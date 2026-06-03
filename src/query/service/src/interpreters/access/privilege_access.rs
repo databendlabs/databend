@@ -1902,6 +1902,17 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CopyIntoTable(plan) => {
                 self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                 self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
+                if plan.enable_schema_evolution && plan.query.is_none() && !plan.no_file_to_copy {
+                    self.validate_table_access(
+                        plan.catalog_info.catalog_name(),
+                        &plan.database_name,
+                        &plan.table_name,
+                        UserPrivilegeType::Alter,
+                        false,
+                        false,
+                    )
+                    .await?;
+                }
                 if let Some(query) = &plan.query {
                     self.check(ctx, query).await?;
                 }

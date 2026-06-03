@@ -1194,6 +1194,8 @@ pub enum TokenKind {
     SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMA_EVOLUTION", ignore(ascii_case))]
+    SCHEMA_EVOLUTION,
     #[token("SCHEMAS", ignore(ascii_case))]
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
@@ -1466,6 +1468,8 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("PROXY", ignore(ascii_case))]
+    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]

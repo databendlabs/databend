@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_storages_basic::MemoryTable;
 use databend_common_storages_basic::NullTable;
+use databend_common_storages_basic::ProxyTable;
 use databend_common_storages_basic::RandomTable;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_common_storages_basic::view_table::ViewTable;
@@ -153,6 +154,12 @@ impl StorageFactory {
         creators.insert("RANDOM".to_string(), Storage {
             creator: Arc::new(RandomTable::try_create),
             descriptor: Arc::new(RandomTable::description),
+        });
+
+        // Register PROXY table engine
+        creators.insert("PROXY".to_string(), Storage {
+            creator: Arc::new(ProxyTable::try_create),
+            descriptor: Arc::new(ProxyTable::description),
         });
 
         // Register STREAM table engine

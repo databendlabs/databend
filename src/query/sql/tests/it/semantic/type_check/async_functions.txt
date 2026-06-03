@@ -1,0 +1,69 @@
+=== nextval_uses_sequence_adapter ===
+description: nextval should validate the sequence through the type-check adapter and build an async function.
+sql: nextval(seq)
+status: ok
+scalar: nextval(seq)
+type: UInt64
+
+=== dict_get_uses_dictionary_adapter ===
+description: dict_get should resolve dictionary metadata through the type-check adapter.
+sql: dict_get(dict, 'field', number)
+status: ok
+scalar: dict_get(default.dict, 'field', number)
+type: String
+
+=== read_file_uses_stage_adapter ===
+description: Two-argument read_file should resolve the stage through the type-check adapter.
+sql: read_file('@stage', 'file.txt')
+status: ok
+scalar: read_file('@stage', 'file.txt')
+type: Binary
+
+=== read_file_rejects_invalid_arity ===
+description: read_file should validate its one-or-two argument shape during async-function lowering.
+sql: read_file()
+status: error
+code: 1065
+message: read_file function need one or two arguments but got 0
+
+=== read_file_requires_stage_path ===
+description: A single-argument read_file call should require an @stage path when the location is constant.
+sql: read_file('not_stage_path')
+status: error
+code: 1065
+message: stage path must start with @, but got not_stage_path
+
+=== async_functions_cannot_be_nested ===
+description: Async functions should remain rejected while resolving another async function argument.
+sql: read_file(read_file('@s/file.txt'))
+status: error
+code: 1065
+message: async functions cannot be nested
+
+=== nextval_requires_identifier_argument ===
+description: nextval should reject non-identifier arguments before sequence resolution.
+sql: nextval(1)
+status: error
+code: 1065
+message: nextval function argument don't support expr
+
+=== nextval_rejects_multipart_identifier ===
+description: nextval should accept only a one-part sequence identifier.
+sql: nextval(db.seq)
+status: error
+code: 1065
+message: nextval function argument identifier should only contain one part
+
+=== dict_get_requires_dictionary_identifier ===
+description: dict_get should reject a non-identifier dictionary argument before catalog resolution.
+sql: dict_get('dict', 'field', number)
+status: error
+code: 1065
+message: async function can only used as column
+
+=== dict_get_rejects_three_part_identifier ===
+description: dict_get should accept only one-or-two-part dictionary identifiers.
+sql: dict_get(catalog.db.dict, 'field', number)
+status: error
+code: 1065
+message: dict_get function argument identifier should contain one or two parts

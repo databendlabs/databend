@@ -64,6 +64,12 @@ pub trait PartInfo: Send + Sync {
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
     }
+
+    /// Whether this part carries metadata that must stay with any reshuffled
+    /// slice of the real partitions.
+    fn is_reshuffle_header(&self) -> bool {
+        false
+    }
 }
 
 impl Debug for Box<dyn PartInfo> {
@@ -133,13 +139,36 @@ impl Partitions {
         executors_sorted.sort_by(|left, right| left.cache_id.cmp(&right.cache_id));
 
         let num_executors = executors_sorted.len();
+        // Some partition lists include synthetic header parts that carry
+        // metadata needed to interpret the real partitions. Reshuffle must not
+        // assign such a header to only the first executor slice:
+        //
+        //   executor-1: [header, part1, part2]
+        //   executor-2: [part3, part4]         // missing metadata
+        //
+        // Instead, every non-empty executor slice receives the headers:
+        //
+        //   executor-1: [header, part1, part2]
+        //   executor-2: [header, part3, part4]
+        let headers = self
+            .partitions
+            .iter()
+            .filter(|part| part.is_reshuffle_header())
+            .cloned()
+            .collect::<Vec<_>>();
+        let regular_partitions = self
+            .partitions
+            .iter()
+            .filter(|part| !part.is_reshuffle_header())
+            .cloned()
+            .collect::<Vec<_>>();
+
         let partitions = match self.kind {
-            PartitionsShuffleKind::Seq => self.partitions.clone(),
+            PartitionsShuffleKind::Seq => regular_partitions,
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
-                let mut parts = self
-                    .partitions
-                    .iter()
+                let mut parts = regular_partitions
+                    .into_iter()
                     .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
                 parts.sort_by(|a, b| a.0.cmp(&b.0));
@@ -158,6 +187,14 @@ impl Partitions {
                     .map(|e| (e.id.clone(), Partitions::default()))
                     .collect::<HashMap<_, _>>();
 
+                if !headers.is_empty() && regular_partitions.is_empty() {
+                    let local_id = &GlobalConfig::instance().query.node_id;
+                    if let Some(part) = executor_part.get_mut(local_id) {
+                        part.partitions = headers;
+                    }
+                    return Ok(executor_part);
+                }
+
                 let mut ring = executors_sorted
                     .iter()
                     .flat_map(|e| {
@@ -172,7 +209,7 @@ impl Partitions {
 
                 ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
 
-                for p in self.partitions.iter() {
+                for p in &regular_partitions {
                     let k = p.hash();
                     let idx = ring
                         .binary_search_by(|&(_, h)| h.cmp(&k))
@@ -185,11 +222,18 @@ impl Partitions {
                     let part = executor_part.get_mut(&executor).unwrap();
                     part.partitions.push(p.clone());
                 }
+                if !headers.is_empty() {
+                    for part in executor_part.values_mut() {
+                        if !part.partitions.is_empty() {
+                            part.partitions.splice(0..0, headers.clone());
+                        }
+                    }
+                }
                 return Ok(executor_part);
             }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
-                let mut parts = self.partitions.clone();
+                let mut parts = regular_partitions;
                 parts.shuffle(&mut rng);
                 parts
             }
@@ -208,13 +252,36 @@ impl Partitions {
         };
 
         // If there is only one partition, we prioritize executing the query on the local node.
+        if partitions.is_empty() && !headers.is_empty() {
+            let mut executor_part = HashMap::default();
+
+            let local_id = &GlobalConfig::instance().query.node_id;
+            for executor in executors_sorted.into_iter() {
+                let parts = match &executor.id == local_id {
+                    true => headers.clone(),
+                    false => vec![],
+                };
+
+                executor_part.insert(
+                    executor.id.clone(),
+                    Partitions::create(PartitionsShuffleKind::Seq, parts),
+                );
+            }
+
+            return Ok(executor_part);
+        }
+
         if partitions.len() == 1 {
             let mut executor_part = HashMap::default();
 
             let local_id = &GlobalConfig::instance().query.node_id;
             for executor in executors_sorted.into_iter() {
                 let parts = match &executor.id == local_id {
-                    true => partitions.clone(),
+                    true => headers
+                        .iter()
+                        .cloned()
+                        .chain(partitions.iter().cloned())
+                        .collect(),
                     false => vec![],
                 };
 
@@ -243,7 +310,11 @@ impl Partitions {
                 // reach here only when num_executors > num_parts
                 vec![]
             } else {
-                partitions[begin..end].to_vec()
+                headers
+                    .iter()
+                    .cloned()
+                    .chain(partitions[begin..end].iter().cloned())
+                    .collect()
             };
 
             executor_part.insert(

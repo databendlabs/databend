@@ -23,6 +23,102 @@ use databend_query::interpreters::OptimizeCompactBlockInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lambda_udf_executes_nested_body_parameters() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!("create database {db}"))
+        .await?;
+    fixture
+        .execute_command("create function lambda_udf_f1 as (p) -> (p)")
+        .await?;
+    fixture
+        .execute_command("create function lambda_udf_f2 as (p) -> (p)")
+        .await?;
+    fixture
+        .execute_command(&format!("create table {db}.lambda_udf_t(i uint8 not null)"))
+        .await?;
+
+    expects_ok(
+        "nested lambda udf",
+        fixture
+            .execute_query("select lambda_udf_f2(lambda_udf_f1(1))")
+            .await,
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 1        |",
+            "+----------+",
+        ],
+    )
+    .await?;
+
+    expects_ok(
+        "nested lambda udf filter",
+        fixture
+            .execute_query("select * from system.one where lambda_udf_f2(lambda_udf_f1(1))")
+            .await,
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 1        |",
+            "+----------+",
+        ],
+    )
+    .await?;
+
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.lambda_udf_t values (lambda_udf_f2(lambda_udf_f1(1)))"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.lambda_udf_t set i=lambda_udf_f2(lambda_udf_f1(2)) where i=lambda_udf_f2(lambda_udf_f1(1))"
+        ))
+        .await?;
+
+    expects_ok(
+        "nested lambda udf window",
+        fixture
+            .execute_query(&format!(
+                "select i, nth_value(i, lambda_udf_f2(lambda_udf_f1(1))) over (partition by i) from {db}.lambda_udf_t"
+            ))
+            .await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 2        | 2        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    expects_ok(
+        "nested lambda udf case",
+        fixture
+            .execute_query(&format!(
+                "select case when i > lambda_udf_f2(lambda_udf_f1(1)) then 200 else 100 end from {db}.lambda_udf_t"
+            ))
+            .await,
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 200      |",
+            "+----------+",
+        ],
+    )
+    .await?;
+
+    Ok(())
+}
+
 #[test]
 pub fn test_format_field_name() {
     use databend_query::sql::executor::decode_field_name;
@@ -47,7 +143,7 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let db2 = db.clone();
     let tbl2 = tbl.clone();
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("sql-exec-test".to_string()))?;
 
     // 1. insert into tbl
     let mut planner = Planner::new(ctx.clone());

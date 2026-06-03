@@ -20,14 +20,19 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::TaskSql;
+use databend_common_meta_api::fetch_id;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
 use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::principal::task;
+use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -142,7 +147,7 @@ impl TaskMgr {
                 todo!()
             }
             AlterTaskOptions::ModifyAs(sql) => {
-                task.query_text = sql.to_string();
+                task.task_sql = Self::make_task_sql(sql);
             }
             AlterTaskOptions::ModifyWhen(sql) => {
                 task.when_condition = Some(sql.to_string());
@@ -257,7 +262,7 @@ impl TaskMgr {
 
     async fn create_task_inner(
         &self,
-        task: Task,
+        mut task: Task,
         create_option: &CreateOption,
         without_schedule: bool,
     ) -> Result<Result<(), TaskError>, TaskApiError> {
@@ -288,6 +293,9 @@ impl TaskMgr {
         }
 
         let seq = MatchSeq::from(*create_option);
+        if task.task_id == EMPTY_TASK_ID {
+            task.task_id = fetch_id(self.kv_api.as_ref(), IdGenerator::task_id()).await?;
+        }
 
         let key = TaskIdent::new(&self.tenant, &task.task_name);
         let req = UpsertPB::insert(key, task.clone()).with(seq);
@@ -302,6 +310,9 @@ impl TaskMgr {
                 };
                 return Ok(Err(err));
             }
+        }
+        if !res.is_changed() {
+            return Ok(Ok(()));
         }
         if !task.after.is_empty() {
             self.send(TaskMessage::AfterTask(task)).await?;
@@ -339,6 +350,13 @@ impl TaskMgr {
         task::WarehouseOptions {
             warehouse: opt,
             using_warehouse_size: None,
+        }
+    }
+
+    pub fn make_task_sql(sql: &TaskSql) -> MetaTaskSql {
+        match sql {
+            TaskSql::SingleStatement(stmt) => MetaTaskSql::Sql(stmt.clone()),
+            TaskSql::ScriptBlock(sqls) => MetaTaskSql::Script(sqls.clone()),
         }
     }
 }

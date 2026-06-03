@@ -1,0 +1,41 @@
+=== non_lambda_function_rejects_lambda_syntax ===
+description: Only lambda functions should accept lambda syntax.
+sql: abs(number, x -> x)
+status: error
+code: 1065
+message: only lambda functions allowed in lambda syntax
+
+=== lambda_function_requires_lambda_expression ===
+description: Lambda functions should reject calls without a lambda expression.
+sql: array_transform([number])
+status: error
+code: 1065
+message: function array_transform must have a lambda expression
+
+=== lambda_functions_can_be_nested ===
+description: Lambda functions should be allowed inside another lambda body.
+sql: array_transform([number], x -> array_transform([x], y -> y))
+status: ok
+scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x (#7)), ["y"] -> y (#8)))
+type: Array(Array(Int64 NULL))
+
+=== lambda_function_requires_collection_argument ===
+description: Lambda functions should require an array or map input argument.
+sql: array_transform(number, x -> x)
+status: error
+code: 1065
+message: invalid arguments for lambda function, argument data type must be an array or map
+
+=== lambda_filter_requires_boolean_result ===
+description: Filter-style lambda functions should require a boolean lambda result.
+sql: array_filter([number], x -> x)
+status: error
+code: 1065
+message: invalid lambda function for `array_filter`, the result data type of lambda function must be boolean
+
+=== lambda_function_checks_parameter_count ===
+description: Lambda functions should validate the number of lambda parameters for the input collection.
+sql: array_transform([number], (x, y) -> x)
+status: error
+code: 1065
+message: incorrect number of parameters in lambda function, array_transform expects 1 parameter(s), but got 2

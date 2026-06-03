@@ -41,7 +41,6 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::ExprContext;
 use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
@@ -62,7 +61,7 @@ impl Dataframe {
         } = self;
 
         let s_expr = binder.bind_projection(&mut bind_context, select_info, s_expr)?;
-        let s_expr = binder.add_internal_column_into_expr(&mut bind_context, s_expr)?;
+        let s_expr = binder.add_bound_columns_into_expr(&mut bind_context, s_expr)?;
 
         Ok(Self {
             query_ctx,
@@ -235,7 +234,11 @@ impl Dataframe {
         let alias_catalog = select_list.alias_catalog();
         let aliases = alias_catalog.all_aliases();
 
-        let group_by_aliases = alias_catalog.bindings_for(ExprContext::GroupClaue);
+        let group_by_aliases = alias_catalog.group_by_bindings(
+            self.query_ctx
+                .get_settings()
+                .get_enable_group_by_column_first()?,
+        );
         self.binder.analyze_group_items(
             &mut self.bind_context,
             &select_list,

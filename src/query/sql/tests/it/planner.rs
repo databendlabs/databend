@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -119,6 +121,18 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 1,
     },
+    LiteReplayCaseSpec {
+        name: "q17_histogram_join_order",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "q10_scaled_join_ndv",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {
@@ -160,6 +174,7 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
 
     for sql in [
         "SELECT 'a' LIKE 'a' ESCAPE ''",
+        "SELECT '%++' NOT LIKE '*%++' ESCAPE '*'",
         "SELECT 'a' LIKE concat('a') ESCAPE ''",
         "SELECT '%' LIKE '\\\\%' ESCAPE ''",
         "SELECT like_any('%', '\\\\%', '')",
@@ -169,6 +184,137 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
         ctx.bind_sql(sql).await?;
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql(
+        "CREATE FUNCTION ddb_string_split_compat AS (s, delim) -> CASE
+            WHEN s IS NULL THEN NULL
+            WHEN delim IS NULL THEN [s]
+            WHEN delim = '' THEN REGEXP_SPLIT_TO_ARRAY(s, '')
+            ELSE SPLIT(s, delim)
+        END",
+    )
+    .await?;
+    ctx.register_setup_sql("CREATE TABLE documents(id INT, s VARCHAR)")
+        .await?;
+
+    let plan = ctx
+        .bind_sql(
+            "SELECT ss FROM (
+                SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss
+                FROM documents WHERE 1
+            ) AS q ORDER BY id",
+        )
+        .await?;
+    let plan = ctx.optimize_plan(plan).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("split(documents.s"),
+        "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"
+    );
+    assert!(
+        !plan.contains("split('bb'"),
+        "UDF parameter replacement should not overwrite outer column references:\n{plan}"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_execute_immediate_binds_session_variable_script() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.set_variable(
+        "exec_script".to_string(),
+        Scalar::String("select 42".to_string()),
+    );
+
+    ctx.bind_sql("EXECUTE IMMEDIATE $exec_script").await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_time_travel_binds_session_variable_snapshot() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE t(c int)").await?;
+    ctx.set_variable(
+        "first_snap".to_string(),
+        Scalar::String("snapshot-id".to_string()),
+    );
+
+    let err = ctx
+        .bind_sql("SELECT * FROM t AT(SNAPSHOT => $first_snap)")
+        .await
+        .unwrap_err();
+    assert!(
+        err.message()
+            .contains("Time travel operation is not supported"),
+        "unexpected error: {err:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rewrite_boundaries_preserve_legacy_function_forms() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    ctx.bind_sql("SELECT IFNULL(1, 2), IFNULL(NULL), NVL(NULL)")
+        .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_large_inlist_threshold_binds_constant_values() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE t1(a int, b int)")
+        .await?;
+
+    let values = (0..=1300)
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("SELECT * FROM t1 WHERE a NOT IN ({values})");
+    ctx.bind_sql(&sql).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_srf_rejects_window_argument_before_project_set_binding() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    let err = ctx
+        .bind_sql("SELECT unnest(first_value('aa') OVER (PARTITION BY 'bb'))")
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), 1065, "unexpected error: {err:?}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lambda_udf_resolves_own_parameters() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE FUNCTION f1 AS (p) -> (p)")
+        .await?;
+    ctx.register_setup_sql("CREATE FUNCTION f2 AS (p) -> (p)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE t(i UInt8 NOT NULL)")
+        .await?;
+
+    ctx.bind_sql("SELECT f1(1)").await?;
+    for sql in [
+        "SELECT 1 FROM (SELECT f2(f1(10)))",
+        "SELECT * FROM t WHERE f2(f1(1))",
+        "SELECT i, nth_value(i, f2(f1(2))) OVER (PARTITION BY i) fv FROM t",
+        "SELECT CASE WHEN i > f2(f1(100)) THEN 200 ELSE 100 END FROM t",
+    ] {
+        let plan = ctx.bind_sql(sql).await?;
+        ctx.optimize_plan(plan).await?;
+    }
+    ctx.bind_sql("INSERT INTO t VALUES (f2(f1(1)))").await?;
+    ctx.bind_sql("UPDATE t SET i=f2(f1(2)) WHERE i=f2(f1(1))")
+        .await?;
     Ok(())
 }
 

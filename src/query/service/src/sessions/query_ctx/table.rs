@@ -334,43 +334,9 @@ impl TableContextQueryProfile for QueryContext {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for QueryContext {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()
-    }
-
-    #[async_backtrace::framed]
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
-        match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatParams::default_by_type(typ),
-            Err(_) => {
-                let user_mgr = UserApiProvider::instance();
-                let tenant = self.get_tenant();
-                Ok(user_mgr
-                    .get_file_format(&tenant, name)
-                    .await?
-                    .file_format_params)
-            }
-        }
-    }
-
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        if self
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let visibility_checker = self
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            if !visibility_checker.check_connection_visibility(name) {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
-                    &self.get_current_user()?.identity().display(),
-                )));
-            }
-        }
-        self.shared.get_connection(name).await
     }
 }
 

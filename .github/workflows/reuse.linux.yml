@@ -51,6 +51,27 @@ jobs:
             exit 1
           fi
 
+  proxy_benchmark_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      any_changed: ${{ steps.proxy.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check PROXY benchmark related changes
+        uses: tj-actions/changed-files@v46
+        id: proxy
+        with:
+          files: |
+            .github/workflows/reuse.linux.yml
+            scripts/benchmark/proxy_table_routing_bench.py
+            scripts/ci/ci-run-proxy-routing-benchmark.sh
+            src/query/catalog/src/table.rs
+            src/query/settings/src/**
+            src/query/storages/basic/src/proxy_table.rs
+            src/query/storages/fuse/src/**
+
   check:
     needs: info
     runs-on:
@@ -250,6 +271,45 @@ jobs:
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
+
+  test_proxy_routing_benchmark:
+    needs: [build, check, proxy_benchmark_changes]
+    if: needs.proxy_benchmark_changes.outputs.any_changed == 'true'
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c
+      - "${{ inputs.runner_provider }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: statistics
+            proxy_routing_model: statistics
+            min_top1_hit_ratio: "0.85"
+            min_acceptable_hit_ratio: "1.0"
+          - name: prefix
+            proxy_routing_model: prefix
+            min_top1_hit_ratio: "0.50"
+            min_acceptable_hit_ratio: "0.75"
+    name: PROXY routing benchmark (${{ matrix.name }})
+    env:
+      ROWS: "50000"
+      PROXY_ROUTING_MODEL: ${{ matrix.proxy_routing_model }}
+      MIN_TOP1_HIT_RATIO: ${{ matrix.min_top1_hit_ratio }}
+      MIN_ACCEPTABLE_HIT_RATIO: ${{ matrix.min_acceptable_hit_ratio }}
+      PAYLOAD_BYTES: "16"
+      WARMUP_ROUNDS: "0"
+      MEASURE_ROUNDS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_test
+        with:
+          artifacts: meta,query
+      - name: Run PROXY routing benchmark
+        timeout-minutes: 20
+        run: bash scripts/ci/ci-run-proxy-routing-benchmark.sh
 
   test_sandbox_udf:
     needs: [build, check]

@@ -17,6 +17,8 @@ use std::mem;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,14 +33,19 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use itertools::Itertools;
+use unicase::Ascii;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
+use crate::Visibility;
 use crate::binder::ExprContext;
-use crate::parse_lambda_expr;
 use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -47,7 +54,112 @@ use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
-impl<'a> TypeChecker<'a> {
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_lambda(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        let uni_case_func_name = Ascii::new(func_name);
+        if func.lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
+            return Err(
+                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
+                    .set_span(span),
+            );
+        }
+
+        let Some(func_name) = GENERAL_LAMBDA_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == uni_case_func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+        let Some(lambda) = func.lambda.as_ref() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "function {func_name} must have a lambda expression",
+            ))
+            .set_span(span));
+        };
+
+        Ok(Some(
+            self.lambda_function(span, func_name, &func.args, lambda)?,
+        ))
+    }
+
+    pub(super) fn lambda_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: &'a [Expr],
+        lambda: &'a Lambda,
+    ) -> Result<CoreExprId> {
+        let args = self.lower_expr_args(args)?;
+        let previous_in_lambda_function = self.in_lambda_function;
+        self.in_lambda_function = true;
+        let lambda_expr = self.lower_ast_expr(&lambda.expr);
+        self.in_lambda_function = previous_in_lambda_function;
+        let lambda_expr = lambda_expr?;
+        Ok(self.alloc(CoreExpr::LambdaFunction {
+            span,
+            func_name,
+            args,
+            lambda_params: &lambda.params,
+            lambda_expr,
+        }))
+    }
+}
+
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
+{
+    fn resolve_core_lambda_expr(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        lambda_context: &mut BindContext,
+        lambda_columns: &[(String, DataType)],
+        lambda_expr: CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        lambda_context.expr_context = ExprContext::InLambdaFunction;
+
+        // Hide existing columns with the same name as lambda parameters
+        // to implement parameter shadowing for nested lambdas.
+        // Use UnqualifiedWildcardInVisible so that unqualified references
+        // resolve to the lambda parameter, while qualified references
+        // (e.g. table.column) still work.
+        for (lambda_column, _) in lambda_columns.iter() {
+            for col in lambda_context.columns.iter_mut() {
+                if col.column_name == *lambda_column {
+                    col.visibility = Visibility::UnqualifiedWildcardInVisible;
+                }
+            }
+        }
+
+        for (lambda_column, lambda_column_type) in lambda_columns.iter() {
+            let column_index = lambda_context.next_column_index();
+            lambda_context.add_column_binding(
+                ColumnBindingBuilder::new(
+                    lambda_column.clone(),
+                    column_index,
+                    Box::new(lambda_column_type.clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+            );
+        }
+
+        let mut type_checker = TypeChecker::try_create_with_adapter(
+            lambda_context,
+            self.adapter.clone(),
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        )?;
+        type_checker.resolve_core(arena, lambda_expr)
+    }
+
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
         let max_ty = match ty.remove_nullable() {
             DataType::Number(s) => {
@@ -84,23 +196,15 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub(super) fn resolve_lambda_function(
+    pub(super) fn resolve_core_lambda_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func_name: &str,
-        args: &[&Expr],
-        lambda: &Lambda,
+        args: &CoreExprArgs,
+        lambda_params: &[Identifier],
+        lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "lambda functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for lambda function, {} expects 1 argument, but got {}",
@@ -109,8 +213,28 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let box (mut arg, mut arg_type) = self.resolve(args[0])?;
+        let box (arg, arg_type) = self.resolve_core(arena, args[0])?;
+        self.resolve_lambda_function_arg(
+            arena,
+            span,
+            func_name,
+            arg,
+            arg_type,
+            lambda_params,
+            lambda_expr,
+        )
+    }
 
+    fn resolve_lambda_function_arg(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        mut arg: ScalarExpr,
+        mut arg_type: DataType,
+        lambda_params: &[Identifier],
+        lambda_expr: CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut func_name = func_name;
         let mut is_cast_variant = false;
         if arg_type.remove_nullable() == DataType::Variant {
@@ -142,8 +266,7 @@ impl<'a> TypeChecker<'a> {
             is_cast_variant = true;
         }
 
-        let params = lambda
-            .params
+        let params = lambda_params
             .iter()
             .map(|param| param.name.to_lowercase())
             .collect::<Vec<_>>();
@@ -188,19 +311,11 @@ impl<'a> TypeChecker<'a> {
             .collect::<Vec<_>>();
 
         let mut lambda_context = self.bind_context.clone();
-        let box (lambda_expr, lambda_type) = parse_lambda_expr(
-            self.ctx.clone(),
+        let box (lambda_expr, lambda_type) = self.resolve_core_lambda_expr(
+            arena,
             &mut lambda_context,
             &lambda_columns,
-            &lambda.expr,
-            if LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
-                .is_ok()
-            {
-                Some(self.metadata.clone())
-            } else {
-                None
-            },
+            lambda_expr,
         )?;
 
         let return_type = if func_name == "array_filter" || func_name == "map_filter" {

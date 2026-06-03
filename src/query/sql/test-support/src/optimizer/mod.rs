@@ -41,6 +41,8 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::HistogramBucket;
 use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
@@ -55,6 +57,8 @@ struct TestSpec {
     table_statistics: HashMap<String, TableStats>,
     #[serde(default)]
     column_statistics: HashMap<String, ColumnStats>,
+    #[serde(default)]
+    histogram_statistics: HashMap<String, HistogramStats>,
     #[serde(default)]
     statistics_file: Option<String>,
     #[serde(default)]
@@ -85,11 +89,34 @@ pub struct ColumnStats {
     pub null_count: Option<u64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HistogramStats {
+    pub accuracy: bool,
+    pub buckets: Vec<HistogramBucketStats>,
+    pub avg_spacing: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HistogramBucketStats {
+    pub lower_bound: Datum,
+    pub upper_bound: Datum,
+    pub num_values: f64,
+    pub num_distinct: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct StatsFile {
     table_statistics: HashMap<String, TableStats>,
     column_statistics: HashMap<String, ColumnStats>,
+    #[serde(default)]
+    histogram_statistics: HashMap<String, HistogramStats>,
 }
+
+type ResolvedStats = (
+    HashMap<String, TableStats>,
+    HashMap<String, ColumnStats>,
+    HashMap<String, HistogramStats>,
+);
 
 #[derive(Debug, Clone)]
 pub struct TestCase {
@@ -97,6 +124,7 @@ pub struct TestCase {
     pub sql: String,
     pub table_stats: HashMap<String, TableStats>,
     pub column_stats: HashMap<String, ColumnStats>,
+    pub histogram_stats: HashMap<String, HistogramStats>,
     pub auto_stats: bool,
     pub stem: String,
     pub subdir: Option<String>,
@@ -205,7 +233,7 @@ impl TestSuite {
             .to_string();
 
         let tables = self.resolve_tables(&spec)?;
-        let (table_stats, column_stats) = self.resolve_stats(&spec)?;
+        let (table_stats, column_stats, histogram_stats) = self.resolve_stats(&spec)?;
         let auto_stats = spec.auto_statistics;
         let sql = spec.sql;
         let name = spec.name;
@@ -216,6 +244,7 @@ impl TestSuite {
             sql,
             table_stats,
             column_stats,
+            histogram_stats,
             auto_stats,
             stem,
             subdir,
@@ -241,20 +270,19 @@ impl TestSuite {
             .collect()
     }
 
-    fn resolve_stats(
-        &self,
-        spec: &TestSpec,
-    ) -> Result<(HashMap<String, TableStats>, HashMap<String, ColumnStats>)> {
+    fn resolve_stats(&self, spec: &TestSpec) -> Result<ResolvedStats> {
         let mut table_stats = spec.table_statistics.clone();
         let mut column_stats = spec.column_statistics.clone();
+        let mut histogram_stats = spec.histogram_statistics.clone();
 
         if let Some(file_ref) = spec.statistics_file.as_deref() {
             let stats_file = self.load_stats_file(file_ref)?;
             table_stats.extend(stats_file.table_statistics);
             column_stats.extend(stats_file.column_statistics);
+            histogram_stats.extend(stats_file.histogram_statistics);
         }
 
-        Ok((table_stats, column_stats))
+        Ok((table_stats, column_stats, histogram_stats))
     }
 
     fn load_stats_file(&self, file_ref: &str) -> Result<StatsFile> {
@@ -420,6 +448,7 @@ struct StatsApplier<'a> {
     metadata: &'a MetadataRef,
     table_stats: &'a HashMap<String, TableStats>,
     column_stats: &'a HashMap<String, ColumnStats>,
+    histogram_stats: &'a HashMap<String, HistogramStats>,
 }
 
 impl SExprVisitor for StatsApplier<'_> {
@@ -431,6 +460,8 @@ impl SExprVisitor for StatsApplier<'_> {
             if let Some(stats) = self.table_stats.get(table.name()) {
                 let column_stats =
                     self.build_column_stats(&metadata, scan.table_index, table.name());
+                let histograms =
+                    self.build_histograms(&metadata, scan.table_index, table.name())?;
                 let table_stats = TableStatistics {
                     num_rows: stats.num_rows,
                     data_size: stats.data_size,
@@ -449,7 +480,7 @@ impl SExprVisitor for StatsApplier<'_> {
                 new_scan.statistics = Arc::new(Statistics {
                     table_stats: Some(table_stats),
                     column_stats,
-                    histograms: HashMap::new(),
+                    histograms,
                 });
 
                 return Ok(VisitAction::Replace(
@@ -470,16 +501,17 @@ impl StatsApplier<'_> {
     ) -> HashMap<Symbol, Option<BasicColumnStatistics>> {
         let mut result = HashMap::new();
 
-        for (idx, column) in metadata
-            .columns_by_table_index(table_index)
-            .iter()
-            .enumerate()
-        {
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) = column {
+        for column in metadata.columns_by_table_index(table_index).iter() {
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn {
+                column_index,
+                column_name,
+                ..
+            }) = column
+            {
                 let full_name = format!("{table_name}.{column_name}");
                 if let Some(stats) = self.column_stats.get(&full_name) {
                     result.insert(
-                        Symbol::new(idx),
+                        *column_index,
                         Some(BasicColumnStatistics {
                             min: to_datum(&stats.min)
                                 .or_else(|| default_min_datum(&column.data_type())),
@@ -496,6 +528,50 @@ impl StatsApplier<'_> {
 
         result
     }
+
+    fn build_histograms(
+        &self,
+        metadata: &Metadata,
+        table_index: IndexType,
+        table_name: &str,
+    ) -> Result<HashMap<Symbol, Option<Histogram>>> {
+        let mut result = HashMap::new();
+
+        for column in metadata.columns_by_table_index(table_index).iter() {
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn {
+                column_index,
+                column_name,
+                ..
+            }) = column
+            {
+                let full_name = format!("{table_name}.{column_name}");
+                if let Some(stats) = self.histogram_stats.get(&full_name) {
+                    result.insert(*column_index, Some(histogram_from_stats(stats)?));
+                }
+            }
+        }
+
+        Ok(result)
+    }
+}
+
+fn histogram_from_stats(stats: &HistogramStats) -> Result<Histogram> {
+    let buckets = stats
+        .buckets
+        .iter()
+        .map(|bucket| {
+            HistogramBucket::try_from_bounds(
+                bucket.lower_bound.clone(),
+                bucket.upper_bound.clone(),
+                bucket.num_values,
+                bucket.num_distinct,
+            )
+            .map_err(|err| ErrorCode::Internal(format!("invalid histogram bucket: {err}")))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Histogram::try_from_buckets(stats.accuracy, buckets, stats.avg_spacing)
+        .map_err(|err| ErrorCode::Internal(format!("invalid histogram: {err}")))
 }
 
 fn write_result<F>(mint: &mut Mint, name: &str, f: F) -> Result<()>
@@ -524,7 +600,12 @@ where
     R: TestCaseRunner + ?Sized,
 {
     let mut raw_plan = runner.bind_sql(&case.sql).await?;
-    apply_stats(&mut raw_plan, &case.table_stats, &case.column_stats)?;
+    apply_stats(
+        &mut raw_plan,
+        &case.table_stats,
+        &case.column_stats,
+        &case.histogram_stats,
+    )?;
     let raw = raw_plan.format_indent(databend_common_sql::FormatOptions { verbose: false })?;
     write_result(mint, &format!("{}_raw.txt", case.stem), |f| {
         writeln!(f, "{}", raw).map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
@@ -557,6 +638,7 @@ fn apply_stats(
     plan: &mut Plan,
     table_stats: &HashMap<String, TableStats>,
     column_stats: &HashMap<String, ColumnStats>,
+    histogram_stats: &HashMap<String, HistogramStats>,
 ) -> Result<()> {
     if let Plan::Query {
         s_expr, metadata, ..
@@ -566,6 +648,7 @@ fn apply_stats(
             metadata,
             table_stats,
             column_stats,
+            histogram_stats,
         };
         if let Some(new_expr) = s_expr.accept(&mut applier)? {
             **s_expr = new_expr;

@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -48,6 +47,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -894,9 +894,6 @@ impl Binder {
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
-        let original_group_by_column_first = bind_context.group_by_column_first;
-        bind_context.group_by_column_first =
-            self.ctx.get_settings().get_enable_group_by_column_first()?;
 
         let result = (|| {
             let group_by = Self::expand_group(group_by.clone())?;
@@ -928,7 +925,6 @@ impl Binder {
             Ok(())
         })();
         bind_context.expr_context = original_context;
-        bind_context.group_by_column_first = original_group_by_column_first;
         result
     }
 
@@ -1181,11 +1177,7 @@ impl Binder {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        let preferred_aliases = group_by_aliases.preferred_aliases();
-        let available_aliases = group_by_aliases.available_aliases();
-        // Keep alias-first binding for simple `GROUP BY <alias>` items. For
-        // complex expressions, resolve input columns first and only use SELECT
-        // aliases for names that are not present in the input scope.
+        let mut group_by_aliases = group_by_aliases.clone();
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1218,52 +1210,29 @@ impl Binder {
                 continue;
             }
 
-            let is_simple_column_ref = matches!(expr, Expr::ColumnRef {
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    ..
-                },
-                ..
-            });
+            let (preferred_aliases, fallback_aliases) = group_by_aliases.group_item_aliases(expr);
 
-            let (mut scalar_expr, _) = if is_simple_column_ref {
-                let mut scalar_binder = ScalarBinder::new(
+            let (mut scalar_expr, _) = {
+                let mut type_checker = TypeChecker::try_create_with_alias_fallback(
                     bind_context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
-                    preferred_aliases,
-                );
-                if preferred_aliases == available_aliases {
-                    scalar_binder.bind(expr)?
-                } else {
-                    scalar_binder.bind(expr).or_else(|_| {
-                        let mut fallback_scalar_binder = ScalarBinder::new(
-                            bind_context,
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                            available_aliases,
-                        );
-                        fallback_scalar_binder.bind(expr)
-                    })?
-                }
-            } else {
-                bind_context.with_expr_context(
-                    ExprContext::SelectClause,
-                    |bind_context| -> Result<(ScalarExpr, DataType)> {
-                        let mut scalar_binder = ScalarBinder::new(
-                            bind_context,
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                            available_aliases,
-                        );
-                        scalar_binder.bind(expr)
-                    },
-                )?
+                    preferred_aliases.unwrap_or(&[]),
+                    fallback_aliases,
+                    false,
+                )?;
+                *type_checker.resolve(expr)?
             };
+
+            // If a simple GROUP BY item matched a SELECT alias, remember that
+            // alias as a group item column for later GROUP BY items.
+            //
+            // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
+            // use the preceding group item alias `k`.
+            // `SELECT i AS k FROM t GROUP BY abs(k)` is still rejected because
+            // complex GROUP BY items do not expand SELECT aliases directly.
+            let group_alias = group_by_aliases.matched_group_item_alias(expr, &scalar_expr);
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
             analyzer.visit(&mut scalar_expr)?;
@@ -1271,37 +1240,42 @@ impl Binder {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
-            // Was add by previous
-            // The group key is duplicated
-            if bind_context
+            let group_item_index = if let Some(index) = bind_context
                 .aggregate_info
                 .group_items_map
-                .contains_key(&scalar_expr)
-            {
-                continue;
-            }
-
-            let group_item_name = format!("{:#}", expr);
-            let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
-                column: ColumnBinding { index, .. },
-                ..
-            }) = &scalar_expr
+                .get(&scalar_expr)
             {
                 *index
             } else {
-                self.metadata
-                    .write()
-                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
-            };
+                let group_item_name = format!("{:#}", expr);
+                let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding { index, .. },
+                    ..
+                }) = &scalar_expr
+                {
+                    *index
+                } else {
+                    self.metadata
+                        .write()
+                        .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
+                };
 
-            bind_context.aggregate_info.group_items.push(ScalarItem {
-                scalar: scalar_expr.clone(),
-                index,
-            });
-            bind_context.aggregate_info.group_items_map.insert(
-                scalar_expr,
-                bind_context.aggregate_info.group_items.len() - 1,
-            );
+                bind_context.aggregate_info.group_items.push(ScalarItem {
+                    scalar: scalar_expr.clone(),
+                    index,
+                });
+                bind_context.aggregate_info.group_items_map.insert(
+                    scalar_expr,
+                    bind_context.aggregate_info.group_items.len() - 1,
+                );
+                bind_context.aggregate_info.group_items.len() - 1
+            };
+            if let Some(alias) = group_alias {
+                let group_item_scalar = bind_context.aggregate_info.group_items[group_item_index]
+                    .scalar
+                    .clone();
+                group_by_aliases.register_group_item_alias(alias, group_item_scalar);
+            }
         }
 
         // Check group by contains aggregate functions or not

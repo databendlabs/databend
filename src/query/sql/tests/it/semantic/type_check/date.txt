@@ -1,0 +1,62 @@
+=== date_add_date_from_function_tests_binds ===
+description: The date_add(day, n, date) scalar-test shape should type check through date arithmetic rewrite.
+sql: date_add(day, delta, date)
+status: ok
+scalar: add_days(date (#6), delta (#3))
+type: Date NULL
+
+=== date_sub_timestamp_from_function_tests_binds ===
+description: The date_sub(hour, n, timestamp) shape should type check as negative date arithmetic.
+sql: date_sub(hour, delta, ts)
+status: ok
+scalar: add_hours(ts (#5), minus(delta (#3)))
+type: Timestamp NULL
+
+=== date_diff_day_from_function_tests_binds ===
+description: The date_diff(day, start, end) scalar-test shape should resolve to diff_days.
+sql: date_diff(day, date, to_date('2024-12-31'))
+status: ok
+scalar: diff_days('2024-12-31', date (#6))
+type: Int64 NULL
+
+=== date_between_epoch_from_function_tests_binds ===
+description: The date_between(epoch, start, end) scalar-test shape should resolve to between_epochs.
+sql: date_between(epoch, date, to_date('2024-12-31'))
+status: ok
+scalar: between_epochs('2024-12-31', date (#6))
+type: Int64 NULL
+
+=== date_trunc_month_from_sqllogictest_binds ===
+description: The date_trunc(month, ts) form should resolve through the date truncation rewrite path.
+sql: date_trunc(month, ts)
+status: ok
+scalar: to_start_of_month(ts (#5))
+type: Date NULL
+
+=== time_slice_from_sqllogictest_binds ===
+description: TIME_SLICE with unit and boundary arguments should type check through the dedicated rewrite.
+sql: time_slice(ts, 8, 'day', 'end')
+status: ok
+scalar: time_slice(ts (#5), 8, 'end', 'DAY')
+type: Timestamp NULL
+
+=== last_day_month_from_function_tests_binds ===
+description: last_day(timestamp, month) should type check through the adjacent calendar rewrite.
+sql: last_day(ts, month)
+status: ok
+scalar: to_last_of_month(ts (#5))
+type: Date NULL
+
+=== previous_day_from_function_tests_binds ===
+description: previous_day(timestamp, monday) should resolve the weekday literal during type checking.
+sql: previous_day(ts, monday)
+status: ok
+scalar: to_previous_monday(ts (#5))
+type: Date NULL
+
+=== next_day_from_function_tests_binds ===
+description: next_day(timestamp, friday) should resolve the weekday literal during type checking.
+sql: next_day(ts, friday)
+status: ok
+scalar: to_next_friday(ts (#5))
+type: Date NULL

@@ -55,6 +55,7 @@ impl ResultCacheWriter {
     }
 
     pub fn append_block(&mut self, block: DataBlock) {
+        let block = block.maybe_gc();
         self.current_bytes += block.memory_size();
         self.num_rows += block.num_rows();
         self.blocks.push(block);

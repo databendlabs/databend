@@ -34,6 +34,14 @@ INSERT INTO table3 (value) SELECT number from numbers(2001);
 statement ok
 INSERT INTO table3 (value) SELECT NULL FROM numbers(2000);
 
+statement ok
+analyze table table1;
+
+statement ok
+analyze table table2;
+
+statement ok
+analyze table table3;
 
 query T
 explain SELECT * FROM table1 INNER JOIN table2 ON table1.value = table2.value;
@@ -50,7 +58,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 250.00
+    ├── estimated rows: 985.82
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -79,7 +87,7 @@ Exchange
         └── estimated rows: 2000.00
 
 query T
-explain SELECT * FROM table1 INNER JOIN table2 INNER JOIN table3 ON table1.value = table2.value and table2.value = table3.value;
+explain SELECT /*+ SET_VAR(disable_join_reorder=1) */ * FROM table1 INNER JOIN table2 INNER JOIN table3 ON table1.value = table2.value and table2.value = table3.value;
 ----
 Exchange
 ├── output columns: [table1.value (#0), table2.value (#1), table3.value (#2)]
@@ -91,60 +99,63 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
-    │   └── filter id:1, build key:table3.value (#2), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 500.00
+    ├── build join filters(distributed):
+    │   └── filter id:1, build key:table3.value (#2), probe targets:[table1.value (#0)@scan0, table2.value (#1)@scan1], filter type:bloom,inlist,min_max
+    ├── estimated rows: 985.82
     ├── Exchange(Build)
-    │   ├── output columns: [table3.value (#2), table2.value (#1)]
-    │   ├── exchange type: Broadcast
-    │   └── HashJoin
-    │       ├── output columns: [table3.value (#2), table2.value (#1)]
-    │       ├── join type: INNER
-    │       ├── build keys: [table2.value (#1)]
-    │       ├── probe keys: [table3.value (#2)]
-    │       ├── keys is null equal: [false]
-    │       ├── filters: []
-    │       ├── build join filters:
-    │       │   └── filter id:0, build key:table2.value (#1), probe targets:[table3.value (#2)@scan2], filter type:bloom,inlist,min_max
-    │       ├── estimated rows: 250.00
-    │       ├── Exchange(Build)
-    │       │   ├── output columns: [table2.value (#1)]
-    │       │   ├── exchange type: Broadcast
-    │       │   └── TableScan
-    │       │       ├── table: default.default.table2
-    │       │       ├── scan id: 1
-    │       │       ├── output columns: [value (#1)]
-    │       │       ├── read rows: 1000
-    │       │       ├── read size: 2.31 KiB
-    │       │       ├── partitions total: 6
-    │       │       ├── partitions scanned: 3
-    │       │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │       │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │       │       └── estimated rows: 1000.00
-    │       └── TableScan(Probe)
-    │           ├── table: default.default.table3
-    │           ├── scan id: 2
-    │           ├── output columns: [value (#2)]
-    │           ├── read rows: 2001
-    │           ├── read size: 3.95 KiB
-    │           ├── partitions total: 6
-    │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
-    │           ├── apply join filters: [#0]
-    │           └── estimated rows: 2001.00
-    └── TableScan(Probe)
-        ├── table: default.default.table1
-        ├── scan id: 0
-        ├── output columns: [value (#0)]
-        ├── read rows: 2000
-        ├── read size: 3.95 KiB
-        ├── partitions total: 6
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-        ├── apply join filters: [#1]
-        └── estimated rows: 2000.00
+    │   ├── output columns: [table3.value (#2)]
+    │   ├── exchange type: Hash(table3.value (#2))
+    │   └── TableScan
+    │       ├── table: default.default.table3
+    │       ├── scan id: 2
+    │       ├── output columns: [value (#2)]
+    │       ├── read rows: 2001
+    │       ├── read size: 3.95 KiB
+    │       ├── partitions total: 6
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
+    │       └── estimated rows: 2001.00
+    └── HashJoin(Probe)
+        ├── output columns: [table1.value (#0), table2.value (#1)]
+        ├── join type: INNER
+        ├── build keys: [table2.value (#1)]
+        ├── probe keys: [table1.value (#0)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters(distributed):
+        │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
+        ├── estimated rows: 985.82
+        ├── Exchange(Build)
+        │   ├── output columns: [table2.value (#1)]
+        │   ├── exchange type: Hash(table2.value (#1))
+        │   └── TableScan
+        │       ├── table: default.default.table2
+        │       ├── scan id: 1
+        │       ├── output columns: [value (#1)]
+        │       ├── read rows: 1000
+        │       ├── read size: 2.31 KiB
+        │       ├── partitions total: 6
+        │       ├── partitions scanned: 3
+        │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+        │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+        │       ├── apply join filters: [#1]
+        │       └── estimated rows: 1000.00
+        └── Exchange(Probe)
+            ├── output columns: [table1.value (#0)]
+            ├── exchange type: Hash(table1.value (#0))
+            └── TableScan
+                ├── table: default.default.table1
+                ├── scan id: 0
+                ├── output columns: [value (#0)]
+                ├── read rows: 2000
+                ├── read size: 3.95 KiB
+                ├── partitions total: 6
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+                ├── apply join filters: [#1, #0]
+                └── estimated rows: 2000.00
 
 
 query T
@@ -162,7 +173,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 250.00
+    ├── estimated rows: 985.82
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -205,7 +216,7 @@ Exchange
     ├── filters: []
     ├── build join filters(distributed):
     │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 250.00
+    ├── estimated rows: 985.82
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Hash(table2.value (#1))

@@ -66,7 +66,19 @@ fn test_trigonometric(file: &mut impl Write) {
     run_ast(file, "atan(0.5)", &[]);
     run_ast(file, "cot(-1.0)", &[]);
     run_ast(file, "asin(1)", &[]);
+    run_ast(file, "asin(a)", &[(
+        "a",
+        Float64Type::from_data(vec![-1.0f64, -0.5, 0.5]),
+    )]);
+    run_ast(file, "asin(a) > 2", &[(
+        "a",
+        Float64Type::from_data(vec![0.5f64, 1.1]),
+    )]);
     run_ast(file, "acos(0)", &[]);
+    run_ast(file, "acos(a) > 4", &[(
+        "a",
+        Float64Type::from_data(vec![0.5f64, 1.1]),
+    )]);
     run_ast(file, "atan(null)", &[]);
     run_ast(file, "atan2(a, 4)", &[(
         "a",
@@ -129,7 +141,12 @@ fn test_cbrt(file: &mut impl Write) {
 
 fn test_factorial(file: &mut impl Write) {
     run_ast(file, "factorial(5)", &[]);
+    run_ast(file, "factorial(-1)", &[]);
     run_ast(file, "factorial(30)", &[]);
+    run_ast(file, "factorial(u)", &[(
+        "u",
+        UInt64Type::from_data(vec![u64::MAX]),
+    )]);
     run_ast(file, "factorial(a)", &[(
         "a",
         Int64Type::from_data(vec![3, 12, 16]),

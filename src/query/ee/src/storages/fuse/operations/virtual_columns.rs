@@ -119,12 +119,10 @@ pub async fn prepare_refresh_virtual_column(
         ..table_schema.as_ref().clone()
     });
 
-    if !fuse_table.support_virtual_columns() {
-        return Err(ErrorCode::VirtualColumnError(format!(
-            "Table don't support virtual column, storage_format: {} read_only: {}",
-            fuse_table.get_storage_format(),
-            fuse_table.is_read_only()
-        )));
+    if !fuse_table.enable_virtual_column() {
+        return Err(ErrorCode::VirtualColumnError(
+            "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
+        ));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 

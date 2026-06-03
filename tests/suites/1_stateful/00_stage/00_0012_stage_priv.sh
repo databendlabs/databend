@@ -54,6 +54,29 @@ echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) f
 echo "grant Read on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT | $RM_UUID
 
+echo "==== check schema evolution alter priv ==="
+echo "drop table if exists se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
+echo "create table se_table(a int);" | $BENDSQL_CLIENT_CONNECT
+echo "alter table se_table set options(enable_schema_evolution = true);" | $BENDSQL_CLIENT_CONNECT
+echo "create table se_query_table(a int);" | $BENDSQL_CLIENT_CONNECT
+echo "alter table se_query_table set options(enable_schema_evolution = true);" | $BENDSQL_CLIENT_CONNECT
+echo "create stage s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s_schema_evolution from (select 1 as a, 2 as b) file_format=(type=ndjson);" | $BENDSQL_CLIENT_CONNECT >/dev/null
+echo "grant read on stage s_schema_evolution to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert on default.se_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_table from @s_schema_evolution/ file_format=(type=ndjson missing_field_as=field_default) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "grant alter on default.se_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_table from @s_schema_evolution/ file_format=(type=ndjson missing_field_as=field_default) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "select a, b from se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert on default.se_query_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_query_table from (select to_int32(\$1:a) from @s_schema_evolution) file_format=(type=ndjson) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "select * from se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
+
 echo "remove @s2;" | $TEST_USER_CONNECT
 echo "remove @s1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE s2;" | $BENDSQL_CLIENT_CONNECT

@@ -177,6 +177,29 @@ impl Domain {
         }
     }
 
+    pub fn finite_cardinality_upper(&self) -> Option<u128> {
+        match self {
+            Domain::Boolean(domain) => {
+                Some((domain.has_false as u8 + domain.has_true as u8).into())
+            }
+            Domain::Number(domain) => domain.finite_cardinality_upper(),
+            Domain::Nullable(NullableDomain { value: None, .. }) => Some(0),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Boolean(domain)),
+                ..
+            }) => Some((domain.has_false as u8 + domain.has_true as u8).into()),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Number(domain)),
+                ..
+            }) => domain.finite_cardinality_upper(),
+            Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Nullable(_)),
+                ..
+            }) => unreachable!(),
+            _ => None,
+        }
+    }
+
     pub fn matches_data_type(&self, data_type: &DataType) -> bool {
         match data_type {
             DataType::Nullable(inner_type) => match self {
@@ -487,6 +510,9 @@ impl Domain {
             }
             Domain::Timestamp(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Timestamp(*min))
+            }
+            Domain::TimestampTz(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::TimestampTz(*min))
             }
             Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
             Domain::Interval(SimpleDomain { min, max }) if min == max => {

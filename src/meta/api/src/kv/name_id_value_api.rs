@@ -32,7 +32,6 @@ use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
-use futures::TryStreamExt;
 use log::debug;
 
 use crate::ValueOf;
@@ -46,6 +45,19 @@ use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
 use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
+
+/// The outcome of creating a `name -> id -> value` mapping.
+pub enum CreateIdValueResult<IdRsc> {
+    Created(DataId<IdRsc>),
+    Existing(SeqV<DataId<IdRsc>>),
+}
+
+/// Defines how to handle an existing `name -> id` mapping when creating.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CreateIdValueMode {
+    CreateOnly,
+    CreateOrReplace,
+}
 
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
@@ -73,25 +85,25 @@ where
     /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
     ///
     /// `mark_delete_records` is used to generate additional key-values for implementing `mark_delete` operation.
-    /// For example, when an index is dropped by `override_exist`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
+    /// For example, when an index is replaced by `CreateOrReplace`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
     ///
-    /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
-    /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
+    /// If there is already a `name_ident` exists, return the existing id in `CreateIdValueResult::Existing`.
+    /// Otherwise, create `name -> id -> value` and return the created id in `CreateIdValueResult::Created`.
     ///
-    /// `on_override_fn` is called with the old id and txn when override_exist is true and an existing
+    /// `on_override_fn` is called with the old id and txn when `CreateOrReplace` replaces an existing
     /// resource is being replaced. It can add custom operations to the transaction.
     ///
     /// This eliminates the need for callers to manually handle cleanup logic after the fact.
-    /// For example, when a procedure is dropped by `override_exist`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
+    /// For example, when a procedure is replaced by `CreateOrReplace`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
     async fn create_id_value<A, M, O>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
-        override_exist: bool,
+        create_mode: CreateIdValueMode,
         associated_records: A,
         mark_delete_records: M,
         on_override_fn: O,
-    ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
+    ) -> Result<CreateIdValueResult<IdRsc>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
         M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
@@ -113,31 +125,31 @@ where
                 let get_res = self.get_id_and_value(name_ident).await?;
 
                 if let Some((seq_id, seq_meta)) = get_res {
-                    if override_exist {
-                        // Override take place only when the id -> value does not change.
-                        // If it does not override, no such condition is required.
-                        let id_ident = seq_id.data.into_t_ident(tenant);
-                        txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
-                        txn.if_then.push(txn_del(&id_ident));
+                    let CreateIdValueMode::CreateOrReplace = create_mode else {
+                        return Ok(CreateIdValueResult::Existing(seq_id));
+                    };
 
-                        // Following txn must match this seq to proceed.
-                        current_id_seq = seq_id.seq;
+                    // Override take place only when the id -> value does not change.
+                    // If it does not override, no such condition is required.
+                    let id_ident = seq_id.data.into_t_ident(tenant);
+                    txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
+                    txn.if_then.push(txn_del(&id_ident));
 
-                        // Remove existing associated.
-                        let kvs = associated_records(seq_id.data);
-                        for (k, _v) in kvs {
-                            txn.if_then.push(TxnOp::delete(k));
-                        }
+                    // Following txn must match this seq to proceed.
+                    current_id_seq = seq_id.seq;
 
-                        let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
-                        for (k, v) in kvs {
-                            txn.if_then.push(TxnOp::put(k, v));
-                        }
-                        // Apply override function if provided
-                        on_override_fn(seq_id.data, &mut txn);
-                    } else {
-                        return Ok(Err(seq_id));
+                    // Remove existing associated.
+                    let kvs = associated_records(seq_id.data);
+                    for (k, _v) in kvs {
+                        txn.if_then.push(TxnOp::delete(k));
                     }
+
+                    let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
+                    for (k, v) in kvs {
+                        txn.if_then.push(TxnOp::put(k, v));
+                    }
+                    // Apply override function if provided
+                    on_override_fn(seq_id.data, &mut txn);
                 };
             }
 
@@ -147,7 +159,7 @@ where
             debug!(id :? = id,name_ident :? =name_ident; "new id");
 
             txn.condition
-                .extend(vec![txn_cond_eq_seq(name_ident, current_id_seq)]);
+                .push(txn_cond_eq_seq(name_ident, current_id_seq));
 
             txn.if_then
                 .push(txn_put_pb_with_ttl(name_ident, &id, None)?); // (tenant, name) -> id
@@ -164,7 +176,7 @@ where
             debug!(name_ident :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
 
             if succ {
-                return Ok(Ok(id));
+                return Ok(CreateIdValueResult::Created(id));
             }
         }
     }
@@ -193,7 +205,7 @@ where
 
             let mut txn = TxnRequest::default();
 
-            let get_res = self.get_id_value(name_ident).await?;
+            let get_res = self.get_id_and_value(name_ident).await?;
             let Some((seq_id, seq_meta)) = get_res else {
                 return Ok(None);
             };
@@ -228,7 +240,7 @@ where
         key: &K,
         value: IdRsc::ValueType,
     ) -> Result<Option<(DataId<IdRsc>, IdRsc::ValueType)>, MetaError> {
-        let got = self.get_id_value(key).await?;
+        let got = self.get_id_and_value(key).await?;
 
         let Some((seq_id, seq_meta)) = got else {
             return Ok(None);
@@ -254,27 +266,13 @@ where
         id_ident: TIdent<IdRsc, DataId<IdRsc>>,
         value: IdRsc::ValueType,
     ) -> Result<Change<IdRsc::ValueType>, MetaError> {
-        let reply = self
-            .upsert_pb(&UpsertPB::new(
-                id_ident,
-                MatchSeq::GE(1),
-                Operation::Update(value),
-                None,
-            ))
-            .await?;
-
-        Ok(reply)
-    }
-
-    /// Get the `name -> id -> value` mapping by name.
-    ///
-    /// Returning `None` means the name does not exist.
-    /// Otherwise, returns the `SeqV<id>` and `SeqV<value>`.
-    async fn get_id_value(
-        &self,
-        key: &K,
-    ) -> Result<Option<(SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>, MetaError> {
-        self.get_id_and_value(key).await
+        self.upsert_pb(&UpsertPB::new(
+            id_ident,
+            MatchSeq::GE(1),
+            Operation::Update(value),
+            None,
+        ))
+        .await
     }
 
     /// list by name prefix, returns a list of `(name, SeqV<id>, SeqV<value>)`
@@ -295,22 +293,21 @@ where
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(ListOptions::unlimited(prefix)).await?;
-            let name_ids = strm.try_collect::<Vec<_>>().await?;
+            let name_ids = self.list_pb_vec(ListOptions::unlimited(prefix)).await?;
 
             let id_idents = name_ids
                 .iter()
-                .map(|itm| itm.seqv.data.into_t_ident(tenant));
+                .map(|(_name, seq_id)| seq_id.data.into_t_ident(tenant))
+                .collect::<Vec<_>>();
 
-            let strm = self.get_pb_values(id_idents).await?;
-            let seq_metas = strm.try_collect::<Vec<_>>().await?;
+            let seq_metas = self.get_pb_values_vec(id_idents).await?;
 
             let name_id_values =
                 name_ids
                     .into_iter()
                     .zip(seq_metas)
-                    .filter_map(|(itm, opt_seq_meta)| {
-                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv, seq_meta))
+                    .filter_map(|((name, seq_id), opt_seq_meta)| {
+                        opt_seq_meta.map(|seq_meta| (name, seq_id, seq_meta))
                     });
 
             Ok(name_id_values)
@@ -358,9 +355,10 @@ where
             MetaError,
         >,
     > + Send {
+        let names = names.into_iter().collect::<Vec<_>>();
+
         async move {
-            let strm = self.get_pb_stream(names).await?;
-            let name_ids = strm.try_collect::<Vec<_>>().await?;
+            let name_ids = self.get_pb_vec(names).await?;
 
             let name_ids = name_ids
                 .into_iter()
@@ -372,8 +370,7 @@ where
                 .map(|(_k, id)| id.clone())
                 .collect::<Vec<_>>();
 
-            let strm = self.get_pb_values(id_idents).await?;
-            let seq_metas = strm.try_collect::<Vec<_>>().await?;
+            let seq_metas = self.get_pb_values_vec(id_idents).await?;
 
             let name_id_values =
                 name_ids

@@ -546,6 +546,7 @@ impl SpillWriter {
     }
 }
 
+#[derive(Clone)]
 pub struct SpillReader {
     spiller: BackpressureSpiller,
     schema: Arc<DataSchema>,

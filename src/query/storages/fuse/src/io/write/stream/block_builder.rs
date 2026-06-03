@@ -55,7 +55,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -128,7 +128,7 @@ impl ArrowParquetWriter {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<FileMetaData> {
+    fn finish(&mut self) -> Result<ParquetMetaData> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
         };
@@ -609,11 +609,7 @@ impl StreamBlockProperties {
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let enable_virtual_column = ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default();
-        let virtual_column_builder = if table.support_virtual_columns() && enable_virtual_column {
+        let virtual_column_builder = if table.enable_virtual_column() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {
             None

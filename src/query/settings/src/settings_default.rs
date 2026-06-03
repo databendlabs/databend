@@ -491,6 +491,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("materialized_cte_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the maximum memory ratio in bytes that materialized CTE execution can use before spilling data to storage, 0 is unlimited",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
@@ -1517,6 +1524,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_proxy_bloom_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable bloom index pruning during PROXY lightweight route estimation. Disabled by default to keep routing cheap.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("proxy_routing_model", DefaultSettingValue {
+                    value: UserSettingValue::String("statistics".to_string()),
+                    desc: "Controls how PROXY chooses a target table. 'statistics' estimates route cost with lightweight pruning; 'prefix' matches predicates against the target cluster key prefix.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: Some(SettingRange::String(vec!["statistics".into(), "prefix".into()])),
+                }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",
@@ -1548,6 +1569,13 @@ impl DefaultSettings {
                 ("force_aggregate_data_spill", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "For testing only. aggregate data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_materialized_cte_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. materialized CTE data will be forcibly spilled to external storage if enabled",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

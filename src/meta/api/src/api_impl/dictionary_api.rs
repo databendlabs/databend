@@ -34,10 +34,12 @@ use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::CreateIdValueMode;
+use crate::name_id_value_api::CreateIdValueResult;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
@@ -70,7 +72,7 @@ where
             .create_id_value(
                 name_ident,
                 &req.dictionary_meta,
-                false,
+                CreateIdValueMode::CreateOnly,
                 |_| vec![],
                 |_, _| Ok(vec![]),
                 |_, _| {},
@@ -78,8 +80,10 @@ where
             .await?;
 
         match create_res {
-            Ok(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
-            Err(_existent) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
+            CreateIdValueResult::Created(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
+            CreateIdValueResult::Existing(_existent) => {
+                Err(AppError::from(name_ident.exist_error(func_name!())).into())
+            }
         }
     }
 
@@ -122,7 +126,7 @@ where
     ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError> {
         debug!(dict_ident :? =(&name_ident); "DictionaryApi: {}", func_name!());
 
-        let got = self.get_id_value(&name_ident).await?;
+        let got = self.get_id_and_value(&name_ident).await?;
         Ok(got)
     }
 

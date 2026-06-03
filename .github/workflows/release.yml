@@ -8,15 +8,15 @@ on:
       tag:
         description: |
           The tags to be released.
-          Nightly release dose not require a tag.
+          Nightly release does not require a tag.
           Stable release requires a nightly version (v1.0.0-nightly).
           Patch release requires a stable version (v1.0.0).
+          Custom release requires a custom tag (v1.0.0-patch.1).
         required: false
         type: string
       sha:
         description: |
-          The commit SHA to release from.
-          If not specified, uses the current HEAD of the branch.
+          The commit SHA to release from (only for custom type).
           Example: cc3d1e657cc8731c976d90764589eb9c748dbca9
         required: false
         type: string
@@ -29,6 +29,7 @@ on:
           - nightly
           - stable
           - patch
+          - custom
 
 permissions:
   id-token: write
@@ -73,6 +74,12 @@ jobs:
             const tag = '${{ steps.bump.outputs.tag }}';
             const previous = '${{ steps.bump.outputs.previous }}';
             const sha = '${{ steps.bump.outputs.sha }}';
+            const fs = require('fs');
+            if (!previous) {
+              core.info('No previous release found, skipping release notes generation');
+              fs.writeFileSync('/tmp/release_notes.md', '');
+              return;
+            }
             const { data } = await github.rest.repos.generateReleaseNotes({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -86,7 +93,6 @@ jobs:
               core.warning(`Release notes too long (${body.length} chars), truncating to ${MAX_LEN}`);
               body = body.substring(0, MAX_LEN) + '\n\n> **Note**: changelog truncated due to GitHub size limits. See commit history for full details.';
             }
-            const fs = require('fs');
             fs.writeFileSync('/tmp/release_notes.md', body);
       - name: Create release
         env:
@@ -102,6 +108,9 @@ jobs:
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --latest --draft
               ;;
             patch)
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
+              ;;
+            custom)
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
               ;;
             *)
@@ -399,6 +408,23 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Check release SHA is on default branch
+        id: default_branch
+        uses: actions/github-script@v7
+        env:
+          RELEASE_SHA: ${{ needs.create_release.outputs.sha }}
+        with:
+          script: |
+            const releaseSha = process.env.RELEASE_SHA;
+            const defaultBranch = context.payload.repository?.default_branch ?? 'main';
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${releaseSha}...${defaultBranch}`,
+            });
+            const containsReleaseSha = comparison.status === 'ahead' || comparison.status === 'identical';
+            core.info(`Default branch ${defaultBranch} contains ${releaseSha}: ${containsReleaseSha}`);
+            core.setOutput('contains_release_sha', containsReleaseSha ? 'true' : 'false');
       - name: Get Image Tags
         id: tags
         uses: actions/github-script@v7
@@ -407,17 +433,24 @@ jobs:
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
           TYPE: ${{ needs.create_release.outputs.type }}
+          DEFAULT_BRANCH_CONTAINS_RELEASE_SHA: ${{ steps.default_branch.outputs.contains_release_sha }}
         with:
           script: |
-            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR, DEFAULT_BRANCH_CONTAINS_RELEASE_SHA } = process.env;
             const repos = [REPO_DOCKERHUB, REPO_ECR];
+            const shouldPushNightly = TYPE === 'nightly' && DEFAULT_BRANCH_CONTAINS_RELEASE_SHA === 'true';
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
-              if (TYPE === 'stable') {
-                tags.push(`${repo}:latest`);
-              } else {
-                tags.push(`${repo}:nightly`);
+              switch (TYPE) {
+                case 'stable':
+                  tags.push(`${repo}:latest`);
+                  break;
+                case 'nightly':
+                  if (shouldPushNightly) {
+                    tags.push(`${repo}:nightly`);
+                  }
+                  break;
               }
             }
             core.setOutput('tags', tags.join(','));
@@ -486,6 +519,23 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Check release SHA is on default branch
+        id: default_branch
+        uses: actions/github-script@v7
+        env:
+          RELEASE_SHA: ${{ needs.create_release.outputs.sha }}
+        with:
+          script: |
+            const releaseSha = process.env.RELEASE_SHA;
+            const defaultBranch = context.payload.repository?.default_branch ?? 'main';
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${releaseSha}...${defaultBranch}`,
+            });
+            const containsReleaseSha = comparison.status === 'ahead' || comparison.status === 'identical';
+            core.info(`Default branch ${defaultBranch} contains ${releaseSha}: ${containsReleaseSha}`);
+            core.setOutput('contains_release_sha', containsReleaseSha ? 'true' : 'false');
       - name: Get Image Tags
         id: tags
         uses: actions/github-script@v7
@@ -494,17 +544,24 @@ jobs:
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
           TYPE: ${{ needs.create_release.outputs.type }}
+          DEFAULT_BRANCH_CONTAINS_RELEASE_SHA: ${{ steps.default_branch.outputs.contains_release_sha }}
         with:
           script: |
-            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR, DEFAULT_BRANCH_CONTAINS_RELEASE_SHA } = process.env;
             const repos = [REPO_DOCKERHUB, REPO_ECR];
+            const shouldPushNightly = TYPE === 'nightly' && DEFAULT_BRANCH_CONTAINS_RELEASE_SHA === 'true';
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
-              if (TYPE === 'stable') {
-                tags.push(`${repo}:latest`);
-              } else {
-                tags.push(`${repo}:nightly`);
+              switch (TYPE) {
+                case 'stable':
+                  tags.push(`${repo}:latest`);
+                  break;
+                case 'nightly':
+                  if (shouldPushNightly) {
+                    tags.push(`${repo}:nightly`);
+                  }
+                  break;
               }
             }
             core.setOutput('tags', tags.join(','));

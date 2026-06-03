@@ -5,26 +5,11 @@ settings (ddl_column_type_nullable=0) create or replace table t1 as select * fro
 query T
 explain select count() from t1 where number % 10 = 11;
 ----
-AggregateFinal
+EvalScalar
 ├── output columns: [count() (#1)]
-├── group by: []
-├── aggregate functions: [count()]
+├── expressions: [0]
 ├── estimated rows: 1.00
-└── AggregatePartial
-    ├── group by: []
-    ├── aggregate functions: [count()]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: []
-        ├── read rows: 1000
-        ├── read size: 1.41 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [t1.number (#0) % 10 = 11], limit: NONE]
-        └── estimated rows: 0.00
+└── DummyTableScan
 
 # selectivity == 0.1
 query T

@@ -35,7 +35,7 @@ use super::util::TableIdentifier;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::binder::Binder;
-use crate::binder::resolve_stage_location;
+use crate::binder::StageResolver;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -252,8 +252,15 @@ impl Binder {
                                 "Insert into branch from stage is not supported yet",
                             ));
                         }
-                        let (mut stage_info, path) =
-                            resolve_stage_location(self.ctx.as_ref(), loc).await?;
+                        let (mut stage_info, path) = StageResolver::from_table_context(
+                            self.ctx.clone(),
+                            databend_common_users::UserApiProvider::instance(),
+                            databend_common_config::GlobalConfig::instance()
+                                .storage
+                                .allow_insecure,
+                        )?
+                        .resolve_stage_location(loc)
+                        .await?;
                         stage_info.file_format_params = file_format_params;
 
                         let files_info = StageFilesInfo {
