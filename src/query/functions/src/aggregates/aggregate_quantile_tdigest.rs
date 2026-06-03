@@ -91,9 +91,10 @@ impl QuantileTDigestState {
             self.compress();
         }
 
-        self.unmerged_weights.push(weight.unwrap_or(1) as f64);
+        let weight = weight.unwrap_or(1) as f64;
+        self.unmerged_weights.push(weight);
         self.unmerged_means.push(other);
-        self.unmerged_total_weight += 1f64;
+        self.unmerged_total_weight += weight;
     }
 
     pub(crate) fn merge(&mut self, rhs: &mut Self) -> Result<()> {
