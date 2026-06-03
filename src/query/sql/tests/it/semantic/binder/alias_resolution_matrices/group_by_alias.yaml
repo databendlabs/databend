@@ -360,3 +360,9 @@ regions:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, count(*) FROM t GROUP BY CUBE(abs(k))"
+      - key: G4N2S1_14_
+        name: combined_normal_complex_select_alias_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 1 AS k, count(*) FROM t GROUP BY k + 1, GROUPING SETS (())"

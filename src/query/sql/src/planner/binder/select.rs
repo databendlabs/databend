@@ -83,7 +83,7 @@ impl ClauseAliasBindings {
     pub(crate) fn group_item_aliases(
         &self,
         expr: &Expr,
-        in_grouping_sets: bool,
+        disable_select_alias_fallback: bool,
     ) -> ClauseAliasLookup<'_> {
         // Complex GROUP BY items bind input columns first, then fall back to
         // SELECT aliases only for unresolved names in a normal GROUP BY.
@@ -97,7 +97,7 @@ impl ClauseAliasBindings {
             // GROUPING SETS keep prior alias reuse scoped to the current
             // generated set. A complex item in a later set must not bypass that
             // boundary by falling back to SELECT aliases directly.
-            let fallback_aliases = if in_grouping_sets || self.available.is_empty() {
+            let fallback_aliases = if disable_select_alias_fallback || self.available.is_empty() {
                 None
             } else {
                 Some(self.available.as_slice())

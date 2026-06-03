@@ -129,6 +129,34 @@ pub struct GroupingSetsInfo {
     pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
+#[derive(Clone)]
+struct GroupItem {
+    expr: Expr,
+    disable_select_alias_fallback: bool,
+}
+
+impl GroupItem {
+    fn normal(expr: Expr) -> Self {
+        Self {
+            expr,
+            disable_select_alias_fallback: false,
+        }
+    }
+
+    fn grouping_construct(expr: Expr) -> Self {
+        Self {
+            expr,
+            disable_select_alias_fallback: true,
+        }
+    }
+}
+
+enum ExpandedGroup {
+    Normal(Vec<GroupItem>),
+    All,
+    GroupingSets(Vec<Vec<GroupItem>>),
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
     /// Builtin aggregation functions.
@@ -898,16 +926,20 @@ impl Binder {
         let result = (|| {
             let group_by = Self::expand_group(group_by.clone())?;
             match &group_by {
-                GroupBy::Normal(exprs) => self.resolve_group_items(
+                ExpandedGroup::Normal(items) => self.resolve_group_items(
                     bind_context,
                     select_list,
-                    exprs,
+                    items,
                     group_by_aliases,
                     false,
                     &mut vec![],
                 )?,
-                GroupBy::All => {
+                ExpandedGroup::All => {
                     let groups = self.resolve_group_all(select_list)?;
+                    let groups = groups
+                        .into_iter()
+                        .map(GroupItem::normal)
+                        .collect::<Vec<_>>();
                     self.resolve_group_items(
                         bind_context,
                         select_list,
@@ -917,10 +949,9 @@ impl Binder {
                         &mut vec![],
                     )?;
                 }
-                GroupBy::GroupingSets(sets) => {
+                ExpandedGroup::GroupingSets(sets) => {
                     self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
                 }
-                _ => unreachable!(),
             }
             Ok(())
         })();
@@ -928,38 +959,53 @@ impl Binder {
         result
     }
 
-    pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
+    fn expand_group(group_by: GroupBy) -> Result<ExpandedGroup> {
         match group_by {
-            GroupBy::Normal(_) | GroupBy::All | GroupBy::GroupingSets(_) => Ok(group_by),
+            GroupBy::Normal(exprs) => Ok(ExpandedGroup::Normal(
+                exprs.into_iter().map(GroupItem::normal).collect(),
+            )),
+            GroupBy::All => Ok(ExpandedGroup::All),
+            GroupBy::GroupingSets(sets) => Ok(ExpandedGroup::GroupingSets(
+                Self::grouping_construct_sets(sets),
+            )),
             GroupBy::Cube(exprs) => {
                 // Expand CUBE to GroupingSets
-                let sets = Self::generate_cube_sets(exprs);
-                Ok(GroupBy::GroupingSets(sets))
+                Ok(ExpandedGroup::GroupingSets(
+                    Self::generate_cube_sets(exprs)
+                        .into_iter()
+                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+                        .collect(),
+                ))
             }
             GroupBy::Rollup(exprs) => {
                 // Expand ROLLUP to GroupingSets
-                let sets = Self::generate_rollup_sets(exprs);
-                Ok(GroupBy::GroupingSets(sets))
+                Ok(ExpandedGroup::GroupingSets(
+                    Self::generate_rollup_sets(exprs)
+                        .into_iter()
+                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+                        .collect(),
+                ))
             }
             GroupBy::Combined(groups) => {
                 // Flatten and expand all nested GroupBy variants
                 let mut combined_sets = Vec::new();
                 for group in groups {
                     match Self::expand_group(group)? {
-                        GroupBy::Normal(exprs) => {
-                            combined_sets = Self::cartesian_product(combined_sets, vec![exprs]);
+                        ExpandedGroup::Normal(items) => {
+                            combined_sets = Self::cartesian_product(combined_sets, vec![items]);
                         }
-                        GroupBy::GroupingSets(sets) => {
+                        ExpandedGroup::GroupingSets(sets) => {
                             combined_sets = Self::cartesian_product(combined_sets, sets);
                         }
-                        other => {
+                        ExpandedGroup::All => {
                             return Err(ErrorCode::SyntaxException(format!(
-                                "COMBINED GROUP BY does not support {other:?}"
+                                "COMBINED GROUP BY does not support {:?}",
+                                GroupBy::All
                             )));
                         }
                     }
                 }
-                Ok(GroupBy::GroupingSets(combined_sets))
+                Ok(ExpandedGroup::GroupingSets(combined_sets))
             }
         }
     }
@@ -980,8 +1026,17 @@ impl Binder {
         result
     }
 
+    fn grouping_construct_sets(sets: Vec<Vec<Expr>>) -> Vec<Vec<GroupItem>> {
+        sets.into_iter()
+            .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+            .collect()
+    }
+
     /// Perform Cartesian product of two sets of grouping sets
-    fn cartesian_product(set1: Vec<Vec<Expr>>, set2: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
+    fn cartesian_product(
+        set1: Vec<Vec<GroupItem>>,
+        set2: Vec<Vec<GroupItem>>,
+    ) -> Vec<Vec<GroupItem>> {
         if set1.is_empty() {
             return set2;
         }
@@ -1068,7 +1123,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        sets: &[Vec<Expr>],
+        sets: &[Vec<GroupItem>],
         group_by_aliases: &ClauseAliasBindings,
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
@@ -1169,7 +1224,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        group_by: &[Expr],
+        group_by: &[GroupItem],
         group_by_aliases: &ClauseAliasBindings,
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
@@ -1178,7 +1233,8 @@ impl Binder {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
         let mut group_by_aliases = group_by_aliases.clone();
-        for expr in group_by.iter() {
+        for item in group_by.iter() {
+            let expr = &item.expr;
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
                 value: Literal::UInt64(index),
@@ -1211,7 +1267,7 @@ impl Binder {
             }
 
             let (preferred_aliases, fallback_aliases) =
-                group_by_aliases.group_item_aliases(expr, collect_grouping_sets);
+                group_by_aliases.group_item_aliases(expr, item.disable_select_alias_fallback);
 
             let (mut scalar_expr, _) = {
                 let mut type_checker = TypeChecker::try_create_with_alias_fallback(

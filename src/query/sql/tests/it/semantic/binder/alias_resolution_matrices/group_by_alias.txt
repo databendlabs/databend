@@ -494,3 +494,23 @@ status: error
 code: 1065
 message: column k doesn't exist
 
+=== group_by_alias__combined_normal_complex_select_alias_fallback ===
+matrix: group_by_alias
+key: G4N2S1_14_
+setting: enable_group_by_column_first=0
+sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1, GROUPING SETS (())
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#4) AS (#4), 1 AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [2 AS (#1), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── EvalScalar
+        ├── scalars: [2 AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
