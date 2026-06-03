@@ -817,7 +817,6 @@ impl DPhpyOptimizer {
         join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
         probe_cardinality: f64,
         build_cardinality: f64,
-        build_input_cost: f64,
         probe_join: JoinNode,
         build_join: JoinNode,
     ) -> Result<JoinNode> {
@@ -843,7 +842,6 @@ impl DPhpyOptimizer {
 
             // Calculate cost for inner join
             let cost = join_node.cardinality(&self.join_relations).await? * probe_factor
-                + build_input_cost
                 + join_node.children[0].cost
                 + join_node.children[1].cost;
 
@@ -883,7 +881,7 @@ impl DPhpyOptimizer {
         let left_cardinality = left_join.cardinality(&self.join_relations).await?;
         let right_cardinality = right_join.cardinality(&self.join_relations).await?;
 
-        let (probe_cardinality, build_cardinality, build_input_cost, probe_join, build_join) =
+        let (probe_cardinality, build_cardinality, probe_join, build_join) =
             if self.cluster_key_cost.enabled() {
                 let left_filter_factor = self
                     .cluster_key_cost
@@ -897,41 +895,17 @@ impl DPhpyOptimizer {
                     for join_condition in join_conditions.iter_mut() {
                         std::mem::swap(&mut join_condition.0, &mut join_condition.1);
                     }
-                    (
-                        right_cardinality,
-                        left_cardinality,
-                        left_cardinality * left_filter_factor,
-                        right_join,
-                        left_join,
-                    )
+                    (right_cardinality, left_cardinality, right_join, left_join)
                 } else {
-                    (
-                        left_cardinality,
-                        right_cardinality,
-                        right_cardinality * right_filter_factor,
-                        left_join,
-                        right_join,
-                    )
+                    (left_cardinality, right_cardinality, left_join, right_join)
                 }
             } else if left_cardinality < right_cardinality {
                 for join_condition in join_conditions.iter_mut() {
                     std::mem::swap(&mut join_condition.0, &mut join_condition.1);
                 }
-                (
-                    right_cardinality,
-                    left_cardinality,
-                    0.0,
-                    right_join,
-                    left_join,
-                )
+                (right_cardinality, left_cardinality, right_join, left_join)
             } else {
-                (
-                    left_cardinality,
-                    right_cardinality,
-                    0.0,
-                    left_join,
-                    right_join,
-                )
+                (left_cardinality, right_cardinality, left_join, right_join)
             };
 
         // Create join node
@@ -942,7 +916,6 @@ impl DPhpyOptimizer {
                 join_conditions,
                 probe_cardinality,
                 build_cardinality,
-                build_input_cost,
                 probe_join,
                 build_join,
             )
