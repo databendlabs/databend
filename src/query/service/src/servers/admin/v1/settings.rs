@@ -171,9 +171,7 @@ pub async fn set_settings_local(
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn unset_settings_local(
-    Path(key): Path<String>,
-) -> poem::Result<impl IntoResponse> {
+pub async fn unset_settings_local(Path(key): Path<String>) -> poem::Result<impl IntoResponse> {
     let config = GlobalConfig::instance();
     let tenant = config.query.tenant_id.tenant_name();
     Ok(Json(
