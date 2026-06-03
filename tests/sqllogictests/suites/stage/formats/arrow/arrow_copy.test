@@ -21,6 +21,12 @@ select id, name from @data/arrow/sample.arrow (file_format=>'arrow') order by id
 1 alice
 2 bob
 
+query ????
+select metadata$filename, metadata$file_row_number, id, name from @data/arrow/sample.arrow (file_format=>'arrow') order by metadata$file_row_number
+----
+arrow/sample.arrow 0 1 alice
+arrow/sample.arrow 1 2 bob
+
 statement ok
 drop table if exists arrow_stream_copy_t
 
@@ -43,3 +49,9 @@ select id, name from @data/arrow/sample.arrow_stream (file_format=>'arrow_stream
 ----
 1 alice
 2 bob
+
+query ????
+select metadata$filename, metadata$file_row_number, id, name from @data/arrow/sample.arrow_stream (file_format=>'arrow_stream') order by metadata$file_row_number
+----
+arrow/sample.arrow_stream 0 1 alice
+arrow/sample.arrow_stream 1 2 bob
