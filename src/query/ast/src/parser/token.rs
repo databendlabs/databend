@@ -430,6 +430,10 @@ pub enum TokenKind {
     AND,
     #[token("ARRAY", ignore(ascii_case))]
     ARRAY,
+    #[token("ARROW_STREAM", ignore(ascii_case))]
+    ARROW_STREAM,
+    #[token("ARROW", ignore(ascii_case))]
+    ARROW,
     #[token("AS", ignore(ascii_case))]
     AS,
     #[token("ASOF", ignore(ascii_case))]
