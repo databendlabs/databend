@@ -822,11 +822,15 @@ impl DPhpyOptimizer {
         build_join: JoinNode,
     ) -> Result<JoinNode> {
         if !join_conditions.is_empty() {
-            let probe_factor = self.cluster_key_cost.probe_join_factor(
-                &probe_join,
-                &self.join_relations,
-                &join_conditions,
-            )?;
+            let probe_factor = if self.cluster_key_cost.enabled() {
+                self.cluster_key_cost.probe_join_factor(
+                    &probe_join,
+                    &self.join_relations,
+                    &join_conditions,
+                )?
+            } else {
+                1.0
+            };
             let mut join_node = JoinNode {
                 join_type: JoinType::Inner,
                 leaves: Arc::new(union(left, right)),
@@ -878,23 +882,45 @@ impl DPhpyOptimizer {
 
         let left_cardinality = left_join.cardinality(&self.join_relations).await?;
         let right_cardinality = right_join.cardinality(&self.join_relations).await?;
-        let left_filter_factor = self
-            .cluster_key_cost
-            .filter_factor(&left_join, &self.join_relations)?;
-        let right_filter_factor = self
-            .cluster_key_cost
-            .filter_factor(&right_join, &self.join_relations)?;
 
-        // Use the cheaper side as build input after cluster-key filter discount.
         let (probe_cardinality, build_cardinality, build_input_cost, probe_join, build_join) =
-            if left_cardinality * left_filter_factor < right_cardinality * right_filter_factor {
+            if self.cluster_key_cost.enabled() {
+                let left_filter_factor = self
+                    .cluster_key_cost
+                    .filter_factor(&left_join, &self.join_relations)?;
+                let right_filter_factor = self
+                    .cluster_key_cost
+                    .filter_factor(&right_join, &self.join_relations)?;
+
+                // Use the cheaper side as build input after cluster-key filter discount.
+                if left_cardinality * left_filter_factor < right_cardinality * right_filter_factor {
+                    for join_condition in join_conditions.iter_mut() {
+                        std::mem::swap(&mut join_condition.0, &mut join_condition.1);
+                    }
+                    (
+                        right_cardinality,
+                        left_cardinality,
+                        left_cardinality * left_filter_factor,
+                        right_join,
+                        left_join,
+                    )
+                } else {
+                    (
+                        left_cardinality,
+                        right_cardinality,
+                        right_cardinality * right_filter_factor,
+                        left_join,
+                        right_join,
+                    )
+                }
+            } else if left_cardinality < right_cardinality {
                 for join_condition in join_conditions.iter_mut() {
                     std::mem::swap(&mut join_condition.0, &mut join_condition.1);
                 }
                 (
                     right_cardinality,
                     left_cardinality,
-                    left_cardinality * left_filter_factor,
+                    0.0,
                     right_join,
                     left_join,
                 )
@@ -902,7 +928,7 @@ impl DPhpyOptimizer {
                 (
                     left_cardinality,
                     right_cardinality,
-                    right_cardinality * right_filter_factor,
+                    0.0,
                     left_join,
                     right_join,
                 )
@@ -1174,14 +1200,20 @@ impl DPhpyOptimizer {
 
 #[derive(Clone, Default)]
 struct ClusterKeyCostModel {
+    enabled: bool,
     factor: f64,
 }
 
 impl ClusterKeyCostModel {
     fn new(factor_percent: u64) -> Self {
         Self {
+            enabled: factor_percent > 0,
             factor: factor_percent as f64 / 100.0,
         }
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
     }
 
     fn probe_join_factor(

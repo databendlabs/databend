@@ -281,7 +281,7 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
         },
         JoinMemoCase {
             name: "clustered_filter_discount_disabled",
-            description: "The default cluster-key cost factor disables the join-order discount.",
+            description: "The default cluster-key cost factor keeps the original join-order cost formula.",
             tables: string_filter_tables(),
             settings: &[],
             sql: "
