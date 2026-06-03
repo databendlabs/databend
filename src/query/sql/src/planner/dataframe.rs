@@ -61,7 +61,7 @@ impl Dataframe {
         } = self;
 
         let s_expr = binder.bind_projection(&mut bind_context, select_info, s_expr)?;
-        let s_expr = binder.add_internal_column_into_expr(&mut bind_context, s_expr)?;
+        let s_expr = binder.add_bound_columns_into_expr(&mut bind_context, s_expr)?;
 
         Ok(Self {
             query_ctx,

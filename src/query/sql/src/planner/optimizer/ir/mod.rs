@@ -26,6 +26,7 @@ pub use expr::Matcher;
 pub use expr::PatternExtractor;
 pub use expr::SExpr;
 pub use expr::SExprVisitor;
+pub use expr::ScanRequiredColumns;
 pub use expr::Side;
 pub use expr::VisitAction;
 pub use group::Group;

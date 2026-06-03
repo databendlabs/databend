@@ -47,8 +47,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::display::scalar_ref_to_string;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use log::warn;
 
 use crate::AsyncFunctionRewriter;
@@ -429,14 +427,7 @@ impl Binder {
         }
 
         // whether allow rewrite virtual column and pushdown
-        bind_context.allow_virtual_column = self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-            && LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
-                .is_ok();
+        bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
         let mut rewriter =
             SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
@@ -498,10 +489,8 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
-        // add internal column binding into expr
-        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
-
-        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
+        // add internal and virtual column bindings into expr
+        s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
