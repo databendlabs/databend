@@ -159,11 +159,13 @@ async fn infer_arrow_schema_from_file(
         .to_vec();
     let schema = match mode {
         ArrowIpcMode::File => FileReaderBuilder::new()
-            .build(Cursor::new(data))?
+            .build(Cursor::new(data))
+            .map_err(|e| ErrorCode::from(e).add_detail_back(format!("file path: {}", file.path)))?
             .schema()
             .as_ref()
             .try_into()?,
-        ArrowIpcMode::Stream => StreamReader::try_new(Cursor::new(data), None)?
+        ArrowIpcMode::Stream => StreamReader::try_new(Cursor::new(data), None)
+            .map_err(|e| ErrorCode::from(e).add_detail_back(format!("file path: {}", file.path)))?
             .schema()
             .as_ref()
             .try_into()?,
@@ -230,19 +232,25 @@ impl ArrowBlockBuilder {
         })
     }
 
-    fn read_batches(&self, data: Vec<u8>) -> Result<Vec<RecordBatch>> {
+    fn read_batches(&self, path: &str, data: Vec<u8>) -> Result<Vec<RecordBatch>> {
         match self.mode {
             ArrowIpcMode::File => {
-                let reader = FileReaderBuilder::new().build(Cursor::new(data))?;
+                let reader = FileReaderBuilder::new()
+                    .build(Cursor::new(data))
+                    .map_err(|e| {
+                        ErrorCode::from(e).add_detail_back(format!("file path: {path}"))
+                    })?;
                 reader
                     .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
+                    .map_err(|e| ErrorCode::from(e).add_detail_back(format!("file path: {path}")))
             }
             ArrowIpcMode::Stream => {
-                let reader = StreamReader::try_new(Cursor::new(data), None)?;
+                let reader = StreamReader::try_new(Cursor::new(data), None).map_err(|e| {
+                    ErrorCode::from(e).add_detail_back(format!("file path: {path}"))
+                })?;
                 reader
                     .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
+                    .map_err(|e| ErrorCode::from(e).add_detail_back(format!("file path: {path}")))
             }
         }
     }
@@ -317,7 +325,7 @@ impl AccumulatingTransform for ArrowBlockBuilder {
         let mut blocks = Vec::new();
         let mut rows_start = 0;
         let mut rows_loaded = 0;
-        for batch in self.read_batches(data)? {
+        for batch in self.read_batches(&path, data)? {
             if batch.num_rows() == 0 {
                 continue;
             }
