@@ -1,0 +1,288 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::io::Cursor;
+use std::sync::Arc;
+
+use arrow_array::RecordBatch;
+use arrow_ipc::reader::FileReaderBuilder;
+use arrow_ipc::reader::StreamReader;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::ArrowFileFormatParams;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::PrefetchAsyncSourcer;
+use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::init_stage_operator;
+use databend_storages_common_stage::project_columnar;
+
+use crate::BytesBatch;
+use crate::read::load_context::LoadContext;
+use crate::read::whole_file_reader::WholeFileData;
+use crate::read::whole_file_reader::WholeFileReader;
+
+#[derive(Clone, Copy)]
+pub enum ArrowIpcMode {
+    File,
+    Stream,
+}
+
+pub struct ArrowReadPipelineBuilder<'a> {
+    pub(crate) stage_table_info: &'a StageTableInfo,
+    pub(crate) compact_threshold: BlockThresholds,
+    pub(crate) mode: ArrowIpcMode,
+    pub(crate) format_params: ArrowFileFormatParams,
+}
+
+impl ArrowReadPipelineBuilder<'_> {
+    pub fn read_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        internal_columns: Vec<InternalColumn>,
+    ) -> Result<()> {
+        if plan.parts.is_empty() {
+            pipeline.add_source(EmptySource::create, 1)?;
+            return Ok(());
+        };
+
+        let pos_projection = if let Some(PushDownInfo {
+            projection: Some(Projection::Columns(columns)),
+            ..
+        }) = &plan.push_downs
+        {
+            Some(columns.clone())
+        } else {
+            None
+        };
+
+        let settings = ctx.get_settings();
+        ctx.set_partitions(plan.parts.clone())?;
+
+        let max_threads = settings.get_max_threads()? as usize;
+        let num_sources = std::cmp::min(max_threads, plan.parts.len());
+        let operator = init_stage_operator(&self.stage_table_info.stage_info)?;
+        let load_ctx = Arc::new(LoadContext::try_create_for_copy(
+            ctx.clone(),
+            self.stage_table_info,
+            pos_projection,
+            self.compact_threshold,
+            internal_columns,
+        )?);
+
+        pipeline.add_source(
+            |output| {
+                let reader = WholeFileReader::try_create(ctx.clone(), operator.clone())?;
+                PrefetchAsyncSourcer::create(ctx.get_scan_progress(), output, reader)
+            },
+            num_sources,
+        )?;
+
+        pipeline.try_resize(max_threads)?;
+        pipeline.try_add_accumulating_transformer(|| {
+            ArrowBlockBuilder::create(
+                load_ctx.clone(),
+                self.mode,
+                self.format_params.clone(),
+                ctx.clone(),
+            )
+        })?;
+
+        Ok(())
+    }
+}
+
+pub async fn infer_arrow_schema(
+    ctx: &dyn TableContext,
+    stage_table_info: &StageTableInfo,
+    mode: ArrowIpcMode,
+) -> Result<TableSchemaRef> {
+    let thread_num = ctx.get_settings().get_max_threads()? as usize;
+    let files = stage_table_info.list_files(thread_num, Some(1)).await?;
+    let file = files
+        .into_iter()
+        .find(|f| f.size > 0)
+        .ok_or_else(|| ErrorCode::BadBytes("no non-empty Arrow file to infer schema"))?;
+    infer_arrow_schema_from_file(&stage_table_info.stage_info, &file, mode).await
+}
+
+async fn infer_arrow_schema_from_file(
+    stage_info: &databend_common_meta_app::principal::StageInfo,
+    file: &StageFileInfo,
+    mode: ArrowIpcMode,
+) -> Result<TableSchemaRef> {
+    let operator = init_stage_operator(stage_info)?;
+    let data = operator
+        .reader_with(&file.path)
+        .await?
+        .read(0..file.size as u64)
+        .await?
+        .to_vec();
+    let schema = match mode {
+        ArrowIpcMode::File => FileReaderBuilder::new()
+            .build(Cursor::new(data))?
+            .schema()
+            .as_ref()
+            .try_into()?,
+        ArrowIpcMode::Stream => StreamReader::try_new(Cursor::new(data), None)?
+            .schema()
+            .as_ref()
+            .try_into()?,
+    };
+    Ok(Arc::new(schema))
+}
+
+pub(crate) struct ArrowBlockBuilder {
+    ctx: Arc<LoadContext>,
+    mode: ArrowIpcMode,
+    format_params: ArrowFileFormatParams,
+    source_schema: Option<TableSchemaRef>,
+    projection: Option<Vec<Expr>>,
+    copy_projection_evaluator: CopyProjectionEvaluator,
+}
+
+struct CopyProjectionEvaluator {
+    schema: DataSchemaRef,
+    func_ctx: Arc<FunctionContext>,
+}
+
+impl CopyProjectionEvaluator {
+    fn new(schema: DataSchemaRef, func_ctx: Arc<FunctionContext>) -> Self {
+        Self { schema, func_ctx }
+    }
+
+    fn project(&self, block: &DataBlock, projection: &[Expr]) -> Result<DataBlock> {
+        let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let mut entries = Vec::with_capacity(projection.len());
+        let num_rows = block.num_rows();
+        for (field, expr) in self.schema.fields().iter().zip(projection.iter()) {
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                (field.data_type().clone(), num_rows)
+            });
+            entries.push(entry);
+        }
+        Ok(DataBlock::new(entries, num_rows))
+    }
+}
+
+impl ArrowBlockBuilder {
+    pub(crate) fn create(
+        ctx: Arc<LoadContext>,
+        mode: ArrowIpcMode,
+        format_params: ArrowFileFormatParams,
+        table_ctx: Arc<dyn TableContext>,
+    ) -> Result<Self> {
+        let output_schema = Arc::new(DataSchema::from(ctx.schema.as_ref()));
+        let func_ctx = Arc::new(table_ctx.get_function_context()?);
+        Ok(Self {
+            ctx,
+            mode,
+            format_params,
+            source_schema: None,
+            projection: None,
+            copy_projection_evaluator: CopyProjectionEvaluator::new(output_schema, func_ctx),
+        })
+    }
+
+    fn read_batches(&self, data: Vec<u8>) -> Result<Vec<RecordBatch>> {
+        match self.mode {
+            ArrowIpcMode::File => {
+                let reader = FileReaderBuilder::new().build(Cursor::new(data))?;
+                reader
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(Into::into)
+            }
+            ArrowIpcMode::Stream => {
+                let reader = StreamReader::try_new(Cursor::new(data), None)?;
+                reader
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(Into::into)
+            }
+        }
+    }
+
+    fn project_batch(&mut self, path: &str, batch: &RecordBatch) -> Result<DataBlock> {
+        let source_schema = Arc::new(TableSchema::try_from(batch.schema().as_ref())?);
+        let rebuild_projection = self
+            .source_schema
+            .as_ref()
+            .map_or(true, |schema| schema.as_ref() != source_schema.as_ref());
+        if rebuild_projection {
+            let (projection, _) = project_columnar(
+                &source_schema,
+                &self.ctx.schema,
+                &self.format_params.missing_field_as,
+                &self.ctx.default_exprs,
+                path,
+                false,
+            )?;
+            self.source_schema = Some(source_schema.clone());
+            self.projection = Some(projection);
+        }
+
+        let source_data_schema = DataSchema::from(source_schema.as_ref());
+        let block = DataBlock::from_record_batch(&source_data_schema, batch)?;
+        self.copy_projection_evaluator
+            .project(&block, self.projection.as_deref().unwrap())
+    }
+}
+
+impl AccumulatingTransform for ArrowBlockBuilder {
+    const NAME: &'static str = "ArrowBlockBuilder";
+
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
+        let meta = data
+            .get_owned_meta()
+            .ok_or_else(|| ErrorCode::Internal("ArrowBlockBuilder expects file data meta"))?;
+        let (path, data) = match BytesBatch::downcast_from_err(meta) {
+            Ok(data) => (data.path, data.data),
+            Err(meta) => {
+                let data = WholeFileData::downcast_from(meta).ok_or_else(|| {
+                    ErrorCode::Internal("ArrowBlockBuilder expects Arrow file data")
+                })?;
+                (data.path, data.data)
+            }
+        };
+        let mut blocks = Vec::new();
+        for batch in self.read_batches(data)? {
+            if batch.num_rows() == 0 {
+                continue;
+            }
+            blocks.push(self.project_batch(&path, &batch)?);
+        }
+        Ok(blocks)
+    }
+}

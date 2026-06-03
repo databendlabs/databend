@@ -567,6 +567,31 @@ impl TableContextTableManagement for QueryContext {
                 };
                 StageTable::try_create(info)
             }
+            FileFormatParams::Arrow(..) | FileFormatParams::ArrowStream(..) => {
+                if max_column_position > 0 {
+                    return Err(ErrorCode::SemanticError(
+                        "Query from Arrow file does not support column positions. Query Arrow fields by name.",
+                    ));
+                }
+                let mode = match &stage_info.file_format_params {
+                    FileFormatParams::Arrow(..) => ArrowIpcMode::File,
+                    FileFormatParams::ArrowStream(..) => ArrowIpcMode::Stream,
+                    _ => unreachable!(),
+                };
+                let mut info = StageTableInfo {
+                    schema: Arc::new(TableSchema::empty()),
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    is_select: true,
+                    is_variant: false,
+                    stage_root,
+                    copy_into_table_options: copy_options.clone(),
+                    ..Default::default()
+                };
+                info.schema = infer_arrow_schema(self, &info, mode).await?;
+                StageTable::try_create(info)
+            }
             FileFormatParams::Csv(..) | FileFormatParams::Text(..) => {
                 if max_column_position == 0 {
                     let file_type = match stage_info.file_format_params {
@@ -611,7 +636,7 @@ impl TableContextTableManagement for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TEXT. Provided: '{}'",
+                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TEXT, ARROW, ARROW_STREAM. Provided: '{}'",
                     stage_info.file_format_params
                 )));
             }
