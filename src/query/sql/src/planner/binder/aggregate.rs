@@ -1210,7 +1210,8 @@ impl Binder {
                 continue;
             }
 
-            let (preferred_aliases, fallback_aliases) = group_by_aliases.group_item_aliases(expr);
+            let (preferred_aliases, fallback_aliases) =
+                group_by_aliases.group_item_aliases(expr, collect_grouping_sets);
 
             let (mut scalar_expr, _) = {
                 let mut type_checker = TypeChecker::try_create_with_alias_fallback(
@@ -1230,8 +1231,8 @@ impl Binder {
             //
             // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
             // use the preceding group item alias `k`.
-            // `SELECT i AS k FROM t GROUP BY abs(k)` is still rejected because
-            // complex GROUP BY items do not expand SELECT aliases directly.
+            // Without a preceding group item alias, complex GROUP BY items
+            // still bind input columns before falling back to SELECT aliases.
             let group_alias = group_by_aliases.matched_group_item_alias(expr, &scalar_expr);
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());

@@ -247,9 +247,78 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_alias__group_by_complex_select_alias_conflict_uses_input ===
+matrix: group_by_alias
+key: G0N2S1_7_0
+setting: enable_group_by_column_first=0
+sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3), 1 AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [plus(t.k (#1), 1) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [plus(t.k (#1), 1) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_complex_select_alias_no_input_fallback__group_by_column_first_off__run_1 ===
+matrix: group_by_alias
+key: G0N2S1_7_1
+setting: enable_group_by_column_first=0
+sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2), 1 AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [2 AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [2 AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_complex_select_alias_no_input_fallback__group_by_column_first_on__run_2 ===
+matrix: group_by_alias
+key: G0N2S1_7_1
+setting: enable_group_by_column_first=1
+sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2), 1 AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [2 AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [2 AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_complex_select_alias_ambiguous_input_rejected ===
+matrix: group_by_alias
+key: G0N2S1_7_2
+setting: enable_group_by_column_first=0
+sql: SELECT 1 AS k, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY k + 1
+status: error
+code: 1065
+message: column k reference or alias is ambiguous, please use another alias name
+
 === group_by_alias__group_by_aggregate_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S2_8_0
+key: G0N0S2_9_0
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
 status: ok
@@ -276,7 +345,7 @@ EvalScalar
 
 === group_by_alias__group_by_aggregate_alias_no_input_rejected ===
 matrix: group_by_alias
-key: G0N0S2_8_1
+key: G0N0S2_9_1
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c FROM t GROUP BY c
 status: error
@@ -285,7 +354,7 @@ message: GROUP BY items can't contain aggregate functions or window functions: C
 
 === group_by_alias__group_by_srf_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S4_9_0
+key: G0N0S4_10_0
 setting: enable_group_by_column_first=0
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
 status: ok
@@ -309,7 +378,7 @@ Sort
 
 === group_by_alias__group_by_srf_alias_no_input ===
 matrix: group_by_alias
-key: G0N0S4_9_1
+key: G0N0S4_10_1
 setting: enable_group_by_column_first=0
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
 status: ok
@@ -333,7 +402,7 @@ Sort
 
 === group_by_alias__group_by_ordinal_uses_select_item_position ===
 matrix: group_by_alias
-key: G0N4N0_11_
+key: G0N4N0_12_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY 1
 status: ok
@@ -353,7 +422,7 @@ EvalScalar
 
 === group_by_alias__group_by_all_expands_non_aggregate_select_items ===
 matrix: group_by_alias
-key: G5N5N0_12_
+key: G5N5N0_13_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY ALL
 status: ok
@@ -373,7 +442,7 @@ EvalScalar
 
 === group_by_alias__group_by_qualified_name_does_not_consume_prior_group_alias ===
 matrix: group_by_alias
-key: G0N1G0_13_
+key: G0N1G0_14_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY k, t.k
 status: error
@@ -382,7 +451,7 @@ message: column k doesn't exist
 
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G0N3S1_13_
+key: G0N3S1_14_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
@@ -391,9 +460,36 @@ message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G1N1S1_13_
+key: G1N1S1_14_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
+status: error
+code: 1065
+message: column k doesn't exist
+
+=== group_by_alias__grouping_sets_complex_select_alias_does_not_fallback ===
+matrix: group_by_alias
+key: G1N2S1_14_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((abs(k)))
+status: error
+code: 1065
+message: column k doesn't exist
+
+=== group_by_alias__rollup_complex_select_alias_does_not_fallback ===
+matrix: group_by_alias
+key: G2N2S1_14_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, count(*) FROM t GROUP BY ROLLUP(abs(k))
+status: error
+code: 1065
+message: column k doesn't exist
+
+=== group_by_alias__cube_complex_select_alias_does_not_fallback ===
+matrix: group_by_alias
+key: G3N2S1_14_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, count(*) FROM t GROUP BY CUBE(abs(k))
 status: error
 code: 1065
 message: column k doesn't exist

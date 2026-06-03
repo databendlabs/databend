@@ -80,19 +80,33 @@ pub(crate) type ClauseAliasLookup<'a> = (
 );
 
 impl ClauseAliasBindings {
-    pub(crate) fn group_item_aliases(&self, expr: &Expr) -> ClauseAliasLookup<'_> {
-        // Only simple GROUP BY items can resolve SELECT aliases directly.
+    pub(crate) fn group_item_aliases(
+        &self,
+        expr: &Expr,
+        in_grouping_sets: bool,
+    ) -> ClauseAliasLookup<'_> {
+        // Complex GROUP BY items bind input columns first, then fall back to
+        // SELECT aliases only for unresolved names in a normal GROUP BY.
         //
         // `SELECT i AS k FROM t GROUP BY k` may bind `k` as the alias for `i`.
-        // `SELECT i AS k FROM t GROUP BY abs(k)` must not expand `k` directly
-        // from the SELECT list. A complex item may only reuse an alias that an
-        // earlier simple item has already grouped, for example
-        // `GROUP BY k, abs(k)`.
+        // `SELECT 1 AS k FROM t GROUP BY k + 1` may bind `k` from the SELECT
+        // list if there is no input column named `k`.
+        // `GROUP BY k, abs(k)` should still prefer the earlier GROUP BY item
+        // alias inside later complex items, even if an input column conflicts.
         if Self::simple_unqualified_column_name(expr).is_none() {
+            // GROUPING SETS keep prior alias reuse scoped to the current
+            // generated set. A complex item in a later set must not bypass that
+            // boundary by falling back to SELECT aliases directly.
+            let fallback_aliases = if in_grouping_sets || self.available.is_empty() {
+                None
+            } else {
+                Some(self.available.as_slice())
+            };
+
             return (
                 (!self.prior_group_aliases.is_empty())
                     .then_some(self.prior_group_aliases.as_slice()),
-                None,
+                fallback_aliases,
             );
         }
 
