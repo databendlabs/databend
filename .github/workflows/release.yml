@@ -408,6 +408,23 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Check release SHA is on default branch
+        id: default_branch
+        uses: actions/github-script@v7
+        env:
+          RELEASE_SHA: ${{ needs.create_release.outputs.sha }}
+        with:
+          script: |
+            const releaseSha = process.env.RELEASE_SHA;
+            const defaultBranch = context.payload.repository?.default_branch ?? 'main';
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${releaseSha}...${defaultBranch}`,
+            });
+            const containsReleaseSha = comparison.status === 'ahead' || comparison.status === 'identical';
+            core.info(`Default branch ${defaultBranch} contains ${releaseSha}: ${containsReleaseSha}`);
+            core.setOutput('contains_release_sha', containsReleaseSha ? 'true' : 'false');
       - name: Get Image Tags
         id: tags
         uses: actions/github-script@v7
@@ -416,10 +433,12 @@ jobs:
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
           TYPE: ${{ needs.create_release.outputs.type }}
+          DEFAULT_BRANCH_CONTAINS_RELEASE_SHA: ${{ steps.default_branch.outputs.contains_release_sha }}
         with:
           script: |
-            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR, DEFAULT_BRANCH_CONTAINS_RELEASE_SHA } = process.env;
             const repos = [REPO_DOCKERHUB, REPO_ECR];
+            const shouldPushNightly = TYPE === 'nightly' && DEFAULT_BRANCH_CONTAINS_RELEASE_SHA === 'true';
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
@@ -428,7 +447,9 @@ jobs:
                   tags.push(`${repo}:latest`);
                   break;
                 case 'nightly':
-                  tags.push(`${repo}:nightly`);
+                  if (shouldPushNightly) {
+                    tags.push(`${repo}:nightly`);
+                  }
                   break;
               }
             }
@@ -498,6 +519,23 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Check release SHA is on default branch
+        id: default_branch
+        uses: actions/github-script@v7
+        env:
+          RELEASE_SHA: ${{ needs.create_release.outputs.sha }}
+        with:
+          script: |
+            const releaseSha = process.env.RELEASE_SHA;
+            const defaultBranch = context.payload.repository?.default_branch ?? 'main';
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${releaseSha}...${defaultBranch}`,
+            });
+            const containsReleaseSha = comparison.status === 'ahead' || comparison.status === 'identical';
+            core.info(`Default branch ${defaultBranch} contains ${releaseSha}: ${containsReleaseSha}`);
+            core.setOutput('contains_release_sha', containsReleaseSha ? 'true' : 'false');
       - name: Get Image Tags
         id: tags
         uses: actions/github-script@v7
@@ -506,10 +544,12 @@ jobs:
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
           TYPE: ${{ needs.create_release.outputs.type }}
+          DEFAULT_BRANCH_CONTAINS_RELEASE_SHA: ${{ steps.default_branch.outputs.contains_release_sha }}
         with:
           script: |
-            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR, DEFAULT_BRANCH_CONTAINS_RELEASE_SHA } = process.env;
             const repos = [REPO_DOCKERHUB, REPO_ECR];
+            const shouldPushNightly = TYPE === 'nightly' && DEFAULT_BRANCH_CONTAINS_RELEASE_SHA === 'true';
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
@@ -518,7 +558,9 @@ jobs:
                   tags.push(`${repo}:latest`);
                   break;
                 case 'nightly':
-                  tags.push(`${repo}:nightly`);
+                  if (shouldPushNightly) {
+                    tags.push(`${repo}:nightly`);
+                  }
                   break;
               }
             }
