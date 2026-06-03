@@ -1,0 +1,215 @@
+statement ok
+set ddl_column_type_nullable = 0;
+
+statement ok
+drop database if exists join_reorder_cluster_key_cost;
+
+statement ok
+create database join_reorder_cluster_key_cost;
+
+statement ok
+use join_reorder_cluster_key_cost;
+
+statement ok
+create table clustered_side(
+    join_key int,
+    filter_key int,
+    payload int
+) cluster by(filter_key);
+
+statement ok
+insert into clustered_side
+select
+    number % 100,
+    number % 10,
+    number
+from numbers(1000);
+
+statement ok
+create table plain_side(
+    join_key int,
+    filter_key int,
+    payload int
+);
+
+statement ok
+insert into plain_side
+select
+    number % 100,
+    number % 10,
+    number
+from numbers(1000);
+
+statement ok
+analyze table clustered_side;
+
+statement ok
+analyze table plain_side;
+
+# Isolate the cluster-key filter discount from TPCH data shape.
+# With the old formula disabled by factor 0, equal cardinality keeps the plain
+# table as build side. Factor 85 discounts the clustered-side filter and flips
+# the build side. Factor 100 is the neutral discount point and should not take
+# the discounted build-side path.
+statement ok
+set cost_factor_cluster_key = 0;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+
+statement ok
+set cost_factor_cluster_key = 85;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+
+statement ok
+set cost_factor_cluster_key = 100;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+
+statement ok
+create or replace table a(k1 BIGINT, k2 BIGINT, v BIGINT) cluster by(k1, k2);
+
+statement ok
+insert into a
+select number, number, number
+from numbers(1000);
+
+statement ok
+create or replace table b(k1 BIGINT, k2 BIGINT, v BIGINT);
+
+statement ok
+insert into b
+select number, number, number
+from numbers(1000);
+
+statement ok
+create or replace table c(k1 BIGINT, k2 BIGINT, v BIGINT);
+
+statement ok
+insert into c
+select number, number, number
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+statement ok
+analyze table b;
+
+statement ok
+analyze table c;
+
+statement ok
+set cost_factor_cluster_key = 85;
+
+# k1_k2_prefix from cluster_key_join_order.rs.
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+statement ok
+create or replace table a(k1 BIGINT, k2 BIGINT, v BIGINT) cluster by(k2, k1);
+
+statement ok
+insert into a
+select number, number, number
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+# k2_k1_prefix from cluster_key_join_order.rs.
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+statement ok
+create or replace table a(k1 BIGINT, k2 BIGINT, v BIGINT) cluster by(k1, k2);
+
+statement ok
+insert into a
+select number, number, number
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+# filter_preserves_cluster_keys from cluster_key_join_order.rs.
+query T
+explain join
+SELECT *
+FROM (SELECT * FROM a WHERE v >= 0) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+statement ok
+unset cost_factor_cluster_key;
