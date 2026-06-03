@@ -105,6 +105,7 @@ impl Operator for MutationSource {
             statistics: OpStatistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         }))
     }

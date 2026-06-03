@@ -36,6 +36,7 @@ static COST_FACTOR_COMPUTE_PER_ROW: u64 = 1;
 static COST_FACTOR_HASH_TABLE_PER_ROW: u64 = 10;
 static COST_FACTOR_AGGREGATE_PER_ROW: u64 = 5;
 static COST_FACTOR_NETWORK_PER_ROW: u64 = 50;
+static COST_FACTOR_CLUSTER_KEY: u64 = 100;
 
 // Settings for readability and writability of tags.
 // we will not be able to safely get its value when set to only write.
@@ -1239,6 +1240,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_cluster_key", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_CLUSTER_KEY),
+                    desc: "Cost factor percentage for clustered keys in join ordering. Set to 100 to disable this discount.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 // This setting has been deprecated, retained to prevent set errors.
                 ("enable_geo_create_table", DefaultSettingValue {
