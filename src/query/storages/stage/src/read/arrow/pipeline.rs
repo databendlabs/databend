@@ -20,6 +20,7 @@ use arrow_ipc::reader::FileReaderBuilder;
 use arrow_ipc::reader::StreamReader;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
@@ -29,14 +30,18 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::ArrowFileFormatParams;
 use databend_common_pipeline::core::Pipeline;
@@ -44,6 +49,7 @@ use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_stage::project_columnar;
@@ -172,6 +178,7 @@ pub(crate) struct ArrowBlockBuilder {
     source_schema: Option<TableSchemaRef>,
     projection: Option<Vec<Expr>>,
     copy_projection_evaluator: CopyProjectionEvaluator,
+    internal_column_types: Vec<InternalColumnType>,
 }
 
 struct CopyProjectionEvaluator {
@@ -207,6 +214,11 @@ impl ArrowBlockBuilder {
     ) -> Result<Self> {
         let output_schema = Arc::new(DataSchema::from(ctx.schema.as_ref()));
         let func_ctx = Arc::new(table_ctx.get_function_context()?);
+        let internal_column_types = ctx
+            .internal_columns
+            .iter()
+            .map(|column| column.column_type.clone())
+            .collect();
         Ok(Self {
             ctx,
             mode,
@@ -214,6 +226,7 @@ impl ArrowBlockBuilder {
             source_schema: None,
             projection: None,
             copy_projection_evaluator: CopyProjectionEvaluator::new(output_schema, func_ctx),
+            internal_column_types,
         })
     }
 
@@ -260,6 +273,31 @@ impl ArrowBlockBuilder {
     }
 }
 
+fn add_arrow_internal_columns(
+    internal_columns: &[InternalColumnType],
+    path: String,
+    block: &mut DataBlock,
+    start_row: &mut u64,
+) {
+    for column_type in internal_columns {
+        match column_type {
+            InternalColumnType::FileName => {
+                block.add_const_column(Scalar::String(path.clone()), DataType::String);
+            }
+            InternalColumnType::FileRowNumber => {
+                let end_row = *start_row + block.num_rows() as u64;
+                block.add_column(Column::Number(
+                    NumberColumnBuilder::UInt64((*start_row..end_row).collect()).build(),
+                ));
+                *start_row = end_row;
+            }
+            _ => unreachable!(
+                "except InternalColumnType::FileName or InternalColumnType::FileRowNumber"
+            ),
+        }
+    }
+}
+
 impl AccumulatingTransform for ArrowBlockBuilder {
     const NAME: &'static str = "ArrowBlockBuilder";
 
@@ -277,11 +315,27 @@ impl AccumulatingTransform for ArrowBlockBuilder {
             }
         };
         let mut blocks = Vec::new();
+        let mut rows_start = 0;
+        let mut rows_loaded = 0;
         for batch in self.read_batches(data)? {
             if batch.num_rows() == 0 {
                 continue;
             }
-            blocks.push(self.project_batch(&path, &batch)?);
+            let mut block = self.project_batch(&path, &batch)?;
+            add_arrow_internal_columns(
+                &self.internal_column_types,
+                path.clone(),
+                &mut block,
+                &mut rows_start,
+            );
+            rows_loaded += block.num_rows();
+            blocks.push(block);
+        }
+        if !self.ctx.is_select {
+            self.ctx.table_context.add_file_status(&path, FileStatus {
+                num_rows_loaded: rows_loaded,
+                error: None,
+            })?;
         }
         Ok(blocks)
     }
