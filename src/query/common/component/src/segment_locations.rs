@@ -27,6 +27,10 @@ impl SegmentLocationsState {
         self.locations.write().unwrap().insert(location);
     }
 
+    pub fn extend(&self, locations: impl IntoIterator<Item = Location>) {
+        self.locations.write().unwrap().extend(locations);
+    }
+
     pub fn clear(&self) {
         self.locations.write().unwrap().clear();
     }

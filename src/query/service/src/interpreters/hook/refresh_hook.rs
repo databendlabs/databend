@@ -68,21 +68,27 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("Pipeline execution completed successfully, starting refresh job");
-            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
-                Ok(_) => {
-                    info!("Refresh job completed successfully");
-                }
-                Err(e) => {
-                    info!("Refresh job failed: {:?}", e);
-                }
-            }
+            let _ = GlobalIORuntime::instance().block_on(execute_refresh_hook(ctx, desc));
         }
         Ok(())
     });
 }
 
-async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+    info!("Table hook starting refresh job");
+    match do_refresh(ctx, desc).await {
+        Ok(_) => {
+            info!("Refresh job completed successfully");
+        }
+        Err(e) => {
+            info!("Refresh job failed: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;

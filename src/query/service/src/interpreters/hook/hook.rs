@@ -19,20 +19,23 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use log::info;
 use log::warn;
 
 use crate::interpreters::hook::analyze_hook::AnalyzeDesc;
 use crate::interpreters::hook::analyze_hook::hook_analyze;
 use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
 use crate::interpreters::hook::compact_hook::CompactTargetTableDescription;
+use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
 use crate::interpreters::hook::compact_hook::hook_compact;
 use crate::interpreters::hook::refresh_hook::RefreshDesc;
 use crate::interpreters::hook::refresh_hook::hook_refresh;
+use crate::interpreters::hook::table_hook_scheduler::TableHookScheduler;
+use crate::interpreters::hook::table_hook_scheduler::TableHookTask;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 /// Hook operator.
 pub struct HookOperator {
@@ -71,31 +74,69 @@ impl HookOperator {
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
+        if TableHookScheduler::is_async_enabled() {
+            self.execute_async(pipeline).await;
+            return;
+        }
+
         self.execute_compact(pipeline).await;
         self.execute_refresh(pipeline).await;
         self.execute_analyze(pipeline).await;
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn execute_async(&self, pipeline: &mut Pipeline) {
+        if pipeline.is_empty() {
+            return;
+        }
+
+        let table_id = match self
+            .ctx
+            .get_table(&self.catalog, &self.database, &self.table)
+            .await
+        {
+            Ok(table) => table.get_id(),
+            Err(e) => {
+                warn!(
+                    "Failed to resolve table id for async table hook {}.{}.{}: {}",
+                    self.catalog, self.database, self.table, e
+                );
+                return;
+            }
+        };
+
+        let task = TableHookTask {
+            ctx: self.ctx.clone(),
+            table_id,
+            compact_target: CompactTargetTableDescription {
+                catalog: self.catalog.clone(),
+                database: self.database.clone(),
+                table: self.table.clone(),
+            },
+            lock_opt: self.lock_opt.clone(),
+            operation_name: self.mutation_kind.to_string(),
+            main_operation_start: Instant::now(),
+        };
+
+        pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if info.res.is_ok() {
+                match TableHookScheduler::try_instance() {
+                    Some(scheduler) => scheduler.enqueue(task),
+                    None => warn!("Async table hook scheduler is not initialized"),
+                }
+            }
+
+            Ok(())
+        });
     }
 
     /// Execute the compact hook operator.
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_compact(&self, pipeline: &mut Pipeline) {
-        match self.ctx.get_settings().get_enable_compact_after_write() {
-            Ok(false) => {
-                info!("Auto compaction is disabled");
-                return;
-            }
-            Err(e) => {
-                // swallow the exception, compaction hook should not prevent the main operation.
-                warn!(
-                    "Failed to retrieve compaction settings, continuing without compaction: {}",
-                    e
-                );
-                return;
-            }
-            Ok(true) => {
-                // auto compaction is enabled, proceed with the compaction process.
-            }
+        if !compact_after_write_enabled(&self.ctx) {
+            return;
         }
 
         let compact_target = CompactTargetTableDescription {

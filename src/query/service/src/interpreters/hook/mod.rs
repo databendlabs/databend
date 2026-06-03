@@ -15,9 +15,11 @@
 pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
 pub(crate) mod refresh_hook;
+pub(crate) mod table_hook_scheduler;
 pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
 mod hook;
 
 pub use hook::HookOperator;
+pub use table_hook_scheduler::TableHookScheduler;
