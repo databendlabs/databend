@@ -40,14 +40,20 @@ use crate::plans::Statistics;
 pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    collect_cluster_keys: bool,
 }
 
 impl CollectStatisticsOptimizer {
-    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
-        CollectStatisticsOptimizer {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
+        Ok(CollectStatisticsOptimizer {
+            collect_cluster_keys: opt_ctx
+                .get_table_ctx()
+                .get_settings()
+                .get_cost_factor_cluster_key()?
+                > 0,
             table_ctx: opt_ctx.get_table_ctx(),
             metadata: opt_ctx.get_metadata(),
-        }
+        })
     }
 
     pub async fn optimize_async(&mut self, s_expr: &SExpr) -> Result<SExpr> {
@@ -94,7 +100,9 @@ impl CollectStatisticsOptimizer {
                         }
                     }
                 }
-                let cluster_key_order = if let Some((_, cluster_key)) = table.cluster_key_meta() {
+                let cluster_key_order = if self.collect_cluster_keys
+                    && let Some((_, cluster_key)) = table.cluster_key_meta()
+                {
                     analyze_cluster_key_order(
                         self.table_ctx.clone(),
                         table.clone(),
