@@ -340,25 +340,69 @@ impl Column {
                 NullableColumn::new_column(column, validity)
             }
             DataType::Array(inner) => {
-                let f = DataField::new("DUMMY", *inner.clone());
-                let inner_f = Field::from(&f);
-                let array =
-                    arrow_cast::cast(array.as_ref(), &ArrowDataType::LargeList(inner_f.into()))?;
-
-                let array = array
-                    .as_any()
-                    .downcast_ref::<arrow_array::LargeListArray>()
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "Cannot downcast to LargeListArray from array: {:?}",
-                            array
-                        ))
-                    })?;
-                let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
-                let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
-
-                let inner_col = ArrayColumn::new(values, offsets);
-                Column::Array(Box::new(inner_col))
+                let (values, offsets) = match array.data_type() {
+                    ArrowDataType::LargeList(_) => {
+                        let array = array
+                            .as_any()
+                            .downcast_ref::<arrow_array::LargeListArray>()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(format!(
+                                    "Cannot downcast to LargeListArray from array: {:?}",
+                                    array
+                                ))
+                            })?;
+                        let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
+                        (array.values().clone(), offsets)
+                    }
+                    ArrowDataType::List(_) => {
+                        let array = array
+                            .as_any()
+                            .downcast_ref::<arrow_array::ListArray>()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(format!(
+                                    "Cannot downcast to ListArray from array: {:?}",
+                                    array
+                                ))
+                            })?;
+                        let offsets: Buffer<i32> = array.offsets().inner().inner().clone().into();
+                        let offsets = offsets.into_iter().map(|x| x as u64).collect();
+                        (array.values().clone(), offsets)
+                    }
+                    ArrowDataType::FixedSizeList(_, size) => {
+                        let array = array
+                            .as_any()
+                            .downcast_ref::<arrow_array::FixedSizeListArray>()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(format!(
+                                    "Cannot downcast to FixedSizeListArray from array: {:?}",
+                                    array
+                                ))
+                            })?;
+                        let offsets = (0..=array.len()).map(|i| i as u64 * *size as u64).collect();
+                        (array.values().clone(), offsets)
+                    }
+                    _ => {
+                        let f = DataField::new("DUMMY", *inner.clone());
+                        let inner_f = Field::from(&f);
+                        let array = arrow_cast::cast(
+                            array.as_ref(),
+                            &ArrowDataType::LargeList(inner_f.into()),
+                        )?;
+                        let array = array
+                            .as_any()
+                            .downcast_ref::<arrow_array::LargeListArray>()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(format!(
+                                    "Cannot downcast to LargeListArray from array: {:?}",
+                                    array
+                                ))
+                            })?;
+                        let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
+                        (array.values().clone(), offsets)
+                    }
+                };
+                let values = Column::from_arrow_rs(values, inner.as_ref())?;
+                Column::Array(Box::new(ArrayColumn::new(values, offsets)))
             }
             DataType::Map(inner) => {
                 let array = array
