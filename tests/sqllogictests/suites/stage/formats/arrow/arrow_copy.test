@@ -21,6 +21,12 @@ select id, name from @data/arrow/ (files=>('sample.arrow'), file_format=>'arrow'
 1 alice
 2 bob
 
+query ??
+select id, name from @data (files=>('empty.txt', 'arrow/sample.arrow'), file_format=>'arrow') order by id
+----
+1 alice
+2 bob
+
 query ????
 select metadata$filename, metadata$file_row_number, id, name from @data/arrow/ (files=>('sample.arrow'), file_format=>'arrow') order by metadata$file_row_number
 ----

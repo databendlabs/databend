@@ -136,8 +136,13 @@ pub async fn infer_arrow_schema(
     stage_table_info: &StageTableInfo,
     mode: ArrowIpcMode,
 ) -> Result<TableSchemaRef> {
-    let thread_num = ctx.get_settings().get_max_threads()? as usize;
-    let files = stage_table_info.list_files(thread_num, Some(1)).await?;
+    let files = match &stage_table_info.files_to_copy {
+        Some(files) => files.clone(),
+        None => {
+            let thread_num = ctx.get_settings().get_max_threads()? as usize;
+            stage_table_info.list_files(thread_num, None).await?
+        }
+    };
     let file = files
         .into_iter()
         .find(|f| f.size > 0)
