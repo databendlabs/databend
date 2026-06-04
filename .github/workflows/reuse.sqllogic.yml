@@ -91,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v7
       - uses: ./.github/actions/setup_minio
       - name: Start UDF Server
         working-directory: tests/udf
@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v7
       - name: Start Cloud Control Server
         working-directory: tests/cloud_control_server
         run: |

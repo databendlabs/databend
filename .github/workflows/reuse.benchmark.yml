@@ -189,7 +189,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v7
       - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
@@ -252,7 +252,7 @@ jobs:
           - "internal"
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v7
       - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
