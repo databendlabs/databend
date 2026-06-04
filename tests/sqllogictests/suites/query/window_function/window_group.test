@@ -1,0 +1,20 @@
+statement ok
+SET max_threads = 1
+
+query III
+SELECT
+    number,
+    row_number() OVER (ORDER BY number DESC) AS rn_desc,
+    rank() OVER (ORDER BY number % 3, number) AS modulo_rank
+FROM numbers(6)
+ORDER BY number
+----
+0 6 1
+1 5 3
+2 4 5
+3 3 2
+4 2 4
+5 1 6
+
+statement ok
+UNSET max_threads

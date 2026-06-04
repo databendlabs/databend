@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -278,6 +280,12 @@ async fn test_binder_window_core_paths() -> Result<()> {
             sql: "SELECT row_number() OVER (ORDER BY number), row_number() OVER (ORDER BY number) FROM t",
         },
         SqlTestCase {
+            name: "multiple_window_expressions_use_window_group",
+            description: "Multiple distinct window expressions should bind through WindowGroup instead of nested Window nodes.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY number), rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM t",
+        },
+        SqlTestCase {
             name: "laglead_window_from_sqllogictest_binds",
             description: "A sqllogictest LEAD window pattern should still bind through the lag/lead rewrite path.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -298,6 +306,103 @@ async fn test_binder_window_core_paths() -> Result<()> {
     ];
 
     run_binder_cases("binder_window_core.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> {
+    let case = SqlTestCase {
+        name: "many_window_expressions_bind_as_flat_window_group",
+        description: "Many distinct window expressions should bind as one flat WindowGroup instead of a deep Window chain.",
+        setup_sqls: &["CREATE TABLE t(number UInt64)"],
+        sql: "SELECT 1",
+    };
+    let ctx = setup_context(&case).await?;
+
+    let window_count = 128;
+    let select_items = (0..window_count)
+        .map(|i| format!("lead(number, {i}, number) OVER (ORDER BY number) AS w{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("SELECT {select_items} FROM t");
+
+    let plan = ctx.bind_sql(&sql).await?;
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan");
+    };
+
+    let mut stats = WindowPlanStats::default();
+    collect_window_plan_stats(&s_expr, &mut stats);
+
+    assert_eq!(stats.window_group_nodes, 1);
+    assert_eq!(stats.window_nodes, 0);
+    assert_eq!(stats.window_group_windows, window_count);
+    assert!(
+        stats.max_depth < 16,
+        "window plan should stay shallow, got depth {}",
+        stats.max_depth
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_mixed_partition_windows_bind_as_partitioned_window_groups() -> Result<()> {
+    let case = SqlTestCase {
+        name: "mixed_partition_windows_bind_as_partitioned_window_groups",
+        description: "Window expressions with different partition requirements should bind as separate WindowGroup nodes.",
+        setup_sqls: &["CREATE TABLE t(number UInt64, value UInt64)"],
+        sql: "SELECT row_number() OVER (ORDER BY value) AS w0, rank() OVER (PARTITION BY number % 3 ORDER BY value) AS w1, dense_rank() OVER (PARTITION BY number % 3 ORDER BY value DESC) AS w2 FROM t",
+    };
+    let ctx = setup_context(&case).await?;
+
+    let plan = ctx.bind_sql(case.sql).await?;
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan");
+    };
+
+    let mut stats = WindowPlanStats::default();
+    collect_window_plan_stats(&s_expr, &mut stats);
+
+    assert_eq!(stats.window_group_nodes, 2);
+    assert_eq!(stats.window_nodes, 0);
+    assert_eq!(stats.window_group_windows, 3);
+    assert!(
+        stats.max_depth < 8,
+        "window plan should stay shallow, got depth {}",
+        stats.max_depth
+    );
+
+    Ok(())
+}
+
+#[derive(Default)]
+struct WindowPlanStats {
+    window_group_nodes: usize,
+    window_group_windows: usize,
+    window_nodes: usize,
+    max_depth: usize,
+}
+
+fn collect_window_plan_stats(s_expr: &SExpr, stats: &mut WindowPlanStats) {
+    collect_window_plan_stats_inner(s_expr, stats, 1);
+}
+
+fn collect_window_plan_stats_inner(s_expr: &SExpr, stats: &mut WindowPlanStats, depth: usize) {
+    stats.max_depth = stats.max_depth.max(depth);
+    match s_expr.plan() {
+        RelOperator::Window(_) => {
+            stats.window_nodes += 1;
+        }
+        RelOperator::WindowGroup(window_group) => {
+            stats.window_group_nodes += 1;
+            stats.window_group_windows += window_group.windows.len();
+        }
+        _ => {}
+    }
+
+    for child in s_expr.children() {
+        collect_window_plan_stats_inner(child, stats, depth + 1);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

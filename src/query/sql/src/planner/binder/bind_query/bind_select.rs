@@ -457,8 +457,9 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
-        for window_info in &from_context.windows.window_functions {
-            s_expr = self.bind_window_function(window_info, s_expr)?;
+        if !from_context.windows.window_functions.is_empty() {
+            let window_functions = from_context.windows.window_functions.clone();
+            s_expr = self.bind_window_functions(&window_functions, s_expr)?;
         }
 
         // Bind lazy Set-returning functions after aggregate plan.

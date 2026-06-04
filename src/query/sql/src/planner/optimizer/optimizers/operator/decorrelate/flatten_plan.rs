@@ -66,6 +66,7 @@ use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 use crate::plans::WindowPartition;
 
 impl SubqueryDecorrelatorOptimizer {
@@ -204,6 +205,14 @@ impl SubqueryDecorrelatorOptimizer {
                 derived_columns,
             ),
             RelOperator::Window(op) => self.flatten_sub_window(
+                outer,
+                subquery,
+                op,
+                correlated_columns,
+                flatten_info,
+                derived_columns,
+            ),
+            RelOperator::WindowGroup(op) => self.flatten_sub_window_group(
                 outer,
                 subquery,
                 op,
@@ -787,6 +796,7 @@ impl SubqueryDecorrelatorOptimizer {
                 end_bound: WindowFuncFrameBound::CurrentRow,
             },
             limit: None,
+            top: None,
         };
 
         let window_child = if sort_items.is_empty() {
@@ -909,6 +919,72 @@ impl SubqueryDecorrelatorOptimizer {
                 order_by: window.order_by.clone(),
                 frame: window.frame.clone(),
                 limit: window.limit,
+                top: window.top,
+            }),
+            derived_columns,
+        ))
+    }
+
+    fn flatten_sub_window_group(
+        &mut self,
+        outer: &SExpr,
+        subquery: &SExpr,
+        window_group: &WindowGroup,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+        derived_columns: &DerivedColumnScope,
+    ) -> Result<FlattenPlanResult> {
+        if !window_group.used_columns()?.is_disjoint(correlated_columns) {
+            return Err(ErrorCode::SemanticError(
+                "correlated columns in window functions not supported",
+            ));
+        }
+        let (flatten_plan, derived_columns) = self.flatten_plan_with_scope(
+            outer,
+            subquery.unary_child(),
+            correlated_columns,
+            flatten_info,
+            true,
+            derived_columns,
+        )?;
+
+        let metadata = self.metadata.read();
+        let windows = window_group
+            .windows
+            .iter()
+            .map(|window| {
+                let partition_by = window
+                    .partition_by
+                    .iter()
+                    .cloned()
+                    .map(Ok)
+                    .chain(correlated_columns.iter().copied().map(|old| {
+                        Ok(Self::scalar_item_from_index(
+                            derived_columns.must_resolve(old)?,
+                            "outer.",
+                            &metadata,
+                        ))
+                    }))
+                    .collect::<Result<_>>()?;
+                Ok(Window {
+                    span: window.span,
+                    index: window.index,
+                    function: window.function.clone(),
+                    arguments: window.arguments.clone(),
+                    partition_by,
+                    order_by: window.order_by.clone(),
+                    frame: window.frame.clone(),
+                    limit: window.limit,
+                    top: window.top,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        drop(metadata);
+
+        Ok((
+            flatten_plan.build_unary(WindowGroup {
+                windows,
+                scalar_items: window_group.scalar_items.clone(),
             }),
             derived_columns,
         ))
