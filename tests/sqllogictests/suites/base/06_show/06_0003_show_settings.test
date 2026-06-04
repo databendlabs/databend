@@ -31,6 +31,12 @@ SHOW SETTINGS
 statement ok
 SHOW SETTINGS LIKE 'enable%'
 
+# Settings are built-in and cannot be created by the test fixture; this empty
+# result still covers escaping the rewritten LIKE pattern.
+query TTTTTTT
+SHOW SETTINGS LIKE 'a''b%'
+----
+
 query TTTTTTT
 SHOW SETTINGS LIKE 'max_block_size%' LIMIT 1
 ----

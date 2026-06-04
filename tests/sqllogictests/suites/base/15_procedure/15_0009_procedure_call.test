@@ -77,3 +77,7 @@ BEGIN
 END;
 $$;
 
+query IIII
+call admin$tenant_quota('a''b')
+----
+0 0 0 0

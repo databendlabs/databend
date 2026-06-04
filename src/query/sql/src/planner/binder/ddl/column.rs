@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::ShowColumnsStmt;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -92,13 +93,14 @@ impl Binder {
             .with_order_by("column_name");
 
         select_builder
-            .with_filter(format!("table_schema = '{database}'"))
-            .with_filter(format!("table_name = '{table}'"));
+            .with_filter(format!("table_schema = {}", QuotedString(&database, '\'')))
+            .with_filter(format!("table_name = {}", QuotedString(&table, '\'')));
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("column_name LIKE '{pattern}'"));
+                select_builder
+                    .with_filter(format!("column_name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

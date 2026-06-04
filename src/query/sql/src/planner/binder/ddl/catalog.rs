@@ -24,6 +24,7 @@ use databend_common_ast::ast::ShowCatalogsStmt;
 use databend_common_ast::ast::ShowCreateCatalogStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -69,7 +70,7 @@ impl Binder {
         .unwrap();
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                write!(query, " WHERE name LIKE '{pattern}'").unwrap();
+                write!(query, " WHERE name LIKE {}", QuotedString(pattern, '\'')).unwrap();
             }
             Some(ShowLimit::Where { selection }) => {
                 write!(query, " WHERE {selection}").unwrap();

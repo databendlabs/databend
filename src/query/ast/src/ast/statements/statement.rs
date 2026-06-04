@@ -995,7 +995,7 @@ impl Display for Statement {
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::ShowStages { show_options } => {
@@ -1019,7 +1019,7 @@ impl Display for Statement {
             Statement::RemoveStage { location, pattern } => {
                 write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,

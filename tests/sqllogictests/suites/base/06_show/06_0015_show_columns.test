@@ -13,6 +13,9 @@ CREATE TABLE showcolumn.t2(c1 int not null) ENGINE = Null
 statement ok
 CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime not null default '2022-02-02 12:00:00', c3 String not null Default 'c3') ENGINE = Null;
 
+statement ok
+CREATE TABLE showcolumn.t_quote(`a'b_col` int null default 7) ENGINE = Null;
+
 query TTTT??
 SHOW COLUMNS FROM default.showcolumn.t3
 ----
@@ -52,6 +55,11 @@ SHOW FULL COLUMNS IN t3 like '%1';
 ----
 c1 int YES 4 NULL NULL NULL NULL (empty)
 
+query TTTT??T?T
+SHOW FULL COLUMNS IN t_quote like 'a''b%'
+----
+a'b_col int YES 7 NULL NULL NULL NULL (empty)
+
 query TTTT??
 SHOW COLUMNS IN t3 where column_name like '%1';
 ----
@@ -81,6 +89,12 @@ SHOW COLUMNS IN columns from system like '%type%'
 ----
 data_type varchar(16382) NO (empty) NULL NULL
 type varchar(16382) NO (empty) NULL NULL
+
+# system.columns is read-only, so the test cannot create a system column whose
+# name matches a'b%; keep this empty result as rewrite escaping coverage.
+query TTTT??
+SHOW COLUMNS IN columns from system like 'a''b%'
+----
 
 query TTTT??
 SHOW COLUMNS IN columns from system where column_name != '%type%' and is_nullable!='YES'
