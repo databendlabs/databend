@@ -230,27 +230,29 @@ def test_copy_nested_arrow_batches(copy_env, tmp_path, format_name, stream):
     rows = [
         row.values()
         for row in conn.query_iter(
-            f"select id, to_string(items) from {table_name} order by id"
+            f"select id, length(items), items[1].y, items[1].z, items[1].x, "
+            f"items[2].y, items[2].z, items[2].x from {table_name} order by id"
         )
     ]
     assert rows == [
-        (1, "[(10,NULL,1),(20,NULL,2)]"),
-        (2, None),
-        (3, "[]"),
-        (4, "[(40,NULL,4)]"),
+        (1, 2, 10, None, 1, 20, None, 2),
+        (2, None, None, None, None, None, None, None),
+        (3, 0, None, None, None, None, None, None),
+        (4, 1, 40, None, 4, None, None, None),
     ]
 
     selected = [
         row.values()
         for row in conn.query_iter(
-            f"select id, to_string(items) from @{stage_name} order by id"
+            f"select id, length(items), items[1].x, items[1].y, "
+            f"items[2].x, items[2].y from @{stage_name} order by id"
         )
     ]
     assert selected == [
-        (1, "[(1,10),(2,20)]"),
-        (2, None),
-        (3, "[]"),
-        (4, "[(4,40)]"),
+        (1, 2, 1, 10, 2, 20),
+        (2, None, None, None, None, None),
+        (3, 0, None, None, None, None),
+        (4, 1, 4, 40, None, None),
     ]
 
     res = conn.query_row(
@@ -262,12 +264,13 @@ def test_copy_nested_arrow_batches(copy_env, tmp_path, format_name, stream):
     copied_from_select = [
         row.values()
         for row in conn.query_iter(
-            f"select id, to_string(items) from {select_table_name} order by id"
+            f"select id, length(items), items[1].x, items[1].y, "
+            f"items[2].x, items[2].y from {select_table_name} order by id"
         )
     ]
     assert copied_from_select == [
-        (11, "[(1,10),(2,20)]"),
-        (14, "[(4,40)]"),
+        (11, 2, 1, 10, 2, 20),
+        (14, 1, 4, 40, None, None),
     ]
 
 
@@ -307,22 +310,14 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
     inferred_type = conn.query_row(
         f"select typeof(ts), typeof(ts_string) from @{stage_name} limit 1"
     )
-    assert inferred_type.values() == ("TIMESTAMP_TZ", "TIMESTAMP_TZ")
+    assert inferred_type.values() == ("TIMESTAMP_TZ NULL", "TIMESTAMP_TZ NULL")
 
-    first_events = (
-        "[(2025-01-01 00:00:00.000000 +0000,"
-        "2025-01-01 00:00:00.000000 +0000,start)]"
-    )
-    second_events = (
-        "[(2025-01-01 01:00:00.000000 +0000,"
-        "2025-01-01 01:00:00.000000 +0000,middle),"
-        "(2025-01-02 00:00:00.000000 +0000,"
-        "2025-01-02 00:00:00.000000 +0000,end)]"
-    )
     stage_rows = [
         row.values()
         for row in conn.query_iter(
-            f"select id, ts::string, ts_string::string, to_string(events) "
+            f"select id, ts::string, ts_string::string, length(events), "
+            f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
+            f"events[2].ts::string, events[2].ts_string::string, events[2].label "
             f"from @{stage_name} order by id"
         )
     ]
@@ -331,13 +326,25 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
             1,
             "2025-01-01 00:00:00.000000 +0000",
             "2025-01-01 00:00:00.000000 +0000",
-            first_events,
+            1,
+            "2025-01-01 00:00:00.000000 +0000",
+            "2025-01-01 00:00:00.000000 +0000",
+            "start",
+            None,
+            None,
+            None,
         ),
         (
             2,
             "2025-01-01 01:00:00.000000 +0000",
             "2025-01-01 01:00:00.000000 +0000",
-            second_events,
+            2,
+            "2025-01-01 01:00:00.000000 +0000",
+            "2025-01-01 01:00:00.000000 +0000",
+            "middle",
+            "2025-01-02 00:00:00.000000 +0000",
+            "2025-01-02 00:00:00.000000 +0000",
+            "end",
         ),
     ]
 
@@ -347,7 +354,9 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
     copied_rows = [
         row.values()
         for row in conn.query_iter(
-            f"select id, ts::string, ts_string::string, to_string(events) "
+            f"select id, ts::string, ts_string::string, length(events), "
+            f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
+            f"events[2].ts::string, events[2].ts_string::string, events[2].label "
             f"from {table_name} order by id"
         )
     ]
@@ -363,7 +372,9 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
     copied_from_select = [
         row.values()
         for row in conn.query_iter(
-            f"select id, ts::string, ts_string::string, to_string(events) "
+            f"select id, ts::string, ts_string::string, length(events), "
+            f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
+            f"events[2].ts::string, events[2].ts_string::string, events[2].label "
             f"from {select_table_name}"
         )
     ]
@@ -372,6 +383,12 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
             12,
             "2025-01-01 01:00:00.000000 +0000",
             "2025-01-01 01:00:00.000000 +0000",
-            second_events,
+            2,
+            "2025-01-01 01:00:00.000000 +0000",
+            "2025-01-01 01:00:00.000000 +0000",
+            "middle",
+            "2025-01-02 00:00:00.000000 +0000",
+            "2025-01-02 00:00:00.000000 +0000",
+            "end",
         )
     ]
