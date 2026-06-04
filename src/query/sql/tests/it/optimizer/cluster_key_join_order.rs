@@ -441,7 +441,7 @@ async fn explain_memo(ctx: &std::sync::Arc<LiteTableContext>, sql: &str) -> Resu
         .await?
         .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
+        .add(CollectStatisticsOptimizer::new(opt_ctx.clone())?)
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
         .add(RecursiveRuleOptimizer::new(
             opt_ctx.clone(),
