@@ -28,6 +28,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use jiff::tz::TimeZone;
 
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -316,8 +317,7 @@ impl Column {
                 Column::Timestamp(buffer)
             }
             DataType::TimestampTz => {
-                let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Decimal128(38, 0))?;
-                let buffer: Buffer<timestamp_tz> = array.to_data().buffers()[0].clone().into();
+                let buffer = try_to_timestamp_tz_column(array)?;
                 Column::TimestampTz(buffer)
             }
             DataType::Date => {
@@ -474,6 +474,36 @@ fn try_to_string_column(array: ArrayRef) -> Result<StringColumn> {
 
     let data = array.to_data();
     Ok(data.into())
+}
+
+fn try_to_timestamp_tz_column(array: ArrayRef) -> Result<Buffer<timestamp_tz>> {
+    if matches!(
+        array.data_type(),
+        ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View
+    ) {
+        let is_null = (0..array.len())
+            .map(|row| array.is_null(row))
+            .collect::<Vec<_>>();
+        let strings = try_to_string_column(array)?;
+        let timezone = TimeZone::UTC;
+        let values = strings
+            .iter()
+            .enumerate()
+            .map(|(row, value)| {
+                if is_null[row] {
+                    Ok(timestamp_tz::default())
+                } else {
+                    crate::types::timestamp_tz::string_to_timestamp_tz(value.as_bytes(), || {
+                        &timezone
+                    })
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        return Ok(Buffer::from(values));
+    }
+
+    let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Decimal128(38, 0))?;
+    Ok(array.to_data().buffers()[0].clone().into())
 }
 
 fn try_to_opaque_column(array: ArrayRef, size: usize) -> Result<OpaqueColumn> {
