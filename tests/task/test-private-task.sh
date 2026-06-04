@@ -86,6 +86,17 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 check_response_error "$response"
 echo "Set enterprise license for private task tests"
 
+response=$(query_sql_with_auth "root:" "SELECT value FROM system.configs WHERE \"group\" = 'task' AND name = 'on'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "true" ]; then
+    echo "✅ system.configs exposes private task config"
+else
+    echo "❌ Expected system.configs to expose task.on"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 expected_task_history_schema='["name","id","owner","comment","schedule","warehouse","state","definition","condition_text","run_id","query_id","exception_code","exception_text","attempt_number","completed_time","scheduled_time","root_task_id","session_parameters"]'
 
 check_task_history_schema() {
@@ -250,6 +261,84 @@ if [ "$actual" = "0" ]; then
     echo "✅ Slow interval task runs do not overlap"
 else
     echo "❌ Expected slow interval task runs not to overlap"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE TABLE t_failed_task_recovery (c1 int)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK failed_recovery_task SCHEDULE = 2 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 1 AS SELECT CAST('bad' AS INT)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task RESUME")
+check_response_error "$response"
+
+sleep 5
+
+response=$(query_sql_with_auth "root:" "SELECT state, exception_text FROM TASK_HISTORY(TASK_NAME => 'failed_recovery_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.data[0][0]')
+exception_text=$(echo "$response" | jq -r '.data[0][1]')
+if [ "$state" = "FAILED" ] && [[ "$exception_text" == *"bad"* ]]; then
+    echo "✅ Failed task records quoted error text"
+else
+    echo "❌ Expected failed task history to record quoted error text"
+    echo "State: $state"
+    echo "Exception: $exception_text"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'failed_recovery_task' AND state = 'EXECUTING' AND completed_at IS NULL")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Failed task does not leave an executing run behind"
+else
+    echo "❌ Expected failed task not to block future runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'failed_recovery_task', RESULT_LIMIT => 10) WHERE state = 'FAILED'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+response=$(query_sql_with_auth "root:" "SHOW TASKS LIKE 'failed_recovery_task'")
+check_response_error "$response"
+status=$(echo "$response" | jq -r '.data[0][7]')
+if [ "$actual" = "1" ] && [ "$status" = "Suspended" ]; then
+    echo "✅ Failed task suspends after the configured failure count"
+else
+    echo "❌ Expected failed task to suspend after one configured failure"
+    echo "Failed runs: $actual"
+    echo "Status     : $status"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task MODIFY AS INSERT INTO t_failed_task_recovery VALUES(1)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task RESUME")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM t_failed_task_recovery")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task SUSPEND")
+check_response_error "$response"
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ Failed scheduled task can run again after resume"
+else
+    echo "❌ Expected failed scheduled task to run again after resume"
     echo "Actual  : $actual"
     exit 1
 fi
