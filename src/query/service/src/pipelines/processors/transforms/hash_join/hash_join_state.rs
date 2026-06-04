@@ -285,7 +285,6 @@ impl HashJoinState {
         if self.need_mark_scan() {
             build_state.mark_scan_map.clear();
         }
-        build_state.generation_state.is_build_projected = true;
     }
 
     pub fn num_build_chunks(&self) -> usize {

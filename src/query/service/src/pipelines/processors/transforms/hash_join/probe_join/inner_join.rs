@@ -19,14 +19,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
-use databend_common_io::extract_bbox_from_ewkb;
-use databend_common_io::extract_point_xy_from_ewkb;
+use databend_common_io::EwkbBbox;
+use databend_common_io::ewkb_to_bbox;
 
 use crate::pipelines::processors::transforms::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
-use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxCache;
+use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxIndex;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
@@ -230,12 +230,12 @@ impl HashJoinProbeState {
             return Err(ErrorCode::aborting());
         }
 
-        let filtered = build_state.spatial_bbox_cache.as_ref().map(|cache| {
+        let filtered = build_state.spatial_bbox_index.as_ref().map(|index| {
             Self::spatial_bbox_filter_indexes(
                 input,
                 &probe_indexes[0..matched_idx],
                 &build_indexes[0..matched_idx],
-                cache,
+                index,
             )
         });
 
@@ -366,29 +366,22 @@ impl HashJoinProbeState {
         input: &DataBlock,
         probe_indexes: &[u32],
         build_indexes: &[RowPtr],
-        cache: &SpatialBboxCache,
+        index: &SpatialBboxIndex,
     ) -> (Vec<u32>, Vec<RowPtr>, usize) {
-        let probe_col = input.get_by_offset(cache.probe_geom_col_idx).to_column();
+        let probe_col = input.get_by_offset(index.probe_geom_col_idx).to_column();
 
-        let num_probe_rows = input.num_rows();
-        let mut probe_srids: Vec<Option<i32>> = Vec::with_capacity(num_probe_rows);
-        for row_idx in 0..num_probe_rows {
-            let value = unsafe { probe_col.index_unchecked(row_idx) };
-            let srid = match value {
-                databend_common_expression::ScalarRef::Geometry(ewkb) => {
-                    databend_common_io::read_srid_from_bytes(ewkb)
-                }
-                _ => None,
-            };
-            probe_srids.push(srid);
-        }
+        // Lazily parse each referenced probe row at most once. A single probe row
+        // can match many build rows, so parsing on demand and memoizing avoids both
+        // re-parsing and parsing rows the join never references.
+        let mut probe_bboxes: Vec<Option<EwkbBbox>> = vec![None; input.num_rows()];
+        let mut parsed = vec![false; input.num_rows()];
 
         let mut filtered_probe = Vec::with_capacity(probe_indexes.len());
         let mut filtered_build = Vec::with_capacity(build_indexes.len());
 
         for i in 0..probe_indexes.len() {
             let build_bbox =
-                match cache.get_bbox(build_indexes[i].chunk_index, build_indexes[i].row_index) {
+                match index.get_bbox(build_indexes[i].chunk_index, build_indexes[i].row_index) {
                     Some(bb) => bb,
                     None => {
                         filtered_probe.push(probe_indexes[i]);
@@ -398,9 +391,17 @@ impl HashJoinProbeState {
                 };
 
             let probe_idx = probe_indexes[i] as usize;
+            if !parsed[probe_idx] {
+                probe_bboxes[probe_idx] = match unsafe { probe_col.index_unchecked(probe_idx) } {
+                    databend_common_expression::ScalarRef::Geometry(ewkb) => ewkb_to_bbox(ewkb),
+                    _ => None,
+                };
+                parsed[probe_idx] = true;
+            }
+            let probe_bbox = probe_bboxes[probe_idx];
 
-            let probe_srid = probe_srids[probe_idx].unwrap_or(0);
-            let build_srid = cache
+            let probe_srid = probe_bbox.and_then(|result| result.srid).unwrap_or(0);
+            let build_srid = index
                 .get_srid(build_indexes[i].chunk_index, build_indexes[i].row_index)
                 .unwrap_or(0);
             if probe_srid != build_srid {
@@ -409,25 +410,9 @@ impl HashJoinProbeState {
                 continue;
             }
 
-            let probe_value = unsafe { probe_col.index_unchecked(probe_idx) };
-
-            let keep = match probe_value {
-                databend_common_expression::ScalarRef::Geometry(ewkb) => {
-                    if let Some((px, py)) = extract_point_xy_from_ewkb(ewkb) {
-                        px >= build_bbox.0
-                            && px <= build_bbox.2
-                            && py >= build_bbox.1
-                            && py <= build_bbox.3
-                    } else if let Some(probe_bbox) = extract_bbox_from_ewkb(ewkb) {
-                        probe_bbox.2 >= build_bbox.0
-                            && probe_bbox.0 <= build_bbox.2
-                            && probe_bbox.3 >= build_bbox.1
-                            && probe_bbox.1 <= build_bbox.3
-                    } else {
-                        true
-                    }
-                }
-                _ => true,
+            let keep = match probe_bbox.and_then(|result| result.bbox) {
+                Some(probe_bbox) => probe_bbox.intersects(&build_bbox),
+                None => true,
             };
 
             if keep {

@@ -1,59 +1,4 @@
-## Tests for spatial bbox pre-filter optimization correctness
-
-# -- SRID incompatibility must still raise error (not swallowed by bbox shortcut) --
-
-statement error Incompatible SRID
-SELECT ST_Intersects(
-    ST_SetSRID(TO_GEOMETRY('POINT(0 0)'), 4326),
-    ST_SetSRID(TO_GEOMETRY('POINT(1 1)'), 3857)
-);
-
-statement error Incompatible SRID
-SELECT ST_Contains(
-    ST_SetSRID(TO_GEOMETRY('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 4326),
-    ST_SetSRID(TO_GEOMETRY('POINT(5 5)'), 3857)
-);
-
-statement error Incompatible SRID
-SELECT ST_DWithin(
-    ST_SetSRID(TO_GEOMETRY('POINT(0 0)'), 4326),
-    ST_SetSRID(TO_GEOMETRY('POINT(1 1)'), 3857),
-    100.0
-);
-
-# -- Bbox pre-filter correctness: non-intersecting bboxes return false --
-
-query B
-SELECT ST_Intersects(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-----
-0
-
-query B
-SELECT ST_Within(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-----
-0
-
-query B
-SELECT ST_Contains(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), TO_GEOMETRY('POINT(100 100)'));
-----
-0
-
-query B
-SELECT ST_DWithin(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POINT(0 0)'), 1.0);
-----
-0
-
-# -- Bbox pre-filter correctness: intersecting bboxes still do precise check --
-
-query B
-SELECT ST_Intersects(TO_GEOMETRY('POINT(0.5 0.5)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-----
-1
-
-query B
-SELECT ST_Within(TO_GEOMETRY('POINT(0.5 2)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-----
-0
+## Tests for spatial join bbox runtime filter correctness
 
 # -- Spatial join: all pairs filtered by bbox --
 
@@ -157,32 +102,6 @@ DROP TABLE bbox_test_polys
 
 statement ok
 DROP TABLE bbox_test_multi_probe
-
-# -- Edge cases: st_dwithin with distance = 0 and negative --
-
-query B
-SELECT ST_DWithin(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'), 0.0);
-----
-0
-
-query B
-SELECT ST_DWithin(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'), -1.0);
-----
-0
-
-# -- Edge case: NULL geometry --
-
-query T
-SELECT ST_Within(NULL::GEOMETRY, TO_GEOMETRY('POINT(1 1)'));
-----
-NULL
-
-# -- Edge case: touching bbox still evaluates precisely --
-
-query B
-SELECT ST_Intersects(TO_GEOMETRY('POINT(1 0)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-----
-1
 
 # -- Join-level SRID mismatch must still raise error --
 

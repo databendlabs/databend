@@ -244,20 +244,6 @@ pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
     Polygon::new(exterior, vec![])
 }
 
-/// Read SRID from raw EWKB bytes without constructing a Geometry object.
-pub fn read_srid_from_bytes(ewkb: &[u8]) -> Option<i32> {
-    let mut srid_processor = SridProcessor::new();
-    Ewkb(ewkb).process_geom(&mut srid_processor).ok()?;
-    srid_processor.srid
-}
-
-pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
-    let mut srid_processor = SridProcessor::new();
-    ewkb.process_geom(&mut srid_processor).ok()?;
-
-    srid_processor.srid
-}
-
 /// Process EWKB input and return Geometry object and SRID.
 pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>, Option<i32>)> {
     let mut ewkb_processor = EwkbProcessor::new();
@@ -269,23 +255,6 @@ pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>,
         .ok_or_else(|| ErrorCode::GeometryError("Invalid ewkb format"))?;
     let srid = ewkb_processor.srid;
     Ok((geo, srid))
-}
-
-struct SridProcessor {
-    srid: Option<i32>,
-}
-
-impl SridProcessor {
-    fn new() -> Self {
-        Self { srid: None }
-    }
-}
-
-impl GeomProcessor for SridProcessor {
-    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
-        self.srid = srid;
-        Ok(())
-    }
 }
 
 struct EwkbProcessor {
@@ -456,53 +425,34 @@ pub fn point_to_geohash(ewkb: &[u8], precision: Option<i32>) -> Result<String> {
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }
 
-pub fn extract_bbox_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64, f64, f64)> {
-    let mut processor = BboxProcessor::new();
-    Ewkb(ewkb).process_geom(&mut processor).ok()?;
-    processor.bbox()
-}
-
-/// Returns Some only if the geometry is a single point.
-pub fn extract_point_xy_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64)> {
-    let mut processor = BboxProcessor::new();
-    Ewkb(ewkb).process_geom(&mut processor).ok()?;
-    if processor.count == 1 {
-        Some((processor.min_x, processor.min_y))
-    } else {
-        None
-    }
-}
-
-struct BboxProcessor {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bbox {
     min_x: f64,
     min_y: f64,
     max_x: f64,
     max_y: f64,
-    count: usize,
 }
 
-impl BboxProcessor {
-    fn new() -> Self {
+impl Bbox {
+    pub fn new(x: f64, y: f64) -> Self {
         Self {
-            min_x: f64::INFINITY,
-            min_y: f64::INFINITY,
-            max_x: f64::NEG_INFINITY,
-            max_y: f64::NEG_INFINITY,
-            count: 0,
+            min_x: x,
+            min_y: y,
+            max_x: x,
+            max_y: y,
         }
     }
 
-    fn bbox(&self) -> Option<(f64, f64, f64, f64)> {
-        if self.count == 0 {
-            None
-        } else {
-            Some((self.min_x, self.min_y, self.max_x, self.max_y))
+    pub fn from_corners(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> Self {
+        Self {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
         }
     }
-}
 
-impl GeomProcessor for BboxProcessor {
-    fn xy(&mut self, x: f64, y: f64, _idx: usize) -> geozero::error::Result<()> {
+    pub fn extend(&mut self, x: f64, y: f64) {
         if x < self.min_x {
             self.min_x = x;
         }
@@ -515,7 +465,72 @@ impl GeomProcessor for BboxProcessor {
         if y > self.max_y {
             self.max_y = y;
         }
-        self.count += 1;
+    }
+
+    pub fn expand(&mut self, distance: f64) {
+        self.min_x -= distance;
+        self.min_y -= distance;
+        self.max_x += distance;
+        self.max_y += distance;
+    }
+
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.max_x >= other.min_x
+            && self.min_x <= other.max_x
+            && self.max_y >= other.min_y
+            && self.min_y <= other.max_y
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EwkbBbox {
+    pub bbox: Option<Bbox>,
+    pub srid: Option<i32>,
+}
+
+pub fn ewkb_to_bbox(ewkb: &[u8]) -> Option<EwkbBbox> {
+    let mut processor = BboxProcessor::new();
+    Ewkb(ewkb).process_geom(&mut processor).ok()?;
+    Some(processor.into_ewkb_bbox())
+}
+
+struct BboxProcessor {
+    bbox: Option<Bbox>,
+    srid: Option<i32>,
+}
+
+impl BboxProcessor {
+    fn new() -> Self {
+        Self {
+            bbox: None,
+            srid: None,
+        }
+    }
+
+    fn extend(&mut self, x: f64, y: f64) {
+        if let Some(bbox) = self.bbox.as_mut() {
+            bbox.extend(x, y);
+        } else {
+            self.bbox = Some(Bbox::new(x, y));
+        }
+    }
+
+    fn into_ewkb_bbox(self) -> EwkbBbox {
+        EwkbBbox {
+            bbox: self.bbox,
+            srid: self.srid,
+        }
+    }
+}
+
+impl GeomProcessor for BboxProcessor {
+    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
+        self.srid = srid;
+        Ok(())
+    }
+
+    fn xy(&mut self, x: f64, y: f64, _idx: usize) -> geozero::error::Result<()> {
+        self.extend(x, y);
         Ok(())
     }
 }

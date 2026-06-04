@@ -18,6 +18,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::DataType;
+use databend_common_io::Bbox;
 
 pub struct BuildState {
     // The `generation_state` is used to generate build side `DataBlock`.
@@ -40,15 +41,13 @@ impl BuildState {
     }
 }
 
-type Bbox = (f64, f64, f64, f64);
-
-pub struct SpatialBboxCache {
+pub struct SpatialBboxIndex {
     pub(crate) bboxes: Vec<Vec<Option<Bbox>>>,
     pub(crate) srids: Vec<Vec<Option<i32>>>,
     pub(crate) probe_geom_col_idx: usize,
 }
 
-impl SpatialBboxCache {
+impl SpatialBboxIndex {
     #[inline(always)]
     pub(crate) fn get_bbox(&self, chunk_index: u32, row_index: u32) -> Option<Bbox> {
         self.bboxes
@@ -77,7 +76,7 @@ pub struct BuildBlockGenerationState {
     pub(crate) build_columns_data_type: Vec<DataType>,
     // after projected by build_projection, whether we still have data.
     pub(crate) is_build_projected: bool,
-    pub(crate) spatial_bbox_cache: Option<SpatialBboxCache>,
+    pub(crate) spatial_bbox_index: Option<SpatialBboxIndex>,
 }
 
 impl BuildBlockGenerationState {
@@ -88,7 +87,7 @@ impl BuildBlockGenerationState {
             build_columns: Vec::new(),
             build_columns_data_type: Vec::new(),
             is_build_projected: true,
-            spatial_bbox_cache: None,
+            spatial_bbox_index: None,
         }
     }
 
@@ -98,6 +97,6 @@ impl BuildBlockGenerationState {
         self.build_columns.clear();
         self.build_columns_data_type.clear();
         self.is_build_projected = true;
-        self.spatial_bbox_cache = None;
+        self.spatial_bbox_index = None;
     }
 }

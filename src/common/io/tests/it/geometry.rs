@@ -12,37 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_io::geometry::extract_bbox_from_ewkb;
-use databend_common_io::geometry::extract_point_xy_from_ewkb;
+use databend_common_io::geometry::Bbox;
+use databend_common_io::geometry::ewkb_to_bbox;
 use databend_common_io::geometry::geometry_from_str;
 use databend_common_io::wkb::make_point;
 
 #[test]
 fn test_extract_bbox_point() {
     let point = make_point(-74.0, 40.7);
-    let bbox = extract_bbox_from_ewkb(&point).unwrap();
-    assert_eq!(bbox, (-74.0, 40.7, -74.0, 40.7));
-}
-
-#[test]
-fn test_extract_point_xy() {
-    let point = make_point(139.7, 35.6);
-    let xy = extract_point_xy_from_ewkb(&point).unwrap();
-    assert_eq!(xy, (139.7, 35.6));
+    let bbox = ewkb_to_bbox(&point).unwrap().bbox.unwrap();
+    assert_eq!(bbox, Bbox::from_corners(-74.0, 40.7, -74.0, 40.7));
 }
 
 #[test]
 fn test_extract_bbox_point_with_srid() {
     let ewkb = geometry_from_str("SRID=4326;POINT(-122.35 37.55)", None).unwrap();
-    let bbox = extract_bbox_from_ewkb(&ewkb).unwrap();
-    assert_eq!(bbox, (-122.35, 37.55, -122.35, 37.55));
+    let result = ewkb_to_bbox(&ewkb).unwrap();
+    assert_eq!(
+        result.bbox.unwrap(),
+        Bbox::from_corners(-122.35, 37.55, -122.35, 37.55)
+    );
+    assert_eq!(result.srid, Some(4326));
 }
 
 #[test]
 fn test_extract_bbox_linestring() {
     let ewkb = geometry_from_str("LINESTRING(0 0, 10 5, 20 3)", None).unwrap();
-    let bbox = extract_bbox_from_ewkb(&ewkb).unwrap();
-    assert_eq!(bbox, (0.0, 0.0, 20.0, 5.0));
+    let bbox = ewkb_to_bbox(&ewkb).unwrap().bbox.unwrap();
+    assert_eq!(bbox, Bbox::from_corners(0.0, 0.0, 20.0, 5.0));
 }
 
 #[test]
@@ -52,6 +49,6 @@ fn test_extract_bbox_polygon() {
         None,
     )
     .unwrap();
-    let bbox = extract_bbox_from_ewkb(&ewkb).unwrap();
-    assert_eq!(bbox, (0.0, 0.0, 10.0, 10.0));
+    let bbox = ewkb_to_bbox(&ewkb).unwrap().bbox.unwrap();
+    assert_eq!(bbox, Bbox::from_corners(0.0, 0.0, 10.0, 10.0));
 }

@@ -42,7 +42,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_io::extract_bbox_from_ewkb;
+use databend_common_io::ewkb_to_bbox;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
@@ -65,7 +65,7 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
-use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxCache;
+use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxIndex;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
@@ -842,7 +842,7 @@ impl HashJoinBuildState {
             build_state.generation_state.build_columns_data_type = columns_data_type;
             build_state.generation_state.build_columns = columns;
 
-            self.try_build_spatial_bbox_cache(build_state);
+            self.try_build_spatial_bbox_index(build_state);
         }
     }
 
@@ -950,7 +950,7 @@ impl HashJoinBuildState {
             .any(|rf| rf.enable_bloom_runtime_filter)
     }
 
-    fn try_build_spatial_bbox_cache(&self, build_state: &mut super::build_state::BuildState) {
+    fn try_build_spatial_bbox_index(&self, build_state: &mut super::build_state::BuildState) {
         let spatial_filter = self
             .hash_join_state
             .hash_join_desc
@@ -1018,17 +1018,18 @@ impl HashJoinBuildState {
                 let value = unsafe { col.index_unchecked(row_idx) };
                 let (bbox, srid) = match value {
                     databend_common_expression::ScalarRef::Geometry(ewkb) => {
-                        let srid = databend_common_io::read_srid_from_bytes(ewkb);
-                        let mut bb = extract_bbox_from_ewkb(ewkb);
+                        let Some(result) = ewkb_to_bbox(ewkb) else {
+                            chunk_bboxes.push(None);
+                            chunk_srids.push(None);
+                            continue;
+                        };
+                        let mut bb = result.bbox;
                         if distance > 0.0 {
                             if let Some(ref mut b) = bb {
-                                b.0 -= distance;
-                                b.1 -= distance;
-                                b.2 += distance;
-                                b.3 += distance;
+                                b.expand(distance);
                             }
                         }
-                        (bb, srid)
+                        (bb, result.srid)
                     }
                     _ => (None, None),
                 };
@@ -1039,16 +1040,7 @@ impl HashJoinBuildState {
             srids.push(chunk_srids);
         }
 
-        info!(
-            "spatial bbox cache: {} chunks, {} rows, distance={}, build_col={}, probe_col={}",
-            bboxes.len(),
-            build_state.generation_state.build_num_rows,
-            distance,
-            build_geom_col_idx,
-            probe_geom_col_idx,
-        );
-
-        build_state.generation_state.spatial_bbox_cache = Some(SpatialBboxCache {
+        build_state.generation_state.spatial_bbox_index = Some(SpatialBboxIndex {
             bboxes,
             srids,
             probe_geom_col_idx,

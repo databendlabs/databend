@@ -41,8 +41,8 @@ use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
 use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::ewkb_to_bbox;
 use databend_common_io::ewkb_to_geo;
-use databend_common_io::extract_bbox_from_ewkb;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
@@ -57,7 +57,6 @@ use databend_common_io::geometry::st_extreme;
 use databend_common_io::geometry_format;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::geometry_type_name;
-use databend_common_io::read_srid;
 use geo::Area;
 use geo::BoundingRect;
 use geo::Buffer;
@@ -111,7 +110,6 @@ use crate::register::geo_try_convert_fn;
 use crate::register::geo_try_convert_with_arg_fn;
 use crate::register::geometry_binary_combine_fn;
 use crate::register::geometry_binary_fn;
-use crate::register::geometry_binary_predicate_fn;
 use crate::register::geometry_unary_combine_fn;
 use crate::register::geometry_unary_fn;
 
@@ -627,15 +625,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         Ok(ewkb)
     });
 
-    geometry_binary_predicate_fn("st_contains", registry, false, |l, r, _| Ok(l.contains(&r)));
+    geometry_binary_fn::<BooleanType>("st_contains", registry, |l, r, _| Ok(l.contains(&r)));
 
-    geometry_binary_predicate_fn("st_intersects", registry, false, |l, r, _| {
-        Ok(l.intersects(&r))
-    });
+    geometry_binary_fn::<BooleanType>("st_intersects", registry, |l, r, _| Ok(l.intersects(&r)));
 
     geometry_binary_fn::<BooleanType>("st_disjoint", registry, |l, r, _| Ok(!l.intersects(&r)));
 
-    geometry_binary_predicate_fn("st_within", registry, false, |l, r, _| Ok(l.is_within(&r)));
+    geometry_binary_fn::<BooleanType>("st_within", registry, |l, r, _| Ok(l.is_within(&r)));
 
     geometry_binary_fn::<BooleanType>("st_equals", registry, |l, r, _| {
         Ok(l.relate(&r).is_equal_topo())
@@ -660,33 +656,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let l_srid = read_srid(&mut Ewkb(l_ewkb));
-                let r_srid = read_srid(&mut Ewkb(r_ewkb));
-                if !check_incompatible_srid(l_srid, r_srid, row, ctx) {
-                    builder.push(false);
-                    return;
-                }
-
-                let d = distance.0;
-                if let (Some(l_bbox), Some(r_bbox)) =
-                    (extract_bbox_from_ewkb(l_ewkb), extract_bbox_from_ewkb(r_ewkb))
-                {
-                    if l_bbox.2 + d < r_bbox.0
-                        || l_bbox.0 - d > r_bbox.2
-                        || l_bbox.3 + d < r_bbox.1
-                        || l_bbox.1 - d > r_bbox.3
-                    {
-                        builder.push(false);
-                        return;
-                    }
-                }
-
                 match (
                     ewkb_to_geo(&mut Ewkb(l_ewkb)),
                     ewkb_to_geo(&mut Ewkb(r_ewkb)),
                 ) {
-                    (Ok((l_geo, _)), Ok((r_geo, _))) => {
-                        let is_within = Euclidean.distance_within(&l_geo, &r_geo, d);
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, row, ctx) {
+                            builder.push(false);
+                            return;
+                        }
+                        let is_within = Euclidean.distance_within(&l_geo, &r_geo, distance.0);
                         builder.push(is_within);
                     }
                     (Err(e), _) | (_, Err(e)) => {
@@ -772,7 +751,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let srid = read_srid(&mut Ewkb(ewkb)).unwrap_or_default();
+            let srid = ewkb_to_bbox(ewkb)
+                .and_then(|result| result.srid)
+                .unwrap_or_default();
             output.push(srid);
         }),
     );
@@ -792,7 +773,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
                 // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-                let Some(from_srid) = read_srid(&mut Ewkb(original)) else {
+                let Some(from_srid) = ewkb_to_bbox(original).and_then(|result| result.srid) else {
                     ctx.set_error(row, "input geometry must has the correct SRID".to_string());
                     builder.commit_row();
                     return;
