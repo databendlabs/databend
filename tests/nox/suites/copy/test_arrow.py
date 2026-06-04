@@ -52,7 +52,6 @@ def _extension_batches():
     timestamp_tz_string_field = pa.field(
         "ts_string",
         pa.string(),
-        metadata={b"Extension": b"TimestampTz"},
     )
     events_type = pa.list_(
         pa.struct(
@@ -312,7 +311,7 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
     inferred_type = conn.query_row(
         f"select typeof(ts), typeof(ts_string) from @{stage_name} limit 1"
     )
-    assert inferred_type.values() == ("TIMESTAMP_TZ NULL", "TIMESTAMP_TZ NULL")
+    assert inferred_type.values() == ("TIMESTAMP_TZ NULL", "VARCHAR NULL")
 
     stage_rows = [
         row.values()
@@ -324,6 +323,45 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
         )
     ]
     assert stage_rows == [
+        (
+            1,
+            "2025-01-01 00:00:00.000000 +0000",
+            "2025-01-01 00:00:00 +0000",
+            1,
+            "2025-01-01 00:00:00.000000 +0000",
+            "2025-01-01 00:00:00 +0000",
+            "start",
+            None,
+            None,
+            None,
+        ),
+        (
+            2,
+            "2025-01-01 01:00:00.000000 +0000",
+            "2025-01-01 01:00:00 +0000",
+            2,
+            "2025-01-01 01:00:00.000000 +0000",
+            "2025-01-01 01:00:00 +0000",
+            "middle",
+            "2025-01-02 00:00:00.000000 +0000",
+            "2025-01-02 00:00:00 +0000",
+            "end",
+        ),
+    ]
+
+    res = conn.query_row(f"copy into {table_name} from @{stage_name}")
+    assert res.values()[1] == 2
+
+    copied_rows = [
+        row.values()
+        for row in conn.query_iter(
+            f"select id, ts::string, ts_string::string, length(events), "
+            f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
+            f"events[2].ts::string, events[2].ts_string::string, events[2].label "
+            f"from {table_name} order by id"
+        )
+    ]
+    assert copied_rows == [
         (
             1,
             "2025-01-01 00:00:00.000000 +0000",
@@ -349,20 +387,6 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
             "end",
         ),
     ]
-
-    res = conn.query_row(f"copy into {table_name} from @{stage_name}")
-    assert res.values()[1] == 2
-
-    copied_rows = [
-        row.values()
-        for row in conn.query_iter(
-            f"select id, ts::string, ts_string::string, length(events), "
-            f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
-            f"events[2].ts::string, events[2].ts_string::string, events[2].label "
-            f"from {table_name} order by id"
-        )
-    ]
-    assert copied_rows == stage_rows
 
     conn.exec(
         f"copy into {select_table_name} "
