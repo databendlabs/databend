@@ -255,11 +255,11 @@ def test_copy_nested_arrow_batches(copy_env, tmp_path, format_name, stream):
         (4, 1, 4, 40, None, None),
     ]
 
-    res = conn.query_row(
+    conn.exec(
         f"copy into {select_table_name} "
-        f"from (select id + 10, items from @{stage_name} where id in (1, 4))"
+        f"from (select id + 10, items from @{stage_name})"
     )
-    assert res.values()[1] == 2
+    assert conn.query_row(f"select count(*) from {select_table_name}").values()[0] == 4
 
     copied_from_select = [
         row.values()
@@ -270,6 +270,8 @@ def test_copy_nested_arrow_batches(copy_env, tmp_path, format_name, stream):
     ]
     assert copied_from_select == [
         (11, 2, 1, 10, 2, 20),
+        (12, None, None, None, None, None),
+        (13, 0, None, None, None, None),
         (14, 1, 4, 40, None, None),
     ]
 
@@ -362,12 +364,11 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
     ]
     assert copied_rows == stage_rows
 
-    res = conn.query_row(
+    conn.exec(
         f"copy into {select_table_name} "
-        f"from (select id + 10, ts, ts_string, events "
-        f"from @{stage_name} where id = 2)"
+        f"from (select id + 10, ts, ts_string, events from @{stage_name})"
     )
-    assert res.values()[1] == 1
+    assert conn.query_row(f"select count(*) from {select_table_name}").values()[0] == 2
 
     copied_from_select = [
         row.values()
@@ -375,10 +376,22 @@ def test_copy_arrow_extension_field_metadata(copy_env, tmp_path, format_name, st
             f"select id, ts::string, ts_string::string, length(events), "
             f"events[1].ts::string, events[1].ts_string::string, events[1].label, "
             f"events[2].ts::string, events[2].ts_string::string, events[2].label "
-            f"from {select_table_name}"
+            f"from {select_table_name} order by id"
         )
     ]
     assert copied_from_select == [
+        (
+            11,
+            "2025-01-01 00:00:00.000000 +0000",
+            "2025-01-01 00:00:00.000000 +0000",
+            1,
+            "2025-01-01 00:00:00.000000 +0000",
+            "2025-01-01 00:00:00.000000 +0000",
+            "start",
+            None,
+            None,
+            None,
+        ),
         (
             12,
             "2025-01-01 01:00:00.000000 +0000",
