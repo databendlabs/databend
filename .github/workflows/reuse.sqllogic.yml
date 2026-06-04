@@ -37,7 +37,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
@@ -67,7 +67,7 @@ jobs:
           - "hybrid"
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 20
         with:
@@ -89,9 +89,9 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8
       - uses: ./.github/actions/setup_minio
       - name: Start UDF Server
         working-directory: tests/udf
@@ -120,9 +120,9 @@ jobs:
       - 4c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8
       - name: Start Cloud Control Server
         working-directory: tests/cloud_control_server
         run: |
@@ -160,7 +160,7 @@ jobs:
           - "native"
           - "parquet"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
         timeout-minutes: 15
         with:
@@ -181,7 +181,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -209,7 +209,7 @@ jobs:
         handler:
           - "ttc-rust"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_test
         with:
           artifacts: sqllogictests,meta,query
@@ -235,8 +235,8 @@ jobs:
       - 4c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
@@ -274,7 +274,7 @@ jobs:
           - "hybrid"
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -314,7 +314,7 @@ jobs:
           - "small"
           - "large"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_stage
         timeout-minutes: 15
         with:
@@ -344,7 +344,7 @@ jobs:
         handler:
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
@@ -372,7 +372,7 @@ jobs:
           - "parquet"
           - "native"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
