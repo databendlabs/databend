@@ -18,6 +18,7 @@ use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
 use databend_common_exception::Result;
@@ -173,7 +174,10 @@ impl Binder {
                 .with_column("created_on AS create_time")
                 .with_column("view_query");
         } else {
-            select_builder.with_column(format!("name AS `Views_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Views_in_{database}"), '`')
+            ));
         }
 
         if *with_history {

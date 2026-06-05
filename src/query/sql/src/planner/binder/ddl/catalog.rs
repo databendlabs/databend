@@ -24,6 +24,7 @@ use databend_common_ast::ast::ShowCatalogsStmt;
 use databend_common_ast::ast::ShowCreateCatalogStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -65,7 +66,7 @@ impl Binder {
         write!(
             query,
             "SELECT name AS Catalogs FROM {}.system.catalogs",
-            default_catalog
+            QuotedIdent(&default_catalog, '`')
         )
         .unwrap();
         match limit {
