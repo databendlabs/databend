@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
@@ -192,7 +193,11 @@ impl NewTransformFinalAggregate {
         }
     }
 
-    fn handle_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
+    fn handle_serialized(
+        &mut self,
+        payload: SerializedPayload,
+        need_check_spill: bool,
+    ) -> Result<()> {
         if payload.data_block.is_empty() {
             return Ok(());
         }
@@ -214,10 +219,14 @@ impl NewTransformFinalAggregate {
             ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
         }
 
-        Ok(())
+        self.check_spill(need_check_spill)
     }
 
-    fn handle_aggregate_payload(&mut self, payload: AggregatePayload) -> Result<()> {
+    fn handle_aggregate_payload(
+        &mut self,
+        payload: AggregatePayload,
+        need_check_spill: bool,
+    ) -> Result<()> {
         let rows = payload.payload.len();
         let bytes = payload.payload.memory_size();
         self.statistics.record_block(rows, bytes);
@@ -226,40 +235,10 @@ impl NewTransformFinalAggregate {
             ht.combine_payload(&payload.payload, &mut self.flush_state)?;
         }
 
-        Ok(())
+        self.check_spill(need_check_spill)
     }
 
-    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
-        match meta {
-            AggregateMeta::Serialized(payload) => {
-                self.handle_serialized(payload)?;
-            }
-            AggregateMeta::AggregatePayload(payload) => {
-                self.handle_aggregate_payload(payload)?;
-            }
-            AggregateMeta::NewSpilled(payloads) => {
-                for payload in payloads {
-                    let restored = self.spiller.restore(payload)?;
-                    self.handle_meta(restored, need_check_spill)?;
-                }
-                return Ok(());
-            }
-            AggregateMeta::NewBucketSpilled(payload) => {
-                let restored = self.spiller.restore(payload)?;
-                self.handle_meta(restored, need_check_spill)?;
-                return Ok(());
-            }
-            AggregateMeta::Partitioned { bucket: _, data } => {
-                for meta in data {
-                    self.handle_meta(meta, need_check_spill)?;
-                }
-                return Ok(());
-            }
-            _ => {
-                unreachable!("unexpected aggregate meta, found type: {:?}", meta);
-            }
-        }
-
+    fn check_spill(&mut self, need_check_spill: bool) -> Result<()> {
         // If already trigger spilled for this task, we continue to spill the remaining part
         if self.spilled_occurred || (need_check_spill && self.settings.check_spill()) {
             self.spill_out()?;
@@ -268,14 +247,60 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
+    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
+        match meta {
+            AggregateMeta::Serialized(payload) => {
+                self.handle_serialized(payload, need_check_spill)?;
+            }
+            AggregateMeta::AggregatePayload(payload) => {
+                self.handle_aggregate_payload(payload, need_check_spill)?;
+            }
+            AggregateMeta::NewSpilled(payloads) => {
+                for payload in payloads {
+                    let restored = self.spiller.restore(payload)?;
+                    self.handle_serialized(restored, need_check_spill)?;
+                }
+            }
+            AggregateMeta::NewBucketSpilled(payload) => {
+                let restored = self.spiller.restore(payload)?;
+                self.handle_serialized(restored, need_check_spill)?;
+            }
+            AggregateMeta::Partitioned { data, .. } => match data {
+                PartitionedData::Empty => {}
+                PartitionedData::Serialized(payloads) => {
+                    for payload in payloads {
+                        self.handle_serialized(payload, need_check_spill)?;
+                    }
+                }
+                PartitionedData::AggregatePayload(payloads) => {
+                    for payload in payloads {
+                        self.handle_aggregate_payload(payload, need_check_spill)?;
+                    }
+                }
+                PartitionedData::NewBucketSpilled(payloads) => {
+                    for payload in payloads {
+                        let restored = self.spiller.restore(payload)?;
+                        self.handle_serialized(restored, need_check_spill)?;
+                    }
+                }
+                PartitionedData::Mixed(items) => {
+                    for item in items {
+                        self.handle_meta(AggregateMeta::from(item), need_check_spill)?;
+                    }
+                }
+                _ => unreachable!("unexpected partitioned aggregate data"),
+            },
+            _ => {
+                unreachable!("unexpected aggregate meta, found type: {:?}", meta);
+            }
+        }
+        Ok(())
+    }
+
     fn spill_out(&mut self) -> Result<()> {
         self.spilled_occurred = true;
         if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
-            for (bucket, payload) in v.payload.payloads.into_iter().enumerate() {
-                if payload.len() == 0 {
-                    continue;
-                }
-
+            for (bucket, payload) in v.payload.into_non_empty_bucket_payloads() {
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.spiller.spill(bucket, data_block)?;
             }

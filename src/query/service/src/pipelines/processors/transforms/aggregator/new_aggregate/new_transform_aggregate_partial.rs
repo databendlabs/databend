@@ -34,12 +34,12 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::scatter_partitioned_payload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
 
@@ -77,25 +77,18 @@ impl Spiller {
 
     pub fn spill(&mut self, partition: PartitionedPayload, is_row_shuffle: bool) -> Result<()> {
         if is_row_shuffle {
-            for (bucket, p) in scatter_partitioned_payload(partition, self.bucket_num)?
+            for (bucket, p) in partition
+                .scatter_into_buckets(self.bucket_num)
                 .into_iter()
                 .enumerate()
             {
-                for payload in p.payloads.into_iter() {
-                    if payload.len() == 0 {
-                        continue;
-                    }
-
+                for (_, payload) in p.into_non_empty_bucket_payloads() {
                     let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                     self.inner.spill(bucket, data_block)?;
                 }
             }
         } else {
-            for (bucket, payload) in partition.payloads.into_iter().enumerate() {
-                if payload.len() == 0 {
-                    continue;
-                }
-
+            for (bucket, payload) in partition.into_non_empty_bucket_payloads() {
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.inner.spill(bucket, data_block)?;
             }
@@ -109,12 +102,10 @@ impl Spiller {
         if payloads.is_empty() {
             return Ok(vec![]);
         }
-        let payloads = payloads
-            .into_iter()
-            .map(AggregateMeta::NewBucketSpilled)
-            .collect::<Vec<_>>();
-        let partitioned_payload =
-            DataBlock::empty_with_meta(AggregateMeta::create_partitioned(None, payloads));
+        let partitioned_payload = DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+            None,
+            PartitionedData::NewBucketSpilled(payloads),
+        ));
         return Ok(vec![partitioned_payload]);
     }
 }
@@ -244,16 +235,14 @@ impl NewTransformPartialAggregate {
 
     fn spill_out(&mut self) -> Result<()> {
         if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-            let group_types = v.payload.group_types.clone();
-            let aggrs = v.payload.aggrs.clone();
             let config = v.config.clone();
 
             self.spillers.spill(v.payload, self.is_row_shuffle)?;
 
             let arena = Arc::new(Bump::new());
             self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                group_types,
-                aggrs,
+                self.params.group_data_types.clone(),
+                self.params.aggregate_functions.clone(),
                 config,
                 arena,
             ));
@@ -292,19 +281,18 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
 
                 let payloads = hashtable
                     .payload
-                    .payloads
-                    .into_iter()
-                    .enumerate()
-                    .map(|(bucket, payload)| {
-                        AggregateMeta::AggregatePayload(AggregatePayload {
-                            bucket: bucket as isize,
-                            payload,
-                            max_partition_count: 0,
-                        })
+                    .into_bucket_payloads()
+                    .map(|(bucket, payload)| AggregatePayload {
+                        bucket: bucket as isize,
+                        payload,
+                        max_partition_count: 0,
                     })
                     .collect::<Vec<_>>();
                 blocks.push(DataBlock::empty_with_meta(
-                    AggregateMeta::create_partitioned(None, payloads),
+                    AggregateMeta::create_partitioned(
+                        None,
+                        PartitionedData::AggregatePayload(payloads),
+                    ),
                 ));
                 blocks
             }
