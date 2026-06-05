@@ -651,3 +651,92 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
 
     Ok(())
 }
+
+// `system.columns` refreshes ATTACH table schemas, unlike `SHOW TABLES`. This guards the
+// resilience part of that: one ATTACH table with unreachable storage must not drop the columns
+// of healthy tables in the same database. (New-column visibility is covered by the EE SLT.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_system_columns_tolerates_broken_attached_table() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_catalog("default").await?;
+    let database = catalog.get_database(&tenant, "default").await?;
+
+    execute_command(ctx.clone(), "create table default.healthy(a int)").await?;
+
+    // Simulate a broken attached-table storage: any refresh from this S3 endpoint fails with 403.
+    let mock_server = MockServer::start().await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&mock_server)
+        .await;
+
+    let broken_schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "a",
+        TableDataType::Number(NumberDataType::Int32),
+    )]));
+
+    catalog
+        .create_table(CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: "default".to_string(),
+                table_name: "broken_attached".to_string(),
+            },
+            table_meta: TableMeta {
+                schema: broken_schema,
+                engine: "FUSE".to_string(),
+                options: [
+                    (
+                        OPT_KEY_DATABASE_ID.to_string(),
+                        database.get_db_info().database_id.db_id.to_string(),
+                    ),
+                    (
+                        FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(),
+                        "0".to_string(),
+                    ),
+                    (
+                        OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+                        "s3://broken-bucket/broken-attached/".to_string(),
+                    ),
+                ]
+                .into(),
+                storage_params: Some(StorageParams::S3(StorageS3Config {
+                    region: "us-east-2".to_string(),
+                    endpoint_url: mock_server.uri(),
+                    bucket: "broken-bucket".to_string(),
+                    root: "/".to_string(),
+                    access_key_id: "access_key_id".to_string(),
+                    secret_access_key: "secret_access_key".to_string(),
+                    disable_credential_loader: true,
+                    ..Default::default()
+                })),
+                ..TableMeta::default()
+            },
+            as_dropped: false,
+            table_properties: None,
+            table_partition: None,
+        })
+        .await?;
+
+    let result = execute_query(
+        ctx.clone(),
+        "select database, table, name from system.columns \
+         where database = 'default' order by table, name",
+    )
+    .await?;
+    let blocks = result.try_collect::<Vec<_>>().await?;
+    let output = pretty_format_blocks(&blocks)?;
+    println!("{}", output);
+
+    assert!(
+        output.contains("healthy"),
+        "system.columns must still expose healthy table columns despite a broken ATTACH table: {output}"
+    );
+
+    Ok(())
+}
+

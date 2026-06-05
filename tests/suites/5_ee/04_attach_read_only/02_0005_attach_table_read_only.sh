@@ -49,6 +49,11 @@ echo "desc attach_read_only;" | $BENDSQL_CLIENT_CONNECT
 echo "expects one row, 3 columns"
 echo "select * from attach_read_only order by number;" | $BENDSQL_CLIENT_CONNECT
 
+echo "system.columns should reflect the added columns"
+echo "select name from system.columns where database='default' and table='attach_read_only' order by name;" | $BENDSQL_CLIENT_CONNECT
+echo "information_schema.columns should reflect the added columns"
+echo "select column_name from information_schema.columns where table_schema='default' and table_name='attach_read_only' order by column_name;" | $BENDSQL_CLIENT_CONNECT
+
 
 echo "alter table drop column"
 echo "alter table base drop column c1;" | $BENDSQL_CLIENT_CONNECT

@@ -37,6 +37,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use log::warn;
@@ -269,8 +270,9 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
-    // For performance considerations, we do not require the most up-to-date table information here
-    let catalog = disable_catalog_refresh(catalog.clone())?;
+    // List through a refresh-disabled catalog: refreshing every ATTACH table here costs one S3
+    // round-trip each, and a single unreachable one would fail the whole listing (#19759).
+    let disabled_catalog = disable_catalog_refresh(catalog.clone())?;
 
     // Extract filters from push_downs
     let func_ctx = ctx.get_function_context()?;
@@ -278,13 +280,44 @@ pub(crate) async fn dump_tables(
 
     // Use unified visibility collection from util.rs
     let db_with_tables =
-        collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
+        collect_visible_tables(ctx, &disabled_catalog, &filtered_db_names, &filtered_table_names)
+            .await?;
 
-    // Convert to the expected return format
+    // A read-only ATTACH table keeps its current schema in the source snapshot, not on the meta
+    // server, so the disabled catalog above hands back the schema frozen at ATTACH time. Refresh
+    // each one through the original catalog to pick up source schema changes; a failure here must
+    // not drop sibling tables, so fall back to the cached handle.
     Ok(db_with_tables
         .into_iter()
-        .map(|db| (db.name, db.tables))
+        .map(|db| {
+            let tables = db
+                .tables
+                .into_iter()
+                .map(|table| refresh_attach_table(catalog, table))
+                .collect();
+            (db.name, tables)
+        })
         .collect())
+}
+
+/// Refresh an ATTACH table's schema from its source storage, returning the cached handle on
+/// failure. Other tables are returned as-is; their schema already comes from the meta server.
+fn refresh_attach_table(catalog: &Arc<dyn Catalog>, table: Arc<dyn Table>) -> Arc<dyn Table> {
+    if !FuseTable::is_table_attached(&table.get_table_info().meta.options) {
+        return table;
+    }
+
+    match catalog.get_table_by_info(table.get_table_info()) {
+        Ok(refreshed) => refreshed,
+        Err(e) => {
+            warn!(
+                "failed to refresh schema of attach table {}, fallback to cached schema: {}",
+                table.get_table_info().desc,
+                e
+            );
+            table
+        }
+    }
 }
 
 fn extract_filters(

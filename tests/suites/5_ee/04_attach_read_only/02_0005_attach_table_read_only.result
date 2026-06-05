@@ -23,6 +23,14 @@ c1	VARCHAR	NO	'c1'
 c2	VARCHAR	NO	'c2'	
 expects one row, 3 columns
 0	c1	c2
+system.columns should reflect the added columns
+c1
+c2
+number
+information_schema.columns should reflect the added columns
+c1
+c2
+number
 alter table drop column
 expects new columns: number, c2
 number	VARCHAR	YES	NULL	
