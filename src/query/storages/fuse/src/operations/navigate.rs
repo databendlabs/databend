@@ -313,17 +313,15 @@ impl FuseTable {
 
         let abort_checker = ctx.clone().get_abort_checker();
         let mut first_snapshot_after = None;
+        let mut seen_v4_snapshot = false;
         while let Some(entry) = lister.try_next().await? {
             abort_checker
                 .try_check_aborting()
                 .with_context(|| "navigate_to_time_point_unchecked")?;
             if entry.metadata().mode() == EntryMode::FILE {
                 let path = entry.path().to_string();
-                if path.ends_with("_v4.mpk")
-                    || path.ends_with("_v3.bincode")
-                    || path.ends_with("_v2.json")
-                    || path.ends_with("_v1.json")
-                {
+                if path.ends_with("_v4.mpk") {
+                    seen_v4_snapshot = true;
                     if !has_start_after && path.as_str() <= start_after_key.as_str() {
                         continue;
                     }
@@ -358,6 +356,12 @@ impl FuseTable {
                 }
             }
             None => {
+                if !seen_v4_snapshot {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "NO_CHECK requires V4 format snapshots (UUID v7). \
+                         This table has no V4 snapshots.",
+                    ));
+                }
                 let Some(location) = self.snapshot_loc() else {
                     return Err(ErrorCode::TableHistoricalDataNotFound(
                         "Empty Table has no historical data",
