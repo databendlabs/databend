@@ -33,4 +33,6 @@ pub use databend_common_storages_stage::build_streaming_load_pipeline;
 #[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::infer_arrow_schema;
 #[cfg(feature = "storage-stage")]
+pub use databend_common_storages_stage::infer_arrow_schema_from_file;
+#[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::parse_tsv_records_for_infer_schema;

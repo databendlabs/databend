@@ -37,6 +37,7 @@ pub use infer_schema::InferSchemaPartInfo;
 pub use read::LoadContext;
 pub use read::arrow::ArrowIpcMode;
 pub use read::arrow::infer_arrow_schema;
+pub use read::arrow::infer_arrow_schema_from_file;
 pub use read::row_based::BytesBatch;
 pub use read::row_based::BytesReader;
 pub use read::row_based::Decompressor;

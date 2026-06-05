@@ -26,6 +26,18 @@ def _write_arrow(path, stream):
             writer.write_table(table)
 
 
+def _write_arrow_string_ids(path, stream):
+    table = pa.table({"id": ["bad"], "name": ["broken"]})
+    with path.open("wb") as f:
+        writer = (
+            ipc.new_stream(f, table.schema)
+            if stream
+            else ipc.new_file(f, table.schema)
+        )
+        with writer:
+            writer.write_table(table)
+
+
 def _write_arrow_batches(path, stream, batches):
     with path.open("wb") as f:
         writer = (
@@ -194,6 +206,107 @@ def test_copy_into_table_from_arrow(copy_env, tmp_path, format_name, stream):
         for row in conn.query_iter(f"select id, name from @{stage_name} order by id")
     ]
     assert selected == [(1, "alice"), (2, "bob")]
+
+
+@pytest.mark.parametrize(
+    "format_name",
+    ["arrow", "arrow_stream"],
+)
+def test_copy_into_stage_as_arrow(copy_env, tmp_path, format_name):
+    conn = copy_env.conn
+    stage_name = f"{copy_env.uniq_name}_{format_name}"
+    table_name = f"{stage_name}_unload_t"
+    stage_dir = tmp_path / stage_name
+    stage_dir.mkdir()
+
+    conn.exec(
+        f"create or replace stage {stage_name} "
+        f"url='{_stage_fs_url(stage_dir)}' "
+        f"file_format=(type={format_name} missing_field_as=field_default)"
+    )
+    conn.exec(
+        f"copy into @{stage_name}/unload "
+        "from (select 1 as id, 'alice' as name union all select 2, 'bob') "
+        f"file_format=(type={format_name}) single=true overwrite=true"
+    )
+    conn.exec(
+        f"create or replace table {table_name} "
+        "(id int, name string, extra int default 7)"
+    )
+
+    selected = [
+        row.values()
+        for row in conn.query_iter(
+            f"select id, name from @{stage_name}/unload order by id"
+        )
+    ]
+    assert selected == [(1, "alice"), (2, "bob")]
+
+    res = conn.query_row(f"copy into {table_name} from @{stage_name}/unload")
+    assert res.values()[1] == 2
+    rows = [row.values() for row in conn.query_iter(f"select * from {table_name} order by id")]
+    assert rows == [(1, "alice", 7), (2, "bob", 7)]
+
+
+@pytest.mark.parametrize(
+    "format_name",
+    ["arrow", "arrow_stream"],
+)
+def test_empty_arrow_stage_count(copy_env, tmp_path, format_name):
+    conn = copy_env.conn
+    stage_name = f"{copy_env.uniq_name}_{format_name}"
+    stage_dir = tmp_path / stage_name
+    stage_dir.mkdir()
+    (stage_dir / "empty.arrow").touch()
+
+    conn.exec(
+        f"create or replace stage {stage_name} "
+        f"url='{_stage_fs_url(stage_dir)}' "
+        f"file_format=(type={format_name} missing_field_as=field_default)"
+    )
+
+    assert conn.query_row(f"select count(*) from @{stage_name}/missing").values()[0] == 0
+    assert conn.query_row(f"select count(*) from @{stage_name}").values()[0] == 0
+    with pytest.raises(Exception, match="no non-empty Arrow file to infer schema"):
+        conn.query_row(f"select id from @{stage_name}/missing")
+    with pytest.raises(Exception, match="no non-empty Arrow file to infer schema"):
+        conn.query_row(f"select id from @{stage_name}")
+
+
+@pytest.mark.parametrize(
+    "format_name, stream",
+    [("arrow", False), ("arrow_stream", True)],
+)
+def test_copy_arrow_on_error_continue(copy_env, tmp_path, format_name, stream):
+    conn = copy_env.conn
+    stage_name = f"{copy_env.uniq_name}_{format_name}"
+    table_name = f"{stage_name}_on_error_t"
+    stage_dir = tmp_path / stage_name
+    stage_dir.mkdir()
+    _write_arrow(stage_dir / f"valid.{format_name}", stream)
+    _write_arrow_string_ids(stage_dir / f"bad_cast.{format_name}", stream)
+    (stage_dir / f"corrupt.{format_name}").write_bytes(b"not an arrow ipc file")
+
+    conn.exec(
+        f"create or replace stage {stage_name} "
+        f"url='{_stage_fs_url(stage_dir)}' "
+        f"file_format=(type={format_name} missing_field_as=field_default)"
+    )
+    conn.exec(f"create or replace table {table_name} (id int, name string)")
+
+    result = [
+        row.values()
+        for row in conn.query_iter(
+            f"copy into {table_name} from @{stage_name} on_error=continue"
+        )
+    ]
+    failed = [row for row in result if row[2] == 1]
+    assert len(failed) == 2
+    assert any(row[0].endswith(f"bad_cast.{format_name}") for row in failed)
+    assert any(row[0].endswith(f"corrupt.{format_name}") for row in failed)
+
+    rows = [row.values() for row in conn.query_iter(f"select * from {table_name} order by id")]
+    assert rows == [(1, "alice"), (2, "bob")]
 
 
 @pytest.mark.parametrize(

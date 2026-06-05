@@ -589,7 +589,23 @@ impl TableContextTableManagement for QueryContext {
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
-                info.schema = infer_arrow_schema(self, &info, mode).await?;
+                let files = match &info.files_to_copy {
+                    Some(files) => files.clone(),
+                    None => {
+                        let thread_num = self.get_settings().get_max_threads()? as usize;
+                        info.list_files(thread_num, None).await?
+                    }
+                };
+                let Some(file) = files.into_iter().find(|f| f.size > 0) else {
+                    return if has_column_name_ref {
+                        Err(ErrorCode::BadBytes(
+                            "no non-empty Arrow file to infer schema",
+                        ))
+                    } else {
+                        self.get_zero_table().await
+                    };
+                };
+                info.schema = infer_arrow_schema_from_file(&info.stage_info, &file, mode).await?;
                 StageTable::try_create(info)
             }
             FileFormatParams::Csv(..) | FileFormatParams::Text(..) => {

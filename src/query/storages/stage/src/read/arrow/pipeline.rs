@@ -49,6 +49,7 @@ use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storage::FileParseError;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::init_stage_operator;
@@ -150,7 +151,7 @@ pub async fn infer_arrow_schema(
     infer_arrow_schema_from_file(&stage_table_info.stage_info, &file, mode).await
 }
 
-async fn infer_arrow_schema_from_file(
+pub async fn infer_arrow_schema_from_file(
     stage_info: &databend_common_meta_app::principal::StageInfo,
     file: &StageFileInfo,
     mode: ArrowIpcMode,
@@ -327,9 +328,19 @@ impl AccumulatingTransform for ArrowBlockBuilder {
                 (data.path, data.data)
             }
         };
+
+        if self.ctx.is_select {
+            return self.transform_for_select(path, data);
+        }
+
+        self.transform_for_copy(path, data)
+    }
+}
+
+impl ArrowBlockBuilder {
+    fn transform_for_select(&mut self, path: String, data: Vec<u8>) -> Result<Vec<DataBlock>> {
         let mut blocks = Vec::new();
         let mut rows_start = 0;
-        let mut rows_loaded = 0;
         for batch in self.read_batches(&path, data)? {
             if batch.num_rows() == 0 {
                 continue;
@@ -341,15 +352,66 @@ impl AccumulatingTransform for ArrowBlockBuilder {
                 &mut block,
                 &mut rows_start,
             );
+            blocks.push(block);
+        }
+        Ok(blocks)
+    }
+
+    fn transform_for_copy(&mut self, path: String, data: Vec<u8>) -> Result<Vec<DataBlock>> {
+        let mut file_status = FileStatus::default();
+        let batches = match self.read_batches(&path, data) {
+            Ok(batches) => batches,
+            Err(e) => {
+                self.ctx.error_handler.on_error(
+                    FileParseError::BadFile {
+                        format: "ARROW".to_string(),
+                        message: e.to_string(),
+                    }
+                    .with_row(0),
+                    None,
+                    &mut file_status,
+                    &path,
+                )?;
+                self.ctx.table_context.add_file_status(&path, file_status)?;
+                return Ok(vec![]);
+            }
+        };
+
+        let mut blocks = Vec::new();
+        let mut rows_start = 0;
+        let mut rows_loaded = 0;
+        for batch in batches {
+            if batch.num_rows() == 0 {
+                continue;
+            }
+            let mut block = match self.project_batch(&path, &batch) {
+                Ok(block) => block,
+                Err(e) => {
+                    self.ctx.error_handler.on_error(
+                        FileParseError::InvalidRow {
+                            format: "ARROW".to_string(),
+                            message: e.to_string(),
+                        }
+                        .with_row(rows_start as usize),
+                        None,
+                        &mut file_status,
+                        &path,
+                    )?;
+                    self.ctx.table_context.add_file_status(&path, file_status)?;
+                    return Ok(vec![]);
+                }
+            };
+            add_arrow_internal_columns(
+                &self.internal_column_types,
+                path.clone(),
+                &mut block,
+                &mut rows_start,
+            );
             rows_loaded += block.num_rows();
             blocks.push(block);
         }
-        if !self.ctx.is_select {
-            self.ctx.table_context.add_file_status(&path, FileStatus {
-                num_rows_loaded: rows_loaded,
-                error: None,
-            })?;
-        }
+        file_status.num_rows_loaded = rows_loaded;
+        self.ctx.table_context.add_file_status(&path, file_status)?;
         Ok(blocks)
     }
 }

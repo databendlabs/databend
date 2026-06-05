@@ -143,7 +143,7 @@ use databend_query_storage_stage_support::ArrowIpcMode;
 #[cfg(feature = "storage-stage")]
 use databend_query_storage_stage_support::StageTable;
 #[cfg(feature = "storage-stage")]
-use databend_query_storage_stage_support::infer_arrow_schema;
+use databend_query_storage_stage_support::infer_arrow_schema_from_file;
 use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_session::SessionState;

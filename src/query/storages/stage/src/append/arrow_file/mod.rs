@@ -13,9 +13,6 @@
 // limitations under the License.
 
 mod pipeline;
+mod writer_processor;
 
-pub(crate) use pipeline::ArrowBlockBuilder;
-pub use pipeline::ArrowIpcMode;
-pub use pipeline::ArrowReadPipelineBuilder;
-pub use pipeline::infer_arrow_schema;
-pub use pipeline::infer_arrow_schema_from_file;
+pub(crate) use pipeline::append_data_to_arrow_files;
