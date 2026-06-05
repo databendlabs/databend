@@ -709,6 +709,8 @@ pub enum TokenKind {
     ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("NO_CHECK", ignore(ascii_case))]
+    NO_CHECK,
     #[token("FETCH", ignore(ascii_case))]
     FETCH,
     #[token("FIELDS", ignore(ascii_case))]
