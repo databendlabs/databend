@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use super::RowID;
-use crate::StateAddr;
-use crate::StatesLayout;
+use super::StateAddr;
+use super::StatesLayout;
 use crate::types::StringColumn;
 
 /// A wrapper around raw pointer that provides safe and convenient methods

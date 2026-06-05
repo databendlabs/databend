@@ -52,7 +52,7 @@ impl PartitionMask {
         Self { mask, shift }
     }
 
-    pub fn index(&self, hash: u64) -> usize {
+    fn index(&self, hash: u64) -> usize {
         ((hash & self.mask) >> self.shift) as _
     }
 }
@@ -83,7 +83,7 @@ impl PartitionedPayload {
         Self::new_with_start_bit(group_types, aggrs, partition_count, 0, arenas)
     }
 
-    pub fn new_with_start_bit(
+    pub(super) fn new_with_start_bit(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         partition_count: u64,
@@ -124,10 +124,6 @@ impl PartitionedPayload {
         }
     }
 
-    pub fn states_layout(&self) -> Option<&StatesLayout> {
-        self.row_layout.states_layout.as_ref()
-    }
-
     pub fn into_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
         self.payloads.into_iter().enumerate()
     }
@@ -135,13 +131,6 @@ impl PartitionedPayload {
     pub fn into_non_empty_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
         self.into_bucket_payloads()
             .filter(|(_, payload)| payload.len() != 0)
-    }
-
-    pub fn into_bucket_payload(mut self, bucket: usize) -> Option<Payload> {
-        if bucket >= self.partition_count() {
-            return None;
-        }
-        Some(self.payloads.remove(bucket))
     }
 
     pub(super) fn into_single_payload(mut self) -> Payload {
@@ -304,10 +293,6 @@ impl PartitionedPayload {
         self.payloads.len()
     }
 
-    pub fn page_count(&self) -> usize {
-        self.payloads.iter().map(|x| x.pages.len()).sum()
-    }
-
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
     }
@@ -335,7 +320,7 @@ impl PartitionedPayload {
                     Arc::new(Bump::new()),
                     group_types.clone(),
                     aggrs.clone(),
-                    self.states_layout().cloned(),
+                    self.row_layout.states_layout.clone(),
                 )
             })
             .collect_vec();

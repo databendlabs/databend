@@ -153,16 +153,16 @@ unsafe impl Send for Payload {}
 unsafe impl Sync for Payload {}
 
 pub(super) struct Page {
-    pub(crate) data: Vec<MaybeUninit<u8>>,
-    pub(crate) rows: usize,
+    pub(super) data: Vec<MaybeUninit<u8>>,
+    pub(super) rows: usize,
     // state_offset = state_rows * agg_len
     // which mark that the offset to clean the agg states
-    pub(crate) state_offsets: usize,
-    pub(crate) capacity: usize,
+    pub(super) state_offsets: usize,
+    pub(super) capacity: usize,
 }
 
 impl Page {
-    pub fn is_partial_state(&self, agg_len: usize) -> bool {
+    fn is_partial_state(&self, agg_len: usize) -> bool {
         self.rows * agg_len != self.state_offsets
     }
 
@@ -435,7 +435,7 @@ impl Payload {
         );
     }
 
-    pub fn combine(&mut self, mut other: Payload) {
+    pub(super) fn combine(&mut self, mut other: Payload) {
         debug_assert_eq!(
             other.total_rows,
             other.pages.iter().map(|x| x.rows).sum::<usize>()
@@ -445,7 +445,7 @@ impl Payload {
         self.pages.append(other.pages.as_mut());
     }
 
-    pub fn mark_min_cardinality(&mut self) {
+    pub(super) fn mark_min_cardinality(&mut self) {
         if self.min_cardinality.is_none() {
             self.min_cardinality = Some(self.total_rows);
         }

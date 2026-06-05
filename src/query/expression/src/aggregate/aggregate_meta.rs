@@ -24,7 +24,6 @@ use super::PartitionedPayload;
 use super::Payload;
 use super::PayloadFlushState;
 use super::ProbeState;
-use crate::Column;
 use crate::DataBlock;
 use crate::ProjectedBlock;
 use crate::aggregate::AggregateFunction;
@@ -39,11 +38,6 @@ pub struct SerializedPayload {
 }
 
 impl SerializedPayload {
-    pub fn get_group_by_column(&self) -> &Column {
-        let entry = self.data_block.columns().last().unwrap();
-        entry.as_column().unwrap()
-    }
-
     #[fastrace::trace(name = "SerializedPayload::convert_to_aggregate_table")]
     pub fn convert_to_aggregate_table(
         &self,
