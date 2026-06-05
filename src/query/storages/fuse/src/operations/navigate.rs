@@ -240,7 +240,8 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::TimePoint(time_point) => {
-                self.navigate_to_time_point_unchecked(ctx, *time_point).await
+                self.navigate_to_time_point_unchecked(ctx, *time_point)
+                    .await
             }
             _ => self.navigate_to_point(ctx, point).await,
         }
@@ -291,9 +292,14 @@ impl FuseTable {
         let op = self.get_operator();
         let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
 
-        let millis = time_point.timestamp_millis() as u64;
+        let ts_millis = time_point.timestamp_millis();
+        if ts_millis < 0 {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "NO_CHECK does not support timestamps before 1970-01-01",
+            ));
+        }
         let target_uuid =
-            uuid::Builder::from_unix_timestamp_millis(millis, &[0u8; 10]).into_uuid();
+            uuid::Builder::from_unix_timestamp_millis(ts_millis as u64, &[0u8; 10]).into_uuid();
         let start_after_key = format!(
             "{}{}{}",
             snapshot_prefix,
@@ -369,11 +375,7 @@ impl FuseTable {
                 };
                 let (snapshot, format_version) =
                     SnapshotsIO::read_snapshot(location, op, true).await?;
-                self.load_table_by_snapshot(
-                    snapshot.as_ref(),
-                    format_version,
-                    s3_storage_class,
-                )
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
             }
         }
     }
