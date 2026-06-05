@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::too_many_arguments)]
-
 mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
+mod aggregate_meta;
 mod group_hash;
 mod legacy_hash_index;
 mod new_hash_index;
@@ -35,6 +33,7 @@ use std::sync::atomic::Ordering;
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
+pub use aggregate_meta::*;
 pub use group_hash::*;
 pub use partitioned_payload::*;
 pub use payload::*;
