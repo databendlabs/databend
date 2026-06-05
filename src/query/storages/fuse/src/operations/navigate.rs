@@ -31,7 +31,6 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
@@ -292,7 +291,9 @@ impl FuseTable {
         let op = self.get_operator();
         let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
 
-        let target_uuid = uuid_from_date_time(time_point);
+        let millis = time_point.timestamp_millis() as u64;
+        let target_uuid =
+            uuid::Builder::from_unix_timestamp_millis(millis, &[0u8; 10]).into_uuid();
         let start_after_key = format!(
             "{}{}{}",
             snapshot_prefix,
