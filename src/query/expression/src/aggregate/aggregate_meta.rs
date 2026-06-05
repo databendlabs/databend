@@ -110,6 +110,26 @@ impl SerializedPayload {
         Ok(hashtable.payload)
     }
 
+    pub fn convert_to_single_payload(
+        &self,
+        group_types: Vec<DataType>,
+        aggrs: Vec<Arc<dyn AggregateFunction>>,
+        num_states: usize,
+        enable_experiment_hash_index: bool,
+        arena: Arc<Bump>,
+    ) -> Result<Payload> {
+        let hashtable = self.convert_to_aggregate_table(
+            group_types,
+            aggrs,
+            num_states,
+            0,
+            enable_experiment_hash_index,
+            arena,
+            false,
+        )?;
+        Ok(hashtable.payload.into_single_payload())
+    }
+
     pub fn repartition_to_payloads(
         self,
         max_partition_count: usize,
@@ -119,19 +139,21 @@ impl SerializedPayload {
         enable_experiment_hash_index: bool,
         flush_state: &mut PayloadFlushState,
     ) -> Result<Vec<AggregatePayload>> {
-        let partitioned_payload = self
-            .convert_to_partitioned_payload(
+        Ok(self
+            .convert_to_aggregate_table(
                 group_types,
                 aggrs,
                 num_states,
                 0,
                 enable_experiment_hash_index,
                 Arc::new(Bump::new()),
+                false,
             )?
-            .repartition(max_partition_count, flush_state);
-
-        Ok(partitioned_payload
-            .into_bucket_payloads()
+            .payload
+            .repartition(max_partition_count, flush_state)
+            .payloads
+            .into_iter()
+            .enumerate()
             .map(|(bucket, payload)| AggregatePayload {
                 bucket: bucket as isize,
                 payload,
