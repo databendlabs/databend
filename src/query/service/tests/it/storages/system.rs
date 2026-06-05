@@ -663,6 +663,10 @@ async fn test_system_columns_tolerates_broken_attached_table() -> anyhow::Result
     let catalog = ctx.get_catalog("default").await?;
     let database = catalog.get_database(&tenant, "default").await?;
 
+    // ATTACH schema refresh is opt-in; enable it so the resilience path under test is exercised.
+    ctx.get_settings()
+        .set_setting("enable_table_schema_refresh".to_string(), "1".to_string())?;
+
     execute_command(ctx.clone(), "create table default.healthy(a int)").await?;
 
     // Simulate a broken attached-table storage: any refresh from this S3 endpoint fails with 403.
@@ -739,4 +743,3 @@ async fn test_system_columns_tolerates_broken_attached_table() -> anyhow::Result
 
     Ok(())
 }
-

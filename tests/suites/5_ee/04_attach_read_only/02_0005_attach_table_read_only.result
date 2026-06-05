@@ -23,6 +23,8 @@ c1	VARCHAR	NO	'c1'
 c2	VARCHAR	NO	'c2'	
 expects one row, 3 columns
 0	c1	c2
+system.columns hides source-side added columns when refresh is disabled (default)
+number
 system.columns should reflect the added columns
 c1
 c2
@@ -30,6 +32,8 @@ number
 information_schema.columns should reflect the added columns
 c1
 c2
+number
+refresh does NOT persist to meta server: disable refresh again, should still see frozen schema
 number
 alter table drop column
 expects new columns: number, c2

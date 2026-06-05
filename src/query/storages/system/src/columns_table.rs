@@ -279,22 +279,31 @@ pub(crate) async fn dump_tables(
     let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
 
     // Use unified visibility collection from util.rs
-    let db_with_tables =
-        collect_visible_tables(ctx, &disabled_catalog, &filtered_db_names, &filtered_table_names)
-            .await?;
+    let db_with_tables = collect_visible_tables(
+        ctx,
+        &disabled_catalog,
+        &filtered_db_names,
+        &filtered_table_names,
+    )
+    .await?;
 
     // A read-only ATTACH table keeps its current schema in the source snapshot, not on the meta
-    // server, so the disabled catalog above hands back the schema frozen at ATTACH time. Refresh
-    // each one through the original catalog to pick up source schema changes; a failure here must
-    // not drop sibling tables, so fall back to the cached handle.
+    // server, so the disabled catalog above hands back the schema frozen at ATTACH time. Refreshing
+    // each one through the original catalog picks up source schema changes, but costs one S3
+    // round-trip per ATTACH table, so it is opt-in via enable_table_schema_refresh. A refresh
+    // failure must not drop sibling tables, so fall back to the cached handle.
+    let refresh = ctx.get_settings().get_enable_table_schema_refresh()?;
     Ok(db_with_tables
         .into_iter()
         .map(|db| {
-            let tables = db
-                .tables
-                .into_iter()
-                .map(|table| refresh_attach_table(catalog, table))
-                .collect();
+            let tables = if refresh {
+                db.tables
+                    .into_iter()
+                    .map(|table| refresh_attach_table(catalog, table))
+                    .collect()
+            } else {
+                db.tables
+            };
             (db.name, tables)
         })
         .collect())
