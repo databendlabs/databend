@@ -356,7 +356,7 @@ impl FuseTable {
                 }
             }
             None => {
-                if !seen_v4_snapshot {
+                if !has_start_after && !seen_v4_snapshot {
                     return Err(ErrorCode::TableHistoricalDataNotFound(
                         "NO_CHECK requires V4 format snapshots (UUID v7). \
                          This table has no V4 snapshots.",
