@@ -4147,6 +4147,7 @@ dependencies = [
  "either",
  "enum-as-inner",
  "ethnum",
+ "fastrace",
  "futures",
  "geo",
  "geozero",

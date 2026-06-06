@@ -199,11 +199,7 @@ pub fn agg_spilling_aggregate_payload(
     let mut rows = 0;
     let mut buckets_count = 0;
     let location = spiller.create_unique_location();
-    for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-        if payload.len() == 0 {
-            continue;
-        }
-
+    for (bucket, payload) in partitioned_payload.into_non_empty_bucket_payloads() {
         let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
         rows += data_block.num_rows();
         buckets_count += 1;
