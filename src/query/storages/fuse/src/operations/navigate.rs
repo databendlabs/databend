@@ -292,12 +292,24 @@ impl FuseTable {
         let op = self.get_operator();
         let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
 
+        // NO_CHECK only works with V4 snapshots (UUID v7 temporal ordering).
+        if let Some(loc) = self.snapshot_loc() {
+            if !loc.ends_with("_v4.mpk") {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "NO_CHECK requires V4 format snapshots (UUID v7)",
+                ));
+            }
+        }
+
         let ts_millis = time_point.timestamp_millis();
         if ts_millis < 0 {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "NO_CHECK does not support timestamps before 1970-01-01",
             ));
         }
+        // Use all-zero random bytes to produce the minimum UUID for this millisecond.
+        // This is intentional: any snapshot at the same millisecond sorts after this
+        // boundary, so we always return its predecessor (ts < time_point semantics).
         let target_uuid =
             uuid::Builder::from_unix_timestamp_millis(ts_millis as u64, &[0u8; 10]).into_uuid();
         let start_after_key = format!(
@@ -319,7 +331,6 @@ impl FuseTable {
 
         let abort_checker = ctx.clone().get_abort_checker();
         let mut first_snapshot_after = None;
-        let mut seen_v4_snapshot = false;
         while let Some(entry) = lister.try_next().await? {
             abort_checker
                 .try_check_aborting()
@@ -327,7 +338,6 @@ impl FuseTable {
             if entry.metadata().mode() == EntryMode::FILE {
                 let path = entry.path().to_string();
                 if path.ends_with("_v4.mpk") {
-                    seen_v4_snapshot = true;
                     if !has_start_after && path.as_str() <= start_after_key.as_str() {
                         continue;
                     }
@@ -362,12 +372,6 @@ impl FuseTable {
                 }
             }
             None => {
-                if !has_start_after && !seen_v4_snapshot {
-                    return Err(ErrorCode::TableHistoricalDataNotFound(
-                        "NO_CHECK requires V4 format snapshots (UUID v7). \
-                         This table has no V4 snapshots.",
-                    ));
-                }
                 let Some(location) = self.snapshot_loc() else {
                     return Err(ErrorCode::TableHistoricalDataNotFound(
                         "Empty Table has no historical data",
