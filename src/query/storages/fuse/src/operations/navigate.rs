@@ -32,6 +32,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -354,6 +355,12 @@ impl FuseTable {
 
                 match snapshot.prev_snapshot_id {
                     Some((prev_id, prev_ver)) => {
+                        if prev_ver < TableSnapshot::VERSION {
+                            return Err(ErrorCode::TableHistoricalDataNotFound(
+                                "NO_CHECK cannot navigate to pre-V4 snapshots \
+                                 in mixed-format tables",
+                            ));
+                        }
                         let prev_location = self
                             .meta_location_generator()
                             .gen_snapshot_location(&prev_id, prev_ver)?;
