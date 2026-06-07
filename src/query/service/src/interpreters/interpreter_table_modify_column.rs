@@ -871,7 +871,7 @@ pub(crate) async fn build_select_insert_plan(
     table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipelineBuildResult> {
     // 1. build plan by sql
-    let mut planner = Planner::new(ctx.clone());
+    let mut planner = Planner::new(ctx.clone()).with_suppress_wap_branch(true);
     let (plan, _extras) = planner.plan_sql(&sql).await?;
     let select_schema = plan.schema();
 

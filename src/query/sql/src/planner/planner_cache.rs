@@ -38,6 +38,7 @@ use sha2::Sha256;
 
 use crate::NameResolutionContext;
 use crate::Planner;
+use crate::binder::wap_branch::applicable_wap_branch_for_table;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 
@@ -77,6 +78,7 @@ impl Planner {
             ctx: self.ctx.clone(),
             schema_snapshots: vec![],
             name_resolution_ctx,
+            wap_branch: self.ctx.get_settings().get_wap_branch().ok().flatten(),
             cache_miss: false,
         };
         stmt.drive(&mut visitor);
@@ -110,11 +112,11 @@ impl Planner {
                 if visitor.schema_snapshots.iter().all(|ss| {
                     metadata.tables().iter().any(|table| {
                         let tbl = table.table();
-                        if tbl.is_temp() || tbl.schema().ne(&ss.0) {
+                        if tbl.is_temp() || tbl.get_id() != ss.0 || tbl.schema().ne(&ss.1) {
                             return false;
                         }
                         let snapshot = tbl.options().get(OPT_KEY_SNAPSHOT_LOCATION);
-                        snapshot == Some(&ss.1)
+                        snapshot == Some(&ss.2)
                     })
                 }) {
                     return (!visitor.cache_miss, Some(plan_item.as_ref().clone()));
@@ -152,8 +154,9 @@ impl Planner {
 #[visitor(TableReference(enter), FunctionCall(enter))]
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
-    schema_snapshots: Vec<(TableSchemaRef, String)>,
+    schema_snapshots: Vec<(u64, TableSchemaRef, String)>,
     name_resolution_ctx: NameResolutionContext,
+    wap_branch: Option<String>,
     cache_miss: bool,
 }
 
@@ -206,6 +209,15 @@ impl TableRefVisitor {
                 .branch
                 .as_ref()
                 .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
+            let target_branch = branch.or_else(|| {
+                applicable_wap_branch_for_table(
+                    self.ctx.as_ref(),
+                    self.wap_branch.clone(),
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                )
+            });
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
@@ -214,7 +226,7 @@ impl TableRefVisitor {
                         &catalog_name,
                         &database_name,
                         &table_name,
-                        branch.as_deref(),
+                        target_branch.as_deref(),
                     )
                     .await
                 {
@@ -224,7 +236,11 @@ impl TableRefVisitor {
                     {
                         let snapshot = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
                         if let Some(sn) = snapshot {
-                            self.schema_snapshots.push((table_meta.schema(), sn));
+                            self.schema_snapshots.push((
+                                table_meta.get_id(),
+                                table_meta.schema(),
+                                sn,
+                            ));
                             return;
                         }
                     }

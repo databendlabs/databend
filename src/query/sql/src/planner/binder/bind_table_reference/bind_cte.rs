@@ -54,6 +54,7 @@ impl Binder {
                     &cte_name,
                     &bind_context.cte_context.cte_map,
                     &cte.query,
+                    bind_context,
                 )?;
                 // The physical CTE registry is query-global, while CTE aliases are scoped.
                 // Give each materialized producer a unique execution name.
@@ -111,6 +112,7 @@ impl Binder {
             table_name,
             bind_context.cte_context.cte_map.as_ref(),
             &cte_info.query,
+            bind_context,
         )?;
 
         let (table_alias, column_alias) = match alias {
@@ -191,6 +193,7 @@ impl Binder {
         cte_name: &str,
         cte_map: &IndexMap<String, CteInfo>,
         query: &Query,
+        parent: &BindContext,
     ) -> Result<(SExpr, BindContext)> {
         let mut prev_cte_map = Box::new(IndexMap::new());
         for (name, cte_info) in cte_map.iter() {
@@ -199,11 +202,15 @@ impl Binder {
             }
             prev_cte_map.insert(name.clone(), cte_info.clone());
         }
+        // Fresh CTE context: preserve view WAP suppression, but not agg-index state
+        // because agg-index queries reject WITH.
         let mut cte_bind_context = BindContext {
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
             },
+            suppress_wap_branch: parent.suppress_wap_branch,
+            binding_views: parent.binding_views.clone(),
             ..Default::default()
         };
         let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, query)?;

@@ -45,7 +45,7 @@ SHOW FIELDS FROM `t/slash`
 a INT NO NULL (empty)
 
 query T
-SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't/slash' ORDER BY name
+SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't/slash' AND branch = '' ORDER BY name
 ----
 a
 

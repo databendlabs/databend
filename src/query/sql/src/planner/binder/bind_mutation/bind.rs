@@ -145,6 +145,14 @@ impl Binder {
             target_table_identifier.table_name_alias(),
         );
 
+        let branch_name = self.resolve_write_branch_with_wap_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+            bind_context.suppress_wap_branch,
+        )?;
+
         // Add table lock before execution.
         let lock_guard = if strategy != MutationStrategy::NotMatchedOnly {
             self.ctx

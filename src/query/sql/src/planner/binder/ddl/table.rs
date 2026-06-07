@@ -1488,7 +1488,7 @@ impl Binder {
             }))),
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
-                if branch.is_some() && matches!(&point, NavigationPoint::TableTag(_)) {
+                if branch.is_some() && point.is_table_tag() {
                     return Err(ErrorCode::Unimplemented(format!(
                         "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
                         branch.as_ref().unwrap()
@@ -1604,7 +1604,11 @@ impl Binder {
                 } else {
                     None
                 };
-                if branch.is_some() && matches!(navigation, Some(NavigationPoint::TableTag(_))) {
+                if branch.is_some()
+                    && navigation
+                        .as_ref()
+                        .is_some_and(NavigationPoint::is_table_tag)
+                {
                     return Err(ErrorCode::Unimplemented(format!(
                         "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
                         branch.as_ref().unwrap()
@@ -1737,6 +1741,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &TruncateTableStmt,
     ) -> Result<Plan> {
         let TruncateTableStmt {
@@ -1750,12 +1755,19 @@ impl Binder {
         let catalog = table_identifier.catalog_name();
         let database = table_identifier.database_name();
         let table = table_identifier.table_name();
+        let branch = self.resolve_write_branch_with_wap_branch(
+            &catalog,
+            &database,
+            &table,
+            table_identifier.branch_name(),
+            bind_context.suppress_wap_branch,
+        )?;
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
             database,
             table,
-            branch: table_identifier.branch_name(),
+            branch,
         })))
     }
 
@@ -2395,7 +2407,9 @@ impl Binder {
 
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
-                        let mut planner = Planner::new(self.ctx.clone());
+                        // Replay stored view SQL against base tables.
+                        let mut planner =
+                            Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,

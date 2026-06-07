@@ -91,7 +91,12 @@ impl Binder {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let mut plan = self
-                    .bind_copy_into_table_common(stmt, location, false)
+                    .bind_copy_into_table_common(
+                        stmt,
+                        location,
+                        false,
+                        bind_context.suppress_wap_branch,
+                    )
                     .await?;
 
                 // for copy from location, collect files explicitly
@@ -114,7 +119,9 @@ impl Binder {
                     max_column_position.max_pos,
                     max_column_position.has_name_ref,
                 );
-                let plan = self.bind_copy_into_table_common(stmt, from, true).await?;
+                let plan = self
+                    .bind_copy_into_table_common(stmt, from, true, bind_context.suppress_wap_branch)
+                    .await?;
 
                 let alias = alias_name.as_ref().map(|name| TableAlias {
                     name: name.clone(),
@@ -152,6 +159,7 @@ impl Binder {
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
         is_transform: bool,
+        suppress_wap_branch: bool,
     ) -> Result<CopyIntoTablePlan> {
         let table_identifier = TableIdentifier::new_with_ref(self, &stmt.table, &None);
         let (catalog_name, database_name, table_name, branch_name) = (
@@ -160,8 +168,16 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
+
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
+        let branch_name = self.resolve_write_branch_with_wap_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+            suppress_wap_branch,
+        )?;
         let table = self
             .ctx
             .get_table_with_branch(

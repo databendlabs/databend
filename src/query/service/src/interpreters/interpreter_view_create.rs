@@ -59,7 +59,8 @@ impl Interpreter for CreateViewInterpreter {
         let tenant = self.ctx.get_tenant();
         let table_function = catalog.list_table_functions();
         let mut options = BTreeMap::new();
-        let mut planner = Planner::new(self.ctx.clone());
+        // Replay stored view SQL against base tables.
+        let mut planner = Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
         let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
         match plan.clone() {
             Plan::Query { metadata, .. } => {

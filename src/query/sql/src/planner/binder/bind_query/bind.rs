@@ -315,6 +315,8 @@ impl Binder {
         let create_table_sql = create_table_stmt.to_string();
         log::info!("[CTE]create_table_sql: {create_table_sql}");
         if let Some(subquery_executor) = &self.subquery_executor {
+            // This CTAS does not inherit WAP suppression. Safe while persisted views
+            // reject explicit MATERIALIZED CTEs; see `v_mat_cte_in_view_rejected`.
             let _ = databend_common_base::runtime::block_on(async move {
                 subquery_executor
                     .execute_query_with_sql_string(&create_table_sql)

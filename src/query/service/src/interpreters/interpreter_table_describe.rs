@@ -65,7 +65,8 @@ impl Interpreter for DescribeTableInterpreter {
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
-                let mut planner = Planner::new(self.ctx.clone());
+                // Replay stored view SQL against base tables.
+                let mut planner = Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
                 let (plan, _) = planner.plan_sql(query).await?;
                 infer_table_schema(&plan.schema())
             } else {
