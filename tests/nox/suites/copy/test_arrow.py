@@ -227,7 +227,7 @@ def test_copy_into_stage_as_arrow(copy_env, tmp_path, format_name):
     conn.exec(
         f"copy into @{stage_name}/unload "
         "from (select 1 as id, 'alice' as name union all select 2, 'bob') "
-        f"file_format=(type={format_name}) single=true overwrite=true"
+        f"file_format=(type={format_name}) single=true use_raw_path=true overwrite=true"
     )
     conn.exec(
         f"create or replace table {table_name} "
