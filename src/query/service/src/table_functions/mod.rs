@@ -23,6 +23,8 @@ mod list_stage;
 mod numbers;
 mod others;
 mod policy_references;
+#[cfg(feature = "task-support")]
+mod private_task_history;
 mod show_grants;
 mod show_roles;
 mod show_sequences;
@@ -44,6 +46,8 @@ pub use numbers::generate_numbers_parts;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use policy_references::PolicyReferencesTable;
+#[cfg(feature = "task-support")]
+pub use private_task_history::PrivateTaskHistoryTable;
 pub use system::TableStatisticsFunc;
 pub use system::get_fuse_table_snapshot;
 pub use system::get_fuse_table_statistics;

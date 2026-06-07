@@ -24,10 +24,12 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::StageFilesInfo;
+use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
 use crate::binder::Binder;
-use crate::binder::copy_into_table::resolve_file_location;
+use crate::binder::StageResolver;
+use crate::binder::resolve_file_format;
 use crate::optimizer::ir::SExpr;
 
 impl Binder {
@@ -48,8 +50,16 @@ impl Binder {
                 _ => location.clone(),
             };
 
-            let (mut stage_info, path) =
-                resolve_file_location(self.ctx.as_ref(), &location).await?;
+            let user_api = UserApiProvider::instance();
+            let (mut stage_info, path) = StageResolver::from_table_context(
+                self.ctx.clone(),
+                user_api.clone(),
+                databend_common_config::GlobalConfig::instance()
+                    .storage
+                    .allow_insecure,
+            )?
+            .resolve_file_location(&location)
+            .await?;
 
             if let Some(f) = &options.file_format {
                 stage_info.file_format_params = match StageFileFormatType::from_str(f) {
@@ -62,7 +72,10 @@ impl Binder {
                         }
                         FileFormatParams::default_by_type(t)?
                     }
-                    _ => databend_common_base::runtime::block_on(self.ctx.get_file_format(f))?,
+                    _ => {
+                        let tenant = self.ctx.get_tenant();
+                        resolve_file_format(&tenant, &user_api, f).await?
+                    }
                 }
             }
             let pattern = match &options.pattern {

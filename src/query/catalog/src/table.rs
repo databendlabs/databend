@@ -60,6 +60,12 @@ use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
 
+// Opaque engine-specific pruning payload that can be carried between
+// read_partitions calls. Proxy only forwards this handle across routing; the
+// engine that produced it is responsible for downcasting and validating the
+// concrete type before reuse.
+pub type ReusablePrunedMetas = Arc<dyn Any + Send + Sync>;
+
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
     fn name(&self) -> &str {
@@ -213,6 +219,18 @@ pub trait Table: Sync + Send {
             self.name(),
             self.get_table_info().meta.engine
         )))
+    }
+
+    #[async_backtrace::framed]
+    async fn read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        dry_run: bool,
+        _reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        let (statistics, partitions) = self.read_partitions(ctx, push_downs, dry_run).await?;
+        Ok((statistics, partitions, None))
     }
 
     fn table_args(&self) -> Option<TableArgs> {
@@ -519,7 +537,10 @@ impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TimeNavigation {
-    TimeTravel(NavigationPoint),
+    TimeTravel {
+        point: NavigationPoint,
+        no_check: bool,
+    },
     Changes {
         append_only: bool,
         desc: String,

@@ -1,0 +1,109 @@
+statement ok
+DROP DATABASE IF EXISTS replace_into_decimal_key
+
+statement ok
+CREATE DATABASE replace_into_decimal_key
+
+statement ok
+USE replace_into_decimal_key
+
+# Regression: replace-into used to panic with `unreachable!()` when the
+# on-conflict key was deserialized as DecimalScalar::Decimal64. The hash
+# function in fuse's replace-into mutator needs to handle every decimal
+# width, so this exercises Decimal64 (precision <= 18), Decimal128
+# (precision <= 38), and Decimal256.
+
+# --- Decimal64 (precision = 18, stored as i64) ---
+
+statement ok
+create or replace table t_d64 (k decimal(18, 2), v string)
+
+statement ok
+replace into t_d64 on(k) values (1.23, 'a'), (4.56, 'b')
+
+query RT
+select k, v from t_d64 order by k
+----
+1.23 a
+4.56 b
+
+# Same logical key value, different payload: must replace, not duplicate.
+statement ok
+replace into t_d64 on(k) values (1.23, 'a2'), (7.89, 'c')
+
+query RT
+select k, v from t_d64 order by k
+----
+1.23 a2
+4.56 b
+7.89 c
+
+query I
+select count() from t_d64
+----
+3
+
+# --- Decimal128 (precision > 18, stored as i128) ---
+
+statement ok
+create or replace table t_d128 (k decimal(28, 2), v string)
+
+statement ok
+replace into t_d128 on(k) values (1.23, 'a'), (4.56, 'b')
+
+statement ok
+replace into t_d128 on(k) values (1.23, 'a2'), (7.89, 'c')
+
+query RT
+select k, v from t_d128 order by k
+----
+1.23 a2
+4.56 b
+7.89 c
+
+# --- Decimal256 (precision > 38) ---
+
+statement ok
+create or replace table t_d256 (k decimal(40, 2), v string)
+
+statement ok
+replace into t_d256 on(k) values (1.23, 'a'), (4.56, 'b')
+
+statement ok
+replace into t_d256 on(k) values (1.23, 'a2'), (7.89, 'c')
+
+query RT
+select k, v from t_d256 order by k
+----
+1.23 a2
+4.56 b
+7.89 c
+
+# --- NULL key handling on a Decimal64 column ---
+# Rows whose on-conflict key is NULL are kept as-is (row hash returns None).
+
+statement ok
+create or replace table t_d64_null (k decimal(18, 2) null, v string)
+
+statement ok
+replace into t_d64_null on(k) values (NULL, 'x'), (NULL, 'y'), (1.00, 'z')
+
+query I
+select count() from t_d64_null
+----
+3
+
+statement ok
+drop table t_d64
+
+statement ok
+drop table t_d128
+
+statement ok
+drop table t_d256
+
+statement ok
+drop table t_d64_null
+
+statement ok
+DROP DATABASE replace_into_decimal_key

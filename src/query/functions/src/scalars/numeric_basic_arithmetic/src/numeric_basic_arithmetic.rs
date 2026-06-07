@@ -21,10 +21,10 @@ use databend_common_expression::Scalar;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::ReturnStat;
 use databend_common_expression::stat_distribution::StatBinaryArg;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::AccessType;
@@ -207,7 +207,7 @@ where
                     has_null: true,
                     value: None,
                 }),
-                ndv: StatEstimate::exact(0.0),
+                ndv: NdvEstimate::exact(0.0),
                 null_count: lhs.null_count,
                 distribution: OwnedDistribution::Unknown,
             },

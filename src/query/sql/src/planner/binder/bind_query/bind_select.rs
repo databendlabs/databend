@@ -46,8 +46,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_expression::display::scalar_ref_to_string;
 use log::warn;
 
 use crate::AsyncFunctionRewriter;
@@ -428,14 +427,7 @@ impl Binder {
         }
 
         // whether allow rewrite virtual column and pushdown
-        bind_context.allow_virtual_column = self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-            && LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
-                .is_ok();
+        bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
         let mut rewriter =
             SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
@@ -465,8 +457,9 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
-        for window_info in &from_context.windows.window_functions {
-            s_expr = self.bind_window_function(window_info, s_expr)?;
+        if !from_context.windows.window_functions.is_empty() {
+            let window_functions = from_context.windows.window_functions.clone();
+            s_expr = self.bind_window_functions(&window_functions, s_expr)?;
         }
 
         // Bind lazy Set-returning functions after aggregate plan.
@@ -497,10 +490,8 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
-        // add internal column binding into expr
-        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
-
-        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
+        // add internal and virtual column bindings into expr
+        s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -733,7 +724,7 @@ impl SelectRewriter {
                     // Build a query to get all distinct values from the pivot column
                     let mut query_sql = format!(
                         "SELECT DISTINCT {} FROM ({}) AS pivot_source",
-                        pivot.value_column.name,
+                        pivot.value_column,
                         self.build_pivot_source_query(stmt)?
                     );
 
@@ -852,36 +843,29 @@ impl SelectRewriter {
                 .set_span(span));
             }
             let columns = block.columns();
-            // TODO: support more scalar into expr types
             for row in 0..block.num_rows() {
                 let s = columns[0].index(row).unwrap();
                 let data_type = columns[0].data_type();
+                let value = scalar_ref_to_string(&s);
                 match s {
-                    ScalarRef::String(s) => {
-                        let literal = Expr::Literal {
-                            span,
-                            value: Literal::String(s.to_string()),
-                        };
-                        values.push((literal, s.to_string()));
-                    }
                     ScalarRef::Null => {
                         let literal = Expr::Literal {
                             span,
                             value: Literal::Null,
                         };
-                        values.push((literal, "NULL".to_string()));
+                        values.push((literal, value));
                     }
-                    other => {
+                    _ => {
                         let e = Expr::Cast {
                             span,
                             expr: Box::new(Expr::Literal {
                                 span,
-                                value: Literal::String(other.to_string()),
+                                value: Literal::String(value.clone()),
                             }),
                             target_type: data_type.to_type_name()?,
                             pg_style: false,
                         };
-                        values.push((e, other.to_string()));
+                        values.push((e, value));
                     }
                 }
             }
@@ -946,57 +930,9 @@ impl SelectRewriter {
                 if i > 0 {
                     source_query.push_str(", ");
                 }
-                // Remove pivot from the from clause
-                match from_item {
-                    TableReference::Table {
-                        span: _,
-                        table,
-                        alias,
-                        temporal,
-                        with_options,
-                        pivot: _,
-                        unpivot,
-                        sample,
-                    } => {
-                        if let Some(catalog) = &table.catalog {
-                            source_query.push_str(&catalog.name);
-                            source_query.push('.');
-                        }
-                        if let Some(database) = &table.database {
-                            source_query.push_str(&database.name);
-                            source_query.push('.');
-                        }
-                        source_query.push_str(&table.table.name);
-                        if let Some(branch) = &table.branch {
-                            source_query.push('/');
-                            source_query.push_str(&branch.name);
-                        }
-
-                        if let Some(temporal) = temporal {
-                            source_query.push(' ');
-                            source_query.push_str(&temporal.to_string());
-                        }
-                        if let Some(with_options) = with_options {
-                            source_query.push(' ');
-                            source_query.push_str(&with_options.to_string());
-                        }
-                        if let Some(alias) = alias {
-                            source_query.push_str(" AS ");
-                            source_query.push_str(&alias.to_string());
-                        }
-                        if let Some(unpivot) = unpivot {
-                            source_query.push(' ');
-                            source_query.push_str(&unpivot.to_string());
-                        }
-                        if let Some(sample) = sample {
-                            source_query.push(' ');
-                            source_query.push_str(&sample.to_string());
-                        }
-                    }
-                    _ => {
-                        source_query.push_str(&from_item.to_string());
-                    }
-                }
+                let mut from_item = from_item.clone();
+                Self::strip_pivot(&mut from_item);
+                source_query.push_str(&from_item.to_string());
             }
         } else {
             return Err(ErrorCode::SemanticError(

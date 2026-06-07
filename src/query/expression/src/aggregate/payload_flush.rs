@@ -15,17 +15,17 @@
 use databend_common_exception::Result;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 
+use super::BATCH_SIZE;
+use super::StateAddr;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
-use crate::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
-use crate::StateAddr;
 use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -97,7 +97,26 @@ impl PayloadFlushState {
 }
 
 impl PartitionedPayload {
-    pub fn flush(&mut self, state: &mut PayloadFlushState) -> bool {
+    pub fn aggregate_flush_bucket(&self, bucket: usize) -> Result<DataBlock> {
+        self.payloads[bucket].aggregate_flush_all()
+    }
+
+    pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
+        let mut blocks = Vec::with_capacity(self.partition_count());
+
+        for payload in self.payloads.iter() {
+            if payload.len() != 0 {
+                blocks.push(payload.aggregate_flush_all()?);
+            }
+        }
+
+        if blocks.is_empty() {
+            return Ok(self.payloads[0].empty_block(0));
+        }
+        DataBlock::concat(&blocks)
+    }
+
+    pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
         if state.flush_partition >= self.payloads.len() {
             return false;
         }

@@ -24,9 +24,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -235,14 +235,14 @@ impl Scan {
     }
 }
 
-fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> StatEstimate {
+fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> NdvEstimate {
     let max_non_null_count = num_rows
         .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
         .unwrap_or(u64::MAX as f64);
 
     match ndv {
-        Some(ndv) => StatEstimate::exact(ndv as f64),
-        None => StatEstimate::new(0.0, max_non_null_count, max_non_null_count),
+        Some(ndv) => NdvEstimate::exact(ndv as f64),
+        None => NdvEstimate::upper_bound(max_non_null_count),
     }
 }
 
@@ -360,11 +360,9 @@ impl Operator for Scan {
                         if num_rows == 0 {
                             return None;
                         }
-                        if ndv.lower != ndv.upper {
-                            return None;
-                        }
+                        let ndv = col_stat.ndv?;
                         HistogramBuilder::from_ndv(
-                            ndv.expected as _,
+                            ndv,
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,

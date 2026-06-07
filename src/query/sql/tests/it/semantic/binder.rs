@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -72,12 +74,40 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     Ok(outcome)
 }
 
+async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTestOutcome> {
+    let ctx = setup_context(case).await?;
+    ctx.enable_commercial_license_for_test();
+    let outcome = match ctx.bind_sql(case.sql).await {
+        Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),
+        Err(err) => SqlTestOutcome::Error {
+            code: err.code(),
+            message: err.message(),
+        },
+    };
+    Ok(outcome)
+}
+
 async fn run_binder_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
     let mut file = open_golden_file("semantic", file_name)?;
 
     for case in cases {
         write_case_header(&mut file, case)?;
         let outcome = bind_case(case).await?;
+        write_case_outcome(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}
+
+async fn run_binder_cases_with_commercial_license(
+    file_name: &str,
+    cases: &[SqlTestCase],
+) -> Result<()> {
+    let mut file = open_golden_file("semantic", file_name)?;
+
+    for case in cases {
+        write_case_header(&mut file, case)?;
+        let outcome = bind_case_with_commercial_license(case).await?;
         write_case_outcome(&mut file, &outcome)?;
     }
 
@@ -250,6 +280,12 @@ async fn test_binder_window_core_paths() -> Result<()> {
             sql: "SELECT row_number() OVER (ORDER BY number), row_number() OVER (ORDER BY number) FROM t",
         },
         SqlTestCase {
+            name: "multiple_window_expressions_use_window_group",
+            description: "Multiple distinct window expressions should bind through WindowGroup instead of nested Window nodes.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY number), rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM t",
+        },
+        SqlTestCase {
             name: "laglead_window_from_sqllogictest_binds",
             description: "A sqllogictest LEAD window pattern should still bind through the lag/lead rewrite path.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -270,6 +306,103 @@ async fn test_binder_window_core_paths() -> Result<()> {
     ];
 
     run_binder_cases("binder_window_core.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> {
+    let case = SqlTestCase {
+        name: "many_window_expressions_bind_as_flat_window_group",
+        description: "Many distinct window expressions should bind as one flat WindowGroup instead of a deep Window chain.",
+        setup_sqls: &["CREATE TABLE t(number UInt64)"],
+        sql: "SELECT 1",
+    };
+    let ctx = setup_context(&case).await?;
+
+    let window_count = 128;
+    let select_items = (0..window_count)
+        .map(|i| format!("lead(number, {i}, number) OVER (ORDER BY number) AS w{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("SELECT {select_items} FROM t");
+
+    let plan = ctx.bind_sql(&sql).await?;
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan");
+    };
+
+    let mut stats = WindowPlanStats::default();
+    collect_window_plan_stats(&s_expr, &mut stats);
+
+    assert_eq!(stats.window_group_nodes, 1);
+    assert_eq!(stats.window_nodes, 0);
+    assert_eq!(stats.window_group_windows, window_count);
+    assert!(
+        stats.max_depth < 16,
+        "window plan should stay shallow, got depth {}",
+        stats.max_depth
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_mixed_partition_windows_bind_as_partitioned_window_groups() -> Result<()> {
+    let case = SqlTestCase {
+        name: "mixed_partition_windows_bind_as_partitioned_window_groups",
+        description: "Window expressions with different partition requirements should bind as separate WindowGroup nodes.",
+        setup_sqls: &["CREATE TABLE t(number UInt64, value UInt64)"],
+        sql: "SELECT row_number() OVER (ORDER BY value) AS w0, rank() OVER (PARTITION BY number % 3 ORDER BY value) AS w1, dense_rank() OVER (PARTITION BY number % 3 ORDER BY value DESC) AS w2 FROM t",
+    };
+    let ctx = setup_context(&case).await?;
+
+    let plan = ctx.bind_sql(case.sql).await?;
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("expected query plan");
+    };
+
+    let mut stats = WindowPlanStats::default();
+    collect_window_plan_stats(&s_expr, &mut stats);
+
+    assert_eq!(stats.window_group_nodes, 2);
+    assert_eq!(stats.window_nodes, 0);
+    assert_eq!(stats.window_group_windows, 3);
+    assert!(
+        stats.max_depth < 8,
+        "window plan should stay shallow, got depth {}",
+        stats.max_depth
+    );
+
+    Ok(())
+}
+
+#[derive(Default)]
+struct WindowPlanStats {
+    window_group_nodes: usize,
+    window_group_windows: usize,
+    window_nodes: usize,
+    max_depth: usize,
+}
+
+fn collect_window_plan_stats(s_expr: &SExpr, stats: &mut WindowPlanStats) {
+    collect_window_plan_stats_inner(s_expr, stats, 1);
+}
+
+fn collect_window_plan_stats_inner(s_expr: &SExpr, stats: &mut WindowPlanStats, depth: usize) {
+    stats.max_depth = stats.max_depth.max(depth);
+    match s_expr.plan() {
+        RelOperator::Window(_) => {
+            stats.window_nodes += 1;
+        }
+        RelOperator::WindowGroup(window_group) => {
+            stats.window_group_nodes += 1;
+            stats.window_group_windows += window_group.windows.len();
+        }
+        _ => {}
+    }
+
+    for child in s_expr.children() {
+        collect_window_plan_stats_inner(child, stats, depth + 1);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -471,4 +604,90 @@ async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_materialized_cte_virtual_column_rewrite() -> Result<()> {
+    const CREATE_VIRTUAL_COLUMN_TABLE: &str =
+        "CREATE TABLE t(v JSON NULL) storage_format = 'parquet' enable_virtual_column = true";
+    const CREATE_NON_VIRTUAL_COLUMN_TABLE: &str =
+        "CREATE TABLE t_no_vc(v JSON NULL) storage_format = 'parquet'";
+    const CREATE_OTHER_MESSAGE_TABLE: &str =
+        "CREATE TABLE other_table(message JSON NULL) storage_format = 'parquet'";
+
+    const SQL_WITH_CTE: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t) 
+        SELECT message['attribute']['user_id'] FROM logs 
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+"#;
+
+    const SQL_WITH_CHAINED_CTE: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t), 
+        attrs AS (SELECT message['attribute'] AS attr FROM logs),
+        users AS (SELECT attr['user_id'] AS user_id, attr['name'] AS name FROM attrs)
+        SELECT user_id, name FROM users;
+"#;
+
+    const SQL_WITH_CTE_MULTI_FIELDS: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message, v['response'] AS response FROM t),
+        base AS (SELECT message['attribute']['user_id']::Int32 AS user_id, 
+            message['attribute']['trace_id']::Int32 AS trace_id, 
+            message['attribute']['level']::String AS level,
+            response['status_code']::Int64 AS status_code,
+            response['error_message']::String AS error_message FROM logs)
+        SELECT user_id, trace_id, level, status_code, error_message FROM base
+"#;
+
+    const SQL_WITHOUT_TABLE_VIRTUAL_COLUMNS: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t_no_vc)
+        SELECT message['attribute']['user_id'] FROM logs
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+    "#;
+
+    const SQL_WITH_AMBIGUOUS_UNQUALIFIED_COLUMN: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t)
+        SELECT message['attribute']['user_id'] FROM logs, other_table
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs, other_table;
+    "#;
+
+    let cases = [
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites",
+            description: "A materialized CTE consumer should still expose the full base-table JSON path when virtual-column rewrite is enabled.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CTE,
+        },
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites_chained_ctes",
+            description: "A chained materialized CTE should preserve the original base-table JSON path across multiple CTE layers.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CHAINED_CTE,
+        },
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites_multi_fields",
+            description: "Multiple downstream CTE fields reading the same materialized source CTE should push their JSON path requirements back to the source.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CTE_MULTI_FIELDS,
+        },
+        SqlTestCase {
+            name: "materialized_cte_static_json_paths_without_table_virtual_columns",
+            description: "A materialized CTE should still precompute static JSON paths inside the producer even when the source table has no Fuse virtual columns.",
+            setup_sqls: &[CREATE_NON_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITHOUT_TABLE_VIRTUAL_COLUMNS,
+        },
+        SqlTestCase {
+            name: "materialized_cte_unqualified_column_preserves_ambiguity",
+            description: "An unqualified materialized CTE output should not be rewritten before binder can reject an ambiguous column reference.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE, CREATE_OTHER_MESSAGE_TABLE],
+            sql: SQL_WITH_AMBIGUOUS_UNQUALIFIED_COLUMN,
+        },
+    ];
+
+    run_binder_cases_with_commercial_license("binder_materialized_cte_virtual_column.txt", &cases)
+        .await
 }

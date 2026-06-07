@@ -132,7 +132,7 @@ impl FuseTable {
                             'INSERT' as change$action, \
                             false as change$is_update, \
                             if(is_not_null(_origin_block_id), \
-                                concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                 {append_alias}._base_row_id \
                             ) as change$row_id \
                     from {table_desc} as {append_alias} \
@@ -181,7 +181,7 @@ impl FuseTable {
                             select {a_cols}, \
                                     'INSERT' as a_change$action, \
                                     if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                         {a_table_alias}._base_row_id \
                                     ) as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
@@ -190,7 +190,7 @@ impl FuseTable {
                             select {d_cols_alias}, \
                                     'DELETE' as d_change$action, \
                                     if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                         {d_table_alias}._base_row_id \
                                     ) as d_change$row_id \
                             from {table_desc} as {d_table_alias} \

@@ -39,6 +39,7 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table_context::TableContext;
@@ -950,6 +951,24 @@ impl Table for FuseTable {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
+    async fn read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        dry_run: bool,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.do_read_partitions_with_reusable_pruned_metas(
+            ctx,
+            push_downs,
+            dry_run,
+            reusable_pruned_metas,
+        )
+        .await
+    }
+
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -1236,7 +1255,13 @@ impl Table for FuseTable {
         navigation: &TimeNavigation,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(ctx, point).await?),
+            TimeNavigation::TimeTravel { point, no_check } => {
+                if *no_check {
+                    Ok(self.navigate_to_point_unchecked(ctx, point).await?)
+                } else {
+                    Ok(self.navigate_to_point(ctx, point).await?)
+                }
+            }
             TimeNavigation::Changes {
                 append_only,
                 at,

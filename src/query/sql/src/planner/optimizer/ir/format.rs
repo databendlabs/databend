@@ -79,6 +79,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),
+        RelOperator::WindowGroup(_) => "WindowGroup".to_string(),
         RelOperator::ConstantTableScan(s) => s.name().to_string(),
         RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
         RelOperator::CacheScan(_) => "CacheScan".to_string(),

@@ -592,8 +592,8 @@ Query {
                     },
                     alias: None,
                     temporal: Some(
-                        TimeTravel(
-                            Offset(
+                        TimeTravel {
+                            point: Offset(
                                 BinaryOp {
                                     span: Some(
                                         40..41,
@@ -619,7 +619,8 @@ Query {
                                     },
                                 },
                             ),
-                        ),
+                            no_check: false,
+                        },
                     ),
                     with_options: None,
                     pivot: None,
@@ -929,8 +930,8 @@ Query {
                         },
                     ),
                     temporal: Some(
-                        TimeTravel(
-                            Timestamp(
+                        TimeTravel {
+                            point: Timestamp(
                                 Literal {
                                     span: Some(
                                         40..46,
@@ -940,7 +941,8 @@ Query {
                                     ),
                                 },
                             ),
-                        ),
+                            no_check: false,
+                        },
                     ),
                     with_options: None,
                     pivot: None,
@@ -1068,8 +1070,8 @@ Query {
                         },
                     ),
                     temporal: Some(
-                        TimeTravel(
-                            Snapshot(
+                        TimeTravel {
+                            point: Snapshot(
                                 Literal {
                                     span: Some(
                                         48..54,
@@ -1079,7 +1081,8 @@ Query {
                                     ),
                                 },
                             ),
-                        ),
+                            no_check: false,
+                        },
                     ),
                     with_options: None,
                     pivot: None,
@@ -1151,8 +1154,8 @@ Query {
                     },
                     alias: None,
                     temporal: Some(
-                        TimeTravel(
-                            Snapshot(
+                        TimeTravel {
+                            point: Snapshot(
                                 Subquery {
                                     span: Some(
                                         32..90,
@@ -1255,7 +1258,267 @@ Query {
                                     },
                                 },
                             ),
+                            no_check: false,
+                        },
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t at (snapshot => 'abc123', NO_CHECK => true)
+---------- Output ---------
+SELECT * FROM t AT (SNAPSHOT => 'abc123', NO_CHECK => true)
+---------- AST ------------
+Query {
+    span: Some(
+        0..59,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..59,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
                         ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..59,
+                    ),
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel {
+                            point: Snapshot(
+                                Literal {
+                                    span: Some(
+                                        32..40,
+                                    ),
+                                    value: String(
+                                        "abc123",
+                                    ),
+                                },
+                            ),
+                            no_check: true,
+                        },
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t at (timestamp => '2024-01-01'::TIMESTAMP, NO_CHECK => true)
+---------- Output ---------
+SELECT * FROM t AT (TIMESTAMP => '2024-01-01'::TIMESTAMP, NO_CHECK => true)
+---------- AST ------------
+Query {
+    span: Some(
+        0..75,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..75,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..75,
+                    ),
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel {
+                            point: Timestamp(
+                                Cast {
+                                    span: Some(
+                                        45..56,
+                                    ),
+                                    expr: Literal {
+                                        span: Some(
+                                            33..45,
+                                        ),
+                                        value: String(
+                                            "2024-01-01",
+                                        ),
+                                    },
+                                    target_type: Timestamp,
+                                    pg_style: true,
+                                },
+                            ),
+                            no_check: true,
+                        },
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t at (snapshot => 'abc123', NO_CHECK => false)
+---------- Output ---------
+SELECT * FROM t AT (SNAPSHOT => 'abc123')
+---------- AST ------------
+Query {
+    span: Some(
+        0..60,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..60,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..60,
+                    ),
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel {
+                            point: Snapshot(
+                                Literal {
+                                    span: Some(
+                                        32..40,
+                                    ),
+                                    value: String(
+                                        "abc123",
+                                    ),
+                                },
+                            ),
+                            no_check: false,
+                        },
                     ),
                     with_options: None,
                     pivot: None,

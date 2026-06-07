@@ -44,6 +44,7 @@ use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
@@ -244,7 +245,9 @@ impl Interpreter for AddTableColumnInterpreter {
                     schema,
                     mutation.metadata.clone(),
                 )?;
-                let _ = interpreter.execute(self.ctx.clone()).await?;
+                let _ = interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                    .await?;
                 return Ok(PipelineBuildResult::create());
             }
         }

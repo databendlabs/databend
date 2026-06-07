@@ -3,44 +3,52 @@ Exchange(Merge)
     ├── scalars: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144), sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) AS (#167), eq(sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), 0) AS (#168)]
     └── Aggregate(Final)
         ├── group items: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144)]
-        ├── aggregate functions: [sum(sum_arg_0 (#166)) AS (#167)]
+        ├── aggregate functions: [sum(sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) * _eager_count (#180)) AS (#167)]
         └── Aggregate(Partial)
             ├── group items: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144)]
-            ├── aggregate functions: [sum(sum_arg_0 (#166)) AS (#167)]
+            ├── aggregate functions: [sum(sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) * _eager_count (#180)) AS (#167)]
             └── Exchange(Hash)
                 ├── Exchange(Hash): keys: [a0c.a0d (#0)]
                 └── EvalScalar
-                    ├── scalars: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144), if(eq(a5r.a1v (#154), '603020'), 1, 0) AS (#166), a1z.a2t (#70) AS (#169), a2x.a4m (#118) AS (#170), a5r.a5w (#156) AS (#171)]
+                    ├── scalars: [multiply(if(eq(a5r.a1v (#154), '603020'), 1, 0), CAST(count(*) (#179) AS UInt64)) AS (#180)]
                     └── Join(Inner)
-                        ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
-                        ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
-                        ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
+                        ├── build keys: [a0m (#149)]
+                        ├── probe keys: [a0c.a0m (#9)]
+                        ├── other filters: []
                         ├── Exchange(Broadcast)
-                        │   └── Scan
-                        │       ├── table: default.a1z (#1)
-                        │       ├── filters: [eq(a1z.a2t (#70), '624100')]
-                        │       ├── order by: []
-                        │       └── limit: NONE
+                        │   └── Aggregate(Final)
+                        │       ├── group items: [a2x.a5m (#144) AS (#144), a0m (#149) AS (#149)]
+                        │       ├── aggregate functions: [count() AS (#179)]
+                        │       └── Aggregate(Partial)
+                        │           ├── group items: [a2x.a5m (#144) AS (#144), a0m (#149) AS (#149)]
+                        │           ├── aggregate functions: [count() AS (#179)]
+                        │           └── Exchange(Hash)
+                        │               ├── Exchange(Hash): keys: [a2x.a5m (#144)]
+                        │               └── EvalScalar
+                        │                   ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
+                        │                   └── Scan
+                        │                       ├── table: default.a2x (#2)
+                        │                       ├── filters: [eq(substring(a2x.a4m (#118), 20, 1), '1')]
+                        │                       ├── order by: []
+                        │                       └── limit: NONE
                         └── Join(Inner)
-                            ├── build keys: [a0m (#149)]
-                            ├── probe keys: [a0c.a0m (#9)]
+                            ├── build keys: [a5r.a5t (#151)]
+                            ├── probe keys: [a0c.a0l (#8)]
                             ├── other filters: []
                             ├── Exchange(Broadcast)
-                            │   └── EvalScalar
-                            │       ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
-                            │       └── Scan
-                            │           ├── table: default.a2x (#2)
-                            │           ├── filters: [eq(substring(a2x.a4m (#118), 20, 1), '1')]
-                            │           ├── order by: []
-                            │           └── limit: NONE
+                            │   └── Scan
+                            │       ├── table: default.a5r (#3)
+                            │       ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
+                            │       ├── order by: []
+                            │       └── limit: NONE
                             └── Join(Inner)
-                                ├── build keys: [a5r.a5t (#151)]
-                                ├── probe keys: [a0c.a0l (#8)]
-                                ├── other filters: []
+                                ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
+                                ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
+                                ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
                                 ├── Exchange(Broadcast)
                                 │   └── Scan
-                                │       ├── table: default.a5r (#3)
-                                │       ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
+                                │       ├── table: default.a1z (#1)
+                                │       ├── filters: [eq(a1z.a2t (#70), '624100')]
                                 │       ├── order by: []
                                 │       └── limit: NONE
                                 └── Scan

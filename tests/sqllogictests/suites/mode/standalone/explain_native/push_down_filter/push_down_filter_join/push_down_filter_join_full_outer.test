@@ -176,7 +176,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 1.33
+├── estimated rows: 2.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── scan id: 1
@@ -214,7 +214,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 1.33
+├── estimated rows: 2.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── scan id: 1
