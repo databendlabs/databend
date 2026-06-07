@@ -322,7 +322,7 @@ SELECT * FROM v_star ORDER BY a
 3 base_only
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_star'
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_star' AND branch = ''
 ----
 2
 
@@ -339,7 +339,7 @@ a INT YES NULL (empty)
 c VARCHAR YES NULL (empty)
 
 query I
-SELECT count(*) FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 'v_star'
+SELECT count(*) FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 'v_star' AND branch = ''
 ----
 2
 
@@ -348,7 +348,7 @@ statement ok
 CREATE TABLE t_like_v_star LIKE v_star
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 't_like_v_star'
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 't_like_v_star' AND branch = ''
 ----
 2
 
@@ -530,7 +530,7 @@ SELECT * FROM test_wap_branch.t_no_branch
 4 branch_only 40
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_cache_star'
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_cache_star' AND branch = ''
 ----
 2
 
@@ -570,7 +570,7 @@ SELECT * FROM v_mcte ORDER BY a
 
 ## Suppressed schema inference (system.columns) must report the base schema (2).
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_mcte'
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_mcte' AND branch = ''
 ----
 2
 
@@ -594,7 +594,7 @@ SELECT count(*) FROM v_join
 0
 
 query I
-SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_join'
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_join' AND branch = ''
 ----
 2
 
@@ -696,6 +696,33 @@ SELECT * FROM t_ddl_rewrite/dev ORDER BY a
 
 statement ok
 DROP TABLE t_ddl_rewrite
+
+## ANALYZE histogram replans must read the analyze target, not the session branch.
+statement ok
+SET enable_analyze_histogram = 1
+
+statement ok
+SET enable_table_snapshot_stats = 1
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+ANALYZE TABLE t_no_branch
+
+statement ok
+UNSET wap_branch
+
+query B
+SELECT histogram LIKE '%min: "3"%' AND histogram NOT LIKE '%min: "4"%' FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 't_no_branch' AND branch = '' AND column_name = 'a'
+----
+1
+
+statement ok
+SET enable_analyze_histogram = 0
+
+statement ok
+SET enable_table_snapshot_stats = 0
 
 ## Guard: an explicit MATERIALIZED CTE cannot live in a persisted view body
 ## (CREATE/ALTER VIEW validate with a Planner that has no subquery executor, so the
