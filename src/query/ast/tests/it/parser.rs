@@ -659,6 +659,22 @@ SELECT * from s;"#,
         "#,
         r#"
             COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow
+                FILE_FORMAT = (
+                    type = ARROW
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow_stream
+                FILE_FORMAT = (
+                    type = ARROW_STREAM
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
                     AWS_KEY_ID = 'access_key'

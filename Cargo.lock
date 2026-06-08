@@ -5243,6 +5243,7 @@ version = "0.1.0"
 dependencies = [
  "apache-avro 0.17.0",
  "arrow-array 58.1.0",
+ "arrow-ipc 58.1.0",
  "arrow-schema 58.1.0",
  "async-backtrace",
  "async-trait",

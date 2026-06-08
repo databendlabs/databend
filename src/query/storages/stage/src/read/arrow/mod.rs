@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod arrow;
-pub mod avro;
-mod error_handler;
-pub(crate) mod load_context;
-pub mod row_based;
+mod pipeline;
 
-pub(crate) mod block_builder_state;
-mod default_expr_evaluator;
-pub(crate) mod whole_file_reader;
-pub use load_context::LoadContext;
+pub(crate) use pipeline::ArrowBlockBuilder;
+pub use pipeline::ArrowIpcMode;
+pub use pipeline::ArrowReadPipelineBuilder;
+pub use pipeline::infer_arrow_schema;
+pub use pipeline::infer_arrow_schema_from_file;

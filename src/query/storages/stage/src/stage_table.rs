@@ -44,6 +44,8 @@ use databend_common_storages_parquet::ParquetVariantTable;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 
+use crate::read::arrow::ArrowIpcMode;
+use crate::read::arrow::ArrowReadPipelineBuilder;
 use crate::read::avro::AvroReadPipelineBuilder;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
@@ -165,7 +167,7 @@ impl Table for StageTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_table_info = &self.table_info;
-        match stage_table_info.stage_info.file_format_params {
+        match &stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 if stage_table_info.is_variant {
                     ParquetVariantTable::do_read_partitions(stage_table_info, ctx).await
@@ -181,6 +183,8 @@ impl Table for StageTable {
             FileFormatParams::Csv(_)
             | FileFormatParams::NdJson(_)
             | FileFormatParams::Text(_)
+            | FileFormatParams::Arrow(_)
+            | FileFormatParams::ArrowStream(_)
             | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
             FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
                 "LANCE stage table read is not supported".to_string(),
@@ -214,7 +218,7 @@ impl Table for StageTable {
             } else {
                 return Err(ErrorCode::Internal(""));
             };
-        match stage_table_info.stage_info.file_format_params {
+        match &stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 if stage_table_info.is_variant {
                     ParquetVariantTable::do_read_data(ctx, plan, pipeline, _put_cache)
@@ -238,6 +242,26 @@ impl Table for StageTable {
                 AvroReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,
+                }
+                .read_data(ctx, plan, pipeline, internal_columns)
+            }
+            FileFormatParams::Arrow(format_params) => {
+                let compact_threshold = ctx.read_block_thresholds().get();
+                ArrowReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                    mode: ArrowIpcMode::File,
+                    format_params: format_params.clone(),
+                }
+                .read_data(ctx, plan, pipeline, internal_columns)
+            }
+            FileFormatParams::ArrowStream(format_params) => {
+                let compact_threshold = ctx.read_block_thresholds().get();
+                ArrowReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                    mode: ArrowIpcMode::Stream,
+                    format_params: format_params.clone(),
                 }
                 .read_data(ctx, plan, pipeline, internal_columns)
             }
