@@ -17,6 +17,7 @@ use databend_common_ast::ast::DescribeStreamStmt;
 use databend_common_ast::ast::DropStreamStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
@@ -147,7 +148,10 @@ impl Binder {
                 .with_column("has_data");
         } else {
             select_builder
-                .with_column(format!("name AS `Streams_in_{database}`"))
+                .with_column(format!(
+                    "name AS {}",
+                    QuotedIdent(format!("Streams_in_{database}"), '`')
+                ))
                 .with_column("table_name As table_on")
                 .with_column("mode");
         }

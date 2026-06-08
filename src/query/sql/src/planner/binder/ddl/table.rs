@@ -59,6 +59,7 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -207,10 +208,13 @@ impl Binder {
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from(&format!(
                 "{}.system.tables_with_history",
-                catalog_name.to_lowercase()
+                QuotedIdent(catalog_name.to_lowercase(), '`')
             ))
         } else {
-            SelectBuilder::from(&format!("{}.system.tables", catalog_name.to_lowercase()))
+            SelectBuilder::from(&format!(
+                "{}.system.tables",
+                QuotedIdent(catalog_name.to_lowercase(), '`')
+            ))
         };
 
         if *full {
@@ -233,7 +237,10 @@ impl Binder {
                 .with_column("data_compressed_size")
                 .with_column("index_size");
         } else {
-            select_builder.with_column(format!("name AS `Tables_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Tables_in_{database}"), '`')
+            ));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };
@@ -346,7 +353,10 @@ impl Binder {
             }
         };
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let mut select_builder = SelectBuilder::from(&format!("{catalog_name}.system.statistics"));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.statistics",
+            QuotedIdent(&catalog_name, '`')
+        ));
 
         let database = match database {
             None => self.ctx.get_current_database(),
@@ -421,14 +431,14 @@ impl Binder {
             None => format!(
                 "SELECT {} FROM {}.system.tables WHERE database = {} ORDER BY Name",
                 select_cols,
-                default_catalog,
+                QuotedIdent(&default_catalog, '`'),
                 QuotedString(&database, '\'')
             ),
             Some(ShowLimit::Like { pattern }) => format!(
                 "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
             WHERE Name LIKE {} ORDER BY Name",
                 select_cols,
-                default_catalog,
+                QuotedIdent(&default_catalog, '`'),
                 QuotedString(&database, '\''),
                 QuotedString(pattern, '\'')
             ),
@@ -436,7 +446,7 @@ impl Binder {
                 "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
             WHERE ({}) ORDER BY Name",
                 select_cols,
-                default_catalog,
+                QuotedIdent(&default_catalog, '`'),
                 QuotedString(&database, '\''),
                 selection
             ),
@@ -458,8 +468,10 @@ impl Binder {
         let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder =
-            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.tables_with_history",
+            QuotedIdent(&default_catalog, '`')
+        ));
 
         select_builder
             .with_column("name AS Tables")
