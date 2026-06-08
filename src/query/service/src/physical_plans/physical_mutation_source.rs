@@ -42,7 +42,6 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
-use databend_common_sql::Symbol;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -321,11 +320,8 @@ impl PhysicalPlanBuilder {
             .iter()
             .filter_map(|column_index| {
                 let column = metadata.column(*column_index);
-                mutation_source
-                    .schema
-                    .index_of(&column.name())
-                    .ok()
-                    .map(Symbol::from_field_index)
+                mutation_source.schema.index_of(&column.name()).ok()?;
+                Some(*column_index)
             })
             .collect();
         let delete_meta_only = mutation_source.mutation_type == MutationType::Delete
