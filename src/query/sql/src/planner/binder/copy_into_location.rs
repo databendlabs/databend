@@ -24,7 +24,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_common_storage::init_stage_operator;
+use databend_common_storage::is_stage_path_traversal;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::ErrorKind;
 
@@ -119,6 +121,11 @@ impl Binder {
         .resolve_file_location(&stmt.dst)
         .await?;
 
+        let path_traversal_policy = self.ctx.get_settings().get_stage_path_traversal_policy()?;
+        if is_stage_path_traversal(&path) && !path_traversal_policy.allows_write() {
+            ensure_no_stage_path_traversal(&path)?;
+        }
+
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
@@ -171,6 +178,7 @@ impl Binder {
             path,
             options,
             is_ordered,
+            allow_path_traversal: path_traversal_policy.allows_write(),
             partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
         Ok(Plan::CopyIntoLocation(Box::new(CopyIntoLocationPlan {

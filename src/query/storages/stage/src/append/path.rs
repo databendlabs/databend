@@ -124,6 +124,7 @@ mod tests {
             path: path.to_string(),
             options: CopyIntoLocationOptions::default(),
             is_ordered: false,
+            allow_path_traversal: false,
             partition_by: None,
         }
     }

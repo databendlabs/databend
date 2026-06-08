@@ -48,6 +48,7 @@ use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::StageResolver;
 use databend_common_sql::binder::resolve_file_format;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
@@ -193,6 +194,12 @@ impl Table for InferSchemaTable {
             path: path.clone(),
             ..self.args_parsed.files_info.clone()
         };
+        validate_stage_files_path_traversal(
+            ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let file_format_params = match &self.args_parsed.file_format {
             Some(f) => {

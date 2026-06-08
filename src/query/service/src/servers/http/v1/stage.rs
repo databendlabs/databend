@@ -14,8 +14,11 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_common_storage::init_stage_operator;
+use databend_common_storage::is_stage_path_traversal;
 use databend_common_users::UserApiProvider;
 use futures_util::AsyncWriteExt;
 use futures_util::io;
@@ -121,6 +124,13 @@ pub async fn upload_to_stage(
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
+        let path_traversal_policy = context
+            .get_settings()
+            .get_stage_path_traversal_policy()
+            .map_err(InternalServerError)?;
+        if is_stage_path_traversal(&file_path) && !path_traversal_policy.allows_write() {
+            ensure_no_stage_path_traversal(&file_path).map_err(InternalServerError)?;
+        }
 
         // Read field with 1MiB buf.
         let mut r = io::BufReader::with_capacity(1024 * 1024, field.into_async_read().compat());

@@ -28,6 +28,8 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_storage::ensure_no_stage_path_traversal;
+use databend_common_storage::is_stage_path_traversal;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::LevelFilter;
@@ -104,6 +106,51 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
         )));
     }
     Ok(stage_name.to_string())
+}
+
+pub fn validate_stage_path_traversal(
+    settings: &Settings,
+    path: &str,
+    is_write: bool,
+) -> Result<()> {
+    if !is_stage_path_traversal(path) {
+        return Ok(());
+    }
+
+    let policy = settings.get_stage_path_traversal_policy()?;
+    let allowed = if is_write {
+        policy.allows_write()
+    } else {
+        policy.allows_read()
+    };
+
+    if allowed {
+        Ok(())
+    } else {
+        ensure_no_stage_path_traversal(path)
+    }
+}
+
+pub fn validate_stage_files_path_traversal(
+    settings: &Settings,
+    path: &str,
+    files: Option<&[String]>,
+    is_write: bool,
+) -> Result<()> {
+    validate_stage_path_traversal(settings, path, is_write)?;
+    if let Some(files) = files {
+        for file in files {
+            let full_path = if path == "/" {
+                file.trim_start_matches('/').to_string()
+            } else if path.ends_with('/') {
+                format!("{path}{}", file.trim_start_matches('/'))
+            } else {
+                format!("{path}/{}", file.trim_start_matches('/'))
+            };
+            validate_stage_path_traversal(settings, &full_path, is_write)?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone)]

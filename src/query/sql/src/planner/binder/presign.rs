@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use crate::BindContext;
 use crate::binder::Binder;
 use crate::binder::StageResolver;
+use crate::binder::validate_stage_path_traversal;
 use crate::plans::Plan;
 use crate::plans::PresignAction;
 use crate::plans::PresignPlan;
@@ -42,6 +43,11 @@ impl Binder {
                 )?
                 .resolve_stage_location(stage_location)
                 .await?;
+                validate_stage_path_traversal(
+                    self.ctx.get_settings().as_ref(),
+                    &path,
+                    matches!(stmt.action, AstPresignAction::Upload),
+                )?;
 
                 Ok(Plan::Presign(Box::new(PresignPlan {
                     stage: Box::new(stage_info),

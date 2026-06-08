@@ -43,6 +43,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
@@ -219,6 +220,12 @@ impl ListStagesSource {
             files: self.args_parsed.files_info.files.clone(),
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         let files = files_info.list_stream(&op, thread_num, None).await?;
         Ok(files)
     }

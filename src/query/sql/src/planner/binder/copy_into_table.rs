@@ -71,6 +71,7 @@ use crate::NameResolutionContext;
 use crate::binder::Binder;
 use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -205,6 +206,12 @@ impl Binder {
             files: stmt.files.clone(),
             pattern,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let dest_entity_name = format!("{database_name}.{table_name}");
         let required_values_table_schema = match &stmt.dst_columns {
@@ -369,6 +376,12 @@ impl Binder {
             files: None,
             pattern: None,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         Ok((stage_info, files_info, copy_options))
     }
 

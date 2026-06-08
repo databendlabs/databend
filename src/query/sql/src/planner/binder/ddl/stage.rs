@@ -31,6 +31,7 @@ use crate::binder::Binder;
 use crate::binder::StageResolver;
 use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::resolve_file_format;
+use crate::binder::validate_stage_path_traversal;
 use crate::plans::AlterStageActionPlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterStageSetPlan;
@@ -53,6 +54,7 @@ impl Binder {
         )?
         .resolve_stage_location(location)
         .await?;
+        validate_stage_path_traversal(self.ctx.get_settings().as_ref(), &path, false)?;
         let plan_node = RemoveStagePlan {
             path,
             stage,
