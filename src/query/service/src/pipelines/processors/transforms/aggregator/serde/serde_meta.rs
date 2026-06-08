@@ -23,7 +23,7 @@ pub const SPILLED_TYPE: usize = 2;
 pub const NEW_SPILLED_TYPE: usize = 3;
 pub const PARTITIONED_AGGREGATE_TYPE: usize = 4;
 
-// Cannot change to enum, because bincode cannot deserialize custom enum
+// Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
     pub typ: usize,

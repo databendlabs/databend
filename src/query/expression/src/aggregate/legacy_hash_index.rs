@@ -317,7 +317,6 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::ProbeState;
 
     struct TestTableAdapter {
         incoming: Vec<(u64, u64)>,     // (key, hash)

@@ -31,10 +31,10 @@ use super::legacy_hash_index::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
-use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
+use crate::aggregate::AggregateFunctionRef;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;

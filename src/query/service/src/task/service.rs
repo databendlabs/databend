@@ -443,12 +443,27 @@ impl TaskService {
                                         task_run.error_code = err.code() as i64;
                                         task_run.error_message = Some(err.message());
                                         task_service.update_or_create_task_run(&task_run).await?;
-                                        task_run.run_id = Self::make_run_id();
+                                        if task_run.attempt_number <= 0 {
+                                            task_mgr
+                                                .alter_task(
+                                                    &task.task_name,
+                                                    &AlterTaskOptions::Suspend,
+                                                )
+                                                .await??;
+                                            break;
+                                        } else {
+                                            task_run.run_id = Self::make_run_id();
+                                            task_run.state = State::Executing;
+                                            task_run.scheduled_at = Utc::now();
+                                            task_run.completed_at = None;
+                                            task_run.error_code = 0;
+                                            task_run.error_message = None;
+                                            task_service
+                                                .update_or_create_task_run(&task_run)
+                                                .await?;
+                                        }
                                     }
                                 }
-                                task_mgr
-                                    .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
-                                    .await??;
                             }
 
                             Result::Ok(())
@@ -646,12 +661,13 @@ impl TaskService {
     }
 
     pub async fn has_executing_task_run(&self, task_name: &str) -> Result<bool> {
+        let task_name = Self::sql_string_literal(task_name);
         let blocks = self
             .execute_sql(
                 None,
                 &format!(
                     "SELECT count(*) FROM system_task.task_run \
-                    WHERE task_name = '{task_name}' \
+                    WHERE task_name = {task_name} \
                     AND state = 'EXECUTING' \
                     AND completed_at IS NULL;"
                 ),
@@ -688,11 +704,12 @@ impl TaskService {
         let error_message = task_run
             .error_message
             .as_ref()
-            .map(|s| format!("'{s}'"))
+            .map(|s| Self::sql_string_literal(s))
             .unwrap_or_else(|| "null".to_string());
         let root_task_id = task_run.root_task_id;
+        let task_name = Self::sql_string_literal(&task_run.task.task_name);
 
-        let is_exists = self.execute_sql(None, &format!("UPDATE system_task.task_run SET run_id = {}, state = '{}', scheduled_at = {}, completed_at = {}, error_message = {}, root_task_id = {} WHERE task_name = '{}' AND run_id = {}", task_run.run_id, state, scheduled_at, completed_at, error_message, root_task_id, task_run.task.task_name, task_run.run_id)).await?
+        let is_exists = self.execute_sql(None, &format!("UPDATE system_task.task_run SET run_id = {}, attempt_number = {}, state = '{}', scheduled_at = {}, completed_at = {}, error_code = {}, error_message = {}, root_task_id = {} WHERE task_name = {} AND run_id = {}", task_run.run_id, task_run.attempt_number, state, scheduled_at, completed_at, task_run.error_code, error_message, root_task_id, task_name, task_run.run_id)).await?
             .first()
             .and_then(|block| {
                 block.get_by_offset(0).index(0).and_then(|s| s.as_number().and_then(|n| n.as_u_int64().cloned()))
@@ -712,6 +729,7 @@ impl TaskService {
         task_name: &'a str,
     ) -> impl Stream<Item = Result<String>> + '_ {
         stream! {
+            let task_name = Self::sql_string_literal(task_name);
             let check = format!("
             WITH latest_task_run AS (
     SELECT
@@ -736,7 +754,7 @@ next_task_time AS (
 )
 SELECT DISTINCT ta.next_task
 FROM system_task.task_after ta
-WHERE ta.task_name = '{task_name}'
+WHERE ta.task_name = {task_name}
   AND NOT EXISTS (
     SELECT 1
     FROM system_task.task_after ta_dep
@@ -762,8 +780,8 @@ WHERE ta.task_name = '{task_name}'
         self.execute_sql(
             None,
             &format!(
-                "DELETE FROM system_task.task_after WHERE next_task = '{}'",
-                task_name
+                "DELETE FROM system_task.task_after WHERE next_task = {}",
+                Self::sql_string_literal(task_name)
             ),
         )
         .await?;
@@ -776,7 +794,13 @@ WHERE ta.task_name = '{task_name}'
         let values = task
             .after
             .iter()
-            .map(|after| format!("('{}', '{}')", after, task.task_name))
+            .map(|after| {
+                format!(
+                    "({}, {})",
+                    Self::sql_string_literal(after),
+                    Self::sql_string_literal(&task.task_name)
+                )
+            })
             .join(", ");
         self.execute_sql(
             None,
@@ -792,6 +816,57 @@ WHERE ta.task_name = '{task_name}'
 
     fn task_run2insert(task_run: &TaskRun) -> Result<String> {
         let task = &task_run.task;
+        let task_name = Self::sql_string_literal(&task.task_name);
+        let query_text = Self::sql_string_literal(&task.task_sql.query_text());
+        let when_condition = Self::sql_optional_string(task.when_condition.as_deref());
+        let after = if !task.after.is_empty() {
+            Self::sql_string_literal(&task.after.join(", "))
+        } else {
+            "null".to_string()
+        };
+        let comment = Self::sql_optional_string(task.comment.as_deref());
+        let owner = Self::sql_string_literal(&task.owner);
+        let owner_user = Self::sql_string_literal(&task.owner_user);
+        let warehouse_name = Self::sql_optional_string(
+            task.warehouse_options
+                .as_ref()
+                .and_then(|w| w.warehouse.as_deref()),
+        );
+        let using_warehouse_size = Self::sql_optional_string(
+            task.warehouse_options
+                .as_ref()
+                .and_then(|w| w.using_warehouse_size.as_deref()),
+        );
+        let cron = Self::sql_optional_string(
+            task.schedule_options
+                .as_ref()
+                .and_then(|s| s.cron.as_deref()),
+        );
+        let time_zone = Self::sql_optional_string(
+            task.schedule_options
+                .as_ref()
+                .and_then(|s| s.time_zone.as_deref()),
+        );
+        let state = Self::sql_string_literal(match task_run.state {
+            State::Scheduled => "SCHEDULED",
+            State::Executing => "EXECUTING",
+            State::Succeeded => "SUCCEEDED",
+            State::Failed => "FAILED",
+            State::Cancelled => "CANCELLED",
+        });
+        let error_message = Self::sql_optional_string(task_run.error_message.as_deref());
+        let completed_at = task_run
+            .completed_at
+            .as_ref()
+            .map(|d| d.timestamp().to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let error_integration = Self::sql_optional_string(task.error_integration.as_deref());
+        let status = Self::sql_string_literal(match task.status {
+            Status::Suspended => "SUSPENDED",
+            Status::Started => "STARTED",
+        });
+        let session_params =
+            Self::sql_string_literal(&serde_json::to_string(&task.session_params)?);
 
         let sql = format!(
             "INSERT INTO system_task.task_run (\
@@ -828,13 +903,6 @@ WHERE ta.task_name = '{task_name}'
             suspend_task_after_num_failures
             ) values (
                 {},
-                '{}',
-                '{}',
-                {},
-                {},
-                {},
-                '{}',
-                '{}',
                 {},
                 {},
                 {},
@@ -844,7 +912,6 @@ WHERE ta.task_name = '{task_name}'
                 {},
                 {},
                 {},
-                '{}',
                 {},
                 {},
                 {},
@@ -852,7 +919,15 @@ WHERE ta.task_name = '{task_name}'
                 {},
                 {},
                 {},
-                '{}',
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
                 {},
                 {},
                 {},
@@ -860,33 +935,15 @@ WHERE ta.task_name = '{task_name}'
                 {}
             );",
             task.task_id,
-            task.task_name,
-            task.task_sql.query_text().replace('\'', "''"),
-            task.when_condition
-                .as_ref()
-                .map(|s| format!("'{}'", s.replace('\'', "''")))
-                .unwrap_or_else(|| "null".to_string()),
-            if !task.after.is_empty() {
-                format!("'{}'", task.after.join(", "))
-            } else {
-                "null".to_string()
-            },
-            task.comment
-                .as_ref()
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
-            task.owner,
-            task.owner_user.replace('\'', "''"),
-            task.warehouse_options
-                .as_ref()
-                .and_then(|w| w.warehouse.as_ref())
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
-            task.warehouse_options
-                .as_ref()
-                .and_then(|w| w.using_warehouse_size.as_ref())
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
+            task_name,
+            query_text,
+            when_condition,
+            after,
+            comment,
+            owner,
+            owner_user,
+            warehouse_name,
+            using_warehouse_size,
             task.schedule_options
                 .as_ref()
                 .map(|s| match s.schedule_type {
@@ -904,53 +961,25 @@ WHERE ta.task_name = '{task_name}'
                 .and_then(|s| s.milliseconds_interval)
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "null".to_string()),
-            task.schedule_options
-                .as_ref()
-                .and_then(|s| s.cron.as_ref())
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
-            task.schedule_options
-                .as_ref()
-                .and_then(|s| s.time_zone.as_ref())
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
+            cron,
+            time_zone,
             task_run.run_id,
             task_run.attempt_number,
-            match task_run.state {
-                State::Scheduled => "SCHEDULED".to_string(),
-                State::Executing => "EXECUTING".to_string(),
-                State::Succeeded => "SUCCEEDED".to_string(),
-                State::Failed => "FAILED".to_string(),
-                State::Cancelled => "CANCELLED".to_string(),
-            },
+            state,
             task_run.error_code,
-            task_run
-                .error_message
-                .as_ref()
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
+            error_message,
             task_run.root_task_id,
             task_run.scheduled_at.timestamp(),
-            task_run
-                .completed_at
-                .as_ref()
-                .map(|d| d.to_string())
-                .unwrap_or_else(|| "null".to_string()),
+            completed_at,
             task.next_scheduled_at
                 .as_ref()
                 .map(|d| d.timestamp().to_string())
                 .unwrap_or_else(|| "null".to_string()),
-            task.error_integration
-                .as_ref()
-                .map(|s| format!("'{s}'"))
-                .unwrap_or_else(|| "null".to_string()),
-            match task.status {
-                Status::Suspended => "SUSPENDED".to_string(),
-                Status::Started => "STARTED".to_string(),
-            },
+            error_integration,
+            status,
             task.created_at.timestamp(),
             task.updated_at.timestamp(),
-            serde_json::to_string(&task.session_params).map(|s| format!("'{s}'"))?,
+            session_params,
             task.last_suspended_at
                 .as_ref()
                 .map(|d| d.timestamp().to_string())
@@ -960,6 +989,16 @@ WHERE ta.task_name = '{task_name}'
                 .unwrap_or_else(|| "null".to_string())
         );
         Ok(sql)
+    }
+
+    fn sql_string_literal(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    fn sql_optional_string(value: Option<&str>) -> String {
+        value
+            .map(Self::sql_string_literal)
+            .unwrap_or_else(|| "null".to_string())
     }
 
     async fn execute_sql(&self, other_user: Option<UserInfo>, sql: &str) -> Result<Vec<DataBlock>> {
