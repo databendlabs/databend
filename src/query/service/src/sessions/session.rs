@@ -252,8 +252,36 @@ impl Session {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(&mut self, tenant: Tenant) {
+    #[async_backtrace::framed]
+    pub async fn set_current_tenant(&mut self, tenant: Tenant) -> Result<()> {
+        if tenant.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty("set_current_tenant"));
+        }
+
+        let config = GlobalConfig::instance();
+        let configured_tenant = &config.query.tenant_id;
+        let allow_tenant_override = config.query.common.management_mode
+            || config.query.common.internal_enable_sandbox_tenant;
+
+        if !allow_tenant_override && &tenant != configured_tenant {
+            return Err(ErrorCode::BadArguments(format!(
+                "tenant override is not allowed: requested tenant `{}`, configured tenant `{}`",
+                tenant.tenant_name(),
+                configured_tenant.tenant_name()
+            )));
+        }
+
+        let old_tenant = self.get_current_tenant();
         self.session_ctx.set_current_tenant(tenant);
+        let new_tenant = self.get_current_tenant();
+
+        if old_tenant != new_tenant {
+            let settings = Settings::create(new_tenant);
+            settings.load_changes().await?;
+            self.session_ctx.set_settings(settings);
+        }
+
+        Ok(())
     }
 
     pub fn get_current_user(&self) -> Result<UserInfo> {

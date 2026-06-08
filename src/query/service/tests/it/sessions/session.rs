@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::Settings;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
@@ -27,7 +28,18 @@ async fn test_session() -> anyhow::Result<()> {
         assert_eq!(actual.tenant_name(), "test");
 
         // We are not in management mode, so always get the config tenant.
-        session.set_current_tenant(Tenant::new_literal("tenant2"));
+        assert!(
+            session
+                .set_current_tenant(Tenant::new_literal("tenant2"))
+                .await
+                .is_err()
+        );
+        let actual = session.get_current_tenant();
+        assert_eq!(actual.tenant_name(), "test");
+
+        session
+            .set_current_tenant(Tenant::new_literal("test"))
+            .await?;
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "test");
     }
@@ -55,10 +67,44 @@ async fn test_session_in_management_mode() -> anyhow::Result<()> {
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "test");
 
-        session.set_current_tenant(Tenant::new_literal("tenant2"));
+        session
+            .set_current_tenant(Tenant::new_literal("tenant2"))
+            .await?;
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "tenant2");
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_session_settings_follow_management_tenant() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create().with_management_mode().build();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
+    let tenant = Tenant::new_literal("tenant2");
+    let tenant_settings = Settings::create(tenant.clone());
+    tenant_settings
+        .set_global_setting("network_policy".to_string(), "policy_tenant2".to_string())
+        .await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
+    assert_eq!(session.get_current_tenant().tenant_name(), "test");
+    assert_eq!(
+        session
+            .get_settings()
+            .get_network_policy()
+            .unwrap_or_default(),
+        ""
+    );
+
+    session.set_current_tenant(tenant).await?;
+
+    assert_eq!(session.get_current_tenant().tenant_name(), "tenant2");
+    assert_eq!(
+        session.get_settings().get_network_policy()?,
+        "policy_tenant2"
+    );
 
     Ok(())
 }

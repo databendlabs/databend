@@ -118,10 +118,6 @@ impl AuthMgr {
         need_user_info: bool,
     ) -> Result<(String, Option<String>)> {
         let user_api = UserApiProvider::instance();
-        let global_network_policy = session
-            .get_settings()
-            .get_network_policy()
-            .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
             Credential::DatabendToken { token } => {
@@ -129,7 +125,7 @@ impl AuthMgr {
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone());
+                    session.set_current_tenant(tenant.clone()).await?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
@@ -154,10 +150,14 @@ impl AuthMgr {
                 // setup tenant if the JWT claims contain extra.tenant_id
                 if let Some(tenant) = jwt.custom.tenant_id {
                     let tenant = Tenant::new_or_err(tenant, func_name!())?;
-                    session.set_current_tenant(tenant);
+                    session.set_current_tenant(tenant).await?;
                 };
 
                 let tenant = session.get_current_tenant();
+                let global_network_policy = session
+                    .get_settings()
+                    .get_network_policy()
+                    .unwrap_or_default();
                 let identity = UserIdentity::new(&user_name, "%");
 
                 // create a new user for this identity if not exists
@@ -316,6 +316,10 @@ impl AuthMgr {
 
                 let identity = UserIdentity::new(&user_name, "%");
                 let tenant = session.get_current_tenant();
+                let global_network_policy = session
+                    .get_settings()
+                    .get_network_policy()
+                    .unwrap_or_default();
                 let user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
@@ -351,6 +355,10 @@ impl AuthMgr {
                 client_ip,
             } => {
                 let tenant = session.get_current_tenant();
+                let global_network_policy = session
+                    .get_settings()
+                    .get_network_policy()
+                    .unwrap_or_default();
                 let identity = UserIdentity::new(name, "%");
                 let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())

@@ -39,7 +39,7 @@ use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {
     abort: AtomicBool,
-    settings: Arc<Settings>,
+    settings: RwLock<Arc<Settings>>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
 
@@ -94,7 +94,7 @@ impl SessionContext {
         current_user: Option<UserInfo>,
     ) -> Result<Self> {
         Ok(SessionContext {
-            settings,
+            settings: RwLock::new(settings),
             abort: Default::default(),
             current_user: RwLock::new(current_user),
             current_role: Default::default(),
@@ -128,7 +128,12 @@ impl SessionContext {
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+        self.settings.read().clone()
+    }
+
+    pub(in crate::sessions) fn set_settings(&self, settings: Arc<Settings>) {
+        let mut lock = self.settings.write();
+        *lock = settings;
     }
 
     // Get current catalog name.
@@ -203,7 +208,7 @@ impl SessionContext {
         let conf = GlobalConfig::instance();
 
         if conf.query.common.internal_enable_sandbox_tenant {
-            let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
+            let sandbox_tenant = self.get_settings().get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
                 return Tenant::new_or_err(sandbox_tenant, "create from sandbox_tenant").unwrap();
             }
