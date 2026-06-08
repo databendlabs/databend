@@ -46,8 +46,10 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::binder::StagePathAccess;
 use databend_common_sql::binder::StageResolver;
 use databend_common_sql::binder::resolve_file_format;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
@@ -172,7 +174,9 @@ impl Table for InferSchemaTable {
                 UriLocation::from_uri(self.args_parsed.location.clone(), BTreeMap::default())?;
             FileLocation::Uri(uri)
         };
-        let (stage_info, path) = stage_resolver.resolve_file_location(&file_location).await?;
+        let (stage_info, path) = stage_resolver
+            .resolve_file_location(&file_location, StagePathAccess::Read)
+            .await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
@@ -193,6 +197,12 @@ impl Table for InferSchemaTable {
             path: path.clone(),
             ..self.args_parsed.files_info.clone()
         };
+        validate_stage_files_path_traversal(
+            ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let file_format_params = match &self.args_parsed.file_format {
             Some(f) => {

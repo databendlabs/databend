@@ -71,6 +71,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::wrap_cast;
 use crate::planner::expression::UDFValidator;
@@ -315,7 +316,8 @@ impl FullTypeCheckAdapter {
             self.dependencies.user_api_provider.clone(),
             self.dependencies.storage_allow_insecure,
         )?;
-        let stage_locations = self.block_on(stage_resolver.resolve_stage_locations(imports))?;
+        let stage_locations =
+            self.block_on(stage_resolver.resolve_stage_locations(imports, StagePathAccess::Read))?;
         let expire = Duration::from_secs(
             self.ctx
                 .get_settings()
@@ -445,7 +447,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
             self.dependencies.user_api_provider.clone(),
             self.dependencies.storage_allow_insecure,
         )?;
-        self.block_on(stage_resolver.resolve_stage_locations(locations))
+        self.block_on(stage_resolver.resolve_stage_locations(locations, StagePathAccess::Read))
     }
 
     fn load_udf_code(&self, code: String) -> Result<Vec<u8>> {
@@ -469,7 +471,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
             self.dependencies.storage_allow_insecure,
         )?;
         let (stage_info, module_path) = self
-            .block_on(stage_resolver.resolve_file_location(&file_location))
+            .block_on(stage_resolver.resolve_file_location(&file_location, StagePathAccess::Read))
             .map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to resolve code location {code:?}: {err}"))
             })?;

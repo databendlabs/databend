@@ -28,6 +28,9 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_settings::StagePathTraversalPolicy;
+use databend_common_storage::ensure_no_stage_path_traversal;
+use databend_common_storage::is_stage_path_traversal;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::LevelFilter;
@@ -104,6 +107,64 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
         )));
     }
     Ok(stage_name.to_string())
+}
+
+pub fn validate_stage_path_traversal(
+    settings: &Settings,
+    path: &str,
+    is_write: bool,
+) -> Result<()> {
+    let policy = settings.get_stage_path_traversal_policy()?;
+    validate_stage_path_traversal_policy(policy, path, is_write)
+}
+
+pub fn validate_stage_path_traversal_policy(
+    policy: StagePathTraversalPolicy,
+    path: &str,
+    is_write: bool,
+) -> Result<()> {
+    if !is_stage_path_traversal(path) {
+        return Ok(());
+    }
+
+    let allowed = if is_write {
+        policy.allows_write()
+    } else {
+        policy.allows_read()
+    };
+
+    if allowed {
+        Ok(())
+    } else {
+        ensure_no_stage_path_traversal(path)
+    }
+}
+
+pub fn validate_stage_files_path_traversal(
+    settings: &Settings,
+    path: &str,
+    files: Option<&[String]>,
+    is_write: bool,
+) -> Result<()> {
+    validate_stage_path_traversal(settings, path, is_write)?;
+    if let Some(files) = files {
+        for file in files {
+            validate_stage_path_traversal(settings, file, is_write)?;
+        }
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum StagePathAccess {
+    Read,
+    Write,
+}
+
+impl StagePathAccess {
+    fn is_write(self) -> bool {
+        matches!(self, StagePathAccess::Write)
+    }
 }
 
 #[derive(Clone)]
@@ -250,9 +311,10 @@ where
     pub async fn resolve_file_location(
         &self,
         location: &FileLocation,
+        access: StagePathAccess,
     ) -> Result<(StageInfo, String)> {
         match location.clone() {
-            FileLocation::Stage(location) => self.resolve_stage_location(&location).await,
+            FileLocation::Stage(location) => self.resolve_stage_location(&location, access).await,
             FileLocation::Uri(mut uri) => {
                 let (storage_params, path) = self.resolve_uri_location(&mut uri).await?;
                 if !storage_params.is_secure() && !self.storage_allow_insecure {
@@ -287,7 +349,11 @@ impl StageResolver {
 
 impl<A> StageResolver<A> {
     #[async_backtrace::framed]
-    pub async fn resolve_stage_location(&self, location: &str) -> Result<(StageInfo, String)> {
+    pub async fn resolve_stage_location(
+        &self,
+        location: &str,
+        access: StagePathAccess,
+    ) -> Result<(StageInfo, String)> {
         let (stage_name, path) = parse_stage_location(location)?;
 
         let mut stage = if stage_name == "~" {
@@ -305,6 +371,8 @@ impl<A> StageResolver<A> {
             stage.allow_credential_chain = true;
         }
 
+        validate_stage_path_traversal(self.settings.as_ref(), &path, access.is_write())?;
+
         debug!("parsed stage: {stage:?}, path: {path}");
         Ok((stage, path))
     }
@@ -313,10 +381,11 @@ impl<A> StageResolver<A> {
     pub async fn resolve_stage_locations(
         &self,
         locations: &[String],
+        access: StagePathAccess,
     ) -> Result<Vec<(StageInfo, String)>> {
         let mut results = Vec::with_capacity(locations.len());
         for location in locations {
-            results.push(self.resolve_stage_location(location).await?);
+            results.push(self.resolve_stage_location(location, access).await?);
         }
         Ok(results)
     }

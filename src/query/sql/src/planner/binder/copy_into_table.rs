@@ -69,8 +69,10 @@ use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -172,7 +174,7 @@ impl Binder {
             UserApiProvider::instance(),
             GlobalConfig::instance().storage.allow_insecure,
         )?
-        .resolve_file_location(location)
+        .resolve_file_location(location, StagePathAccess::Read)
         .await?;
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
@@ -205,6 +207,12 @@ impl Binder {
             files: stmt.files.clone(),
             pattern,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let dest_entity_name = format!("{database_name}.{table_name}");
         let required_values_table_schema = match &stmt.dst_columns {
@@ -330,7 +338,7 @@ impl Binder {
             UserApiProvider::instance(),
             GlobalConfig::instance().storage.allow_insecure,
         )?
-        .resolve_stage_location(&attachment.location[1..])
+        .resolve_stage_location(&attachment.location[1..], StagePathAccess::Read)
         .await?;
 
         if let Some(ref options) = attachment.file_format_options {
@@ -369,6 +377,12 @@ impl Binder {
             files: None,
             pattern: None,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         Ok((stage_info, files_info, copy_options))
     }
 

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::plans::Plan;
 use crate::plans::PresignAction;
@@ -40,7 +41,10 @@ impl Binder {
                         .storage
                         .allow_insecure,
                 )?
-                .resolve_stage_location(stage_location)
+                .resolve_stage_location(stage_location, match stmt.action {
+                    AstPresignAction::Upload => StagePathAccess::Write,
+                    AstPresignAction::Download => StagePathAccess::Read,
+                })
                 .await?;
 
                 Ok(Plan::Presign(Box::new(PresignPlan {
