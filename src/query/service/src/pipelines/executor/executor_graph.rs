@@ -122,6 +122,7 @@ impl Node {
                 scope.as_ref().map(|x| x.id),
                 scope.as_ref().map(|x| x.name.clone()),
                 scope.as_ref().and_then(|x| x.parent_id),
+                scope.as_ref().map(|x| x.group_id).unwrap_or_default(),
                 scope
                     .as_ref()
                     .map(|x| x.title.clone())

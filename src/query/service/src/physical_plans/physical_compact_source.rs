@@ -290,6 +290,7 @@ impl PhysicalPlanBuilder {
         });
 
         root.adjust_plan_id(&mut 0);
+        root.assign_profile_group_id();
         Ok(root)
     }
 }

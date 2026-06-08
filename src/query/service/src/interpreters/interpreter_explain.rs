@@ -67,7 +67,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextRuntimeFilter;
 use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
@@ -460,10 +459,11 @@ impl ExplainInterpreter {
 
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr, required).await?;
+        let main_group_id = plan.get_meta().profile_group_id;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res).await?;
+        let query_profiles = self.execute_and_get_profiles(build_res, main_group_id).await?;
 
         Ok(GraphicalProfiles {
             query_id: query_ctx.get_id(),
@@ -485,10 +485,11 @@ impl ExplainInterpreter {
             builder.set_mutation_build_info(build_info);
         }
         let mut plan = builder.build(s_expr, required).await?;
+        let main_group_id = plan.get_meta().profile_group_id;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res).await?;
+        let query_profiles = self.execute_and_get_profiles(build_res, main_group_id).await?;
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
@@ -541,6 +542,7 @@ impl ExplainInterpreter {
     async fn execute_and_get_profiles(
         &self,
         mut build_res: PipelineBuildResult,
+        main_group_id: u64,
     ) -> Result<HashMap<u32, PlanProfile>> {
         let settings = self.ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
@@ -563,9 +565,12 @@ impl ExplainInterpreter {
                 while (executor.pull_data().await?).is_some() {}
             }
         }
+        // EXPLAIN ANALYZE renders the main query plan tree only and looks up each node by its
+        // original plan id. Restrict to the main plan's profile group so that profiles from other
+        // execution units (e.g. materialized CTE fills) with overlapping plan ids are not matched.
         Ok(self
             .ctx
-            .get_query_profiles()
+            .get_query_profiles_by_group(main_group_id)
             .into_iter()
             .filter(|x| x.id.is_some())
             .map(|x| (x.id.unwrap(), x))

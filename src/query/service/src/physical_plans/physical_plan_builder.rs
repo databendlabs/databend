@@ -76,6 +76,7 @@ impl PhysicalPlanBuilder {
 
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
+        plan.assign_profile_group_id();
 
         Ok(plan)
     }

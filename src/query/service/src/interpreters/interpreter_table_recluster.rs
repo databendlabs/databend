@@ -259,6 +259,7 @@ impl ReclusterTableInterpreter {
             return Ok(true);
         };
         physical_plan.adjust_plan_id(&mut 0);
+        physical_plan.assign_profile_group_id();
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         {

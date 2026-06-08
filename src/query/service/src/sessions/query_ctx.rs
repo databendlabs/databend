@@ -508,6 +508,12 @@ impl QueryContext {
         self.shared.set_executor(weak_ptr)
     }
 
+    /// Profiles of a single execution unit (physical plan tree), keyed by their original plan ids.
+    /// Used by EXPLAIN ANALYZE to match the rendered main query plan against its own profiles.
+    pub fn get_query_profiles_by_group(&self, group_id: u64) -> Vec<PlanProfile> {
+        self.shared.get_query_profiles_by_group(group_id)
+    }
+
     pub fn attach_stage(&self, attachment: StageAttachment) {
         self.shared.attach_stage(attachment);
     }

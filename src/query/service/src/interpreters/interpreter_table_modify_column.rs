@@ -912,6 +912,7 @@ pub(crate) async fn build_select_insert_plan(
 
     let mut index = 0;
     insert_plan.adjust_plan_id(&mut index);
+    insert_plan.assign_profile_group_id();
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
     // 5. commit new meta schema and snapshots
