@@ -32,6 +32,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -240,12 +241,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::TimePoint(time_point) => {
-                let Some(location) = self.snapshot_loc() else {
-                    return Err(ErrorCode::TableHistoricalDataNotFound(
-                        "Empty Table has no historical data",
-                    ));
-                };
-                self.navigate_to_time_point(ctx, location, *time_point)
+                self.navigate_to_time_point_unchecked(ctx, *time_point)
                     .await
             }
             _ => self.navigate_to_point(ctx, point).await,
@@ -285,6 +281,114 @@ impl FuseTable {
         Err(ErrorCode::TableHistoricalDataNotFound(
             "Snapshot not found with NO_CHECK",
         ))
+    }
+
+    #[async_backtrace::framed]
+    async fn navigate_to_time_point_unchecked(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        time_point: DateTime<Utc>,
+    ) -> Result<Arc<FuseTable>> {
+        let snapshot_prefix = self.snapshot_prefix();
+        let op = self.get_operator();
+        let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
+
+        // NO_CHECK only works with V4 snapshots (UUID v7 temporal ordering).
+        if let Some(loc) = self.snapshot_loc() {
+            if !loc.ends_with("_v4.mpk") {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "NO_CHECK requires V4 format snapshots (UUID v7)",
+                ));
+            }
+        }
+
+        let ts_millis = time_point.timestamp_millis();
+        if ts_millis < 0 {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "NO_CHECK does not support timestamps before 1970-01-01",
+            ));
+        }
+        // Use all-zero random bytes to produce the minimum UUID for this millisecond.
+        // This is intentional: any snapshot at the same millisecond sorts after this
+        // boundary, so we always return its predecessor (ts < time_point semantics).
+        let target_uuid =
+            uuid::Builder::from_unix_timestamp_millis(ts_millis as u64, &[0u8; 10]).into_uuid();
+        let start_after_key = format!(
+            "{}{}{}",
+            snapshot_prefix,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            target_uuid.as_simple()
+        );
+
+        let has_start_after = op.info().full_capability().list_with_start_after;
+
+        let mut lister = if has_start_after {
+            op.lister_with(&snapshot_prefix)
+                .start_after(&start_after_key)
+                .await?
+        } else {
+            op.lister_with(&snapshot_prefix).await?
+        };
+
+        let abort_checker = ctx.clone().get_abort_checker();
+        let mut first_snapshot_after = None;
+        while let Some(entry) = lister.try_next().await? {
+            abort_checker
+                .try_check_aborting()
+                .with_context(|| "navigate_to_time_point_unchecked")?;
+            if entry.metadata().mode() == EntryMode::FILE {
+                let path = entry.path().to_string();
+                if path.ends_with("_v4.mpk") {
+                    if !has_start_after && path.as_str() <= start_after_key.as_str() {
+                        continue;
+                    }
+                    first_snapshot_after = Some(path);
+                    break;
+                }
+            }
+        }
+
+        match first_snapshot_after {
+            Some(location) => {
+                let (snapshot, _format_version) =
+                    SnapshotsIO::read_snapshot(location, op.clone(), true).await?;
+
+                match snapshot.prev_snapshot_id {
+                    Some((prev_id, prev_ver)) => {
+                        if prev_ver < TableSnapshot::VERSION {
+                            return Err(ErrorCode::TableHistoricalDataNotFound(
+                                "NO_CHECK cannot navigate to pre-V4 snapshots \
+                                 in mixed-format tables",
+                            ));
+                        }
+                        let prev_location = self
+                            .meta_location_generator()
+                            .gen_snapshot_location(&prev_id, prev_ver)?;
+                        let (prev_snapshot, prev_format_version) =
+                            SnapshotsIO::read_snapshot(prev_location, op, true).await?;
+                        self.load_table_by_snapshot(
+                            prev_snapshot.as_ref(),
+                            prev_format_version,
+                            s3_storage_class,
+                        )
+                    }
+                    None => Err(ErrorCode::TableHistoricalDataNotFound(
+                        "No historical data found at given point \
+                         (timestamp is before the earliest snapshot)",
+                    )),
+                }
+            }
+            None => {
+                let Some(location) = self.snapshot_loc() else {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "Empty Table has no historical data",
+                    ));
+                };
+                let (snapshot, format_version) =
+                    SnapshotsIO::read_snapshot(location, op, true).await?;
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
+            }
+        }
     }
 
     #[async_backtrace::framed]
