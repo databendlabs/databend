@@ -30,7 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::geometry::extract_geo_and_srid;
+use databend_common_expression::types::geometry::extract_bbox_and_srid;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
@@ -41,7 +41,6 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::table::TableCompression;
-use geo::algorithm::bounding_rect::BoundingRect;
 use geo_index::rtree::RTreeBuilder;
 use geo_index::rtree::sort::HilbertSort;
 use log::debug;
@@ -354,17 +353,16 @@ impl SpatialIndexBuilder {
 
                 let mut rects = Vec::with_capacity(column.len());
                 for value in column.iter() {
-                    let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+                    let Some((bbox, srid)) = extract_bbox_and_srid(value)? else {
                         let _ = spatial_stat.update_value(ScalarRef::Null);
                         continue;
                     };
-                    let rect = geo.bounding_rect();
-                    spatial_stat.update_rect_with_srid(rect, srid);
+                    spatial_stat.update_rect_with_srid(bbox, srid);
                     if spatial_stat.is_srid_mixed() {
                         break;
                     }
-                    if let Some(rect) = rect {
-                        rects.push(rect)
+                    if let Some(bbox) = bbox {
+                        rects.push(bbox)
                     }
                 }
                 // Don't build index if the column SRID is mixed or all rects are empty.
@@ -373,9 +371,8 @@ impl SpatialIndexBuilder {
                 }
                 let mut builder = RTreeBuilder::<f64>::new(rects.len() as u32);
                 for rect in rects {
-                    let min = rect.min();
-                    let max = rect.max();
-                    builder.add(min.x, min.y, max.x, max.y);
+                    let (min_x, min_y, max_x, max_y) = rect.corners();
+                    builder.add(min_x, min_y, max_x, max_y);
                 }
                 let tree = builder.finish::<HilbertSort>();
                 let buffer = tree.into_inner();
