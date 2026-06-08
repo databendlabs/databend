@@ -28,6 +28,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -270,11 +271,18 @@ async fn mutation_source_partitions(
     let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
         let filters =
             create_push_down_filters(&ctx.get_function_context()?, &mutation.direct_filter)?;
+        let metadata = mutation.metadata.read();
         let filter_used_columns = mutation
             .direct_filter
             .iter()
             .flat_map(|expr| expr.used_columns())
-            .map(|i| i.as_usize())
+            .filter_map(|i| match metadata.column(i) {
+                ColumnEntry::InternalColumn(_) => None,
+                column => fuse_table
+                    .schema_with_stream()
+                    .index_of(&column.name())
+                    .ok(),
+            })
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();

@@ -41,6 +41,7 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::InternalColumnPruneResult;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
@@ -263,6 +264,7 @@ pub struct FusePruner {
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
     pub deleted_segments: Vec<DeletedSegmentInfo>,
+    pub whole_block_deletions: Vec<BlockMetaIndex>,
     pub block_meta_cache: Option<SegmentBlockMetasCache>,
 }
 
@@ -371,6 +373,7 @@ impl FusePruner {
             pruning_ctx,
             inverse_range_index: None,
             deleted_segments: vec![],
+            whole_block_deletions: vec![],
             block_meta_cache: CacheManager::instance().get_segment_block_metas_cache(),
         })
     }
@@ -426,22 +429,44 @@ impl FusePruner {
 
                 async move {
                     // Build pruning tasks.
-                    if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
-                        batch = batch
-                            .into_iter()
-                            .filter(|segment| {
-                                internal_column_pruner
-                                    .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
-                            })
-                            .collect::<Vec<_>>();
-                    }
+                    let whole_segment_matches =
+                        if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
+                            let mut whole_segment_matches = HashSet::new();
+                            batch = batch
+                                .into_iter()
+                                .filter(|segment| {
+                                    match internal_column_pruner
+                                        .eval(&[(SEGMENT_NAME_COL_NAME, &segment.location.0)])
+                                    {
+                                        InternalColumnPruneResult::Pruned => false,
+                                        InternalColumnPruneResult::Keep => true,
+                                        InternalColumnPruneResult::FullMatch => {
+                                            whole_segment_matches.insert(segment.segment_idx);
+                                            true
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            whole_segment_matches
+                        } else {
+                            HashSet::new()
+                        };
 
                     let mut res = vec![];
                     let mut deleted_segments = vec![];
+                    let mut whole_block_deletions = vec![];
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
                         for (segment_location, compact_segment_info) in &pruned_segments {
+                            if whole_segment_matches.contains(&segment_location.segment_idx) {
+                                deleted_segments.push(DeletedSegmentInfo {
+                                    index: segment_location.segment_idx,
+                                    summary: compact_segment_info.summary.clone(),
+                                });
+                                continue;
+                            }
+
                             if let Some(range_index) = &inverse_range_index {
                                 let range_input = RangeIndexInput::new(
                                     &compact_segment_info.summary.col_stats,
@@ -464,11 +489,11 @@ impl FusePruner {
                                 compact_segment_info,
                                 populate_block_meta_cache,
                             )?;
-                            res.extend(
-                                block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
-                                    .await?,
-                            );
+                            let (mut pruned_blocks, mut whole_blocks) = block_pruner
+                                .delete_pruning(segment_location.clone(), block_metas)
+                                .await?;
+                            res.append(&mut pruned_blocks);
+                            whole_block_deletions.append(&mut whole_blocks);
                         }
                     } else {
                         let sample_probability = table_sample(&push_down)?;
@@ -513,7 +538,7 @@ impl FusePruner {
                             res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
-                    Result::<_>::Ok((res, deleted_segments))
+                    Result::<_>::Ok((res, deleted_segments, whole_block_deletions))
                 }
             }));
         }
@@ -525,6 +550,7 @@ impl FusePruner {
             let mut res = worker?;
             metas.extend(res.0);
             self.deleted_segments.append(&mut res.1);
+            self.whole_block_deletions.append(&mut res.2);
         }
         if delete_pruning {
             Ok(metas)

@@ -23,12 +23,14 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -40,6 +42,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
+use databend_common_sql::Symbol;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -67,6 +70,8 @@ pub struct MutationSource {
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
+    #[serde(default)]
+    pub row_filters: Option<Filters>,
     pub display_filters: Option<Filters>,
     #[serde(default)]
     pub has_hidden_secure_filters: bool,
@@ -74,6 +79,8 @@ pub struct MutationSource {
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
     pub truncate_table: bool,
+    #[serde(default)]
+    pub delete_meta_only: bool,
 
     pub partitions: Partitions,
     pub statistics: PartStatistics,
@@ -112,12 +119,14 @@ impl IPhysicalPlan for MutationSource {
             table_index: self.table_index,
             table_info: self.table_info.clone(),
             filters: self.filters.clone(),
+            row_filters: self.row_filters.clone(),
             display_filters: self.display_filters.clone(),
             has_hidden_secure_filters: self.has_hidden_secure_filters,
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
             truncate_table: self.truncate_table,
+            delete_meta_only: self.delete_meta_only,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
         })
@@ -196,7 +205,11 @@ impl IPhysicalPlan for MutationSource {
             builder.ctx.set_partitions(self.partitions.clone())?;
         }
 
-        let filter = self.filters.clone().map(|v| v.filter);
+        let filter = if self.row_filters.is_some() || self.delete_meta_only {
+            self.row_filters.clone().map(|v| v.filter)
+        } else {
+            self.filters.clone().map(|v| v.filter)
+        };
         let mutation_action = if is_delete {
             MutationAction::Deletion
         } else {
@@ -261,6 +274,16 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
+        let (row_predicates, has_internal_filter) =
+            mutation_source_row_predicates(mutation_source.mutation_type.clone(), &all_predicates)?;
+        let row_filters = if !row_predicates.is_empty() {
+            Some(create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &row_predicates,
+            )?)
+        } else {
+            None
+        };
         let mutation_info = self.mutation_build_info.as_ref().unwrap();
 
         let metadata = self.metadata.read();
@@ -293,21 +316,72 @@ impl PhysicalPlanBuilder {
 
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
+        let read_partition_columns = mutation_source
+            .read_partition_columns
+            .iter()
+            .filter_map(|column_index| {
+                let column = metadata.column(*column_index);
+                mutation_source
+                    .schema
+                    .index_of(&column.name())
+                    .ok()
+                    .map(Symbol::from_field_index)
+            })
+            .collect();
+        let delete_meta_only = mutation_source.mutation_type == MutationType::Delete
+            && filters.is_some()
+            && row_filters.is_none()
+            && has_internal_filter;
         Ok(PhysicalPlan::new(MutationSource {
             table_index: mutation_source.table_index,
             output_schema,
             table_info: mutation_info.table_info.clone(),
             filters,
+            row_filters,
             display_filters,
             has_hidden_secure_filters: !mutation_source.secure_predicates.is_empty(),
             input_type: mutation_source.mutation_type.clone(),
-            read_partition_columns: mutation_source.read_partition_columns.clone(),
+            read_partition_columns,
             truncate_table,
+            delete_meta_only,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
         }))
     }
+}
+
+fn mutation_source_row_predicates(
+    mutation_type: MutationType,
+    predicates: &[ScalarExpr],
+) -> Result<(Vec<ScalarExpr>, bool)> {
+    if mutation_type != MutationType::Delete {
+        return Ok((predicates.to_vec(), false));
+    }
+
+    let mut has_internal_column = false;
+    let mut row_predicates = Vec::new();
+    for predicate in predicates {
+        let expr = predicate
+            .as_expr()?
+            .project_column_ref(|col| Ok(col.column_name.clone()))?;
+
+        let mut has_column_ref = false;
+        let mut internal_only = true;
+        for name in expr.column_refs().keys() {
+            has_column_ref = true;
+            if name == SEGMENT_NAME_COL_NAME || name == BLOCK_NAME_COL_NAME {
+                has_internal_column = true;
+            } else {
+                internal_only = false;
+            }
+        }
+
+        if !has_column_ref || !internal_only || !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            row_predicates.push(predicate.clone());
+        }
+    }
+    Ok((row_predicates, has_internal_column))
 }
 
 /// create push down filters
