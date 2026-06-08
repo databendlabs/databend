@@ -208,6 +208,7 @@ mod prost_message_impl {
 
         #[derive(Debug, Default, PartialEq, Eq, kvapi::StructKey)]
         #[structkey(prefix = "foo")]
+        #[allow(dead_code)]
         struct Foo {
             id: u64,
         }
@@ -218,10 +219,6 @@ mod prost_message_impl {
 
         #[derive(Debug)]
         struct Bar;
-
-        impl kvapi::Value for Bar {
-            type KeyType = Foo;
-        }
 
         #[test]
         fn test_id_as_protobuf_message() {

@@ -56,10 +56,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseId {
         type ValueType = DatabaseMeta;
     }
-
-    impl kvapi::Value for DatabaseMeta {
-        type KeyType = DatabaseId;
-    }
 }
 
 #[cfg(test)]

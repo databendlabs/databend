@@ -100,10 +100,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for TableIdTagName {
         type ValueType = TableTag;
     }
-
-    impl kvapi::Value for TableTag {
-        type KeyType = TableIdTagName;
-    }
 }
 
 #[cfg(test)]
