@@ -134,11 +134,22 @@ impl TaskMgr {
                 error_integration,
                 session_parameters,
             } => {
-                task.schedule_options = schedule.clone().map(Self::make_schedule_options);
-                task.comment = comments.clone();
-                task.warehouse_options = Some(Self::make_warehouse_options(warehouse.clone()));
-                task.suspend_task_after_num_failures = *suspend_task_after_num_failures;
-                task.error_integration = error_integration.clone();
+                if let Some(schedule) = schedule {
+                    task.schedule_options = Some(Self::make_schedule_options(schedule.clone()));
+                }
+                if let Some(comments) = comments {
+                    task.comment = Some(comments.clone());
+                }
+                if let Some(warehouse) = warehouse {
+                    task.warehouse_options =
+                        Some(Self::make_warehouse_options(Some(warehouse.clone())));
+                }
+                if let Some(suspend_task_after_num_failures) = suspend_task_after_num_failures {
+                    task.suspend_task_after_num_failures = Some(*suspend_task_after_num_failures);
+                }
+                if let Some(error_integration) = error_integration {
+                    task.error_integration = Some(error_integration.clone());
+                }
                 if let Some(session_parameters) = session_parameters {
                     task.session_params = session_parameters.clone();
                 }
