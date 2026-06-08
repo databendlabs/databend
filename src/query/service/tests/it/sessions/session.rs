@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_query::sessions::SessionManager;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
@@ -27,7 +29,15 @@ async fn test_session() -> anyhow::Result<()> {
         assert_eq!(actual.tenant_name(), "test");
 
         // We are not in management mode, so always get the config tenant.
-        session.set_current_tenant(Tenant::new_literal("tenant2"));
+        assert!(
+            session
+                .set_current_tenant(Tenant::new_literal("tenant2"))
+                .is_err()
+        );
+        let actual = session.get_current_tenant();
+        assert_eq!(actual.tenant_name(), "test");
+
+        session.set_current_tenant(Tenant::new_literal("test"))?;
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "test");
     }
@@ -55,10 +65,25 @@ async fn test_session_in_management_mode() -> anyhow::Result<()> {
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "test");
 
-        session.set_current_tenant(Tenant::new_literal("tenant2"));
+        session.set_current_tenant(Tenant::new_literal("tenant2"))?;
         let actual = session.get_current_tenant();
         assert_eq!(actual.tenant_name(), "tenant2");
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_local_session_can_override_tenant() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut session = SessionManager::instance()
+        .create_session(SessionType::Local)
+        .await?;
+
+    session.set_current_tenant(Tenant::new_literal("tenant2"))?;
+    let actual = session.get_current_tenant();
+    assert_eq!(actual.tenant_name(), "tenant2");
 
     Ok(())
 }
