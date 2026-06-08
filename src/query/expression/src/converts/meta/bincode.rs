@@ -44,7 +44,6 @@ pub enum LegacyScalar {
     Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
-    Interval(months_days_micros),
     Boolean(bool),
     String(Vec<u8>),
     Array(LegacyColumn),
@@ -52,6 +51,8 @@ pub enum LegacyScalar {
     Bitmap(Vec<u8>),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
+    // Interval must be at end: old bincode data did not have this variant
+    Interval(months_days_micros),
 }
 
 #[allow(unused, dead_code)]
