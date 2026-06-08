@@ -167,6 +167,21 @@ impl CloudTaskInterpreter {
         Ok(())
     }
 
+    async fn validate_alter_warehouse<C: TaskContext>(
+        ctx: &Arc<C>,
+        plan: &AlterTaskPlan,
+    ) -> Result<()> {
+        if let AlterTaskOptions::Set {
+            warehouse: Some(warehouse),
+            ..
+        } = &plan.alter_options
+        {
+            ctx.validate_warehouse_exists(Some(warehouse)).await?;
+        }
+
+        Ok(())
+    }
+
     fn build_create_request<C: TaskContext>(ctx: &C, plan: &CreateTaskPlan) -> CreateTaskRequest {
         let plan = plan.clone();
         let mut req = CreateTaskRequest {
@@ -341,6 +356,9 @@ impl<C: TaskContext> TaskInterpreter<C> for CloudTaskInterpreter {
     async fn alter_task(&self, ctx: &Arc<C>, plan: &AlterTaskPlan) -> Result<()> {
         ensure_cloud_control_enabled("alter task")?;
         Self::validate_alter_session_parameters(plan)?;
+        if !plan.if_exists {
+            Self::validate_alter_warehouse(ctx, plan).await?;
+        }
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
@@ -452,9 +470,15 @@ impl<C: TaskContext> TaskInterpreter<C> for PrivateTaskInterpreter {
         Ok(())
     }
 
-    async fn alter_task(&self, _ctx: &Arc<C>, plan: &AlterTaskPlan) -> Result<()> {
-        UserApiProvider::instance()
-            .task_api(&plan.tenant)
+    async fn alter_task(&self, ctx: &Arc<C>, plan: &AlterTaskPlan) -> Result<()> {
+        let task_api = UserApiProvider::instance().task_api(&plan.tenant);
+        if plan.if_exists && task_api.describe_task(&plan.task_name).await??.is_none() {
+            return Ok(());
+        }
+
+        CloudTaskInterpreter::validate_alter_warehouse(ctx, plan).await?;
+
+        task_api
             .alter_task(&plan.task_name, &plan.alter_options)
             .await??;
         Ok(())
