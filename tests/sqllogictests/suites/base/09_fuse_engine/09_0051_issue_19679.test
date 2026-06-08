@@ -52,5 +52,10 @@ select count(distinct file_location), count() from fuse_segment('default', 't_19
 ----
 5 5
 
+query TTB
+select encoding, compression, min(block_meta_size) > 0 from fuse_segment('default', 't_19679') group by encoding, compression
+----
+MessagePack Zstd 1
+
 statement ok
 DROP TABLE t_19679

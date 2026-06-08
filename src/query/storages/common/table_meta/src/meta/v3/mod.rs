@@ -14,7 +14,7 @@
 
 // we use "frozen" types of table meta, to make sure that the type we used for
 // bincode deserialization is compatible with the type we used for bincode serialization.
-mod frozen;
+pub(crate) mod frozen;
 mod segment;
 mod snapshot;
 mod table_snapshot_statistics;

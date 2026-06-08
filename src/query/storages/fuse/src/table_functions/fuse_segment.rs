@@ -26,6 +26,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::MetaCompression;
+use databend_storages_common_table_meta::meta::MetaEncoding;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
@@ -38,6 +40,22 @@ pub struct FuseSegment;
 
 pub type FuseSegmentFunc = TableMetaFuncTemplate<FuseSegment>;
 
+fn encoding_name(encoding: &MetaEncoding) -> &'static str {
+    match encoding {
+        MetaEncoding::Bincode => "Bincode",
+        MetaEncoding::MessagePack => "MessagePack",
+        MetaEncoding::Json => "Json",
+    }
+}
+
+fn compression_name(compression: &MetaCompression) -> &'static str {
+    match compression {
+        MetaCompression::None => "None",
+        MetaCompression::Zstd => "Zstd",
+        MetaCompression::Snappy => "Snappy",
+    }
+}
+
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseSegment {
     fn schema() -> Arc<TableSchema> {
@@ -45,6 +63,12 @@ impl TableMetaFunc for FuseSegment {
             TableField::new("file_location", TableDataType::String),
             TableField::new(
                 "format_version",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("encoding", TableDataType::String),
+            TableField::new("compression", TableDataType::String),
+            TableField::new(
+                "block_meta_size",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
@@ -100,6 +124,9 @@ impl TableMetaFunc for FuseSegment {
         let len = std::cmp::min(segment_locations.len(), limit);
 
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
+        let mut encodings: Vec<String> = Vec::with_capacity(len);
+        let mut compressions: Vec<String> = Vec::with_capacity(len);
+        let mut block_meta_size: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
@@ -128,6 +155,10 @@ impl TableMetaFunc for FuseSegment {
             for segment in segments.into_iter() {
                 let segment = segment?;
                 format_versions.push(segment_locations[row_num].1);
+                encodings.push(encoding_name(&segment.raw_block_metas.encoding).to_string());
+                compressions
+                    .push(compression_name(&segment.raw_block_metas.compression).to_string());
+                block_meta_size.push(segment.raw_block_metas.bytes.len() as u64);
                 block_count.push(segment.summary.block_count);
                 row_count.push(segment.summary.row_count);
                 compressed.push(segment.summary.compressed_byte_size);
@@ -163,6 +194,9 @@ impl TableMetaFunc for FuseSegment {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(file_location),
             UInt64Type::from_data(format_versions),
+            StringType::from_data(encodings),
+            StringType::from_data(compressions),
+            UInt64Type::from_data(block_meta_size),
             UInt64Type::from_data(block_count),
             UInt64Type::from_data(row_count),
             UInt64Type::from_data(uncompressed),
