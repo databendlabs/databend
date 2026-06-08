@@ -167,7 +167,10 @@ mod tests {
     #[test]
     fn get_by_group_keeps_original_ids() {
         let profiles = QueryProfiles::default();
-        profiles.add(&batch(vec![profile(1, 0, None, 1), profile(1, 1, Some(0), 2)]));
+        profiles.add(&batch(vec![
+            profile(1, 0, None, 1),
+            profile(1, 1, Some(0), 2),
+        ]));
         profiles.add(&batch(vec![profile(2, 0, None, 4)]));
 
         let mut group = profiles.get_by_group(1);
@@ -184,8 +187,14 @@ mod tests {
     #[test]
     fn flattens_groups_into_disjoint_id_ranges() {
         let profiles = QueryProfiles::default();
-        profiles.add(&batch(vec![profile(1, 0, None, 1), profile(1, 1, Some(0), 2)]));
-        profiles.add(&batch(vec![profile(2, 0, None, 4), profile(2, 1, Some(0), 8)]));
+        profiles.add(&batch(vec![
+            profile(1, 0, None, 1),
+            profile(1, 1, Some(0), 2),
+        ]));
+        profiles.add(&batch(vec![
+            profile(2, 0, None, 4),
+            profile(2, 1, Some(0), 8),
+        ]));
 
         let mut all = profiles.get();
         all.sort_by_key(|p| p.statistics[0]);
@@ -206,4 +215,3 @@ mod tests {
         ]);
     }
 }
-

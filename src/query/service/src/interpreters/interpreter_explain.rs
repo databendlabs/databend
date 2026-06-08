@@ -463,7 +463,9 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res, main_group_id).await?;
+        let query_profiles = self
+            .execute_and_get_profiles(build_res, main_group_id)
+            .await?;
 
         Ok(GraphicalProfiles {
             query_id: query_ctx.get_id(),
@@ -489,7 +491,9 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res, main_group_id).await?;
+        let query_profiles = self
+            .execute_and_get_profiles(build_res, main_group_id)
+            .await?;
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
