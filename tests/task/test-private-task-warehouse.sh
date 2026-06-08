@@ -130,3 +130,67 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"RESUME WAREHOUSE wh2\"}")
+check_response_error "$response"
+resume_warehouse_2_query_id=$(echo $response | jq -r '.id')
+echo "Resume WareHouse 2 Query ID: $resume_warehouse_2_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t_move_wh (c1 int)\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK move_wh_task WAREHOUSE = 'wh1' SCHEDULE = 2 SECOND AS insert into t_move_wh values(1)\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK move_wh_task RESUME\"}")
+check_response_error "$response"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t_move_wh\"}")
+check_response_error "$response"
+count_before_move=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$count_before_move" -ge 1 ]; then
+    echo "✅ Moving warehouse regression task runs on original warehouse"
+else
+    echo "❌ Expected moving warehouse regression task to run before ALTER"
+    echo "Actual  : $count_before_move"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK move_wh_task SET WAREHOUSE = 'wh2'\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SHOW TASKS\"}")
+check_response_error "$response"
+move_wh_warehouse=$(echo "$response" | jq -r '.data[] | select(.[1] == "move_wh_task") | .[5]')
+move_wh_schedule=$(echo "$response" | jq -r '.data[] | select(.[1] == "move_wh_task") | .[6]')
+if [ "$move_wh_warehouse" = "wh2" ] && [ "$move_wh_schedule" = "INTERVAL 2 SECOND" ]; then
+    echo "✅ ALTER TASK SET WAREHOUSE preserves schedule and updates warehouse"
+else
+    echo "❌ Expected ALTER TASK SET WAREHOUSE to preserve schedule and update warehouse"
+    echo "Warehouse: $move_wh_warehouse"
+    echo "Schedule : $move_wh_schedule"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SUSPEND WAREHOUSE wh2\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t_move_wh\"}")
+check_response_error "$response"
+count_after_move=$(echo "$response" | jq -r '.data[0][0]')
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t_move_wh\"}")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "$count_after_move" ]; then
+    echo "✅ ALTER TASK SET WAREHOUSE cancels old warehouse schedule"
+else
+    echo "❌ Expected old warehouse schedule to stop after ALTER TASK SET WAREHOUSE"
+    echo "Before wait: $count_after_move"
+    echo "After wait : $actual"
+    exit 1
+fi
