@@ -587,6 +587,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         vec![],
+        None,
         vec![],
         FunctionContext::default(),
     );
@@ -629,6 +630,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         operators,
+        None,
         vec![],
         FunctionContext::default(),
     );
@@ -647,6 +649,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         vec![],
+        None,
         vec![],
         FunctionContext::default(),
     );

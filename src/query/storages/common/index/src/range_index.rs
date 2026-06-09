@@ -296,6 +296,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let inner_domain = statistics_to_domain(stats, inner_ty);
             Domain::Map(Some(Box::new(inner_domain)))
         }
+        DataType::Vector(_) => Domain::full(data_type),
         _ => {
             let stat = stats[0];
             let min = stat.min();

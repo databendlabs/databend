@@ -25,9 +25,14 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VectorDataType;
 use databend_common_sql::parse_to_filters;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -41,6 +46,7 @@ use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::operations::SelectedReclusterSegment;
 use databend_common_storages_fuse::pruning::SegmentLocation;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::statistics::VectorClusterInfo;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -51,8 +57,11 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use rand::Rng;
@@ -99,6 +108,7 @@ fn new_test_mutator(
         cluster_key_id,
         max_tasks,
         mode,
+        None,
     )
 }
 
@@ -273,6 +283,133 @@ async fn gen_recluster_segments_by_ranges(
                 )
             })
             .collect::<Vec<_>>();
+        segment_locations.push(
+            write_recluster_segment(
+                data_accessor,
+                location_generator,
+                blocks,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+    Ok(segment_locations)
+}
+
+fn test_vector_cluster_key_expr() -> Expr<usize> {
+    Expr::ColumnRef(ColumnRef {
+        span: None,
+        data_type: DataType::Vector(VectorDataType::Float32(2)),
+        id: 1,
+        display_name: "embedding".to_string(),
+    })
+}
+
+fn vector_column_stats(centroid: [f32; 2], radius: f32) -> VectorColumnStatistics {
+    VectorColumnStatistics {
+        centroid: centroid.into_iter().map(F32::from).collect(),
+        radius: F32::from(radius),
+        row_count: 1,
+    }
+}
+
+fn vector_recluster_schema() -> TableSchemaRef {
+    TableSchemaRef::new(TableSchema::new_from_column_ids(
+        vec![
+            TableField::new_from_column_id(
+                "tenant",
+                TableDataType::Number(NumberDataType::Int32),
+                0,
+            ),
+            TableField::new_from_column_id(
+                "embedding",
+                TableDataType::Vector(VectorDataType::Float32(2)),
+                1,
+            ),
+        ],
+        Default::default(),
+        2,
+    ))
+}
+
+type VectorBlockStatsSpec = (i32, i32, [f32; 2], f32);
+type VectorSegmentStatsSpec = Vec<VectorBlockStatsSpec>;
+
+async fn gen_recluster_segments_by_vector_stats(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    blocks_by_segment: &[VectorSegmentStatsSpec],
+    scalar_cluster_stats: bool,
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(blocks_by_segment.len());
+    for blocks_spec in blocks_by_segment {
+        let mut blocks = Vec::with_capacity(blocks_spec.len());
+        for &(tenant_min, tenant_max, centroid, radius) in blocks_spec {
+            let block_id = Uuid::new_v4().simple().to_string();
+            let location = (block_id, DataBlock::VERSION);
+            let mut col_stats = HashMap::new();
+            col_stats.insert(
+                0,
+                ColumnStatistics::new(
+                    Scalar::from(tenant_min),
+                    Scalar::from(tenant_max),
+                    0,
+                    4,
+                    Some(1),
+                ),
+            );
+
+            let mut vector_stats = HashMap::new();
+            vector_stats.insert(
+                (1, VectorDistanceType::L2),
+                vector_column_stats(centroid, radius),
+            );
+
+            let mut block = BlockMeta::new(
+                row_count,
+                block_size,
+                file_size,
+                col_stats,
+                HashMap::default(),
+                Some(ClusterStatistics::new(
+                    cluster_key_id,
+                    if scalar_cluster_stats {
+                        vec![Scalar::from(tenant_min)]
+                    } else {
+                        vec![]
+                    },
+                    if scalar_cluster_stats {
+                        vec![Scalar::from(tenant_max)]
+                    } else {
+                        vec![]
+                    },
+                    0,
+                    None,
+                )),
+                location,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                meta::Compression::Lz4Raw,
+                Some(Utc::now()),
+            );
+            block.vector_stats = Some(vector_stats);
+            blocks.push(Arc::new(block));
+        }
+
         segment_locations.push(
             write_recluster_segment(
                 data_accessor,
@@ -1029,6 +1166,7 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
         cluster_key_id,
     )
     .await?;
+
     let compact_segments = segment_pruning(
         &ctx,
         schema,
@@ -1039,6 +1177,165 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
     let conservative_windows = conservative_mutator.select_segments(&compact_segments, 2)?;
     assert_eq!(conservative_windows.len(), 1);
     assert_eq!(conservative_windows[0].len(), 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 1);
+
+    let segment_locations = gen_recluster_segments_by_vector_stats(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 1, [0.0, 0.0], 1.0)],
+            vec![(1, 1, [0.5, 0.0], 1.0)],
+            // Vector sphere overlaps with segment 0/1, but scalar range does not.
+            vec![(2, 2, [0.5, 0.0], 1.0)],
+            // Scalar range overlaps with segment 0/1, but vector sphere does not.
+            vec![(1, 1, [10.0, 0.0], 1.0)],
+        ],
+        true,
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = vector_recluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+
+    let vector_cluster_info = VectorClusterInfo {
+        key_index: 1,
+        column_id: 1,
+        column_name: "embedding".to_string(),
+        dimension: 2,
+        distance_type: VectorDistanceType::L2,
+    };
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_cluster_key_expr(), test_vector_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+        ReclusterMode::Conservative,
+        Some(vector_cluster_info),
+    );
+
+    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+    let vector_window = segment_windows
+        .into_iter()
+        .find(|window| {
+            window
+                .iter()
+                .map(|segment| segment.loc.segment_idx)
+                .collect::<HashSet<_>>()
+                == HashSet::from([0, 1])
+        })
+        .unwrap();
+    let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 1);
+
+    let segment_locations = gen_recluster_segments_by_vector_stats(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 1, [0.0, 0.0], 1.0)],
+            vec![(2, 2, [0.5, 0.0], 1.0)],
+            vec![(3, 3, [10.0, 0.0], 1.0)],
+        ],
+        false,
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = vector_recluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+
+    let vector_cluster_info = VectorClusterInfo {
+        key_index: 0,
+        column_id: 1,
+        column_name: "embedding".to_string(),
+        dimension: 2,
+        distance_type: VectorDistanceType::L2,
+    };
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_vector_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+        ReclusterMode::Conservative,
+        Some(vector_cluster_info),
+    );
+
+    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+    let vector_window = segment_windows
+        .into_iter()
+        .find(|window| {
+            window
+                .iter()
+                .map(|segment| segment.loc.segment_idx)
+                .collect::<HashSet<_>>()
+                == HashSet::from([0, 1])
+        })
+        .unwrap();
+    let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
 
     Ok(())
 }

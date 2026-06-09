@@ -108,6 +108,10 @@ impl PageIndex {
             return Ok((true, None));
         }
 
+        if min_values.is_empty() {
+            return Ok((true, None));
+        }
+
         let pages = min_values.len();
         let mut start = 0;
         let mut end = pages - 1;

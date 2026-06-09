@@ -38,6 +38,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::BlockOverlapDepth;
 use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
@@ -94,7 +95,11 @@ impl TableMetaFunc for ClusteringStatistics {
 
         let cluster_keys = tbl.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?;
-        let cluster_key_types = exprs
+        let scalar_exprs = exprs
+            .into_iter()
+            .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+            .collect::<Vec<_>>();
+        let scalar_cluster_key_types = scalar_exprs
             .iter()
             .map(|v| {
                 let data_type = v.data_type();
@@ -114,7 +119,7 @@ impl TableMetaFunc for ClusteringStatistics {
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
         let schema = tbl.schema();
-        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&exprs, schema.as_ref());
+        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_exprs, schema.as_ref());
 
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         let format_vec = |v: &[Scalar]| -> String {
@@ -160,7 +165,11 @@ impl TableMetaFunc for ClusteringStatistics {
             }
         }
 
-        let block_depths = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        let block_depths = if scalar_cluster_key_types.is_empty() {
+            vec![BlockOverlapDepth::default(); ranges.len()]
+        } else {
+            calculate_block_overlap_depths(&ranges, &scalar_cluster_key_types)?
+        };
         let mut segment_name = StringColumnBuilder::with_capacity(output_len);
         let mut block_name = StringColumnBuilder::with_capacity(output_len);
         let mut min = Vec::with_capacity(output_len);

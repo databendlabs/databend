@@ -20,6 +20,7 @@ mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;
 mod transform_serialize_block;
 mod transform_serialize_segment;
+mod transform_vector_cluster;
 
 pub use multi_table_insert_commit::CommitMultiTableInsert;
 pub use sink_commit::CommitSink;
@@ -31,3 +32,4 @@ pub use transform_mutation_aggregator::TableMutationAggregator;
 pub use transform_serialize_block::TransformSerializeBlock;
 pub use transform_serialize_segment::TransformSerializeSegment;
 pub use transform_serialize_segment::new_serialize_segment_processor;
+pub use transform_vector_cluster::TransformVectorCluster;

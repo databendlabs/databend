@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VirtualDataSchema;
+use databend_common_expression::types::DataType;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
@@ -927,7 +928,12 @@ fn fill_missing_segment_cluster_stats(
         return;
     }
 
-    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(cluster_key_exprs, schema);
+    let scalar_cluster_key_exprs = cluster_key_exprs
+        .iter()
+        .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_cluster_key_exprs, schema);
     let (min, max) = get_min_max_stats(
         &prepared_cluster_key_exprs,
         &summary.col_stats,
