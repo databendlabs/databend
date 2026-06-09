@@ -26,7 +26,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
@@ -37,8 +36,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
-use databend_common_native::write::NativeWriter;
-use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::NdvProvider;
@@ -53,7 +50,6 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::file::metadata::ParquetMetaData;
 
@@ -169,8 +165,6 @@ impl NdvProvider for ColumnsNdvInfo {
 
 pub enum BlockWriterImpl {
     Parquet(ArrowParquetWriter),
-    // Native format doesnot support stream write.
-    Native(NativeWriter<Vec<u8>>),
 }
 
 pub trait BlockWriter {
@@ -199,7 +193,6 @@ impl BlockWriter for BlockWriterImpl {
                 *arrow_writer = ArrowParquetWriter::Initialized(InitializedArrowWriter { inner });
                 Ok(())
             }
-            BlockWriterImpl::Native(native_writer) => Ok(native_writer.start()?),
         }
     }
 
@@ -208,15 +201,6 @@ impl BlockWriter for BlockWriterImpl {
             BlockWriterImpl::Parquet(writer) => {
                 let batch = block.to_record_batch(schema)?;
                 writer.write(&batch)?
-            }
-            BlockWriterImpl::Native(writer) => {
-                let block = block.consume_convert_to_full();
-                let batch: Vec<Column> = block
-                    .take_columns()
-                    .into_iter()
-                    .map(|x| x.into_column().unwrap())
-                    .collect();
-                writer.write(&batch)?;
             }
         }
         Ok(())
@@ -228,31 +212,18 @@ impl BlockWriter for BlockWriterImpl {
                 let file_meta = writer.finish()?;
                 column_parquet_metas(&file_meta, schema)
             }
-            BlockWriterImpl::Native(writer) => {
-                writer.finish()?;
-                let mut metas = HashMap::with_capacity(writer.metas.len());
-                let leaf_column_ids = schema.to_leaf_column_ids();
-                for (idx, meta) in writer.metas.iter().enumerate() {
-                    // use column id as key instead of index
-                    let column_id = leaf_column_ids.get(idx).unwrap();
-                    metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
-                }
-                Ok(metas)
-            }
         }
     }
 
     fn inner_mut(&mut self) -> &mut Vec<u8> {
         match self {
             BlockWriterImpl::Parquet(writer) => writer.inner_mut(),
-            BlockWriterImpl::Native(writer) => writer.inner_mut(),
         }
     }
 
     fn compressed_size(&self) -> usize {
         match self {
             BlockWriterImpl::Parquet(writer) => writer.in_progress_size(),
-            BlockWriterImpl::Native(writer) => writer.total_size(),
         }
     }
 }
@@ -276,7 +247,6 @@ pub struct StreamBlockBuilder {
 
 impl StreamBlockBuilder {
     pub fn try_new_with_config(properties: Arc<StreamBlockProperties>) -> Result<Self> {
-        let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_writer = match properties.write_settings.storage_format {
             FuseStorageFormat::Parquet => {
                 BlockWriterImpl::Parquet(ArrowParquetWriter::new_uninitialized(
@@ -284,26 +254,8 @@ impl StreamBlockBuilder {
                     properties.source_schema.clone(),
                 ))
             }
-            FuseStorageFormat::Native => {
-                let mut default_compress_ratio = Some(2.10f64);
-                if matches!(
-                    properties.write_settings.table_compression,
-                    TableCompression::Zstd
-                ) {
-                    default_compress_ratio = Some(3.72f64);
-                }
-
-                let writer = NativeWriter::new(
-                    buffer,
-                    properties.source_schema.as_ref().clone(),
-                    WriteOptions {
-                        default_compression: properties.write_settings.table_compression.into(),
-                        max_page_size: Some(properties.write_settings.max_page_size),
-                        default_compress_ratio,
-                        forbidden_compressions: vec![],
-                    },
-                )?;
-                BlockWriterImpl::Native(writer)
+            FuseStorageFormat::Unsupported => {
+                return Err(crate::unsupported_storage_format_error());
             }
         };
 

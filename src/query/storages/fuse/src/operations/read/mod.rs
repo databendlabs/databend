@@ -15,8 +15,6 @@
 mod block_format;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
-mod native_data_source;
-mod native_data_source_deserializer;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_rows_fetcher;
@@ -34,7 +32,6 @@ mod util;
 
 pub use fuse_rows_fetcher::row_fetch_processor;
 pub use fuse_source::build_fuse_source_pipeline;
-pub use native_data_source_deserializer::NativeDeserializeDataTransform;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
 pub use read_state::ReadState;
 pub use util::need_reserve_block_info;

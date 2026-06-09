@@ -12,35 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 
-use super::native_data_source::NativeDataSource;
 use super::parquet_data_source::ParquetDataSource;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 pub enum ReadDataSource {
-    Native(Box<NativeDataSource>),
     Parquet(Box<ParquetDataSource>),
 }
 
 impl ReadDataSource {
-    pub fn into_native(self) -> Result<NativeDataSource> {
+    pub fn into_parquet(self) -> ParquetDataSource {
         match self {
-            ReadDataSource::Native(data) => Ok(*data),
-            ReadDataSource::Parquet(_) => Err(ErrorCode::Internal(
-                "NativeDeserializeDataTransform got parquet data source",
-            )),
-        }
-    }
-
-    pub fn into_parquet(self) -> Result<ParquetDataSource> {
-        match self {
-            ReadDataSource::Parquet(data) => Ok(*data),
-            ReadDataSource::Native(_) => Err(ErrorCode::Internal(
-                "DeserializeDataTransform got native data source",
-            )),
+            ReadDataSource::Parquet(data) => *data,
         }
     }
 }

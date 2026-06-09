@@ -42,7 +42,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
@@ -331,14 +330,8 @@ pub fn is_valid_fuse_parquet_dictionary_opt(
 
 pub fn is_valid_fuse_virtual_column_opt(
     options: &BTreeMap<String, String>,
-    storage_format: FuseStorageFormat,
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN) {
-        if !matches!(storage_format, FuseStorageFormat::Parquet) {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "table option {FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN} only support {OPT_KEY_STORAGE_FORMAT}=parquet, but got {storage_format}"
-            )));
-        }
         value.parse::<bool>()?;
     }
     Ok(())

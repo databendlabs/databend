@@ -23,7 +23,7 @@ echo "Starting databend-sqllogic tests"
 if [ -z "$RUN_DIR" ]; then
 	target/${BUILD_PROFILE}/databend-sqllogictests --run_dir temp_table --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
 fi
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee,temp_table --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,ee,temp_table --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
 
 echo "Checking query logs for duplicate query_id entries"
 python3 scripts/ci/ci-check-query-log-duplicates.py .databend/logs_1/query-details

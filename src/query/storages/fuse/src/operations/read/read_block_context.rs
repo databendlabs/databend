@@ -21,7 +21,6 @@ use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::block_format::FuseBlockFormat;
-use super::native_data_source::NativeDataSource;
 use super::parquet_data_source::ParquetDataSource;
 use super::raw_data_source::RawDataSource;
 use super::read_data_source::ReadDataSource;
@@ -91,9 +90,6 @@ impl ReadBlockContext {
             .await?;
 
         Ok(match raw_data {
-            RawDataSource::Native(data) => {
-                ReadDataSource::Native(Box::new(NativeDataSource::Normal(data)))
-            }
             RawDataSource::Parquet(data) => {
                 ReadDataSource::Parquet(Box::new(ParquetDataSource::Normal((data, virtual_source))))
             }
@@ -141,9 +137,6 @@ impl ReadBlockContext {
         };
 
         Ok(Some(match raw_data {
-            RawDataSource::Native(data) => {
-                ReadDataSource::Native(Box::new(NativeDataSource::AggIndex(data)))
-            }
             RawDataSource::Parquet(data) => {
                 let part = FuseBlockPartInfo::create(
                     location,

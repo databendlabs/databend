@@ -285,7 +285,7 @@ SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.558
 5 0.03522873
 
 statement ok
-CREATE TABLE IF NOT EXISTS t_native(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') storage_format = 'native' row_per_page = 2
+CREATE TABLE IF NOT EXISTS t_native(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') storage_format = 'parquet' row_per_page = 2
 
 statement ok
 INSERT INTO t_native VALUES

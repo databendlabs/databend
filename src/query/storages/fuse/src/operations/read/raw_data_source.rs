@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use crate::io::BlockReadResult;
-use crate::io::NativeSourceData;
 
 pub enum RawDataSource {
-    Native(NativeSourceData),
     Parquet(BlockReadResult),
 }

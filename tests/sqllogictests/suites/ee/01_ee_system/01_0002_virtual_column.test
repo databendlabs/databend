@@ -28,7 +28,7 @@ statement ok
 drop table if exists t1
 
 statement ok
-create table t1(id int, val json) storage_format = 'native'
+create table t1(id int, val json) storage_format = 'parquet'
 
 statement ok
 insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')

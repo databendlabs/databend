@@ -880,13 +880,7 @@ impl Binder {
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
                 let default_storage_format =
                     match config.query.common.default_storage_format.as_str() {
-                        "" | "auto" => {
-                            if is_blocking_fs {
-                                "native"
-                            } else {
-                                "parquet"
-                            }
-                        }
+                        "" | "auto" | "native" => "parquet",
                         _ => config.query.common.default_storage_format.as_str(),
                     };
                 options.insert(

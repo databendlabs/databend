@@ -178,7 +178,7 @@ impl Processor for DeserializeDataTransform {
                         .data
                         .into_iter()
                         .map(ReadDataSource::into_parquet)
-                        .collect::<Result<Vec<_>>>()?;
+                        .collect::<Vec<_>>();
                     return Ok(Event::Sync);
                 }
             }
