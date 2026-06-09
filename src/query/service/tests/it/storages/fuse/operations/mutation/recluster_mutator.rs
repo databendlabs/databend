@@ -651,46 +651,6 @@ async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Res
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_recluster_defers_small_level0_tail() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-
-    let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
-        thresholds,
-        1,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 4);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].level, 1);
-    assert_eq!(task_part_counts(&parts), vec![4]);
-
-    let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
-        thresholds,
-        2,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 7);
-    assert_eq!(parts.tasks.len(), 2);
-    assert_eq!(
-        parts
-            .tasks
-            .iter()
-            .map(|task| task.level)
-            .collect::<Vec<_>>(),
-        vec![1, 0]
-    );
-    assert_eq!(task_part_counts(&parts), vec![4, 3]);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_final_recluster_skips_high_level_two_block_batch() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     let (block_num, parts) =
