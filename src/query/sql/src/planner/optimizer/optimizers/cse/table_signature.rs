@@ -14,18 +14,33 @@
 
 use std::collections::HashMap;
 
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::ScalarExpr;
+use crate::Symbol;
+use crate::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::planner::metadata::Metadata;
+use crate::plans::Aggregate;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TableSignature {
     pub tables: Vec<IndexType>,
+    pub aggregate: Option<AggregateSignature>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AggregateSignature {
+    pub aggregate: Aggregate,
+    pub input_items: Vec<ScalarItem>,
 }
 
 pub fn collect_table_signatures(
@@ -63,6 +78,7 @@ fn collect_table_signatures_rec(
             signature_to_exprs
                 .entry(TableSignature {
                     tables: tables.clone(),
+                    aggregate: None,
                 })
                 .or_default()
                 .push((path.clone(), expr.clone()));
@@ -81,12 +97,174 @@ fn collect_table_signatures_rec(
             signature_to_exprs
                 .entry(TableSignature {
                     tables: tables.clone(),
+                    aggregate: None,
                 })
                 .or_default()
                 .push((path.clone(), expr.clone()));
             Some(tables)
         }
+        RelOperator::Aggregate(aggregate) if child_tables.len() == 1 => {
+            let tables = child_tables[0]
+                .clone()
+                .or_else(|| aggregate_input_tables(expr.child(0).ok()?, metadata))?;
+            if let Some(aggregate_signature) = aggregate_signature(aggregate, expr.child(0).ok()?) {
+                signature_to_exprs
+                    .entry(TableSignature {
+                        tables: tables.clone(),
+                        aggregate: Some(aggregate_signature),
+                    })
+                    .or_default()
+                    .push((path.clone(), expr.clone()));
+            }
+            None
+        }
         _ => None,
+    }
+}
+
+fn aggregate_input_tables(expr: &SExpr, metadata: &Metadata) -> Option<Vec<IndexType>> {
+    match expr.plan() {
+        RelOperator::EvalScalar(_) if expr.arity() == 1 => {
+            aggregate_input_tables(expr.child(0).ok()?, metadata)
+        }
+        RelOperator::Scan(scan) => Some(vec![scan_signature(scan, metadata)?]),
+        RelOperator::Join(join) if is_supported_cross_join(join) && expr.arity() == 2 => {
+            let mut tables = aggregate_input_tables(expr.child(0).ok()?, metadata)?;
+            tables.extend(aggregate_input_tables(expr.child(1).ok()?, metadata)?);
+            Some(tables)
+        }
+        _ => None,
+    }
+}
+
+fn aggregate_signature(aggregate: &Aggregate, input: &SExpr) -> Option<AggregateSignature> {
+    if aggregate.rank_limit.is_some() || aggregate.grouping_sets.is_some() {
+        return None;
+    }
+
+    let input_columns = input
+        .derive_relational_prop()
+        .ok()?
+        .output_columns
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(position, column)| (column, Symbol::new(position)))
+        .collect::<HashMap<_, _>>();
+
+    let mut aggregate = aggregate.clone();
+    aggregate.group_items = normalize_scalar_items(&aggregate.group_items, &input_columns)?;
+    aggregate.aggregate_functions =
+        normalize_scalar_items(&aggregate.aggregate_functions, &input_columns)?;
+    let input_items = aggregate_input_items(input)?;
+
+    Some(AggregateSignature {
+        aggregate,
+        input_items,
+    })
+}
+
+fn aggregate_input_items(input: &SExpr) -> Option<Vec<ScalarItem>> {
+    let RelOperator::EvalScalar(eval_scalar) = input.plan() else {
+        return Some(vec![]);
+    };
+
+    let input_columns = input
+        .derive_relational_prop()
+        .ok()?
+        .output_columns
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(position, column)| (column, Symbol::new(position)))
+        .collect::<HashMap<_, _>>();
+    let child_columns = input
+        .child(0)
+        .ok()?
+        .derive_relational_prop()
+        .ok()?
+        .output_columns
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(position, column)| (column, Symbol::new(position)))
+        .collect::<HashMap<_, _>>();
+
+    eval_scalar
+        .items
+        .iter()
+        .map(|item| {
+            Some(ScalarItem {
+                scalar: normalize_scalar_expr(&item.scalar, &child_columns)?,
+                index: *input_columns.get(&item.index)?,
+            })
+        })
+        .collect()
+}
+
+fn normalize_scalar_items(
+    items: &[ScalarItem],
+    input_columns: &HashMap<Symbol, Symbol>,
+) -> Option<Vec<ScalarItem>> {
+    items
+        .iter()
+        .enumerate()
+        .map(|(position, item)| {
+            Some(ScalarItem {
+                scalar: normalize_scalar_expr(&item.scalar, input_columns)?,
+                index: Symbol::new(position),
+            })
+        })
+        .collect()
+}
+
+fn normalize_scalar_expr(
+    scalar: &ScalarExpr,
+    input_columns: &HashMap<Symbol, Symbol>,
+) -> Option<ScalarExpr> {
+    let mut scalar = scalar.clone();
+    let mut visitor = NormalizeColumnVisitor { input_columns };
+    visitor.visit(&mut scalar).ok()?;
+    Some(scalar)
+}
+
+struct NormalizeColumnVisitor<'a> {
+    input_columns: &'a HashMap<Symbol, Symbol>,
+}
+
+impl VisitorMut<'_> for NormalizeColumnVisitor<'_> {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> databend_common_exception::Result<()> {
+        walk_expr_mut(self, expr)
+    }
+
+    fn visit_bound_column_ref(
+        &mut self,
+        col: &mut crate::plans::BoundColumnRef,
+    ) -> databend_common_exception::Result<()> {
+        let Some(normalized) = self.input_columns.get(&col.column.index) else {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                "aggregate CSE column is not produced by input",
+            ));
+        };
+        col.column = ColumnBindingBuilder::new(
+            normalized.to_string(),
+            *normalized,
+            col.column.data_type.clone(),
+            Visibility::Visible,
+        )
+        .build();
+        Ok(())
+    }
+
+    fn visit_aggregate_function(
+        &mut self,
+        aggregate: &mut crate::plans::AggregateFunction,
+    ) -> databend_common_exception::Result<()> {
+        aggregate.display_name.clear();
+        for expr in aggregate.exprs_mut() {
+            self.visit(expr)?;
+        }
+        Ok(())
     }
 }
 
