@@ -677,3 +677,68 @@ drop table time_dim;
 
 statement ok
 drop table store;
+
+statement ok
+create or replace table cse_agg_t as
+select number as a, number % 3 as b
+from numbers(6);
+
+query T nosort
+explain select l.b, l.max_a, r.max_a
+from (select b, max(a) as max_a from cse_agg_t group by b) l
+join (select b, max(a) as max_a from cse_agg_t group by b) r
+on l.b = r.b;
+----
+Sequence
+├── MaterializedCTE: cte_cse_0
+│   └── AggregateFinal
+│       ├── output columns: [max(a) (#2), cse_agg_t.b (#1)]
+│       ├── group by: [b]
+│       ├── aggregate functions: [max(a)]
+│       ├── estimated rows: 3.00
+│       └── AggregatePartial
+│           ├── group by: [b]
+│           ├── aggregate functions: [max(a)]
+│           ├── estimated rows: 3.00
+│           └── TableScan
+│               ├── table: default.default.cse_agg_t
+│               ├── scan id: 0
+│               ├── output columns: [a (#0), b (#1)]
+│               ├── read rows: 6
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 6.00
+└── HashJoin
+    ├── output columns: [cse_agg_t.b (#1), max(a) (#2), max(a) (#5)]
+    ├── join type: INNER
+    ├── build keys: [r.b (#4)]
+    ├── probe keys: [l.b (#1)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:r.b (#4), probe targets:[l.b (#1)@scan0], filter type:bloom,inlist,min_max
+    ├── estimated rows: 9.00
+    ├── MaterializeCTERef(Build)
+    │   ├── cte_name: cte_cse_0
+    │   ├── cte_schema: [b (#4), max(a) (#5)]
+    │   └── estimated rows: 3.00
+    └── MaterializeCTERef(Probe)
+        ├── cte_name: cte_cse_0
+        ├── cte_schema: [b (#1), max(a) (#2)]
+        └── estimated rows: 3.00
+
+query III rowsort
+select l.b, l.max_a, r.max_a
+from (select b, max(a) as max_a from cse_agg_t group by b) l
+join (select b, max(a) as max_a from cse_agg_t group by b) r
+on l.b = r.b;
+----
+0 3 3
+1 4 4
+2 5 5
+
+statement ok
+drop table cse_agg_t;
