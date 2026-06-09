@@ -1025,13 +1025,14 @@ impl Debug for StorageHuggingfaceConfig {
 ///
 /// Copied from `common-base` so that we don't need to depend on it.
 #[inline]
-pub fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+pub fn mask_string(s: &str, _unmask_len: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 

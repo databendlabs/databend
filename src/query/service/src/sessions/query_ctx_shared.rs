@@ -26,6 +26,7 @@ use async_channel::Receiver;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
@@ -570,7 +571,7 @@ impl QueryContextShared {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
-                query,
+                mask_connection_info(&query),
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),
