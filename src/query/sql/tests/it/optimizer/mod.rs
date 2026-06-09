@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
