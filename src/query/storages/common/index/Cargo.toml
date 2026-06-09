@@ -33,7 +33,6 @@ crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
-geozero = { workspace = true }
 goldenfile = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
