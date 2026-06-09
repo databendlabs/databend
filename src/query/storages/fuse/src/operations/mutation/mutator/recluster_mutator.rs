@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
@@ -82,14 +83,14 @@ struct LevelReclusterTasks {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReclusterGroup {
     Level(i32),
-    FinalMature,
+    Mixed(i32),
 }
 
 impl ReclusterGroup {
     fn output_level(self, task_indices: &[usize], blocks: &[ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::FinalMature => {
+            ReclusterGroup::Mixed(_) => {
                 let mut level_counts = BTreeMap::new();
                 for &idx in task_indices {
                     *level_counts.entry(blocks[idx].stats.level).or_insert(0) += 1;
@@ -109,7 +110,7 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::FinalMature => write!(f, "mixed"),
+            ReclusterGroup::Mixed(band) => write!(f, "mixed-{}", band),
         }
     }
 }
@@ -175,7 +176,7 @@ impl ReclusterMutator {
         let depth_threshold = Self::recluster_depth_threshold(table, snapshot.summary.block_count);
 
         let settings = ctx.get_settings();
-        let memory_threshold = settings.get_recluster_block_size()? as usize;
+        let memory_threshold = Self::recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
@@ -288,8 +289,11 @@ impl ReclusterMutator {
 
             let group = match mode {
                 ReclusterMode::Normal => ReclusterGroup::Level(block.stats.level),
-                ReclusterMode::Final if block.stats.level == 0 => ReclusterGroup::Level(0),
-                ReclusterMode::Final => ReclusterGroup::FinalMature,
+                ReclusterMode::Final => {
+                    // level 0-1 -> band 0, level 2-3 -> band 1, ...
+                    let band = block.stats.level / 2;
+                    ReclusterGroup::Mixed(band)
+                }
             };
             blocks_map.entry(group).or_default().push(idx);
         }
@@ -487,6 +491,27 @@ impl ReclusterMutator {
         }
     }
 
+    fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
+        let settings = ctx.get_settings();
+        let recluster_block_size = settings.get_recluster_block_size()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
+        if max_memory_usage == 0 {
+            return Ok(recluster_block_size);
+        }
+        let memory_usage = GLOBAL_MEM_STAT.get_memory_usage();
+        let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
+        // No memory budget left: fail with a clear reason.
+        if memory_budget == 0 {
+            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                "Not enough memory for recluster: max_memory_usage = {}, used = {}.",
+                max_memory_usage, memory_usage
+            )));
+        }
+        // Whether a task actually fits is checked in target_select using real block
+        // sizes, so small-block tables are not rejected here under low memory.
+        Ok(recluster_block_size.min(memory_budget))
+    }
+
     fn build_recluster_tasks_for_indices(
         &self,
         group: ReclusterGroup,
@@ -584,6 +609,21 @@ impl ReclusterMutator {
                 max_depth,
                 max_point_overlap_count,
                 selected_block_count,
+            );
+            return Ok(None);
+        }
+
+        // limit_selected_blocks_by_budget always keeps the first 2 blocks even over
+        // budget. These 2 form a single-node task, so check against the per-node
+        // budget (memory_threshold); skip the group if even this minimal task overshoots.
+        if selected_block_count == 2 && selected_total_bytes > self.memory_threshold {
+            debug!(
+                "recluster: level selection detail level={} block_count={} selected_count={} selected_bytes={} memory_threshold={} skip_reason=two_block_task_exceeds_memory_budget",
+                group,
+                block_count,
+                selected_block_count,
+                selected_total_bytes,
+                self.memory_threshold,
             );
             return Ok(None);
         }
@@ -773,7 +813,7 @@ impl ReclusterMutator {
         // still-active segments forward so a long overlap range is not split
         // into unrelated candidates, while the bound prevents one hot range
         // from growing into an oversized window.
-        let anchor_len = max_len.saturating_sub(1).min((max_len / 4).max(1));
+        let anchor_len = max_len.saturating_sub(1).min((max_len / 5).max(1));
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         let mut total_blocks = 0;
@@ -832,14 +872,6 @@ impl ReclusterMutator {
                 let end = &values[idx as usize].1;
                 let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
 
-                // The active set is captured before applying the point update,
-                // matching fetch_max_depth's inclusive start-point semantics.
-                let active_indices = unfinished_intervals
-                    .keys()
-                    .chain(start.iter())
-                    .copied()
-                    .collect::<IndexSet<_>>();
-
                 if point_depth <= 1 {
                     Self::flush_segment_window(
                         &mut current_window,
@@ -852,6 +884,13 @@ impl ReclusterMutator {
                 } else {
                     current_window_max_depth = current_window_max_depth.max(point_depth);
 
+                    // The active set is captured before applying the point update,
+                    // matching fetch_max_depth's inclusive start-point semantics.
+                    let active_indices = unfinished_intervals
+                        .keys()
+                        .chain(start.iter())
+                        .copied()
+                        .collect::<IndexSet<_>>();
                     for active_idx in active_indices.iter().copied() {
                         if !seen_in_hot_range.insert(active_idx) {
                             continue;
@@ -1184,8 +1223,17 @@ impl ReclusterMutator {
             (10000.0 * sum_depth as f64 / interval_depths.len() as f64).round() / 10000.0;
         let max_point_overlap_count = point_overlaps[max_point].len();
 
-        // Find the highest-depth point and expand to neighboring hot points.
-        if max_depth as f64 > depth_threshold {
+        // Decide whether to expand from the highest-depth point to neighboring
+        // hot points. Two independent triggers:
+        //   - average_depth > depth_threshold: overall clustering is not good
+        //     enough, so reclustering is worthwhile.
+        //   - max_depth > 2 * depth_threshold: overall quality may already be
+        //     acceptable, but a severe local hotspot remains. The higher bar
+        //     avoids repeatedly rewriting for moderate hotspots, which is the
+        //     main cause of RECLUSTER FINAL failing to converge.
+        let should_expand =
+            average_depth > depth_threshold || max_depth as f64 > 2.0 * depth_threshold;
+        if should_expand {
             point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);
             });
