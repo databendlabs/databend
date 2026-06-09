@@ -42,7 +42,9 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_sql::binder::StagePathAccess;
 use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
@@ -188,7 +190,7 @@ impl ListStagesSource {
                 .storage
                 .allow_insecure,
         )?
-        .resolve_stage_location(&self.args_parsed.location)
+        .resolve_stage_location(&self.args_parsed.location, StagePathAccess::Read)
         .await?;
         let enable_experimental_rbac_check = self
             .ctx
@@ -219,6 +221,12 @@ impl ListStagesSource {
             files: self.args_parsed.files_info.files.clone(),
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         let files = files_info.list_stream(&op, thread_num, None).await?;
         Ok(files)
     }

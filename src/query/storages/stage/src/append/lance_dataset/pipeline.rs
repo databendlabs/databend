@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use futures::TryStreamExt;
 use opendal::Operator;
@@ -40,6 +41,9 @@ pub(crate) fn append_data_to_lance_dataset(
     max_threads: usize,
 ) -> Result<()> {
     let target_dataset_path = build_target_dataset_path(&info, &query_id);
+    if !info.allow_path_traversal {
+        ensure_no_stage_path_traversal(&target_dataset_path)?;
+    }
     GlobalIORuntime::instance().block_on(prepare_target_dataset_path(
         &info,
         op.clone(),
@@ -171,6 +175,7 @@ mod tests {
                 ..Default::default()
             },
             is_ordered: false,
+            allow_path_traversal: false,
             partition_by: None,
         }
     }
