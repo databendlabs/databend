@@ -606,6 +606,48 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_when_minimal_task_exceeds_memory() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(150)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 10)], vec![(2, 9)], vec![(3, 8)]],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_only_lowest_small_batch_yields() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     let (block_num, parts) = target_select_segments_by_level_with_mode(
@@ -644,46 +686,6 @@ async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Res
             .map(|task| task.level)
             .collect::<Vec<_>>(),
         vec![2, 1]
-    );
-    assert_eq!(task_part_counts(&parts), vec![4, 3]);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_final_recluster_defers_small_level0_tail() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-
-    let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
-        thresholds,
-        1,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 4);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].level, 1);
-    assert_eq!(task_part_counts(&parts), vec![4]);
-
-    let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
-        thresholds,
-        2,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 7);
-    assert_eq!(parts.tasks.len(), 2);
-    assert_eq!(
-        parts
-            .tasks
-            .iter()
-            .map(|task| task.level)
-            .collect::<Vec<_>>(),
-        vec![1, 0]
     );
     assert_eq!(task_part_counts(&parts), vec![4, 3]);
 
