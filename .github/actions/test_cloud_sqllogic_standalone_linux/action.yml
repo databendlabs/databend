@@ -9,10 +9,6 @@ inputs:
     description: "logic test handlers, mysql,http,hybrid"
     required: true
     default: ""
-  storage-format:
-    description: "storage format for databend query to test"
-    required: true
-    default: all
 
 runs:
   using: "composite"
@@ -22,7 +18,6 @@ runs:
         artifacts: sqllogictests,meta,query
 
     - name: Run sqllogic Tests with Standalone mode
-      if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}

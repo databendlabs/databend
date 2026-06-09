@@ -74,7 +74,6 @@ jobs:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           parallel: ${{ matrix.tests.parallel }}
-          storage-format: all
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -105,7 +104,6 @@ jobs:
           dirs: udf_server
           handlers: http,hybrid
           parallel: 1
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -134,7 +132,6 @@ jobs:
         with:
           dirs: task
           handlers: http,hybrid
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -156,9 +153,6 @@ jobs:
         handler:
           - "hybrid"
           - "http"
-        format:
-          - "native"
-          - "parquet"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
@@ -166,12 +160,11 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
 
   standalone_minio_with_bendsave:
     runs-on:
@@ -350,7 +343,6 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: all
           enable_table_meta_cache: false
       - name: Upload failure
         if: failure()
@@ -365,12 +357,6 @@ jobs:
       - Linux
       - 2c
       - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        format:
-          - "parquet"
-          - "native"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
@@ -382,9 +368,8 @@ jobs:
         with:
           dirs: ee
           handlers: http,hybrid
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-ee-sqllogic-standalone-ee-${{ matrix.format }}
+          name: test-ee-sqllogic-standalone-ee
