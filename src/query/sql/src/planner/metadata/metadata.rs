@@ -36,6 +36,7 @@ use databend_common_expression::types::DataType;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
+use crate::optimizer::AggIndexViewInfo;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as it's index type.
@@ -75,7 +76,7 @@ pub struct Metadata {
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
-    agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
+    agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>,
     max_column_position: usize, // for CSV
     has_column_name_ref: bool,  // for schema inference from stage files
 
@@ -88,9 +89,28 @@ pub struct Metadata {
     next_materialized_cte_id: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct AggIndexPlan {
+    pub index_id: u64,
+    pub sql: String,
+    pub metadata: MetadataRef,
+    pub s_expr: SExpr,
+    pub prepared: Arc<AggIndexViewInfo>,
+}
+
 impl Metadata {
     fn next_column_index(&self) -> Symbol {
         Symbol::new(self.columns.len())
+    }
+
+    pub fn for_agg_index_table(source: &Metadata, table_index: IndexType) -> Self {
+        let mut metadata = Metadata::default();
+        metadata
+            .tables
+            .extend_from_slice(&source.tables[..=table_index]);
+        let table = metadata.tables[table_index].table();
+        metadata.add_table_columns(table_index, table);
+        metadata
     }
 
     pub fn table(&self, index: IndexType) -> &TableEntry {
@@ -341,8 +361,8 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indices(&mut self, table: String, agg_indices: Vec<(u64, String, SExpr)>) {
-        match self.agg_indices.entry(table) {
+    pub fn add_agg_indices(&mut self, table_index: IndexType, agg_indices: Vec<AggIndexPlan>) {
+        match self.agg_indices.entry(table_index) {
             Entry::Occupied(occupied) => occupied.into_mut().extend(agg_indices),
             Entry::Vacant(vacant) => {
                 vacant.insert(agg_indices);
@@ -350,16 +370,16 @@ impl Metadata {
         }
     }
 
-    pub fn agg_indices(&self) -> &HashMap<String, Vec<(u64, String, SExpr)>> {
+    pub fn agg_indices(&self) -> &HashMap<IndexType, Vec<AggIndexPlan>> {
         &self.agg_indices
     }
 
-    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>) {
+    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>) {
         self.agg_indices = agg_indices
     }
 
-    pub fn get_agg_indices(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
-        self.agg_indices.get(table).map(|v| v.as_slice())
+    pub fn get_agg_indices(&self, table_index: IndexType) -> Option<&[AggIndexPlan]> {
+        self.agg_indices.get(&table_index).map(|v| v.as_slice())
     }
 
     pub fn has_agg_indices(&self) -> bool {
@@ -375,7 +395,6 @@ impl Metadata {
         table_name
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,
         catalog: String,
@@ -384,7 +403,6 @@ impl Metadata {
         branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
-        source_of_index: bool,
         source_of_stage: bool,
         cte_suffix_name: Option<String>,
     ) -> IndexType {
@@ -402,10 +420,15 @@ impl Metadata {
             branch,
             alias_name: table_alias_name,
             source_of_view,
-            source_of_index,
             source_of_stage,
         };
         self.tables.push(table_entry);
+        self.add_table_columns(table_index, table_meta);
+
+        table_index
+    }
+
+    fn add_table_columns(&mut self, table_index: IndexType, table_meta: Arc<dyn Table>) {
         let table_schema = table_meta.schema_with_stream();
         let mut index = 0;
         let mut fields = VecDeque::with_capacity(table_schema.fields().len());
@@ -484,8 +507,6 @@ impl Metadata {
                 );
             }
         }
-
-        table_index
     }
 
     pub fn change_derived_column_alias(&mut self, index: Symbol, alias: String) {
@@ -547,10 +568,6 @@ pub struct TableEntry {
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
-
-    /// If this table is bound to an index.
-    source_of_index: bool,
-
     source_of_stage: bool,
     table: Arc<dyn Table>,
 }
@@ -609,11 +626,6 @@ impl TableEntry {
     /// Return true if it is source from stage.
     pub fn is_source_of_stage(&self) -> bool {
         self.source_of_stage
-    }
-
-    /// Return true if it is bound for an index.
-    pub fn is_source_of_index(&self) -> bool {
-        self.source_of_index
     }
 
     pub fn update_table_index(&mut self, table_index: IndexType) {

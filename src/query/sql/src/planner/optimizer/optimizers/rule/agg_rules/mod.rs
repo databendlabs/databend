@@ -22,6 +22,7 @@ mod rule_push_down_limit_aggregate;
 mod rule_split_aggregate;
 mod rule_try_apply_agg_index;
 
+pub use agg_index::*;
 pub use rule_eager_aggregation::RuleEagerAggregation;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
 pub use rule_grouping_sets_to_union::RuleGroupingSetsToUnion;

@@ -70,6 +70,31 @@ pub struct FormatOptions {
 /// ```
 pub struct DefaultOperatorHumanizer;
 
+#[derive(Debug, Clone, Default)]
+pub struct DefaultIdHumanizer {
+    options: FormatOptions,
+}
+
+impl DefaultIdHumanizer {
+    pub fn new(options: FormatOptions) -> Self {
+        Self { options }
+    }
+}
+
+impl IdHumanizer for DefaultIdHumanizer {
+    fn humanize_column_id(&self, id: Symbol) -> String {
+        format!("#{id}")
+    }
+
+    fn humanize_table_id(&self, id: IndexType) -> String {
+        format!("#{id}")
+    }
+
+    fn options(&self) -> &FormatOptions {
+        &self.options
+    }
+}
+
 pub struct MetadataIdHumanizer<'a> {
     metadata: &'a Metadata,
     options: FormatOptions,

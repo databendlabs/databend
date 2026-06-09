@@ -234,9 +234,9 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        let (table_index, table_name) = self.get_table(s_expr);
+        let table_index = self.get_table(s_expr);
         let metadata = self.metadata.read();
-        let index_plans = metadata.get_agg_indices(&table_name);
+        let index_plans = metadata.get_agg_indices(table_index);
         let Some(index_plans) = index_plans else {
             // No enterprise license or no index.
             return Ok(());
@@ -265,16 +265,9 @@ impl Rule for RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    fn get_table(&self, s_expr: &SExpr) -> (IndexType, String) {
+    fn get_table(&self, s_expr: &SExpr) -> IndexType {
         match s_expr.plan() {
-            RelOperator::Scan(scan) => {
-                let metadata = self.metadata.read();
-                let table = metadata.table(scan.table_index);
-                (
-                    scan.table_index,
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name()),
-                )
-            }
+            RelOperator::Scan(scan) => scan.table_index,
             _ => self.get_table(s_expr.child(0).unwrap()),
         }
     }

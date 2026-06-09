@@ -15,6 +15,7 @@
 use databend_common_ast::ast::FormatTreeNode;
 use itertools::Itertools;
 
+use super::display::FormatOptions;
 use super::display::IdHumanizer;
 use super::display::OperatorHumanizer;
 use crate::planner::format::display::DefaultOperatorHumanizer;
@@ -162,6 +163,25 @@ fn format_scalar_item<I: IdHumanizer>(id_humanizer: &I, item: &ScalarItem) -> St
     )
 }
 
+#[derive(Default)]
+struct AggIndexIdHumanizer {
+    options: FormatOptions,
+}
+
+impl IdHumanizer for AggIndexIdHumanizer {
+    fn humanize_column_id(&self, id: crate::Symbol) -> String {
+        format!("index field {}", id.as_usize())
+    }
+
+    fn humanize_table_id(&self, id: crate::IndexType) -> String {
+        format!("#{id}")
+    }
+
+    fn options(&self) -> &FormatOptions {
+        &self.options
+    }
+}
+
 fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
     let mut children = vec![
         FormatTreeNode::new(format!(
@@ -198,6 +218,38 @@ fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTre
     ];
     if op.secure_predicates.is_some() {
         children.push(FormatTreeNode::new("ROW ACCESS POLICY APPLIED".to_string()));
+    }
+    if let Some(agg_index) = &op.agg_index {
+        let agg_index_id_humanizer = AggIndexIdHumanizer::default();
+        children.push(FormatTreeNode::with_children(
+            "agg index".to_string(),
+            vec![
+                FormatTreeNode::new(format!(
+                    "selection: [{}]",
+                    agg_index
+                        .selection
+                        .iter()
+                        .map(|item| {
+                            format!(
+                                "{} -> query #{}",
+                                format_scalar(&agg_index_id_humanizer, &item.scalar),
+                                item.index
+                            )
+                        })
+                        .join(", ")
+                )),
+                FormatTreeNode::new(format!(
+                    "predicates: [{}]",
+                    agg_index
+                        .predicates
+                        .iter()
+                        .map(|expr| format_scalar(&agg_index_id_humanizer, expr))
+                        .join(", ")
+                )),
+                FormatTreeNode::new(format!("is agg: {}", agg_index.is_agg)),
+                FormatTreeNode::new(format!("num agg funcs: {}", agg_index.num_agg_funcs)),
+            ],
+        ));
     }
     FormatTreeNode::with_children("Scan".to_string(), children)
 }
