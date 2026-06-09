@@ -436,6 +436,10 @@ impl TableContextQueryState for CtxDelegation {
         todo!()
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.ctx.get_nodes_memory_usage()
+    }
+
     fn push_warning(&self, _warn: String) {
         todo!()
     }

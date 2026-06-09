@@ -1373,6 +1373,10 @@ impl TableContextQueryState for LiteTableContext {
         None
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        0
+    }
+
     fn push_warning(&self, _warning: String) {}
 }
 
