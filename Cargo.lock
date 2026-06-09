@@ -6727,7 +6727,6 @@ dependencies = [
  "fastrace",
  "feistel-permutation-rs",
  "geo",
- "geozero",
  "goldenfile",
  "itertools 0.13.0",
  "jsonb",
