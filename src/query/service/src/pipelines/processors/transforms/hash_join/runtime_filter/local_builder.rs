@@ -24,9 +24,8 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::geometry::extract_geo_and_srid;
+use databend_common_expression::types::geometry::extract_bbox_and_srid;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use geo::algorithm::bounding_rect::BoundingRect;
 
 use crate::physical_plans::SpatialRuntimeFilterMode;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
@@ -168,7 +167,7 @@ impl SingleFilterBuilder {
         }
 
         for value in column.iter() {
-            let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+            let Some((bbox, srid)) = extract_bbox_and_srid(value)? else {
                 continue;
             };
 
@@ -182,10 +181,9 @@ impl SingleFilterBuilder {
                 self.spatial_srid = Some(srid);
             }
 
-            if let Some(rect) = geo.bounding_rect() {
-                let min = rect.min();
-                let max = rect.max();
-                self.spatial_rects.push((min.x, min.y, max.x, max.y));
+            if let Some(bbox) = bbox {
+                let (min_x, min_y, max_x, max_y) = bbox.corners();
+                self.spatial_rects.push((min_x, min_y, max_x, max_y));
             }
         }
 

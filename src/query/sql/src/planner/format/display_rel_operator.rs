@@ -36,6 +36,7 @@ use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowGroup;
 
 impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
     fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
@@ -53,6 +54,7 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
         RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
+        RelOperator::WindowGroup(op) => window_group_to_format_tree(id_humanizer, op),
         RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
         RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
         RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
@@ -278,12 +280,33 @@ fn window_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Window) -> Forma
 
     let frame = op.frame.to_string();
 
-    FormatTreeNode::with_children("Window".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!("aggregate function: {}", op.function.func_name())),
         FormatTreeNode::new(format!("partition items: [{}]", partition_by_items)),
         FormatTreeNode::new(format!("order by items: [{}]", order_by_items)),
         FormatTreeNode::new(format!("frame: [{}]", frame)),
-    ])
+    ];
+    if let Some(top) = op.top {
+        children.push(FormatTreeNode::new(format!("top: {}", top)));
+    }
+
+    FormatTreeNode::with_children("Window".to_string(), children)
+}
+
+fn window_group_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &WindowGroup,
+) -> FormatTreeNode {
+    if op.windows.len() == 1 {
+        return window_to_format_tree(id_humanizer, &op.windows[0]);
+    }
+
+    let children = op
+        .windows
+        .iter()
+        .map(|window| window_to_format_tree(id_humanizer, window))
+        .collect();
+    FormatTreeNode::with_children("WindowGroup".to_string(), children)
 }
 
 fn udf_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Udf) -> FormatTreeNode {

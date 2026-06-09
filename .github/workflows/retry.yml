@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Retry failed jobs
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_RUN_URL: ${{ github.event.workflow_run.html_url }}

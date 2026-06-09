@@ -16,8 +16,8 @@
 use std::hint::likely;
 use std::mem::size_of;
 
-use crate::ProbeState;
 use crate::aggregate::NEW_INDEX_LOAD_FACTOR;
+use crate::aggregate::ProbeState;
 use crate::aggregate::legacy_hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;

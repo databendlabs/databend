@@ -360,10 +360,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseIdToName {
         type ValueType = DatabaseNameIdentRaw;
     }
-
-    impl kvapi::Value for DatabaseNameIdentRaw {
-        type KeyType = DatabaseIdToName;
-    }
 }
 
 #[cfg(test)]

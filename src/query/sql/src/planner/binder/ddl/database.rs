@@ -26,6 +26,8 @@ use databend_common_ast::ast::ShowDatabasesStmt;
 use databend_common_ast::ast::ShowDropDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -80,22 +82,27 @@ impl Binder {
             self.ctx.get_current_catalog().to_string()
         };
 
-        let mut select_builder =
-            SelectBuilder::from(&format!("{}.system.databases", ctl.to_lowercase()));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.databases",
+            QuotedIdent(ctl.to_lowercase(), '`')
+        ));
 
-        select_builder.with_filter(format!("catalog = '{ctl}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&ctl, '\'')));
 
         if *full {
             select_builder.with_column("catalog AS Catalog");
             select_builder.with_column("owner");
         }
-        select_builder.with_column(format!("name AS `databases_in_{ctl}`"));
+        select_builder.with_column(format!(
+            "name AS {}",
+            QuotedIdent(format!("databases_in_{ctl}"), '`')
+        ));
         select_builder.with_order_by("catalog");
         select_builder.with_order_by("name");
 
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));
@@ -120,7 +127,7 @@ impl Binder {
         let default_catalog = self.ctx.get_default_catalog()?.name();
         let mut select_builder = SelectBuilder::from(&format!(
             "{}.system.databases_with_history",
-            default_catalog
+            QuotedIdent(&default_catalog, '`')
         ));
 
         let ctl = if let Some(ctl) = catalog {
@@ -129,7 +136,7 @@ impl Binder {
             self.ctx.get_current_catalog().to_string()
         };
 
-        select_builder.with_filter(format!("catalog = '{ctl}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&ctl, '\'')));
 
         select_builder.with_column("catalog");
         select_builder.with_column("name");
@@ -141,7 +148,7 @@ impl Binder {
 
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));

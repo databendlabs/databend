@@ -19,10 +19,10 @@ use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
+use super::BATCH_SIZE;
 use super::RowID;
 use super::RowLayout;
 use super::RowPtr;
-use crate::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;

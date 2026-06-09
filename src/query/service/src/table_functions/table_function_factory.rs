@@ -57,6 +57,8 @@ use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseTagFunc;
+#[cfg(feature = "task-support")]
+use crate::table_functions::PrivateTaskHistoryTable;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
@@ -327,7 +329,12 @@ impl TableFunctionFactory {
         );
 
         #[cfg(feature = "task-support")]
-        if !config.task.on {
+        if config.task.on {
+            creators.insert(
+                "task_history".to_string(),
+                (next_id(), Arc::new(PrivateTaskHistoryTable::create)),
+            );
+        } else {
             creators.insert(
                 "task_dependents".to_string(),
                 (next_id(), Arc::new(TaskDependentsTable::create)),

@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::fmt::Formatter;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -129,16 +128,9 @@ impl TransformAggregateSerializer {
             unreachable!()
         };
 
-        self.input_data = Some(SerializeAggregateStream::create(
-            &self.params,
-            SerializePayload::AggregatePayload(p),
-        ));
+        self.input_data = Some(SerializeAggregateStream::create(&self.params, p));
         Ok(Event::Sync)
     }
-}
-
-pub enum SerializePayload {
-    AggregatePayload(AggregatePayload),
 }
 
 pub enum FlightSerialized {
@@ -173,7 +165,7 @@ impl BlockMetaInfo for FlightSerializedMeta {}
 
 pub struct SerializeAggregateStream {
     _params: Arc<AggregatorParams>,
-    pub payload: Pin<Box<SerializePayload>>,
+    payload: AggregatePayload,
     flush_state: PayloadFlushState,
     end_iter: bool,
     nums: usize,
@@ -184,9 +176,7 @@ unsafe impl Send for SerializeAggregateStream {}
 unsafe impl Sync for SerializeAggregateStream {}
 
 impl SerializeAggregateStream {
-    pub fn create(params: &Arc<AggregatorParams>, payload: SerializePayload) -> Self {
-        let payload = Box::pin(payload);
-
+    pub fn create(params: &Arc<AggregatorParams>, payload: AggregatePayload) -> Self {
         SerializeAggregateStream {
             payload,
             flush_state: PayloadFlushState::default(),
@@ -211,12 +201,16 @@ impl SerializeAggregateStream {
             return Ok(None);
         }
 
-        let SerializePayload::AggregatePayload(p) = self.payload.as_ref().get_ref();
-        match p.payload.aggregate_flush(&mut self.flush_state)? {
+        let AggregatePayload {
+            bucket,
+            ref payload,
+            max_partition_count,
+        } = self.payload;
+        match payload.aggregate_flush(&mut self.flush_state)? {
             Some(block) => {
                 self.nums += 1;
                 Ok(Some(block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count, false),
+                    AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, false),
                 ))?))
             }
             None => {
@@ -224,13 +218,9 @@ impl SerializeAggregateStream {
                 // always return at least one block
                 if self.nums == 0 {
                     self.nums += 1;
-                    let block = p.payload.empty_block(1);
+                    let block = payload.empty_block(1);
                     Ok(Some(block.add_meta(Some(
-                        AggregateSerdeMeta::create_agg_payload(
-                            p.bucket,
-                            p.max_partition_count,
-                            true,
-                        ),
+                        AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, true),
                     ))?))
                 } else {
                     Ok(None)

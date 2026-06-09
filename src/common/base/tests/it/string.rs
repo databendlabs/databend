@@ -29,12 +29,11 @@ fn test_progress() -> anyhow::Result<()> {
 
 #[test]
 fn mask_string_test() {
-    assert_eq!(mask_string("", 10), "".to_string());
-    assert_eq!(mask_string("string", 0), "******".to_string());
-    assert_eq!(mask_string("string", 1), "******g".to_string());
-    assert_eq!(mask_string("string", 2), "******ng".to_string());
-    assert_eq!(mask_string("string", 3), "******ing".to_string());
-    assert_eq!(mask_string("string", 20), "string".to_string());
+    assert_eq!(mask_string("", 10), "***".to_string());
+    assert_eq!(mask_string("ab", 0), "***".to_string());
+    assert_eq!(mask_string("abcd", 3), "***".to_string());
+    assert_eq!(mask_string("string", 3), "st***ng".to_string());
+    assert_eq!(mask_string("longstring", 20), "lo***ng".to_string());
 }
 
 #[test]
@@ -94,18 +93,15 @@ fn test_mask_connection_info() {
         );"#;
 
     let actual = mask_connection_info(sql);
-    let expect = r#"COPY INTO table1
-        FROM 's3://xx/yy
-        CONNECTION = (***masked***)
-        PATTERN = '.*[.]csv'
-            FILE_FORMAT = (
-            TYPE = CSV,
-            FIELD_DELIMITER = '\t',
-            RECORD_DELIMITER = '\n',
-            SKIP_HEADER = 1
-        );"#;
-
-    assert_eq!(expect, actual);
+    // ACCESS_KEY_ID and SECRET_ACCESS_KEY are sensitive keys, their values get masked
+    // 'aaa' and 'sss' are <= 4 chars so fully masked
+    assert!(actual.contains("ACCESS_KEY_ID = '***'"));
+    assert!(actual.contains("SECRET_ACCESS_KEY = '***'"));
+    // REGION is not a sensitive key, should remain unchanged
+    assert!(actual.contains("REGION = 'us-east-2'"));
+    // Original secrets should not appear
+    assert!(!actual.contains("= 'aaa'"));
+    assert!(!actual.contains("= 'sss'"));
 }
 
 #[test]

@@ -798,11 +798,9 @@ digraph {
     15 [ label = "KWayMergeWorker" ]
     16 [ label = "KWayMergeCombiner" ]
     17 [ label = "Transform Window" ]
-    18 [ label = "CompoundBlockOperator(Map)" ]
+    18 [ label = "Transform Window" ]
     19 [ label = "Transform Window" ]
-    20 [ label = "CompoundBlockOperator(Map)" ]
-    21 [ label = "Transform Window" ]
-    22 [ label = "CompoundBlockOperator(Project)" ]
+    20 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "from: 0, to: 0" ]
@@ -829,8 +827,6 @@ digraph {
     17 -> 18 [ label = "" ]
     18 -> 19 [ label = "" ]
     19 -> 20 [ label = "" ]
-    20 -> 21 [ label = "" ]
-    21 -> 22 [ label = "" ]
 }
 
 # same order same partiton by multi window
@@ -844,12 +840,8 @@ digraph {
     3 [ label = "ShuffleMergePartition(Window)" ]
     4 [ label = "TransformWindowPartitionCollect(Sort)" ]
     5 [ label = "Transform Window" ]
-    6 [ label = "CompoundBlockOperator(Map)" ]
-    7 [ label = "ShufflePartition(Window)" ]
-    8 [ label = "ShuffleMergePartition(Window)" ]
-    9 [ label = "TransformWindowPartitionCollect(Sort)" ]
-    10 [ label = "Transform Window" ]
-    11 [ label = "CompoundBlockOperator(Project)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -857,10 +849,6 @@ digraph {
     4 -> 5 [ label = "" ]
     5 -> 6 [ label = "" ]
     6 -> 7 [ label = "" ]
-    7 -> 8 [ label = "" ]
-    8 -> 9 [ label = "" ]
-    9 -> 10 [ label = "" ]
-    10 -> 11 [ label = "" ]
 }
 
 # window partition with empty sort items from same window partition  with sort items
@@ -913,58 +901,44 @@ query T
 explain select number, avg(number) over (partition by number % 3),  rank() over (partition by number % 3 order by number + 1), sum(number) over (partition by number % 3)
     from numbers(50);
 ----
-Window
-├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6), sum(number) OVER (PARTITION BY number % 3) (#7)]
-├── aggregate function: [sum(number)]
-├── partition by: [sum_part_0]
-├── order by: []
-├── frame: [Range: Preceding(None) ~ Following(None)]
+WindowGroup
+├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum(number) OVER (PARTITION BY number % 3) (#7)]
+├── Window
+│   ├── output column: [5]
+│   ├── aggregate function: [rank]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: [rank_order_0]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── Window
+│   ├── output column: [2]
+│   ├── aggregate function: [avg(number)]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: []
+│   └── frame: [Range: Preceding(None) ~ Following(None)]
+├── Window
+│   ├── output column: [7]
+│   ├── aggregate function: [sum(number)]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: []
+│   └── frame: [Range: Preceding(None) ~ Following(None)]
 └── WindowPartition
-    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6)]
-    ├── hash keys: [sum_part_0]
+    ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
+    ├── hash keys: [rank_part_0]
     ├── estimated rows: 50.00
     └── EvalScalar
-        ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6)]
-        ├── expressions: [numbers.number (#0) % 3]
+        ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
+        ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
         ├── estimated rows: 50.00
-        └── Window
-            ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1), avg(number) OVER (PARTITION BY number % 3) (#2)]
-            ├── aggregate function: [avg(number)]
-            ├── partition by: [avg_part_0]
-            ├── order by: []
-            ├── frame: [Range: Preceding(None) ~ Following(None)]
-            └── WindowPartition
-                ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1)]
-                ├── hash keys: [avg_part_0]
-                ├── estimated rows: 50.00
-                └── EvalScalar
-                    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1)]
-                    ├── expressions: [numbers.number (#0) % 3]
-                    ├── estimated rows: 50.00
-                    └── Window
-                        ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5)]
-                        ├── aggregate function: [rank]
-                        ├── partition by: [rank_part_0]
-                        ├── order by: [rank_order_0]
-                        ├── frame: [Range: Preceding(None) ~ CurrentRow]
-                        └── WindowPartition
-                            ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
-                            ├── hash keys: [rank_part_0]
-                            ├── estimated rows: 50.00
-                            └── EvalScalar
-                                ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
-                                ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
-                                ├── estimated rows: 50.00
-                                └── TableScan
-                                    ├── table: default.system.numbers
-                                    ├── scan id: 0
-                                    ├── output columns: [number (#0)]
-                                    ├── read rows: 50
-                                    ├── read size: < 1 KiB
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── push downs: [filters: [], limit: NONE]
-                                    └── estimated rows: 50.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── scan id: 0
+            ├── output columns: [number (#0)]
+            ├── read rows: 50
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 50.00
 
 query T
 explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50));

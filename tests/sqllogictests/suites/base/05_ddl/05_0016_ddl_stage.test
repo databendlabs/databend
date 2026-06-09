@@ -19,6 +19,19 @@ CREATE STAGE test_stage_internal file_format=(type=csv compression=AUTO record_d
 statement ok
 LIST @test_stage_internal
 
+query III
+copy into '@test_stage_internal/a''b' from (select 1) file_format=(type=csv)
+----
+1 2 2
+
+query TITTT
+LIST @test_stage_internal PATTERN='a''b.*'
+----
+a'b/<slt:ignore> 2 NULL <slt:ignore> NULL
+
+statement ok
+REMOVE @test_stage_internal PATTERN='a''b.*'
+
 statement ok
 desc stage test_stage_internal
 

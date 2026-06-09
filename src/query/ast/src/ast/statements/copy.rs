@@ -481,7 +481,7 @@ impl Connection {
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
         for (k, v) in &self.conns {
-            conns.insert(k.to_string(), mask_string(v, 3));
+            conns.insert(k.to_string(), mask_string(v));
         }
         Self {
             visited_keys: self.visited_keys.clone(),
@@ -530,14 +530,16 @@ impl Display for Connection {
     }
 }
 
-/// Mask a string by "******", but keep `unmask_len` of suffix.
-fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+/// Mask a string by showing first 2 and last 2 characters.
+/// For values with 4 or fewer characters, fully mask.
+fn mask_string(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 

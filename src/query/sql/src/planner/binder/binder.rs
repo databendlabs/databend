@@ -24,6 +24,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -453,14 +454,17 @@ impl Binder {
             }
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
-                    format!(", pattern => '{pattern}'")
+                    format!(", pattern => {}", QuotedString(pattern, '\''))
                 } else {
                     "".to_string()
                 };
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM LIST_STAGE(location => {}{pattern})",
+                        QuotedString(format!("@{location}"), '\'')
+                    )
+                    .as_str(),
                     RewriteKind::ListStage,
                 )
                 .await?
@@ -468,8 +472,11 @@ impl Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM default.system.stages WHERE name = {}",
+                        QuotedString(stage_name, '\'')
+                    )
+                    .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?

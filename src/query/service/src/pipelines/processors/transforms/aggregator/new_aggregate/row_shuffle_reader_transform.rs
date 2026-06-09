@@ -23,6 +23,7 @@ use databend_common_pipeline_transforms::BlockMetaTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 
 pub struct RowShuffleReaderTransform {
     reader: NewAggregateSpillReader,
@@ -46,32 +47,22 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         meta: AggregateMeta,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
         // We only processed Partitioned meta with new spilled buckets in it.
-        if let AggregateMeta::Partitioned { data, .. } = &meta {
-            let first = data.first();
-            if !matches!(first, Some(AggregateMeta::NewBucketSpilled(_))) {
-                return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]);
-            }
-        } else {
-            return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]);
-        }
+        let payloads = match meta {
+            AggregateMeta::Partitioned {
+                data: PartitionedData::NewBucketSpilled(payloads),
+                ..
+            } => payloads,
+            meta => return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]),
+        };
 
-        if let AggregateMeta::Partitioned { data, .. } = meta {
-            let mut restored = Vec::with_capacity(data.len());
-            for partition_meta in data {
-                if let AggregateMeta::NewBucketSpilled(spilled_payload) = partition_meta {
-                    let payload = self.reader.restore(spilled_payload)?;
-                    restored.push(payload);
-                } else {
-                    return Err(databend_common_exception::ErrorCode::Internal(
-                        "Unexpected aggregate meta in RowShuffleReaderTransform",
-                    ));
-                }
-            }
-            return Ok(vec![DataBlock::empty_with_meta(
-                AggregateMeta::create_partitioned(None, restored),
-            )]);
-        } else {
-            unreachable!()
-        }
+        let restored = payloads
+            .into_iter()
+            .map(|payload| self.reader.restore(payload))
+            .collect::<Result<_, _>>()?;
+        let meta = AggregateMeta::Partitioned {
+            bucket: None,
+            data: PartitionedData::Serialized(restored),
+        };
+        Ok(vec![DataBlock::empty_with_meta(Box::new(meta))])
     }
 }

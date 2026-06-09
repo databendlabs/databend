@@ -48,7 +48,6 @@ use log::warn;
 use opendal::Builder;
 use opendal::Operator;
 use opendal::layers::AsyncBacktraceLayer;
-use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::HttpClientLayer;
 use opendal::layers::ImmutableIndexLayer;
@@ -61,6 +60,7 @@ use opendal::services;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
+use crate::concurrent_limit_layer::ConcurrentLimitLayer;
 use crate::config::CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;

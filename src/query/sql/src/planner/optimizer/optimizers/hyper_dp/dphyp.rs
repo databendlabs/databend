@@ -182,6 +182,7 @@ impl DPhpyOptimizer {
                 | RelOperator::Limit(_)
                 | RelOperator::ProjectSet(_)
                 | RelOperator::Window(_)
+                | RelOperator::WindowGroup(_)
                 | RelOperator::Udf(_)
         )
     }
@@ -406,6 +407,7 @@ impl DPhpyOptimizer {
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
+            | RelOperator::WindowGroup(_)
             | RelOperator::Udf(_)
             | RelOperator::Filter(_)
             | RelOperator::MaterializedCTE(_) => {

@@ -34,7 +34,6 @@ use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
@@ -385,7 +384,7 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         Ok(payloads)
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
+    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
         restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
@@ -405,7 +404,7 @@ impl NewAggregateSpillReader {
         })
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
+    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
         restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
@@ -414,7 +413,7 @@ fn restore_payload(
     read_setting: ReadSettings,
     payload: NewSpilledPayload,
     data_schema: &DataSchemaRef,
-) -> Result<AggregateMeta> {
+) -> Result<SerializedPayload> {
     let NewSpilledPayload {
         bucket,
         location,
@@ -451,12 +450,12 @@ fn restore_payload(
     );
 
     if let Some(block) = data_block {
-        Ok(AggregateMeta::Serialized(SerializedPayload {
+        Ok(SerializedPayload {
             bucket,
             data_block: block,
             // this field is no longer used in new aggregate
             max_partition_count: 0,
-        }))
+        })
     } else {
         Err(ErrorCode::Internal("read empty block from final aggregate"))
     }

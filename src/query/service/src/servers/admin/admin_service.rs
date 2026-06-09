@@ -72,6 +72,43 @@ impl AdminService {
                 get(super::v1::tenant_table_stats::get_tables_stats_handler),
             )
             .at(
+                "/v1/databases/:database/tables/:table/clustering_information",
+                get(super::v1::clustering_information::clustering_information_local_handler),
+            )
+            .at(
+                "/v1/databases/:database/tables/:table/stats",
+                get(super::v1::table_statistics::get_table_stats_local_handler),
+            )
+            .at(
+                "/v1/stream_status",
+                get(super::v1::stream_status::stream_status_local_handler),
+            )
+            .at(
+                "/v1/settings",
+                get(super::v1::settings::list_settings_local),
+            )
+            .at(
+                "/v1/settings/:key",
+                post(super::v1::settings::set_settings_local)
+                    .delete(super::v1::settings::unset_settings_local),
+            )
+            .at(
+                "/v1/user_functions",
+                get(super::v1::user_functions::user_functions_local),
+            )
+            .at(
+                "/v1/procedures",
+                get(super::v1::procedures::list_procedures_local),
+            )
+            .at(
+                "/v1/procedures/:procedure_id",
+                get(super::v1::procedures::get_procedure_by_id_local),
+            )
+            .at(
+                "/v1/procedures/:name",
+                get(super::v1::procedures::get_procedure_by_name_local),
+            )
+            .at(
                 "/v1/cluster/list",
                 get(super::v1::cluster::cluster_list_handler),
             )
