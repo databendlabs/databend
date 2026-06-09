@@ -41,6 +41,7 @@ use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
 use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::ewkb_to_bbox;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -56,7 +57,6 @@ use databend_common_io::geometry::st_extreme;
 use databend_common_io::geometry_format;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::geometry_type_name;
-use databend_common_io::read_srid;
 use geo::Area;
 use geo::BoundingRect;
 use geo::Buffer;
@@ -751,7 +751,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let srid = read_srid(&mut Ewkb(ewkb)).unwrap_or_default();
+            let srid = ewkb_to_bbox(ewkb)
+                .and_then(|result| result.srid)
+                .unwrap_or_default();
             output.push(srid);
         }),
     );
@@ -771,7 +773,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
                 // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-                let Some(from_srid) = read_srid(&mut Ewkb(original)) else {
+                let Some(from_srid) = ewkb_to_bbox(original).and_then(|result| result.srid) else {
                     ctx.set_error(row, "input geometry must has the correct SRID".to_string());
                     builder.commit_row();
                     return;

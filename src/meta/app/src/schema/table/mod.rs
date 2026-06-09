@@ -1247,26 +1247,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for TableCopiedFileNameIdent {
         type ValueType = TableCopiedFileInfo;
     }
-
-    impl kvapi::Value for TableId {
-        type KeyType = DBIdTableName;
-    }
-
-    impl kvapi::Value for DBIdTableName {
-        type KeyType = TableIdToName;
-    }
-
-    impl kvapi::Value for TableMeta {
-        type KeyType = TableId;
-    }
-
-    impl kvapi::Value for TableIdList {
-        type KeyType = TableIdHistoryIdent;
-    }
-
-    impl kvapi::Value for TableCopiedFileInfo {
-        type KeyType = TableCopiedFileNameIdent;
-    }
 }
 
 #[cfg(test)]

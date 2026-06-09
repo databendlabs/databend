@@ -37,9 +37,7 @@ impl RoleIdentRaw {
 mod kvapi_impl {
 
     use databend_common_exception::ErrorCode;
-    use databend_meta_client::kvapi;
 
-    use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -50,10 +48,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "RoleIdent";
         const HAS_TENANT: bool = true;
         type ValueType = RoleInfo;
-    }
-
-    impl kvapi::Value for RoleInfo {
-        type KeyType = RoleIdent;
     }
 
     // ExistError<Resource> is no longer produced: create_role returns bool.

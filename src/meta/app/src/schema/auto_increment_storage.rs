@@ -23,8 +23,6 @@ pub type AutoIncrementStorageIdent = TIdent<AutoIncrementStorageRsc, AutoIncreme
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::tenant_key::resource::TenantResource;
     use crate::value_id::ValueId;
 
@@ -37,10 +35,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_autoincrement_storage";
         const HAS_TENANT: bool = true;
         type ValueType = ValueId<AutoIncrementStorageValue>;
-    }
-
-    impl kvapi::Value for ValueId<AutoIncrementStorageValue> {
-        type KeyType = super::AutoIncrementStorageIdent;
     }
 
     pub struct AutoIncrementStorageValue;

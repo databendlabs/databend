@@ -48,10 +48,7 @@ impl TableLockIdent {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::LockMeta;
-    use crate::schema::TableLockIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -60,10 +57,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "TableLockIdent";
         const HAS_TENANT: bool = true;
         type ValueType = LockMeta;
-    }
-
-    impl kvapi::Value for LockMeta {
-        type KeyType = TableLockIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

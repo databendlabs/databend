@@ -454,6 +454,45 @@ impl Statement {
                 attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
                 format!("{}", Statement::AttachTable(attach_clone))
             }
+            Statement::CreateConnection(stmt) => {
+                let mut clone = stmt.clone();
+                clone.storage_params = clone
+                    .storage_params
+                    .iter()
+                    .map(|(k, v)| {
+                        let chars: Vec<char> = v.chars().collect();
+                        let masked = if chars.len() <= 4 {
+                            "***".to_string()
+                        } else {
+                            let head: String = chars[..2].iter().collect();
+                            let tail: String = chars[chars.len() - 2..].iter().collect();
+                            format!("{}***{}", head, tail)
+                        };
+                        (k.clone(), masked)
+                    })
+                    .collect();
+                format!("{}", Statement::CreateConnection(clone))
+            }
+            Statement::AlterTable(stmt) => {
+                let mut clone = stmt.clone();
+                if let AlterTableAction::ModifyConnection { new_connection } = &mut clone.action {
+                    *new_connection = new_connection
+                        .iter()
+                        .map(|(k, v)| {
+                            let chars: Vec<char> = v.chars().collect();
+                            let masked = if chars.len() <= 4 {
+                                "***".to_string()
+                            } else {
+                                let head: String = chars[..2].iter().collect();
+                                let tail: String = chars[chars.len() - 2..].iter().collect();
+                                format!("{}***{}", head, tail)
+                            };
+                            (k.clone(), masked)
+                        })
+                        .collect();
+                }
+                format!("{}", Statement::AlterTable(clone))
+            }
             _ => format!("{}", self),
         }
     }

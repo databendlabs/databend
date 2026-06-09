@@ -132,8 +132,6 @@ pub struct DropSequenceReply {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use super::SequenceMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -142,10 +140,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_sequence";
         const HAS_TENANT: bool = true;
         type ValueType = SequenceMeta;
-    }
-
-    impl kvapi::Value for SequenceMeta {
-        type KeyType = super::SequenceIdent;
     }
 }
 
