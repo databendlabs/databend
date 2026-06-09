@@ -20,6 +20,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_storages_common_index::PageIndex;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -72,12 +73,25 @@ impl PagePrunerCreator {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Result<Arc<dyn PagePruner + Send + Sync>> {
-        if cluster_key_meta.is_none()
-            || cluster_keys.is_empty()
-            || cluster_keys
-                .iter()
-                .any(|expr| !matches!(expr, RemoteExpr::ColumnRef { .. }))
-        {
+        if cluster_key_meta.is_none() || cluster_keys.is_empty() {
+            return Ok(Arc::new(KeepTrue));
+        }
+
+        // ClusterStatistics min/max/pages are stored as scalar-only tuples.
+        // Drop vector keys here so PageIndex fields stay aligned with those tuples;
+        // vector pruning uses BlockMeta.vector_stats instead of page stats.
+        let mut scalar_cluster_keys = Vec::with_capacity(cluster_keys.len());
+        for expr in cluster_keys {
+            match expr {
+                RemoteExpr::ColumnRef { id, data_type, .. } => {
+                    if !matches!(data_type.remove_nullable(), DataType::Vector(_)) {
+                        scalar_cluster_keys.push(id.to_string());
+                    }
+                }
+                _ => return Ok(Arc::new(KeepTrue)),
+            }
+        }
+        if scalar_cluster_keys.is_empty() {
             return Ok(Arc::new(KeepTrue));
         }
 
@@ -85,18 +99,10 @@ impl PagePrunerCreator {
 
         Ok(match filter_expr {
             Some(expr) => {
-                let cluster_keys = cluster_keys
-                    .iter()
-                    .map(|expr| match expr {
-                        RemoteExpr::ColumnRef { id, .. } => id.to_string(),
-                        _ => unreachable!(),
-                    })
-                    .collect::<Vec<_>>();
-
                 let page_filter = PageIndex::try_create(
                     func_ctx,
                     cluster_key_meta.0,
-                    cluster_keys,
+                    scalar_cluster_keys,
                     expr,
                     schema.clone(),
                 )?;

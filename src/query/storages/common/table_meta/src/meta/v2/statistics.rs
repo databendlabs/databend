@@ -24,7 +24,11 @@ use databend_common_expression::TableField;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_vector::angular_distance;
+use databend_common_vector::l1_distance;
+use databend_common_vector::l2_distance;
 use log::info;
 use serde::de::Error;
 
@@ -87,6 +91,74 @@ pub struct SpatialStatistics {
     // Srid mixed or all rects are empty.
     #[serde(default)]
     pub is_valid: bool,
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    FrozenAPI,
+)]
+pub enum VectorDistanceType {
+    L1,
+    L2,
+    Dot,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
+pub struct VectorColumnStatistics {
+    pub centroid: Vec<F32>,
+    pub radius: F32,
+    pub row_count: u64,
+}
+
+impl VectorColumnStatistics {
+    pub fn centroid_values(&self) -> Vec<f32> {
+        self.centroid.iter().map(|value| value.0).collect()
+    }
+
+    pub fn spheres_overlap(
+        &self,
+        other: &VectorColumnStatistics,
+        distance_type: VectorDistanceType,
+    ) -> databend_common_exception::Result<bool> {
+        let left_centroid = self.centroid_values();
+        let right_centroid = other.centroid_values();
+        let distance = match distance_type {
+            VectorDistanceType::L1 => l1_distance(&left_centroid, &right_centroid)?,
+            VectorDistanceType::L2 => l2_distance(&left_centroid, &right_centroid)?,
+            VectorDistanceType::Dot => angular_distance(&left_centroid, &right_centroid)?,
+        };
+
+        Ok(distance <= self.radius.0 + other.radius.0)
+    }
+
+    pub fn distance_domain(
+        &self,
+        query: &[f32],
+        distance_type: VectorDistanceType,
+    ) -> databend_common_exception::Result<(f32, f32)> {
+        let centroid = self.centroid_values();
+        let distance = match distance_type {
+            VectorDistanceType::L1 => l1_distance(query, &centroid)?,
+            VectorDistanceType::L2 => l2_distance(query, &centroid)?,
+            VectorDistanceType::Dot => angular_distance(query, &centroid)?,
+        };
+        let lower_bound = (distance - self.radius.0).max(0.0);
+        if matches!(distance_type, VectorDistanceType::Dot) {
+            let upper_bound = (distance + self.radius.0).min(std::f32::consts::PI);
+            return Ok((1.0 - lower_bound.cos(), 1.0 - upper_bound.cos()));
+        }
+
+        Ok((lower_bound, distance + self.radius.0))
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]

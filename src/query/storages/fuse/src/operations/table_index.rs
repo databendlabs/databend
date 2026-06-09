@@ -882,7 +882,7 @@ impl AsyncTransform for VectorIndexTransform {
 
         let vector_index_location = self.meta_locations.block_vector_index_location();
         let existing_location = &block_meta.vector_index_location;
-        let state = builder
+        let vector_result = builder
             .finalize_with_existing(
                 self.operator.clone(),
                 &self.settings,
@@ -892,9 +892,17 @@ impl AsyncTransform for VectorIndexTransform {
                 index_meta.clone(),
             )
             .await?;
+        let Some(state) = vector_result.index_state else {
+            return Err(ErrorCode::Internal("Failed to build vector index"));
+        };
 
         new_block_meta.vector_index_size = Some(state.size);
         new_block_meta.vector_index_location = Some(vector_index_location);
+        let mut vector_stats = block_meta.vector_stats.clone().unwrap_or_default();
+        if let Some(new_vector_stats) = vector_result.vector_stats {
+            vector_stats.extend(new_vector_stats);
+        }
+        new_block_meta.vector_stats = (!vector_stats.is_empty()).then_some(vector_stats);
         BlockWriter::write_down_vector_index_state(&self.operator, Some(state)).await?;
 
         let extended_block_meta = ExtendedBlockMeta {

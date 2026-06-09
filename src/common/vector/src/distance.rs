@@ -33,6 +33,19 @@ pub fn cosine_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
     Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
 
+// Return the angle theta between two vectors, derived from their cosine
+// similarity. The result is in radians and falls in [0, PI] for valid
+// finite inputs.
+pub fn angular_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
+    let distance = cosine_distance(lhs, rhs)?;
+
+    if !distance.is_finite() {
+        return Ok(std::f32::consts::FRAC_PI_2);
+    }
+    let angular_distance = (1.0 - distance).clamp(-1.0, 1.0).acos();
+    Ok(angular_distance)
+}
+
 pub fn l1_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
     if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
