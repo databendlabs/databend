@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -189,7 +190,8 @@ impl IPhysicalPlan for ColumnMutation {
 
         let block_thresholds = table.get_block_thresholds();
         let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?
+            let input_schema = DataSchema::from(table.schema_with_stream()).into();
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
         } else {
             table.cluster_gen_for_append(
                 builder.ctx.clone(),
