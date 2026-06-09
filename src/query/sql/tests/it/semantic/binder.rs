@@ -445,6 +445,12 @@ async fn test_binder_named_window_paths() -> Result<()> {
             sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname",
         },
         SqlTestCase {
+            name: "named_window_rejects_duplicate_name",
+            description: "A WINDOW clause must reject duplicate names instead of silently keeping the later definition.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname), W AS (ORDER BY salary)",
+        },
+        SqlTestCase {
             name: "inherited_named_window_rejects_partition_override",
             description: "Referencing a named window must not add a new PARTITION BY clause.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],

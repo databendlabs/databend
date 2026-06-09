@@ -45,6 +45,7 @@ use super::CoreOrderByExprs;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::binder::ExprContext;
+use crate::planner::semantic::normalize_identifier;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
@@ -377,10 +378,12 @@ where A: TypeCheckAdapter
         let spec = match window {
             CoreWindow::WindowSpec(spec) => spec,
             CoreWindow::WindowReference(window_name) => {
+                let normalized_window_name =
+                    normalize_identifier(window_name, self.name_resolution_ctx).name;
                 let spec = self
                     .bind_context
                     .window_definitions
-                    .get(&window_name.name)
+                    .get(&normalized_window_name)
                     .ok_or_else(|| {
                         ErrorCode::SyntaxException(format!(
                             "Window definition {} not found",
