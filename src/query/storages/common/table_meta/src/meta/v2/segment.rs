@@ -39,6 +39,7 @@ use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
+use crate::meta::StatisticsOfVectorColumns;
 use crate::meta::Versioned;
 use crate::meta::v0;
 use crate::meta::v1;
@@ -194,6 +195,7 @@ pub struct BlockMeta {
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
+    pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -242,6 +244,7 @@ impl BlockMeta {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
+            vector_stats: None,
             virtual_block_meta,
             compression,
             create_on,
@@ -380,6 +383,7 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            vector_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -411,6 +415,7 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            vector_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

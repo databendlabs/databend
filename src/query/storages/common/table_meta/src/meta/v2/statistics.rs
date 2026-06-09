@@ -24,6 +24,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_common_frozen_api::FrozenAPI;
 use log::info;
 use serde::de::Error;
@@ -87,6 +88,31 @@ pub struct SpatialStatistics {
     // Srid mixed or all rects are empty.
     #[serde(default)]
     pub is_valid: bool,
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    FrozenAPI,
+)]
+pub enum VectorDistanceType {
+    L1,
+    L2,
+    Dot,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
+pub struct VectorColumnStatistics {
+    pub centroid: Vec<F32>,
+    pub radius: F32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]

@@ -691,7 +691,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 builder.ctx.clone(),
                 0,
                 block_thresholds,
-                Some(schema),
+                schema,
             )?;
             let operators = cluster_stats_gen.operators.clone();
             if !operators.is_empty() {

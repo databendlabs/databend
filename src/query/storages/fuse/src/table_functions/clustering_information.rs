@@ -46,6 +46,7 @@ use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::BlockOverlapDepth;
 use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
 use crate::table_functions::SimpleArgFunc;
@@ -223,6 +224,21 @@ impl<'a> ClusteringInformationImpl<'a> {
         let snapshot = snapshot.unwrap();
 
         let schema = self.table.schema();
+        let scalar_exprs = exprs
+            .into_iter()
+            .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+            .collect::<Vec<_>>();
+        let scalar_cluster_key_types = scalar_exprs
+            .iter()
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
+            .collect::<Vec<_>>();
 
         let mut ranges = Vec::with_capacity(snapshot.summary.block_count as usize);
         let mut constant_block_count = 0;
@@ -240,7 +256,7 @@ impl<'a> ClusteringInformationImpl<'a> {
             for segment in segments.into_iter().flatten() {
                 for block in segment.blocks {
                     let (min, max) = get_min_max_stats(
-                        &exprs,
+                        &scalar_exprs,
                         &block.col_stats,
                         block.cluster_stats.as_ref(),
                         default_cluster_key_id,
@@ -256,18 +272,11 @@ impl<'a> ClusteringInformationImpl<'a> {
         }
         drop(snapshot);
 
-        let cluster_key_types = exprs
-            .into_iter()
-            .map(|v| {
-                let data_type = v.data_type();
-                if matches!(*data_type, DataType::String) {
-                    data_type.wrap_nullable()
-                } else {
-                    data_type.clone()
-                }
-            })
-            .collect::<Vec<_>>();
-        let stats = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        let stats = if scalar_cluster_key_types.is_empty() {
+            vec![BlockOverlapDepth::default(); ranges.len()]
+        } else {
+            calculate_block_overlap_depths(&ranges, &scalar_cluster_key_types)?
+        };
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;

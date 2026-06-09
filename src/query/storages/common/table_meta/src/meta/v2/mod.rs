@@ -33,4 +33,6 @@ pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::SpatialStatistics;
 pub use statistics::Statistics;
+pub use statistics::VectorColumnStatistics;
+pub use statistics::VectorDistanceType;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

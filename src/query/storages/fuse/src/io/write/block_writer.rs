@@ -199,14 +199,19 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
-        let vector_index_state = if let Some(ref vector_index_builder) = self.vector_index_builder {
+        let (vector_index_state, vector_stats) = if let Some(ref vector_index_builder) =
+            self.vector_index_builder
+        {
             let vector_index_location = self.meta_locations.block_vector_index_location();
             let mut vector_index_builder = vector_index_builder.clone();
             vector_index_builder.add_block(&data_block)?;
-            let vector_index_state = vector_index_builder.finalize(&vector_index_location)?;
-            Some(vector_index_state)
+            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
+            (
+                vector_index_state.index_state,
+                vector_index_state.vector_stats,
+            )
         } else {
-            None
+            (None, None)
         };
 
         let (spatial_index_state, spatial_stats) =
@@ -277,6 +282,7 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
+            vector_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
