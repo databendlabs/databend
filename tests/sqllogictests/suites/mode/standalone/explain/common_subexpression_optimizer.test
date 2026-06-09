@@ -677,3 +677,21 @@ drop table time_dim;
 
 statement ok
 drop table store;
+
+statement ok
+create or replace table cse_agg_t as
+select number as a, number % 3 as b
+from numbers(6);
+
+query III rowsort
+select l.b, l.max_a, r.max_a
+from (select b, max(a) as max_a from cse_agg_t group by b) l
+join (select b, max(a) as max_a from cse_agg_t group by b) r
+on l.b = r.b;
+----
+0 3 3
+1 4 4
+2 5 5
+
+statement ok
+drop table cse_agg_t;
