@@ -44,6 +44,8 @@ use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::EndpointUrlPolicy;
+use databend_common_storage::EndpointUrlPolicyConfig;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -362,6 +364,39 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    /// Policy for validating external storage endpoint_url targets.
+    ///
+    /// `permissive` preserves backward compatibility. `strict` rejects
+    /// high-risk targets such as loopback, private, link-local and metadata
+    /// addresses unless explicitly allowed.
+    #[clap(
+        long = "storage-endpoint-url-policy",
+        value_name = "VALUE",
+        default_value_t,
+        value_enum
+    )]
+    pub endpoint_url_policy: EndpointUrlPolicyConfigValue,
+
+    /// Hostnames allowed by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-allowed-hosts", value_name = "VALUE")]
+    pub endpoint_url_allowed_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks allowed by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-allowed-cidrs", value_name = "VALUE")]
+    pub endpoint_url_allowed_cidrs: Vec<String>,
+
+    /// Hostnames rejected by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-blocked-hosts", value_name = "VALUE")]
+    pub endpoint_url_blocked_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks rejected by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-blocked-cidrs", value_name = "VALUE")]
+    pub endpoint_url_blocked_cidrs: Vec<String>,
+
     /// Disable loading credentials from env/shared config/web identity files globally.
     #[clap(long = "storage-disable-config-load")]
     pub disable_config_load: bool,
@@ -431,12 +466,43 @@ impl Default for StorageConfig {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum EndpointUrlPolicyConfigValue {
+    #[default]
+    Permissive,
+    Strict,
+}
+
+impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
+    fn from(value: EndpointUrlPolicyConfigValue) -> Self {
+        match value {
+            EndpointUrlPolicyConfigValue::Permissive => EndpointUrlPolicy::Permissive,
+            EndpointUrlPolicyConfigValue::Strict => EndpointUrlPolicy::Strict,
+        }
+    }
+}
+
+impl From<&EndpointUrlPolicy> for EndpointUrlPolicyConfigValue {
+    fn from(value: &EndpointUrlPolicy) -> Self {
+        match value {
+            EndpointUrlPolicy::Permissive => EndpointUrlPolicyConfigValue::Permissive,
+            EndpointUrlPolicy::Strict => EndpointUrlPolicyConfigValue::Strict,
+        }
+    }
+}
+
 impl From<InnerStorageConfig> for StorageConfig {
     fn from(inner: InnerStorageConfig) -> Self {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            endpoint_url_policy: (&inner.endpoint_url_policy.policy).into(),
+            endpoint_url_allowed_hosts: inner.endpoint_url_policy.allowed_hosts,
+            endpoint_url_allowed_cidrs: inner.endpoint_url_policy.allowed_cidrs,
+            endpoint_url_blocked_hosts: inner.endpoint_url_policy.blocked_hosts,
+            endpoint_url_blocked_cidrs: inner.endpoint_url_policy.blocked_cidrs,
             disable_config_load: inner.disable_config_load,
             disable_instance_profile: inner.disable_instance_profile,
             // use default for each config instead of using `..Default::default`
@@ -576,6 +642,17 @@ impl StorageConfig {
             max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
         }
     }
+
+    fn create_endpoint_url_policy_config(&self) -> EndpointUrlPolicyConfig {
+        EndpointUrlPolicyConfig {
+            policy: self.endpoint_url_policy.clone().into(),
+            allowed_hosts: self.endpoint_url_allowed_hosts.clone(),
+            allowed_cidrs: self.endpoint_url_allowed_cidrs.clone(),
+            blocked_hosts: self.endpoint_url_blocked_hosts.clone(),
+            blocked_cidrs: self.endpoint_url_blocked_cidrs.clone(),
+            protected_sockets: vec![],
+        }
+    }
 }
 
 impl TryInto<InnerStorageConfig> for StorageConfig {
@@ -597,6 +674,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            endpoint_url_policy: self.create_endpoint_url_policy_config(),
             disable_config_load: self.disable_config_load,
             disable_instance_profile: self.disable_instance_profile,
             params: {
@@ -3725,5 +3803,35 @@ mod test {
                 assert!(!cfg.cache.enable_table_index_bloom);
             },
         );
+    }
+
+    #[test]
+    fn test_endpoint_url_policy_round_trips_through_inner() {
+        let args = vec![
+            "databend-query",
+            "--storage-endpoint-url-policy=strict",
+            "--storage-endpoint-url-allowed-hosts=s3.us-east-1.amazonaws.com",
+            "--storage-endpoint-url-allowed-hosts=*.storage.googleapis.com",
+            "--storage-endpoint-url-allowed-cidrs=10.0.0.0/8",
+            "--storage-endpoint-url-blocked-hosts=evil.example.com",
+            "--storage-endpoint-url-blocked-cidrs=192.168.99.0/24",
+        ];
+        let cmd = Cmd::parse_from(args);
+        let inner: InnerConfig = cmd.config.try_into().expect("must parse");
+
+        let policy = &inner.storage.endpoint_url_policy;
+        assert_eq!(
+            policy.policy,
+            databend_common_storage::EndpointUrlPolicy::Strict
+        );
+        assert_eq!(policy.allowed_hosts, vec![
+            "s3.us-east-1.amazonaws.com",
+            "*.storage.googleapis.com"
+        ]);
+        assert_eq!(policy.allowed_cidrs, vec!["10.0.0.0/8"]);
+        assert_eq!(policy.blocked_hosts, vec!["evil.example.com"]);
+        assert_eq!(policy.blocked_cidrs, vec!["192.168.99.0/24"]);
+        // protected_sockets is runtime-only and must not be set from CLI
+        assert!(policy.protected_sockets.is_empty());
     }
 }
