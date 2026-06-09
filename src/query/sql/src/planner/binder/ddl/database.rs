@@ -35,6 +35,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -522,13 +523,16 @@ impl Binder {
 
             // Verify essential privileges for the external storage location
             // Similar to table creation, we test basic storage operations
-            let operator =
-                databend_common_storage::init_operator(&storage_params).map_err(|e| {
-                    ErrorCode::BadArguments(format!(
-                        "Failed to access storage location '{}': {}",
-                        path_prop.value, e
-                    ))
-                })?;
+            let operator = databend_common_storage::init_operator_with_policy_scope(
+                &storage_params,
+                EndpointPolicyScope::External,
+            )
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Failed to access storage location '{}': {}",
+                    path_prop.value, e
+                ))
+            })?;
 
             // Test storage accessibility with basic operations
             // Reuse the existing verify_external_location_privileges function from table.rs

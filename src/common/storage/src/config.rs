@@ -44,6 +44,9 @@ use crate::auth::TokenFile;
 pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
+    /// Runtime policy used to validate user-controlled external storage
+    /// endpoints before query nodes connect to them.
+    pub endpoint_url_policy: EndpointUrlPolicyConfig,
     pub params: StorageParams,
     /// Global switches that affect the ambient credential chain behavior.
     ///
@@ -52,6 +55,72 @@ pub struct StorageConfig {
     /// - They apply to all storage operators created in this process.
     pub disable_config_load: bool,
     pub disable_instance_profile: bool,
+}
+
+/// Endpoint target validation mode for external storage URLs.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EndpointUrlPolicy {
+    /// Keep backward compatibility: allow endpoints unless they match an
+    /// explicit blocklist or protected internal socket.
+    #[default]
+    Permissive,
+    /// Reject high-risk targets such as loopback, private, link-local,
+    /// multicast, unspecified and metadata addresses unless explicitly allowed.
+    Strict,
+}
+
+/// Runtime egress policy for external storage endpoint URLs.
+///
+/// This config is process-local and is applied by query nodes before creating
+/// storage clients and before sending storage HTTP requests. It is intentionally
+/// separate from `allow_insecure`, which only controls whether non-HTTPS storage
+/// endpoints are allowed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointUrlPolicyConfig {
+    /// Validation mode. `Permissive` preserves compatibility, while `Strict`
+    /// rejects high-risk resolved targets by default.
+    pub policy: EndpointUrlPolicy,
+    /// Hostnames that are allowed even when their resolved IPs are normally
+    /// rejected by strict mode. Supports exact hosts and subdomain-only
+    /// wildcard patterns such as `*.example.com`.
+    pub allowed_hosts: Vec<String>,
+    /// IP ranges that are allowed even when they are normally rejected by
+    /// strict mode. Entries may be IP addresses or CIDR blocks.
+    pub allowed_cidrs: Vec<String>,
+    /// Hostnames that are always rejected. Supports exact hosts and
+    /// subdomain-only wildcard patterns such as `*.example.com`.
+    pub blocked_hosts: Vec<String>,
+    /// IP ranges that are always rejected. Entries may be IP addresses or CIDR
+    /// blocks.
+    pub blocked_cidrs: Vec<String>,
+    /// Internal service sockets that storage endpoints must never access.
+    ///
+    /// Query initializes this from configured databend-meta endpoints. Wildcard
+    /// binds such as `0.0.0.0:9191` and `[::]:9191` protect local and private
+    /// IPs (those matched by `builtin_blocked_ip_reason`) on the same port.
+    /// Public IPs bound on those ports are not covered. IPv6 socket addresses
+    /// must be bracketed.
+    ///
+    /// This field is runtime-only: it is populated at process init from meta
+    /// endpoint config and is not persisted or round-tripped through
+    /// serialization.
+    pub protected_sockets: Vec<String>,
+}
+
+/// Runtime trust scope for storage endpoint URL egress checks.
+///
+/// This is intentionally not persisted in `StorageParams`: the same storage
+/// config can be trusted when it comes from server config, and external when it
+/// comes from user SQL.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum EndpointPolicyScope {
+    /// Server-controlled storage configuration. Endpoint egress policy is not
+    /// applied.
+    #[default]
+    Trusted,
+    /// User-controlled external storage configuration. Endpoint egress policy
+    /// is applied before requests are sent.
+    External,
 }
 
 /// Runtime-only switches for ambient credential chain behavior.
