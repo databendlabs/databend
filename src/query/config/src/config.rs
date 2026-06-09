@@ -44,6 +44,8 @@ use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::EndpointUrlPolicy;
+use databend_common_storage::EndpointUrlPolicyConfig;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -362,6 +364,25 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    #[clap(
+        long = "storage-endpoint-url-policy",
+        value_name = "VALUE",
+        default_value = "permissive"
+    )]
+    pub endpoint_url_policy: String,
+
+    #[clap(long = "storage-endpoint-url-allowed-hosts", value_name = "VALUE")]
+    pub endpoint_url_allowed_hosts: Vec<String>,
+
+    #[clap(long = "storage-endpoint-url-allowed-cidrs", value_name = "VALUE")]
+    pub endpoint_url_allowed_cidrs: Vec<String>,
+
+    #[clap(long = "storage-endpoint-url-blocked-hosts", value_name = "VALUE")]
+    pub endpoint_url_blocked_hosts: Vec<String>,
+
+    #[clap(long = "storage-endpoint-url-blocked-cidrs", value_name = "VALUE")]
+    pub endpoint_url_blocked_cidrs: Vec<String>,
+
     /// Disable loading credentials from env/shared config/web identity files globally.
     #[clap(long = "storage-disable-config-load")]
     pub disable_config_load: bool,
@@ -437,6 +458,11 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            endpoint_url_policy: endpoint_url_policy_to_string(&inner.endpoint_url_policy.policy),
+            endpoint_url_allowed_hosts: inner.endpoint_url_policy.allowed_hosts,
+            endpoint_url_allowed_cidrs: inner.endpoint_url_policy.allowed_cidrs,
+            endpoint_url_blocked_hosts: inner.endpoint_url_policy.blocked_hosts,
+            endpoint_url_blocked_cidrs: inner.endpoint_url_policy.blocked_cidrs,
             disable_config_load: inner.disable_config_load,
             disable_instance_profile: inner.disable_instance_profile,
             // use default for each config instead of using `..Default::default`
@@ -576,6 +602,34 @@ impl StorageConfig {
             max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
         }
     }
+
+    fn create_endpoint_url_policy_config(&self) -> Result<EndpointUrlPolicyConfig> {
+        Ok(EndpointUrlPolicyConfig {
+            policy: parse_endpoint_url_policy(&self.endpoint_url_policy)?,
+            allowed_hosts: self.endpoint_url_allowed_hosts.clone(),
+            allowed_cidrs: self.endpoint_url_allowed_cidrs.clone(),
+            blocked_hosts: self.endpoint_url_blocked_hosts.clone(),
+            blocked_cidrs: self.endpoint_url_blocked_cidrs.clone(),
+            protected_sockets: vec![],
+        })
+    }
+}
+
+fn parse_endpoint_url_policy(policy: &str) -> Result<EndpointUrlPolicy> {
+    match policy.to_ascii_lowercase().as_str() {
+        "permissive" => Ok(EndpointUrlPolicy::Permissive),
+        "strict" => Ok(EndpointUrlPolicy::Strict),
+        _ => Err(ErrorCode::InvalidConfig(format!(
+            "invalid storage endpoint url policy: {policy}, valid values are permissive or strict"
+        ))),
+    }
+}
+
+fn endpoint_url_policy_to_string(policy: &EndpointUrlPolicy) -> String {
+    match policy {
+        EndpointUrlPolicy::Permissive => "permissive".to_string(),
+        EndpointUrlPolicy::Strict => "strict".to_string(),
+    }
 }
 
 impl TryInto<InnerStorageConfig> for StorageConfig {
@@ -597,6 +651,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            endpoint_url_policy: self.create_endpoint_url_policy_config()?,
             disable_config_load: self.disable_config_load,
             disable_instance_profile: self.disable_instance_profile,
             params: {

@@ -38,8 +38,14 @@ pub use auth::RefreshableToken;
 pub use auth::TokenFile;
 
 mod config;
+mod endpoint_policy;
+pub use config::EndpointUrlPolicy;
+pub use config::EndpointUrlPolicyConfig;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
+pub use endpoint_policy::EndpointUrlPolicyRegistry;
+pub use endpoint_policy::check_storage_endpoint_url;
+pub use endpoint_policy::check_storage_endpoint_url_without_dns;
 
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;

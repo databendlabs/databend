@@ -43,6 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
+use databend_common_storage::check_storage_endpoint_url_without_dns;
 use log::LevelFilter;
 use log::info;
 use opendal::Scheme;
@@ -60,6 +61,11 @@ fn secure_omission(endpoint: String) -> String {
     }
 }
 
+fn check_endpoint_url(endpoint: &str) -> Result<()> {
+    check_storage_endpoint_url_without_dns(endpoint)
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))
+}
+
 fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l.connection.get("endpoint_url").cloned().ok_or_else(|| {
         Error::new(
@@ -67,8 +73,10 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
             anyhow!("endpoint_url is required for storage azblob"),
         )
     })?;
+    let endpoint = secure_omission(endpoint);
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Azblob(StorageAzblobConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         container: l.name.to_string(),
         account_name: l
             .connection
@@ -93,6 +101,8 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
+    check_endpoint_url(&endpoint)?;
 
     // we split those field out to make borrow checker happy.
     let region = l.connection.get("region").cloned().unwrap_or_default();
@@ -181,7 +191,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         });
 
     let sp = StorageParams::S3(StorageS3Config {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         region,
         bucket: l.name.to_string(),
         access_key_id,
@@ -212,8 +222,10 @@ fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Gcs(StorageGcsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         bucket: l.name.clone(),
         root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
@@ -233,8 +245,10 @@ fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         root: "/ipfs".to_string() + root.as_str(),
         network_config: None,
     });
@@ -258,6 +272,7 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
                 anyhow!("endpoint_url is required for storage oss"),
             )
         })?;
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Oss(StorageOssConfig {
         endpoint_url: endpoint,
         presign_endpoint_url: "".to_string(),
@@ -299,6 +314,7 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
                 anyhow!("endpoint_url is required for storage oss"),
             )
         })?;
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Obs(StorageObsConfig {
         endpoint_url: endpoint,
         bucket: l.name.to_string(),
@@ -335,6 +351,7 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
                 anyhow!("endpoint_url is required for storage cos"),
             )
         })?;
+    check_endpoint_url(&endpoint)?;
     let sp = StorageParams::Cos(StorageCosConfig {
         endpoint_url: endpoint,
         bucket: l.name.to_string(),
@@ -417,6 +434,7 @@ fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StoragePara
         })?;
     let prefix = if is_https { "https" } else { "http" };
     let endpoint_url = format!("{prefix}://{}", l.name);
+    check_endpoint_url(&endpoint_url)?;
 
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
     let disable_list_batch = l
@@ -614,6 +632,7 @@ async fn parse_uri_location_resolved(
                     .collect(),
                 network_config: None,
             };
+            check_endpoint_url(&cfg.endpoint_url)?;
 
             // HTTP is special that we don't support dir, always return / instead.
             return Ok((StorageParams::Http(cfg), "/".to_string()));

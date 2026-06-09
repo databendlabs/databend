@@ -29,6 +29,8 @@ use opendal::raw::parse_content_encoding;
 use opendal::raw::parse_content_length;
 use url::Url;
 
+use crate::check_storage_endpoint_url;
+
 pub struct StorageHttpClient {
     client: reqwest::Client,
 }
@@ -74,6 +76,10 @@ impl HttpFetch for StorageHttpClient {
         );
 
         let (parts, body) = req.into_parts();
+
+        check_storage_endpoint_url(&url).await.map_err(|err| {
+            opendal::Error::new(opendal::ErrorKind::PermissionDenied, err.to_string())
+        })?;
 
         let mut req_builder = self
             .client

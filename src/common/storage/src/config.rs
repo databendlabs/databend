@@ -44,6 +44,7 @@ use crate::auth::TokenFile;
 pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
+    pub endpoint_url_policy: EndpointUrlPolicyConfig,
     pub params: StorageParams,
     /// Global switches that affect the ambient credential chain behavior.
     ///
@@ -52,6 +53,23 @@ pub struct StorageConfig {
     /// - They apply to all storage operators created in this process.
     pub disable_config_load: bool,
     pub disable_instance_profile: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EndpointUrlPolicy {
+    #[default]
+    Permissive,
+    Strict,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointUrlPolicyConfig {
+    pub policy: EndpointUrlPolicy,
+    pub allowed_hosts: Vec<String>,
+    pub allowed_cidrs: Vec<String>,
+    pub blocked_hosts: Vec<String>,
+    pub blocked_cidrs: Vec<String>,
+    pub protected_sockets: Vec<String>,
 }
 
 /// Runtime-only switches for ambient credential chain behavior.
