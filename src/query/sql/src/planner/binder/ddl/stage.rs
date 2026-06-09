@@ -28,6 +28,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::resolve_file_format;
@@ -51,7 +52,7 @@ impl Binder {
             UserApiProvider::instance(),
             GlobalConfig::instance().storage.allow_insecure,
         )?
-        .resolve_stage_location(location)
+        .resolve_stage_location(location, StagePathAccess::Write)
         .await?;
         let plan_node = RemoveStagePlan {
             path,

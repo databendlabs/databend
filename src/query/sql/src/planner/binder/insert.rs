@@ -35,7 +35,9 @@ use super::util::TableIdentifier;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -259,7 +261,7 @@ impl Binder {
                                 .storage
                                 .allow_insecure,
                         )?
-                        .resolve_stage_location(loc)
+                        .resolve_stage_location(loc, StagePathAccess::Read)
                         .await?;
                         stage_info.file_format_params = file_format_params;
 
@@ -268,6 +270,12 @@ impl Binder {
                             files: None,
                             pattern: None,
                         };
+                        validate_stage_files_path_traversal(
+                            self.ctx.get_settings().as_ref(),
+                            &files_info.path,
+                            files_info.files.as_deref(),
+                            false,
+                        )?;
                         let options = CopyIntoTableOptions {
                             purge: true,
                             force: true,

@@ -23,5 +23,7 @@ pub struct CopyIntoLocationInfo {
     pub options: CopyIntoLocationOptions,
     pub is_ordered: bool,
     #[serde(default)]
+    pub allow_path_traversal: bool,
+    #[serde(default)]
     pub partition_by: Option<RemoteExpr>,
 }

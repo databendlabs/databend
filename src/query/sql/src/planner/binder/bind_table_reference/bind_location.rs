@@ -28,8 +28,10 @@ use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::resolve_file_format;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::optimizer::ir::SExpr;
 
 impl Binder {
@@ -58,7 +60,7 @@ impl Binder {
                     .storage
                     .allow_insecure,
             )?
-            .resolve_file_location(&location)
+            .resolve_file_location(&location, StagePathAccess::Read)
             .await?;
 
             if let Some(f) = &options.file_format {
@@ -88,6 +90,12 @@ impl Binder {
                 pattern,
                 files: options.files.clone(),
             };
+            validate_stage_files_path_traversal(
+                self.ctx.get_settings().as_ref(),
+                &files_info.path,
+                files_info.files.as_deref(),
+                false,
+            )?;
             let table_ctx = self.ctx.clone();
             self.bind_stage_table(
                 table_ctx,

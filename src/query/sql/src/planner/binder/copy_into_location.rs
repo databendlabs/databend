@@ -30,6 +30,7 @@ use opendal::ErrorKind;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::wrap_cast;
@@ -116,8 +117,13 @@ impl Binder {
                 .storage
                 .allow_insecure,
         )?
-        .resolve_file_location(&stmt.dst)
+        .resolve_file_location(&stmt.dst, StagePathAccess::Write)
         .await?;
+        let allow_path_traversal = self
+            .ctx
+            .get_settings()
+            .get_stage_path_traversal_policy()?
+            .allows_write();
 
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
@@ -171,6 +177,7 @@ impl Binder {
             path,
             options,
             is_ordered,
+            allow_path_traversal,
             partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
         Ok(Plan::CopyIntoLocation(Box::new(CopyIntoLocationPlan {

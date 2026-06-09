@@ -62,6 +62,7 @@ use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
@@ -279,7 +280,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 self.dependencies.user_api_provider.clone(),
                 self.dependencies.storage_allow_insecure,
             )?
-            .resolve_stage_location(stage_name)
+            .resolve_stage_location(stage_name, StagePathAccess::Read)
             .await?;
             if self
                 .ctx
