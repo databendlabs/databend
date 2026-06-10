@@ -70,6 +70,8 @@ mod aggregate_count;
 mod aggregate_covariance;
 mod aggregate_distinct_state;
 mod aggregate_function_factory;
+mod aggregate_function_v2_impl;
+pub mod aggregate_function_v2_registry;
 mod aggregate_geographic_agg;
 mod aggregate_histogram;
 mod aggregate_json_array_agg;

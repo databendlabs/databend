@@ -14,6 +14,7 @@
 
 mod aggregate_function;
 mod aggregate_function_state;
+pub mod aggregate_function_v2;
 mod aggregate_hashtable;
 mod aggregate_meta;
 mod group_hash;
