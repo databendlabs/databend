@@ -452,9 +452,15 @@ impl<C: TaskContext> TaskInterpreter<C> for PrivateTaskInterpreter {
         Ok(())
     }
 
-    async fn alter_task(&self, _ctx: &Arc<C>, plan: &AlterTaskPlan) -> Result<()> {
-        UserApiProvider::instance()
-            .task_api(&plan.tenant)
+    async fn alter_task(&self, ctx: &Arc<C>, plan: &AlterTaskPlan) -> Result<()> {
+        let task_api = UserApiProvider::instance().task_api(&plan.tenant);
+        if plan.if_exists && task_api.describe_task(&plan.task_name).await??.is_none() {
+            return Ok(());
+        }
+
+        validate_alter_warehouse(ctx, plan).await?;
+
+        task_api
             .alter_task(&plan.task_name, &plan.alter_options)
             .await??;
         Ok(())
@@ -518,6 +524,21 @@ fn make_schedule_options(
             }
         }
     }
+}
+
+async fn validate_alter_warehouse<C: TaskContext>(
+    ctx: &Arc<C>,
+    plan: &AlterTaskPlan,
+) -> Result<()> {
+    if let AlterTaskOptions::Set {
+        warehouse: Some(warehouse),
+        ..
+    } = &plan.alter_options
+    {
+        ctx.validate_warehouse_exists(Some(warehouse)).await?;
+    }
+
+    Ok(())
 }
 
 fn make_warehouse_options(

@@ -33,6 +33,7 @@ use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::probe_state::SelectVector;
 use super::row_ptr::RowLayout;
+use super::row_ptr::RowMut;
 use super::row_ptr::RowPtr;
 use crate::BlockEntry;
 use crate::Column;
@@ -53,7 +54,7 @@ pub struct Payload {
     pub(super) aggrs: Vec<AggregateFunctionRef>,
     pub(super) row_layout: RowLayout,
 
-    pub(super) pages: Pages,
+    pub(super) pages: Vec<Page>,
     pub(super) tuple_size: usize,
     row_per_page: usize,
 
@@ -153,12 +154,14 @@ unsafe impl Send for Payload {}
 unsafe impl Sync for Payload {}
 
 pub(super) struct Page {
-    pub(super) data: Vec<MaybeUninit<u8>>,
+    // RowRef values into this buffer may be stored in hash indexes and flush
+    // state. A page must not reallocate after such row refs are published.
+    data: Vec<MaybeUninit<u8>>,
     pub(super) rows: usize,
     // state_offset = state_rows * agg_len
     // which mark that the offset to clean the agg states
-    pub(super) state_offsets: usize,
-    pub(super) capacity: usize,
+    state_offsets: usize,
+    capacity: usize,
 }
 
 impl Page {
@@ -166,12 +169,23 @@ impl Page {
         self.rows * agg_len != self.state_offsets
     }
 
-    pub(super) fn data_ptr(&self, row: usize, row_size: usize) -> RowPtr {
-        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) as _ })
+    pub(super) fn row_ptr(&self, row: usize, row_size: usize) -> RowPtr {
+        debug_assert!(row < self.rows);
+        debug_assert_eq!(self.data.len(), self.rows * row_size);
+        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) as *const u8 })
+    }
+
+    fn reserve_row(&mut self, row_size: usize) -> RowMut {
+        debug_assert!(self.rows < self.capacity);
+        let row_offset = self.data.len();
+        unsafe {
+            self.data.set_len(row_offset + row_size);
+        }
+        self.rows += 1;
+        let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) as *mut u8 };
+        RowMut::new(ptr)
     }
 }
-
-pub(super) type Pages = Vec<Page>;
 
 impl Payload {
     pub fn new(
@@ -262,9 +276,8 @@ impl Payload {
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
-                let data = Vec::with_capacity(self.row_per_page * self.tuple_size);
                 self.pages.push(Page {
-                    data,
+                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
                     rows: 0,
                     state_offsets: 0,
                     capacity: self.row_per_page,
@@ -276,7 +289,7 @@ impl Payload {
     }
 
     pub(super) fn data_ptr(&self, page: &Page, row: usize) -> RowPtr {
-        page.data_ptr(row, self.tuple_size)
+        page.row_ptr(row, self.tuple_size)
     }
 
     pub(super) fn reserve_append_rows(
@@ -289,10 +302,17 @@ impl Payload {
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
+        let address = unsafe {
+            // SAFETY: RowRef and RowMut are repr(transparent) wrappers over raw
+            // u8 pointers. Raw pointer mutability does not change layout, and
+            // row_ptr.rs has compile-time size/alignment assertions for these
+            // two wrappers.
+            std::mem::transmute::<&mut [RowPtr; BATCH_SIZE], &mut [RowMut; BATCH_SIZE]>(address)
+        };
         for row in select_vector {
-            address[*row] = page.data_ptr(page.rows, tuple_size);
+            let row_mut = page.reserve_row(tuple_size);
+            address[*row] = row_mut;
             page_index[*row] = page_index_value;
-            page.rows += 1;
 
             if page.rows == page.capacity {
                 (page, page_index_value) = self.writable_page();
@@ -312,7 +332,7 @@ impl Payload {
         &mut self,
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
-        address: &mut [RowPtr; BATCH_SIZE],
+        address: &mut [RowMut; BATCH_SIZE],
         page_index: &mut [usize],
         group_columns: ProjectedBlock,
     ) {
@@ -454,7 +474,7 @@ impl Payload {
     fn copy_state_addr_rows_for_transfer(
         &mut self,
         select_vector: &[RowID],
-        address: &[RowPtr; BATCH_SIZE],
+        row_refs: &[RowPtr; BATCH_SIZE],
     ) -> Vec<(usize, usize)> {
         let tuple_size = self.tuple_size;
         let agg_len = self.aggrs.len();
@@ -463,14 +483,14 @@ impl Payload {
         let mut page_state_offset = 0;
 
         for index in select_vector {
+            let mut row_mut = page.reserve_row(tuple_size);
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    address[*index].as_ptr(),
-                    page.data.as_mut_ptr().add(page.rows * tuple_size) as _,
+                    row_refs[*index].as_ptr(),
+                    row_mut.as_mut_ptr(),
                     tuple_size,
                 )
             }
-            page.rows += 1;
             page_state_offset += agg_len;
 
             if page.rows == page.capacity {

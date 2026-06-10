@@ -215,7 +215,7 @@ impl PartitionedPayload {
         );
 
         state.clear();
-        for payload in payloads.into_iter() {
+        for payload in payloads {
             new_partition_payload.combine_single(payload, state)
         }
 
