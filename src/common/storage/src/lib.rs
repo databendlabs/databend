@@ -76,7 +76,9 @@ pub use stage::StageFileInfo;
 pub use stage::StageFileInfoStream;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
+pub use stage::ensure_no_stage_path_traversal;
 pub use stage::init_stage_operator;
+pub use stage::is_stage_path_traversal;
 
 mod copy;
 mod merge;

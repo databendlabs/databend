@@ -174,6 +174,16 @@ select 1 as c union all select 3.3::Double;
 3.3
 
 query I
+SELECT x FROM (
+  SELECT 1 AS x
+  UNION ALL
+  SELECT count(*) AS x FROM (SELECT * FROM numbers(1) WHERE false)
+) ORDER BY x
+----
+0
+1
+
+query I
 with
 t1 as (select number as a from numbers(10)),
 t2 as (select number as a from numbers(1000)),

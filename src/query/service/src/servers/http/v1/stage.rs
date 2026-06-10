@@ -14,7 +14,9 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_sql::binder::validate_stage_path_traversal_policy;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use futures_util::AsyncWriteExt;
@@ -114,6 +116,10 @@ pub async fn upload_to_stage(
     };
 
     let op = init_stage_operator(&stage).map_err(InternalServerError)?;
+    let path_traversal_policy = context
+        .get_settings()
+        .get_stage_path_traversal_policy()
+        .map_err(InternalServerError)?;
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -121,6 +127,8 @@ pub async fn upload_to_stage(
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
+        validate_stage_path_traversal_policy(path_traversal_policy, &file_path, true)
+            .map_err(InternalServerError)?;
 
         // Read field with 1MiB buf.
         let mut r = io::BufReader::with_capacity(1024 * 1024, field.into_async_read().compat());
