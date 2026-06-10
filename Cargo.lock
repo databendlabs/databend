@@ -4519,7 +4519,9 @@ name = "databend-common-meta-app-storage"
 version = "0.1.0"
 dependencies = [
  "databend-common-exception",
+ "log",
  "opendal 0.54.1",
+ "parking_lot 0.12.3",
  "serde",
  "tokio",
 ]
