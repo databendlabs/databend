@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -97,9 +98,25 @@ impl Binder {
         let mut window_specs = HashMap::new();
         let mut resolved_window_specs = HashMap::new();
         for window in window_list {
-            window_specs.insert(window.name.name.clone(), window.spec.clone());
-            if window.spec.existing_window_name.is_none() {
-                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
+            let window_name = self.normalize_identifier(&window.name).name;
+            let mut window_spec = window.spec.clone();
+            if let Some(existing_window_name) = &mut window_spec.existing_window_name {
+                *existing_window_name = self.normalize_identifier(existing_window_name);
+            }
+
+            match window_specs.entry(window_name.clone()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(window_spec.clone());
+                }
+                Entry::Occupied(_) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Duplicate window name: {window_name}"
+                    )));
+                }
+            }
+
+            if window_spec.existing_window_name.is_none() {
+                resolved_window_specs.insert(window_name, window_spec);
             }
         }
         Ok((window_specs, resolved_window_specs))
