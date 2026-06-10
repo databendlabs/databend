@@ -30,7 +30,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
@@ -169,12 +168,8 @@ impl Interpreter for SetOptionsInterpreter {
             options_map.insert(key, Some(table_option.1.clone()));
         }
 
-        let storage_format = match table.get_table_info().options().get(OPT_KEY_STORAGE_FORMAT) {
-            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
-            None => FuseStorageFormat::Parquet,
-        };
         // check enable_virtual_column
-        is_valid_fuse_virtual_column_opt(&self.plan.set_options, storage_format)?;
+        is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 

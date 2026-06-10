@@ -50,7 +50,6 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -77,7 +76,6 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUN
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -560,7 +558,6 @@ impl FuseTable {
             let schema = self.schema_with_stream();
             let pruned_block_metas = Self::attach_optional_block_meta_indexes(block_metas);
             let (statistics, partitions) = self.read_partitions_with_metas(
-                ctx.clone(),
                 schema,
                 push_downs,
                 &pruned_block_metas,
@@ -711,16 +708,8 @@ impl FuseTable {
             })?;
         }
 
-        let top_k = push_down
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| {
-                DefaultExprBinder::try_new(ctx.clone())?
-                    .get_scalar(&topk.field)
-                    .map(|d| (topk, d))
-            })
-            .transpose()?;
+        // Storage-layer topk push down was only supported by the native format.
+        let top_k: Option<(TopK, Scalar)> = None;
 
         let limit = push_down
             .as_ref()
@@ -917,34 +906,16 @@ impl FuseTable {
         let spatial_index_columns =
             Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
-        let pruner =
-            if !self.is_native() || self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
-                FusePruner::create(
-                    &ctx,
-                    dal,
-                    table_schema.clone(),
-                    &push_downs,
-                    self.bloom_index_cols(),
-                    ngram_args,
-                    spatial_index_columns,
-                    bloom_index_builder,
-                )?
-            } else {
-                let cluster_keys = self.linear_cluster_keys(ctx.clone());
-
-                FusePruner::create_with_pages(
-                    &ctx,
-                    dal,
-                    table_schema,
-                    &push_downs,
-                    self.cluster_key_meta(),
-                    cluster_keys,
-                    self.bloom_index_cols(),
-                    ngram_args,
-                    spatial_index_columns,
-                    bloom_index_builder,
-                )?
-            };
+        let pruner = FusePruner::create(
+            &ctx,
+            dal,
+            table_schema.clone(),
+            &push_downs,
+            self.bloom_index_cols(),
+            ngram_args,
+            spatial_index_columns,
+            bloom_index_builder,
+        )?;
         Ok(pruner)
     }
 
@@ -1017,7 +988,6 @@ impl FuseTable {
 
     pub fn read_partitions_with_metas(
         &self,
-        ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
@@ -1028,16 +998,8 @@ impl FuseTable {
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
         let partitions_scanned = block_metas.len();
 
-        let top_k = push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| {
-                DefaultExprBinder::try_new(ctx.clone())?
-                    .get_scalar(&topk.field)
-                    .map(|d| (topk, d))
-            })
-            .transpose()?;
+        // Storage-layer topk push down was only supported by the native format.
+        let top_k: Option<(TopK, Scalar)> = None;
 
         let (mut statistics, parts) =
             Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);

@@ -287,12 +287,10 @@ impl FuseTable {
         }
 
         let table_schema = self.schema_with_stream();
-        let cluster_key_meta = self.cluster_key_meta();
-        let (cluster_keys, cluster_key_meta) = if !self.is_native() || cluster_key_meta.is_none() {
-            (vec![], None)
-        } else {
-            (self.linear_cluster_keys(ctx.clone()), cluster_key_meta)
-        };
+        // Page-level cluster pruning was only used by the native format; for parquet
+        // tables there are no cluster keys or cluster key meta to push down here.
+        let cluster_keys = vec![];
+        let cluster_key_meta = None;
         let bloom_index_cols = self.bloom_index_cols();
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
@@ -333,7 +331,6 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (stats, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             table_schema,
             push_downs,
             &block_metas,

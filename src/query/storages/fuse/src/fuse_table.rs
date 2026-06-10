@@ -114,7 +114,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
-use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -126,7 +125,6 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -292,7 +290,7 @@ impl FuseTable {
             approx_distinct_cols,
             operator,
             data_metrics,
-            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            storage_format: FuseStorageFormat::from_table_option(storage_format.as_str()),
             segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
@@ -326,16 +324,11 @@ impl FuseTable {
         }
     }
 
-    pub fn is_native(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
-    }
-
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, DEFAULT_ROW_PER_PAGE);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
@@ -357,7 +350,6 @@ impl FuseTable {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             bloom_index_type: self.bloom_index_type,
-            max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
@@ -374,15 +366,6 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
-    }
-
-    /// Get max page size.
-    /// For native storage format.
-    pub fn get_max_page_size(&self) -> Option<usize> {
-        match self.storage_format {
-            FuseStorageFormat::Parquet => None,
-            FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
-        }
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
@@ -672,6 +655,28 @@ impl FuseTable {
         self.storage_format
     }
 
+    /// Reject any data-touching operation on a table whose storage format is no
+    /// longer supported (e.g. the removed `native` format). Such tables can
+    /// still be listed and dropped, but cannot be read from, written to, or
+    /// compacted. The error carries the fully-qualified table name and the
+    /// original storage format string for diagnostics.
+    pub fn check_format_supported(&self) -> Result<()> {
+        if matches!(self.storage_format, FuseStorageFormat::Unsupported) {
+            let format = self
+                .table_info
+                .options()
+                .get(OPT_KEY_STORAGE_FORMAT)
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "table {} uses storage_format '{}' which is no longer supported. \
+                 The table can be dropped, but cannot be queried, written to, or compacted.",
+                self.table_info.desc, format
+            )));
+        }
+        Ok(())
+    }
+
     pub fn get_storage_prefix(&self) -> &str {
         self.meta_location_generator.prefix()
     }
@@ -894,7 +899,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        !matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_column_projection(&self) -> bool {
@@ -947,6 +952,7 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
@@ -959,6 +965,7 @@ impl Table for FuseTable {
         dry_run: bool,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_format_supported()?;
         self.do_read_partitions_with_reusable_pruned_metas(
             ctx,
             push_downs,
@@ -976,6 +983,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
@@ -985,6 +993,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
@@ -1339,6 +1348,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: Option<usize>,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_compact_segments(ctx, limit).await
     }
 
@@ -1348,6 +1358,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
         self.do_compact_blocks(ctx, limits).await
     }
 
@@ -1357,6 +1368,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_revert_to(ctx, point).await
     }
 
