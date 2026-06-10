@@ -170,8 +170,11 @@ where F: WriterFactory
                 };
                 Ok(())
             }
-            PartitionSpillState::Writing { writer, .. } => {
-                if !writer.need_new_file(encoder.memory_size())? {
+            PartitionSpillState::Writing { writer, row_groups } => {
+                let must_close_current = row_groups.len() >= SpillWriter::MAX_ROW_GROUPS_PER_FILE
+                    || writer.need_new_file(row_group_size)?;
+
+                if !must_close_current {
                     let PartitionSpillState::Writing {
                         mut writer,
                         mut row_groups,
@@ -182,13 +185,7 @@ where F: WriterFactory
 
                     let ordinal = writer.add_row_group_encoded(encoder)?;
                     row_groups.push(ordinal);
-
-                    if ordinal >= SpillWriter::MAX_ORDINAL {
-                        let reader = writer.close()?;
-                        self.readers.push((reader, row_groups));
-                    } else {
-                        self.state = PartitionSpillState::Writing { writer, row_groups };
-                    }
+                    self.state = PartitionSpillState::Writing { writer, row_groups };
 
                     return Ok(());
                 }

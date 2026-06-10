@@ -151,14 +151,47 @@ impl MaterializedCteSink {
         &self,
         data_blocks: Vec<DataBlock>,
     ) -> Result<Vec<MaterializedCtePayload>> {
-        let local_file_size = data_blocks
-            .iter()
-            .map(DataBlock::memory_size)
-            .sum::<usize>()
-            .max(self.spill_unit_size())
-            .max(1);
         let schema = Arc::new(data_blocks[0].infer_schema());
         let mut writer_creator = self.spiller.new_writer_creator(schema)?;
+        let mut pending_blocks = Vec::new();
+        let mut pending_size = 0;
+        let mut payloads = Vec::with_capacity(data_blocks.len());
+
+        for data_block in data_blocks {
+            pending_size += data_block.memory_size();
+            pending_blocks.push(data_block);
+
+            if pending_blocks.len() >= SpillWriter::MAX_ROW_GROUPS_PER_FILE {
+                self.spill_data_block_chunk(
+                    &mut writer_creator,
+                    std::mem::take(&mut pending_blocks),
+                    pending_size,
+                    &mut payloads,
+                )?;
+                pending_size = 0;
+            }
+        }
+
+        if !pending_blocks.is_empty() {
+            self.spill_data_block_chunk(
+                &mut writer_creator,
+                pending_blocks,
+                pending_size,
+                &mut payloads,
+            )?;
+        }
+
+        Ok(payloads)
+    }
+
+    fn spill_data_block_chunk(
+        &self,
+        writer_creator: &mut crate::spillers::WriterCreator,
+        data_blocks: Vec<DataBlock>,
+        data_size: usize,
+        payloads: &mut Vec<MaterializedCtePayload>,
+    ) -> Result<()> {
+        let local_file_size = data_size.max(self.spill_unit_size()).max(1);
         let mut writer = writer_creator.open(Some(local_file_size))?;
         let mut row_groups = Vec::with_capacity(data_blocks.len());
         for data_block in data_blocks {
@@ -166,15 +199,13 @@ impl MaterializedCteSink {
         }
         let reader = writer.close()?;
 
-        Ok(row_groups
-            .into_iter()
-            .map(|row_group| {
-                MaterializedCtePayload::Spilled(MaterializedCteSpilledPayload {
-                    reader: reader.clone(),
-                    row_group,
-                })
+        payloads.extend(row_groups.into_iter().map(|row_group| {
+            MaterializedCtePayload::Spilled(MaterializedCteSpilledPayload {
+                reader: reader.clone(),
+                row_group,
             })
-            .collect())
+        }));
+        Ok(())
     }
 
     fn consume_block(&mut self, data_block: DataBlock) -> Result<()> {
@@ -184,7 +215,7 @@ impl MaterializedCteSink {
             self.spilling_blocks.push(data_block);
 
             if self.spilling_bytes >= self.spill_unit_size()
-                || self.spilling_blocks.len() >= SpillWriter::MAX_ORDINAL
+                || self.spilling_blocks.len() >= SpillWriter::MAX_ROW_GROUPS_PER_FILE
             {
                 self.flush_spilling_blocks()?;
             }

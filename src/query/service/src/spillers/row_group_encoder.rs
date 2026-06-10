@@ -54,6 +54,7 @@ use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::Location;
+use super::MAX_PARQUET_ROW_GROUPS_PER_FILE;
 use super::SpillerInner;
 use super::SpillsBufferPool;
 use super::async_buffer::BufferWriter;
@@ -234,7 +235,7 @@ impl<W: Write + Send> FileWriter<W> {
     }
 
     pub fn is_row_group_full(&self) -> bool {
-        self.writer.flushed_row_groups().len() >= i16::MAX as _
+        self.writer.flushed_row_groups().len() >= MAX_PARQUET_ROW_GROUPS_PER_FILE
     }
 
     fn into_closed_writer(self) -> errors::Result<(ParquetMetaData, SerializedFileWriter<W>)> {

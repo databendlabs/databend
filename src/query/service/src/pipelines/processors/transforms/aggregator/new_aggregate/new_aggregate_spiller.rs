@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,7 +30,6 @@ use databend_common_storages_parquet::ReadSettings;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
-use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
@@ -41,16 +39,16 @@ use crate::sessions::TableContext;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Layout;
+use crate::spillers::RollingSpillsDataWriter;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
+use crate::spillers::SpilledDataFile;
 use crate::spillers::SpillsBufferPool;
-use crate::spillers::SpillsDataWriter;
 
 const BYTES_PER_MIB: usize = 1024 * 1024;
 
 struct PayloadWriter {
-    path: String,
-    writer: SpillsDataWriter,
+    writer: RollingSpillsDataWriter,
 }
 
 impl PayloadWriter {
@@ -58,28 +56,23 @@ impl PayloadWriter {
         let data_operator = DataOperator::instance();
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer =
-            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
 
         Ok(PayloadWriter {
-            path: file_path,
-            writer: spills_data_writer,
+            writer: RollingSpillsDataWriter::create(
+                operator,
+                prefix.to_string(),
+                writer_pool_bytes,
+                buffer_pool,
+            ),
         })
     }
 
     fn write_block(&mut self, block: DataBlock) -> Result<()> {
-        if block.is_empty() {
-            return Ok(());
-        }
-
-        self.writer.write(block)?;
-        self.writer.flush()
+        self.writer.write_and_flush(block)
     }
 
-    fn close(self) -> Result<(String, usize, Vec<RowGroupMetaData>)> {
-        let (bytes_written, row_groups) = self.writer.close()?;
-        Ok((self.path, bytes_written, row_groups))
+    fn close(self) -> Result<Vec<SpilledDataFile>> {
+        self.writer.close()
     }
 }
 
@@ -187,40 +180,46 @@ impl AggregatePayloadWriters {
                 continue;
             };
 
-            let (path, written_size, row_groups) = writer.close()?;
-
-            if written_size != 0 {
-                info!(
-                    "Write aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
-                    partition_id,
+            for file in writer.close()? {
+                let SpilledDataFile {
                     path,
-                    written_size,
-                    row_groups.iter().map(|rg| rg.num_rows()).sum::<i64>(),
-                    row_groups.len()
+                    bytes_written,
+                    row_groups,
+                } = file;
+
+                if bytes_written != 0 {
+                    info!(
+                        "Write aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
+                        partition_id,
+                        path,
+                        bytes_written,
+                        row_groups.iter().map(|rg| rg.num_rows()).sum::<i64>(),
+                        row_groups.len()
+                    );
+                }
+
+                self.ctx.add_spill_file(
+                    Location::Remote(path.clone()),
+                    Layout::Aggregate,
+                    bytes_written,
                 );
-            }
 
-            self.ctx.add_spill_file(
-                Location::Remote(path.clone()),
-                Layout::Aggregate,
-                written_size,
-            );
+                if row_groups.is_empty() {
+                    continue;
+                }
 
-            if row_groups.is_empty() {
-                continue;
-            }
+                if bytes_written > 0 {
+                    self.write_stats.add_bytes(bytes_written);
+                }
 
-            if written_size > 0 {
-                self.write_stats.add_bytes(written_size);
-            }
-
-            for row_group in row_groups {
-                self.write_stats.add_rows(row_group.num_rows() as usize);
-                spilled_payloads.push(NewSpilledPayload {
-                    bucket: partition_id as isize,
-                    location: path.clone(),
-                    row_group,
-                });
+                for row_group in row_groups {
+                    self.write_stats.add_rows(row_group.num_rows() as usize);
+                    spilled_payloads.push(NewSpilledPayload {
+                        bucket: partition_id as isize,
+                        location: path.clone(),
+                        row_group,
+                    });
+                }
             }
         }
 
