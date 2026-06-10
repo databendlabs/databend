@@ -41,6 +41,7 @@ use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use itertools::Itertools;
 
 use super::super::scalars::parser;
+use super::aggregate_function_v2_support::assert_two_groups_group_by_v2_matches_legacy_result;
 
 pub(super) trait AggregationSimulator = Fn(
         &str,
@@ -264,6 +265,9 @@ pub(super) fn simulate_two_groups_group_by(
     func.merge_result(state2, false, &mut builder)?;
 
     let res = (builder.build(), data_type);
+    assert_two_groups_group_by_v2_matches_legacy_result(
+        name, params, entries, rows, sort_descs, &res,
+    )?;
     Ok(res)
 }
 

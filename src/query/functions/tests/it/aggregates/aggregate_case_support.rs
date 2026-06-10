@@ -5,6 +5,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 
+use super::aggregate_function_v2_support::assert_v2_aggr_matches_legacy_result;
 use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
 
 pub(super) fn eval_legacy_aggregate(
@@ -34,6 +35,7 @@ pub(super) fn eval_legacy_aggregate(
         sort_descs.clone(),
     )?;
     assert_eq!(res1, res2);
+    assert_v2_aggr_matches_legacy_result(name, params, entries, rows, sort_descs, &res1)?;
     Ok(res1)
 }
 
@@ -53,5 +55,6 @@ pub(super) fn eval_legacy_aggregate_without_each_row(
         true,
         sort_descs.clone(),
     )?;
+    assert_v2_aggr_matches_legacy_result(name, params, entries, rows, sort_descs, &res)?;
     Ok(res)
 }

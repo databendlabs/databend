@@ -42,6 +42,12 @@ impl StateAddr {
     }
 
     #[inline]
+    pub fn get_ref<'a, T>(&self) -> &'a T
+    where T: Send + 'static {
+        unsafe { &*self.0.cast::<T>() }
+    }
+
+    #[inline]
     #[must_use]
     pub fn next(&self, offset: usize) -> Self {
         unsafe { Self(self.0.add(offset)) }
@@ -247,6 +253,13 @@ impl<'a> AggrState<'a> {
         assume(self.loc.len() == 1);
         debug_assert!(self.loc[0].is_custom());
         self.addr.next(self.loc[0].offset()).get::<T>()
+    }
+
+    pub fn get_ref<'b, T>(&self) -> &'b T
+    where T: Send + 'static {
+        assume(self.loc.len() == 1);
+        debug_assert!(self.loc[0].is_custom());
+        self.addr.next(self.loc[0].offset()).get_ref::<T>()
     }
 
     pub fn write<T, F>(&self, f: F)

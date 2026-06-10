@@ -16,6 +16,7 @@ use std::io::Write;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggregateFunctionRef;
@@ -25,6 +26,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::aggregate::aggregate_function_v2 as v2;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
@@ -140,13 +142,13 @@ fn test_quantile_tdigest_edge_cases() {
     test_tdigest_weighted_merged_centroid(file, simulate_accumulate_matches_rows_and_legacy);
     test_tdigest_weighted_zero_weight(file, simulate_accumulate_matches_rows_and_legacy);
     test_tdigest_weighted_tail_boundary(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_merge_empty_right(file, simulate_merge_empty_right);
+    test_tdigest_merge_empty_right(file, simulate_merge_empty_right_and_v2);
     test_tdigest_weighted_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
     test_tdigest_weighted_zero_weight_nan(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_weighted_merge_nan_only_right(file, simulate_merge_last_row_into_left);
+    test_tdigest_weighted_merge_nan_only_right(file, simulate_merge_last_row_into_left_and_v2);
     test_tdigest_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
-    test_tdigest_merge_nan_only_right(file, simulate_merge_last_row_into_left);
-    test_tdigest_merge_with_uncompressed_left(file, simulate_merge_into_uncompressed_left);
+    test_tdigest_merge_nan_only_right(file, simulate_merge_last_row_into_left_and_v2);
+    test_tdigest_merge_with_uncompressed_left(file, simulate_merge_into_uncompressed_left_and_v2);
     test_tdigest_group_by_nan_input(file, simulate_accumulate_keys_matches_rows_and_legacy);
     test_tdigest_weighted_group_by_nan_input(
         file,
@@ -576,7 +578,7 @@ fn simulate_accumulate_keys_matches_rows_and_legacy(
     Ok(legacy)
 }
 
-fn simulate_merge_last_row_into_left(
+fn simulate_merge_last_row_into_left_and_v2(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -584,20 +586,20 @@ fn simulate_merge_last_row_into_left(
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     assert!(rows > 1);
-    simulate_merge_split(name, params, entries, rows, sort_descs, rows - 1)
+    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, rows - 1)
 }
 
-fn simulate_merge_empty_right(
+fn simulate_merge_empty_right_and_v2(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    simulate_merge_split(name, params, entries, rows, sort_descs, rows)
+    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, rows)
 }
 
-fn simulate_merge_into_uncompressed_left(
+fn simulate_merge_into_uncompressed_left_and_v2(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -605,7 +607,94 @@ fn simulate_merge_into_uncompressed_left(
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     assert_eq!(rows, 3);
-    simulate_merge_split(name, params, entries, rows, sort_descs, 2)
+    simulate_merge_split_and_v2(name, params, entries, rows, sort_descs, 2)
+}
+
+fn simulate_merge_split_and_v2(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+    right_start: usize,
+) -> Result<(Column, DataType)> {
+    let args_type = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    let legacy = simulate_merge_split(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        sort_descs.clone(),
+        right_start,
+    )?;
+    let v2 = simulate_v2_merge_split(name, params, entries, rows, sort_descs, right_start)?;
+
+    assert_eq!(
+        v2, legacy,
+        "v2 merge-state result mismatch for {name}({args_type:?})"
+    );
+    Ok(legacy)
+}
+
+fn simulate_v2_merge_split(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+    right_start: usize,
+) -> Result<(Column, DataType)> {
+    if !sort_descs.is_empty() {
+        return Err(ErrorCode::Unimplemented(
+            "v2 aggregate test simulator does not support sort descriptors yet",
+        ));
+    }
+
+    let args_type = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    let registry =
+        databend_common_functions::aggregates::aggregate_function_v2_registry::instance();
+    let function = registry.resolve(v2::AggregateFunctionRequest {
+        name,
+        params: &params,
+        args_type: &args_type,
+        distinct: false,
+        order_by: &[],
+    })?;
+    let data_type = function.signature().return_type.clone();
+
+    let left = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    let right = v2::AggregateStateOwner::new(vec![function.clone()])?;
+    for row in 0..right_start {
+        function.accumulate_row(v2::AccumulateRowInput {
+            state: left.state(0),
+            columns: entries.into(),
+            row,
+        })?;
+    }
+    for row in right_start..rows {
+        function.accumulate_row(v2::AccumulateRowInput {
+            state: right.state(0),
+            columns: entries.into(),
+            row,
+        })?;
+    }
+    function.merge_states(v2::MergeStatesInput {
+        state: left.state(0),
+        rhs: right.state(0),
+    })?;
+
+    let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+    function.merge_result(v2::MergeResultInput {
+        state: left.state(0),
+        builder: &mut builder,
+    })?;
+    Ok((builder.build(), data_type))
 }
 
 fn simulate_merge_split(
