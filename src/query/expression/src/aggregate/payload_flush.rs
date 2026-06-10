@@ -48,17 +48,17 @@ use crate::types::string::StringColumnBuilder;
 use crate::with_number_mapped_type;
 
 pub struct PayloadFlushState {
-    pub probe_state: Box<ProbeState>,
-    pub group_columns: Vec<BlockEntry>,
+    pub(super) probe_state: Box<ProbeState>,
+    pub(super) group_columns: Vec<BlockEntry>,
     pub(super) aggregate_results: Vec<BlockEntry>,
-    pub row_count: usize,
+    pub(super) row_count: usize,
 
-    pub flush_partition: usize,
-    pub flush_page: usize,
-    pub flush_page_row: usize,
+    flush_partition: usize,
+    pub(super) flush_page: usize,
+    pub(super) flush_page_row: usize,
 
-    pub addresses: [RowPtr; BATCH_SIZE],
-    pub state_places: [StateAddr; BATCH_SIZE],
+    pub(super) addresses: [RowPtr; BATCH_SIZE],
+    pub(super) state_places: [StateAddr; BATCH_SIZE],
 }
 
 impl Default for PayloadFlushState {

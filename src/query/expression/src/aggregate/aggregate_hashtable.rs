@@ -40,6 +40,9 @@ use crate::types::DataType;
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
 pub struct AggregateHashTable {
+    // Hash index entries store RowRef values into these payload pages. Any path
+    // that replaces or repartitions payload must clear or rebuild the index
+    // before probing it again.
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
@@ -436,7 +439,7 @@ impl AggregateHashTable {
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {
                 for idx in 0..page.rows {
-                    let row_ptr = page.data_ptr(idx, payload.tuple_size);
+                    let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
                     hash_index.probe_slot_and_set(hash, row_ptr);

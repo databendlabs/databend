@@ -167,7 +167,7 @@ impl Entry {
     }
 
     pub fn get_pointer(&self) -> RowPtr {
-        RowPtr::new((self.0 & POINTER_MASK) as *mut u8)
+        RowPtr::new((self.0 & POINTER_MASK) as *const u8)
     }
 
     pub fn set_pointer(&mut self, ptr: RowPtr) {
@@ -365,7 +365,7 @@ mod tests {
             RowPtr::new(unsafe {
                 self.pin_data
                     .as_ptr()
-                    .add(if incoimg { row + self.init_count } else { row }) as _
+                    .add(if incoimg { row + self.init_count } else { row })
             })
         }
 
