@@ -15,6 +15,5 @@
 mod fuse_block_format;
 mod parquet;
 
-pub use fuse_block_format::FuseBlockFormat;
 pub use fuse_block_format::ReadBlockMeta;
 pub use parquet::FuseParquetBlockFormat;
