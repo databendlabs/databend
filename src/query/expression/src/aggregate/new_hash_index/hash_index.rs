@@ -21,11 +21,11 @@ use crate::aggregate::ProbeState;
 use crate::aggregate::legacy_hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
-use crate::aggregate::row_ptr::RowPtr;
+use crate::aggregate::row_ptr::RowRef;
 
 pub struct ExperimentalHashIndex {
     ctrls: Vec<Tag>,
-    pointers: Vec<RowPtr>,
+    pointers: Vec<RowRef>,
     capacity: usize,
     bucket_mask: usize,
     count: usize,
@@ -39,7 +39,7 @@ impl ExperimentalHashIndex {
         debug_assert!(capacity >= Group::WIDTH);
         let bucket_mask = capacity - 1;
         let ctrls = vec![Tag::EMPTY; capacity + Group::WIDTH];
-        let pointers = vec![RowPtr::null(); capacity];
+        let pointers = vec![RowRef::null(); capacity];
         Self {
             ctrls,
             pointers,
@@ -229,7 +229,7 @@ impl ExperimentalHashIndex {
     }
 
     pub fn allocated_bytes(&self) -> usize {
-        self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RowPtr>()
+        self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RowRef>()
     }
 
     pub fn reset(&mut self) {
@@ -238,10 +238,10 @@ impl ExperimentalHashIndex {
         }
         self.count = 0;
         self.ctrls.fill(Tag::EMPTY);
-        self.pointers.fill(RowPtr::null());
+        self.pointers.fill(RowRef::null());
     }
 
-    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowRef) {
         let index = self.probe_empty(hash);
         self.pointers[index] = row_ptr;
         self.count += 1;

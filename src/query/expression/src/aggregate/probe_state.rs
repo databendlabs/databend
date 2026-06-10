@@ -17,7 +17,7 @@ use std::ops::IndexMut;
 
 use super::BATCH_SIZE;
 use super::StateAddr;
-use super::row_ptr::RowPtr;
+use super::row_ptr::RowRef;
 
 pub type SelectVector = [RowID; BATCH_SIZE];
 
@@ -26,7 +26,7 @@ pub type SelectVector = [RowID; BATCH_SIZE];
 #[derive(Debug)]
 pub struct ProbeState {
     pub(super) group_hashes: [u64; BATCH_SIZE],
-    pub(super) addresses: [RowPtr; BATCH_SIZE],
+    pub(super) addresses: [RowRef; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
     pub(super) state_places: [StateAddr; BATCH_SIZE],
 
@@ -44,7 +44,7 @@ impl Default for ProbeState {
     fn default() -> Self {
         Self {
             group_hashes: [0; BATCH_SIZE],
-            addresses: [RowPtr::null(); BATCH_SIZE],
+            addresses: [RowRef::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [RowID::default(); BATCH_SIZE],
@@ -69,7 +69,7 @@ impl ProbeState {
             uninit.partition_entries = vec![];
 
             for ptr in &mut uninit.addresses {
-                *ptr = RowPtr::null();
+                *ptr = RowRef::null();
             }
             for addr in &mut uninit.state_places {
                 *addr = StateAddr::null()

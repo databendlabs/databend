@@ -20,7 +20,7 @@ use super::StateAddr;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::row_ptr::RowPtr;
+use super::row_ptr::RowRef;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -48,17 +48,17 @@ use crate::types::string::StringColumnBuilder;
 use crate::with_number_mapped_type;
 
 pub struct PayloadFlushState {
-    pub probe_state: Box<ProbeState>,
-    pub group_columns: Vec<BlockEntry>,
+    pub(super) probe_state: Box<ProbeState>,
+    pub(super) group_columns: Vec<BlockEntry>,
     pub(super) aggregate_results: Vec<BlockEntry>,
-    pub row_count: usize,
+    pub(super) row_count: usize,
 
-    pub flush_partition: usize,
-    pub flush_page: usize,
-    pub flush_page_row: usize,
+    flush_partition: usize,
+    pub(super) flush_page: usize,
+    pub(super) flush_page_row: usize,
 
-    pub addresses: [RowPtr; BATCH_SIZE],
-    pub state_places: [StateAddr; BATCH_SIZE],
+    pub(super) addresses: [RowRef; BATCH_SIZE],
+    pub(super) state_places: [StateAddr; BATCH_SIZE],
 }
 
 impl Default for PayloadFlushState {
@@ -71,7 +71,7 @@ impl Default for PayloadFlushState {
             flush_partition: 0,
             flush_page: 0,
             flush_page_row: 0,
-            addresses: [RowPtr::null(); BATCH_SIZE],
+            addresses: [RowRef::null(); BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
         }
     }

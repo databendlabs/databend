@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use super::LOAD_FACTOR;
 use super::PartitionedPayload;
 use super::ProbeState;
-use super::RowPtr;
+use super::RowRef;
 use super::payload_row::CompareState;
 use crate::ProjectedBlock;
 
@@ -127,7 +127,7 @@ impl LegacyHashIndex {
         self.entries.len() * std::mem::size_of::<Entry>()
     }
 
-    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowRef) {
         let slot = Self::probe_slot(self, hash);
         let mut entry = self.mut_entry(slot);
         entry.set_hash(hash);
@@ -166,12 +166,12 @@ impl Entry {
         self.0 != 0
     }
 
-    pub fn get_pointer(&self) -> RowPtr {
-        RowPtr::new((self.0 & POINTER_MASK) as *mut u8)
+    pub fn get_pointer(&self) -> RowRef {
+        RowRef::new((self.0 & POINTER_MASK) as *const u8)
     }
 
-    pub fn set_pointer(&mut self, ptr: RowPtr) {
-        let ptr_value = ptr.as_ptr() as u64;
+    pub fn set_pointer(&mut self, row_ref: RowRef) {
+        let ptr_value = row_ref.as_ptr() as u64;
         // Pointer shouldn't use upper bits
         debug_assert!(ptr_value & SALT_MASK == 0);
         // Value should have all 1's in the pointer area
@@ -356,21 +356,21 @@ mod tests {
                 let entry = hash_index.mut_entry(slot);
                 debug_assert!(!entry.is_occupied());
                 entry.set_hash(hash);
-                let row_ptr = self.get_row_ptr(false, i);
-                entry.set_pointer(row_ptr);
+                let row_ref = self.get_row_ptr(false, i);
+                entry.set_pointer(row_ref);
             }
         }
 
-        fn get_row_ptr(&self, incoimg: bool, row: usize) -> RowPtr {
-            RowPtr::new(unsafe {
+        fn get_row_ptr(&self, incoimg: bool, row: usize) -> RowRef {
+            RowRef::new(unsafe {
                 self.pin_data
                     .as_ptr()
-                    .add(if incoimg { row + self.init_count } else { row }) as _
+                    .add(if incoimg { row + self.init_count } else { row })
             })
         }
 
-        fn get_payload(&self, row_ptr: RowPtr) -> (u64, u64, u64) {
-            let index = row_ptr.as_ptr() as usize - self.pin_data.as_ptr() as usize;
+        fn get_payload(&self, row_ref: RowRef) -> (u64, u64, u64) {
+            let index = row_ref.as_ptr() as usize - self.pin_data.as_ptr() as usize;
             self.payload[index]
         }
     }

@@ -140,7 +140,7 @@ impl HashIndex {
         }
     }
 
-    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowRef) {
         match self {
             HashIndex::Legacy(index) => index.probe_slot_and_set(hash, row_ptr),
             HashIndex::Experimental(index) => index.probe_slot_and_set(hash, row_ptr),
