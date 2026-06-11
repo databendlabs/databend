@@ -34,7 +34,6 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
-use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
@@ -44,7 +43,6 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use rand::Rng;
 use rand::thread_rng;
@@ -313,8 +311,9 @@ async fn target_select_segment_locations_with_mode(
     let mut parts = ReclusterParts::default();
     for selected_segs in segment_windows {
         selected_segments = selected_segs.len();
-        let (candidate_block_num, candidate_parts) =
-            mutator.target_select(selected_segs, mode).await?;
+        let (candidate_block_num, candidate_parts) = mutator
+            .target_select(selected_segs, mode, max_tasks)
+            .await?;
         if !candidate_parts.is_empty() {
             block_num = candidate_block_num;
             parts = candidate_parts;
@@ -383,7 +382,7 @@ async fn test_recluster_mutator_limits_removed_segments_to_selected_blocks() -> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
+async fn test_recluster_mutator_compacts_small_overlapping_blocks() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
@@ -427,7 +426,7 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Result<()> {
+async fn test_recluster_mutator_select_segments_covers_candidates() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -480,7 +479,7 @@ async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Re
         1,
     );
 
-    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+    let segment_windows = mutator.select_segments(&compact_segments, 3)?;
     let window_index_sets = segment_windows
         .iter()
         .map(|window| {
@@ -490,13 +489,25 @@ async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Re
                 .collect::<HashSet<_>>()
         })
         .collect::<Vec<_>>();
-    assert!(window_index_sets.contains(&HashSet::from([0, 1])));
-    assert!(window_index_sets.contains(&HashSet::from([2, 3])));
-    let selected_segments = window_index_sets
-        .iter()
-        .flat_map(|window| window.iter().copied())
-        .collect::<HashSet<_>>();
-    assert_eq!(selected_segments.len(), 7);
+    // Windows are segment-disjoint and together cover every candidate segment.
+    // The trailing window is folded into the previous one, so a window may hold
+    // more than the cap.
+    assert_eq!(window_index_sets.len(), 2);
+    let mut covered = HashSet::new();
+    let mut total = 0;
+    for window in &window_index_sets {
+        total += window.len();
+        covered.extend(window.iter().copied());
+    }
+    assert_eq!(total, covered.len());
+    assert_eq!(covered.len(), 7);
+
+    // `RECLUSTER LIMIT 1`: each window holds at most one segment (segments on
+    // distinct cluster-key points are never grouped), so the limit is honored.
+    let limit_one_windows = mutator.select_segments(&compact_segments, 1)?;
+    for window in &limit_one_windows {
+        assert_eq!(window.len(), 1);
+    }
 
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
     let segment_locations = gen_recluster_segments_by_ranges(
@@ -526,9 +537,9 @@ async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Re
     )
     .await?;
     let mutator = ReclusterMutator::new(
-        ctx,
-        data_accessor,
-        schema,
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
         vec![test_cluster_key_expr()],
         1.0,
         thresholds,
@@ -540,21 +551,139 @@ async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Re
         .iter()
         .map(|window| window.len())
         .collect::<Vec<_>>();
-    assert_eq!(window_sizes, vec![3, 3]);
-    let first_window = segment_windows[0]
+    // The trailing window is folded into the previous one, so all five nested
+    // segments end up in a single window.
+    assert_eq!(window_sizes, vec![5]);
+    let selected = segment_windows
         .iter()
-        .map(|segment| segment.loc.segment_idx)
+        .flat_map(|window| window.iter().map(|segment| segment.loc.segment_idx))
         .collect::<HashSet<_>>();
-    let second_window = segment_windows[1]
+    assert_eq!(selected.len(), 5);
+
+    // Four segments sharing the identical range [1, 2] start at the same sweep
+    // point, so they are never split and stay in one window even with a cap of 2.
+    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 2)], vec![(1, 2)], vec![(1, 2)], vec![(1, 2)]],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = FuseTable::segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        &None,
+        segment_locations,
+    )
+    .await?;
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+    );
+    let segment_windows = mutator.select_segments(&compact_segments, 2)?;
+    assert_eq!(segment_windows.len(), 1);
+    assert_eq!(segment_windows[0].len(), 4);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_accumulates_tasks_across_windows() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
+
+    // Two overlapping clusters that are far apart in key space. With a window cap
+    // of 2 they fall into two separate, segment-disjoint windows. A single window
+    // only yields one task, so reaching the budget of 2 requires accumulating
+    // tasks across both windows.
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 10)], vec![(2, 9)], vec![(100, 110)], vec![(
+            101, 109,
+        )]],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = TableSchemaRef::new(TableSchema::empty());
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = FuseTable::segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        &None,
+        segment_locations,
+    )
+    .await?;
+
+    let max_tasks = 2;
+    let mutator = ReclusterMutator::new(
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        max_tasks,
+    );
+
+    let segment_windows = mutator.select_segments(&compact_segments, 2)?;
+    // The two far-apart clusters produce two disjoint windows.
+    assert_eq!(segment_windows.len(), 2);
+
+    // Mimic do_recluster: accumulate parts from disjoint windows, bounded by the
+    // remaining task budget, until the budget is filled.
+    let mut parts = ReclusterParts::default();
+    for selected_segs in segment_windows {
+        let task_budget = max_tasks.saturating_sub(parts.tasks.len());
+        if task_budget == 0 {
+            break;
+        }
+        let (_, candidate_parts) = mutator
+            .target_select(selected_segs, ReclusterMode::Normal, task_budget)
+            .await?;
+        parts.tasks.extend(candidate_parts.tasks);
+        parts
+            .removed_segment_indexes
+            .extend(candidate_parts.removed_segment_indexes);
+    }
+
+    // One task per window, accumulated to the full budget of 2.
+    assert_eq!(parts.tasks.len(), 2);
+    // The four overlapping segments are all scheduled for removal, with no
+    // duplicates across windows.
+    let removed = parts
+        .removed_segment_indexes
         .iter()
-        .map(|segment| segment.loc.segment_idx)
-        .collect::<HashSet<_>>();
-    let union = first_window
-        .union(&second_window)
         .copied()
         .collect::<HashSet<_>>();
-    assert_eq!(union.len(), 5);
-    assert_eq!(first_window.intersection(&second_window).count(), 1);
+    assert_eq!(removed.len(), 4);
 
     Ok(())
 }
@@ -787,12 +916,7 @@ async fn test_final_recluster_groups_mature_levels_in_two_level_bands() -> anyho
     assert_eq!(block_num, 0);
     assert!(parts.tasks.is_empty());
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_final_recluster_skips_high_level_two_block_batch() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Two high-level blocks alone are not enough to produce useful FINAL work.
     let (block_num, parts) =
         target_select_segments_by_level_with_mode(&[(2, 2)], thresholds, 1, ReclusterMode::Final)
             .await?;
@@ -857,18 +981,6 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
 
         eprintln!("data ready");
 
-        let mut summary = Statistics::default();
-        for seg in &segment_infos {
-            merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
-        }
-
-        let mut block_ids = HashSet::new();
-        for seg in &segment_infos {
-            for b in &seg.blocks {
-                block_ids.insert(b.location.clone());
-            }
-        }
-
         let ctx: Arc<dyn TableContext> = ctx.clone();
         let segment_locations = create_segment_location_vector(locations.clone(), None);
         let compact_segments = FuseTable::segment_pruning(
@@ -892,10 +1004,28 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
             max_tasks,
         ));
         let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        // `select_segments` only skips large unclustered segments (level < 0 and
+        // block_count >= block_per_segment). Every other candidate segment must
+        // land in exactly one window, with no duplicates across windows.
+        let expected_segments = compact_segments
+            .iter()
+            .filter(|(_, info)| {
+                let level = info
+                    .summary
+                    .cluster_stats
+                    .as_ref()
+                    .filter(|stats| stats.cluster_key_id == cluster_key_id)
+                    .map_or(0, |stats| stats.level);
+                !(level < 0 && info.summary.block_count as usize >= threshold.block_per_segment)
+            })
+            .count();
+        let total_windowed: usize = segment_windows.iter().map(|window| window.len()).sum();
+        assert_eq!(expected_segments, total_windowed);
+
         // select the blocks with the highest depth.
         for selected_segs in segment_windows {
             let (_, candidate_parts) = mutator
-                .target_select(selected_segs, ReclusterMode::Normal)
+                .target_select(selected_segs, ReclusterMode::Normal, max_tasks)
                 .await?;
             if !candidate_parts.is_empty() {
                 parts = candidate_parts;
