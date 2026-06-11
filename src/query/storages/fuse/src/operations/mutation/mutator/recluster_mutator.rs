@@ -254,6 +254,7 @@ impl ReclusterMutator {
         &self,
         compact_segments: Vec<SelectedReclusterSegment>,
         mode: ReclusterMode,
+        task_budget: usize,
     ) -> Result<(u64, ReclusterParts)> {
         // Prepare for reclustering by collecting segment indices, statistics, and blocks
         let mut selected_segs_idx = Vec::with_capacity(compact_segments.len());
@@ -306,6 +307,9 @@ impl ReclusterMutator {
         let arrow_schema = self.schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
+        // The caller may already have built tasks in earlier windows, so this
+        // window is bounded by the remaining task budget rather than max_tasks.
+        let task_budget = task_budget.min(self.max_tasks);
         let mut tasks = Vec::new();
         let mut selected_blocks_idx = IndexSet::new();
 
@@ -316,7 +320,7 @@ impl ReclusterMutator {
                 continue;
             }
 
-            let remaining_budget = self.max_tasks.saturating_sub(tasks.len());
+            let remaining_budget = task_budget.saturating_sub(tasks.len());
             if remaining_budget == 0 {
                 debug!(
                     "recluster: level selection level={} block_count={} skip_reason=task_budget_exhausted",
@@ -358,21 +362,21 @@ impl ReclusterMutator {
                 tasks.push(task);
             }
 
-            if tasks.len() >= self.max_tasks {
+            if tasks.len() >= task_budget {
                 debug!(
-                    "recluster: task budget reached selected_task_count={} max_tasks={}",
+                    "recluster: task budget reached selected_task_count={} task_budget={}",
                     tasks.len(),
-                    self.max_tasks,
+                    task_budget,
                 );
                 break;
             }
         }
 
-        if tasks.len() < self.max_tasks {
+        if tasks.len() < task_budget {
             if let Some(level_tasks) = deferred_level_task {
                 // Backfill deferred low-level work when later groups did not use
                 // the full budget, so finite low-level data still converges.
-                let remaining_budget = self.max_tasks - tasks.len();
+                let remaining_budget = task_budget - tasks.len();
                 for (task, task_indices) in level_tasks.tasks.into_iter().take(remaining_budget) {
                     debug!(
                         "recluster: backfill deferred level={} selected_count={}",
@@ -803,22 +807,17 @@ impl ReclusterMutator {
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         max_len: usize,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>> {
-        // Keep a bounded overlap between adjacent hot windows. Anchors carry
-        // still-active segments forward so a long overlap range is not split
-        // into unrelated candidates, while the bound prevents one hot range
-        // from growing into an oversized window.
-        let anchor_len = max_len.saturating_sub(1).min((max_len / 5).max(1));
+        // One candidate window holds at most `window_len` segments. Any trailing
+        // window is merged into the previous one so we do not emit a tiny fragment.
+        let window_len = max_len.max(2);
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         let mut total_blocks = 0;
-        let mut candidate_indices = IndexSet::new();
         let mut segments = vec![None; compact_segments.len()];
         let mut segment_points: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
-        let mut small_segments = IndexSet::new();
 
         // Phase 1: collect segment ranges for the sweep-line selection. Large
-        // unclustered segments are ignored here; small segments are recorded so
-        // they can still be considered by the fallback merge path.
+        // unclustered segments are skipped because rewriting them is not useful.
         for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
             let segment =
                 SelectedReclusterSegment::create(self, loc.clone(), compact_segment.clone());
@@ -828,12 +827,7 @@ impl ReclusterMutator {
                 continue;
             }
 
-            let current_blocks_num = compact_segment.summary.block_count as usize;
-            if current_blocks_num < block_per_seg {
-                small_segments.insert(i);
-            }
-            total_blocks += current_blocks_num;
-            candidate_indices.insert(i);
+            total_blocks += compact_segment.summary.block_count as usize;
             segment_points
                 .entry(segment.stats.min().clone())
                 .and_modify(|v| v.0.push(i))
@@ -845,146 +839,84 @@ impl ReclusterMutator {
             segments[i] = Some(segment);
         }
 
-        let mut windows = Vec::new();
-        let mut seen_windows = HashSet::new();
-        let mut covered_segments = IndexSet::new();
+        let mut windows: Vec<(IndexSet<usize>, usize)> = Vec::new();
 
-        // Phase 2: enumerate hot windows by segment-level overlap depth. A hot
-        // point means more than one segment covers the same cluster-key point.
-        if candidate_indices.len() > 1 && total_blocks > block_per_seg {
-            let mut unfinished_intervals = BTreeMap::new();
-            let mut current_window = IndexSet::new();
-            let mut current_window_max_depth = 0usize;
-            // Deduplicate segments within one continuous hot range. After a
-            // flush, only bounded anchors remain eligible for the next window.
-            let mut seen_in_hot_range = IndexSet::new();
-            let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
-            let sorted_indices = compare_scalars(keys, &self.cluster_key_types)?;
+        // Phase 2: sweep the cluster-key points and cut the candidate segments
+        // into consecutive, segment-disjoint windows. Each segment joins exactly
+        // one window (at its own start point), so windows never share a segment
+        // and the resulting recluster tasks never read the same block twice. A
+        // window is closed once it reaches `window_len`; the most recently closed
+        // window is held in `prev_window` so a small trailing window can be merged
+        // into it instead of being emitted as a tiny fragment.
+        let mut unfinished_intervals = BTreeMap::new();
+        let mut prev_window: Option<(IndexSet<usize>, usize)> = None;
+        let mut current_window: IndexSet<usize> = IndexSet::new();
+        let mut current_window_max_depth = 0usize;
+        let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
+        let sorted_indices = compare_scalars(keys, &self.cluster_key_types)?;
 
-            for idx in sorted_indices {
-                let start = &values[idx as usize].0;
-                let end = &values[idx as usize].1;
-                let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
+        for idx in sorted_indices {
+            let start = &values[idx as usize].0;
+            let end = &values[idx as usize].1;
+            let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
 
-                if point_depth <= 1 {
-                    Self::flush_segment_window(
-                        &mut current_window,
-                        &mut current_window_max_depth,
-                        &mut seen_windows,
-                        &mut covered_segments,
-                        &mut windows,
-                    );
-                    seen_in_hot_range.clear();
-                } else {
-                    current_window_max_depth = current_window_max_depth.max(point_depth);
+            // A window is just a contiguous run of segments, so partitioning the
+            // run keeps windows segment-disjoint without any extra bookkeeping.
+            // Depth only contributes to the window score.
+            current_window_max_depth = current_window_max_depth.max(point_depth);
+            current_window.extend(start.iter().copied());
 
-                    // The active set is captured before applying the point update,
-                    // matching fetch_max_depth's inclusive start-point semantics.
-                    let active_indices = unfinished_intervals
-                        .keys()
-                        .chain(start.iter())
-                        .copied()
-                        .collect::<IndexSet<_>>();
-                    for active_idx in active_indices.iter().copied() {
-                        if !seen_in_hot_range.insert(active_idx) {
-                            continue;
-                        }
-
-                        current_window.insert(active_idx);
-                        if current_window.len() < max_len {
-                            continue;
-                        }
-
-                        let selected_indices = Self::flush_segment_window(
-                            &mut current_window,
-                            &mut current_window_max_depth,
-                            &mut seen_windows,
-                            &mut covered_segments,
-                            &mut windows,
-                        );
-
-                        // Carry the latest still-active segments into the
-                        // next window so a long hot range remains connected.
-                        current_window.extend(
-                            selected_indices
-                                .iter()
-                                .rev()
-                                .filter(|idx| active_indices.contains(*idx))
-                                .take(anchor_len)
-                                .copied(),
-                        );
-
-                        current_window_max_depth = if current_window.is_empty() {
-                            0
-                        } else {
-                            point_depth
-                        }
-                    }
+            if current_window.len() >= window_len {
+                // Emit the previously closed window and rotate the current
+                // window into `prev_window`.
+                if let Some((segs, depth)) = prev_window.take() {
+                    windows.push((segs, depth));
                 }
-
-                start.iter().for_each(|&idx| {
-                    unfinished_intervals.insert(idx, point_depth);
-                });
-                end.iter().for_each(|idx| {
-                    unfinished_intervals.remove(idx);
-                });
+                prev_window = Some((
+                    std::mem::take(&mut current_window),
+                    current_window_max_depth,
+                ));
+                current_window_max_depth = 0;
             }
-            Self::flush_segment_window(
-                &mut current_window,
-                &mut current_window_max_depth,
-                &mut seen_windows,
-                &mut covered_segments,
-                &mut windows,
-            );
 
-            // Try the deepest windows first; for equal depth, prefer the larger
-            // window because it gives target_select more room to build tasks.
-            windows.sort_by(|(left_indices, left_depth), (right_indices, right_depth)| {
-                right_depth
-                    .cmp(left_depth)
-                    .then_with(|| right_indices.len().cmp(&left_indices.len()))
+            start.iter().for_each(|&idx| {
+                unfinished_intervals.insert(idx, point_depth);
             });
-
-            debug!(
-                "recluster: segment selection hot windows segments={} blocks={} window_count={} covered_segments={}",
-                candidate_indices.len(),
-                total_blocks,
-                windows.len(),
-                covered_segments.len(),
-            );
+            end.iter().for_each(|idx| {
+                unfinished_intervals.remove(idx);
+            });
         }
 
-        // Phase 3: append fallback windows for candidates not covered by hot
-        // windows, plus small segments that may need segment-level repacking
-        // even when they do not overlap.
-        let max_threads = (self.ctx.get_settings().get_max_threads()? as usize).max(2);
-        let mut fallback_indices = Vec::new();
-        let mut fallback_blocks = 0;
-        for idx in candidate_indices {
-            if !covered_segments.contains(&idx) || small_segments.contains(&idx) {
-                fallback_blocks += compact_segments[idx].1.summary.block_count as usize;
-                fallback_indices.push(idx);
+        // Tail handling: merge the trailing window into the previous one if any,
+        // otherwise emit it on its own.
+        match prev_window.take() {
+            Some((mut prev_segs, prev_depth)) => {
+                prev_segs.extend(current_window.iter().copied());
+                windows.push((prev_segs, prev_depth.max(current_window_max_depth)));
+            }
+            None => {
+                if !current_window.is_empty() {
+                    windows.push((current_window, current_window_max_depth));
+                }
             }
         }
 
-        let fallback_groups = if fallback_blocks <= block_per_seg {
-            vec![fallback_indices]
-        } else {
-            fallback_indices
-                .chunks(max_threads)
-                .map(|chunk| chunk.to_vec())
-                .collect::<Vec<_>>()
-        };
-        for selected_indices in fallback_groups {
-            let mut window_key = selected_indices.clone();
-            window_key.sort_unstable();
-            if seen_windows.insert(window_key) {
-                windows.push((selected_indices, 0));
-            }
-        }
+        // Try the deepest windows first; for equal depth, prefer the larger
+        // window because it gives target_select more room to build tasks.
+        windows.sort_by(|(left_indices, left_depth), (right_indices, right_depth)| {
+            right_depth
+                .cmp(left_depth)
+                .then_with(|| right_indices.len().cmp(&left_indices.len()))
+        });
 
-        // Convert index windows back to segment objects. Empty windows can be
-        // produced only by an empty fallback group and are ignored here.
+        debug!(
+            "recluster: segment selection windows segments={} blocks={} window_count={}",
+            compact_segments.len(),
+            total_blocks,
+            windows.len(),
+        );
+
+        // Convert index windows back to segment objects.
         Ok(windows
             .into_iter()
             .map(|(selected_indices, _)| {
@@ -995,32 +927,6 @@ impl ReclusterMutator {
             })
             .filter(|window| !window.is_empty())
             .collect())
-    }
-
-    fn flush_segment_window(
-        current_indices: &mut IndexSet<usize>,
-        current_max_depth: &mut usize,
-        seen_windows: &mut HashSet<Vec<usize>>,
-        covered_segments: &mut IndexSet<usize>,
-        windows: &mut Vec<(Vec<usize>, usize)>,
-    ) -> Vec<usize> {
-        if current_indices.is_empty() {
-            return vec![];
-        }
-
-        let selected_indices = current_indices.iter().copied().collect::<Vec<_>>();
-        if selected_indices.len() >= 2 {
-            let mut window_key = selected_indices.clone();
-            window_key.sort_unstable();
-            if seen_windows.insert(window_key) {
-                covered_segments.extend(selected_indices.iter().copied());
-                windows.push((selected_indices.clone(), *current_max_depth));
-            }
-        }
-
-        current_indices.clear();
-        *current_max_depth = 0;
-        selected_indices
     }
 
     fn build_cluster_stats_for_recluster(
