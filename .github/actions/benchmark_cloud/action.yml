@@ -91,7 +91,7 @@ runs:
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
-        python3 benchmark_cloud.py
+        cargo run --quiet --bin benchmark-cloud
 
     - name: Upload artifact
       uses: actions/upload-artifact@v7
