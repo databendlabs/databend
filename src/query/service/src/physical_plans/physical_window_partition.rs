@@ -17,14 +17,12 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_storages_common_cache::TempDirManager;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
@@ -38,8 +36,6 @@ use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
-use crate::sessions::TableContextQueryIdentity;
-use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WindowPartition {
@@ -145,16 +141,6 @@ impl IPhysicalPlan for WindowPartition {
             )?;
         }
 
-        let temp_dir_manager = TempDirManager::instance();
-        let disk_bytes_limit = GlobalConfig::instance()
-            .spill
-            .window_partition_spill_bytes_limit();
-        let enable_dio = settings.get_enable_dio()?;
-        let disk_spill = temp_dir_manager
-            .get_disk_spill_dir(disk_bytes_limit, &builder.ctx.get_id())
-            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-            .transpose()?;
-
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
 
         let processor_id = AtomicUsize::new(0);
@@ -171,7 +157,6 @@ impl IPhysicalPlan for WindowPartition {
                     num_processors,
                     num_partitions,
                     window_spill_settings.clone(),
-                    disk_spill.clone(),
                     strategy,
                 )?,
             )))

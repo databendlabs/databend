@@ -313,17 +313,6 @@ impl BufferWriter {
         self.response.wait_and_take()
     }
 
-    pub(super) fn finish(&mut self) -> std::io::Result<Metadata> {
-        if let Some(b) = self.current_bytes.take() {
-            if self.buffer_tx.try_send(b.freeze()).is_err() {
-                return Err(io::ErrorKind::BrokenPipe.into());
-            }
-        }
-
-        self.buffer_tx.close();
-        self.response.wait_and_take()
-    }
-
     fn last_error(&mut self) -> io::Result<()> {
         let locked = self.response.mutex.lock();
         let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
@@ -455,6 +444,20 @@ impl SpillsDataWriter {
             SpillsDataWriter::Initialized(writer) => {
                 writer.writer.flush()?;
                 Ok(writer.writer.inner_mut().flush()?)
+            }
+        }
+    }
+
+    /// Flush current buffered data as a complete row group and return its ordinal index.
+    pub fn flush_row_group(&mut self) -> Result<usize> {
+        match self {
+            SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
+                "Bad state, BlockStreamWriter is uninitialized",
+            )),
+            SpillsDataWriter::Initialized(writer) => {
+                writer.writer.flush()?;
+                writer.writer.inner_mut().flush()?;
+                Ok(writer.writer.flushed_row_groups().len() - 1)
             }
         }
     }

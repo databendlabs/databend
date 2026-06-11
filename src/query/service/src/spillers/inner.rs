@@ -112,7 +112,7 @@ pub struct SpillerInner<A> {
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
     pub(super) use_parquet: bool,
-    pub(super) writer_pool_bytes: usize,
+    _writer_pool_bytes: usize,
     _spiller_type: SpillerType,
 }
 
@@ -141,7 +141,7 @@ impl<A> SpillerInner<A> {
             temp_dir,
             local_operator,
             use_parquet,
-            writer_pool_bytes,
+            _writer_pool_bytes: writer_pool_bytes,
             _spiller_type: spiller_type,
         })
     }

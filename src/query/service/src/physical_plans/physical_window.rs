@@ -17,7 +17,6 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
@@ -48,7 +47,6 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
-use databend_storages_common_cache::TempDirManager;
 
 use super::LagLeadDefault;
 use super::LagLeadFunctionDesc;
@@ -79,8 +77,6 @@ use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 use crate::pipelines::processors::transforms::WindowSortDesc;
-use crate::sessions::TableContextQueryIdentity;
-use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
@@ -473,16 +469,6 @@ fn apply_window_partition(
         )?;
     }
 
-    let temp_dir_manager = TempDirManager::instance();
-    let disk_bytes_limit = GlobalConfig::instance()
-        .spill
-        .window_partition_spill_bytes_limit();
-    let enable_dio = settings.get_enable_dio()?;
-    let disk_spill = temp_dir_manager
-        .get_disk_spill_dir(disk_bytes_limit, &builder.ctx.get_id())
-        .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-        .transpose()?;
-
     let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
     let plan_schema = DataSchemaRefExt::create(input_schema.fields().clone());
     let processor_id = AtomicUsize::new(0);
@@ -498,7 +484,6 @@ fn apply_window_partition(
                 num_processors,
                 num_partitions,
                 window_spill_settings.clone(),
-                disk_spill.clone(),
                 strategy,
             )?,
         )))
