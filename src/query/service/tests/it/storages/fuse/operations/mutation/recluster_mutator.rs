@@ -305,7 +305,7 @@ async fn target_select_segment_locations_with_mode(
         max_tasks,
     );
 
-    let segment_windows = mutator.select_segments(&compact_segments, max_segments)?;
+    let segment_windows = mutator.select_segments(&compact_segments, max_segments, true)?;
     let mut selected_segments = 0;
     let mut block_num = 0;
     let mut parts = ReclusterParts::default();
@@ -480,7 +480,7 @@ async fn test_recluster_mutator_select_segments_covers_candidates_and_merges_tai
         1,
     );
 
-    let segment_windows = mutator.select_segments(&compact_segments, 3)?;
+    let segment_windows = mutator.select_segments(&compact_segments, 3, true)?;
     let window_index_sets = segment_windows
         .iter()
         .map(|window| {
@@ -500,6 +500,21 @@ async fn test_recluster_mutator_select_segments_covers_candidates_and_merges_tai
     }
     assert_eq!(total, covered.len());
     assert_eq!(covered.len(), 7);
+
+    // With tail merging disabled (the `LIMIT` path), no window may exceed
+    // `max_len`, so the trailing segments form their own window instead of
+    // being merged into a previous full one.
+    let limited_windows = mutator.select_segments(&compact_segments, 3, false)?;
+    let mut limited_covered = HashSet::new();
+    let mut limited_total = 0;
+    for window in &limited_windows {
+        assert!(window.len() <= 3);
+        limited_total += window.len();
+        limited_covered.extend(window.iter().map(|segment| segment.loc.segment_idx));
+    }
+    // Still segment-disjoint and covering every candidate.
+    assert_eq!(limited_total, limited_covered.len());
+    assert_eq!(limited_covered.len(), 7);
 
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
     let segment_locations = gen_recluster_segments_by_ranges(
@@ -538,7 +553,7 @@ async fn test_recluster_mutator_select_segments_covers_candidates_and_merges_tai
         cluster_key_id,
         1,
     );
-    let segment_windows = mutator.select_segments(&compact_segments, 3)?;
+    let segment_windows = mutator.select_segments(&compact_segments, 3, true)?;
     let window_sizes = segment_windows
         .iter()
         .map(|window| window.len())
@@ -603,7 +618,7 @@ async fn test_recluster_mutator_keeps_same_point_segments_in_one_window() -> any
         1,
     );
 
-    let segment_windows = mutator.select_segments(&compact_segments, 2)?;
+    let segment_windows = mutator.select_segments(&compact_segments, 2, true)?;
     // All four same-point segments stay together in a single window despite the
     // window cap of 2.
     assert_eq!(segment_windows.len(), 1);
@@ -665,7 +680,7 @@ async fn test_recluster_mutator_accumulates_tasks_across_windows() -> anyhow::Re
         max_tasks,
     );
 
-    let segment_windows = mutator.select_segments(&compact_segments, 2)?;
+    let segment_windows = mutator.select_segments(&compact_segments, 2, true)?;
     // The two far-apart clusters produce two disjoint windows.
     assert_eq!(segment_windows.len(), 2);
 
@@ -1015,7 +1030,7 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
             cluster_key_id,
             max_tasks,
         ));
-        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let segment_windows = mutator.select_segments(&compact_segments, 8, true)?;
         // `select_segments` only skips large unclustered segments (level < 0 and
         // block_count >= block_per_segment). Every other candidate segment must
         // land in exactly one window, with no duplicates across windows.

@@ -786,9 +786,8 @@ impl ReclusterMutator {
         &self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         max_len: usize,
+        merge_tail: bool,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>> {
-        // One candidate window holds at most `window_len` segments. Any trailing
-        // window is merged into the previous one so we do not emit a tiny fragment.
         let window_len = max_len.max(2);
         let block_per_seg = self.block_thresholds.block_per_segment;
 
@@ -867,18 +866,19 @@ impl ReclusterMutator {
             });
         }
 
-        // Tail handling: merge the trailing window into the previous one if any,
-        // otherwise emit it on its own.
-        match prev_window.take() {
-            Some((mut prev_segs, prev_depth)) => {
-                prev_segs.extend(current_window.iter().copied());
-                windows.push((prev_segs, prev_depth.max(current_window_max_depth)));
+        // Tail handling: when `merge_tail` is set, fold the trailing window into
+        // the previous one (if any) to avoid a tiny fragment; otherwise emit the
+        // previous window on its own so none exceeds `max_len`.
+        if let Some((prev_segs, prev_depth)) = prev_window.take() {
+            if merge_tail {
+                current_window.extend(prev_segs);
+                current_window_max_depth = current_window_max_depth.max(prev_depth);
+            } else {
+                windows.push((prev_segs, prev_depth));
             }
-            None => {
-                if !current_window.is_empty() {
-                    windows.push((current_window, current_window_max_depth));
-                }
-            }
+        }
+        if !current_window.is_empty() {
+            windows.push((current_window, current_window_max_depth));
         }
 
         // Try the deepest windows first; for equal depth, prefer the larger

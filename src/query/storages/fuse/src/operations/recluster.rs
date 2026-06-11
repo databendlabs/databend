@@ -132,8 +132,11 @@ impl FuseTable {
                 continue;
             }
 
-            // Select segment windows with the highest depth.
-            let segment_windows = mutator.select_segments(&compact_segments, max_seg_num)?;
+            // Select segment windows with the highest depth. With a user-supplied
+            // `LIMIT`, disable tail merging so no window exceeds `max_seg_num` and
+            // the total segments rewritten stays within the limit.
+            let segment_windows =
+                mutator.select_segments(&compact_segments, max_seg_num, limit.is_none())?;
             debug!(
                 "recluster: selected segment windows compact_segments={} window_count={} max_segments={}",
                 compact_segments.len(),
