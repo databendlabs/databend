@@ -609,7 +609,7 @@ impl TransformUdfScript {
                     imports_stage_info,
                     ..
                 }) => {
-                    let mut dependencies = Self::extract_deps(&code_str);
+                    let mut dependencies = Self::extract_deps(&code_str)?;
                     dependencies.extend_from_slice(packages.as_slice());
 
                     let stage_fingerprints = Self::collect_stage_fingerprints(imports_stage_info)?;
@@ -677,7 +677,7 @@ impl TransformUdfScript {
         Ok(script_runtimes)
     }
 
-    fn extract_deps(script: &str) -> Vec<String> {
+    fn extract_deps(script: &str) -> Result<Vec<String>> {
         let mut ss = String::new();
         let mut meta_start = false;
         for line in script.lines() {
@@ -693,19 +693,23 @@ impl TransformUdfScript {
             }
         }
 
-        let parsed = ss.parse::<toml::Value>().unwrap();
+        let parsed = ss.parse::<toml::Value>().map_err(|err| {
+            ErrorCode::SemanticError(format!("Failed to parse UDF script metadata as TOML: {err}"))
+        })?;
 
         if parsed.get("dependencies").is_none() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
-        if let Some(deps) = parsed["dependencies"].as_array() {
-            deps.iter()
+        let deps = if let Some(deps) = parsed["dependencies"].as_array() {
+            deps
+                .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         } else {
             Vec::new()
-        }
+        };
+        Ok(deps)
     }
 
     fn prepare_block_entries(
@@ -1177,4 +1181,26 @@ mod venv {
 
     pub static PY_VENV_CACHE: LazyLock<RwLock<LruCache<PyVenvKeyEntry, PyVenvCacheEntry>>> =
         LazyLock::new(|| RwLock::new(LruCache::with_items_capacity(64)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_deps_returns_error_for_malformed_toml() {
+        let err = TransformUdfScript::extract_deps(
+            r#"# /// script
+# dependencies = [
+# ///
+"#,
+        )
+        .expect_err("malformed UDF script metadata should return an error");
+
+        assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
+        assert!(
+            err.message()
+                .contains("Failed to parse UDF script metadata as TOML")
+        );
+    }
 }
