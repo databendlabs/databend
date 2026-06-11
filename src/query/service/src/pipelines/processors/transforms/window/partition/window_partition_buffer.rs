@@ -23,7 +23,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use parquet::file::metadata::RowGroupMetaData;
 
-
 fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result<Vec<DataBlock>> {
     let mut num_rows = 0;
     let mut result = Vec::new();
@@ -107,7 +106,10 @@ struct PartitionFileReader {
 
 impl PartitionFileReader {
     fn restore(&self, indices: Vec<usize>) -> Result<Vec<DataBlock>> {
-        let selected: Vec<_> = indices.iter().map(|&i| self.row_groups[i].clone()).collect();
+        let selected: Vec<_> = indices
+            .iter()
+            .map(|&i| self.row_groups[i].clone())
+            .collect();
         if selected.is_empty() {
             return Ok(Vec::new());
         }
@@ -232,10 +234,6 @@ impl PartitionSlot {
         Ok(std::mem::take(&mut self.readers))
     }
 }
-
-// --- Public PartitionBuffer (WindowPartitionBufferV2) ---
-
-pub(super) type WindowPartitionBufferV2 = WindowPartitionBuffer;
 
 pub(super) struct WindowPartitionBuffer {
     prefix: String,

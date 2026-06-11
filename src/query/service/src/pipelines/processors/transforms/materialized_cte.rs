@@ -69,14 +69,8 @@ impl MaterializedCteSpilledPayload {
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let settings = ReadSettings::default();
-        let mut reader = buffer_pool.reader(
-            operator,
-            self.path,
-            self.schema,
-            selected,
-            target,
-            settings,
-        )?;
+        let mut reader =
+            buffer_pool.reader(operator, self.path, self.schema, selected, target, settings)?;
         match reader.read()? {
             Some(block) => Ok(block),
             None => Err(ErrorCode::Internal(
