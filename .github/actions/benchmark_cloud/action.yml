@@ -89,6 +89,8 @@ runs:
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
+        RUSTFLAGS: ""
+        CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
       shell: bash
       run: |
         cargo run --quiet --bin benchmark-cloud
