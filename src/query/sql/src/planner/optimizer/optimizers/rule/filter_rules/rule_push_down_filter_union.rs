@@ -93,7 +93,7 @@ impl Rule for RulePushDownFilterUnion {
                 .zip(union_side.iter())
                 .map(|(index, side)| {
                     let replacement = match &side.1 {
-                        Some(expr) => UnionOutputReplacement::Scalar(expr.clone()),
+                        Some(expr) => UnionOutputReplacement::Scalar(Box::new(expr.clone())),
                         None => UnionOutputReplacement::Column(side.0),
                     };
                     (*index, replacement)
@@ -132,7 +132,7 @@ impl Rule for RulePushDownFilterUnion {
 
 enum UnionOutputReplacement {
     Column(Symbol),
-    Scalar(ScalarExpr),
+    Scalar(Box<ScalarExpr>),
 }
 
 fn replace_union_output(
@@ -161,7 +161,7 @@ fn replace_union_output(
                             column.column = new_column;
                         }
                         UnionOutputReplacement::Scalar(new_scalar) => {
-                            *expr = new_scalar.clone();
+                            *expr = new_scalar.as_ref().clone();
                         }
                     }
                     return Ok(());
