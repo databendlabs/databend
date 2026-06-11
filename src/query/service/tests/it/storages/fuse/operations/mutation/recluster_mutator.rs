@@ -516,6 +516,13 @@ async fn test_recluster_mutator_select_segments_covers_candidates_and_merges_tai
     assert_eq!(limited_total, limited_covered.len());
     assert_eq!(limited_covered.len(), 7);
 
+    // `RECLUSTER LIMIT 1`: each window must hold at most one segment (segments on
+    // distinct cluster-key points are never grouped), so the limit is honored.
+    let limit_one_windows = mutator.select_segments(&compact_segments, 1, false)?;
+    for window in &limit_one_windows {
+        assert_eq!(window.len(), 1);
+    }
+
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
     let segment_locations = gen_recluster_segments_by_ranges(
         &data_accessor,

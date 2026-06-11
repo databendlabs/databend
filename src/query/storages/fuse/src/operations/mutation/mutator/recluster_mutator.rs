@@ -785,10 +785,10 @@ impl ReclusterMutator {
     pub fn select_segments(
         &self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
-        max_len: usize,
+        window_len: usize,
         merge_tail: bool,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>> {
-        let window_len = max_len.max(2);
+        debug_assert!(window_len > 0);
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         let mut total_blocks = 0;
@@ -868,7 +868,7 @@ impl ReclusterMutator {
 
         // Tail handling: when `merge_tail` is set, fold the trailing window into
         // the previous one (if any) to avoid a tiny fragment; otherwise emit the
-        // previous window on its own so none exceeds `max_len`.
+        // previous window on its own so none exceeds `window_len`.
         if let Some((prev_segs, prev_depth)) = prev_window.take() {
             if merge_tail {
                 current_window.extend(prev_segs);

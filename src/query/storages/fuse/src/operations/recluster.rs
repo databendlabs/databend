@@ -66,6 +66,11 @@ impl FuseTable {
             return Ok(None);
         }
 
+        // `LIMIT 0` requests no work.
+        if limit == Some(0) {
+            return Ok(None);
+        }
+
         let Some(snapshot) = self.read_table_snapshot().await? else {
             // no snapshot, no recluster.
             return Ok(None);
