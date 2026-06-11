@@ -226,14 +226,14 @@ pub fn calculate_block_overlap_depths(
         return Ok(Vec::new());
     }
 
-    let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
+    let mut points_map: HashMap<&[Scalar], (Vec<usize>, Vec<usize>)> = HashMap::new();
     for (index, (min, max)) in ranges.iter().enumerate() {
         points_map
-            .entry(min.clone())
+            .entry(min.as_slice())
             .and_modify(|v| v.0.push(index))
             .or_insert((vec![index], vec![]));
         points_map
-            .entry(max.clone())
+            .entry(max.as_slice())
             .and_modify(|v| v.1.push(index))
             .or_insert((vec![], vec![index]));
     }
@@ -241,7 +241,7 @@ pub fn calculate_block_overlap_depths(
     let mut stats = vec![BlockOverlapDepth::default(); ranges.len()];
     let mut unfinished_parts: HashMap<usize, BlockOverlapDepth> = HashMap::new();
     let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
-    let indices = compare_scalars(keys, cluster_key_types)?;
+    let indices = compare_scalars(&keys, cluster_key_types)?;
     for idx in indices.into_iter() {
         let start = &values[idx as usize].0;
         let end = &values[idx as usize].1;
