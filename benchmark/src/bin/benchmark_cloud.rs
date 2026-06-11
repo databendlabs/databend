@@ -18,6 +18,9 @@ use databend_driver::Connection;
 use databend_driver::RowWithStats;
 use databend_driver::ServerStats;
 use serde::Serialize;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 
 #[derive(Debug)]
@@ -91,6 +94,16 @@ struct QueryExecutionRecord {
 }
 
 #[derive(Serialize)]
+struct SystemHistoryRecord {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query_history: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    profile_history: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
 struct QueryAttempt {
     attempt: usize,
     success: bool,
@@ -106,7 +119,24 @@ struct QueryAttempt {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     query_execution: Vec<QueryExecutionRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    system_history: Option<SystemHistoryRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+}
+
+struct QueryAttemptWithHistory {
+    attempt: QueryAttempt,
+    history_receiver: Option<oneshot::Receiver<SystemHistoryRecord>>,
+}
+
+struct HistoryRequest {
+    query_id: String,
+    response: oneshot::Sender<SystemHistoryRecord>,
+}
+
+struct HistoryCollector {
+    sender: mpsc::UnboundedSender<HistoryRequest>,
+    worker: JoinHandle<()>,
 }
 
 fn env_or_default(name: &str, default: &str) -> String {
@@ -343,6 +373,7 @@ async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> Quer
         server_stats: final_stats,
         stats_samples,
         query_execution,
+        system_history: None,
         error,
     }
 }
@@ -382,6 +413,216 @@ async fn collect_query_execution(
         }
     }
     Ok(Vec::new())
+}
+
+async fn collect_system_history(conn: &Connection, query_id: &str) -> SystemHistoryRecord {
+    let mut query_history = None;
+    let mut profile_history = Vec::new();
+    let mut error = None;
+
+    for delay in [0_u64, 500, 1000, 2000] {
+        if delay > 0 {
+            tokio::time::sleep(Duration::from_millis(delay)).await;
+        }
+
+        match collect_query_history(conn, query_id).await {
+            Ok(Some(record)) => query_history = Some(record),
+            Ok(None) => {}
+            Err(err) => {
+                error = Some(err.to_string());
+                break;
+            }
+        }
+
+        match collect_profile_history(conn, query_id).await {
+            Ok(records) => {
+                if !records.is_empty() {
+                    profile_history = records;
+                }
+            }
+            Err(err) => {
+                error = Some(err.to_string());
+                break;
+            }
+        }
+
+        if query_history.is_some() && !profile_history.is_empty() {
+            break;
+        }
+    }
+
+    SystemHistoryRecord {
+        query_history,
+        profile_history,
+        error,
+    }
+}
+
+impl HistoryCollector {
+    fn spawn(history_dsn: String) -> Self {
+        let (sender, mut receiver) = mpsc::unbounded_channel::<HistoryRequest>();
+        // This benchmark crate is intentionally independent from the main Databend workspace.
+        #[allow(clippy::disallowed_methods)]
+        let worker = tokio::spawn(async move {
+            match connect(history_dsn).await {
+                Ok(conn) => {
+                    while let Some(request) = receiver.recv().await {
+                        let history = collect_system_history(&conn, &request.query_id).await;
+                        let _ = request.response.send(history);
+                    }
+                    if let Err(err) = conn.close().await {
+                        eprintln!("failed to close system history connection: {err}");
+                    }
+                }
+                Err(err) => {
+                    let error = err.to_string();
+                    while let Some(request) = receiver.recv().await {
+                        let _ = request.response.send(history_error(error.clone()));
+                    }
+                }
+            }
+        });
+
+        Self { sender, worker }
+    }
+
+    fn queue(&self, query_id: String) -> Result<oneshot::Receiver<SystemHistoryRecord>> {
+        let (response, receiver) = oneshot::channel();
+        self.sender
+            .send(HistoryRequest { query_id, response })
+            .map_err(|_| anyhow!("system history collector is not running"))?;
+        Ok(receiver)
+    }
+
+    async fn shutdown(self) {
+        drop(self.sender);
+        if let Err(err) = self.worker.await {
+            eprintln!("system history collector task failed: {err}");
+        }
+    }
+}
+
+fn history_error(error: String) -> SystemHistoryRecord {
+    SystemHistoryRecord {
+        query_history: None,
+        profile_history: Vec::new(),
+        error: Some(error),
+    }
+}
+
+async fn finalize_history(attempts: Vec<QueryAttemptWithHistory>) -> Vec<QueryAttempt> {
+    let mut output = Vec::with_capacity(attempts.len());
+    for mut item in attempts {
+        if let Some(receiver) = item.history_receiver.take() {
+            item.attempt.system_history = Some(match receiver.await {
+                Ok(history) => history,
+                Err(err) => {
+                    history_error(format!("system history collector dropped result: {err}"))
+                }
+            });
+        }
+        output.push(item.attempt);
+    }
+    output
+}
+
+async fn collect_query_history(
+    conn: &Connection,
+    query_id: &str,
+) -> Result<Option<serde_json::Value>> {
+    let query_id_literal = quote_literal(query_id);
+    let sql = format!(
+        r#"
+        SELECT to_string(object_construct(
+            'query_id', query_id,
+            'query_text', query_text,
+            'query_kind', query_kind,
+            'sql_user', sql_user,
+            'handler_type', handler_type,
+            'tenant_id', tenant_id,
+            'cluster_id', cluster_id,
+            'node_id', node_id,
+            'event_time', event_time,
+            'query_start_time', query_start_time,
+            'query_duration_ms', query_duration_ms,
+            'query_queued_duration_ms', query_queued_duration_ms,
+            'current_database', current_database,
+            'scan_rows', scan_rows,
+            'scan_bytes', scan_bytes,
+            'scan_io_bytes', scan_io_bytes,
+            'scan_io_bytes_cost_ms', scan_io_bytes_cost_ms,
+            'scan_partitions', scan_partitions,
+            'total_partitions', total_partitions,
+            'result_rows', result_rows,
+            'result_bytes', result_bytes,
+            'written_rows', written_rows,
+            'written_bytes', written_bytes,
+            'written_io_bytes', written_io_bytes,
+            'written_io_bytes_cost_ms', written_io_bytes_cost_ms,
+            'join_spilled_rows', join_spilled_rows,
+            'join_spilled_bytes', join_spilled_bytes,
+            'agg_spilled_rows', agg_spilled_rows,
+            'agg_spilled_bytes', agg_spilled_bytes,
+            'group_by_spilled_rows', group_by_spilled_rows,
+            'group_by_spilled_bytes', group_by_spilled_bytes,
+            'bytes_from_remote_disk', bytes_from_remote_disk,
+            'bytes_from_local_disk', bytes_from_local_disk,
+            'bytes_from_memory', bytes_from_memory,
+            'exception_code', exception_code,
+            'exception_text', exception_text,
+            'server_version', server_version,
+            'query_tag', query_tag,
+            'has_profile', has_profile,
+            'peek_memory_usage', peek_memory_usage,
+            'session_id', session_id,
+            'session_settings', session_settings
+        ))
+        FROM system_history.query_history
+        WHERE query_id = '{query_id_literal}'
+        ORDER BY event_time DESC
+        LIMIT 1
+        "#
+    );
+
+    let Some(row) = conn.query_row(&sql).await? else {
+        return Ok(None);
+    };
+    let (raw,): (Option<String>,) = row.try_into().map_err(|err: String| anyhow!(err))?;
+    Ok(raw.map(|raw| json_or_raw(&raw)))
+}
+
+async fn collect_profile_history(
+    conn: &Connection,
+    query_id: &str,
+) -> Result<Vec<serde_json::Value>> {
+    let query_id_literal = quote_literal(query_id);
+    let sql = format!(
+        r#"
+        SELECT to_string(object_construct(
+            'timestamp', timestamp,
+            'query_id', query_id,
+            'profiles', profiles,
+            'statistics_desc', statistics_desc
+        ))
+        FROM system_history.profile_history
+        WHERE query_id = '{query_id_literal}'
+        ORDER BY timestamp
+        "#
+    );
+
+    let rows = conn.query_all(&sql).await?;
+    let mut records = Vec::with_capacity(rows.len());
+    for row in rows {
+        let (raw,): (Option<String>,) = row.try_into().map_err(|err: String| anyhow!(err))?;
+        if let Some(raw) = raw {
+            records.push(json_or_raw(&raw));
+        }
+    }
+    Ok(records)
+}
+
+fn json_or_raw(raw: &str) -> serde_json::Value {
+    serde_json::from_str(raw).unwrap_or_else(|_| serde_json::json!({ "raw": raw }))
 }
 
 fn pad_attempts(values: &mut Vec<f64>, target_size: usize) {
@@ -481,6 +722,8 @@ async fn main() -> Result<()> {
         detail_sources: vec![
             "databend-driver query_iter_ext".to_string(),
             "system.query_execution".to_string(),
+            "system_history.query_history".to_string(),
+            "system_history.profile_history".to_string(),
         ],
         load_time: None,
         data_size: None,
@@ -527,6 +770,13 @@ async fn main() -> Result<()> {
         false,
     ))
     .await?;
+    let history_dsn = build_dsn(
+        &config,
+        Some(&config.database),
+        Some(&config.warehouse),
+        false,
+    );
+    let history_collector = HistoryCollector::spawn(history_dsn);
 
     println!("Checking session settings...");
     execute_sql(
@@ -546,6 +796,7 @@ async fn main() -> Result<()> {
     if queries.is_empty() {
         bail!("No queries found under {}", dataset_dir.display());
     }
+    let mut pending_query_details: BTreeMap<String, Vec<QueryAttemptWithHistory>> = BTreeMap::new();
 
     for (query_num, query_file) in queries.iter().enumerate() {
         println!("==> Running Q{query_num}: {}", query_file.display());
@@ -554,10 +805,22 @@ async fn main() -> Result<()> {
         record.result.push(Vec::new());
         let query_key = format!("Q{query_num}");
         record.values.insert(query_key.clone(), Vec::new());
-        let mut attempts = Vec::new();
+        let mut attempt_results = Vec::new();
 
         for attempt in 1..=config.tries {
-            let detail = run_query_attempt(&query_conn, &query_sql, attempt).await;
+            let mut detail = run_query_attempt(&query_conn, &query_sql, attempt).await;
+            let history_receiver = if let Some(query_id) = detail.query_id.clone() {
+                match history_collector.queue(query_id) {
+                    Ok(receiver) => Some(receiver),
+                    Err(err) => {
+                        detail.system_history = Some(history_error(err.to_string()));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
             if detail.success {
                 if let Some(elapsed) = detail.elapsed_seconds {
                     println!("Q{query_num}[{attempt}] succeeded in {elapsed:.3} seconds");
@@ -576,7 +839,10 @@ async fn main() -> Result<()> {
                     detail.error.as_deref().unwrap_or("unknown error")
                 );
             }
-            attempts.push(detail);
+            attempt_results.push(QueryAttemptWithHistory {
+                attempt: detail,
+                history_receiver,
+            });
         }
 
         if config.tries < 3 {
@@ -589,8 +855,16 @@ async fn main() -> Result<()> {
                 3,
             );
         }
-        record.query_details.insert(query_key, attempts);
+        pending_query_details.insert(query_key, attempt_results);
     }
+
+    println!("Collecting system history details...");
+    for (query_key, attempts) in pending_query_details {
+        record
+            .query_details
+            .insert(query_key, finalize_history(attempts).await);
+    }
+    history_collector.shutdown().await;
 
     let cleanup_result = cleanup(&config).await;
     let write_result = write_result_files(&script_dir, &record);
