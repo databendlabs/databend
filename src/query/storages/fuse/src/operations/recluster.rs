@@ -38,6 +38,10 @@ use crate::operations::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 use crate::pruning::create_segment_location_vector;
+use crate::statistics::reducers::merge_statistics_mut;
+
+const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
+const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReclusterMode {
@@ -76,21 +80,20 @@ impl FuseTable {
         let segment_locations = create_segment_location_vector(snapshot.segments.clone(), None);
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let segment_limit = limit.unwrap_or(1000);
         let number_segments = segment_locations.len();
-        // The default limit might be too small, which makes
-        // the scanning of recluster candidates slow.
-        let chunk_size = segment_limit.max(max_threads * 4);
-        // The max number of segments to be reclustered.
-        let max_seg_num = segment_limit.min(max_threads * 2);
+        let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);
+        let candidate_window_limit = (max_threads * 4).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW);
+        // Keep the scan range large enough for candidate window selection.
+        let chunk_size = segment_limit.max(candidate_window_limit);
+        // The max number of segments to be reclustered in one candidate window.
+        let max_seg_num = segment_limit.min(candidate_window_limit);
 
-        let mut recluster_seg_num = 0;
+        let max_tasks = mutator.max_tasks;
         let mut recluster_blocks_count = 0;
         let mut parts = ReclusterParts::default();
 
         let mut segment_idx = 0;
         for chunk in segment_locations.chunks(chunk_size) {
-            let mut selected_seg_num = 0;
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
@@ -137,32 +140,53 @@ impl FuseTable {
                 segment_windows.len(),
                 max_seg_num,
             );
-            // Select the blocks with the highest depth.
+            // Windows are segment-disjoint, so their parts can be merged safely.
+            // Accumulate windows until the task budget is filled, so a single
+            // low-overlap window does not waste available parallelism.
             for selected_segs in segment_windows {
+                let task_budget = max_tasks.saturating_sub(parts.tasks.len());
+                if task_budget == 0 {
+                    break;
+                }
+
                 let candidate_seg_num = selected_segs.len();
-                let (block_num, recluster_parts) =
-                    mutator.target_select(selected_segs, mode).await?;
-                let seg_num = recluster_parts.removed_segment_indexes.len() as u64;
-                if !recluster_parts.is_empty() {
-                    debug!(
-                        "recluster: built parts candidate_segments={} selected_segments={} blocks={} tasks={}",
-                        candidate_seg_num,
-                        seg_num,
-                        block_num,
-                        recluster_parts.tasks.len(),
-                    );
-                    selected_seg_num = seg_num;
-                    recluster_blocks_count = block_num;
-                    parts = recluster_parts;
+                let (block_num, recluster_parts) = mutator
+                    .target_select(selected_segs, mode, task_budget)
+                    .await?;
+                if recluster_parts.is_empty() {
+                    continue;
+                }
+
+                debug!(
+                    "recluster: built parts candidate_segments={} selected_segments={} blocks={} tasks={}",
+                    candidate_seg_num,
+                    recluster_parts.removed_segment_indexes.len(),
+                    block_num,
+                    recluster_parts.tasks.len(),
+                );
+                recluster_blocks_count += block_num;
+                // A rebuild-only result (segment repack, no rewrite task) does not
+                // advance the task budget. Accept one and stop, so the repack
+                // scope stays bounded instead of growing across the whole chunk.
+                let produced_tasks = !recluster_parts.tasks.is_empty();
+                merge_recluster_parts(&mut parts, recluster_parts, mutator.cluster_key_id);
+                // `LIMIT` bounds the total segments rewritten per invocation, so
+                // stop after the first productive window instead of accumulating
+                // more across windows.
+                if !produced_tasks || limit.is_some() {
                     break;
                 }
             }
 
+            // A scan chunk is large enough to fill the task budget from its
+            // disjoint windows, so once a chunk produces any work we stop. With
+            // no limit we keep scanning later chunks only while nothing has been
+            // produced yet. `LIMIT` bounds the scan to a single chunk.
             if !parts.is_empty() || limit.is_some() {
-                recluster_seg_num = selected_seg_num;
                 break;
             }
         }
+        let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
 
         {
             let elapsed_time = start.elapsed();
@@ -241,4 +265,21 @@ impl FuseTable {
 
         Ok(metas)
     }
+}
+
+fn merge_recluster_parts(acc: &mut ReclusterParts, other: ReclusterParts, cluster_key_id: u32) {
+    if other.is_empty() {
+        return;
+    }
+    acc.tasks.extend(other.tasks);
+    acc.remained_blocks.extend(other.remained_blocks);
+    acc.removed_segment_indexes
+        .extend(other.removed_segment_indexes);
+    acc.removed_segment_indexes
+        .sort_unstable_by(|a, b| b.cmp(a));
+    merge_statistics_mut(
+        &mut acc.removed_segment_summary,
+        &other.removed_segment_summary,
+        Some(cluster_key_id),
+    );
 }
