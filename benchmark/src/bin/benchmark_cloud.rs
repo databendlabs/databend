@@ -535,6 +535,8 @@ async fn collect_query_history(
         r#"
         SELECT to_string(object_construct(
             'query_id', query_id,
+            'log_type', log_type,
+            'log_type_name', log_type_name,
             'query_text', query_text,
             'query_kind', query_kind,
             'sql_user', sql_user,
@@ -579,6 +581,7 @@ async fn collect_query_history(
         ))
         FROM system_history.query_history
         WHERE query_id = '{query_id_literal}'
+          AND log_type != 1
         ORDER BY event_time DESC
         LIMIT 1
         "#
