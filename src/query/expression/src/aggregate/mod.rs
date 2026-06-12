@@ -17,8 +17,8 @@ mod aggregate_function_state;
 mod aggregate_hashtable;
 mod aggregate_meta;
 mod group_hash;
-mod legacy_hash_index;
-mod new_hash_index;
+mod hash_index;
+mod hash_index_adapter;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
@@ -42,9 +42,7 @@ pub use probe_state::ProbeState;
 use probe_state::*;
 use row_ptr::*;
 
-use crate::aggregate::legacy_hash_index::LegacyHashIndex;
-use crate::aggregate::legacy_hash_index::TableAdapter;
-use crate::aggregate::new_hash_index::ExperimentalHashIndex;
+use crate::aggregate::hash_index::HashIndex;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
@@ -52,9 +50,9 @@ pub(crate) const BATCH_SIZE: usize = 2048;
 const LOAD_FACTOR: f64 = 1.5;
 
 // 75% of the capacity
-// new index can probe multiple ctrl byte by SIMD
-// we can make the hash index more
-const NEW_INDEX_LOAD_FACTOR: f64 = 1.35;
+// The hash index can probe multiple ctrl bytes by SIMD, so it can use a denser
+// load factor than the payload capacity estimate.
+const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
 
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
@@ -68,86 +66,6 @@ pub(crate) const L3_CACHE_SIZE: usize = 1572864 / 2;
 pub(crate) const MAX_RADIX_BITS: u64 = 7;
 pub const MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM: u64 = 1 << MAX_RADIX_BITS;
 
-enum HashIndex {
-    Legacy(LegacyHashIndex),
-    Experimental(ExperimentalHashIndex),
-}
-
-impl HashIndex {
-    /// Create a HashIndex with the given capacity
-    fn new(config: &HashTableConfig, capacity: usize) -> HashIndex {
-        if config.enable_experiment_hash_index {
-            HashIndex::Experimental(ExperimentalHashIndex::with_capacity(capacity))
-        } else {
-            HashIndex::Legacy(LegacyHashIndex::with_capacity(capacity))
-        }
-    }
-
-    /// Create a dummy LegacyHashIndex with zero capacity
-    /// Any operation on this LegacyHashIndex is not allowed.
-    fn new_dummy(config: &HashTableConfig) -> HashIndex {
-        if config.enable_experiment_hash_index {
-            HashIndex::Experimental(ExperimentalHashIndex::dummy())
-        } else {
-            HashIndex::Legacy(LegacyHashIndex::dummy())
-        }
-    }
-
-    fn capacity(&self) -> usize {
-        match self {
-            HashIndex::Legacy(index) => index.capacity(),
-            HashIndex::Experimental(index) => index.capacity(),
-        }
-    }
-
-    fn count(&self) -> usize {
-        match self {
-            HashIndex::Legacy(index) => index.count(),
-            HashIndex::Experimental(index) => index.count(),
-        }
-    }
-
-    fn resize_threshold(&self) -> usize {
-        match self {
-            HashIndex::Legacy(index) => index.resize_threshold(),
-            HashIndex::Experimental(index) => index.resize_threshold(),
-        }
-    }
-
-    fn allocated_bytes(&self) -> usize {
-        match self {
-            HashIndex::Legacy(index) => index.allocated_bytes(),
-            HashIndex::Experimental(index) => index.allocated_bytes(),
-        }
-    }
-
-    fn reset(&mut self) {
-        match self {
-            HashIndex::Legacy(index) => index.reset(),
-            HashIndex::Experimental(index) => index.reset(),
-        }
-    }
-
-    fn probe_and_create(
-        &mut self,
-        state: &mut ProbeState,
-        row_count: usize,
-        adapter: &mut dyn TableAdapter,
-    ) -> usize {
-        match self {
-            HashIndex::Legacy(index) => index.probe_and_create(state, row_count, adapter),
-            HashIndex::Experimental(index) => index.probe_and_create(state, row_count, adapter),
-        }
-    }
-
-    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
-        match self {
-            HashIndex::Legacy(index) => index.probe_slot_and_set(hash, row_ptr),
-            HashIndex::Experimental(index) => index.probe_slot_and_set(hash, row_ptr),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
     // Max radix bits across all threads, this is a hint to repartition
@@ -159,7 +77,6 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     pub max_partial_capacity: usize,
-    pub enable_experiment_hash_index: bool,
 }
 
 impl Default for HashTableConfig {
@@ -173,7 +90,6 @@ impl Default for HashTableConfig {
             block_fill_factor: 1.8,
             partial_agg: false,
             max_partial_capacity: 131072,
-            enable_experiment_hash_index: false,
         }
     }
 }
@@ -214,11 +130,6 @@ impl HashTableConfig {
 
     pub fn with_partition_start_bit(mut self, partition_start_bit: u64) -> Self {
         self.partition_start_bit = partition_start_bit;
-        self
-    }
-
-    pub fn with_experiment_hash_index(mut self, enable: bool) -> Self {
-        self.enable_experiment_hash_index = enable;
         self
     }
 

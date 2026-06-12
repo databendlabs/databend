@@ -18,8 +18,8 @@ use std::simd::num::SimdInt;
 use std::simd::num::SimdUint;
 use std::simd::u8x8;
 
-use crate::aggregate::new_hash_index::bitmask::BitMask;
-use crate::aggregate::new_hash_index::bitmask::Tag;
+use crate::aggregate::hash_index::bitmask::BitMask;
+use crate::aggregate::hash_index::bitmask::Tag;
 
 #[derive(Copy, Clone)]
 pub struct Group(u8x8);
@@ -57,7 +57,7 @@ mod tests {
     use rand::RngCore;
 
     use super::Group;
-    use crate::aggregate::new_hash_index::bitmask::Tag;
+    use crate::aggregate::hash_index::bitmask::Tag;
 
     #[test]
     fn test_fuzz_portable_simd() {
