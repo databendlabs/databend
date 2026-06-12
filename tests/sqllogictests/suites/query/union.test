@@ -359,6 +359,11 @@ query I
 select number::int32 from numbers(100) union all select number::int from numbers(100) where number > 0 ignore_result;
 ----
 
+query RTT
+select a, typeof(a), cast(a as string) as s from (select '1' as a union all select 0 as a) as u where cast(a as string) = '1.00000' order by 1;
+----
+1.00000 DECIMAL(38, 5) 1.00000
+
 statement ok
 create or replace table t1 (a int, b int);
 
