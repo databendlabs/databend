@@ -15,7 +15,7 @@
 
 use std::num::NonZeroU64;
 
-use crate::aggregate::new_hash_index::group::Group;
+use crate::aggregate::hash_index::group::Group;
 
 const BITMASK_ITER_MASK: u64 = 0x8080_8080_8080_8080;
 
