@@ -38,8 +38,15 @@ pub use auth::RefreshableToken;
 pub use auth::TokenFile;
 
 mod config;
+mod endpoint_policy;
+pub use config::EndpointPolicyScope;
+pub use config::EndpointUrlPolicy;
+pub use config::EndpointUrlPolicyConfig;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
+pub use endpoint_policy::EndpointUrlPolicyRegistry;
+pub use endpoint_policy::check_storage_endpoint_url;
+pub use endpoint_policy::check_storage_params_endpoints;
 
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
@@ -53,6 +60,7 @@ pub use operator::IcebergFileIO;
 pub use operator::OperatorRegistry;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;
 

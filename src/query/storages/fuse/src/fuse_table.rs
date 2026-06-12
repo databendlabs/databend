@@ -76,9 +76,11 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::Files;
@@ -196,11 +198,22 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
-                        // Special handling for history tables.
-                        // Since history tables storage params are fully generated from config,
-                        // we can safely allow credential chain.
-                        let sp = allow_system_history_credential_chain(&table_info, sp);
-                        let operator = init_operator(&sp)?;
+                        // Special handling for history tables. Since history
+                        // table storage params are fully generated from server
+                        // config, we both allow the credential chain and treat
+                        // the operator as trusted (skipping the request-time
+                        // endpoint egress policy).
+                        let is_system_history = is_system_history_table(&table_info);
+                        let sp = if is_system_history {
+                            allow_credential_chain_for_s3(sp)
+                        } else {
+                            sp
+                        };
+                        let operator = if is_system_history {
+                            init_operator(&sp)?
+                        } else {
+                            init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?
+                        };
 
                         let table_meta_options = &table_info.meta.options;
                         let table_type = if Self::is_table_attached(table_meta_options) {
@@ -1465,21 +1478,90 @@ pub enum RetentionPolicy {
     ByNumOfSnapshotsToKeep(usize),
 }
 
-fn allow_system_history_credential_chain(
-    table_info: &TableInfo,
-    storage_params: StorageParams,
-) -> StorageParams {
+/// Returns true if `table_info` belongs to the `system_history` database.
+///
+/// `system_history` storage params are fully generated from server config, so
+/// callers can treat them as trusted (e.g. allow the AWS credential chain and
+/// skip the user-SQL endpoint egress policy).
+fn is_system_history_table(table_info: &TableInfo) -> bool {
+    table_info
+        .database_name()
+        .is_ok_and(|db_name| db_name.eq_ignore_ascii_case("system_history"))
+}
+
+/// Force-enable the AWS credential chain on S3 storage params when it has not
+/// been set explicitly.
+///
+/// The `allow_credential_chain` flag is not persisted through meta proto
+/// conversion, so for storage params that originate from server config (such
+/// as `system_history` tables) we have to re-apply the default at load time;
+/// otherwise EC2/IRSA-only deployments would lose access to the history bucket
+/// after a round-trip through meta.
+fn allow_credential_chain_for_s3(storage_params: StorageParams) -> StorageParams {
     let mut sp = storage_params;
-    let Ok(db_name) = table_info.database_name() else {
-        return sp;
-    };
-    if !db_name.eq_ignore_ascii_case("system_history") {
-        return sp;
-    }
-    if let StorageParams::S3(cfg) = &mut sp {
-        if cfg.allow_credential_chain.is_none() {
-            cfg.allow_credential_chain = Some(true);
-        }
+    if let StorageParams::S3(cfg) = &mut sp
+        && cfg.allow_credential_chain.is_none()
+    {
+        cfg.allow_credential_chain = Some(true);
     }
     sp
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::DatabaseType;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::allow_credential_chain_for_s3;
+    use super::is_system_history_table;
+
+    fn table_info_with_db(db_name: &str) -> TableInfo {
+        // database_name() requires a FUSE engine.
+        let mut meta = TableMeta {
+            storage_params: Some(StorageParams::Memory),
+            ..Default::default()
+        };
+        meta.engine = "FUSE".to_string();
+        TableInfo {
+            ident: TableIdent::new(0, 0),
+            desc: format!("'{}'.'{}'", db_name, "t"),
+            name: "t".to_string(),
+            meta,
+            db_type: DatabaseType::NormalDB,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_matches_case_insensitively() {
+        for db in &["system_history", "SYSTEM_HISTORY", "System_History"] {
+            let info = table_info_with_db(db);
+            assert!(
+                is_system_history_table(&info),
+                "'{db}' should be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_rejects_other_dbs() {
+        // These database names must NOT be treated as system_history.
+        for db in &["user_db", "system_history_backup", "SYSTEM", "default"] {
+            let info = table_info_with_db(db);
+            assert!(
+                !is_system_history_table(&info),
+                "db '{db}' must not be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_allow_credential_chain_for_s3_is_noop_for_non_s3() {
+        let sp = StorageParams::Memory;
+        let result = allow_credential_chain_for_s3(sp.clone());
+        assert_eq!(result, sp);
+    }
 }
