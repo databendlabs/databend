@@ -27,6 +27,7 @@ use std::time::Instant;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use bytes::BytesMut;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::spawn;
@@ -57,6 +58,7 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 
+use super::MAX_PARQUET_ROW_GROUPS_PER_FILE;
 use super::record_read_profile;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -405,6 +407,12 @@ pub struct InitializedBlocksStreamWriter {
     writer: ArrowWriter<BufferWriter>,
 }
 
+pub struct SpilledDataFile {
+    pub path: String,
+    pub bytes_written: usize,
+    pub row_groups: Vec<RowGroupMetaData>,
+}
+
 pub enum SpillsDataWriter {
     Uninitialize(Option<BufferWriter>),
     Initialized(InitializedBlocksStreamWriter),
@@ -423,6 +431,7 @@ impl SpillsDataWriter {
 
                 let props = WriterProperties::builder()
                     .set_compression(Compression::LZ4_RAW)
+                    .set_max_row_group_row_count(Some(usize::MAX))
                     .set_statistics_enabled(EnabledStatistics::None)
                     .set_bloom_filter_enabled(false)
                     .set_dictionary_enabled(false)
@@ -444,6 +453,13 @@ impl SpillsDataWriter {
                 let record_batch = block.to_record_batch(&writer.table_schema)?;
                 Ok(writer.writer.write(&record_batch)?)
             }
+        }
+    }
+
+    pub fn row_group_count(&self) -> usize {
+        match self {
+            SpillsDataWriter::Uninitialize(_) => 0,
+            SpillsDataWriter::Initialized(writer) => writer.writer.flushed_row_groups().len(),
         }
     }
 
@@ -477,6 +493,120 @@ impl SpillsDataWriter {
                 Ok((bytes_written, row_groups))
             }
         }
+    }
+}
+
+struct ActiveSpillsDataWriter {
+    path: String,
+    writer: SpillsDataWriter,
+}
+
+pub struct RollingSpillsDataWriter {
+    operator: Operator,
+    prefix: String,
+    pool_bytes: usize,
+    buffer_pool: Arc<SpillsBufferPool>,
+    current: Option<ActiveSpillsDataWriter>,
+    closed_files: Vec<SpilledDataFile>,
+    max_row_groups_per_file: usize,
+}
+
+impl RollingSpillsDataWriter {
+    pub fn create(
+        operator: Operator,
+        prefix: String,
+        pool_bytes: usize,
+        buffer_pool: Arc<SpillsBufferPool>,
+    ) -> Self {
+        Self {
+            operator,
+            prefix,
+            pool_bytes,
+            buffer_pool,
+            current: None,
+            closed_files: Vec::new(),
+            max_row_groups_per_file: MAX_PARQUET_ROW_GROUPS_PER_FILE,
+        }
+    }
+
+    #[cfg(test)]
+    fn create_with_max_row_groups_per_file(
+        operator: Operator,
+        prefix: String,
+        pool_bytes: usize,
+        buffer_pool: Arc<SpillsBufferPool>,
+        max_row_groups_per_file: usize,
+    ) -> Self {
+        Self {
+            operator,
+            prefix,
+            pool_bytes,
+            buffer_pool,
+            current: None,
+            closed_files: Vec::new(),
+            max_row_groups_per_file,
+        }
+    }
+
+    fn create_file_writer(
+        buffer_pool: &Arc<SpillsBufferPool>,
+        operator: Operator,
+        prefix: &str,
+        pool_bytes: usize,
+    ) -> Result<ActiveSpillsDataWriter> {
+        let path = format!("{}/{}", prefix, GlobalUniq::unique());
+        let writer = buffer_pool.writer(operator, path.clone(), pool_bytes)?;
+        Ok(ActiveSpillsDataWriter { path, writer })
+    }
+
+    fn ensure_current(&mut self) -> Result<&mut ActiveSpillsDataWriter> {
+        if self.current.is_none() {
+            self.current = Some(Self::create_file_writer(
+                &self.buffer_pool,
+                self.operator.clone(),
+                &self.prefix,
+                self.pool_bytes,
+            )?);
+        }
+        Ok(self.current.as_mut().unwrap())
+    }
+
+    fn close_current(&mut self) -> Result<()> {
+        let Some(current) = self.current.take() else {
+            return Ok(());
+        };
+
+        let (bytes_written, row_groups) = current.writer.close()?;
+        if bytes_written != 0 || !row_groups.is_empty() {
+            self.closed_files.push(SpilledDataFile {
+                path: current.path,
+                bytes_written,
+                row_groups,
+            });
+        }
+        Ok(())
+    }
+
+    pub fn write_and_flush(&mut self, block: DataBlock) -> Result<()> {
+        if block.is_empty() {
+            return Ok(());
+        }
+
+        let max_row_groups_per_file = self.max_row_groups_per_file;
+        let current = self.ensure_current()?;
+        current.writer.write(block)?;
+        current.writer.flush()?;
+
+        if current.writer.row_group_count() >= max_row_groups_per_file {
+            self.close_current()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn close(mut self) -> Result<Vec<SpilledDataFile>> {
+        self.close_current()?;
+        Ok(self.closed_files)
     }
 }
 
@@ -766,6 +896,9 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_base::runtime::spawn;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::number::Int32Type;
     use opendal::Operator;
 
     use super::*;
@@ -773,6 +906,14 @@ mod tests {
     fn create_test_operator() -> std::io::Result<Operator> {
         let builder = opendal::services::Fs::default().root("/tmp");
         Ok(Operator::new(builder)?.finish())
+    }
+
+    fn create_test_memory_operator() -> std::io::Result<Operator> {
+        Ok(Operator::new(opendal::services::Memory::default())?.finish())
+    }
+
+    fn sample_block(value: i32) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![value])])
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -932,6 +1073,30 @@ mod tests {
         buffer_writer.write_all(b"minimum chunk").unwrap();
         let metadata = buffer_writer.close().unwrap();
         assert!(metadata.content_length() > 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_rolling_spills_data_writer_rotates_by_row_group_count() {
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_memory_operator().unwrap();
+        let mut writer = RollingSpillsDataWriter::create_with_max_row_groups_per_file(
+            operator,
+            "rolling_spill_test".to_string(),
+            CHUNK_SIZE,
+            pool,
+            2,
+        );
+
+        writer.write_and_flush(sample_block(1)).unwrap();
+        writer.write_and_flush(sample_block(2)).unwrap();
+        writer.write_and_flush(sample_block(3)).unwrap();
+
+        let files = writer.close().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].row_groups.len(), 2);
+        assert_eq!(files[1].row_groups.len(), 1);
+        assert!(files.iter().all(|file| file.bytes_written > 0));
+        assert_ne!(files[0].path, files[1].path);
     }
 
     #[tokio::test(flavor = "multi_thread")]

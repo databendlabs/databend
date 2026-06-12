@@ -17,7 +17,6 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::PoisonError;
 
-use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
@@ -40,11 +39,12 @@ use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 use crate::spillers::Layout;
+use crate::spillers::RollingSpillsDataWriter;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
+use crate::spillers::SpilledDataFile;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
-use crate::spillers::SpillsDataWriter;
 
 const BYTES_PER_MIB: usize = 1024 * 1024;
 
@@ -84,8 +84,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         };
 
         for (id, data_block) in ready_partitions {
-            self.partitions[id].writer.write(data_block)?;
-            self.partitions[id].writer.flush()?;
+            self.partitions[id].write_block(data_block)?;
         }
 
         Ok(())
@@ -104,15 +103,22 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         }
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
-            let path = partition.path;
-            let (written, row_groups) = partition.writer.close()?;
+            for file in partition.close()? {
+                let SpilledDataFile {
+                    path,
+                    bytes_written,
+                    row_groups,
+                } = file;
 
-            self.state
-                .ctx
-                .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+                self.state.ctx.add_spill_file(
+                    Location::Remote(path.clone()),
+                    Layout::Parquet,
+                    bytes_written,
+                );
 
-            if !row_groups.is_empty() {
-                partitions_meta.push((id, SpillMetadata { path, row_groups }));
+                if !row_groups.is_empty() {
+                    partitions_meta.push((id, SpillMetadata { path, row_groups }));
+                }
             }
         }
 
@@ -139,8 +145,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         let ready_partitions = self.partition_probe_data(data)?;
 
         for (id, data_block) in ready_partitions {
-            self.partitions[id].writer.write(data_block)?;
-            self.partitions[id].writer.flush()?;
+            self.partitions[id].write_block(data_block)?;
         }
 
         Ok(Box::new(EmptyJoinStream))
@@ -358,8 +363,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         for id in ready_partitions_id {
             if let Some(data_block) = self.probe_partition_stream.finalize_partition(id) {
-                self.partitions[id].writer.write(data_block)?;
-                self.partitions[id].writer.flush()?;
+                self.partitions[id].write_block(data_block)?;
             }
         }
 
@@ -367,15 +371,22 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let mut partitions_meta = Vec::with_capacity(self.partitions.len());
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
-            let path = partition.path;
-            let (written, row_groups) = partition.writer.close()?;
+            for file in partition.close()? {
+                let SpilledDataFile {
+                    path,
+                    bytes_written,
+                    row_groups,
+                } = file;
 
-            self.state
-                .ctx
-                .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+                self.state.ctx.add_spill_file(
+                    Location::Remote(path.clone()),
+                    Layout::Parquet,
+                    bytes_written,
+                );
 
-            if !row_groups.is_empty() {
-                partitions_meta.push((id, SpillMetadata { path, row_groups }));
+                if !row_groups.is_empty() {
+                    partitions_meta.push((id, SpillMetadata { path, row_groups }));
+                }
             }
         }
 
@@ -422,8 +433,7 @@ pub enum RestoreStage {
 }
 
 pub struct GraceJoinPartition {
-    path: String,
-    writer: SpillsDataWriter,
+    writer: RollingSpillsDataWriter,
 }
 
 impl GraceJoinPartition {
@@ -432,14 +442,23 @@ impl GraceJoinPartition {
 
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer =
-            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
 
         Ok(GraceJoinPartition {
-            path: file_path,
-            writer: spills_data_writer,
+            writer: RollingSpillsDataWriter::create(
+                operator,
+                prefix.to_string(),
+                writer_pool_bytes,
+                buffer_pool,
+            ),
         })
+    }
+
+    fn write_block(&mut self, block: DataBlock) -> Result<()> {
+        self.writer.write_and_flush(block)
+    }
+
+    fn close(self) -> Result<Vec<SpilledDataFile>> {
+        self.writer.close()
     }
 }
 

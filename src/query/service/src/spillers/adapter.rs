@@ -24,6 +24,7 @@ use std::time::Instant;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -467,13 +468,27 @@ pub struct SpillWriter {
 }
 
 impl SpillWriter {
-    pub const MAX_ORDINAL: usize = 2 << 15;
+    pub const MAX_ROW_GROUPS_PER_FILE: usize = super::MAX_PARQUET_ROW_GROUPS_PER_FILE;
 
     pub fn file_writer(&self) -> &AnyFileWriter {
         &self.file_writer
     }
 
+    pub fn row_group_count(&self) -> usize {
+        match &self.file_writer {
+            AnyFileWriter::Local { writer, .. } => writer.num_row_group(),
+            AnyFileWriter::Remote { writer, .. } => writer.num_row_group(),
+        }
+    }
+
     pub fn add_row_group(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        if self.row_group_count() >= Self::MAX_ROW_GROUPS_PER_FILE {
+            return Err(ErrorCode::Internal(format!(
+                "Parquet spill writer reached the row group limit: {}",
+                Self::MAX_ROW_GROUPS_PER_FILE
+            )));
+        }
+
         let mut encoder = self.new_row_group_encoder();
         for block in blocks {
             encoder.add(block)?;
@@ -487,6 +502,13 @@ impl SpillWriter {
         &mut self,
         row_group: RowGroupEncoder,
     ) -> Result<RowGroupMetaDataPtr> {
+        if self.row_group_count() >= Self::MAX_ROW_GROUPS_PER_FILE {
+            return Err(ErrorCode::Internal(format!(
+                "Parquet spill writer reached the row group limit: {}",
+                Self::MAX_ROW_GROUPS_PER_FILE
+            )));
+        }
+
         let start = std::time::Instant::now();
 
         match &mut self.file_writer {

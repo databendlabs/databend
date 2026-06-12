@@ -23,9 +23,13 @@ mod serialize;
 #[cfg(test)]
 mod test_memory;
 
+pub const MAX_PARQUET_ROW_GROUPS_PER_FILE: usize = i16::MAX as usize;
+
 pub use adapter::*;
 pub use async_buffer::BufferWriter;
+pub use async_buffer::RollingSpillsDataWriter;
 pub use async_buffer::SpillTarget;
+pub use async_buffer::SpilledDataFile;
 pub use async_buffer::SpillsBufferPool;
 pub use async_buffer::SpillsDataReader;
 pub use async_buffer::SpillsDataWriter;
