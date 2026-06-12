@@ -63,7 +63,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         let num_rows = data.num_rows();
-        let num_bytes = data.estimate_block_size();
+        let num_bytes = data.estimate_block_size(data.num_columns());
 
         if !self.thresholds.check_for_compact(num_rows, num_bytes) {
             // holding slices of blocks to merge later may lead to oom, so

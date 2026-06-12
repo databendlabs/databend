@@ -41,7 +41,8 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_storage::DataOperator;
-use databend_common_storage::init_operator;
+use databend_common_storage::EndpointPolicyScope;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
@@ -351,7 +352,7 @@ fn get_table_operator_for_drop_operation(table_meta: &TableMeta) -> Result<Opera
     // Check if the table has custom storage parameters
     if let Some(storage_params) = &table_meta.storage_params {
         // Use the custom storage parameters to create an operator
-        init_operator(storage_params)
+        init_operator_with_policy_scope(storage_params, EndpointPolicyScope::External)
             .map_err(|e| ErrorCode::StorageUnavailable(format!("Failed to init operator: {}", e)))
     } else {
         // Use the default operator

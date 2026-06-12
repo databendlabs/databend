@@ -13,14 +13,24 @@
 // limitations under the License.
 
 use std::env;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use hickory_resolver::config::LookupIpStrategy;
+use reqwest::dns::Name;
+use reqwest::dns::Resolve;
 use reqwest_hickory_resolver::HickoryResolver;
 use reqwest_hickory_resolver::ResolverOpts;
+
+/// Positive DNS TTL (seconds) used by the global hickory resolver.
+///
+/// Exposed so that downstream caches (for example the storage HTTP client's
+/// checked-endpoint cache) can derive their TTL from this single source of
+/// truth instead of duplicating the value.
+pub const GLOBAL_HICKORY_POSITIVE_MIN_TTL: Duration = Duration::from_secs(300);
 
 /// Global shared hickory resolver.
 static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|| {
@@ -29,8 +39,7 @@ static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|
     opts.ip_strategy = LookupIpStrategy::Ipv4Only;
     // Use larger cache size for better performance.
     opts.cache_size = 1024;
-    // Positive TTL is set to 5 minutes.
-    opts.positive_min_ttl = Some(Duration::from_secs(300));
+    opts.positive_min_ttl = Some(GLOBAL_HICKORY_POSITIVE_MIN_TTL);
     // Negative TTL is set to 1 minute.
     opts.negative_min_ttl = Some(Duration::from_secs(60));
 
@@ -75,6 +84,22 @@ pub fn get_global_http_client(
         let client = builder.build().expect("http client must be created");
         HttpClient { client }
     })
+}
+
+pub fn get_global_hickory_resolver() -> Arc<HickoryResolver> {
+    GLOBAL_HICKORY_RESOLVER.clone()
+}
+
+pub async fn resolve_global_dns(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
+    let name = host
+        .parse::<Name>()
+        .map_err(|err| format!("invalid dns name: {err}"))?;
+    let addrs = GLOBAL_HICKORY_RESOLVER
+        .resolve(name)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    Ok(addrs.map(|addr| SocketAddr::new(addr.ip(), port)).collect())
 }
 
 /// HttpClient that used by databend.

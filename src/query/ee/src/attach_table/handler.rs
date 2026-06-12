@@ -23,8 +23,9 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
@@ -46,7 +47,7 @@ impl AttachTableHandler for RealAttachTableHandler {
     ) -> databend_common_exception::Result<CreateTableReq> {
         // Safe to unwrap here, as attach table must have storage params.
         let sp = plan.storage_params.as_ref().unwrap();
-        let operator = init_operator(sp)?;
+        let operator = init_operator_with_policy_scope(sp, EndpointPolicyScope::External)?;
         check_operator(&operator, sp).await?;
 
         let snapshot_hint = load_last_snapshot_hint(storage_prefix, &operator)

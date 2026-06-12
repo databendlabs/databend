@@ -49,7 +49,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_storage::DataOperator;
-use databend_common_storage::init_operator;
+use databend_common_storage::EndpointPolicyScope;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_parquet::ParquetPruner;
 use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSourceType;
@@ -85,7 +86,7 @@ impl HiveTable {
         let table_options = table_info.engine_options().try_into()?;
         let storage_params = table_info.meta.storage_params.clone();
         let dal = match storage_params {
-            Some(sp) => init_operator(&sp)?,
+            Some(sp) => init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?,
             None => DataOperator::instance().operator(),
         };
 

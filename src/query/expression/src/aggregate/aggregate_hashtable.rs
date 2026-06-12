@@ -27,7 +27,7 @@ use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
-use super::legacy_hash_index::AdapterImpl;
+use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
@@ -84,7 +84,7 @@ impl AggregateHashTable {
                 config.partition_start_bit,
                 vec![arena],
             ),
-            hash_index: HashIndex::new(&config, capacity),
+            hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
         }
@@ -102,9 +102,9 @@ impl AggregateHashTable {
         // if need_init_entry is false, we will directly append rows without probing hash index
         // so we can use a dummy hash index, which is not allowed to insert any entry
         let hash_index = if need_init_entry {
-            HashIndex::new(&config, capacity)
+            HashIndex::with_capacity(capacity)
         } else {
-            HashIndex::new_dummy(&config)
+            HashIndex::dummy()
         };
         Self {
             direct_append: !need_init_entry,
@@ -428,13 +428,13 @@ impl AggregateHashTable {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::new(&self.config, target);
+            self.hash_index = HashIndex::with_capacity(target);
             return;
         }
 
         self.hash_index_resize_count += 1;
 
-        let mut hash_index = HashIndex::new(&self.config, new_capacity);
+        let mut hash_index = HashIndex::with_capacity(new_capacity);
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {

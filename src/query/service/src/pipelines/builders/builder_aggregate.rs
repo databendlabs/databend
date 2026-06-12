@@ -37,7 +37,6 @@ impl PipelineBuilder {
         cluster_aggregator: bool,
         max_spill_io_requests: usize,
         enable_experiment_aggregate: bool,
-        enable_experiment_hash_index: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -133,7 +132,6 @@ impl PipelineBuilder {
             cluster_aggregator,
             max_spill_io_requests,
             enable_experiment_aggregate,
-            enable_experiment_hash_index,
             max_block_rows,
             max_block_bytes,
         )?;

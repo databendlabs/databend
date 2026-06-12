@@ -69,6 +69,10 @@ use crate::statistics::reducers::merge_statistics_mut;
 /// For two-block layouts, repeated reclustering beyond this level
 /// rarely improves data locality and may cause task churn.
 const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
+/// Maximum recluster level allowed for candidate selection.
+/// Blocks that reach this level have already been rewritten many times, so
+/// keep them out of future recluster tasks to avoid unbounded level growth.
+const MAX_RECLUSTER_LEVEL: i32 = 32;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 struct LevelReclusterTasks {
@@ -286,6 +290,13 @@ impl ReclusterMutator {
         let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             if block.stats.level < 0 {
+                continue;
+            }
+            if block.stats.level >= MAX_RECLUSTER_LEVEL {
+                debug!(
+                    "recluster: skip block segment_idx={} block_idx={} level={} skip_reason=max_recluster_level",
+                    block.index.segment_idx, block.index.block_idx, block.stats.level,
+                );
                 continue;
             }
 

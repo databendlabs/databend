@@ -928,6 +928,19 @@ async fn test_final_recluster_groups_mature_levels_in_two_level_bands() -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_max_level_blocks() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level_with_mode(&[(32, 3)], thresholds, 1, ReclusterMode::Final)
+            .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_safety_for_recluster() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
