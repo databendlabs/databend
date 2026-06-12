@@ -40,6 +40,9 @@ use databend_common_storages_parquet::ReadSettings;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::sessions::QueryContext;
+use crate::spillers::Layout;
+use crate::spillers::Location;
+use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 
@@ -81,6 +84,7 @@ impl MaterializedCteSpilledPayload {
 }
 
 pub struct MaterializedCteSink {
+    ctx: Arc<QueryContext>,
     input: Arc<InputPort>,
     senders: Vec<Sender<MaterializedCtePayload>>,
     prefix: String,
@@ -106,6 +110,7 @@ impl MaterializedCteSink {
             .get_spill_writer_memory_pool_size_mb()?
             .saturating_mul(1024 * 1024);
         Ok(ProcessorPtr::create(Box::new(Self {
+            ctx,
             input,
             senders,
             prefix,
@@ -141,7 +146,14 @@ impl MaterializedCteSink {
             writer.write(block)?;
             ordinals.push(writer.flush_row_group()?);
         }
-        let (_bytes_written, row_groups) = writer.close()?;
+        let (bytes_written, row_groups) = writer.close()?;
+        if bytes_written > 0 {
+            self.ctx.add_spill_file(
+                Location::Remote(path.clone()),
+                Layout::Parquet,
+                bytes_written,
+            );
+        }
         let row_groups = Arc::new(row_groups);
 
         Ok(ordinals

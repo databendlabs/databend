@@ -19,9 +19,20 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use parquet::file::metadata::RowGroupMetaData;
+
+use crate::sessions::QueryContext;
+use crate::spillers::Layout;
+use crate::spillers::SpillAdapter;
+use crate::spillers::SpillTarget;
+use crate::spillers::SpillsBufferPool;
+use crate::spillers::SpillsDataWriter;
+
+/// Maximum number of row groups per file before rotating to a new file.
+const MAX_ROW_GROUPS_PER_FILE: usize = 2 << 15;
 
 fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result<Vec<DataBlock>> {
     let mut num_rows = 0;
@@ -44,14 +55,6 @@ fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result
 
     Ok(result)
 }
-use crate::spillers::SpillTarget;
-use crate::spillers::SpillsBufferPool;
-use crate::spillers::SpillsDataWriter;
-
-/// Maximum number of row groups per file before rotating to a new file.
-const MAX_ROW_GROUPS_PER_FILE: usize = 2 << 15;
-
-// --- Writer / Reader for a single partition file ---
 
 struct PartitionFileWriter {
     path: String,
@@ -83,17 +86,32 @@ impl PartitionFileWriter {
         self.writer.flush_row_group()
     }
 
-    fn close(self) -> Result<PartitionFileReader> {
-        let (bytes_written, row_groups) = self.writer.close()?;
+    fn close(self, ctx: &Arc<QueryContext>) -> Result<PartitionFileReader> {
+        let Self {
+            path,
+            writer,
+            schema,
+        } = self;
+        let (bytes_written, row_groups) = writer.close()?;
         log::debug!(
-            path = self.path,
+            path = path,
             bytes_written;
             "partition file closed"
         );
+
+        if bytes_written > 0 {
+            SpillAdapter::add_spill_file(
+                ctx,
+                Location::Remote(path.clone()),
+                Layout::Parquet,
+                bytes_written,
+            );
+        }
+
         Ok(PartitionFileReader {
-            path: self.path,
+            path,
             row_groups,
-            schema: self.schema.unwrap_or_else(|| Arc::new(Default::default())),
+            schema: schema.unwrap_or_else(|| Arc::new(Default::default())),
         })
     }
 }
@@ -183,6 +201,7 @@ impl PartitionSlot {
     #[fastrace::trace(name = "PartitionSlot::spill_blocks")]
     fn spill_blocks(
         &mut self,
+        ctx: &Arc<QueryContext>,
         prefix: &str,
         writer_pool_bytes: usize,
         blocks: Vec<DataBlock>,
@@ -213,7 +232,7 @@ impl PartitionSlot {
                 row_groups.push(ordinal);
 
                 if ordinal >= MAX_ROW_GROUPS_PER_FILE {
-                    let reader = writer.close()?;
+                    let reader = writer.close(ctx)?;
                     self.readers.push((reader, row_groups));
                 } else {
                     self.state = PartitionSpillState::Writing { writer, row_groups };
@@ -224,11 +243,14 @@ impl PartitionSlot {
         }
     }
 
-    fn take_readers(&mut self) -> Result<Vec<(PartitionFileReader, Vec<usize>)>> {
+    fn take_readers(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<Vec<(PartitionFileReader, Vec<usize>)>> {
         if let PartitionSpillState::Writing { writer, row_groups } =
             std::mem::replace(&mut self.state, PartitionSpillState::Reading)
         {
-            let reader = writer.close()?;
+            let reader = writer.close(ctx)?;
             self.readers.push((reader, row_groups));
         }
         Ok(std::mem::take(&mut self.readers))
@@ -236,6 +258,7 @@ impl PartitionSlot {
 }
 
 pub(super) struct WindowPartitionBuffer {
+    ctx: Arc<QueryContext>,
     prefix: String,
     writer_pool_bytes: usize,
     partitions: Vec<PartitionSlot>,
@@ -248,6 +271,7 @@ pub(super) struct WindowPartitionBuffer {
 
 impl WindowPartitionBuffer {
     pub fn new(
+        ctx: Arc<QueryContext>,
         prefix: String,
         writer_pool_bytes: usize,
         num_partitions: usize,
@@ -256,6 +280,7 @@ impl WindowPartitionBuffer {
     ) -> Result<Self> {
         let partitions = (0..num_partitions).map(PartitionSlot::new).collect();
         Ok(Self {
+            ctx,
             prefix,
             writer_pool_bytes,
             partitions,
@@ -296,7 +321,7 @@ impl WindowPartitionBuffer {
                 continue;
             }
             if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
-                partition.spill_blocks(&self.prefix, self.writer_pool_bytes, blocks)?;
+                partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, blocks)?;
                 return Ok(());
             }
 
@@ -314,7 +339,7 @@ impl WindowPartitionBuffer {
             && size >= self.min_row_group_size
         {
             let blocks = partition.take_blocks(None).unwrap();
-            partition.spill_blocks(&self.prefix, self.writer_pool_bytes, blocks)?;
+            partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, blocks)?;
         } else {
             self.can_spill = false;
         }
@@ -327,7 +352,7 @@ impl WindowPartitionBuffer {
             self.next_to_restore += 1;
 
             let mut result = Vec::new();
-            for (reader, row_groups) in partition.take_readers()? {
+            for (reader, row_groups) in partition.take_readers(&self.ctx)? {
                 debug_assert!(!row_groups.is_empty());
                 let blocks = reader.restore(row_groups)?;
                 result.extend(blocks);

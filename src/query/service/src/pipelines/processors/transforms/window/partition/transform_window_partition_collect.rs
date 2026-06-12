@@ -83,6 +83,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let buffer = WindowPartitionBuffer::new(
+            ctx.clone(),
             prefix,
             writer_pool_bytes,
             partitions.len(),
