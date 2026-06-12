@@ -246,6 +246,7 @@ impl IPhysicalPlan for Recluster {
                     &mut builder.main_pipeline,
                     compact_thresholds,
                     max_threads,
+                    cluster_stats_gen.extra_key_num,
                 )?;
 
                 builder.main_pipeline.add_transform(

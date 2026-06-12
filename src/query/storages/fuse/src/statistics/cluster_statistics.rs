@@ -38,12 +38,12 @@ use log::warn;
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
-    extra_key_num: usize,
     max_page_size: Option<usize>,
 
     level: i32,
     block_thresholds: BlockThresholds,
 
+    pub extra_key_num: usize,
     pub cluster_key_index: Vec<usize>,
     pub operators: Vec<BlockOperator>,
     pub out_fields: Vec<DataField>,
@@ -149,10 +149,10 @@ impl ClusterStatsGenerator {
         );
 
         let level = if min == max
-            && self
-                .block_thresholds
-                .check_large_enough(data_block.num_rows(), data_block.memory_size())
-        {
+            && self.block_thresholds.check_large_enough(
+                data_block.num_rows(),
+                data_block.estimate_block_size(data_block.num_columns() - self.extra_key_num),
+            ) {
             -1
         } else {
             level
