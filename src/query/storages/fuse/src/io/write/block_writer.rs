@@ -240,7 +240,7 @@ impl BlockBuilder {
         )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let block_size = data_block.estimate_block_size() as u64;
+        let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
         let col_metas = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,

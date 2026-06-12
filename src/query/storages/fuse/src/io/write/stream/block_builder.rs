@@ -288,7 +288,7 @@ impl StreamBlockBuilder {
             spatial_index_builder.add_block(&block)?;
         }
         self.row_count += block.num_rows();
-        self.block_size += block.estimate_block_size();
+        self.block_size += block.estimate_block_size(block.num_columns());
 
         if !had_existing_rows {
             // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first

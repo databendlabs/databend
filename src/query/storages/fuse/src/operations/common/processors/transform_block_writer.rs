@@ -97,7 +97,7 @@ impl TransformBlockBuilder {
     }
 
     fn split_input(&self, input: DataBlock) -> Vec<DataBlock> {
-        let block_size = input.estimate_block_size();
+        let block_size = input.estimate_block_size(input.num_columns());
         let num_rows = input.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
         let max_rows = self
@@ -184,7 +184,7 @@ impl Processor for TransformBlockBuilder {
                 block.check_valid()?;
                 self.input_num_rows += block.num_rows();
                 for block in self.split_input(block) {
-                    let block_size = block.estimate_block_size();
+                    let block_size = block.estimate_block_size(block.num_columns());
                     self.input_data_size += block_size;
                     self.input_data.push_back((block_size, block));
                 }

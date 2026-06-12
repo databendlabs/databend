@@ -62,7 +62,7 @@ impl DataProcessorStrategy for CompactStrategy {
         let mut result = Vec::with_capacity(blocks_num);
         for block in data_blocks {
             accumulated_rows += block.num_rows();
-            accumulated_bytes += block.estimate_block_size();
+            accumulated_bytes += block.estimate_block_size(block.num_columns());
             pending_blocks.push(block);
             if !self.check_large_enough(accumulated_rows, accumulated_bytes) {
                 continue;
