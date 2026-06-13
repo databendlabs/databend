@@ -24,7 +24,6 @@ use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use log::error;
-use num_cpus;
 use rustls::ServerConfig;
 use socket2::TcpKeepalive;
 use tokio::net::TcpStream;
