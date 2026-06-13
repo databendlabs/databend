@@ -65,11 +65,7 @@ pub fn vector_cluster_info_from_column(
     column_id: ColumnId,
     column_name: &str,
 ) -> Result<VectorClusterInfo> {
-    let Some(distance_type) = vector_cluster_distance_type(table_indexes, column_id) else {
-        return Err(ErrorCode::InvalidClusterKeys(format!(
-            "Vector cluster key `{column_name}` requires a vector index with distance option"
-        )));
-    };
+    let distance_type = vector_cluster_distance_type(table_indexes, column_id, column_name)?;
 
     Ok(VectorClusterInfo {
         key_index,
@@ -82,15 +78,34 @@ pub fn vector_cluster_info_from_column(
 fn vector_cluster_distance_type(
     table_indexes: &BTreeMap<String, TableIndex>,
     column_id: ColumnId,
-) -> Option<VectorDistanceType> {
-    table_indexes
-        .values()
-        .filter(|index| {
-            index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
-        })
-        .filter_map(|index| index.options.get("distance"))
-        .flat_map(|distance| distance.split(','))
-        .find_map(vector_distance_type_from_index_option)
+    column_name: &str,
+) -> Result<VectorDistanceType> {
+    let mut distance_types = Vec::new();
+    for index in table_indexes.values().filter(|index| {
+        index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
+    }) {
+        let Some(distance) = index.options.get("distance") else {
+            continue;
+        };
+        for distance_type in distance
+            .split(',')
+            .filter_map(vector_distance_type_from_index_option)
+        {
+            if !distance_types.contains(&distance_type) {
+                distance_types.push(distance_type);
+            }
+        }
+    }
+
+    match distance_types.as_slice() {
+        [distance_type] => Ok(*distance_type),
+        [] => Err(ErrorCode::InvalidClusterKeys(format!(
+            "Vector cluster key `{column_name}` requires a vector index with distance option"
+        ))),
+        _ => Err(ErrorCode::InvalidClusterKeys(format!(
+            "Vector cluster key `{column_name}` has multiple vector index distance types; use exactly one distance type for vector clustering"
+        ))),
+    }
 }
 
 #[derive(Clone, Default)]

@@ -153,20 +153,21 @@ impl FuseTable {
         }
 
         let sort_desc: Arc<[_]> = cluster_stats_gen.sort_descs().into();
-
-        let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
-            || {
-                Ok(TransformSortPartial::new(
-                    LimitType::None,
-                    sort_desc.clone(),
-                ))
-            },
-            transform_len,
-        )?;
-        if need_match {
-            builder.add_items_prepend(vec![create_dummy_item()]);
+        if !sort_desc.is_empty() {
+            let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
+                || {
+                    Ok(TransformSortPartial::new(
+                        LimitType::None,
+                        sort_desc.clone(),
+                    ))
+                },
+                transform_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            pipeline.add_pipe(builder.finalize());
         }
-        pipeline.add_pipe(builder.finalize());
         Ok(cluster_stats_gen)
     }
 
@@ -204,7 +205,12 @@ impl FuseTable {
         }
 
         let sort_desc: Arc<[_]> = cluster_stats_gen.sort_descs().into();
-        pipeline.add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
+        if !sort_desc.is_empty() {
+            pipeline.add_transformer({
+                let sort_desc = sort_desc.clone();
+                move || TransformSortPartial::new(LimitType::None, sort_desc.clone())
+            });
+        }
         Ok(cluster_stats_gen)
     }
 

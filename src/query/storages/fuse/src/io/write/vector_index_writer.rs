@@ -160,6 +160,10 @@ impl VectorIndexBuilder {
             }
             for (offset, column_id) in &offsets {
                 field_offsets_set.insert(*offset);
+                // Vector statistics currently use only the first configured distance type
+                // to avoid scanning the same vectors multiple times during block writing.
+                // If stat-based pruning needs full coverage for multi-distance indexes,
+                // extend statistics_params to keep all distance types per column.
                 statistics_params
                     .entry(*offset)
                     .or_insert((*column_id, distances[0]));

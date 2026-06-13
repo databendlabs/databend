@@ -27,6 +27,10 @@ use databend_storages_common_table_meta::meta::VectorDistanceType;
 const KMEANS_MAX_ITER: usize = 100;
 const KMEANS_SEED: u64 = 0xD47A_BA5E_C1A5_7E12;
 const KMEANS_TOLERANCE: f32 = 1e-4;
+// Kmeans is computed per bounded batch so the transform can stream instead of
+// buffering the whole INSERT/RECLUSTER input. Cluster ids are batch-local.
+const KMEANS_BATCH_CLUSTER_COUNT: usize = 64;
+const KMEANS_MAX_BATCH_ROWS: usize = 262_144;
 
 struct KMeansResult {
     assignments: Vec<usize>,
@@ -63,7 +67,9 @@ pub struct TransformVectorClusterKmeans {
     vector_column_input_offset: usize,
     distance_type: VectorDistanceType,
     rows_per_block: usize,
+    batch_rows: usize,
     pending_blocks: Vec<DataBlock>,
+    pending_rows: usize,
 }
 
 impl TransformVectorClusterKmeans {
@@ -72,11 +78,14 @@ impl TransformVectorClusterKmeans {
         distance_type: VectorDistanceType,
         rows_per_block: usize,
     ) -> Self {
+        let rows_per_block = rows_per_block.max(1);
         Self {
             vector_column_input_offset,
             distance_type,
-            rows_per_block: rows_per_block.max(1),
+            rows_per_block,
+            batch_rows: kmeans_batch_rows(rows_per_block),
             pending_blocks: vec![],
+            pending_rows: 0,
         }
     }
 
@@ -86,9 +95,12 @@ impl TransformVectorClusterKmeans {
         }
 
         let mut block = if self.pending_blocks.len() == 1 {
+            self.pending_rows = 0;
             self.pending_blocks.pop().unwrap()
         } else {
-            DataBlock::concat(&std::mem::take(&mut self.pending_blocks))?
+            let blocks = std::mem::take(&mut self.pending_blocks);
+            self.pending_rows = 0;
+            DataBlock::concat(&blocks)?
         };
         let num_rows = block.num_rows();
         if num_rows <= 1 {
@@ -122,20 +134,52 @@ impl TransformVectorClusterKmeans {
         append_cluster_id_column(&mut block, result.assignments);
         Ok(vec![block])
     }
+
+    fn push_block(&mut self, data: DataBlock, output: &mut Vec<DataBlock>) -> Result<()> {
+        let rows = data.num_rows();
+        if rows == 0 {
+            let mut data = data;
+            append_cluster_id_column(&mut data, vec![]);
+            output.push(data);
+            return Ok(());
+        }
+
+        if rows > self.batch_rows {
+            output.extend(self.cluster_blocks()?);
+            let (blocks, remain) = data.split_by_rows(self.batch_rows);
+            for block in blocks {
+                self.pending_rows = block.num_rows();
+                self.pending_blocks.push(block);
+                output.extend(self.cluster_blocks()?);
+            }
+            if let Some(remain) = remain {
+                self.pending_rows = remain.num_rows();
+                self.pending_blocks.push(remain);
+            }
+            return Ok(());
+        }
+
+        if self.pending_rows > 0 && self.pending_rows.saturating_add(rows) > self.batch_rows {
+            output.extend(self.cluster_blocks()?);
+        }
+
+        self.pending_rows += rows;
+        self.pending_blocks.push(data);
+        if self.pending_rows >= self.batch_rows {
+            output.extend(self.cluster_blocks()?);
+        }
+
+        Ok(())
+    }
 }
 
 impl AccumulatingTransform for TransformVectorClusterKmeans {
     const NAME: &'static str = "TransformVectorClusterKmeans";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
-        if data.is_empty() {
-            let mut data = data;
-            append_cluster_id_column(&mut data, vec![]);
-            return Ok(vec![data]);
-        }
-
-        self.pending_blocks.push(data);
-        Ok(vec![])
+        let mut output = Vec::new();
+        self.push_block(data, &mut output)?;
+        Ok(output)
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
@@ -143,9 +187,18 @@ impl AccumulatingTransform for TransformVectorClusterKmeans {
             self.cluster_blocks()
         } else {
             self.pending_blocks.clear();
+            self.pending_rows = 0;
             Ok(vec![])
         }
     }
+}
+
+fn kmeans_batch_rows(rows_per_block: usize) -> usize {
+    rows_per_block
+        .saturating_mul(KMEANS_BATCH_CLUSTER_COUNT)
+        .min(KMEANS_MAX_BATCH_ROWS)
+        .max(rows_per_block)
+        .max(1)
 }
 
 fn vector_samples(column: Column, distance_type: VectorDistanceType) -> Result<(Vec<f32>, usize)> {
