@@ -31,7 +31,9 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_table;
 mod interpreter_create_warehouses;
 mod interpreter_create_workload_group;
@@ -118,8 +120,12 @@ mod interpreter_show_online_nodes;
 mod interpreter_show_warehouses;
 mod interpreter_show_workload_groups;
 mod interpreter_stream_create;
-mod interpreter_table_ref_create;
-mod interpreter_table_ref_drop;
+mod interpreter_table_branch_create;
+mod interpreter_table_branch_drop;
+mod interpreter_worker_alter;
+mod interpreter_worker_create;
+mod interpreter_worker_drop;
+mod interpreter_worker_show;
 pub use hook::vacuum_hook::hook_clear_m_cte_temp_table;
 mod interpreter_object_tag;
 mod interpreter_stream_drop;
@@ -150,18 +156,43 @@ mod interpreter_table_row_access_drop_all;
 mod interpreter_table_set_options;
 mod interpreter_table_show_create;
 mod interpreter_table_swap;
+mod interpreter_table_tag_create;
+mod interpreter_table_tag_drop;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
 mod interpreter_table_unset_options;
 mod interpreter_table_vacuum;
 mod interpreter_tag_create;
 mod interpreter_tag_drop;
-mod interpreter_task_alter;
-mod interpreter_task_create;
-mod interpreter_task_describe;
-mod interpreter_task_drop;
-mod interpreter_task_execute;
-mod interpreter_tasks_show;
+#[cfg(feature = "task-support")]
+mod task {
+    mod interpreter_task_alter {
+        include!("interpreter_task_alter.rs");
+    }
+    mod interpreter_task_create {
+        include!("interpreter_task_create.rs");
+    }
+    mod interpreter_task_describe {
+        include!("interpreter_task_describe.rs");
+    }
+    mod interpreter_task_drop {
+        include!("interpreter_task_drop.rs");
+    }
+    mod interpreter_task_execute {
+        include!("interpreter_task_execute.rs");
+    }
+    mod interpreter_tasks_show {
+        include!("interpreter_tasks_show.rs");
+    }
+
+    pub(crate) use interpreter_task_alter::AlterTaskInterpreter;
+    pub(crate) use interpreter_task_create::CreateTaskInterpreter;
+    pub(crate) use interpreter_task_describe::DescribeTaskInterpreter;
+    pub(crate) use interpreter_task_drop::DropTaskInterpreter;
+    pub(crate) use interpreter_task_execute::ExecuteTaskInterpreter;
+    pub(crate) use interpreter_tasks_show::ShowTasksInterpreter;
+}
+mod interpreter_show_public_keys;
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
@@ -188,12 +219,14 @@ mod interpreter_view_create;
 mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
-mod task;
-mod util;
+mod interpreter_virtual_column_vacuum;
+pub(crate) mod util;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
+pub use common::QueryFinishHooks;
 pub use hook::HookOperator;
+pub use hook::TableHookScheduler;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter::interpreter_plan_sql;
@@ -252,6 +285,7 @@ pub use interpreter_sequence_create::CreateSequenceInterpreter;
 pub use interpreter_sequence_drop::DropSequenceInterpreter;
 pub use interpreter_set::SetInterpreter;
 pub use interpreter_set_priority::SetPriorityInterpreter;
+pub use interpreter_show_public_keys::ShowPublicKeysInterpreter;
 pub use interpreter_stream_create::CreateStreamInterpreter;
 pub use interpreter_stream_drop::DropStreamInterpreter;
 pub use interpreter_system_action::SystemActionInterpreter;
@@ -301,3 +335,4 @@ pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
 pub use interpreter_virtual_column_refresh::RefreshVirtualColumnInterpreter;
+pub use interpreter_virtual_column_vacuum::VacuumVirtualColumnInterpreter;

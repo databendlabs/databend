@@ -21,7 +21,6 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -31,7 +30,8 @@ use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
-use databend_common_meta_api::LockApi;
+use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
@@ -57,6 +57,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
@@ -70,6 +71,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -87,6 +89,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
@@ -99,6 +102,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -115,6 +119,7 @@ use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -138,9 +143,10 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
+use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -151,6 +157,7 @@ use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::meta_service_error;
 use crate::meta_txn_error;
+use crate::sessions::TableContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
@@ -189,15 +196,16 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, _version: BuildInfoRef) -> Result<Self> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -625,6 +633,60 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.ctx.meta.create_table_tag(req).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.ctx.meta.drop_table_tag(req).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_tag(
+        &self,
+        table_id: u64,
+        tag_name: &str,
+        include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        let req = GetTableTagReq {
+            table_id,
+            tag_name: tag_name.to_string(),
+            include_expired,
+        };
+        self.ctx
+            .meta
+            .get_table_tag(req)
+            .await
+            .map_err(ErrorCode::from)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        self.ctx
+            .meta
+            .list_table_tags(req)
+            .await
+            .map_err(ErrorCode::from)
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.mget_tables(table_names).await
+    }
+
+    #[async_backtrace::framed]
     async fn get_table_history(
         &self,
         tenant: &Tenant,
@@ -869,27 +931,27 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        Ok(self.ctx.meta.list_lock_revisions(req).await?)
+        Ok(self.ctx.meta.list_lock_revisions_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        Ok(self.ctx.meta.create_lock_revision(req).await?)
+        Ok(self.ctx.meta.create_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.extend_lock_revision(req).await?)
+        Ok(self.ctx.meta.extend_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.delete_lock_revision(req).await?)
+        Ok(self.ctx.meta.delete_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
-        Ok(self.ctx.meta.list_locks(req).await?)
+        Ok(self.ctx.meta.list_locks_v2(req).await?)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
@@ -903,7 +965,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -946,7 +1008,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod bytes;
 mod csv;
 pub mod helpers;
 mod json;
-mod values;
+mod string;
 
+pub use bytes::FieldEncoderBytes;
+pub use csv::CsvQuoteSettings;
 pub use csv::FieldEncoderCSV;
 pub use csv::write_csv_string;
+pub use csv::write_csv_string_maybe_quoted;
 pub use helpers::write_tsv_escaped_string;
 pub use json::FieldEncoderJSON;
-pub use values::FieldEncoderValues;
+pub use string::FieldEncoderToString;

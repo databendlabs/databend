@@ -306,6 +306,57 @@ pub struct SimpleDomain<T> {
     pub max: T,
 }
 
+impl<T> SimpleDomain<T>
+where T: PartialOrd + Debug
+{
+    pub fn check_valid(&self) -> Result<()> {
+        if self.min <= self.max {
+            Ok(())
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "invalid simple domain: {:?}",
+                self
+            )))
+        }
+    }
+}
+
+impl NumberDomain {
+    pub fn check_valid(&self) -> Result<()> {
+        match self {
+            NumberDomain::UInt8(domain) => domain.check_valid(),
+            NumberDomain::UInt16(domain) => domain.check_valid(),
+            NumberDomain::UInt32(domain) => domain.check_valid(),
+            NumberDomain::UInt64(domain) => domain.check_valid(),
+            NumberDomain::Int8(domain) => domain.check_valid(),
+            NumberDomain::Int16(domain) => domain.check_valid(),
+            NumberDomain::Int32(domain) => domain.check_valid(),
+            NumberDomain::Int64(domain) => domain.check_valid(),
+            NumberDomain::Float32(domain) => domain.check_valid(),
+            NumberDomain::Float64(domain) => domain.check_valid(),
+        }
+    }
+
+    pub fn finite_cardinality_upper(&self) -> Option<u128> {
+        if let Err(error) = self.check_valid() {
+            debug_assert!(false, "invalid number domain: {error}");
+            return None;
+        }
+
+        match self {
+            NumberDomain::UInt8(domain) => Some(domain.max as u128 - domain.min as u128 + 1),
+            NumberDomain::UInt16(domain) => Some(domain.max as u128 - domain.min as u128 + 1),
+            NumberDomain::UInt32(domain) => Some(domain.max as u128 - domain.min as u128 + 1),
+            NumberDomain::UInt64(domain) => Some(domain.max as u128 - domain.min as u128 + 1),
+            NumberDomain::Int8(domain) => Some(domain.max.abs_diff(domain.min) as u128 + 1),
+            NumberDomain::Int16(domain) => Some(domain.max.abs_diff(domain.min) as u128 + 1),
+            NumberDomain::Int32(domain) => Some(domain.max.abs_diff(domain.min) as u128 + 1),
+            NumberDomain::Int64(domain) => Some(domain.max.abs_diff(domain.min) as u128 + 1),
+            NumberDomain::Float32(_) | NumberDomain::Float64(_) => None,
+        }
+    }
+}
+
 impl NumberDataType {
     pub const fn new(bit_width: u8, is_signed: bool, is_float: bool) -> Self {
         match (bit_width, is_signed, is_float) {

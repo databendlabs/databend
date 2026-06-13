@@ -56,7 +56,7 @@ pub enum CreateDatabaseOption {
     Options(Vec<SQLProperty>),
 }
 
-fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+pub fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
     let procedure_type_names = map(
         rule! {
             "(" ~ #comma_separated_list1(type_name) ~ ")"
@@ -79,9 +79,19 @@ fn query_statement(i: Input) -> IResult<Statement> {
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    let explain_options = map(
+        rule! {
+            "(" ~ #comma_separated_list1(explain_option) ~ ")"
+        },
+        |(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts),
+    );
+    let explain_verbose_alias = map(rule! { VERBOSE }, |verbose| {
+        (Some(verbose.span), vec![ExplainOption::Verbose])
+    });
+
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
+            EXPLAIN ~ ( #explain_options | #explain_verbose_alias )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -99,13 +109,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
-                    Some(TokenKind::PERF) => ExplainKind::Perf,
+                    Some(TokenKind::PERF) => ExplainKind::Perf {
+                        event_groups: vec![],
+                    },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options
-                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
-                    .unwrap_or_default(),
+                options: options.unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -488,7 +498,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         },
                     })
                 } else {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "inconsistent number of variables and values",
                     )))
                 }
@@ -583,6 +593,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
+    let show_workers = map(
+        rule! {
+            SHOW ~ WORKERS
+        },
+        |(_, _)| Statement::ShowWorkers(ShowWorkersStmt {}),
+    );
+
     let use_warehouse = map(
         rule! {
             USE ~ WAREHOUSE ~ #ident
@@ -603,11 +620,36 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_worker = map(
+        rule! {
+            CREATE ~ WORKER ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, opt_if_not_exists, name, options)| {
+            Statement::CreateWorker(CreateWorkerStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name,
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
     let drop_warehouse = map(
         rule! {
             DROP ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let drop_worker = map(
+        rule! {
+            DROP ~ WORKER ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropWorker(DropWorkerStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
     );
 
     let rename_warehouse = map(
@@ -641,6 +683,50 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             INSPECT ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let alter_worker_action = map(
+        rule! {
+            SET ~ TAG ~ #tag_set_items
+        },
+        |(_, _, tags)| AlterWorkerAction::SetTag { tags },
+    )
+    .or(map(
+        rule! {
+            UNSET ~ TAG ~ #tag_unset_items
+        },
+        |(_, _, tags)| AlterWorkerAction::UnsetTag { tags },
+    ))
+    .or(map(
+        rule! {
+            SET ~ #warehouse_cluster_option
+        },
+        |(_, options)| AlterWorkerAction::SetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            UNSET ~ #tag_unset_items
+        },
+        |(_, options)| AlterWorkerAction::UnsetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            SUSPEND
+        },
+        |_| AlterWorkerAction::Suspend,
+    ))
+    .or(map(
+        rule! {
+            RESUME
+        },
+        |_| AlterWorkerAction::Resume,
+    ));
+
+    let alter_worker = map(
+        rule! {
+            ALTER ~ WORKER ~ #ident ~ #alter_worker_action
+        },
+        |(_, _, name, action)| Statement::AlterWorker(AlterWorkerStmt { name, action }),
     );
 
     let add_warehouse_cluster = map(
@@ -1112,7 +1198,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let alter_table = map(
         rule! {
-            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
+            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only_with_branch ~ #alter_table_action
         },
         |(_, _, opt_if_exists, table_reference, action)| {
             Statement::AlterTable(AlterTableStmt {
@@ -1208,6 +1294,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 option,
+            })
+        },
+    );
+    let vacuum_virtual_column = map(
+        rule! {
+            VACUUM ~ VIRTUAL ~ ^COLUMN ~ ^FROM ~ ^#dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::VacuumVirtualColumn(VacuumVirtualColumnStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -1612,6 +1710,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ( DESC | DESCRIBE ) ~ USER ~ #user_identity
         },
         |(_, _, user)| Statement::DescribeUser { user },
+    );
+    let show_public_keys = map(
+        rule! {
+            SHOW ~ PUBLIC ~ KEYS ~ FOR ~ USER ~ #user_identity
+        },
+        |(_, _, _, _, _, user)| Statement::ShowPublicKeys { user },
     );
     let create_user = map_res(
         rule! {
@@ -2692,7 +2796,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
+            | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
@@ -2719,6 +2824,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
                 | #show_online_nodes: "`SHOW ONLINE NODES`"
                 | #show_warehouses: "`SHOW WAREHOUSES`"
+                | #show_workers: "`SHOW WORKERS`"
                 | #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
                 | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
                 | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
@@ -2739,6 +2845,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
                 | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
                 | #show_users : "`SHOW USERS`"
+                | #show_public_keys : "`SHOW PUBLIC KEYS FOR USER <user_name>`"
                 | #show_roles : "`SHOW ROLES`"
                 | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
                 | #show_connections: "`SHOW CONNECTIONS`"
@@ -2792,6 +2899,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
             | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
@@ -2861,6 +2969,7 @@ AS
   <sql>`"
                 | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+                | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name> [WITH <key>=<value> [, ...]]`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
                 | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
@@ -2907,6 +3016,7 @@ AS
                 #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
                 | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
                 | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+                | #drop_worker: "`DROP WORKER [IF EXISTS] <name>`"
                 | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
                 | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
                 | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
@@ -2944,9 +3054,10 @@ AS
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
             | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -2965,16 +3076,14 @@ AS
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ).parse(i),
-        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
-            ).parse(i),
-        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
-            ).parse(i),
+        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`").parse(i),
+        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
     );
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other("expecting SQL statement"),
+        ErrorKind::other("expecting SQL statement"),
     )))
 }
 
@@ -2999,7 +3108,7 @@ pub fn parse_create_option(
         (false, false) => Ok(CreateOption::Create),
         (true, false) => Ok(CreateOption::CreateOrReplace),
         (false, true) => Ok(CreateOption::CreateIfNotExists),
-        (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
+        (true, true) => Err(nom::Err::Failure(ErrorKind::other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),
     }
@@ -3026,7 +3135,7 @@ pub fn insert_stmt(
             },
             |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
                     )));
                 }
@@ -3491,21 +3600,30 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
+    let stats_truncate_len = map(
+        rule! {
+            STATS_TRUNCATE_LEN ~ #literal_u64
+        },
+        |(_, n)| n,
+    );
+
     let (i, (mut def, constraints)) = map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`"
+            ~ ( #stats_truncate_len )?
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`"
         },
-        |(name, data_type, constraints, comment)| {
+        |(name, data_type, constraints, comment, stats_truncate_len)| {
             let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len,
             };
             (def, constraints)
         },
@@ -3519,7 +3637,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                        ErrorKind::other("ambiguous NOT NULL constraint"),
                     )));
                 }
                 if nullable {
@@ -3532,7 +3650,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other(
+                        ErrorKind::other(
                             "DEFAULT and AUTO INCREMENT cannot exist at the same time",
                         ),
                     )));
@@ -3554,7 +3672,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                        ErrorKind::other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement {
@@ -3626,14 +3744,14 @@ pub fn role_name(i: Input) -> IResult<String> {
                 match c {
                     '\\' => match chars.next() {
                         Some('f') | Some('b') => {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "' or \" or \\f or \\b are not allowed in role name",
                             )));
                         }
                         _ => {}
                     },
                     '\'' | '"' => {
-                        return Err(nom::Err::Failure(ErrorKind::Other(
+                        return Err(nom::Err::Failure(ErrorKind::other(
                             "' or \" or \\f or \\b are not allowed in role name",
                         )));
                     }
@@ -4424,11 +4542,70 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
+                USER ~ ( IF ~ ^EXISTS )? ~ #user_identity
+            },
+            |(_, opt_if_exists, user)| AlterObjectTagTarget::User {
+                if_exists: opt_if_exists.is_some(),
+                user,
+            },
+        ),
+        map(
+            rule! {
+                ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
+            },
+            |(_, opt_if_exists, role_name)| AlterObjectTagTarget::Role {
+                if_exists: opt_if_exists.is_some(),
+                role_name,
+            },
+        ),
+        map(
+            rule! {
                 CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
             },
             |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
                 if_exists: opt_if_exists.is_some(),
                 connection_name,
+            },
+        ),
+        map(
+            rule! {
+                VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, view))| AlterObjectTagTarget::View {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            },
+        ),
+        map(
+            rule! {
+                STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, stream))| AlterObjectTagTarget::Stream {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                stream,
+            },
+        ),
+        map(
+            rule! {
+                FUNCTION ~ ( IF ~ ^EXISTS )? ~ #ident
+            },
+            |(_, opt_if_exists, udf_name)| AlterObjectTagTarget::Function {
+                if_exists: opt_if_exists.is_some(),
+                udf_name,
+            },
+        ),
+        map(
+            rule! {
+                PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
+            },
+            |(_, opt_if_exists, name, arg_types)| AlterObjectTagTarget::Procedure {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                arg_types,
             },
         ),
     ))
@@ -4506,6 +4683,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len: None,
             };
             for constraint in constraints {
                 match constraint {
@@ -4513,7 +4691,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                         if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
                             || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
                         {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "ambiguous NOT NULL constraint",
                             )));
                         }
@@ -4645,9 +4823,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
+            ADD ~ COLUMN? ~ ( IF ~ NOT ~ EXISTS )? ~ #column_def ~ ( #add_column_option )?
         },
-        |(_, _, column, option)| AlterTableAction::AddColumn {
+        |(_, _, if_not_exists, column, option)| AlterTableAction::AddColumn {
+            if_not_exists: if_not_exists.is_some(),
             column,
             option: option.unwrap_or(AddColumnOption::End),
         },
@@ -4771,49 +4950,52 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
-    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
-    // available for SELECT or other query statements, so keep the parsing rule scoped
-    // here to avoid implying broader support.
-    let create_snapshot_ref = map(
+    let create_table_branch = map(
         rule! {
-            CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?
+            CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, token, ref_name, opt_travel_point, retain)| {
-            let ref_type = match token.kind {
-                TokenKind::BRANCH => SnapshotRefType::Branch,
-                TokenKind::TAG => SnapshotRefType::Tag,
-                _ => unreachable!(),
-            };
-
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
+        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
+            spec: CreateTableRefSpec {
+                name,
                 travel_point: opt_travel_point.map(|(_, point)| point),
-                retain: retain.map(|(_, reatin)| reatin),
-            }
+                retain: retain.map(|(_, retain)| retain),
+            },
         },
     );
 
-    let drop_snapshot_ref = map(
+    let create_table_tag = map(
         rule! {
-            DROP ~ ( BRANCH | TAG ) ~ #ident
+            CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, token, ref_name)| {
-            let ref_type = match token.kind {
-                TokenKind::BRANCH => SnapshotRefType::Branch,
-                TokenKind::TAG => SnapshotRefType::Tag,
-                _ => unreachable!(),
-            };
+        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableTag {
+            spec: CreateTableRefSpec {
+                name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, retain)| retain),
+            },
+        },
+    );
 
-            AlterTableAction::DropTableRef { ref_type, ref_name }
+    let drop_table_branch = map(
+        rule! {
+            DROP ~ BRANCH ~ #ident
         },
+        |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
+    );
+
+    let drop_table_tag = map(
+        rule! {
+            DROP ~ TAG ~ #ident
+        },
+        |(_, _, tag_name)| AlterTableAction::DropTableTag { tag_name },
     );
 
     // The action list is split to avoid the trait bound limit in `alt(...)`.
     let alter_table_action_primary = rule!(
-        #create_snapshot_ref
-            | #drop_snapshot_ref
+        #create_table_branch
+            | #create_table_tag
+            | #drop_table_branch
+            | #drop_table_tag
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5244,7 +5426,7 @@ pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
                     quotas.insert(name, value);
                 }
                 Err(error_desc) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(error_desc)));
+                    return Err(nom::Err::Failure(ErrorKind::other(error_desc)));
                 }
             }
         }
@@ -5459,6 +5641,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
+        value(Engine::Proxy, rule! { PROXY }),
     ));
 
     map(
@@ -5531,6 +5714,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
+    let default_warehouse_option = map(
+        rule! {
+            DEFAULT_WAREHOUSE ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, warehouse)| UserOptionItem::DefaultWarehouse(warehouse),
+    );
     let set_network_policy = map(
         rule! {
             SET ~ NETWORK ~ POLICY ~ ^"=" ~ ^#literal_string
@@ -5579,11 +5768,33 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
     );
+    let add_public_key = map(
+        rule! {
+            ADD ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string ~ ( LABEL ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, _, pem, label_opt)| {
+            let label = label_opt.map(|(_, _, l)| l);
+            UserOptionItem::AddPublicKey(pem, label)
+        },
+    );
+    let remove_public_key_by_label = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ LABEL ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, label)| UserOptionItem::RemovePublicKeyByLabel(label),
+    );
+    let remove_public_key_by_fingerprint = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ FINGERPRINT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, fingerprint)| UserOptionItem::RemovePublicKeyByFingerprint(fingerprint),
+    );
 
     rule!(
         #tenant_setting
         | #no_tenant_setting
         | #default_role_option
+        | #default_warehouse_option
         | #set_network_policy
         | #unset_network_policy
         | #set_password_policy
@@ -5592,6 +5803,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
+        | #add_public_key
+        | #remove_public_key_by_label
+        | #remove_public_key_by_fingerprint
     )
     .parse(i)
 }
@@ -5615,6 +5829,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+        value(AuthType::KeyPair, rule! { KEY_PAIR }),
     ))
     .parse(i)
 }
@@ -5857,7 +6072,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                 },
                 (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "ScalarUDF unsupported external Server",
                     )));
                 }
@@ -6180,6 +6395,42 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
     .parse(i)
 }
 
+pub fn explain_perf(i: Input) -> IResult<Statement> {
+    map_res(
+        rule! {
+            EXPLAIN ~ PERF ~ ( "(" ~ ^#ident ~ "=" ~ ^#literal_string ~ ")" )? ~ #statement
+        },
+        |(_, _, opt_options, statement)| {
+            let event_groups = if let Some((_, key, _, value, _)) = opt_options {
+                if key.name.to_lowercase() != "events" {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "expected 'events' as the option key for EXPLAIN PERF",
+                    )));
+                }
+                value
+                    .split(',')
+                    .map(|group| {
+                        group
+                            .split('+')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|g| !g.is_empty())
+                    .collect()
+            } else {
+                vec![]
+            };
+            Ok(Statement::Explain {
+                kind: ExplainKind::Perf { event_groups },
+                options: Default::default(),
+                query: Box::new(statement.stmt),
+            })
+        },
+    )
+    .parse(i)
+}
+
 pub fn create_task_option(i: Input) -> IResult<CreateTaskOption> {
     let warehouse_opt = map(
         rule! {
@@ -6367,6 +6618,7 @@ fn index_type(i: Input) -> IResult<TableIndexType> {
         value(TableIndexType::Inverted, rule! { INVERTED }),
         value(TableIndexType::Ngram, rule! { NGRAM }),
         value(TableIndexType::Vector, rule! { VECTOR }),
+        value(TableIndexType::Spatial, rule! { SPATIAL }),
     ))
     .parse(i)
 }

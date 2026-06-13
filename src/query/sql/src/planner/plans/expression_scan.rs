@@ -20,6 +20,7 @@ use databend_common_expression::types::DataType;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
@@ -34,7 +35,7 @@ pub struct ExpressionScan {
     pub values: Vec<Vec<ScalarExpr>>,
     pub num_scalar_columns: usize,
     pub cache_index: usize,
-    pub column_indexes: Vec<usize>,
+    pub column_indexes: Vec<Symbol>,
     pub data_types: Vec<DataType>,
     pub schema: DataSchemaRef,
 }

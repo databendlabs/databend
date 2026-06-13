@@ -12,29 +12,171 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
+use std::borrow::Cow;
+
+use base64::Engine as _;
+use base64::engine::general_purpose;
+use databend_common_exception::ErrorCode;
 use jiff::tz::TimeZone;
 
 use crate::GeometryDataType;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BinaryDisplayFormat {
+    #[default]
+    Hex,
+    Base64,
+    Utf8,
+    Utf8Lossy,
+}
+
+impl BinaryDisplayFormat {
+    pub fn parse(s: &str) -> Result<Self, ErrorCode> {
+        match s.to_ascii_lowercase().as_str() {
+            "hex" => Ok(BinaryDisplayFormat::Hex),
+            "base64" => Ok(BinaryDisplayFormat::Base64),
+            "utf-8" | "utf8" => Ok(BinaryDisplayFormat::Utf8),
+            "utf-8-lossy" | "utf8-lossy" => Ok(BinaryDisplayFormat::Utf8Lossy),
+            other => Err(ErrorCode::InvalidArgument(format!(
+                "Invalid binary format '{other}', valid values: HEX | BASE64 | UTF-8 | UTF-8-LOSSY"
+            ))),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BinaryDisplayFormat::Hex => "HEX",
+            BinaryDisplayFormat::Base64 => "BASE64",
+            BinaryDisplayFormat::Utf8 => "UTF-8",
+            BinaryDisplayFormat::Utf8Lossy => "UTF-8-LOSSY",
+        }
+    }
+    pub fn format<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, str>, ErrorCode> {
+        match self {
+            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value))),
+            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(general_purpose::STANDARD.encode(value))),
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
+                Ok(s) => Ok(Cow::Borrowed(s)),
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => {
+                Ok(Cow::Owned(String::from_utf8_lossy(value).into_owned()))
+            }
+        }
+    }
+
+    pub fn encode<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, [u8]>, ErrorCode> {
+        match self {
+            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value).into_bytes())),
+            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(
+                general_purpose::STANDARD.encode(value).into_bytes(),
+            )),
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
+                Ok(_) => Ok(Cow::Borrowed(value)),
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => Ok(Cow::Owned(
+                String::from_utf8_lossy(value).into_owned().into_bytes(),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HttpHandlerDataFormat {
+    #[default]
+    Display,
+    Driver,
+}
+
+impl HttpHandlerDataFormat {
+    pub fn parse(s: &str) -> Result<Self, ErrorCode> {
+        match s.to_ascii_lowercase().as_str() {
+            "display" => Ok(HttpHandlerDataFormat::Display),
+            "driver" => Ok(HttpHandlerDataFormat::Driver),
+            other => Err(ErrorCode::InvalidArgument(format!(
+                "Invalid http json result mode '{other}', valid values: DISPLAY | DRIVER"
+            ))),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HttpHandlerDataFormat::Display => "display",
+            HttpHandlerDataFormat::Driver => "driver",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormatSettings {
-    pub timezone: Tz,
+pub struct InputFormatSettings {
     pub jiff_timezone: TimeZone,
     pub geometry_format: GeometryDataType,
-    pub enable_dst_hour_fix: bool,
-    pub format_null_as_str: bool,
+    pub binary_format: BinaryDisplayFormat,
+
+    pub is_rounding_mode: bool,
+    pub disable_variant_check: bool,
+    pub enable_auto_detect_datetime_format: bool,
 }
 
 // only used for tests
-impl Default for FormatSettings {
+impl Default for InputFormatSettings {
     fn default() -> Self {
         Self {
-            timezone: "UTC".parse::<Tz>().unwrap(),
             jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
-            enable_dst_hour_fix: false,
+            binary_format: BinaryDisplayFormat::Hex,
+            is_rounding_mode: true,
+            disable_variant_check: false,
+            enable_auto_detect_datetime_format: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputFormatSettings {
+    pub jiff_timezone: TimeZone,
+    pub geometry_format: GeometryDataType,
+    pub binary_format: BinaryDisplayFormat,
+    pub http_json_result_mode: HttpHandlerDataFormat,
+    pub headers: u8,
+    // used only for compat with old bendSQL driver.
+    pub http_arrow_use_jsonb: bool,
+    // used only in http arrow response to gate decimal64 physical type output.
+    pub http_arrow_use_decimal64: bool,
+
+    pub json_compact: bool,
+    pub json_strings: bool,
+
+    // used only in http handler response
+    pub format_null_as_str: bool,
+}
+
+impl Default for OutputFormatSettings {
+    fn default() -> Self {
+        Self {
+            jiff_timezone: TimeZone::UTC,
+            geometry_format: GeometryDataType::default(),
+            binary_format: BinaryDisplayFormat::Hex,
+            http_json_result_mode: HttpHandlerDataFormat::Display,
+            headers: 0,
+            http_arrow_use_jsonb: false,
+            http_arrow_use_decimal64: true,
+            json_compact: false,
+            json_strings: false,
             format_null_as_str: false,
         }
+    }
+}
+
+impl OutputFormatSettings {
+    pub fn format_binary<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, str>, ErrorCode> {
+        self.binary_format.format(value)
     }
 }

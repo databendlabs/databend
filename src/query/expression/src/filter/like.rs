@@ -135,11 +135,28 @@ impl LikePattern<'_> {
         has_end_percent: bool,
         segments: &[Vec<u8>],
     ) -> bool {
+        let segments_len = segments.len();
+        match segments_len {
+            // Repeated '%' can collapse a simple pattern to zero concrete segments.
+            0 => return true,
+            // Repeated '%' can also collapse to a single concrete segment, which is
+            // equivalent to one of the simpler LIKE variants.
+            1 => {
+                let segment = &segments[0];
+                return match (has_start_percent, has_end_percent) {
+                    (false, false) => haystack == segment,
+                    (true, false) => haystack.ends_with(segment),
+                    (false, true) => haystack.starts_with(segment),
+                    (true, true) => find(haystack, segment).is_some(),
+                };
+            }
+            _ => {}
+        }
+
         let haystack_len = haystack.len();
         if haystack_len == 0 {
             return false;
         }
-        let segments_len = segments.len();
         debug_assert!(haystack_len > 0);
         debug_assert!(segments_len > 1);
         let mut haystack_start_idx = 0;
@@ -272,11 +289,40 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
                 if first_non_percent < len {
                     segments.push(pattern[first_non_percent..len].to_vec());
                 }
-                LikePattern::SimplePattern((has_start_percent, has_end_percent, segments))
+                normalize_simple_pattern(
+                    has_start_percent,
+                    has_end_percent,
+                    segments,
+                    haystack_size_hint,
+                )
             } else {
                 LikePattern::ComplexPattern(pattern)
             }
         }
+    }
+}
+
+fn normalize_simple_pattern<'a>(
+    has_start_percent: bool,
+    has_end_percent: bool,
+    mut segments: Vec<Vec<u8>>,
+    haystack_size_hint: usize,
+) -> LikePattern<'a> {
+    match segments.len() {
+        0 => LikePattern::Constant(true),
+        1 => {
+            let segment = segments.pop().unwrap();
+            match (has_start_percent, has_end_percent) {
+                (false, false) => LikePattern::OrdinalStr(Cow::Owned(segment)),
+                (true, false) => LikePattern::StartOfPercent(Cow::Owned(segment)),
+                (false, true) => LikePattern::EndOfPercent(Cow::Owned(segment)),
+                (true, true) => LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
+                    Cow::Owned(segment),
+                    haystack_size_hint,
+                )),
+            }
+        }
+        _ => LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)),
     }
 }
 
@@ -379,6 +425,19 @@ fn test_generate_like_pattern() {
             "%databend%cloud%data%warehouse%",
             LikePattern::SimplePattern((true, true, segments)),
         ),
+        ("%%%%%", LikePattern::Constant(true)),
+        (
+            "%%%%databend",
+            LikePattern::StartOfPercent("databend".as_bytes().into()),
+        ),
+        (
+            "databend%%%%",
+            LikePattern::EndOfPercent("databend".as_bytes().into()),
+        ),
+        (
+            "%%%%databend%%%%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
+        ),
         (
             "databend_cloud%data%warehouse",
             LikePattern::ComplexPattern("databend_cloud%data%warehouse".as_bytes().into()),
@@ -394,5 +453,26 @@ fn test_generate_like_pattern() {
     ];
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
+    }
+}
+
+#[test]
+fn test_like_pattern_with_repeated_percent() {
+    let test_cases = vec![
+        ("ababac", "abab%%%%%", true),
+        ("aba", "abab%%%%%", false),
+        ("zzabab", "%%%%abab", true),
+        ("zzababzz", "%%%%abab%%%%", true),
+        ("zzabazz", "%%%%abab%%%%", false),
+        ("", "%%%%%", true),
+        ("anything", "%%%%%", true),
+    ];
+
+    for (haystack, pattern, expected) in test_cases {
+        assert_eq!(
+            generate_like_pattern(pattern.as_bytes(), haystack.len()).compare(haystack.as_bytes()),
+            expected,
+            "{haystack:?} LIKE {pattern:?}"
+        );
     }
 }

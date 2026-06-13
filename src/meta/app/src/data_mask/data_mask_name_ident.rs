@@ -34,12 +34,7 @@ impl DataMaskNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
-
-    use crate::KeyWithTenant;
     use crate::data_mask::DataMaskId;
-    use crate::data_mask::DataMaskNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -49,19 +44,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = DataMaskId;
     }
-
-    impl kvapi::Value for DataMaskId {
-        type KeyType = DataMaskNameIdent;
-
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::data_mask::DataMaskNameIdent;
     use crate::tenant::Tenant;
@@ -69,10 +57,7 @@ mod tests {
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("tenant1");
-        let ident = DataMaskNameIdent::new(tenant.clone(), "test");
-        assert_eq!("__fd_datamask/tenant1/test", ident.to_string_key());
-
-        let got = DataMaskNameIdent::from_str_key(&ident.to_string_key()).unwrap();
-        assert_eq!(ident, got);
+        let ident = DataMaskNameIdent::new(tenant, "test");
+        assert_round_trip(ident, "__fd_datamask/tenant1/test");
     }
 }

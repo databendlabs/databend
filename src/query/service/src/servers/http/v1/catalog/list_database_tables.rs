@@ -45,7 +45,9 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         .get_visibility_checker(false, Object::All)
         .await?;
 
-    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let catalog = CatalogManager::instance()
+        .get_default_catalog(Default::default())?
+        .disable_table_info_refresh()?;
     let db = catalog.get_database(&tenant, &database).await?;
 
     if !visibility_checker.check_database_visibility(
@@ -62,6 +64,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     let settings = ShowCreateQuerySettings {
         sql_dialect: Dialect::PostgreSQL,
         force_quoted_ident: false,
+        unquoted_ident_case_sensitive: false,
         quoted_ident_case_sensitive: true,
         hide_options_in_show_create_table: false,
     };

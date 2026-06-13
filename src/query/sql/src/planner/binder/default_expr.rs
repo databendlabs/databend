@@ -30,12 +30,13 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use parking_lot::RwLock;
 
 use crate::Metadata;
@@ -43,6 +44,7 @@ use crate::MetadataRef;
 use crate::binder::AsyncFunctionDesc;
 use crate::binder::wrap_cast;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::AsyncFunctionArgument;
@@ -173,17 +175,16 @@ impl DefaultExprBinder {
         ast: &AExpr,
         skip_sequence_check: bool,
     ) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::try_create(
+        let adapter = FullTypeCheckAdapter::new(self.ctx.clone())?
+            .with_forbid_udf(true)
+            .with_skip_sequence_check(skip_sequence_check);
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut self.bind_context,
-            self.ctx.clone(),
+            adapter,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            true,
         )?;
-        if skip_sequence_check {
-            type_checker.set_skip_sequence_check(true);
-        }
         let (scalar_expr, data_type) = *type_checker.resolve(ast)?;
         Ok((scalar_expr, data_type))
     }
@@ -239,9 +240,7 @@ impl DefaultExprBinder {
         let data_field: DataField = field.into();
         let mut scalar_expr = self.parse_and_bind(&data_field)?;
         self.rewriter.visit(&mut scalar_expr)?;
-        let expr = scalar_expr
-            .as_expr()?
-            .project_column_ref(|col| Ok(col.index))?;
+        let expr = scalar_expr.as_field_index_expr()?;
         let result = self.evaluator().run(&expr)?;
         match result {
             databend_common_expression::Value::Scalar(s) => Ok(s),
@@ -283,6 +282,9 @@ impl DefaultExprBinder {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                     AsyncFunctionArgument::DictGetFunction(_) => {
+                        unreachable!("expect AsyncFunctionArgument::SequenceFunction")
+                    }
+                    AsyncFunctionArgument::ReadFile(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                 };
@@ -328,7 +330,7 @@ impl DefaultExprBinder {
                     func_name: async_func.func_name.clone(),
                     display_name: async_func.display_name.clone(),
                     // not used
-                    output_column: 0,
+                    output_column: Symbol::DUMMY_COLUMN,
                     arg_indices: vec![],
                     data_type: async_func.return_type.clone(),
                     func_arg: async_func.func_arg.clone(),

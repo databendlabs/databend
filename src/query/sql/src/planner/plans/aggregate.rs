@@ -20,10 +20,9 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -53,11 +52,11 @@ pub enum AggregateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct GroupingSets {
     /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_index: IndexType,
+    pub grouping_id_index: Symbol,
     /// See the comment in `GroupingSetsInfo`.
-    pub sets: Vec<Vec<IndexType>>,
+    pub sets: Vec<Vec<Symbol>>,
     /// See the comment in `GroupingSetsInfo`.
-    pub dup_group_items: Vec<(IndexType, DataType)>,
+    pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -161,18 +160,14 @@ impl Aggregate {
             }));
         }
 
-        if self.group_items.iter().any(|item| {
-            column_stats
-                .get(&item.index)
-                .map(|stat| {
-                    if let Ndv::Max(ndv) = stat.ndv {
-                        ndv >= stat_info.cardinality
-                    } else {
-                        false
-                    }
-                })
-                .unwrap_or(true)
-        }) {
+        if self
+            .group_items
+            .iter()
+            .any(|item| match column_stats.get(&item.index) {
+                Some(stat) => stat.ndv.is_upper_only(),
+                None => true,
+            })
+        {
             return Ok(Arc::new(StatInfo {
                 cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
                 statistics: Statistics {
@@ -185,7 +180,12 @@ impl Aggregate {
         let groups_ndv = self
             .group_items
             .iter()
-            .map(|group| column_stats[&group.index].ndv.value())
+            .map(|group| {
+                column_stats[&group.index]
+                    .ndv
+                    .expected
+                    .expect("upper-only group NDV should have used aggregate fallback")
+            })
             .collect::<Vec<_>>();
 
         let cardinality = groups_ndv
@@ -213,10 +213,12 @@ impl Aggregate {
             };
             // When there is a high probability that eager aggregation
             // is better, we will update the histogram.
-            if histogram.num_values() >= histogram.num_distinct_values() * 10.0 {
-                for bucket in histogram.buckets.iter_mut() {
-                    bucket.aggregate_values();
-                }
+            if histogram
+                .ndv()
+                .expected
+                .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
+            {
+                histogram.collapse_counts_to_distinct();
             }
         }
 

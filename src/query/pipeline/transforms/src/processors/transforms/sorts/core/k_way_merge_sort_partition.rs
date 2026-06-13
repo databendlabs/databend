@@ -63,7 +63,7 @@ where
     ) -> Self {
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
-        let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
+        let buffer = vec![DataBlock::empty_with_schema(&schema); streams.len()];
         let rows = vec![None; streams.len()];
         let pending_streams = (0..streams.len()).collect();
 
@@ -205,7 +205,7 @@ where
             first_block
         } else {
             let first_block = block.clone();
-            self.buffer[i] = DataBlock::empty_with_schema(self.schema.clone());
+            self.buffer[i] = DataBlock::empty_with_schema(&self.schema);
             self.rows[i] = None;
             self.pending_streams.push_back(i);
             first_block

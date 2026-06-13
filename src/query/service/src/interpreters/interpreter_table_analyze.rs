@@ -22,7 +22,7 @@ use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
@@ -36,7 +36,8 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct AnalyzeTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -181,6 +182,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             &mut build_res.main_pipeline,
             histogram_info_receivers,
             self.plan.no_scan,
+            true,
         )?;
         Ok(build_res)
     }

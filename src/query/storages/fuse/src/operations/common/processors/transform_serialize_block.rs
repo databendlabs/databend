@@ -42,6 +42,7 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
@@ -131,9 +132,9 @@ impl TransformSerializeBlock {
         with_tid: bool,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
+        let schema = table.schema();
         // remove virtual computed fields.
-        let mut fields = table
-            .schema()
+        let mut fields = schema
             .fields()
             .iter()
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
@@ -147,7 +148,7 @@ impl TransformSerializeBlock {
         }
         let source_schema = Arc::new(TableSchema {
             fields,
-            ..table.schema().as_ref().clone()
+            ..schema.as_ref().clone()
         });
 
         let bloom_columns_map = table
@@ -156,20 +157,22 @@ impl TransformSerializeBlock {
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(
-            &table.table_info.meta,
-            &table.table_info.meta.schema,
-            true,
-        )?;
+        let ngram_args =
+            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let virtual_column_builder = if table.support_virtual_columns() {
+        let virtual_column_builder = if table.enable_virtual_column() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {
             None
         };
         let vector_index_builder = VectorIndexBuilder::try_create(
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+            true,
+        );
+        let spatial_index_builder = SpatialIndexBuilder::try_create(
             &table.table_info.meta.indexes,
             source_schema.clone(),
             true,
@@ -199,6 +202,7 @@ impl TransformSerializeBlock {
             inverted_index_builders,
             virtual_column_builder,
             vector_index_builder,
+            spatial_index_builder,
             table_meta_timestamps,
             serialize_hll,
         };
@@ -396,16 +400,21 @@ impl Processor for TransformSerializeBlock {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
                         if let Some(tid) = self.table_id {
-                            self.block_builder.ctx.update_multi_table_insert_status(
-                                tid,
-                                extended_block_meta.block_meta.row_count,
-                            );
+                            self.block_builder
+                                .ctx
+                                .mutation_state()
+                                .update_multi_table_insert_status(
+                                    tid,
+                                    extended_block_meta.block_meta.row_count,
+                                );
                         } else {
-                            self.block_builder.ctx.add_mutation_status(MutationStatus {
-                                insert_rows: extended_block_meta.block_meta.row_count,
-                                update_rows: 0,
-                                deleted_rows: 0,
-                            });
+                            self.block_builder.ctx.mutation_state().add_mutation_status(
+                                MutationStatus {
+                                    insert_rows: extended_block_meta.block_meta.row_count,
+                                    update_rows: 0,
+                                    deleted_rows: 0,
+                                },
+                            );
                         }
                     }
 

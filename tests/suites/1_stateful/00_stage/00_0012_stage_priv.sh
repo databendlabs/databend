@@ -5,8 +5,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_NAME="u1"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql_query_http_user_connect u1 password -A"
+export USER_B_CONNECT="bendsql_query_http_user_connect b password -A"
 export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 echo "drop table if exists test_table;" | $BENDSQL_CLIENT_CONNECT
@@ -53,6 +53,29 @@ echo "truncate table test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT | $RM_UUID
 echo "grant Read on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s2 FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+
+echo "==== check schema evolution alter priv ==="
+echo "drop table if exists se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
+echo "create table se_table(a int);" | $BENDSQL_CLIENT_CONNECT
+echo "alter table se_table set options(enable_schema_evolution = true);" | $BENDSQL_CLIENT_CONNECT
+echo "create table se_query_table(a int);" | $BENDSQL_CLIENT_CONNECT
+echo "alter table se_query_table set options(enable_schema_evolution = true);" | $BENDSQL_CLIENT_CONNECT
+echo "create stage s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s_schema_evolution from (select 1 as a, 2 as b) file_format=(type=ndjson);" | $BENDSQL_CLIENT_CONNECT >/dev/null
+echo "grant read on stage s_schema_evolution to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert on default.se_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_table from @s_schema_evolution/ file_format=(type=ndjson missing_field_as=field_default) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "grant alter on default.se_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_table from @s_schema_evolution/ file_format=(type=ndjson missing_field_as=field_default) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "select a, b from se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert on default.se_query_table to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into se_query_table from (select to_int32(\$1:a) from @s_schema_evolution) file_format=(type=ndjson) force=true;" | $TEST_USER_CONNECT | $RM_UUID
+echo "select * from se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table se_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table se_query_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage s_schema_evolution;" | $BENDSQL_CLIENT_CONNECT
 
 echo "remove @s2;" | $TEST_USER_CONNECT
 echo "remove @s1;" | $BENDSQL_CLIENT_CONNECT

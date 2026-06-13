@@ -279,12 +279,11 @@ fn get_max_num_buckets(params: &[Scalar], display_name: &str) -> Result<u64> {
     if params.len() != 1 {
         return Ok(128);
     }
-    if let Scalar::Number(number) = params[0] {
-        if let Some(number) = number.integer_to_i128() {
-            if number > 0 {
-                return Ok(number as u64);
-            }
-        }
+    if let Scalar::Number(number) = params[0]
+        && let Some(number) = number.integer_to_i128()
+        && number > 0
+    {
+        return Ok(number as u64);
     }
     Err(ErrorCode::BadDataValueType(format!(
         "The argument of aggregate function {} must be positive int",
@@ -478,15 +477,14 @@ where T: Ord + Clone {
         let next = iter.peek();
         let remaining_empty_buckets = max_num_buckets - buckets.len() as u64 - 1;
 
-        if let Some(next) = next {
-            if remaining_distinct_values as u64 > remaining_empty_buckets
-                && values_count + *next.1 <= bucket_max_values
-            {
-                // If the current value is the last in the input map and there are more remaining
-                // distinct values than empty buckets and adding the value does not cause the bucket
-                // to exceed its max size, skip adding the value to the current bucket.
-                continue;
-            }
+        if let Some(next) = next
+            && remaining_distinct_values as u64 > remaining_empty_buckets
+            && values_count + *next.1 <= bucket_max_values
+        {
+            // If the current value is the last in the input map and there are more remaining
+            // distinct values than empty buckets and adding the value does not cause the bucket
+            // to exceed its max size, skip adding the value to the current bucket.
+            continue;
         }
 
         // Finalize the current bucket and add it to our collection of buckets.

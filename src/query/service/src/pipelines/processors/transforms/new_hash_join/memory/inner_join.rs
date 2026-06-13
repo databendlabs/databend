@@ -17,19 +17,23 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
+use databend_common_settings::Settings;
 
+use super::basic::BasicHashJoin;
+use super::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
@@ -37,10 +41,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
-use crate::sessions::QueryContext;
 
 pub struct InnerHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -49,27 +50,36 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
+    pub(crate) inlist_threshold: usize,
+    pub(crate) bloom_threshold: usize,
+    pub(crate) min_max_threshold: usize,
+    pub(crate) spatial_threshold: usize,
 }
 
 impl InnerHashJoin {
     pub fn create(
-        ctx: &QueryContext,
+        settings: &Settings,
         function_ctx: FunctionContext,
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         state: Arc<BasicHashJoinState>,
+        nested_loop_join_threshold: usize,
     ) -> Result<Self> {
-        let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
+        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
+        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
+        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
+        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            nested_loop_join_threshold,
         )?;
 
         Ok(InnerHashJoin {
@@ -78,6 +88,10 @@ impl InnerHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
+            inlist_threshold,
+            bloom_threshold,
+            min_max_threshold,
+            spatial_threshold,
         })
     }
 }
@@ -99,7 +113,13 @@ impl Join for InnerHashJoin {
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
         let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(packets)
+        merge_join_runtime_filter_packets(
+            packets,
+            self.inlist_threshold,
+            self.bloom_threshold,
+            self.min_max_threshold,
+            self.spatial_threshold,
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -118,29 +138,31 @@ impl Join for InnerHashJoin {
         };
 
         self.desc.remove_keys_nullable(&mut keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
-        let joined_stream =
-            with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
-                HashJoinHashTable::T(table) => {
-                    let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
-                    probe_hash_statistics.clear(probe_block.num_rows());
+        let joined_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
+            HashJoinHashTable::T(table) => {
+                let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
+                probe_hash_statistics.clear(probe_block.num_rows());
 
-                    let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
-                    let probe_keys_stream = table.probe_matched(probe_data)?;
+                let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
+                let probe_keys_stream = table.probe_matched(probe_data)?;
 
-                    Ok(InnerHashJoinStream::create(
-                        probe_block,
-                        self.basic_state.clone(),
-                        probe_keys_stream,
-                        self.desc.clone(),
-                        &mut self.performance_context.probe_result,
-                    ))
-                }
-                HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                InnerHashJoinStream::create(
+                    probe_block,
+                    self.basic_state.clone(),
+                    probe_keys_stream,
+                    self.desc.clone(),
+                    &mut self.performance_context.probe_result,
+                )
+            }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
+            HashJoinHashTable::Null => {
+                return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the hash table is uninitialized.",
-                )),
-            })?;
+                ));
+            }
+        });
 
         match &mut self.performance_context.filter_executor {
             None => Ok(joined_stream),
@@ -200,7 +222,7 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -212,22 +234,49 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
 
-            return Ok(Some(final_result_block(
-                &self.desc,
-                probe_block,
-                build_block,
-                self.probed_rows.matched_build.len(),
-            )));
+            let mut result_block = match (probe_block, build_block) {
+                (Some(mut probe_block), Some(build_block)) => {
+                    probe_block.merge_block(build_block);
+                    probe_block
+                }
+                (Some(probe_block), None) => probe_block,
+                (None, Some(build_block)) => build_block,
+                (None, None) => DataBlock::new(vec![], self.probed_rows.matched_build.len()),
+            };
+
+            for (index, (is_probe_nullable, is_build_nullable)) in
+                self.desc.probe_to_build.iter().cloned()
+            {
+                let entry = match (is_probe_nullable, is_build_nullable) {
+                    (true, true) | (false, false) => result_block.get_by_offset(index).clone(),
+                    (true, false) => result_block.get_by_offset(index).clone().remove_nullable(),
+                    (false, true) => {
+                        let entry = result_block.get_by_offset(index);
+                        let col = entry.to_column();
+
+                        match col.is_null() || col.is_nullable() {
+                            true => entry.clone(),
+                            false => BlockEntry::from(NullableColumn::new_column(
+                                col,
+                                Bitmap::new_constant(true, result_block.num_rows()),
+                            )),
+                        }
+                    }
+                };
+
+                result_block.add_entry(entry);
+            }
+
+            return Ok(Some(result_block));
         }
     }
 }
 
-pub struct InnerHashJoinFilterStream<'a> {
+pub(super) struct InnerHashJoinFilterStream<'a> {
     inner: Box<dyn JoinStream + 'a>,
     filter_executor: &'a mut FilterExecutor,
 }

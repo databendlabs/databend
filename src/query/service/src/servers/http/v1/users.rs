@@ -38,6 +38,7 @@ pub struct CreateUserRequest {
     pub auth_type: Option<String>,
     pub auth_string: Option<String>,
     pub default_role: Option<String>,
+    pub default_warehouse: Option<String>,
     pub roles: Option<Vec<String>>,
     pub grant_all: Option<bool>,
 }
@@ -53,6 +54,7 @@ pub struct UserItem {
     pub hostname: String,
     pub auth_type: String,
     pub default_role: String,
+    pub default_warehouse: String,
     pub grant_roles: Vec<String>,
     pub disabled: bool,
     pub network_policy: Option<String>,
@@ -71,7 +73,8 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListUsersResponse> {
             hostname: user.hostname.clone(),
             auth_type: user.auth_info.get_type().to_str().to_string(),
             default_role: user.option.default_role().cloned().unwrap_or_default(),
-            grant_roles: user.grants.roles(),
+            default_warehouse: user.option.default_warehouse().cloned().unwrap_or_default(),
+            grant_roles: user.grants.roles_vec(),
             disabled: user.option.disabled().cloned().unwrap_or_default(),
             network_policy: user.option.network_policy().cloned(),
             password_policy: user.option.password_policy().cloned(),
@@ -108,7 +111,10 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
         &req.hostname.unwrap_or("%".to_string()),
         auth_info,
     );
-    user_info.option = user_info.option.with_default_role(req.default_role);
+    user_info.option = user_info
+        .option
+        .with_default_role(req.default_role)
+        .with_default_warehouse(req.default_warehouse);
     if let Some(roles) = req.roles {
         for role in roles {
             user_info.grants.grant_role(role);
@@ -122,7 +128,7 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     }
     let tenant = ctx.session.get_current_tenant();
     user_api
-        .add_user(&tenant, user_info, &CreateOption::CreateOrReplace)
+        .create_user(&tenant, user_info, &CreateOption::CreateOrReplace)
         .await?;
     Ok(())
 }

@@ -61,6 +61,8 @@ message Task {
   }
   uint64 task_id = 1;
   string task_name = 2;
+  // Kept for compatibility and display. For single-statement tasks this is the
+  // SQL text; for script tasks it is derived from script_sql.
   string query_text = 4;
   optional string comment = 5;
   string owner = 6;
@@ -77,4 +79,7 @@ message Task {
   map<string, string> session_parameters = 19;
   optional string error_integration = 20;
   string owner_user = 21;
+  // Non-empty only for script tasks created with `AS BEGIN ... END`.
+  // Each element is one statement in execution order.
+  repeated string script_sql = 22;
 }

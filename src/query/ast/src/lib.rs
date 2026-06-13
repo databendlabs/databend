@@ -14,11 +14,14 @@
 
 // TODO(xuanwo): Add crate level documents here.
 
+#![feature(never_type)]
+#![feature(associated_type_defaults)]
 #[allow(clippy::collapsible_match)]
 pub mod ast;
 pub mod parser;
 mod parser_error;
 pub mod span;
+pub mod visit;
 mod visitor;
 
 pub use parser_error::ParseError;

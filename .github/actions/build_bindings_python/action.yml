@@ -47,6 +47,22 @@ runs:
           echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
         fi
 
+    - name: Normalize cargo config for release wheel builds
+      if: inputs.version
+      shell: bash
+      run: |
+        marker="[target.'cfg(target_os = \"linux\")']"
+        if ! grep -Fq "$marker" .cargo/config.toml; then
+          echo "No Linux-specific cargo target override found"
+        else
+          awk -v marker="$marker" '
+            index($0, marker) == 1 { exit }
+            { print }
+          ' .cargo/config.toml > .cargo/config.toml.tmp
+          mv .cargo/config.toml.tmp .cargo/config.toml
+          echo "Removed Linux-specific linker overrides for release wheel builds"
+        fi
+
     - name: Cross setup for macOS
       if: endsWith(inputs.target, '-darwin')
       shell: bash
@@ -55,14 +71,30 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
+    - name: Setup build dependencies for Linux
+      if: contains(inputs.target, '-linux') && inputs.version == ''
+      shell: bash
+      run: |
+        sudo apt-get update -yq
+        sudo apt-get install -yq --no-install-recommends build-essential clang mold libssl-dev pkg-config cmake protobuf-compiler
+        if [[ "${{ inputs.target }}" == aarch64-* ]]; then
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
+        else
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+        fi
+        echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
+
     - name: Setup uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
 
     - name: Build wheels
       if: inputs.version
       uses: PyO3/maturin-action@v1
+      env:
+        CARGO_PROFILE_RELEASE_LTO: "off"
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
       with:
         rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
         working-directory: src/bendpy

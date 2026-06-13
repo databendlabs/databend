@@ -30,7 +30,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -58,6 +57,7 @@ pub struct CreateTablePlan {
     pub table_properties: Option<TableOptions>,
     pub table_partition: Option<Vec<String>>,
     pub field_comments: Vec<String>,
+    pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
@@ -332,6 +332,8 @@ pub struct AddTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
+    pub if_not_exists: bool,
     pub field: TableField,
     pub comment: String,
     pub option: AddColumnOption,
@@ -360,6 +362,7 @@ pub struct RenameTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub schema: TableSchema,
     pub old_column: String,
     pub new_column: String,
@@ -377,6 +380,7 @@ pub struct DropTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub column: String,
 }
 
@@ -407,6 +411,7 @@ pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub action: ModifyColumnAction,
     pub lock_guard: Option<SharedLockGuard>,
 }
@@ -423,6 +428,7 @@ impl std::fmt::Debug for ModifyTableColumnPlan {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
+            .field("branch", &self.branch)
             .field("action", &self.action)
             .finish()
     }
@@ -525,6 +531,7 @@ pub struct AlterTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
     pub cluster_type: String,
 }
@@ -541,6 +548,7 @@ pub struct DropTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl DropTableClusterKeyPlan {
@@ -591,25 +599,43 @@ pub struct DropAllTableRowAccessPoliciesPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct CreateTableRefPlan {
+pub struct CreateTableBranchPlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
 
-    pub ref_type: SnapshotRefType,
-    pub ref_name: String,
+    pub name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
-pub struct DropTableRefPlan {
+pub struct CreateTableTagPlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
 
-    pub ref_type: SnapshotRefType,
-    pub ref_name: String,
+    pub name: String,
+    pub navigation: Option<NavigationPoint>,
+    pub retain: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableBranchPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableTagPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub name: String,
 }

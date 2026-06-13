@@ -21,6 +21,8 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -29,10 +31,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,11 +63,15 @@ impl Interpreter for DropTableColumnInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-        let table = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let table = catalog
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                db_name,
+                tbl_name,
+                self.plan.branch.as_deref(),
+            )
             .await?;
 
         // check mutability
@@ -88,6 +95,16 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
 
+        if let Some((_, cluster_key)) = table.cluster_key_meta() {
+            let referenced = cluster_key_referenced_columns(&cluster_key)?;
+            if referenced.contains(self.plan.column.as_str()) {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot drop column '{}' because it is referenced by cluster key {}",
+                    self.plan.column, cluster_key
+                )));
+            }
+        }
+
         if table_info.meta.is_column_reference_policy(&field.column_id) {
             return Err(ErrorCode::AlterTableError(format!(
                 "Cannot drop column '{}' which is associated with a security policy",
@@ -95,7 +112,7 @@ impl Interpreter for DropTableColumnInterpreter {
             )));
         }
         if field.computed_expr().is_none() {
-            let mut schema: DataSchema = table_info.schema().into();
+            let mut schema: DataSchema = table_schema.as_ref().into();
             schema.drop_column(self.plan.column.as_str())?;
             // Check if this column is referenced by computed columns.
             check_referenced_computed_columns(
@@ -108,18 +125,16 @@ impl Interpreter for DropTableColumnInterpreter {
         if !table_info.meta.indexes.is_empty() {
             for (index_name, index) in &table_info.meta.indexes {
                 if index.column_ids.contains(&field.column_id) {
-                    return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                        "column `{}` is referenced by inverted index, drop {} index `{}` first",
-                        index.index_type, field.name, index_name,
+                    return Err(ErrorCode::ColumnReferencedByIndex(format!(
+                        "column `{}` is referenced by {} index, drop index `{}` first",
+                        field.name, index.index_type, index_name,
                     )));
                 }
             }
         }
 
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let mut new_table_meta = table.get_table_info().meta.clone();
+        let mut new_table_meta = table_info.meta.clone();
         new_table_meta.drop_column(&self.plan.column)?;
-
         // update table options
         let opts = &mut new_table_meta.options;
         if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -132,6 +147,7 @@ impl Interpreter for DropTableColumnInterpreter {
                 }
             }
         }
+
         if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
             if let ApproxDistinctColumns::Specify(mut cols) =
                 value.parse::<ApproxDistinctColumns>()?
@@ -143,13 +159,29 @@ impl Interpreter for DropTableColumnInterpreter {
                 }
             }
         }
+        let new_schema = new_table_meta.schema.as_ref().clone();
+
+        let dropped_column_ids = field.column_ids().into_iter().collect();
+        validate_table_indexes_not_referencing_columns(
+            self.ctx.clone(),
+            catalog.as_ref(),
+            &self.ctx.get_tenant(),
+            table.get_id(),
+            &dropped_column_ids,
+        )
+        .await?;
+        validate_constraints_by_schema(self.ctx.clone(), &new_table_meta.constraints, &new_schema)?;
 
         commit_table_meta(
             &self.ctx,
             table.as_ref(),
-            table_info,
             new_table_meta,
             catalog,
+            |snapshot_opt, _| {
+                if let Some(snapshot) = snapshot_opt {
+                    snapshot.schema = new_schema;
+                }
+            },
         )
         .await?;
 

@@ -27,8 +27,10 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::UDFType;
+use databend_query_script_udf_support::ScriptUdfFunctionDesc;
 use itertools::Itertools;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -118,11 +120,17 @@ impl IPhysicalPlan for Udf {
         self.input.build_pipeline(builder)?;
 
         if self.script_udf {
-            let runtimes = TransformUdfScript::init_runtime(&self.udf_funcs)?;
+            let udf_funcs = self
+                .udf_funcs
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect::<Vec<ScriptUdfFunctionDesc>>();
+            let runtimes = TransformUdfScript::init_runtime(&udf_funcs)?;
             builder.main_pipeline.try_add_transformer(|| {
                 Ok(TransformUdfScript::new(
                     builder.func_ctx.clone(),
-                    self.udf_funcs.clone(),
+                    udf_funcs.clone(),
                     runtimes.clone(),
                 ))
             })
@@ -146,13 +154,28 @@ impl IPhysicalPlan for Udf {
 pub struct UdfFunctionDesc {
     pub name: String,
     pub func_name: String,
-    pub output_column: IndexType,
+    pub output_column: Symbol,
     pub arg_indices: Vec<IndexType>,
     pub arg_exprs: Vec<String>,
     pub data_type: Box<DataType>,
     pub headers: BTreeMap<String, String>,
 
     pub udf_type: UDFType,
+}
+
+impl From<UdfFunctionDesc> for ScriptUdfFunctionDesc {
+    fn from(value: UdfFunctionDesc) -> Self {
+        Self {
+            name: value.name,
+            func_name: value.func_name,
+            output_column: value.output_column,
+            arg_indices: value.arg_indices,
+            arg_exprs: value.arg_exprs,
+            data_type: value.data_type,
+            headers: value.headers,
+            udf_type: value.udf_type,
+        }
+    }
 }
 
 impl PhysicalPlanBuilder {

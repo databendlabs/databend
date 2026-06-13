@@ -34,20 +34,20 @@ mod dummy {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::type_check;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_sql_test_support as parser;
 
     #[divan::bench(args = [10240, 102400])]
     fn parse(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
         bencher.bench(|| {
-            let _ = divan::black_box(parser::parse_raw_expr(&text, &[]));
+            let _ = divan::black_box(parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS));
         });
     }
 
     #[divan::bench(args = [10240, 102400])]
     fn check(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
-        let raw_expr = parser::parse_raw_expr(&text, &[]);
+        let raw_expr = parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS);
 
         bencher.bench(|| {
             let _ = divan::black_box(type_check::check(&raw_expr, &BUILTIN_FUNCTIONS));
@@ -57,7 +57,7 @@ mod dummy {
     #[divan::bench(args = [10240, 102400])]
     fn eval(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
-        let raw_expr = parser::parse_raw_expr(&text, &[]);
+        let raw_expr = parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS);
         let func_ctx = FunctionContext::default();
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let block = DataBlock::new(vec![], 1);
@@ -71,6 +71,11 @@ mod dummy {
 
 #[divan::bench_group(max_time = 2)]
 mod bitmap {
+    use std::ops::BitAndAssign;
+    use std::ops::BitOrAssign;
+    use std::ops::BitXorAssign;
+    use std::ops::SubAssign;
+
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
@@ -141,6 +146,17 @@ mod bitmap {
     where F: FnMut(u64) -> u64 {
         let data: Vec<u64> = (0..rows as u64).map(generator).collect();
         UInt64Type::from_data(data)
+    }
+
+    fn mixed_small_large_pair() -> (HybridBitmap, HybridBitmap) {
+        let small = HybridBitmap::from_iter([1_u64, 5, 13, 100]);
+        let large = HybridBitmap::from_iter(0_u64..128);
+        (small, large)
+    }
+
+    fn mixed_large_small_pair() -> (HybridBitmap, HybridBitmap) {
+        let (small, large) = mixed_small_large_pair();
+        (large, small)
     }
 
     fn eval_bitmap_result(entry: &BlockEntry, rows: usize, agg_name: &'static str) {
@@ -230,6 +246,66 @@ mod bitmap {
             eval_bitmap_result(&entry, rows, "bitmap_construct_agg");
         });
     }
+
+    #[divan::bench]
+    fn bitmap_mixed_and_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitand_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_or_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitor_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_xor_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitxor_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_sub_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.sub_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_xor_large_small(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_large_small_pair)
+            .bench_values(|(mut large, small)| {
+                large.bitxor_assign(small);
+                large.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_sub_large_small(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_large_small_pair)
+            .bench_values(|(mut large, small)| {
+                large.sub_assign(small);
+                large.len()
+            });
+    }
 }
 
 #[divan::bench_group(max_time = 0.5)]
@@ -250,7 +326,7 @@ mod datetime_fast_path {
     use databend_common_expression::types::timestamp::microseconds_to_days;
     use databend_common_expression::types::timestamp::timestamp_to_string;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_sql_test_support as parser;
     use jiff::civil::date;
     use jiff::tz::TimeZone;
     use rand::Rng;
@@ -457,7 +533,7 @@ mod datetime_fast_path {
     }
 
     fn build_expr(sql: &str, columns: &[(&str, DataType)]) -> Expr {
-        let raw_expr = parser::parse_raw_expr(sql, columns);
+        let raw_expr = parser::parse_raw_expr(sql, columns, &BUILTIN_FUNCTIONS);
         type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap()
     }
 

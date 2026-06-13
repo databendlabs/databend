@@ -54,12 +54,13 @@ use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
-use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -89,10 +90,12 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -106,24 +109,25 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::BindContext;
+use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ConstraintExprBinder;
+use crate::binder::StageResolver;
 use crate::binder::Visibility;
-use crate::binder::get_storage_params_from_options;
-use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
-use crate::planner::semantic::IdentifierNormalizer;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::plans::AddColumnOption;
@@ -133,15 +137,15 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
-use crate::plans::CreateTableRefPlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
-use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -173,6 +177,7 @@ use crate::plans::VacuumTemporaryFilesPlan;
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
+    pub(in crate::planner::binder) field_stats_truncate_len: Vec<Option<u64>>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
 }
@@ -204,10 +209,13 @@ impl Binder {
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from(&format!(
                 "{}.system.tables_with_history",
-                catalog_name.to_lowercase()
+                QuotedIdent(catalog_name.to_lowercase(), '`')
             ))
         } else {
-            SelectBuilder::from(&format!("{}.system.tables", catalog_name.to_lowercase()))
+            SelectBuilder::from(&format!(
+                "{}.system.tables",
+                QuotedIdent(catalog_name.to_lowercase(), '`')
+            ))
         };
 
         if *full {
@@ -230,7 +238,10 @@ impl Binder {
                 .with_column("data_compressed_size")
                 .with_column("index_size");
         } else {
-            select_builder.with_column(format!("name AS `Tables_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Tables_in_{database}"), '`')
+            ));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };
@@ -241,14 +252,14 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -343,7 +354,10 @@ impl Binder {
             }
         };
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let mut select_builder = SelectBuilder::from(&format!("{catalog_name}.system.statistics"));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.statistics",
+            QuotedIdent(&catalog_name, '`')
+        ));
 
         let database = match database {
             None => self.ctx.get_current_database(),
@@ -355,14 +369,14 @@ impl Binder {
                 database
             }
         };
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         if let ShowStatsTarget::Table(table) = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
             catalog
                 .get_table(&self.ctx.get_tenant(), database.as_str(), &table_name)
                 .await?;
-            select_builder.with_filter(format!("table = '{table_name}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table_name, '\'')));
         }
 
         select_builder
@@ -416,18 +430,26 @@ impl Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM {}.system.tables WHERE database = '{}' ORDER BY Name",
-                select_cols, default_catalog, database
+                "SELECT {} FROM {}.system.tables WHERE database = {} ORDER BY Name",
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\'')
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
-            WHERE Name LIKE '{}' ORDER BY Name",
-                select_cols, default_catalog, database, pattern
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
+            WHERE Name LIKE {} ORDER BY Name",
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\''),
+                QuotedString(pattern, '\'')
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
             WHERE ({}) ORDER BY Name",
-                select_cols, default_catalog, database, selection
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\''),
+                selection
             ),
         };
 
@@ -447,8 +469,10 @@ impl Binder {
         let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder =
-            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.tables_with_history",
+            QuotedIdent(&default_catalog, '`')
+        ));
 
         select_builder
             .with_column("name AS Tables")
@@ -470,13 +494,13 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -555,6 +579,11 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        let stage_resolver = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?;
 
         // Construct a UriLocation from database defaults if table doesn't have explicit location
         let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
@@ -573,7 +602,7 @@ impl Binder {
                 if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
                 {
                     // Get the connection object to access its storage_params
-                    match self.ctx.get_connection(connection_name).await {
+                    match stage_resolver.resolve_connection(connection_name).await {
                         Ok(connection) => {
                             // Construct UriLocation using the database defaults
                             match UriLocation::from_uri(path.clone(), connection.storage_params) {
@@ -654,15 +683,15 @@ impl Binder {
                     path: uri.path.clone(),
                     connection: uri.connection.clone(),
                 };
-                let sp = parse_storage_params_from_uri(
-                    &mut uri,
-                    Some(self.ctx.as_ref()),
-                    "when create TABLE with external location",
-                )
-                .await?;
+                let sp = stage_resolver
+                    .resolve_storage_params_from_uri(
+                        &mut uri,
+                        "when create TABLE with external location",
+                    )
+                    .await?;
 
                 // create a temporary op to check if params is correct
-                let op = init_operator(&sp)?;
+                let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
                 check_operator(&op, &sp).await?;
 
                 // Verify essential privileges.
@@ -696,26 +725,12 @@ impl Binder {
             }
         };
 
-        // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns { columns, .. }) = &source {
-            if columns
-                .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
-                && !self.ctx.get_settings().get_enable_geo_create_table()?
-            {
-                return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry/geography type is an experimental feature. \
-                    You can `set enable_geo_create_table=1` to use this feature. \
-                    We do not guarantee its compatibility until we doc this feature.",
-                ));
-            }
-        }
-
         // Build table schema
         let (
             AnalyzeCreateTableResult {
                 schema,
                 field_comments,
+                field_stats_truncate_len,
                 table_indexes,
                 table_constraints,
             },
@@ -747,6 +762,7 @@ impl Binder {
                     AnalyzeCreateTableResult {
                         schema,
                         field_comments: vec![],
+                        field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
                     },
@@ -783,8 +799,9 @@ impl Binder {
                 };
                 match engine {
                     Engine::Iceberg => {
-                        let sp =
-                            get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
+                        let sp = stage_resolver
+                            .resolve_storage_params_from_options(&options)
+                            .await?;
                         let (table_schema, _) =
                             self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
@@ -795,6 +812,7 @@ impl Binder {
                             AnalyzeCreateTableResult {
                                 schema: Arc::new(table_schema),
                                 field_comments: vec![],
+                                field_stats_truncate_len: vec![],
                                 table_indexes: None,
                                 table_constraints: None,
                             },
@@ -802,8 +820,9 @@ impl Binder {
                         )
                     }
                     Engine::Delta => {
-                        let sp =
-                            get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
+                        let sp = stage_resolver
+                            .resolve_storage_params_from_options(&options)
+                            .await?;
                         let (table_schema, meta) =
                             self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
@@ -815,6 +834,7 @@ impl Binder {
                             AnalyzeCreateTableResult {
                                 schema: Arc::new(table_schema),
                                 field_comments: vec![],
+                                field_stats_truncate_len: vec![],
                                 table_indexes: None,
                                 table_constraints: None,
                             },
@@ -859,16 +879,11 @@ impl Binder {
 
             // we should persist the storage format and compression type instead of using the default value in fuse table
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-                let default_storage_format = match config.query.default_storage_format.as_str() {
-                    "" | "auto" => {
-                        if is_blocking_fs {
-                            "native"
-                        } else {
-                            "parquet"
-                        }
-                    }
-                    _ => config.query.default_storage_format.as_str(),
-                };
+                let default_storage_format =
+                    match config.query.common.default_storage_format.as_str() {
+                        "" | "auto" | "native" => "parquet",
+                        _ => config.query.common.default_storage_format.as_str(),
+                    };
                 options.insert(
                     OPT_KEY_STORAGE_FORMAT.to_owned(),
                     default_storage_format.to_owned(),
@@ -876,7 +891,7 @@ impl Binder {
             }
 
             if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
-                let default_compression = match config.query.default_compression.as_str() {
+                let default_compression = match config.query.common.default_compression.as_str() {
                     "" | "auto" => {
                         if is_blocking_fs {
                             "lz4"
@@ -884,7 +899,7 @@ impl Binder {
                             "zstd"
                         }
                     }
-                    _ => config.query.default_compression.as_str(),
+                    _ => config.query.common.default_compression.as_str(),
                 };
                 options.insert(
                     OPT_KEY_TABLE_COMPRESSION.to_owned(),
@@ -940,6 +955,7 @@ impl Binder {
             table_properties,
             table_partition,
             field_comments,
+            field_stats_truncate_len,
             cluster_key,
             as_select: as_query_plan,
             table_indexes,
@@ -987,12 +1003,16 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let sp =
-            parse_storage_params_from_uri(&mut uri, Some(self.ctx.as_ref()), "when ATTACH TABLE")
-                .await?;
+        let sp = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_storage_params_from_uri(&mut uri, "when ATTACH TABLE")
+        .await?;
 
         // create a temporary op to check if params is correct
-        let op = init_operator(&sp)?;
+        let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
         check_operator(&op, &sp).await?;
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
@@ -1009,6 +1029,7 @@ impl Binder {
             table_properties: None,
             table_partition: None,
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             cluster_key: None,
             as_select: None,
             table_indexes: None,
@@ -1081,16 +1102,29 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table { table, .. } =
-            table_reference
-        {
-            debug_assert!(table.branch.is_none());
-            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
-        } else {
-            return Err(ErrorCode::Internal(
-                "should not happen, parser should have report error already",
-            ));
-        };
+        let (catalog, database, table, branch) =
+            if let TableReference::Table { table, .. } = table_reference {
+                let branch = table
+                    .branch
+                    .as_ref()
+                    .map(|b| normalize_identifier(b, &self.name_resolution_ctx).name);
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &table.catalog,
+                    &table.database,
+                    &table.table,
+                );
+                (catalog, database, table, branch)
+            } else {
+                return Err(ErrorCode::Internal(
+                    "should not happen, parser should have report error already",
+                ));
+            };
+
+        if let Some(branch_name) = branch.as_ref() {
+            return Err(legacy_table_ref_removed_error(format!(
+                "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
+            )));
+        }
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
@@ -1138,7 +1172,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1149,22 +1183,24 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     schema: new_schema,
                     old_column,
                     new_column,
                 })))
             }
             AlterTableAction::AddColumn {
+                if_not_exists,
                 column,
                 option: ast_option,
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
-                    self.analyze_add_column(column, schema).await?;
+                    self.analyze_add_column(column, schema.clone()).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -1177,6 +1213,8 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
+                    if_not_exists: *if_not_exists,
                     field,
                     comment,
                     option,
@@ -1280,7 +1318,7 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1294,7 +1332,7 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
 
@@ -1311,6 +1349,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     action: action_in_plan,
                     lock_guard,
                 })))
@@ -1321,16 +1360,16 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     column,
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                let schema = self
+                let tbl = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
-                    .await?
-                    .schema();
-                let cluster_keys = self.analyze_cluster_keys(cluster_by, schema).await?;
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                    .await?;
+                let cluster_keys = self.analyze_cluster_keys(cluster_by, tbl.schema()).await?;
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
@@ -1338,6 +1377,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         cluster_keys,
                         cluster_type: cluster_by.cluster_type.to_string().to_lowercase(),
                     },
@@ -1349,6 +1389,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                 },
             ))),
             AlterTableAction::ReclusterTable {
@@ -1463,39 +1504,40 @@ impl Binder {
                     },
                 )))
             }
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
-                travel_point,
-                retain,
-            } => {
-                let navigation = if let Some(point) = travel_point {
+            AlterTableAction::CreateTableTag { spec } => {
+                let navigation = if let Some(point) = &spec.travel_point {
                     Some(self.resolve_data_travel_point(bind_context, point)?)
                 } else {
                     None
                 };
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                let name = self.normalize_identifier(&spec.name).name;
+                Ok(Plan::CreateTableTag(Box::new(CreateTableTagPlan {
                     tenant,
                     catalog,
                     database,
                     table,
-                    ref_type: ref_type.into(),
-                    ref_name,
+                    name,
                     navigation,
-                    retain: *retain,
+                    retain: spec.retain,
                 })))
             }
-            AlterTableAction::DropTableRef { ref_type, ref_name } => {
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+            AlterTableAction::DropTableTag { tag_name } => {
+                let name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::DropTableTag(Box::new(DropTableTagPlan {
                     tenant,
                     catalog,
                     database,
                     table,
-                    ref_type: ref_type.into(),
-                    ref_name,
+                    name,
                 })))
+            }
+            AlterTableAction::CreateTableBranch { .. }
+            | AlterTableAction::DropTableBranch { .. } => {
+                // Keep the grammar reserved for the upcoming redesign, but do
+                // not generate legacy branch/tag DDL plans anymore.
+                Err(legacy_table_ref_removed_error(
+                    "ALTER TABLE ... CREATE/DROP BRANCH",
+                ))
             }
         }
     }
@@ -1894,17 +1936,35 @@ impl Binder {
     pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-    ) -> Result<(TableSchemaRef, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>, Vec<Option<u64>>)> {
         let mut has_computed = false;
         let mut has_autoincrement = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
+        let mut fields_stats_truncate_len = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
+            if let Some(len) = column.stats_truncate_len {
+                let inner_type = schema_data_type.remove_nullable();
+                if inner_type != databend_common_expression::TableDataType::String {
+                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
+                        format!(
+                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                            name, inner_type
+                        ),
+                    ));
+                }
+                if len == 0 || len > 4096 {
+                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
+                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
+                    ));
+                }
+            }
+            fields_stats_truncate_len.push(column.stats_truncate_len);
             let mut field = TableField::new(&name, schema_data_type.clone());
             if let Some(expr) = &column.expr {
                 match expr {
@@ -1991,7 +2051,7 @@ impl Binder {
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_comments))
+        Ok((schema, fields_comments, fields_stats_truncate_len))
     }
 
     #[async_backtrace::framed]
@@ -2081,6 +2141,15 @@ impl Binder {
                         self.validate_vector_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Vector, column_ids, options)
                 }
+                AstTableIndexType::Spatial => {
+                    let column_ids = self.validate_spatial_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_spatial_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Spatial, column_ids, options)
+                }
                 AstTableIndexType::Aggregating => unreachable!(),
             };
 
@@ -2110,7 +2179,7 @@ impl Binder {
                 opt_table_constraints,
                 opt_column_constraints,
             } => {
-                let (schema, comments) =
+                let (schema, comments, stats_truncate_len) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
                     let table_indexes = self
@@ -2142,6 +2211,7 @@ impl Binder {
                 Ok(AnalyzeCreateTableResult {
                     schema,
                     field_comments: comments,
+                    field_stats_truncate_len: stats_truncate_len,
                     table_indexes,
                     table_constraints,
                 })
@@ -2162,6 +2232,7 @@ impl Binder {
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,
                             field_comments: vec![],
+                            field_stats_truncate_len: vec![],
                             table_indexes: None,
                             table_constraints: None,
                         })
@@ -2174,6 +2245,7 @@ impl Binder {
                     Ok(AnalyzeCreateTableResult {
                         schema: table.schema(),
                         field_comments: table.field_comments().clone(),
+                        field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
                     })
@@ -2250,10 +2322,14 @@ impl Binder {
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        for field in schema.fields().iter() {
+            let column_index = metadata
+                .write()
+                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                column_index,
                 Box::new(DataType::from(field.data_type())),
                 Visibility::Visible,
             )
@@ -2265,12 +2341,18 @@ impl Binder {
             &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
-            self.metadata.clone(),
+            metadata,
             &[],
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
+        let mut normalizer = ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
+            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
+            sql_dialect: self.dialect,
+        };
         let mut cluster_keys = Vec::with_capacity(expr_len);
         for cluster_expr in cluster_exprs.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
@@ -2298,7 +2380,6 @@ impl Binder {
             }
 
             let mut cluster_expr = cluster_expr.clone();
-            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
             cluster_expr.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_expr));
         }
@@ -2306,7 +2387,7 @@ impl Binder {
         Ok(cluster_keys)
     }
 
-    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+    pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,

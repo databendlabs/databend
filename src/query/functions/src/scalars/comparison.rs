@@ -14,9 +14,13 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -28,7 +32,21 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_common_expression::comparison::ConstantComparison;
+use databend_common_expression::comparison::ConstantComparisonAdapter;
+use databend_common_expression::comparison::GtOp;
+use databend_common_expression::comparison::GteOp;
+use databend_common_expression::comparison::LtOp;
+use databend_common_expression::comparison::LteOp;
+use databend_common_expression::comparison::StatComparisonOp;
+use databend_common_expression::comparison::estimate_ndv_true_count;
+use databend_common_expression::comparison::null_comparison_stat;
+use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::generate_like_pattern;
+use databend_common_expression::scalar_evaluator;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::StatBinaryArg;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
@@ -66,6 +84,9 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::deserialize_bitmap;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::TypedHistogram;
+use databend_common_statistics::TypedHistogramBucket;
 use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
@@ -160,70 +181,949 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
 
 macro_rules! register_simple_domain_type_cmp {
     ($registry:ident, $T:ty) => {
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "eq",
+            |stat, _| derive_equality_stat::<$T>(false, stat),
             |_, d1, d2| d1.domain_eq(d2),
             |lhs, rhs, _| lhs == rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "noteq",
+            |stat, _| derive_equality_stat::<$T>(true, stat),
             |_, d1, d2| d1.domain_noteq(d2),
             |lhs, rhs, _| lhs != rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "gt",
+            |stat, _| derive_comparison_stat::<$T, GtOp>(stat),
             |_, d1, d2| d1.domain_gt(d2),
             |lhs, rhs, _| lhs > rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "gte",
+            |stat, _| derive_comparison_stat::<$T, GteOp>(stat),
             |_, d1, d2| d1.domain_gte(d2),
             |lhs, rhs, _| lhs >= rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "lt",
+            |stat, _| derive_comparison_stat::<$T, LtOp>(stat),
             |_, d1, d2| d1.domain_lt(d2),
             |lhs, rhs, _| lhs < rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "lte",
+            |stat, _| derive_comparison_stat::<$T, LteOp>(stat),
             |_, d1, d2| d1.domain_lte(d2),
             |lhs, rhs, _| lhs <= rhs,
         );
     };
 }
 
+fn register_stat_comparison_2_arg<T>(
+    registry: &mut FunctionRegistry,
+    name: &'static str,
+    derive_stat: fn(
+        StatBinaryArg,
+        &databend_common_expression::FunctionContext,
+    ) -> Result<Option<ReturnStat>, String>,
+    calc_domain: fn(
+        &databend_common_expression::FunctionContext,
+        &T::Domain,
+        &T::Domain,
+    ) -> FunctionDomain<BooleanType>,
+    func: fn(T::ScalarRef<'_>, T::ScalarRef<'_>, &mut EvalContext) -> bool,
+) where
+    T: ArgType,
+    for<'a> T::ScalarRef<'a>: Copy,
+{
+    registry
+        .scalar_builder(name)
+        .function()
+        .typed_2_arg::<T, T, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(calc_domain)
+        .derive_stat(derive_stat)
+        .vectorized(databend_common_expression::vectorize_cmp_2_arg(func))
+        .register();
+}
+
+fn derive_equality_stat<T>(
+    not_eq: bool,
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String>
+where
+    T: ComparisonStatType,
+{
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, _)) = ConstantComparison::<TypedComparisonStat<T>>::from_args(&stat)? else {
+        return Ok(None);
+    };
+
+    let true_count = input.equality_true_count(
+        input
+            .domain
+            .as_ref()
+            .and_then(T::domain_bounds)
+            .map(|(min, max)| {
+                (
+                    T::compare(T::to_scalar_ref(&input.constant), min),
+                    T::compare(T::to_scalar_ref(&input.constant), max),
+                )
+            }),
+        not_eq,
+    );
+
+    Ok(Some(input.boolean_stat(true_count)))
+}
+
+fn derive_comparison_stat<T, Op: StatComparisonOp>(
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String>
+where
+    T: ComparisonStatType,
+    T::Scalar: HistogramConstant,
+{
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, reverse)) = ConstantComparison::<TypedComparisonStat<T>>::from_args(&stat)?
+    else {
+        return Ok(None);
+    };
+
+    let true_count = if reverse {
+        ordered_comparison_true_count::<T, Op::Reverse>(&input)?
+    } else {
+        ordered_comparison_true_count::<T, Op>(&input)?
+    };
+    Ok(true_count.map(|true_count| input.boolean_stat(true_count)))
+}
+
+fn ordered_comparison_true_count<T, Op: StatComparisonOp>(
+    input: &ConstantComparison<'_, '_, TypedComparisonStat<T>>,
+) -> Result<Option<StatEstimate>, String>
+where
+    T: ComparisonStatType,
+    T::Scalar: HistogramConstant,
+{
+    if let Some(histogram) = input.stat.histogram() {
+        return Ok(Some(
+            HistogramComparison::<_, Op> {
+                histogram,
+                constant: &input.constant,
+                non_null_cardinality: input.non_null_cardinality,
+                _op: PhantomData,
+            }
+            .true_count()?,
+        ));
+    }
+
+    if T::USE_INTEGER_RANGE_COMPARISON {
+        let range = IntegerRangeComparison::from_input(input)?;
+        return Ok(Some(range.true_count::<Op>()));
+    }
+
+    let Some((cmp_min, cmp_max)) =
+        input
+            .domain
+            .as_ref()
+            .and_then(T::domain_bounds)
+            .map(|(min, max)| {
+                (
+                    T::compare(T::to_scalar_ref(&input.constant), min),
+                    T::compare(T::to_scalar_ref(&input.constant), max),
+                )
+            })
+    else {
+        return Ok(None);
+    };
+
+    Ok(Op::range_true_count(
+        input.stat.ndv,
+        input.non_null_cardinality,
+        cmp_min,
+        cmp_max,
+    ))
+}
+
+struct TypedComparisonStat<T> {
+    _marker: PhantomData<fn(T)>,
+}
+
+impl<T> Clone for TypedComparisonStat<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TypedComparisonStat<T> {}
+
+impl<T> ConstantComparisonAdapter for TypedComparisonStat<T>
+where T: ComparisonStatType
+{
+    type Value = T::Scalar;
+    type Domain = T::Domain;
+
+    fn constant(scalar: Scalar) -> Result<T::Scalar, String> {
+        T::try_downcast_scalar(&scalar.as_ref())
+            .map(T::to_owned_scalar)
+            .map_err(|e| e.to_string())
+    }
+
+    fn domain(domain: &Domain) -> Result<T::Domain, String> {
+        T::try_downcast_domain(domain).map_err(|e| e.to_string())
+    }
+}
+
+trait ComparisonStatType: ArgType {
+    const USE_INTEGER_RANGE_COMPARISON: bool = false;
+
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)>;
+}
+
+impl<T: Number> ComparisonStatType for NumberType<T> {
+    const USE_INTEGER_RANGE_COMPARISON: bool = !T::FLOATING;
+
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((
+            NumberType::<T>::to_scalar_ref(&domain.min),
+            NumberType::<T>::to_scalar_ref(&domain.max),
+        ))
+    }
+}
+
+impl ComparisonStatType for BooleanType {
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((!domain.has_false, domain.has_true))
+    }
+}
+
+impl ComparisonStatType for StringType {
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((domain.min.as_str(), domain.max.as_deref()?))
+    }
+}
+
+macro_rules! impl_simple_domain_stat_type {
+    ($($ty:ty => $use_integer_range:expr),* $(,)?) => {
+        $(
+            impl ComparisonStatType for $ty {
+                const USE_INTEGER_RANGE_COMPARISON: bool = $use_integer_range;
+
+                fn domain_bounds(
+                    domain: &Self::Domain,
+                ) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+                    Some((Self::to_scalar_ref(&domain.min), Self::to_scalar_ref(&domain.max)))
+                }
+            }
+        )*
+    };
+}
+
+impl_simple_domain_stat_type!(
+    DateType => true,
+    TimestampType => true,
+    TimestampTzType => false,
+    IntervalType => false,
+);
+
+struct HistogramComparison<'a, T, Op> {
+    histogram: &'a Histogram,
+    constant: &'a T,
+    non_null_cardinality: f64,
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> {
+    fn true_count(&self) -> Result<StatEstimate, String> {
+        let histogram_num_values = self.histogram.num_values();
+        if histogram_num_values == 0.0 {
+            return Ok(StatEstimate::exact(0.0));
+        }
+
+        let selected_count = self.selected_count()?;
+        let factor = self.non_null_cardinality / histogram_num_values;
+        Ok(scale_estimate(selected_count, factor))
+    }
+
+    fn selected_count(&self) -> Result<StatEstimate, String> {
+        match self.histogram {
+            Histogram::Int(histogram) => {
+                let constant = self
+                    .constant
+                    .histogram_i64()
+                    .ok_or_else(|| unexpected_histogram_constant("Int", self.constant))?;
+                Ok(TypedHistogramScan::<_, Op> {
+                    histogram,
+                    constant: &constant,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
+                    _op: PhantomData,
+                }
+                .selected_count(HistogramBucketComparison::number_selected_count))
+            }
+            Histogram::UInt(histogram) => {
+                let constant = self
+                    .constant
+                    .histogram_u64()
+                    .ok_or_else(|| unexpected_histogram_constant("UInt", self.constant))?;
+                Ok(TypedHistogramScan::<_, Op> {
+                    histogram,
+                    constant: &constant,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
+                    _op: PhantomData,
+                }
+                .selected_count(HistogramBucketComparison::number_selected_count))
+            }
+            Histogram::Float(histogram) => {
+                let constant = self
+                    .constant
+                    .histogram_f64()
+                    .ok_or_else(|| unexpected_histogram_constant("Float", self.constant))?;
+                Ok(TypedHistogramScan::<_, Op> {
+                    histogram,
+                    constant: &constant,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
+                    _op: PhantomData,
+                }
+                .selected_count(HistogramBucketComparison::number_selected_count))
+            }
+            Histogram::Bytes(histogram) => {
+                let Some(constant) = self.constant.histogram_bytes() else {
+                    return Err(unexpected_histogram_constant("Bytes", self.constant));
+                };
+                let constant = constant.to_vec();
+                Ok(TypedHistogramScan::<_, Op> {
+                    histogram,
+                    constant: &constant,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
+                    _op: PhantomData,
+                }
+                .selected_count(HistogramBucketComparison::bytes_selected_count))
+            }
+        }
+    }
+}
+
+fn add_estimate(left: StatEstimate, right: StatEstimate) -> StatEstimate {
+    StatEstimate::new(
+        left.lower + right.lower,
+        left.expected + right.expected,
+        left.upper + right.upper,
+    )
+}
+
+fn scale_estimate(estimate: StatEstimate, factor: f64) -> StatEstimate {
+    StatEstimate::new(
+        estimate.lower * factor,
+        estimate.expected * factor,
+        estimate.upper * factor,
+    )
+}
+
+struct TypedHistogramScan<'a, T, Op> {
+    histogram: &'a TypedHistogram<T>,
+    constant: &'a T,
+    selected: StatEstimate,
+    row_scale: f64,
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<'a, T: Ord, Op: StatComparisonOp> TypedHistogramScan<'a, T, Op> {
+    fn selected_count(
+        mut self,
+        estimate_partial_bucket_count: impl Fn(&HistogramBucketComparison<'a, T, Op>) -> StatEstimate,
+    ) -> StatEstimate {
+        for bucket in &self.histogram.buckets {
+            let bucket = HistogramBucketComparison::<_, Op> {
+                bucket,
+                constant: self.constant,
+                row_scale: self.row_scale,
+                _op: PhantomData,
+            };
+            match bucket.overlap() {
+                HistogramBucketOverlap::None => {}
+                HistogramBucketOverlap::Complete => {
+                    self.selected =
+                        add_estimate(self.selected, StatEstimate::exact(bucket.num_values()));
+                }
+                HistogramBucketOverlap::Partial => {
+                    self.selected =
+                        add_estimate(self.selected, estimate_partial_bucket_count(&bucket));
+                }
+            }
+        }
+
+        self.selected
+    }
+}
+
+struct HistogramBucketComparison<'a, T, Op> {
+    bucket: &'a TypedHistogramBucket<T>,
+    constant: &'a T,
+    row_scale: f64,
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<T: Ord, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
+    fn num_values(&self) -> f64 {
+        self.bucket.num_values() * self.row_scale
+    }
+
+    fn overlap(&self) -> HistogramBucketOverlap {
+        let lower_cmp = self.constant.cmp(self.bucket.lower_bound());
+        let upper_cmp = self.constant.cmp(self.bucket.upper_bound());
+        if Op::SELECT_LESS {
+            if lower_cmp == Ordering::Less || (!Op::INCLUDE_EQUAL && lower_cmp == Ordering::Equal) {
+                HistogramBucketOverlap::None
+            } else if upper_cmp == Ordering::Greater
+                || (Op::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
+            {
+                HistogramBucketOverlap::Complete
+            } else {
+                HistogramBucketOverlap::Partial
+            }
+        } else if upper_cmp == Ordering::Greater
+            || (!Op::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
+        {
+            HistogramBucketOverlap::None
+        } else if lower_cmp == Ordering::Less || (Op::INCLUDE_EQUAL && lower_cmp == Ordering::Equal)
+        {
+            HistogramBucketOverlap::Complete
+        } else {
+            HistogramBucketOverlap::Partial
+        }
+    }
+}
+
+impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
+    fn bytes_selected_count(&self) -> StatEstimate {
+        let selectivity = if Op::INCLUDE_EQUAL {
+            // Bytes buckets only have a coarse partial-bucket model. For the
+            // equality mass, a non-empty bucket still has at least one value.
+            let ndv = if self.bucket.num_distinct() < 1.0 {
+                1.0
+            } else {
+                self.bucket.num_distinct()
+            };
+            if ndv <= 2.0 { 1.0 } else { 0.5 + 1.0 / ndv }
+        } else {
+            0.5
+        };
+        StatEstimate::exact(self.num_values() * selectivity)
+    }
+}
+
+impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
+    fn number_selected_count(&self) -> StatEstimate {
+        let parts = if let Some(parts) = T::partial_discrete_bucket_parts(
+            self.bucket.lower_bound(),
+            self.bucket.upper_bound(),
+            self.constant,
+        ) {
+            let selected_value_count = match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
+                (true, false) => parts.strict_less_count,
+                (true, true) => parts.strict_less_count + parts.equality_count,
+                (false, false) => parts.strict_greater_count,
+                (false, true) => parts.strict_greater_count + parts.equality_count,
+            };
+            return StatEstimate::exact(
+                selected_value_count * (self.num_values() / parts.value_count),
+            );
+        } else {
+            let (strict_less, equality) = self.number_less_parts();
+            HistogramBucketSelectivity {
+                strict_less,
+                equality,
+                strict_greater: 1.0 - strict_less - equality,
+            }
+        };
+        let selectivity = match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
+            (true, false) => parts.strict_less,
+            (true, true) => parts.strict_less + parts.equality,
+            (false, false) => parts.strict_greater,
+            (false, true) => parts.strict_greater + parts.equality,
+        };
+        debug_assert!(
+            (0.0..=1.0).contains(&selectivity),
+            "invalid numeric bucket selectivity: {selectivity:?}"
+        );
+        let expected = self.num_values() * selectivity;
+        StatEstimate::new(0.0, expected, self.num_values())
+    }
+
+    fn number_less_parts(&self) -> (f64, f64) {
+        // Scaled buckets can be fractional, but equality mass is based on a
+        // count of possible values and must not use a denominator below one.
+        let equality = if self.bucket.num_distinct() < 1.0 {
+            1.0
+        } else {
+            1.0 / self.bucket.num_distinct()
+        };
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid numeric bucket equality selectivity: {equality:?}"
+        );
+        let lower_bound = self.bucket.lower_bound().to_f64();
+        let upper_bound = self.bucket.upper_bound().to_f64();
+        let const_value = self.constant.to_f64();
+
+        let bucket_range = upper_bound - lower_bound;
+        if bucket_range <= 0.0 {
+            return (0.0, equality);
+        }
+
+        let strict_less = if const_value == lower_bound {
+            0.0
+        } else if const_value == upper_bound {
+            1.0 - equality
+        } else {
+            let range_selectivity = (const_value - lower_bound) / bucket_range;
+            debug_assert!(
+                (0.0..=1.0).contains(&range_selectivity),
+                "invalid numeric bucket range selectivity: {range_selectivity:?}"
+            );
+            range_selectivity * (1.0 - equality)
+        };
+
+        (strict_less, equality)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct HistogramBucketSelectivity {
+    strict_less: f64,
+    equality: f64,
+    strict_greater: f64,
+}
+
+#[derive(Clone, Copy)]
+struct DiscreteHistogramBucketParts {
+    value_count: f64,
+    strict_less_count: f64,
+    equality_count: f64,
+    strict_greater_count: f64,
+}
+
+enum IntegerRangeComparison<'s, 'a> {
+    MissingMinMax,
+    Bounded {
+        stat: &'s ArgStat<'a>,
+        min: F64,
+        max: F64,
+        literal: F64,
+        non_null_cardinality: f64,
+    },
+}
+
+impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
+    fn from_input<T>(
+        input: &ConstantComparison<'s, 'a, TypedComparisonStat<T>>,
+    ) -> Result<Self, String>
+    where
+        T: ComparisonStatType,
+        T::Scalar: HistogramConstant,
+    {
+        let Some(domain) = input.domain.as_ref() else {
+            return Ok(Self::MissingMinMax);
+        };
+        let Some((min, max)) = T::domain_bounds(domain) else {
+            return Ok(Self::MissingMinMax);
+        };
+
+        let min = T::to_owned_scalar(min)
+            .range_f64()
+            .ok_or_else(|| "constant comparison integer range bound is not numeric".to_string())?;
+        let max = T::to_owned_scalar(max)
+            .range_f64()
+            .ok_or_else(|| "constant comparison integer range bound is not numeric".to_string())?;
+
+        Ok(Self::Bounded {
+            stat: input.stat,
+            min,
+            max,
+            literal: input.constant.range_f64().ok_or_else(|| {
+                "constant comparison integer range literal is not numeric".to_string()
+            })?,
+            non_null_cardinality: input.non_null_cardinality,
+        })
+    }
+
+    fn true_count<Op: StatComparisonOp>(&self) -> StatEstimate {
+        use std::cmp::Ordering::*;
+
+        let Self::Bounded {
+            stat,
+            min,
+            max,
+            literal,
+            non_null_cardinality,
+        } = self
+        else {
+            return StatEstimate::exact(0.0);
+        };
+
+        let min_value = min.0;
+        let max_value = max.0;
+        let numeric_literal = literal.0;
+        let cmp_min = literal.total_cmp(min);
+        let cmp_max = literal.total_cmp(max);
+
+        if Op::SELECT_LESS {
+            if cmp_min == Less || !Op::INCLUDE_EQUAL && cmp_min == Equal {
+                return StatEstimate::exact(0.0);
+            }
+            if cmp_min == Equal {
+                return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
+            }
+            if cmp_max == Greater {
+                return StatEstimate::exact(*non_null_cardinality);
+            }
+            if !Op::INCLUDE_EQUAL && cmp_max == Equal {
+                return estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality);
+            }
+            let selected_values = if Op::INCLUDE_EQUAL {
+                numeric_literal - min_value + 1.0
+            } else {
+                numeric_literal - min_value
+            };
+            return StatEstimate::exact(
+                (selected_values / (max_value - min_value + 1.0)) * *non_null_cardinality,
+            );
+        }
+
+        if Op::INCLUDE_EQUAL {
+            if cmp_max == Greater {
+                return StatEstimate::exact(0.0);
+            }
+            if cmp_min == Less || cmp_min == Equal {
+                return StatEstimate::exact(*non_null_cardinality);
+            }
+            if cmp_max == Equal {
+                return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
+            }
+            return StatEstimate::exact(
+                ((max_value - numeric_literal + 1.0) / (max_value - min_value + 1.0))
+                    * *non_null_cardinality,
+            );
+        }
+
+        match (cmp_min, cmp_max) {
+            (_, Greater | Equal) => StatEstimate::exact(0.0),
+            (Less, _) => StatEstimate::exact(*non_null_cardinality),
+            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality),
+            _ => StatEstimate::exact(
+                ((max_value - numeric_literal) / (max_value - min_value + 1.0))
+                    * *non_null_cardinality,
+            ),
+        }
+    }
+}
+
+enum HistogramBucketOverlap {
+    None,
+    Partial,
+    Complete,
+}
+
+trait StatNumberValue: Ord {
+    fn to_f64(&self) -> f64;
+
+    fn partial_discrete_bucket_parts(
+        _lower_bound: &Self,
+        _upper_bound: &Self,
+        _constant: &Self,
+    ) -> Option<DiscreteHistogramBucketParts> {
+        None
+    }
+}
+
+impl StatNumberValue for i64 {
+    fn to_f64(&self) -> f64 {
+        *self as f64
+    }
+
+    fn partial_discrete_bucket_parts(
+        lower_bound: &Self,
+        upper_bound: &Self,
+        constant: &Self,
+    ) -> Option<DiscreteHistogramBucketParts> {
+        let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
+        let strict_less_count = if constant <= lower_bound {
+            0.0
+        } else if constant > upper_bound {
+            value_count
+        } else {
+            constant.checked_sub(*lower_bound)? as f64
+        };
+        let equality_count = if constant >= lower_bound && constant <= upper_bound {
+            1.0
+        } else {
+            0.0
+        };
+        let strict_greater_count = value_count - strict_less_count - equality_count;
+
+        let strict_less = strict_less_count / value_count;
+        let equality = equality_count / value_count;
+        let strict_greater = strict_greater_count / value_count;
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_less),
+            "invalid i64 strict-less selectivity: {strict_less:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid i64 equality selectivity: {equality:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_greater),
+            "invalid i64 strict-greater selectivity: {strict_greater:?}"
+        );
+        Some(DiscreteHistogramBucketParts {
+            value_count,
+            strict_less_count,
+            equality_count,
+            strict_greater_count,
+        })
+    }
+}
+
+impl StatNumberValue for u64 {
+    fn to_f64(&self) -> f64 {
+        *self as f64
+    }
+
+    fn partial_discrete_bucket_parts(
+        lower_bound: &Self,
+        upper_bound: &Self,
+        constant: &Self,
+    ) -> Option<DiscreteHistogramBucketParts> {
+        let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
+        let strict_less_count = if constant <= lower_bound {
+            0.0
+        } else if constant > upper_bound {
+            value_count
+        } else {
+            constant.checked_sub(*lower_bound)? as f64
+        };
+        let equality_count = if constant >= lower_bound && constant <= upper_bound {
+            1.0
+        } else {
+            0.0
+        };
+        let strict_greater_count = value_count - strict_less_count - equality_count;
+
+        let strict_less = strict_less_count / value_count;
+        let equality = equality_count / value_count;
+        let strict_greater = strict_greater_count / value_count;
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_less),
+            "invalid u64 strict-less selectivity: {strict_less:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid u64 equality selectivity: {equality:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_greater),
+            "invalid u64 strict-greater selectivity: {strict_greater:?}"
+        );
+        Some(DiscreteHistogramBucketParts {
+            value_count,
+            strict_less_count,
+            equality_count,
+            strict_greater_count,
+        })
+    }
+}
+
+impl StatNumberValue for F64 {
+    fn to_f64(&self) -> f64 {
+        self.into_inner()
+    }
+}
+
+trait HistogramConstant: std::fmt::Debug {
+    fn histogram_i64(&self) -> Option<i64> {
+        None
+    }
+
+    fn histogram_u64(&self) -> Option<u64> {
+        None
+    }
+
+    fn histogram_f64(&self) -> Option<F64> {
+        None
+    }
+
+    fn histogram_bytes(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn range_f64(&self) -> Option<F64> {
+        None
+    }
+}
+
+macro_rules! impl_signed_histogram_constant {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl HistogramConstant for $ty {
+                fn histogram_i64(&self) -> Option<i64> {
+                    Some(*self as i64)
+                }
+
+                fn histogram_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+
+                fn range_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_unsigned_histogram_constant {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl HistogramConstant for $ty {
+                fn histogram_u64(&self) -> Option<u64> {
+                    Some(*self as u64)
+                }
+
+                fn histogram_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+
+                fn range_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+            }
+        )*
+    };
+}
+
+impl_signed_histogram_constant!(i8, i16, i32, i64);
+impl_unsigned_histogram_constant!(u8, u16, u32, u64);
+
+impl HistogramConstant for F64 {
+    fn histogram_f64(&self) -> Option<F64> {
+        Some(*self)
+    }
+}
+
+impl HistogramConstant for databend_common_expression::types::F32 {
+    fn histogram_f64(&self) -> Option<F64> {
+        Some(F64::from(self.into_inner() as f64))
+    }
+}
+
+impl HistogramConstant for String {
+    fn histogram_bytes(&self) -> Option<&[u8]> {
+        Some(self.as_bytes())
+    }
+}
+
+impl HistogramConstant for bool {}
+
+impl HistogramConstant for timestamp_tz {}
+
+impl HistogramConstant for months_days_micros {}
+
+fn unexpected_histogram_constant<T: std::fmt::Debug>(
+    histogram_type: &'static str,
+    constant: &T,
+) -> String {
+    format!("unexpected {histogram_type} histogram comparison constant: {constant:?}")
+}
+
 fn register_string_cmp(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "eq",
+        |stat, _| derive_equality_stat::<StringType>(false, stat),
         |_, d1, d2| d1.domain_eq(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Equal),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "noteq",
+        |stat, _| derive_equality_stat::<StringType>(true, stat),
         |_, d1, d2| d1.domain_noteq(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Equal),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "gt",
+        |stat, _| derive_comparison_stat::<StringType, GtOp>(stat),
         |_, d1, d2| d1.domain_gt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Greater),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "gte",
+        |stat, _| derive_comparison_stat::<StringType, GteOp>(stat),
         |_, d1, d2| d1.domain_gte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Less),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "lt",
+        |stat, _| derive_comparison_stat::<StringType, LtOp>(stat),
         |_, d1, d2| d1.domain_lt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Less),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "lte",
+        |stat, _| derive_comparison_stat::<StringType, LteOp>(stat),
         |_, d1, d2| d1.domain_lte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Greater),
     );
+}
+
+fn register_stat_string_comparison_2_arg(
+    registry: &mut FunctionRegistry,
+    name: &'static str,
+    derive_stat: fn(
+        StatBinaryArg,
+        &databend_common_expression::FunctionContext,
+    ) -> Result<Option<ReturnStat>, String>,
+    calc_domain: fn(
+        &databend_common_expression::FunctionContext,
+        &StringDomain,
+        &StringDomain,
+    ) -> FunctionDomain<BooleanType>,
+    func: impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType>
+    + Copy
+    + Send
+    + Sync
+    + 'static,
+) {
+    registry
+        .scalar_builder(name)
+        .function()
+        .typed_2_arg::<StringType, StringType, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(calc_domain)
+        .derive_stat(derive_stat)
+        .vectorized(func)
+        .register();
 }
 
 fn vectorize_string_cmp(
@@ -269,8 +1169,10 @@ fn register_interval_cmp(registry: &mut FunctionRegistry) {
 }
 
 fn register_boolean_cmp(registry: &mut FunctionRegistry) {
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "eq",
+        |stat, _| derive_equality_stat::<BooleanType>(false, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -280,8 +1182,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs == rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "noteq",
+        |stat, _| derive_equality_stat::<BooleanType>(true, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -291,8 +1195,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs != rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "gt",
+        |stat, _| derive_comparison_stat::<BooleanType, GtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, _, _) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -300,8 +1206,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs & !rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "gte",
+        |stat, _| derive_comparison_stat::<BooleanType, GteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -310,8 +1218,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs | !rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "lt",
+        |stat, _| derive_comparison_stat::<BooleanType, LtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -319,8 +1229,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| !lhs & rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "lte",
+        |stat, _| derive_comparison_stat::<BooleanType, LteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -661,69 +1573,69 @@ fn string_float_cmp<T: Number + std::str::FromStr>(
 }
 
 fn register_array_cmp(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "eq",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "noteq",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "gt",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "gte",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "lt",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "lte",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
 
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "eq",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs == rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "noteq",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs != rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "gt",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs > rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "gte",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs >= rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "lt",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs < rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "lte",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs <= rhs,
@@ -757,8 +1669,8 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                    eval: Box::new(move |args, _| {
+                    calc_domain: Box::new(FunctionDomain::Full),
+                    eval: scalar_evaluator(move |args, _| {
                         let len = args.iter().find_map(|arg| match arg {
                             Value::Column(col) => Some(col.len()),
                             _ => None,
@@ -809,6 +1721,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                             )),
                         }
                     }),
+                    derive_stat: None,
                 },
             }))
         }));
@@ -869,99 +1782,59 @@ fn register_like(registry: &mut FunctionRegistry) {
        },
     );
 
-    registry.register_function_factory("like_any", FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 2 || args_type.len() > 3 {
-            return None;
-        }
-        let is_nullable = args_type[0].is_nullable();
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_string() && !arg_type.is_variant() {
-            return None;
-        }
-        let mut new_args_type =  match &args_type[1] {
-            DataType::Tuple(patterns_ty) => {
-                if patterns_ty.iter().any(|ty| !ty.is_string() && !ty.is_variant()) {
-                    return None;
-                }
-                vec![arg_type, DataType::Tuple(vec![DataType::String; patterns_ty.len()])]
+    registry.register_function_factory(
+        "like_any",
+        FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+            if args_type.len() < 2 || args_type.len() > 3 {
+                return None;
             }
-            DataType::String =>
-                vec![arg_type, DataType::String],
-            _ => return None,
-        };
-        if args_type.len() > 2 {
-            new_args_type.push(DataType::String);
-        }
+            let is_nullable = args_type[0].is_nullable();
+            let arg_type = args_type[0].remove_nullable();
+            if !arg_type.is_string() && !arg_type.is_variant() {
+                return None;
+            }
+            let mut new_args_type = match &args_type[1] {
+                DataType::Tuple(patterns_ty) => {
+                    if patterns_ty
+                        .iter()
+                        .any(|ty| !ty.is_string() && !ty.is_variant())
+                    {
+                        return None;
+                    }
+                    vec![
+                        arg_type,
+                        DataType::Tuple(vec![DataType::String; patterns_ty.len()]),
+                    ]
+                }
+                DataType::String => vec![arg_type, DataType::String],
+                _ => return None,
+            };
+            if args_type.len() > 2 {
+                new_args_type.push(DataType::String);
+            }
 
-        let function = Function {
-            signature: FunctionSignature {
+            let signature = FunctionSignature {
                 name: "like_any".to_string(),
                 args_type: new_args_type,
                 return_type: DataType::Boolean,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    let arg = &args[0];
-                    let input_all_scalars = arg.as_scalar().is_some();
-                    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
-
-                    let patterns = match args[1].as_scalar() {
-                        Some(Scalar::Tuple(patterns)) => patterns.clone(),
-                        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
-                        _ => {
-                            ctx.set_error(1, "The second parameter of `like_any` must be of Tuple or String type");
-                            return Value::Scalar(Scalar::Boolean(Default::default()));
-                        }
-                    };
-                    let escape: Value<StringType> = args
-                        .get(2)
-                        .cloned()
-                        .and_then(|value| value.try_downcast().ok())
-                        .unwrap_or(Value::Scalar("".to_string()));
-
-                    let result = if let Ok(value) = arg.try_downcast::<StringType>() {
-                        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
-                            .collect::<Vec<_>>()
-                    } else if let Ok(value) = arg.try_downcast::<VariantType>() {
-                        let like = variant_vectorize_like_jsonb();
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
-                            .collect::<Vec<_>>()
-                    } else {
-                        ctx.set_error(1, "The first parameter of 'like_any' can only be of type String or Variant");
-                        return Value::Scalar(Scalar::Boolean(Default::default()));
-                    };
-
-                    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
-
-                    let patterns_len = patterns.len();
-                    for row in 0..process_rows {
-                        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
-                    }
-                    if input_all_scalars {
-                        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
-                    } else {
-                        Value::<BooleanType>::Column(BooleanType::build_column(builder))
-                    }.upcast()
-                }),
-            },
-        };
-
-        if is_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
-    })));
+            };
+            Some(Arc::new(Function::with_passthrough_nullable(
+                signature,
+                FunctionDomain::Full,
+                like_any_fn,
+                None,
+                is_nullable,
+            )))
+        })),
+    );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         |_, lhs, rhs| {
-            if rhs.max.as_ref() == Some(&rhs.min) {
-                if let Some(value) = calc_like_domain(lhs, rhs.min.to_string()) {
-                    return value;
-                }
+            if rhs.max.as_ref() == Some(&rhs.min)
+                && let Some(value) = calc_like_domain(lhs, rhs.min.to_string())
+            {
+                return value;
             }
             FunctionDomain::Full
         },
@@ -1043,18 +1916,20 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
+    let is_all_percent_pattern = !pattern.is_empty() && pattern.bytes().all(|c| c == b'%');
     match generate_like_pattern(pattern.as_bytes(), 1) {
         LikePattern::StartOfPercent(v) if v.is_empty() => {
+            Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
+        }
+        LikePattern::Constant(true) if is_all_percent_pattern => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
         LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
             min: pattern.clone(),
             max: Some(pattern),
         })),
-        LikePattern::EndOfPercent(_) => {
-            let mut pat_str = pattern;
-            // remove the last char '%'
-            pat_str.pop();
+        LikePattern::EndOfPercent(v) => {
+            let pat_str = std::str::from_utf8(v.as_ref()).ok()?.to_string();
             let pat_len = pat_str.chars().count();
             let other = StringDomain {
                 min: pat_str.clone(),
@@ -1169,6 +2044,77 @@ fn vectorize_like(
             }
         }
     }
+}
+
+fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg = &args[0];
+    let input_all_scalars = arg.as_scalar().is_some();
+    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+
+    let patterns = match args[1].as_scalar() {
+        Some(Scalar::Tuple(patterns)) => patterns.clone(),
+        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
+        _ => {
+            ctx.set_error(
+                1,
+                "The second parameter of `like_any` must be of Tuple or String type",
+            );
+            return Value::Scalar(Scalar::Boolean(Default::default()));
+        }
+    };
+
+    let escape: Value<StringType> = args
+        .get(2)
+        .cloned()
+        .and_then(|value| value.try_downcast().ok())
+        .unwrap_or(Value::Scalar("".to_string()));
+
+    let result = if let Ok(value) = arg.try_downcast::<StringType>() {
+        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
+        patterns
+            .iter()
+            .map(|pattern| {
+                like(
+                    value.clone(),
+                    Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()),
+                    escape.clone(),
+                    ctx,
+                )
+            })
+            .collect::<Vec<_>>()
+    } else if let Ok(value) = arg.try_downcast::<VariantType>() {
+        let like = variant_vectorize_like_jsonb();
+        patterns
+            .iter()
+            .map(|pattern| {
+                like(
+                    value.clone(),
+                    Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()),
+                    escape.clone(),
+                    ctx,
+                )
+            })
+            .collect::<Vec<_>>()
+    } else {
+        ctx.set_error(
+            1,
+            "The first parameter of 'like_any' can only be of type String or Variant",
+        );
+        return Value::Scalar(Scalar::Boolean(Default::default()));
+    };
+
+    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
+    let patterns_len = patterns.len();
+    for row in 0..process_rows {
+        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
+    }
+
+    if input_all_scalars {
+        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
+    } else {
+        Value::<BooleanType>::Column(BooleanType::build_column(builder))
+    }
+    .upcast()
 }
 
 fn variant_vectorize_like(
@@ -1328,4 +2274,211 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
     };
 
     left.iter().eq(right.iter())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::stat_distribution::BorrowedDistribution;
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::stat_distribution::StatCardinality;
+    use databend_common_expression::stat_distribution::StatCount;
+    use databend_common_expression::stat_distribution::StatEstimate;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDomain;
+    use databend_common_expression::types::SimpleDomain;
+    use databend_common_expression::types::nullable::NullableDomain;
+    use databend_common_expression::types::string::StringDomain;
+    use jsonb::OwnedJsonb;
+
+    use super::*;
+
+    #[test]
+    fn test_numeric_histogram_partial_bucket_reserves_equality_mass() {
+        let bucket = TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 10.0, 2.0);
+        let constant = F64::from(9.0);
+        let comparison = HistogramBucketComparison::<_, GtOp> {
+            bucket: &bucket,
+            constant: &constant,
+            row_scale: 1.0,
+            _op: PhantomData,
+        };
+
+        let selected_count = comparison.number_selected_count();
+        assert_eq!(selected_count.lower, 0.0);
+        assert!((selected_count.expected - 0.5).abs() < 1e-12);
+        assert_eq!(selected_count.upper, 10.0);
+    }
+
+    #[test]
+    fn test_null_constant_comparison_returns_all_null_stat() {
+        let column_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: NdvEstimate::exact(0.0),
+            null_count: StatCount::exact(10),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: StatCardinality::exact(10),
+            args: &args,
+        };
+
+        let output = derive_comparison_stat::<Int64Type, GtOp>(stat)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(output.null_count, StatCount::exact(10));
+        assert!(matches!(
+            output.domain,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None
+            })
+        ));
+        assert!(output.boolean_distribution().is_none());
+    }
+
+    #[test]
+    fn test_unbounded_string_equality_uses_ndv_estimate() {
+        let column_stat = ArgStat {
+            domain: Domain::String(StringDomain {
+                min: "".to_string(),
+                max: None,
+            }),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::String(StringDomain {
+                min: "x".to_string(),
+                max: Some("x".to_string()),
+            }),
+            ndv: NdvEstimate::exact(1.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: StatCardinality::exact(100),
+            args: &args,
+        };
+
+        let output = derive_equality_stat::<StringType>(false, stat)
+            .unwrap()
+            .unwrap();
+        let true_count = output.boolean_distribution().unwrap().true_count;
+
+        assert_eq!(true_count, StatEstimate::new(0.0, 10.0, 100.0));
+    }
+
+    #[test]
+    fn test_calc_like_domain_repeated_trailing_percent_matches_normalized_prefix() {
+        let matching = StringDomain {
+            min: "ababac".to_string(),
+            max: Some("ababac".to_string()),
+        };
+        let non_matching = StringDomain {
+            min: "aba".to_string(),
+            max: Some("aba".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&matching, "abab%".to_string()),
+            calc_like_domain(&matching, "abab%%%%%".to_string()),
+            "repeated trailing % should fold like a single trailing %"
+        );
+        assert_eq!(
+            calc_like_domain(&non_matching, "abab%%%%%".to_string()),
+            calc_like_domain(&non_matching, "abab%".to_string()),
+            "non-matching prefixes should also stay consistent"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_all_percent_matches_single_percent() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "%".to_string()),
+            calc_like_domain(&domain, "%%%%%".to_string()),
+            "repeated all-% patterns should fold like a single %"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_empty_pattern_does_not_fold_to_all_true() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "".to_string()),
+            None,
+            "empty patterns should not reuse repeated all-% folding"
+        );
+    }
+
+    #[test]
+    fn test_variant_like_repeated_percent_preserves_simple_scalar_semantics() {
+        let like = variant_vectorize_like_jsonb();
+        let value = Value::<VariantType>::Scalar(
+            r#"{"name":"abab"}"#.parse::<OwnedJsonb>().unwrap().to_vec(),
+        );
+        let escape = Value::<StringType>::Scalar("".to_string());
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+
+        let leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%%%%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let trailing = like(
+            value.clone(),
+            Value::<StringType>::Scalar("abab%".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_trailing = like(
+            value,
+            Value::<StringType>::Scalar("abab%%%%".to_string()),
+            escape,
+            &mut ctx,
+        );
+
+        assert!(matches!(leading, Value::Scalar(false)));
+        assert_eq!(leading, repeated_leading);
+        assert!(matches!(trailing, Value::Scalar(false)));
+        assert_eq!(trailing, repeated_trailing);
+    }
 }

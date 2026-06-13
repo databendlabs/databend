@@ -70,6 +70,8 @@ fn test_lexer() {
         r#"select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"create view v_t as select /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"create table "user" (id int, name varchar /* the user name */);"#,
+        r#"/**/ select 1;"#,
+        r#"/***不正常，注释后面多了个星号**/ select 1;"#,
     ];
 
     for case in cases {

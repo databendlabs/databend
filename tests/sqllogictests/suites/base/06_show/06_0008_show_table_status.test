@@ -14,6 +14,9 @@ statement ok
 CREATE TABLE showtabstat.t3(c1 int) ENGINE = Null
 
 statement ok
+CREATE TABLE showtabstat.`a'b_table`(c1 int) ENGINE = Null
+
+statement ok
 USE showtabstat
 
 # query TTITTTTTTTTTRTTTT
@@ -37,6 +40,11 @@ USE showtabstat
 
 statement ok
 SHOW TABLE STATUS LIKE 't'
+
+query TTI?I?I?I???????TT
+SHOW TABLE STATUS LIKE 'a''b%'
+----
+a'b_table NULL 0 NULL NULL NULL NULL NULL NULL NULL NULL <slt:ignore> NULL NULL NULL NULL (empty) (empty)
 
 # query TTITTTTTTTTTRTTTT
 # SHOW TABLE STATUS WHERE Name LIKE 't%'

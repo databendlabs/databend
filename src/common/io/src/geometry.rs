@@ -17,7 +17,13 @@ use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use geo::BoundingRect;
 use geo::Geometry;
+use geo::LineString;
+use geo::Point;
+use geo::Polygon;
+use geo::Rect;
+use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
 use geozero::GeozeroGeometry;
@@ -28,6 +34,7 @@ use geozero::ToWkt;
 use geozero::geo_types::GeoWriter;
 use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use hex::encode_upper;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
@@ -182,47 +189,16 @@ pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
     }
 }
 
-pub trait GeometryFormatOutput {
-    fn format(self, data_type: GeometryDataType) -> Result<String>;
-}
-impl<B: AsRef<[u8]>> GeometryFormatOutput for Ewkb<B> {
-    fn format(self, format_type: GeometryDataType) -> Result<String> {
-        match format_type {
-            GeometryDataType::WKB => self
-                .to_wkb(CoordDimensions::xy())
-                .map(|bytes| {
-                    bytes
-                        .iter()
-                        .map(|b| format!("{:02X}", b))
-                        .collect::<Vec<_>>()
-                        .join("")
-                })
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::EWKB => Ok(self
-                .0
-                .as_ref()
-                .iter()
-                .map(|b| format!("{:02X}", b))
-                .collect::<Vec<_>>()
-                .join("")),
-            GeometryDataType::WKT => self
-                .to_wkt()
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::EWKT => self
-                .to_ewkt(self.srid())
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::GEOJSON => self
-                .to_json()
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-        }
+pub fn geometry_format(ewkb: &[u8], format_type: GeometryDataType) -> Result<String> {
+    let (geo, srid) = ewkb_to_geo(&mut Ewkb(ewkb))?;
+    let srid = srid.unwrap_or(0);
+    match format_type {
+        GeometryDataType::WKB => geo_to_wkb(geo).map(encode_upper),
+        GeometryDataType::EWKB => geo_to_ewkb(geo, Some(srid)).map(encode_upper),
+        GeometryDataType::WKT => geo_to_wkt(geo),
+        GeometryDataType::EWKT => geo_to_ewkt(geo, Some(srid)),
+        GeometryDataType::GEOJSON => geo_to_json(geo),
     }
-}
-
-pub fn geometry_format<T: GeometryFormatOutput>(
-    geometry: T,
-    format_type: GeometryDataType,
-) -> Result<String> {
-    geometry.format(format_type)
 }
 
 /// Convert Geometry object to GEOJSON format.
@@ -255,12 +231,17 @@ pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }
 
-/// Process EWKB input and return SRID.
-pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
-    let mut srid_processor = SridProcessor::new();
-    ewkb.process_geom(&mut srid_processor).ok()?;
-
-    srid_processor.srid
+pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
+    let min = rect.min();
+    let max = rect.max();
+    let exterior = LineString::from(vec![
+        (min.x, min.y),
+        (max.x, min.y),
+        (max.x, max.y),
+        (min.x, max.y),
+        (min.x, min.y),
+    ]);
+    Polygon::new(exterior, vec![])
 }
 
 /// Process EWKB input and return Geometry object and SRID.
@@ -274,23 +255,6 @@ pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>,
         .ok_or_else(|| ErrorCode::GeometryError("Invalid ewkb format"))?;
     let srid = ewkb_processor.srid;
     Ok((geo, srid))
-}
-
-struct SridProcessor {
-    srid: Option<i32>,
-}
-
-impl SridProcessor {
-    fn new() -> Self {
-        Self { srid: None }
-    }
-}
-
-impl GeomProcessor for SridProcessor {
-    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
-        self.srid = srid;
-        Ok(())
-    }
 }
 
 struct EwkbProcessor {
@@ -397,5 +361,193 @@ pub fn geometry_type_name(geo: &Geometry) -> &'static str {
         Geometry::GeometryCollection(_) => "GeometryCollection",
         Geometry::Rect(_) => "Rect",
         Geometry::Triangle(_) => "Triangle",
+    }
+}
+
+pub fn st_extreme(geometry: &Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
+    geometry.bounding_rect().map(|rect| match axis {
+        Axis::X => match extremum {
+            Extremum::Max => rect.max().x,
+            Extremum::Min => rect.min().x,
+        },
+        Axis::Y => match extremum {
+            Extremum::Max => rect.max().y,
+            Extremum::Min => rect.min().y,
+        },
+    })
+}
+
+pub fn geometry_bbox_center(geometry: &Geometry<f64>) -> Option<(f64, f64)> {
+    let bbox = geometry.bounding_rect()?;
+    let x = bbox.min().x + (bbox.max().x - bbox.min().x) / 2.0;
+    let y = bbox.min().y + (bbox.max().y - bbox.min().y) / 2.0;
+    Some((x, y))
+}
+
+pub fn count_points(geom: &Geometry) -> usize {
+    match geom {
+        Geometry::Point(_) => 1,
+        Geometry::Line(_) => 2,
+        Geometry::LineString(line_string) => line_string.0.len(),
+        Geometry::Polygon(polygon) => {
+            polygon.exterior().0.len()
+                + polygon
+                    .interiors()
+                    .iter()
+                    .map(|line_string| line_string.0.len())
+                    .sum::<usize>()
+        }
+        Geometry::MultiPoint(multi_point) => multi_point.0.len(),
+        Geometry::MultiLineString(multi_line_string) => multi_line_string
+            .0
+            .iter()
+            .map(|line_string| line_string.0.len())
+            .sum::<usize>(),
+        Geometry::MultiPolygon(multi_polygon) => multi_polygon
+            .0
+            .iter()
+            .map(|polygon| count_points(&Geometry::Polygon(polygon.clone())))
+            .sum::<usize>(),
+        Geometry::GeometryCollection(geometry_collection) => geometry_collection
+            .0
+            .iter()
+            .map(count_points)
+            .sum::<usize>(),
+        Geometry::Rect(_) => 5,
+        Geometry::Triangle(_) => 4,
+    }
+}
+
+pub fn point_to_geohash(ewkb: &[u8], precision: Option<i32>) -> Result<String> {
+    let (geo, _) = ewkb_to_geo(&mut Ewkb(ewkb))?;
+    let point = Point::try_from(geo).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+    encode(point.0, precision.map_or(12, |p| p as usize))
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bbox {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+}
+
+impl Bbox {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self {
+            min_x: x,
+            min_y: y,
+            max_x: x,
+            max_y: y,
+        }
+    }
+
+    pub fn from_corners(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> Self {
+        Self {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        }
+    }
+
+    pub fn corners(&self) -> (f64, f64, f64, f64) {
+        (self.min_x, self.min_y, self.max_x, self.max_y)
+    }
+
+    pub fn extend(&mut self, x: f64, y: f64) {
+        if x < self.min_x {
+            self.min_x = x;
+        }
+        if x > self.max_x {
+            self.max_x = x;
+        }
+        if y < self.min_y {
+            self.min_y = y;
+        }
+        if y > self.max_y {
+            self.max_y = y;
+        }
+    }
+
+    pub fn expand(&mut self, distance: f64) {
+        self.min_x -= distance;
+        self.min_y -= distance;
+        self.max_x += distance;
+        self.max_y += distance;
+    }
+
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.max_x >= other.min_x
+            && self.min_x <= other.max_x
+            && self.max_y >= other.min_y
+            && self.min_y <= other.max_y
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EwkbBbox {
+    pub bbox: Option<Bbox>,
+    pub srid: Option<i32>,
+}
+
+pub fn ewkb_to_bbox(ewkb: &[u8]) -> Option<EwkbBbox> {
+    let mut processor = BboxProcessor::new();
+    Ewkb(ewkb).process_geom(&mut processor).ok()?;
+    Some(processor.into_ewkb_bbox())
+}
+
+struct BboxProcessor {
+    bbox: Option<Bbox>,
+    srid: Option<i32>,
+}
+
+impl BboxProcessor {
+    fn new() -> Self {
+        Self {
+            bbox: None,
+            srid: None,
+        }
+    }
+
+    fn extend(&mut self, x: f64, y: f64) {
+        if let Some(bbox) = self.bbox.as_mut() {
+            bbox.extend(x, y);
+        } else {
+            self.bbox = Some(Bbox::new(x, y));
+        }
+    }
+
+    fn into_ewkb_bbox(self) -> EwkbBbox {
+        EwkbBbox {
+            bbox: self.bbox,
+            srid: self.srid,
+        }
+    }
+}
+
+impl GeomProcessor for BboxProcessor {
+    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
+        self.srid = srid;
+        Ok(())
+    }
+
+    fn xy(&mut self, x: f64, y: f64, _idx: usize) -> geozero::error::Result<()> {
+        self.extend(x, y);
+        Ok(())
+    }
+
+    fn coordinate(
+        &mut self,
+        x: f64,
+        y: f64,
+        _z: Option<f64>,
+        _m: Option<f64>,
+        _t: Option<f64>,
+        _tm: Option<u64>,
+        idx: usize,
+    ) -> geozero::error::Result<()> {
+        self.xy(x, y, idx)
     }
 }

@@ -17,9 +17,13 @@ databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
+databend-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
+arrow-ipc = { workspace = true }
+arrow-schema = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
 bitvec = { workspace = true }
 bytemuck = { workspace = true }
@@ -28,6 +32,7 @@ cbordata = { workspace = true }
 crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
+geo = { workspace = true }
 goldenfile = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -49,10 +54,15 @@ tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
+unicase = { workspace = true }
+xorf = { workspace = true }
 xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
+databend-common-base = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
+
 anyhow = { workspace = true }
 divan = { workspace = true }
 rand = { workspace = true }

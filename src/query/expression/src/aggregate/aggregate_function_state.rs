@@ -198,7 +198,7 @@ impl StateSerdeType {
 pub struct StatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    pub(super) serialize_type: Vec<StateSerdeType>,
+    pub serialize_type: Vec<StateSerdeType>,
 }
 
 impl StatesLayout {
@@ -365,9 +365,9 @@ mod tests {
                 AggrStateType::Custom(layout) => {
                     let start = loc.offset();
                     let end = start + layout.size();
-                    for i in start..end {
-                        assert!(!memory[i], "layout is overlap, input: {input:?}");
-                        memory[i] = true;
+                    for memory in &mut memory[start..end] {
+                        assert!(!*memory, "layout is overlap, input: {input:?}");
+                        *memory = true;
                     }
                 }
                 _ => unreachable!(),

@@ -20,7 +20,7 @@ use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -46,19 +46,21 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
-use super::SerializePayload;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
+use crate::pipelines::processors::transforms::aggregator::PartitionItem;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
 use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -97,6 +99,10 @@ impl TransformExchangeAggregateSerializer {
             location_prefix,
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: ctx
+                .get_settings()
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
         };
 
         let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
@@ -147,7 +153,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 }
 
                 Some(AggregateMeta::AggregatePayload(p)) => {
-                    let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
+                    let block_number = p.exchange_block_number();
 
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(
@@ -156,11 +162,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         continue;
                     }
 
-                    let block_number = compute_block_number(bucket, max_partition_count)?;
-                    let stream = SerializeAggregateStream::create(
-                        &self.params,
-                        SerializePayload::AggregatePayload(p),
-                    );
+                    let stream = SerializeAggregateStream::create(&self.params, p);
                     let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
                     debug_assert!(!stream_blocks.is_empty());
                     let mut c = DataBlock::concat(&stream_blocks)?;
@@ -177,18 +179,21 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         ));
                         continue;
                     }
-                    let first = data.first();
-                    match first {
-                        Some(AggregateMeta::AggregatePayload(_)) => {
+                    let data_block = match data {
+                        PartitionedData::Empty => DataBlock::empty(),
+                        PartitionedData::Serialized(data) if data.is_empty() => DataBlock::empty(),
+                        PartitionedData::AggregatePayload(data) if data.is_empty() => {
+                            DataBlock::empty()
+                        }
+                        PartitionedData::NewBucketSpilled(data) if data.is_empty() => {
+                            DataBlock::empty()
+                        }
+                        PartitionedData::AggregatePayload(data) => {
                             let mut buckets = Vec::with_capacity(data.len());
                             let mut payload_row_counts = Vec::with_capacity(data.len());
                             let mut payload_blocks = Vec::with_capacity(data.len());
 
-                            for meta in data {
-                                let AggregateMeta::AggregatePayload(payload) = meta else {
-                                    unreachable!("Partitioned meta only contains AggregatePayload");
-                                };
-
+                            for payload in data {
                                 let block = payload.payload.aggregate_flush_all()?;
                                 if block.num_rows() == 0 {
                                     continue;
@@ -200,35 +205,25 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
 
                             // Only create empty block when ALL payloads are empty
                             if payload_blocks.is_empty() {
-                                let serialized =
-                                    serialize_block(-1, DataBlock::empty(), &self.options)?;
-                                serialized_blocks.push(FlightSerialized::DataBlock(serialized));
-
-                                continue;
+                                DataBlock::empty()
+                            } else {
+                                let merged_block = DataBlock::concat(&payload_blocks)?;
+                                merged_block.add_meta(Some(
+                                    AggregateSerdeMeta::create_partitioned_payload(
+                                        buckets,
+                                        payload_row_counts,
+                                        false,
+                                    ),
+                                ))?
                             }
-
-                            let mut merged_block = DataBlock::concat(&payload_blocks)?;
-                            merged_block = merged_block.add_meta(Some(
-                                AggregateSerdeMeta::create_partitioned_payload(
-                                    buckets,
-                                    payload_row_counts,
-                                    false,
-                                ),
-                            ))?;
-                            let serialized = serialize_block(-1, merged_block, &self.options)?;
-                            serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                         }
-                        Some(AggregateMeta::NewBucketSpilled(_)) => {
+                        PartitionedData::NewBucketSpilled(data) => {
                             let bucket_num = data.len();
                             let mut bucket_column = Vec::with_capacity(bucket_num);
                             let mut row_group_column = Vec::with_capacity(bucket_num);
                             let mut location_column = Vec::with_capacity(bucket_num);
 
-                            for meta in data {
-                                let AggregateMeta::NewBucketSpilled(payload) = meta else {
-                                    unreachable!("Partitioned meta only contains NewBucketSpilled");
-                                };
-
+                            for payload in data {
                                 bucket_column.push(payload.bucket as i64);
                                 location_column.push(payload.location);
                                 row_group_column
@@ -240,29 +235,19 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                                 BinaryType::from_data(row_group_column),
                             ]);
 
-                            let meta = AggregateSerdeMeta::create_new_spilled(bucket_num as isize);
-
-                            let data_block = data_block.add_meta(Some(meta))?;
-
-                            serialized_blocks.push(FlightSerialized::DataBlock(serialize_block(
-                                -1,
-                                data_block,
-                                &self.options,
-                            )?));
+                            data_block.add_meta(Some(AggregateSerdeMeta::create_new_spilled(
+                                bucket_num as isize,
+                            )))?
                         }
-                        None => {
-                            let serialized =
-                                serialize_block(-1, DataBlock::empty(), &self.options)?;
-                            serialized_blocks.push(FlightSerialized::DataBlock(serialized));
+                        PartitionedData::Mixed(data) => PartitionItem::serialize_mixed(data)?,
+                        data => {
+                            return Err(ErrorCode::Internal(format!(
+                                "Partitioned meta cannot be serialized from this payload batch: {data:?}"
+                            )));
                         }
-
-                        _ => {
-                            unreachable!(
-                                "Partitioned meta only contains AggregatePayload or NewBucketSpilled but found {:?}",
-                                first
-                            );
-                        }
-                    }
+                    };
+                    let serialized = serialize_block(-1, data_block, &self.options)?;
+                    serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                 }
                 _ => unreachable!("unexpected aggregate meta"),
             };
@@ -290,11 +275,7 @@ fn exchange_agg_spilling_aggregate_payload(
     // Record how many rows are spilled.
     let mut rows = 0;
 
-    for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-        if payload.len() == 0 {
-            continue;
-        }
-
+    for (bucket, payload) in partitioned_payload.into_non_empty_bucket_payloads() {
         let data_block = payload.aggregate_flush_all()?;
         rows += data_block.num_rows();
         buckets_count += 1;

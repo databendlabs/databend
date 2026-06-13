@@ -16,10 +16,7 @@ use std::any::type_name;
 use std::fmt;
 use std::marker::PhantomData;
 
-use databend_common_meta_kvapi::kvapi::KeyBuilder;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
-use databend_common_meta_kvapi::kvapi::KeyError;
-use databend_common_meta_kvapi::kvapi::KeyParser;
+use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
@@ -31,14 +28,14 @@ use crate::tenant_key::resource::TenantResource;
 /// e.g. TableId, DatabaseId as a value.
 ///
 /// `DataId<R>` can be dereferenced to `u64`.
-/// `DataId<R>` will take place of `Id<T>` in the future.
+/// `DataId<R>` replaces the legacy primitive id wrapper.
 ///
 /// When an id is used as a key in a key-value store,
 /// it is serialized in another way to keep order.
 ///
 /// `DataId` implements `prost::Message` so that it can be used as a protobuf message.
 /// Although internally it uses JSON encoding.
-#[derive(Deref, DerefMut)]
+#[derive(Deref, DerefMut, kvapi::KeyCodec)]
 pub struct DataId<R> {
     #[deref]
     #[deref_mut]
@@ -125,18 +122,6 @@ impl<R> DataId<R> {
     }
 }
 
-impl<R> KeyCodec for DataId<R> {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        b.push_u64(self.id)
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let v = parser.next_u64()?;
-        Ok(Self::new(v))
-    }
-}
-
 /// Implement `prost::Message` for `Id`, but internally use JSON encoding.
 ///
 /// This enables `Id` to be used as a protobuf message,
@@ -152,6 +137,11 @@ mod prost_message_impl {
     use crate::data_id::DataId;
     use crate::tenant_key::resource::TenantResource;
 
+    #[allow(deprecated)]
+    fn decode_error(message: impl Into<String>) -> DecodeError {
+        DecodeError::new(message.into())
+    }
+
     impl<R> prost::Message for DataId<R>
     where R: TenantResource + Sync + Send
     {
@@ -165,7 +155,7 @@ mod prost_message_impl {
             let mut b = [0; 64];
             let len = buf.remaining();
             if len > b.len() {
-                return Err(DecodeError::new(format!(
+                return Err(decode_error(format!(
                     "buffer(len={}) is too large, max={}",
                     len,
                     b.len()
@@ -174,7 +164,7 @@ mod prost_message_impl {
 
             buf.copy_to_slice(&mut b[..len]);
             let id: u64 = serde_json::from_slice(&b[..len])
-                .map_err(|e| DecodeError::new(format!("failed to decode u64 as json: {}", e)))?;
+                .map_err(|e| decode_error(format!("failed to decode u64 as json: {}", e)))?;
             Ok(DataId::new(id))
         }
 
@@ -203,7 +193,7 @@ mod prost_message_impl {
     #[cfg(test)]
     mod tests {
 
-        use databend_common_meta_kvapi::kvapi;
+        use databend_meta_client::kvapi;
 
         use crate::data_id::DataId;
         use crate::tenant_key::resource::TenantResource;
@@ -216,39 +206,19 @@ mod prost_message_impl {
             type ValueType = Bar;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
-        struct Foo(u64);
-
-        impl kvapi::KeyCodec for Foo {
-            fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-                b.push_u64(self.0)
-            }
-
-            fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
-                let v = parser.next_u64()?;
-                Ok(Foo(v))
-            }
+        #[derive(Debug, Default, PartialEq, Eq, kvapi::StructKey)]
+        #[structkey(prefix = "foo")]
+        #[allow(dead_code)]
+        struct Foo {
+            id: u64,
         }
 
         impl kvapi::Key for Foo {
-            const PREFIX: &'static str = "";
             type ValueType = Bar;
-
-            fn parent(&self) -> Option<String> {
-                todo!()
-            }
         }
 
         #[derive(Debug)]
         struct Bar;
-
-        impl kvapi::Value for Bar {
-            type KeyType = Foo;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
-        }
 
         #[test]
         fn test_id_as_protobuf_message() {
@@ -283,6 +253,28 @@ mod prost_message_impl {
         fn test_display() {
             let id = DataId::<Resource>::new(1u64);
             assert_eq!(format!("{}", id), "DataId<Foo>(1)");
+        }
+
+        #[test]
+        fn test_keycodec_round_trip() {
+            use databend_meta_client::kvapi::KeyCodec;
+
+            let id = DataId::<Resource>::new(42);
+
+            // The encoded key has exactly one segment: the u64. PhantomData<R>
+            // contributes nothing -- which also proves the derive doesn't
+            // synthesize an `R: KeyCodec` bound, since `Resource` has no
+            // `KeyCodec` impl yet this whole block still compiles.
+            let encoded = id.encode_key(kvapi::KeyBuilder::new()).done();
+            assert_eq!("42", encoded);
+
+            // segment_count must equal segments actually pushed; mismatch
+            // would cause the Builder budget to silently truncate.
+            assert_eq!(1, id.segment_count());
+
+            let mut p = kvapi::KeyParser::new(&encoded);
+            let decoded = DataId::<Resource>::decode_key(&mut p).expect("decode");
+            assert_eq!(id, decoded);
         }
     }
 }

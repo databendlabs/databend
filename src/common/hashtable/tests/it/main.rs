@@ -14,16 +14,12 @@
 
 #![allow(clippy::arc_with_non_send_sync)]
 
-use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
-use databend_common_hashtable::DictionaryKeys;
-use databend_common_hashtable::DictionaryStringHashMap;
 use databend_common_hashtable::HashMap;
-use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::ShortStringHashMap;
 use databend_common_hashtable::StackHashMap;
@@ -166,44 +162,4 @@ fn test_unsized_hash_map() {
     }
     drop(hashtable);
     assert_eq!(COUNT.load(Ordering::Relaxed), 0);
-}
-
-#[test]
-fn test_dictionary_hash_map() {
-    let mut hashtable = DictionaryStringHashMap::<usize>::new(Arc::new(Bump::new()), 2);
-    unsafe {
-        for index1 in 0..1000 {
-            for index2 in 0..1000 {
-                let index1_str = format!("{}", index1);
-                let index2_str = format!("{}", index2);
-                let keys = vec![
-                    NonNull::from(index1_str.as_bytes()),
-                    NonNull::from(index2_str.as_bytes()),
-                ];
-                if let Ok(mut e) = hashtable.insert_and_entry(&DictionaryKeys::create(&keys)) {
-                    e.write(index1);
-                }
-
-                let value = hashtable.get(&DictionaryKeys::create(&keys));
-                assert!(value.is_some());
-                assert_eq!(*value.unwrap(), index1);
-            }
-        }
-
-        for index1 in 0..1000 {
-            for index2 in 0..1000 {
-                let index1_str = format!("{}", index1);
-                let index2_str = format!("{}", index2);
-                let keys = vec![
-                    NonNull::from(index1_str.as_bytes()),
-                    NonNull::from(index2_str.as_bytes()),
-                ];
-                assert!(
-                    hashtable
-                        .insert_and_entry(&DictionaryKeys::create(&keys))
-                        .is_err()
-                );
-            }
-        }
-    }
 }

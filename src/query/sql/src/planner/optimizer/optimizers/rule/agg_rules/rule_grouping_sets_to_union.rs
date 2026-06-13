@@ -21,8 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -30,6 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
@@ -38,6 +39,7 @@ use crate::plans::EvalScalar;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
+use crate::plans::ScalarItem;
 use crate::plans::Sequence;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
@@ -92,14 +94,14 @@ impl Rule for RuleGroupingSetsToUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
+        let mut eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         let agg: Aggregate = s_expr.child(0)?.plan().clone().try_into()?;
         if agg.mode != AggregateMode::Initial {
             return Ok(());
         }
 
         let agg_input = s_expr.child(0)?.child(0)?;
-        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(agg_input)
+        let agg_input_columns: Vec<Symbol> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?
             .output_columns
             .iter()
@@ -113,6 +115,20 @@ impl Rule for RuleGroupingSetsToUnion {
 
         if let Some(grouping_sets) = &agg.grouping_sets {
             if !grouping_sets.sets.is_empty() {
+                if !eval_scalar
+                    .items
+                    .iter()
+                    .any(|item| item.index == grouping_sets.grouping_id_index)
+                {
+                    eval_scalar.items.push(ScalarItem {
+                        index: grouping_sets.grouping_id_index,
+                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                            value: Scalar::Number(NumberScalar::UInt32(0)),
+                            span: None,
+                        }),
+                    });
+                }
+
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
 
                 let mut hasher = DefaultHasher::new();
@@ -128,7 +144,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     .unwrap_or(2);
 
                 let cte_materialized_sexpr = SExpr::create_unary(
-                    MaterializedCTE::new(temp_cte_name.clone(), None, Some(channel_size as usize)),
+                    MaterializedCTE::new(temp_cte_name.clone(), Some(channel_size as usize)),
                     agg_input.clone(),
                 );
 
@@ -137,12 +153,14 @@ impl Rule for RuleGroupingSetsToUnion {
                     output_columns: agg_input_columns.clone(),
                     def: agg_input.clone(),
                     column_mapping,
+                    stat_info: None,
                 });
 
                 let mask = (1 << grouping_sets.dup_group_items.len()) - 1;
                 let group_bys = agg
                     .group_items
                     .iter()
+                    .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                     .map(|i| {
                         agg_input_columns
                             .iter()
@@ -162,7 +180,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     // grouping_ids: 00, 01, 10, 11
 
                     for g in set {
-                        let i = group_bys.iter().position(|t| *t == *g).unwrap();
+                        let i = group_bys.iter().position(|t| *t == g.as_usize()).unwrap();
                         id |= 1 << i;
                     }
                     let grouping_id = !id & mask;
@@ -171,17 +189,17 @@ impl Rule for RuleGroupingSetsToUnion {
                     let mut agg = agg.clone();
                     agg.grouping_sets = None;
 
-                    let null_group_ids: Vec<IndexType> = agg
+                    let null_group_ids: Vec<Symbol> = agg
                         .group_items
                         .iter()
+                        .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                         .map(|i| i.index)
                         .filter(|index| !set.contains(index))
                         .clone()
                         .collect();
 
                     agg.group_items.retain(|x| set.contains(&x.index));
-                    let group_ids: Vec<IndexType> =
-                        agg.group_items.iter().map(|i| i.index).collect();
+                    let group_ids: Vec<Symbol> = agg.group_items.iter().map(|i| i.index).collect();
 
                     let mut visitor = ReplaceColumnForGroupingSetsVisitor {
                         group_indexes: group_ids,
@@ -202,7 +220,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 // fold children into result
                 let mut result = children.first().unwrap().clone();
                 for other in children.into_iter().skip(1) {
-                    let left_outputs: Vec<(IndexType, Option<ScalarExpr>)> =
+                    let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
                         eval_scalar.items.iter().map(|x| (x.index, None)).collect();
                     let right_outputs = left_outputs.clone();
 
@@ -210,6 +228,7 @@ impl Rule for RuleGroupingSetsToUnion {
                         left_outputs,
                         right_outputs,
                         cte_scan_names: vec![],
+                        logical_recursive_cte_id: None,
                         output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);
@@ -228,9 +247,9 @@ impl Rule for RuleGroupingSetsToUnion {
 }
 
 struct ReplaceColumnForGroupingSetsVisitor {
-    group_indexes: Vec<IndexType>,
-    exclude_group_indexes: Vec<IndexType>,
-    grouping_id_index: IndexType,
+    group_indexes: Vec<Symbol>,
+    exclude_group_indexes: Vec<Symbol>,
+    grouping_id_index: Symbol,
     grouping_id_value: u32,
 }
 

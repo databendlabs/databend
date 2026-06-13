@@ -25,7 +25,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
@@ -34,6 +34,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
@@ -90,11 +91,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     }
 
     /// Analyzes grouping sets to build a true hierarchical dependency DAG
-    fn build_hierarchy_dag(
-        &self,
-        grouping_sets: &[Vec<IndexType>],
-        agg: &Aggregate,
-    ) -> HierarchyDAG {
+    fn build_hierarchy_dag(&self, grouping_sets: &[Vec<Symbol>], agg: &Aggregate) -> HierarchyDAG {
         let mut levels: Vec<GroupingLevel> = grouping_sets
             .iter()
             .enumerate()
@@ -252,7 +249,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg_input: &SExpr,
         hierarchy: HierarchyDAG,
         base_cte_name: String,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<SExpr> {
         let mut all_ctes = Vec::new();
 
@@ -274,7 +271,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Step 2: Create CTEs for grouping sets, organizing by dependency levels for parallelization
-        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(agg_input)
+        let agg_input_columns: Vec<Symbol> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?
             .output_columns
             .iter()
@@ -406,7 +403,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
         )?;
 
         // Step 4: Assemble the complete plan
-        let union_result = self.create_union_all(&union_branches, eval_scalar)?;
+        let union_result =
+            self.create_union_all(&union_branches, eval_scalar, grouping_id_index)?;
 
         // Step 5: Chain all CTEs in correct dependency order
         // Sequence semantics: left executes first, right executes after
@@ -425,7 +423,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -443,7 +440,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         original_cte_name: &str,
         level: &GroupingLevel,
         agg: &Aggregate,
-        agg_input_columns: &[IndexType],
+        agg_input_columns: &[Symbol],
     ) -> Result<SExpr> {
         // Create aggregate plan for this grouping set
         let mut group_agg = agg.clone();
@@ -467,6 +464,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 output_columns: agg_input_columns.to_vec(), // Will be populated based on original input
                 def: agg_input.clone(),
                 column_mapping: agg_input_columns.iter().map(|col| (*col, *col)).collect(), // Identity mapping
+                stat_info: None,
             }
             .into(),
         ));
@@ -476,7 +474,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -516,7 +513,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -533,7 +529,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         eval_scalar: &EvalScalar,
         hierarchy: &HierarchyDAG,
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<Vec<SExpr>> {
         let mut branches = Vec::new();
 
@@ -651,7 +647,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Create parent CTE consumer
-        let parent_output_columns: Vec<IndexType> = {
+        let parent_output_columns: Vec<Symbol> = {
             let mut output_cols = Vec::new();
             // First: aggregate function output columns
             for agg_item in &agg.aggregate_functions {
@@ -675,6 +671,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 output_columns: parent_output_columns,
                 def: parent_cte.cte.child(0)?.clone(),
                 column_mapping,
+                stat_info: None,
             }
             .into(),
         ));
@@ -686,7 +683,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -704,7 +700,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         format!("cte_hierarchical_groupingsets_{}", hash)
     }
 
-    fn generate_unique_cte_name(base_name: &str, columns: &[IndexType]) -> String {
+    fn generate_unique_cte_name(base_name: &str, columns: &[Symbol]) -> String {
         if columns.is_empty() {
             return format!("{}_empty", base_name);
         }
@@ -725,12 +721,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
     fn build_final_branch(
         &self,
         eval_scalar: &EvalScalar,
-        group_columns: &[IndexType],
+        group_columns: &[Symbol],
         source_cte: &CteInfo,
-        source_output_columns: &[IndexType],
+        source_output_columns: &[Symbol],
         _set_index: usize,
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<SExpr> {
         let mut column_mapping = HashMap::new();
 
@@ -756,6 +752,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
             output_columns: source_output_columns.to_vec(),
             def: source_cte.cte.child(0)?.clone(),
             column_mapping,
+            stat_info: None,
         });
 
         // Apply grouping sets NULL semantics in EvalScalar
@@ -776,15 +773,17 @@ impl RuleHierarchicalGroupingSetsToUnion {
         &self,
         eval_scalar: &mut EvalScalar,
         _source_cte_name: &str,
-        group_columns: &[IndexType],
+        group_columns: &[Symbol],
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<()> {
-        let grouping_id = self.calculate_grouping_id(group_columns, &agg.group_items);
+        let grouping_id =
+            self.calculate_grouping_id(group_columns, &agg.group_items, grouping_id_index);
 
-        let null_group_ids: Vec<IndexType> = agg
+        let null_group_ids: Vec<Symbol> = agg
             .group_items
             .iter()
+            .filter(|item| !is_grouping_id_item(item, grouping_id_index))
             .map(|i| i.index)
             .filter(|index| !group_columns.contains(index))
             .collect();
@@ -801,28 +800,53 @@ impl RuleHierarchicalGroupingSetsToUnion {
             visitor.visit(&mut scalar_item.scalar)?;
         }
 
+        if !eval_scalar
+            .items
+            .iter()
+            .any(|item| item.index == grouping_id_index)
+        {
+            eval_scalar.items.push(ScalarItem {
+                index: grouping_id_index,
+                scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Number(NumberScalar::UInt32(grouping_id)),
+                    span: None,
+                }),
+            });
+        }
+
         Ok(())
     }
 
     /// Create UNION ALL combining all final branches
-    fn create_union_all(&self, branches: &[SExpr], eval_scalar: &EvalScalar) -> Result<SExpr> {
+    fn create_union_all(
+        &self,
+        branches: &[SExpr],
+        eval_scalar: &EvalScalar,
+        grouping_id_index: Symbol,
+    ) -> Result<SExpr> {
         if branches.is_empty() {
             return Err(databend_common_exception::ErrorCode::Internal(
                 "No branches for union".to_string(),
             ));
         }
 
+        let mut output_indexes: Vec<Symbol> = eval_scalar.items.iter().map(|x| x.index).collect();
+        if !output_indexes.contains(&grouping_id_index) {
+            output_indexes.push(grouping_id_index);
+        }
+
         let mut result = branches[0].clone();
         for branch in branches.iter().skip(1) {
-            let left_outputs: Vec<(IndexType, Option<ScalarExpr>)> =
-                eval_scalar.items.iter().map(|x| (x.index, None)).collect();
+            let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
+                output_indexes.iter().map(|x| (*x, None)).collect();
             let right_outputs = left_outputs.clone();
 
             let union_plan = UnionAll {
                 left_outputs,
                 right_outputs,
                 cte_scan_names: vec![],
-                output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
+                logical_recursive_cte_id: None,
+                output_indexes: output_indexes.clone(),
             };
             result = SExpr::create_binary(Arc::new(union_plan.into()), result, branch.clone());
         }
@@ -830,7 +854,16 @@ impl RuleHierarchicalGroupingSetsToUnion {
         Ok(result)
     }
 
-    fn calculate_grouping_id(&self, group_columns: &[IndexType], all_groups: &[ScalarItem]) -> u32 {
+    fn calculate_grouping_id(
+        &self,
+        group_columns: &[Symbol],
+        all_groups: &[ScalarItem],
+        grouping_id_index: Symbol,
+    ) -> u32 {
+        let all_groups: Vec<&ScalarItem> = all_groups
+            .iter()
+            .filter(|item| !is_grouping_id_item(item, grouping_id_index))
+            .collect();
         let mask = (1 << all_groups.len()) - 1;
         let mut id = 0;
 
@@ -911,7 +944,7 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
 #[derive(Debug, Clone)]
 struct GroupingLevel {
     set_index: usize,
-    columns: Vec<IndexType>,
+    columns: Vec<Symbol>,
     direct_children: Vec<usize>,
     possible_parents: Vec<usize>,
     chosen_parent: Option<usize>,
@@ -938,15 +971,15 @@ impl HierarchyDAG {
 }
 
 /// Check if subset is a proper subset of superset
-fn is_proper_subset(subset: &[IndexType], superset: &[IndexType]) -> bool {
+fn is_proper_subset(subset: &[Symbol], superset: &[Symbol]) -> bool {
     subset.len() < superset.len() && subset.iter().all(|item| superset.contains(item))
 }
 
 /// Set other columns to NULL and current group by columns to be nullable
 struct GroupingSetsNullVisitor {
-    group_indexes: Vec<IndexType>,
-    exclude_group_indexes: Vec<IndexType>,
-    grouping_id_index: IndexType,
+    group_indexes: Vec<Symbol>,
+    exclude_group_indexes: Vec<Symbol>,
+    grouping_id_index: Symbol,
     grouping_id_value: u32,
 }
 

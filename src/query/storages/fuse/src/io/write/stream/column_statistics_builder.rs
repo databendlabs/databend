@@ -47,7 +47,10 @@ use databend_common_expression::with_number_type;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use enum_dispatch::enum_dispatch;
 
+use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::Trim;
+use crate::statistics::trim_string_max_with_len;
+use crate::statistics::trim_string_min_with_len;
 
 pub type CommonBuilder<T> = GenericColumnStatisticsBuilder<T, CommonAdapter>;
 pub type DecimalBuilder<T> = GenericColumnStatisticsBuilder<T, DecimalAdapter>;
@@ -100,7 +103,10 @@ where
     }
 }
 
-pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuilder {
+pub fn create_column_stats_builder(
+    data_type: &DataType,
+    string_col_len: usize,
+) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
     macro_rules! match_number_type_create {
         ($inner_type:expr) => {{
@@ -118,9 +124,9 @@ pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuil
         DataType::Number(num_type) => {
             match_number_type_create!(num_type)
         }
-        DataType::String => {
-            ColumnStatisticsBuilder::String(CommonBuilder::<StringType>::create(inner_type))
-        }
+        DataType::String => ColumnStatisticsBuilder::String(
+            CommonBuilder::<StringType>::create_with_string_len(inner_type, string_col_len),
+        ),
         DataType::Date => {
             ColumnStatisticsBuilder::Date(CommonBuilder::<DateType>::create(inner_type))
         }
@@ -220,6 +226,7 @@ where
     null_count: usize,
     in_memory_size: usize,
     data_type: DataType,
+    string_col_len: usize,
 
     _phantom: PhantomData<(T, A)>,
 }
@@ -238,6 +245,19 @@ where
             null_count: 0,
             in_memory_size: 0,
             data_type,
+            string_col_len: STATS_STRING_PREFIX_LEN,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn create_with_string_len(data_type: DataType, string_col_len: usize) -> Self {
+        Self {
+            min: None,
+            max: None,
+            null_count: 0,
+            in_memory_size: 0,
+            data_type,
+            string_col_len,
             _phantom: PhantomData,
         }
     }
@@ -331,23 +351,43 @@ where
     }
 
     fn finalize(self) -> Result<ColumnStatistics> {
+        let string_col_len = self.string_col_len;
         let min = if let Some(v) = self.min {
             let v = A::value_to_scalar(v);
-            // safe upwrap.
-            T::upcast_scalar_with_type(v, &self.data_type)
-                .trim_min()
-                .unwrap()
+            let scalar = T::upcast_scalar_with_type(v, &self.data_type);
+            match scalar {
+                Scalar::String(s) => trim_string_min_with_len(s, string_col_len)
+                    .map(Scalar::String)
+                    .unwrap_or(Scalar::Null),
+                other => other.trim_min().unwrap_or(Scalar::Null),
+            }
         } else {
             Scalar::Null
         };
         let max = if let Some(v) = self.max {
             let v = A::value_to_scalar(v);
-            if let Some(v) = T::upcast_scalar_with_type(v, &self.data_type).trim_max() {
-                v
-            } else {
-                return Err(ErrorCode::Internal(
-                    "Unable to trim string: first 16 chars are all replacement_point".to_string(),
-                ));
+            let scalar = T::upcast_scalar_with_type(v, &self.data_type);
+            match scalar {
+                Scalar::String(s) => {
+                    if let Some(v) = trim_string_max_with_len(s, string_col_len) {
+                        Scalar::String(v)
+                    } else {
+                        return Err(ErrorCode::Internal(
+                            "Unable to trim string: first chars are all replacement_point"
+                                .to_string(),
+                        ));
+                    }
+                }
+                other => {
+                    if let Some(v) = other.trim_max() {
+                        v
+                    } else {
+                        return Err(ErrorCode::Internal(
+                            "Unable to trim string: first 16 chars are all replacement_point"
+                                .to_string(),
+                        ));
+                    }
+                }
             }
         } else {
             Scalar::Null

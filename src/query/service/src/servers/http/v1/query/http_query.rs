@@ -21,10 +21,13 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
@@ -70,9 +73,11 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
+use crate::servers::http::v1::http_query_handlers::ArrowFeatures;
+use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
+use crate::sessions::TableContextCluster;
 
 fn default_as_true() -> bool {
     true
@@ -88,6 +93,10 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
+    #[serde(default)]
+    pub params: Option<serde_json::Value>,
+    pub arrow_result_version_max: Option<u64>,
+    pub arrow_features: Option<ArrowFeatures>,
 }
 
 impl HttpQueryRequest {
@@ -156,6 +165,9 @@ impl Debug for HttpQueryRequest {
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
+            .field("params", &self.params)
+            .field("arrow_result_version_max", &self.arrow_result_version_max)
+            .field("arrow_features", &self.arrow_features)
             .finish()
     }
 }
@@ -367,6 +379,21 @@ impl HttpSessionConf {
     pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
+        if let Some(conf_settings) = &self.settings {
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
         if let Some(catalog) = &self.catalog {
             if !catalog.is_empty() {
                 session.set_current_catalog(catalog.clone());
@@ -386,22 +413,6 @@ impl HttpSessionConf {
         session
             .set_secondary_roles_checked(self.secondary_roles.clone())
             .await?;
-        // TODO(liyz): pass secondary roles here
-        if let Some(conf_settings) = &self.settings {
-            let settings = session.get_settings();
-            for (k, v) in conf_settings {
-                settings
-                    .set_setting(k.to_string(), v.to_string())
-                    .or_else(|e| {
-                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                            warn!("Unknown session setting ignored: {}", k);
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })?;
-            }
-        }
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
@@ -495,7 +506,9 @@ pub struct StageAttachmentConf {
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
     pub schema: DataSchemaRef,
-    pub result_format_settings: Option<ResultFormatSettings>,
+    pub response_settings: Option<QueryResponseSettings>,
+    pub arrow_result_version: Option<u64>,
+    pub arrow_features: Option<ArrowFeatures>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -627,6 +640,8 @@ impl HttpQuery {
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
+        arrow_result_version: Option<u64>,
+        arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
@@ -636,7 +651,8 @@ impl HttpQuery {
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "Creating new query");
+        let masked_sql = mask_connection_info(sql);
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
@@ -660,6 +676,8 @@ impl HttpQuery {
             state: ExecuteState::Starting(ExecuteStarting {
                 ctx: ctx.clone(),
                 sender: Some(sender),
+                arrow_result_version,
+                arrow_features,
             }),
         }));
 
@@ -817,8 +835,12 @@ impl HttpQuery {
         Ok(response)
     }
 
-    pub async fn start_query(&mut self, sql: String) -> Result<()> {
-        let (block_sender, query_context) = {
+    pub async fn start_query(
+        &mut self,
+        sql: String,
+        params: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let (block_sender, query_context, arrow_result_version, arrow_features) = {
             let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
@@ -826,52 +848,67 @@ impl HttpQuery {
                 ));
             };
 
-            (state.sender.take().unwrap(), state.ctx.clone())
+            (
+                state.sender.take().unwrap(),
+                state.ctx.clone(),
+                state.arrow_result_version,
+                state.arrow_features.clone(),
+            )
         };
 
         let query_session = query_context.get_current_session();
 
         let query_state = self.execute_state.clone();
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
 
         GlobalQueryRuntime::instance().runtime().spawn(
-            async move {
-                let block_sender_closer = block_sender.closer();
-                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
-                    query_state.clone(),
-                    sql,
-                    query_session,
-                    query_context.clone(),
-                    block_sender,
-                ))
-                .await
-                .with_context(|| "failed to start query")
-                .flatten()
-                {
-                    crate::interpreters::hook_clear_m_cte_temp_table(&query_context)
-                        .inspect_err(|e| warn!("clear_m_cte_temp_table fail: {e}"))
-                        .ok();
-                    let state = ExecuteStopped {
-                        stats: Progresses::default(),
-                        schema: Default::default(),
-                        result_format_settings: None,
-                        has_result_set: None,
-                        reason: Err(e.clone()),
-                        session_state: ExecutorSessionState::new(
-                            query_context.get_current_session(),
-                        ),
-                        query_duration_ms: query_context.get_query_duration_ms(),
-                        affect: query_context.get_affect(),
-                        warnings: query_context.pop_warnings(),
-                    };
+            tracking_payload.tracking(
+                async move {
+                    let block_sender_closer = block_sender.closer();
+                    if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
+                        query_state.clone(),
+                        sql,
+                        params,
+                        query_session,
+                        query_context.clone(),
+                        arrow_result_version,
+                        arrow_features,
+                        block_sender,
+                    ))
+                    .await
+                    .with_context(|| "failed to start query")
+                    .flatten()
+                    {
+                        crate::interpreters::hook_clear_m_cte_temp_table(&query_context)
+                            .inspect_err(|e| warn!("clear_m_cte_temp_table fail: {e}"))
+                            .ok();
+                        let state = ExecuteStopped {
+                            stats: Progresses::default(),
+                            schema: Default::default(),
+                            response_settings: None,
+                            has_result_set: None,
+                            reason: Err(e.clone()),
+                            session_state: ExecutorSessionState::new(
+                                query_context.get_current_session(),
+                            ),
+                            query_duration_ms: query_context.get_query_duration_ms(),
+                            affect: query_context.get_affect(),
+                            warnings: query_context.pop_warnings(),
+                        };
 
-                    error!("Query state changed to Stopped, failed to start: {:?}", e);
-                    Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
-                    block_sender_closer.abort();
+                        error!("Query state changed to Stopped, failed to start: {:?}", e);
+                        Executor::start_to_stop(
+                            &query_state,
+                            ExecuteState::Stopped(Box::new(state)),
+                        );
+                        block_sender_closer.abort();
+                    }
                 }
-            }
-            .in_span(fastrace::Span::enter_with_local_parent(
-                "HttpQuery::start_query",
-            )),
+                .in_span(fastrace::Span::enter_with_local_parent(
+                    "HttpQuery::start_query",
+                )),
+            ),
         );
 
         Ok(())

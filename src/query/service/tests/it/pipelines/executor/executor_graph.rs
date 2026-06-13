@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::InputPort;
@@ -34,6 +33,7 @@ use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use petgraph::stable_graph::NodeIndex;
 use tokio::sync::mpsc::Receiver;
@@ -456,7 +456,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -468,7 +468,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -484,7 +484,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_source_pipe(
@@ -562,6 +562,7 @@ async fn create_executor_with_simple_pipeline(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

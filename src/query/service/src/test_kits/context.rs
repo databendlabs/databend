@@ -15,7 +15,6 @@
 use std::str;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
@@ -26,6 +25,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::sql::Planner;
 
 /// If you no need to care the ctx please use TestFixture.execute_query().
@@ -43,12 +43,12 @@ pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> 
     Ok(())
 }
 
-pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
+pub async fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
     let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(executor.get_inner())?;
-    executor.execute()
+    executor.execute().await
 }

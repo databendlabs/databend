@@ -19,16 +19,18 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_meta_client::types::MatchSeq;
 use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct CreateDatabaseInterpreter {

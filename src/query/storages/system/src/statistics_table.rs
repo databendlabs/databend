@@ -43,7 +43,7 @@ use databend_common_storages_fuse::TableContext;
 use log::warn;
 
 use crate::columns_table::dump_tables;
-use crate::generate_catalog_meta;
+use crate::generate_default_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -109,7 +109,7 @@ impl StatisticsTable {
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -201,7 +201,7 @@ impl StatisticsTable {
                     let his_info = columns_statistics.histogram(column_id);
                     let histogram = if let Some(his_info) = his_info {
                         let mut his_infos = vec![];
-                        for (i, bucket) in his_info.buckets.iter().enumerate() {
+                        for (i, bucket) in his_info.bucket_iter().enumerate() {
                             let min = bucket.lower_bound().to_string()?;
                             let max = bucket.upper_bound().to_string()?;
                             let ndv = bucket.num_distinct();

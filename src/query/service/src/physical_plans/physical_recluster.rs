@@ -16,12 +16,11 @@ use std::any::Any;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
+use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableInfoWithBranch;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,7 +37,7 @@ use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::build_compact_block_no_split_pipeline;
+use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -58,6 +57,9 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -113,11 +115,13 @@ impl IPhysicalPlan for Recluster {
     //           └──────────────┘
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         match self.tasks.len() {
+            // Keep the pipeline constructible if an empty task list reaches
+            // this layer; normal recluster planning filters no-op parts out.
             0 => builder.main_pipeline.add_source(EmptySource::create, 1),
             1 => {
                 let table = builder
                     .ctx
-                    .build_table_by_table_info(&self.table_info, None, None)?;
+                    .build_table_by_table_info(&self.table_info, None)?;
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
@@ -126,9 +130,8 @@ impl IPhysicalPlan for Recluster {
                 let table_info = table.get_table_info();
                 let schema = table.schema_with_stream();
                 let description = task.stats.get_description(&table_info.desc);
-                let table_info_with_branch = TableInfoWithBranch::new(table_info);
                 let plan = DataSourcePlan {
-                    source_info: DataSourceInfo::TableSource(table_info_with_branch),
+                    source_info: DataSourceInfo::TableSource(table_info.clone()),
                     output_schema: schema.clone(),
                     parts: task.parts.clone(),
                     statistics: task.stats.clone(),
@@ -137,7 +140,8 @@ impl IPhysicalPlan for Recluster {
                     push_downs: None,
                     internal_columns: None,
                     base_block_ids: None,
-                    update_stream_columns: table.change_tracking_enabled(),
+                    block_meta_options: BlockMetaOptions::default()
+                        .set_update_stream_columns(table.change_tracking_enabled()),
                     table_index: usize::MAX,
                     scan_id: usize::MAX,
                 };
@@ -148,8 +152,12 @@ impl IPhysicalPlan for Recluster {
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
                     log::info!(
-                        "Number of blocks scheduled for recluster: {}",
-                        recluster_block_nums
+                        "recluster: scheduled blocks level={} block_count={} rows={} bytes={} compressed={}",
+                        task.level,
+                        recluster_block_nums,
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
                     );
                 }
 
@@ -209,7 +217,7 @@ impl IPhysicalPlan for Recluster {
                     .collect();
 
                 // merge sort
-                let sort_block_size = block_thresholds.calc_rows_for_recluster(
+                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
                     task.total_rows,
                     task.total_bytes,
                     task.total_compressed,
@@ -223,17 +231,22 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(sort_block_size)
-                .remove_order_col_at_last();
-                // Todo(zhyass): Recluster will no longer perform sort in the near future.
-                sort_pipeline_builder.build_full_sort_pipeline(&mut builder.main_pipeline)?;
+                .with_block_size_hit(rows_per_block);
+                sort_pipeline_builder
+                    .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
-                // Compact after merge sort.
+                // Compact after merge sort. This ordered compactor keeps block growth bounded
+                // without requiring a hard post-sort size cap, since final serialized sizes are
+                // not known yet and over-splitting here would create small fragmented blocks.
+                let compact_thresholds = block_thresholds
+                    .set_rows_per_block(rows_per_block)
+                    .set_bytes_per_block(bytes_per_block);
                 let max_threads = settings.get_max_threads()? as usize;
-                build_compact_block_no_split_pipeline(
+                build_ordered_compact_pipeline(
                     &mut builder.main_pipeline,
-                    block_thresholds,
+                    compact_thresholds,
                     max_threads,
+                    cluster_stats_gen.extra_key_num,
                 )?;
 
                 builder.main_pipeline.add_transform(
@@ -313,7 +326,7 @@ impl IPhysicalPlan for HilbertPartition {
         let num_processors = builder.main_pipeline.output_len();
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         builder.main_pipeline.exchange(

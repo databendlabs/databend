@@ -194,10 +194,8 @@ where
 mod kvapi_key_impl {
     use std::fmt::Debug;
 
-    use databend_common_meta_app_types::non_empty::NonEmptyString;
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyCodec;
-    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_base::non_empty::NonEmptyString;
+    use databend_meta_client::kvapi;
 
     use crate::KeyWithTenant;
     use crate::tenant::Tenant;
@@ -207,7 +205,7 @@ mod kvapi_key_impl {
     impl<R, N> kvapi::KeyCodec for TIdent<R, N>
     where
         R: TenantResource,
-        N: KeyCodec,
+        N: kvapi::KeyCodec,
     {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             let b = if R::HAS_TENANT {
@@ -218,9 +216,9 @@ mod kvapi_key_impl {
             self.name.encode_key(b)
         }
 
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let tenant_name = if R::HAS_TENANT {
-                p.next_nonempty()?
+                NonEmptyString::new(p.next_nonempty()?).unwrap()
             } else {
                 NonEmptyString::new("dummy").unwrap()
             };
@@ -232,20 +230,28 @@ mod kvapi_key_impl {
                 name,
             ))
         }
+
+        fn segment_count(&self) -> usize {
+            (if R::HAS_TENANT { 1 } else { 0 }) + self.name.segment_count()
+        }
+    }
+
+    impl<R, N> kvapi::StructKey for TIdent<R, N>
+    where
+        R: TenantResource,
+        N: kvapi::KeyCodec,
+        N: Debug,
+    {
+        const PREFIX: &'static str = R::PREFIX;
     }
 
     impl<R, N> kvapi::Key for TIdent<R, N>
     where
         R: TenantResource,
-        N: KeyCodec,
+        N: kvapi::KeyCodec,
         N: Debug,
     {
-        const PREFIX: &'static str = R::PREFIX;
         type ValueType = R::ValueType;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
     }
 
     impl<R, N> KeyWithTenant for TIdent<R, N>
@@ -260,8 +266,7 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::tenant::Tenant;
     use crate::tenant_key::ident::TIdent;
@@ -280,32 +285,19 @@ mod tests {
             type ValueType = FooValue;
         }
 
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo>;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
-        }
-
         let tenant = Tenant::new_literal("test");
         let ident = TIdent::<Foo>::new(tenant, "test1");
 
-        let key = ident.to_string_key();
-        assert_eq!(key, "foo/test/test1");
-
-        assert_eq!(ident, TIdent::<Foo>::from_str_key(&key).unwrap());
-
-        // Test debug
-
+        // Test debug + display before round-trip, since assert_round_trip
+        // consumes `ident` by value.
         assert_eq!(
             format!("{:?}", ident),
             r#"TIdent { type: "Foo", tenant: Tenant { tenant: "test" }, name: "test1" }"#,
             "debug"
         );
-
-        // Test display
-
         assert_eq!(format!("{}", ident), "TIdent<Foo>(test/test1)", "display");
+
+        assert_round_trip(ident, "foo/test/test1");
     }
 
     #[test]
@@ -321,19 +313,8 @@ mod tests {
             type ValueType = FooValue;
         }
 
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo, u64>;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
-        }
-
         let tenant = Tenant::new_literal("test");
         let ident = TIdent::<Foo, u64>::new(tenant, 3);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "foo/test/3");
-
-        assert_eq!(ident, TIdent::<Foo, u64>::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "foo/test/3");
     }
 }

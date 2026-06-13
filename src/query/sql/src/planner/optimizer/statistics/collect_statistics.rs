@@ -82,14 +82,12 @@ impl CollectStatisticsOptimizer {
                     }) = column
                     {
                         if virtual_expr.is_none() {
-                            if let Some(column_id) = *column_id {
-                                let col_stat = column_statistics_provider
-                                    .column_statistics(column_id as ColumnId);
-                                column_stats.insert(*column_index, col_stat.cloned());
-                                let histogram =
-                                    column_statistics_provider.histogram(column_id as ColumnId);
-                                histograms.insert(*column_index, histogram);
-                            }
+                            let col_stat = column_statistics_provider
+                                .column_statistics(*column_id as ColumnId);
+                            column_stats.insert(*column_index, col_stat.cloned());
+                            let histogram =
+                                column_statistics_provider.histogram(*column_id as ColumnId);
+                            histograms.insert(*column_index, histogram);
                         }
                     }
                 }

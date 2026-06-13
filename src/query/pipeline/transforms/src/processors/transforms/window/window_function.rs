@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::Cell;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
@@ -23,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -31,7 +33,6 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
-use itertools::Itertools;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -55,6 +56,7 @@ pub struct WindowFuncAggImpl {
     addr: StateAddr,
     loc: Box<[AggrStateLoc]>,
     args: Vec<usize>,
+    initialized: Cell<bool>,
 }
 
 unsafe impl Send for WindowFuncAggImpl {}
@@ -62,7 +64,13 @@ unsafe impl Send for WindowFuncAggImpl {}
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
+        if self.initialized.replace(false) && self.agg.need_manual_drop_state() {
+            unsafe {
+                self.agg.drop_state(AggrState::new(self.addr, &self.loc));
+            }
+        }
         self.agg.init_state(AggrState::new(self.addr, &self.loc));
+        self.initialized.set(true);
     }
 
     #[inline]
@@ -86,7 +94,7 @@ impl WindowFuncAggImpl {
 impl Drop for WindowFuncAggImpl {
     fn drop(&mut self) {
         drop_guard(move || {
-            if self.agg.need_manual_drop_state() {
+            if self.initialized.get() && self.agg.need_manual_drop_state() {
                 unsafe {
                     self.agg.drop_state(AggrState::new(self.addr, &self.loc));
                 }
@@ -194,12 +202,13 @@ impl WindowFunctionInfo {
                     arg_indexes.push(*p);
                 }
                 for (i, desc) in agg.sig.sort_descs.iter().enumerate() {
+                    let sort_index = desc.index.as_symbol().unwrap();
                     // sort_desc will reuse existing columns, so only need to insert new columns.
-                    if agg.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                    if agg.sig.sort_descs[i].is_reuse_index && arg_indexes.contains(&sort_index) {
                         continue;
                     }
-                    args.push(schema.index_of(&desc.index.to_string())?);
-                    arg_indexes.push(desc.index);
+                    args.push(schema.index_of(&sort_index.to_string())?);
+                    arg_indexes.push(sort_index);
                 }
 
                 let remapping_sort_descs = agg
@@ -207,20 +216,17 @@ impl WindowFunctionInfo {
                     .sort_descs
                     .iter()
                     .map(|desc| {
-                        let index = arg_indexes
-                            .iter()
-                            .find_position(|i| **i == desc.index)
-                            .map(|(i, _)| i)
-                            .unwrap_or(desc.index);
-                        Ok(AggregateFunctionSortDesc {
-                            index,
+                        let sort_index = desc.index.as_symbol().unwrap();
+                        let offset = arg_indexes.iter().position(|i| *i == sort_index).unwrap();
+                        AggregateFunctionSortDesc {
+                            index: SymbolOrOffset::Offset(offset),
                             is_reuse_index: desc.is_reuse_index,
                             data_type: desc.data_type.clone(),
                             nulls_first: desc.nulls_first,
                             asc: desc.asc,
-                        })
+                        }
                     })
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<Vec<_>>();
                 let agg_func = AggregateFunctionFactory::instance().get(
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),
@@ -273,6 +279,7 @@ impl WindowFunctionImpl {
                     loc,
                     args,
                     _arena: arena,
+                    initialized: Cell::new(false),
                 };
                 agg.reset();
                 Self::Aggregate(agg)
@@ -306,5 +313,159 @@ impl WindowFunctionImpl {
         if let Self::Aggregate(agg) = self {
             agg.reset();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::alloc::Layout;
+    use std::fmt;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::AggrStateRegistry;
+    use databend_common_expression::AggrStateType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::StateSerdeItem;
+    use databend_common_expression::types::Bitmap;
+    use databend_common_functions::aggregates::AggregateFunctionRef;
+
+    use super::*;
+
+    struct DropCountingState {
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl Drop for DropCountingState {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    struct DropCountingAggregate {
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl fmt::Display for DropCountingAggregate {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "drop_counting_aggregate")
+        }
+    }
+
+    impl AggregateFunction for DropCountingAggregate {
+        fn name(&self) -> &str {
+            "DropCountingAggregate"
+        }
+
+        fn return_type(&self) -> Result<DataType> {
+            Ok(DataType::Null)
+        }
+
+        fn init_state(&self, place: AggrState) {
+            let drops = self.drops.clone();
+            place.write(|| DropCountingState { drops });
+        }
+
+        fn register_state(&self, registry: &mut AggrStateRegistry) {
+            registry.register(AggrStateType::Custom(Layout::new::<DropCountingState>()));
+        }
+
+        fn accumulate(
+            &self,
+            _place: AggrState,
+            _columns: ProjectedBlock,
+            _validity: Option<&Bitmap>,
+            _input_rows: usize,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn accumulate_row(
+            &self,
+            _place: AggrState,
+            _columns: ProjectedBlock,
+            _row: usize,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn serialize_type(&self) -> Vec<StateSerdeItem> {
+            vec![]
+        }
+
+        fn batch_serialize(
+            &self,
+            _places: &[StateAddr],
+            _loc: &[AggrStateLoc],
+            _builders: &mut [ColumnBuilder],
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn batch_merge(
+            &self,
+            _places: &[StateAddr],
+            _loc: &[AggrStateLoc],
+            _state: &BlockEntry,
+            _filter: Option<&Bitmap>,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn merge_states(&self, _place: AggrState, _rhs: AggrState) -> Result<()> {
+            Ok(())
+        }
+
+        fn merge_result(
+            &self,
+            _place: AggrState,
+            _read_only: bool,
+            _builder: &mut ColumnBuilder,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn need_manual_drop_state(&self) -> bool {
+            true
+        }
+
+        unsafe fn drop_state(&self, place: AggrState) {
+            let state = place.get::<DropCountingState>();
+            unsafe { std::ptr::drop_in_place(state) };
+        }
+    }
+
+    #[test]
+    fn reset_drops_existing_manual_state_before_reinitializing() -> Result<()> {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let agg: AggregateFunctionRef = Arc::new(DropCountingAggregate {
+            drops: drops.clone(),
+        });
+        let arena = Arena::new();
+        let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
+        let addr = arena.alloc_layout(states_layout.layout).into();
+        let loc = states_layout.states_loc.pop().unwrap();
+
+        let window_agg = WindowFuncAggImpl {
+            _arena: arena,
+            agg,
+            addr,
+            loc,
+            args: vec![],
+            initialized: Cell::new(false),
+        };
+
+        window_agg.reset();
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+        window_agg.reset();
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+
+        drop(window_agg);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+
+        Ok(())
     }
 }

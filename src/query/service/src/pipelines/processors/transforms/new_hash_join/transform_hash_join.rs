@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomPinned;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -26,9 +28,10 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnSet;
+use log::info;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
+use crate::pipelines::processors::transforms::new_hash_join::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
@@ -42,10 +45,11 @@ pub struct TransformHashJoin {
     join: Box<dyn Join>,
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
-    projection: ColumnSet,
+    projection: BTreeSet<usize>,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
     instant: Instant,
+    _p: PhantomPinned,
 }
 
 impl TransformHashJoin {
@@ -55,7 +59,7 @@ impl TransformHashJoin {
         joined_port: Arc<OutputPort>,
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
-        projection: ColumnSet,
+        projection: BTreeSet<usize>,
         rf_desc: Arc<RuntimeFiltersDesc>,
     ) -> Result<ProcessorPtr> {
         let runtime_filter_builder = RuntimeFilterLocalBuilder::try_create(
@@ -64,6 +68,7 @@ impl TransformHashJoin {
             rf_desc.inlist_threshold,
             rf_desc.bloom_threshold,
             rf_desc.min_max_threshold,
+            rf_desc.spatial_threshold,
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
@@ -81,6 +86,7 @@ impl TransformHashJoin {
                 build_data: None,
             }),
             instant: Instant::now(),
+            _p: PhantomPinned,
         })))
     }
 }
@@ -102,7 +108,14 @@ impl Processor for TransformHashJoin {
 
             if !matches!(self.stage, Stage::Finished) {
                 self.stage = Stage::Finished;
-                self.stage_sync_barrier.reduce_quorum(1);
+
+                let mut finished = FinishedJoin::create();
+                std::mem::swap(&mut finished, &mut self.join);
+                drop(finished);
+
+                if self.stage_sync_barrier.reduce_quorum(1) {
+                    self.rf_desc.close_broadcast();
+                }
             }
 
             return Ok(Event::Finished);
@@ -133,7 +146,6 @@ impl Processor for TransformHashJoin {
         }
     }
 
-    #[allow(clippy::missing_transmute_annotations)]
     fn process(&mut self) -> Result<()> {
         match &mut self.stage {
             Stage::Finished => Ok(()),
@@ -163,7 +175,9 @@ impl Processor for TransformHashJoin {
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
-                    state.stream = Some(unsafe { std::mem::transmute(stream) });
+                    state.stream = Some(unsafe {
+                        std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(stream)
+                    });
                 }
 
                 if let Some(mut stream) = state.stream.take() {
@@ -180,7 +194,11 @@ impl Processor for TransformHashJoin {
                     if let Some(final_stream) = self.join.final_probe()? {
                         state.initialize = true;
                         // This is safe because both join and stream are properties of the struct.
-                        state.stream = Some(unsafe { std::mem::transmute(final_stream) });
+                        state.stream = Some(unsafe {
+                            std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(
+                                final_stream,
+                            )
+                        });
                     } else {
                         state.finished = true;
                     }
@@ -207,7 +225,10 @@ impl Processor for TransformHashJoin {
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
                 if let Some(builder) = self.runtime_filter_builder.take() {
-                    let packet = builder.finish(false)?;
+                    let spill_happened = self.join.is_spill_happened();
+                    // Disable runtime filters once spilling occurs to avoid partial-build filters
+                    // being globalized across the cluster, which can prune valid probe rows.
+                    let packet = builder.finish(spill_happened)?;
                     self.join.add_runtime_filter_packet(packet);
                 }
 
@@ -216,7 +237,15 @@ impl Processor for TransformHashJoin {
                 let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
+                    let spilled = self.join.is_spill_happened();
                     let packet = self.join.build_runtime_filter()?;
+                    info!(
+                        "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
+                        spilled,
+                        packet.packets.as_ref().map_or(0, |p| p.len()),
+                        packet.disable_all_due_to_spill
+                    );
+
                     self.rf_desc.globalization(packet).await?;
                 }
 
@@ -265,6 +294,11 @@ impl Processor for TransformHashJoin {
                     );
 
                     self.instant = Instant::now();
+
+                    let mut finished = FinishedJoin::create();
+                    std::mem::swap(&mut finished, &mut self.join);
+                    drop(finished);
+
                     Stage::Finished
                 }
                 false => {

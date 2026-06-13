@@ -28,14 +28,13 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
-use databend_common_meta_app::schema::TableLockIdent;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::protobuf::WatchRequest;
+use databend_meta_client::types::protobuf::watch_request::FilterType;
 use futures::future::Either;
 use futures::future::select;
 use futures_util::StreamExt;
@@ -45,7 +44,6 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
-use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::sessions::SessionManager;
 
@@ -71,7 +69,6 @@ impl LockHolder {
         let lock_key = req.lock_key.clone();
         let lock_type = lock_key.lock_type().to_string();
         let table_id = lock_key.get_table_id();
-        let tenant = lock_key.get_tenant();
 
         let revision = self.start(catalog.clone(), req).await?;
 
@@ -84,12 +81,14 @@ impl LockHolder {
                 .list_lock_revisions(list_table_lock_req.clone())
                 .await?
                 .into_iter()
-                .map(|(x, _)| x)
                 .collect::<Vec<_>>();
             // list_lock_revisions are returned in big-endian order,
             // we need to sort them in ascending numeric order.
-            rev_list.sort();
-            let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
+            rev_list.sort_by_key(|(revision, _)| *revision);
+            let position = rev_list
+                .iter()
+                .position(|(rev, _)| *rev == revision)
+                .ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired(format!(
                     "The acquired table lock with revision '{}' maybe expired(elapsed: {:?})",
@@ -108,36 +107,35 @@ impl LockHolder {
                 break;
             }
 
-            let prev_revision = rev_list[position - 1];
             let elapsed = start.elapsed();
             // if no need retry, return error directly.
             if !should_retry || elapsed >= acquire_timeout {
+                let (holder_revision, holder_lock_meta) = &rev_list[0];
                 return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "Table is locked by other session(rev: {}, prev: {}, elapsed: {:?})",
-                    revision,
-                    prev_revision,
-                    start.elapsed()
+                    "Table is locked by query '{}' (rev: {}, holder_rev: {}, elapsed: {:?})",
+                    holder_lock_meta.query_id, revision, holder_revision, elapsed
                 )));
             }
 
-            let watch_delete_ident = TableLockIdent::new(tenant, table_id, prev_revision);
+            let prev_revision = rev_list[position - 1].0;
+            let watch_delete_ident = lock_key.gen_v2_key(prev_revision);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)
                 .with_filter(FilterType::Delete);
-            let mut watch_stream = meta_api.watch(req).await.map_err(meta_client_error)?;
+            let mut watch_stream = meta_api.watch(req).await.map_err(meta_service_error)?;
 
-            let lock_meta = meta_api
+            let Some(lock_meta) = meta_api
                 .get_pb(&watch_delete_ident)
                 .await
-                .map_err(meta_service_error)?;
-            if lock_meta.is_none() {
+                .map_err(meta_service_error)?
+            else {
                 log::warn!(
                     "Lock revision '{}' already does not exist, skipping",
                     prev_revision
                 );
                 continue;
-            }
+            };
 
             // Add a timeout period for watch.
             if let Err(_cause) = timeout(acquire_timeout.abs_diff(elapsed), async move {
@@ -152,7 +150,8 @@ impl LockHolder {
             .await
             {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "Table is locked by other session(rev: {}, prev: {}, elapsed: {:?})",
+                    "Table is locked, timeout while waiting on previous lock held by query '{}' (rev: {}, prev: {}, elapsed: {:?})",
+                    lock_meta.query_id,
                     revision,
                     prev_revision,
                     start.elapsed()

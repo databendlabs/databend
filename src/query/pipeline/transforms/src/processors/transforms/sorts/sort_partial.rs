@@ -51,11 +51,10 @@ impl TransformSortPartial {
     }
 }
 
-#[async_trait::async_trait]
 impl Transform for TransformSortPartial {
     const NAME: &'static str = "SortPartialTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
-        DataBlock::sort_with_type(&block, &self.sort_columns_descriptions, self.limit)
+        DataBlock::sort_with_type(block, &self.sort_columns_descriptions, self.limit)
     }
 }

@@ -20,7 +20,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use jsonb::Value as JsonbValue;
 use log::debug;
 use log::info;
@@ -59,7 +59,7 @@ impl Interpreter for PresignInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "presign_interpreter_execute");
 
-        let op = StageTable::get_op(&self.plan.stage)?;
+        let op = init_stage_operator(&self.plan.stage)?;
         if !op.info().full_capability().presign {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",

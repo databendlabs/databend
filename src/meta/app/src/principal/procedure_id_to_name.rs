@@ -36,10 +36,7 @@ impl ProcedureIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::principal::ProcedureIdentity;
-    use crate::principal::procedure_id_to_name::ProcedureIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     // TODO(TIdent): parent should return Some(ProcedureIdIdent::new(self.procedure_id).to_string_key())
@@ -51,13 +48,6 @@ mod kvapi_impl {
         type ValueType = ProcedureIdentity;
     }
 
-    impl kvapi::Value for ProcedureIdentity {
-        type KeyType = ProcedureIdToNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -65,7 +55,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::ProcedureIdToNameIdent;
     use crate::principal::procedure_id_ident::ProcedureId;
@@ -75,11 +66,7 @@ mod tests {
     fn test_procedure_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = ProcedureIdToNameIdent::new_generic(tenant, ProcedureId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_procedure_id_to_name/3");
-
-        assert_eq!(ident, ProcedureIdToNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_procedure_id_to_name/3");
     }
 
     #[test]

@@ -31,8 +31,8 @@ use serde::Serialize;
 use super::AggregateFunction;
 use super::NthValueFunction;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
@@ -53,7 +53,7 @@ pub struct Window {
 
     // aggregate scalar expressions, such as: sum(col1), count(*);
     // or general window functions, such as: row_number(), rank();
-    pub index: IndexType,
+    pub index: Symbol,
     pub function: WindowFuncType,
     pub arguments: Vec<ScalarItem>,
 
@@ -65,6 +65,63 @@ pub struct Window {
     pub frame: WindowFuncFrame,
     // limit for potentially possible push-down
     pub limit: Option<usize>,
+    // per-partition top-n for ranking window push-down
+    pub top: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WindowGroup {
+    pub windows: Vec<Window>,
+    pub scalar_items: Vec<ScalarItem>,
+}
+
+impl WindowGroup {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+
+        for item in &self.scalar_items {
+            used_columns.insert(item.index);
+            used_columns.extend(item.scalar.used_columns());
+        }
+
+        for window in &self.windows {
+            used_columns.extend(window.used_columns()?);
+        }
+
+        Ok(used_columns)
+    }
+
+    fn required_distribution(&self, rel_expr: &RelExpr) -> Result<Distribution> {
+        let Some(first) = self.windows.first() else {
+            return Ok(Distribution::Any);
+        };
+
+        if first.partition_by.is_empty() {
+            return Ok(Distribution::Serial);
+        }
+
+        let partition_by = first
+            .partition_by
+            .iter()
+            .map(|item| item.scalar.clone())
+            .collect::<Vec<_>>();
+        if !self.windows.iter().all(|window| {
+            window
+                .partition_by
+                .iter()
+                .map(|item| &item.scalar)
+                .eq(partition_by.iter())
+        }) {
+            return Ok(Distribution::Serial);
+        }
+
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        if child_physical_prop.distribution == Distribution::Serial {
+            return Ok(Distribution::Serial);
+        }
+
+        Ok(Distribution::GlobalHash(partition_by))
+    }
 }
 
 impl Window {
@@ -107,6 +164,83 @@ impl Window {
             col_set.extend(sort.order_by_item.scalar.used_columns())
         }
         Ok(col_set)
+    }
+}
+
+impl Operator for WindowGroup {
+    fn rel_op(&self) -> RelOp {
+        RelOp::WindowGroup
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let scalar_items = self.scalar_items.iter().map(|expr| &expr.scalar);
+        let windows = self
+            .windows
+            .iter()
+            .flat_map(|window| window.scalar_expr_iter());
+        Box::new(scalar_items.chain(windows))
+    }
+
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        match self.required_distribution(rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        match self.required_distribution(rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(vec![vec![required]])
+    }
+
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        let mut output_columns = input_prop.output_columns.clone();
+        for item in &self.scalar_items {
+            output_columns.insert(item.index);
+        }
+        for window in &self.windows {
+            output_columns.insert(window.index);
+        }
+
+        let outer_columns = input_prop
+            .outer_columns
+            .difference(&output_columns)
+            .cloned()
+            .collect();
+
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns.clone());
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings: input_prop.orderings.clone(),
+            partition_orderings: input_prop.partition_orderings.clone(),
+        }))
+    }
+
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0)
     }
 }
 

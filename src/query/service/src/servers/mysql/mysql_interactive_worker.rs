@@ -19,8 +19,10 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,7 +30,7 @@ use databend_common_exception::ToErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
@@ -64,7 +66,11 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::stream::DataBlockStream;
 
 struct InteractiveWorkerBase {
@@ -226,49 +232,48 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id_str.clone());
         tracking_payload.mem_stat = Some(MemStat::create(query_id_str.to_string()));
-        let _guard = ThreadTracker::tracking(tracking_payload);
 
-        ThreadTracker::tracking_future(async {
-            if self.base.session.is_aborting() {
-                writer
-                    .error(
-                        ErrorKind::ER_ABORTING_CONNECTION,
-                        "Aborting this connection. because we are try aborting server.".as_bytes(),
-                    )
-                    .await?;
+        tracking_payload
+            .tracking(async {
+                if self.base.session.is_aborting() {
+                    writer
+                        .error(
+                            ErrorKind::ER_ABORTING_CONNECTION,
+                            "Aborting this connection. because we are try aborting server."
+                                .as_bytes(),
+                        )
+                        .await?;
 
-                return Err(ErrorCode::AbortedSession(
-                    "Aborting this connection. because we are try aborting server.",
-                ));
-            }
+                    return Err(ErrorCode::AbortedSession(
+                        "Aborting this connection. because we are try aborting server.",
+                    ));
+                }
 
-            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
-            if !self.keep_alive_task_started {
-                self.start_keep_alive().await
-            }
+                let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
+                if !self.keep_alive_task_started {
+                    self.start_keep_alive().await
+                }
 
-            let instant = Instant::now();
-            let query_result = self
-                .base
-                .do_query(query_id_str, query)
-                .await
-                .map_err(|err| err.display_with_sql(query));
+                let instant = Instant::now();
+                let query_result = self
+                    .base
+                    .do_query(query_id_str, query)
+                    .await
+                    .map_err(|err| err.display_with_sql(query));
 
-            let format = self.base.session.get_format_settings();
+                let mut write_result = writer.write(query_result).await;
 
-            let mut write_result = writer.write(query_result, &format).await;
+                if let Err(cause) = write_result {
+                    self.base.session.txn_mgr().lock().set_fail();
+                    let suffix = format!("(while in query {})", mask_connection_info(query));
+                    write_result = Err(cause.add_message_back(suffix));
+                }
+                observe_mysql_process_request_duration(instant.elapsed());
 
-            if let Err(cause) = write_result {
-                self.base.session.txn_mgr().lock().set_fail();
-                let suffix = format!("(while in query {})", query);
-                write_result = Err(cause.add_message_back(suffix));
-            }
-            observe_mysql_process_request_duration(instant.elapsed());
-
-            write_result
-        })
-        .in_span(root)
-        .await
+                write_result
+            })
+            .in_span(root)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -392,7 +397,7 @@ impl InteractiveWorkerBase {
         &mut self,
         query_id: String,
         query: &str,
-    ) -> Result<(QueryResult, Option<FormatSettings>)> {
+    ) -> Result<(QueryResult, Option<OutputFormatSettings>)> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
@@ -416,33 +421,41 @@ impl InteractiveWorkerBase {
                 ))
             }
             None => {
-                info!("Normal query: {}", query);
+                info!("Normal query: {}", mask_connection_info(query));
                 let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
+                let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                tracking_payload.warehouse_id = context.get_cluster().get_warehouse_id().ok();
 
-                // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
+                tracking_payload
+                    .tracking(async {
+                        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                        let (plan, _, _guard) =
+                            interpreter_plan_sql(context.clone(), query, true, None).await?;
 
-                let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
-                let has_result_set = plan.has_result_set();
+                        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+                        let has_result_set = plan.has_result_set();
 
-                let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
-                let mut schema = plan.schema();
-                if let Some(real_schema) = interpreter.get_dynamic_schema().await {
-                    schema = real_schema;
-                }
+                        let (blocks, extra_info) =
+                            Self::exec_query(interpreter.clone(), &context).await?;
+                        let mut schema = plan.schema();
+                        if let Some(real_schema) = interpreter.get_dynamic_schema().await {
+                            schema = real_schema;
+                        }
 
-                let format = context.get_format_settings()?;
-                Ok((
-                    QueryResult::create(
-                        blocks,
-                        extra_info,
-                        has_result_set,
-                        schema,
-                        query.to_string(),
-                    ),
-                    Some(format),
-                ))
+                        let format = context.get_output_format_settings()?;
+                        Ok((
+                            QueryResult::create(
+                                blocks,
+                                extra_info,
+                                has_result_set,
+                                schema,
+                                query.to_string(),
+                            ),
+                            Some(format),
+                        ))
+                    })
+                    .await
             }
         }
     }
@@ -498,9 +511,10 @@ impl InteractiveWorkerBase {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
-        let _guard = ThreadTracker::tracking(tracking_payload);
 
-        let do_query = ThreadTracker::tracking_future(self.do_query(query_id, &init_query)).await;
+        let do_query = tracking_payload
+            .tracking(self.do_query(query_id, &init_query))
+            .await;
         match do_query {
             Ok((_, _)) => Ok(()),
             Err(error_code) => Err(error_code),

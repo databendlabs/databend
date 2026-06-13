@@ -23,6 +23,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 
 use crate::physical_plans::PhysicalPlanMeta;
@@ -35,6 +36,21 @@ pub struct FormatContext<'a> {
     pub profs: HashMap<u32, PlanProfile>,
     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
     pub runtime_filter_reports: HashMap<IndexType, Vec<RuntimeFilterReport>>,
+}
+
+pub fn display_materialized_cte_name(name: &str) -> &str {
+    let Some(rest) = name.strip_prefix("__materialized_cte_") else {
+        return name;
+    };
+    let Some((id, display_name)) = rest.split_once('_') else {
+        return name;
+    };
+
+    if !display_name.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
+        display_name
+    } else {
+        name
+    }
 }
 
 pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {
@@ -141,6 +157,21 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         .unwrap();
     }
 
+    // spatial index pruning status.
+    if info.pruning_stats.blocks_spatial_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description.push_str(", ");
+        }
+        write!(
+            blocks_pruning_description,
+            "spatial pruning: {} to {}{}",
+            info.pruning_stats.blocks_spatial_index_pruning_before,
+            info.pruning_stats.blocks_spatial_index_pruning_after,
+            format_pruning_cost_suffix(info.pruning_stats.blocks_spatial_index_pruning_cost)
+        )
+        .unwrap();
+    }
+
     // Combine segment pruning and blocks pruning descriptions if any
     if info.pruning_stats.segments_range_pruning_before > 0
         || !blocks_pruning_description.is_empty()
@@ -194,9 +225,9 @@ pub fn format_output_columns(
     output_schema
         .fields()
         .iter()
-        .map(|field| match field.name().parse::<usize>() {
+        .map(|field| match field.name().parse::<Symbol>() {
             Ok(column_index) => {
-                if column_index == usize::MAX {
+                if column_index.is_dummy_column() {
                     return String::from("dummy value");
                 }
                 let column_entry = metadata.column(column_index);

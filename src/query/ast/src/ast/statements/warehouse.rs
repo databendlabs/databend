@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -39,7 +41,7 @@ impl Display for ShowWarehousesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UseWarehouseStmt {
     pub warehouse: Identifier,
 }
@@ -95,7 +97,7 @@ impl Display for CreateWarehouseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropWarehouseStmt {
     pub warehouse: Identifier,
 }
@@ -106,7 +108,7 @@ impl Display for DropWarehouseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct SuspendWarehouseStmt {
     pub warehouse: Identifier,
 }
@@ -117,7 +119,7 @@ impl Display for SuspendWarehouseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ResumeWarehouseStmt {
     pub warehouse: Identifier,
 }
@@ -128,7 +130,7 @@ impl Display for ResumeWarehouseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameWarehouseStmt {
     pub warehouse: Identifier,
     pub new_warehouse: Identifier,
@@ -144,7 +146,7 @@ impl Display for RenameWarehouseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct InspectWarehouseStmt {
     pub warehouse: Identifier,
 }
@@ -205,7 +207,7 @@ impl Display for AddWarehouseClusterStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropWarehouseClusterStmt {
     pub cluster: Identifier,
     pub warehouse: Identifier,
@@ -221,7 +223,7 @@ impl Display for DropWarehouseClusterStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameWarehouseClusterStmt {
     pub warehouse: Identifier,
     pub cluster: Identifier,

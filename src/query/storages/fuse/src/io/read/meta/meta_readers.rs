@@ -27,7 +27,9 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
+use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -42,8 +44,8 @@ use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet::format::FileMetaData;
-use parquet::thrift::TSerializable;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 
@@ -55,6 +57,9 @@ pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type InvertedIndexMetaReader = HybridCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
+pub type SpatialIndexMetaReader = HybridCacheReader<SpatialIndexMeta, LoaderWrapper<Operator>>;
+pub type VirtualColumnMetaReader =
+    HybridCacheReader<VirtualColumnFileMeta, LoaderWrapper<Operator>>;
 pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
@@ -116,6 +121,20 @@ impl MetaReaders {
     pub fn vector_index_meta_reader(dal: Operator) -> VectorIndexMetaReader {
         VectorIndexMetaReader::new(
             CacheManager::instance().get_vector_index_meta_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn spatial_index_meta_reader(dal: Operator) -> SpatialIndexMetaReader {
+        SpatialIndexMetaReader::new(
+            CacheManager::instance().get_spatial_index_meta_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn virtual_column_meta_reader(dal: Operator) -> VirtualColumnMetaReader {
+        VirtualColumnMetaReader::new(
+            CacheManager::instance().get_virtual_column_meta_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -314,6 +333,24 @@ impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
+#[async_trait::async_trait]
+impl Loader<VirtualColumnFileMeta> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<VirtualColumnFileMeta> {
+        // read the ThriftFileMetaData, omit unnecessary conversions
+        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?;
+
+        VirtualColumnFileMeta::try_from(meta)
+    }
+}
+
 pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
         op.read_with(path).range(0..len).await?
@@ -325,7 +362,6 @@ pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> R
 
 mod thrift_file_meta_read {
     use parquet::errors::ParquetError;
-    use thrift::protocol::TCompactInputProtocol;
 
     use super::*;
 
@@ -358,7 +394,7 @@ mod thrift_file_meta_read {
         op: Operator,
         path: &str,
         len_hint: Option<u64>,
-    ) -> Result<FileMetaData> {
+    ) -> Result<ParquetMetaData> {
         let file_size = if let Some(len) = len_hint {
             len
         } else {
@@ -406,11 +442,8 @@ mod thrift_file_meta_read {
         if (footer_len as usize) < buffer.len() {
             // the whole metadata is in the bytes we already read
             let remaining = buffer.len() - footer_len as usize;
-
-            let mut prot = TCompactInputProtocol::new(&buffer[remaining..]);
-            let meta = FileMetaData::read_from_in_protocol(&mut prot)
-                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-            Ok(meta)
+            ParquetMetaDataReader::decode_metadata(&buffer[remaining..])
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
             let buffer = op
@@ -418,11 +451,9 @@ mod thrift_file_meta_read {
                 .range(file_size - footer_len..file_size)
                 .await
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-
-            let mut prot = TCompactInputProtocol::new(buffer.reader());
-            let meta = FileMetaData::read_from_in_protocol(&mut prot)
-                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-            Ok(meta)
+            let buffer = buffer.to_vec();
+            ParquetMetaDataReader::decode_metadata(&buffer)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         }
     }
 }

@@ -21,7 +21,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::plans::GroupingSets;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -38,7 +38,7 @@ use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupin
 pub struct AggregateExpand {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub group_bys: Vec<IndexType>,
+    pub group_bys: Vec<Symbol>,
     pub grouping_sets: GroupingSets,
 
     // Only used for explain

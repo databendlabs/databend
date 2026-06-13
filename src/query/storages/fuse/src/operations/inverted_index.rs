@@ -81,12 +81,12 @@ impl FuseTable {
         index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let Some(snapshot) = self.read_table_snapshot().await? else {
-            return Ok(());
+            return Ok(0);
         };
 
-        let table_schema = &self.get_table_info().meta.schema;
+        let table_schema = self.schema();
         // Collect field indices used by inverted index.
         let mut field_indices = Vec::new();
         for field in &index_schema.fields {
@@ -97,11 +97,9 @@ impl FuseTable {
         // Read data here to keep the order of blocks in segment.
         let projection = Projection::Columns(field_indices);
 
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection, false, false, false)?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
 
-        let segment_reader =
-            MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
+        let segment_reader = MetaReaders::segment_info_reader(self.get_operator(), table_schema);
 
         // If no segment locations are specified, iterates through all segments
         let segment_locs = if let Some(segment_locs) = segment_locs {
@@ -114,7 +112,7 @@ impl FuseTable {
         };
 
         if segment_locs.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         let operator = self.get_operator_ref();
 
@@ -144,7 +142,7 @@ impl FuseTable {
             }
         }
         if block_metas.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         let data_schema = Arc::new(DataSchema::from(index_schema.as_ref()));
@@ -183,7 +181,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| InvertedIndexSink::try_create(input, block_nums))?;
 
-        Ok(())
+        Ok(block_nums as u64)
     }
 }
 

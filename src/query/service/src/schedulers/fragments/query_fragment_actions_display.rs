@@ -72,6 +72,7 @@ impl Display for QueryFragmentActionsWrap<'_> {
                 DataExchange::Merge(_) => writeln!(f, "  DataExchange: Merge")?,
                 DataExchange::Broadcast(_) => writeln!(f, "  DataExchange: Broadcast")?,
                 DataExchange::NodeToNodeExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
+                DataExchange::GlobalShuffleExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
             }
         }
 

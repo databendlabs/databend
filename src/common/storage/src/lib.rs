@@ -33,18 +33,34 @@
 #![allow(clippy::let_unit_value)]
 #![feature(box_patterns)]
 
+mod auth;
+pub use auth::RefreshableToken;
+pub use auth::TokenFile;
+
 mod config;
+mod endpoint_policy;
+pub use config::EndpointPolicyScope;
+pub use config::EndpointUrlPolicy;
+pub use config::EndpointUrlPolicyConfig;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
+pub use endpoint_policy::EndpointUrlPolicyRegistry;
+pub use endpoint_policy::check_storage_endpoint_url;
+pub use endpoint_policy::check_storage_params_endpoints;
+
+mod concurrent_limit_layer;
+pub use concurrent_limit_layer::ConcurrentLimitLayer;
 
 mod http_client;
 pub use http_client::StorageHttpClient;
 
 mod operator;
 pub use operator::DataOperator;
+pub use operator::IcebergFileIO;
 pub use operator::OperatorRegistry;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;
 
@@ -68,26 +84,21 @@ pub use stage::StageFileInfo;
 pub use stage::StageFileInfoStream;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
+pub use stage::ensure_no_stage_path_traversal;
 pub use stage::init_stage_operator;
+pub use stage::is_stage_path_traversal;
 
 mod copy;
-mod histogram;
 mod merge;
 mod meta_hll;
 mod metrics_layer;
 mod multi_table_insert;
-mod statistics;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileParseErrorAtLine;
 pub use copy::FileStatus;
-pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
-pub use histogram::Histogram;
-pub use histogram::HistogramBucket;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
 pub use meta_hll::MetaHLL12;
 pub use multi_table_insert::MultiTableInsertStatus;
-pub use statistics::Datum;
-pub use statistics::F64;

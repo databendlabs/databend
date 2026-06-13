@@ -132,6 +132,6 @@ impl SyncSource for NullSource {
         }
 
         self.finish = true;
-        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+        Ok(Some(DataBlock::empty_with_schema(&self.schema)))
     }
 }

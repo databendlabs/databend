@@ -14,13 +14,7 @@
 
 use std::collections::BinaryHeap;
 
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::SortColumnDescription;
-
-use super::order_field_type;
 
 pub const ORDER_COL_NAME: &str = "_order_col";
 
@@ -41,21 +35,4 @@ pub fn has_order_field(schema: &DataSchema) -> bool {
         .fields
         .last()
         .is_some_and(|f| f.name() == ORDER_COL_NAME)
-}
-
-pub fn add_order_field(
-    schema: DataSchemaRef,
-    desc: &[SortColumnDescription],
-    enable_fixed_rows: bool,
-) -> DataSchemaRef {
-    if has_order_field(&schema) {
-        schema
-    } else {
-        let mut fields = schema.fields.clone();
-        fields.push(DataField::new(
-            ORDER_COL_NAME,
-            order_field_type(&schema, desc, enable_fixed_rows),
-        ));
-        DataSchemaRefExt::create(fields)
-    }
 }

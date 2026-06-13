@@ -1,0 +1,55 @@
+statement ok
+DROP DATABASE IF EXISTS db_05_0013
+
+statement ok
+CREATE DATABASE db_05_0013
+
+statement ok
+USE db_05_0013
+
+statement ok
+CREATE OR REPLACE TABLE t_drop_idx(a INT, b INT)
+
+statement ok
+CREATE AGGREGATING INDEX idx_drop AS SELECT a, b FROM t_drop_idx WHERE b > 1
+
+statement error AGGREGATING index 'idx_drop' references column 'b'
+ALTER TABLE t_drop_idx DROP COLUMN b
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_drop
+
+statement ok
+CREATE OR REPLACE TABLE t_modify_idx(a INT, b INT)
+
+statement ok
+CREATE AGGREGATING INDEX idx_modify AS SELECT a, b FROM t_modify_idx WHERE b > 1
+
+statement error AGGREGATING index 'idx_modify' references column 'b'
+ALTER TABLE t_modify_idx MODIFY COLUMN b STRING
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_modify
+
+## Cross-database: index should work even when session is in a different database.
+## CREATE AGGREGATING INDEX requires the session to be in the target database,
+## but the persisted query is database-qualified, so validation resolves correctly
+## regardless of the caller's current database.
+
+statement ok
+CREATE OR REPLACE TABLE t_cross_db(a INT, b INT)
+
+statement ok
+CREATE AGGREGATING INDEX idx_cross AS SELECT a, b FROM t_cross_db WHERE b > 1
+
+statement ok
+USE default
+
+statement error AGGREGATING index 'idx_cross' references column 'b'
+ALTER TABLE db_05_0013.t_cross_db DROP COLUMN b
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_cross
+
+statement ok
+DROP DATABASE db_05_0013

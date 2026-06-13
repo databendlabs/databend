@@ -176,6 +176,7 @@ impl DPhpyOptimizer {
                 | RelOperator::Limit(_)
                 | RelOperator::ProjectSet(_)
                 | RelOperator::Window(_)
+                | RelOperator::WindowGroup(_)
                 | RelOperator::Udf(_)
         )
     }
@@ -400,9 +401,9 @@ impl DPhpyOptimizer {
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
+            | RelOperator::WindowGroup(_)
             | RelOperator::Udf(_)
             | RelOperator::Filter(_)
-            | RelOperator::SecureFilter(_)
             | RelOperator::MaterializedCTE(_) => {
                 self.process_unary_node(s_expr, join_conditions, join_child, join_relation)
                     .await

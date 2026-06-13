@@ -24,8 +24,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -49,10 +49,11 @@ pub struct UnionAll {
     meta: PhysicalPlanMeta,
     pub left: PhysicalPlan,
     pub right: PhysicalPlan,
-    pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
-    pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
+    pub left_outputs: Vec<(Symbol, Option<RemoteExpr>)>,
+    pub right_outputs: Vec<(Symbol, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
     pub cte_scan_names: Vec<String>,
+    pub logical_recursive_cte_id: Option<u32>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -109,6 +110,7 @@ impl IPhysicalPlan for UnionAll {
             right_outputs: self.right_outputs.clone(),
             schema: self.schema.clone(),
             cte_scan_names: self.cte_scan_names.clone(),
+            logical_recursive_cte_id: self.logical_recursive_cte_id,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -147,7 +149,7 @@ impl UnionAll {
     fn project_input(
         &self,
         schema: DataSchemaRef,
-        projection: &[(IndexType, Option<RemoteExpr>)],
+        projection: &[(Symbol, Option<RemoteExpr>)],
         builder: &mut PipelineBuilder,
     ) -> Result<()> {
         let mut expr_offset = schema.num_fields();
@@ -299,16 +301,17 @@ impl PhysicalPlanBuilder {
             schema: DataSchemaRefExt::create(fields),
 
             cte_scan_names: union_all.cte_scan_names.clone(),
+            logical_recursive_cte_id: union_all.logical_recursive_cte_id,
             stat_info: Some(stat_info),
         }))
     }
 }
 
 fn process_outputs(
-    outputs: &[(IndexType, Option<ScalarExpr>)],
+    outputs: &[(Symbol, Option<ScalarExpr>)],
     offset_indices: &[usize],
     schema: &DataSchema,
-) -> Result<Vec<(IndexType, Option<RemoteExpr>)>> {
+) -> Result<Vec<(Symbol, Option<RemoteExpr>)>> {
     let mut results = Vec::with_capacity(offset_indices.len());
     for index in offset_indices {
         let output = &outputs[*index];

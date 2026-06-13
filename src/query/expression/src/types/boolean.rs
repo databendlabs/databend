@@ -24,14 +24,20 @@ use super::ArgType;
 use super::BuilderMut;
 use super::DataType;
 use super::GenericMap;
+use super::NullableType;
 use super::ReturnType;
 use super::ValueType;
 use super::column_type_error;
 use super::domain_type_error;
+use super::nullable::NullableColumnBuilder;
 use super::scalar_type_error;
+use crate::BlockEntry;
+use crate::Chunk;
+use crate::ChunkIndex;
 use crate::ColumnBuilder;
 use crate::ColumnView;
 use crate::ScalarRef;
+use crate::TakeIndex;
 use crate::property::Domain;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
@@ -238,13 +244,93 @@ impl ReturnType for BooleanType {
             (_, None) => MutableBitmap::from_iter(iter).into(),
         }
     }
+}
 
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        generics: &GenericMap,
-    ) -> Self::Column {
-        Self::column_from_iter(iter, generics)
+pub fn take_boolean_from_views(
+    views: &[ColumnView<BooleanType>],
+    indices: &ChunkIndex,
+) -> BlockEntry {
+    let mut builder = MutableBitmap::with_capacity(indices.num_rows());
+    for chunk in indices.iter_chunk() {
+        match chunk {
+            Chunk::Single { block, rows } => {
+                let view = &views[block as usize];
+                match view {
+                    ColumnView::Const(value, _) => {
+                        builder.extend_constant(rows.len(), *value);
+                    }
+                    ColumnView::Column(column) => {
+                        for row in TakeIndex::iter(rows) {
+                            builder.push(column.get_bit(row));
+                        }
+                    }
+                }
+            }
+            Chunk::Repeat { block, rows } => {
+                let view = &views[block as usize];
+                match view {
+                    ColumnView::Const(value, _) => {
+                        builder.extend_constant(rows.count as usize, *value);
+                    }
+                    ColumnView::Column(column) => {
+                        let value = column.get_bit(rows.row as usize);
+                        builder.extend_constant(rows.count as usize, value);
+                    }
+                }
+            }
+            Chunk::Range { block, row, len } => {
+                let view = &views[block as usize];
+                match view {
+                    ColumnView::Const(value, _) => {
+                        builder.extend_constant(len as usize, *value);
+                    }
+                    ColumnView::Column(column) => {
+                        builder.extend_from_bitmap(&column.clone().sliced(row as _, len as _))
+                    }
+                }
+            }
+        }
     }
+    let column = builder.into();
+    BooleanType::upcast_column(column).into()
+}
+
+pub fn take_nullable_boolean_from_views(
+    views: &[ColumnView<NullableType<BooleanType>>],
+    indices: &ChunkIndex,
+) -> BlockEntry {
+    let mut builder = NullableColumnBuilder::<BooleanType>::with_capacity(indices.num_rows(), &[]);
+    for chunk in indices.iter_chunk() {
+        match chunk {
+            Chunk::Single { block, rows } => {
+                let view = &views[block as usize];
+                for row in TakeIndex::iter(rows) {
+                    match unsafe { view.index_unchecked(row) } {
+                        Some(value) => builder.push(value),
+                        None => builder.push_null(),
+                    }
+                }
+            }
+            Chunk::Repeat { block, rows } => {
+                let view = &views[block as usize];
+                match unsafe { view.index_unchecked(rows.row as usize) } {
+                    Some(value) => builder.push_repeat(value, rows.count as usize),
+                    None => builder.push_repeat_null(rows.count as usize),
+                }
+            }
+            Chunk::Range { block, row, len } => {
+                let view = &views[block as usize];
+                for i in row..row + len {
+                    match unsafe { view.index_unchecked(i as usize) } {
+                        Some(value) => builder.push(value),
+                        None => builder.push_null(),
+                    }
+                }
+            }
+        }
+    }
+    let column = builder.build();
+    NullableType::<BooleanType>::upcast_column(column).into()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

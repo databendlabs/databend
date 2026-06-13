@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::too_many_arguments)]
-
 mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
+mod aggregate_meta;
 mod group_hash;
 mod hash_index;
+mod hash_index_adapter;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
@@ -34,8 +33,8 @@ use std::sync::atomic::Ordering;
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
+pub use aggregate_meta::*;
 pub use group_hash::*;
-use hash_index::Entry;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
@@ -43,9 +42,18 @@ pub use probe_state::ProbeState;
 use probe_state::*;
 use row_ptr::*;
 
+use crate::aggregate::hash_index::HashIndex;
+
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
+
 const LOAD_FACTOR: f64 = 1.5;
+
+// 75% of the capacity
+// The hash index can probe multiple ctrl bytes by SIMD, so it can use a denser
+// load factor than the payload capacity estimate.
+const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
+
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
 // Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
@@ -63,6 +71,7 @@ pub struct HashTableConfig {
     // Max radix bits across all threads, this is a hint to repartition
     pub current_max_radix_bits: Arc<AtomicU64>,
     pub initial_radix_bits: u64,
+    pub partition_start_bit: u64,
     pub max_radix_bits: u64,
     pub repartition_radix_bits_incr: u64,
     pub block_fill_factor: f64,
@@ -75,6 +84,7 @@ impl Default for HashTableConfig {
         Self {
             current_max_radix_bits: Arc::new(AtomicU64::new(3)),
             initial_radix_bits: 3,
+            partition_start_bit: 0,
             max_radix_bits: MAX_RADIX_BITS,
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
@@ -115,6 +125,11 @@ impl HashTableConfig {
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
         self.current_max_radix_bits = Arc::new(AtomicU64::new(initial_radix_bits));
+        self
+    }
+
+    pub fn with_partition_start_bit(mut self, partition_start_bit: u64) -> Self {
+        self.partition_start_bit = partition_start_bit;
         self
     }
 

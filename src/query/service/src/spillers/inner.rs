@@ -43,6 +43,7 @@ pub enum SpillerType {
     Window,
     OrderBy,
     Aggregation,
+    MaterializedCTE,
     ResultSet,
 }
 
@@ -54,6 +55,7 @@ impl Display for SpillerType {
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
             SpillerType::Aggregation => write!(f, "Aggregation"),
+            SpillerType::MaterializedCTE => write!(f, "MaterializedCTE"),
             SpillerType::ResultSet => write!(f, "ResultSet"),
         }
     }
@@ -66,6 +68,7 @@ pub struct SpillerConfig {
     pub location_prefix: String,
     pub disk_spill: Option<SpillerDiskConfig>,
     pub use_parquet: bool,
+    pub writer_pool_bytes: usize,
 }
 
 #[derive(Clone)]
@@ -109,6 +112,7 @@ pub struct SpillerInner<A> {
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
     pub(super) use_parquet: bool,
+    pub(super) writer_pool_bytes: usize,
     _spiller_type: SpillerType,
 }
 
@@ -119,6 +123,7 @@ impl<A> SpillerInner<A> {
             disk_spill,
             spiller_type,
             use_parquet,
+            writer_pool_bytes,
         } = config;
 
         let (temp_dir, local_operator) = match disk_spill {
@@ -136,6 +141,7 @@ impl<A> SpillerInner<A> {
             temp_dir,
             local_operator,
             use_parquet,
+            writer_pool_bytes,
             _spiller_type: spiller_type,
         })
     }

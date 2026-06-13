@@ -42,12 +42,13 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use jaq_core;
-use jaq_interpret::Ctx;
-use jaq_interpret::FilterT;
-use jaq_interpret::ParseCtx;
-use jaq_interpret::RcIter;
-use jaq_interpret::Val;
-use jaq_parse;
+use jaq_core::Compiler;
+use jaq_core::Ctx;
+use jaq_core::RcIter;
+use jaq_core::load::Arena;
+use jaq_core::load::File;
+use jaq_core::load::Loader;
+use jaq_json::Val;
 use jaq_std;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
@@ -467,28 +468,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                             return vec![];
                         }
                     };
-
-                    let mut defs = ParseCtx::new(vec![]);
-                    defs.insert_natives(jaq_core::core());
-                    defs.insert_defs(jaq_std::std());
-                    assert!(defs.errs.is_empty());
-                    let (filter, errs) = jaq_parse::parse(jq_filter, jaq_parse::main());
-                    if !errs.is_empty() {
-                        ctx.set_error(0, errs[0].to_string());
+                    let arena = Arena::default();
+                    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+                    let Ok(modules) = loader.load(&arena, File {
+                        path: (),
+                        code: jq_filter,
+                    }) else {
+                        ctx.set_error(0, "Invalid jq filter load error");
                         return vec![];
-                    }
+                    };
 
-                    let filter = defs.compile(filter.unwrap());
-                    if !defs.errs.is_empty() {
-                        let err_str = defs
-                            .errs
-                            .iter()
-                            .map(|e| format!("err: {} location: {:?}", e.0, e.1))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        ctx.set_error(0, err_str);
+                    let Ok(filter) = Compiler::default()
+                        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+                        .compile(modules)
+                    else {
+                        ctx.set_error(0, "Invalid jq filter compile error");
                         return vec![];
-                    }
+                    };
 
                     let jaq_args = vec![];
                     // You can pass additional scalar inputs as args to the jq filter.

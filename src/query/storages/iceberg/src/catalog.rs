@@ -106,20 +106,16 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use educe::Educe;
+use iceberg::CatalogBuilder;
 use iceberg::NamespaceIdent;
-use iceberg_catalog_glue::GlueCatalog;
-use iceberg_catalog_glue::GlueCatalogConfig;
-use iceberg_catalog_hms::HmsCatalog;
-use iceberg_catalog_hms::HmsCatalogConfig;
-use iceberg_catalog_hms::HmsThriftTransport;
-use iceberg_catalog_rest::RestCatalog;
-use iceberg_catalog_rest::RestCatalogConfig;
-use iceberg_catalog_s3tables::S3TablesCatalog;
-use iceberg_catalog_s3tables::S3TablesCatalogConfig;
+use iceberg_catalog_glue::GlueCatalogBuilder;
+use iceberg_catalog_hms::HmsCatalogBuilder;
+use iceberg_catalog_rest::RestCatalogBuilder;
+use iceberg_catalog_s3tables::S3TablesCatalogBuilder;
 
 use crate::IcebergTable;
 use crate::database::IcebergDatabase;
@@ -136,9 +132,72 @@ impl CatalogCreator for IcebergMutableCreator {
     }
 }
 
-/// `Catalog` for a external iceberg storage
+fn trim_props(
+    raw: &std::collections::HashMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    raw.iter()
+        .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+        .collect()
+}
+
+fn validate_s3_credentials(props: &std::collections::HashMap<String, String>) -> Result<()> {
+    let has_access_key = props.contains_key("s3.access-key-id");
+    let has_secret_key = props.contains_key("s3.secret-access-key");
+    let has_session_token = props.contains_key("s3.session-token");
+
+    if has_access_key != has_secret_key {
+        return Err(ErrorCode::BadArguments(
+            "s3.access-key-id and s3.secret-access-key must be configured together",
+        ));
+    }
+
+    if has_session_token && !(has_access_key && has_secret_key) {
+        return Err(ErrorCode::BadArguments(
+            "s3.session-token requires s3.access-key-id and s3.secret-access-key",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Add iceberg s3 FileIO credential keys from AWS SDK style keys while keeping
+/// the original AWS keys for catalog clients such as S3Tables.
 ///
-/// - Metadata of databases are saved in meta store
+/// Treat S3 credentials as a group: if users provide explicit s3 credential
+/// keys, don't mix in AWS catalog credentials such as Glue session tokens.
+fn with_s3_file_io_aliases(
+    raw: &std::collections::HashMap<String, String>,
+) -> Result<std::collections::HashMap<String, String>> {
+    let mut out = trim_props(raw);
+    validate_s3_credentials(&out)?;
+    let has_s3_credentials = out.contains_key("s3.access-key-id")
+        || out.contains_key("s3.secret-access-key")
+        || out.contains_key("s3.session-token");
+
+    if !has_s3_credentials {
+        let credential_aliases = [
+            ("aws_access_key_id", "s3.access-key-id"),
+            ("aws_secret_access_key", "s3.secret-access-key"),
+            ("aws_session_token", "s3.session-token"),
+        ];
+
+        for (aws_key, s3_key) in credential_aliases {
+            if let Some(val) = out.get(aws_key).cloned() {
+                out.entry(s3_key.to_string()).or_insert(val);
+            }
+        }
+    }
+
+    let region_aliases = [("region_name", "s3.region"), ("aws_region", "s3.region")];
+    for (aws_key, s3_key) in region_aliases {
+        if let Some(val) = out.get(aws_key).cloned() {
+            out.entry(s3_key.to_string()).or_insert(val);
+        }
+    }
+
+    Ok(out)
+}
+
 /// - Instances of `Database` are created from reading subdirectories of
 ///   Iceberg table
 /// - Table metadata are saved in external Iceberg storage
@@ -171,82 +230,65 @@ impl IcebergMutableCatalog {
         // We only do this while building catalog so this won't affect existing catalogs.
         let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
-                let cfg = HmsCatalogConfig::builder()
-                    .address(hms.address.clone())
-                    .thrift_transport(HmsThriftTransport::Buffered)
-                    .warehouse(hms.warehouse.clone())
-                    .props(
-                        hms.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
-                let ctl = HmsCatalog::new(cfg).map_err(|err| {
+                let mut props = trim_props(&hms.props);
+                props.insert("uri".to_string(), hms.address.clone());
+                props.insert("warehouse".to_string(), hms.warehouse.clone());
+
+                let ctl = databend_common_base::runtime::block_on(
+                    HmsCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
                     ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
                 })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Rest(rest) => {
                 let client = HttpClient::default();
-                let cfg = RestCatalogConfig::builder()
-                    .uri(rest.uri.clone())
-                    .warehouse(rest.warehouse.clone())
-                    .props(
-                        rest.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .client(Some(client.inner()))
-                    .build();
-                let ctl = RestCatalog::new(cfg);
+                let mut props = trim_props(&rest.props);
+                props.insert("uri".to_string(), rest.uri.clone());
+                props.insert("warehouse".to_string(), rest.warehouse.clone());
+
+                let ctl = databend_common_base::runtime::block_on(
+                    RestCatalogBuilder::default()
+                        .with_client(client.inner())
+                        .load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!("Iceberg build rest catalog failed: {err:?}"))
+                })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Glue(glue) => {
-                let cfg = GlueCatalogConfig::builder()
-                    .uri(glue.address.clone())
-                    .warehouse(glue.warehouse.clone())
-                    .props(
-                        glue.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
+                let mut props = trim_props(&glue.props);
+                props.insert("uri".to_string(), glue.address.clone());
+                props.insert("warehouse".to_string(), glue.warehouse.clone());
 
-                // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
-                let ctl = databend_common_base::runtime::block_on(GlueCatalog::new(cfg)).map_err(
-                    |err| {
-                        ErrorCode::BadArguments(format!(
-                            "There was an error building the AWS Glue catalog: {err:?}"
-                        ))
-                    },
-                )?;
+                let ctl = databend_common_base::runtime::block_on(
+                    GlueCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!(
+                        "There was an error building the AWS Glue catalog: {err:?}"
+                    ))
+                })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Storage(s) => {
-                let cfg = S3TablesCatalogConfig::builder()
-                    .endpoint_url(s.address.clone())
-                    .table_bucket_arn(s.table_bucket_arn.clone())
-                    .properties(
-                        s.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
+                // S3Tables uses aws_* keys for the AWS SDK client, while its
+                // FileIO path expects iceberg s3.* keys. Keep the AWS keys and
+                // add missing s3.* aliases for file access.
+                let mut props = with_s3_file_io_aliases(&s.props)?;
+                props.insert("endpoint_url".to_string(), s.address.clone());
+                props.insert("table_bucket_arn".to_string(), s.table_bucket_arn.clone());
 
-                let ctl = databend_common_base::runtime::block_on(S3TablesCatalog::new(cfg))
-                    .map_err(|err| {
-                        ErrorCode::BadArguments(format!(
-                            "There was an error building the s3 tables catalog: {err:?}"
-                        ))
-                    })?;
+                let ctl = databend_common_base::runtime::block_on(
+                    S3TablesCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!(
+                        "There was an error building the s3 tables catalog: {err:?}"
+                    ))
+                })?;
                 Arc::new(ctl)
             }
         };
@@ -402,9 +444,8 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
-
-        Ok(table)
+        let table = IcebergTable::try_create(table_info.clone())?;
+        Ok(table.into())
     }
 
     #[async_backtrace::framed]
@@ -439,11 +480,17 @@ impl Catalog for IcebergMutableCatalog {
     async fn mget_databases(
         &self,
         _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in ICEBERG catalog",
-        ))
+        Ok(db_names
+            .iter()
+            .map(|db_name| {
+                Arc::new(IcebergDatabase::create(
+                    self.clone(),
+                    db_name.database_name(),
+                )) as Arc<dyn Database>
+            })
+            .collect())
     }
 
     async fn mget_database_names_by_ids(
@@ -466,6 +513,16 @@ impl Catalog for IcebergMutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.mget_tables(table_names).await
     }
 
     #[async_backtrace::framed]
@@ -698,7 +755,7 @@ impl Catalog for IcebergMutableCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -709,7 +766,7 @@ impl Catalog for IcebergMutableCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }
@@ -772,5 +829,151 @@ impl Catalog for IcebergMutableCatalog {
         _func_name: &str,
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_exception::Result;
+
+    use super::with_s3_file_io_aliases;
+
+    #[test]
+    fn storage_catalog_keeps_aws_keys_and_adds_missing_s3_aliases() -> Result<()> {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+        ]))?;
+
+        assert_eq!(
+            props.get("aws_access_key_id"),
+            Some(&"aws_access".to_string())
+        );
+        assert_eq!(
+            props.get("aws_secret_access_key"),
+            Some(&"aws_secret".to_string())
+        );
+        assert_eq!(
+            props.get("aws_session_token"),
+            Some(&"aws_token".to_string())
+        );
+        assert_eq!(props.get("region_name"), Some(&"us-east-1".to_string()));
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"aws_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"aws_secret".to_string())
+        );
+        assert_eq!(
+            props.get("s3.session-token"),
+            Some(&"aws_token".to_string())
+        );
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn storage_catalog_keeps_aws_region_and_adds_missing_s3_region() -> Result<()> {
+        let props = with_s3_file_io_aliases(&HashMap::from([(
+            "aws_region".to_string(),
+            "us-east-1".to_string(),
+        )]))?;
+
+        assert_eq!(props.get("aws_region"), Some(&"us-east-1".to_string()));
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn storage_catalog_does_not_mix_aws_session_token_with_explicit_s3_credentials() -> Result<()> {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+            ("s3.access-key-id".to_string(), "s3_access".to_string()),
+            ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
+        ]))?;
+
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"s3_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"s3_secret".to_string())
+        );
+        assert!(!props.contains_key("s3.session-token"));
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn storage_catalog_does_not_override_explicit_s3_aliases() -> Result<()> {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+            ("s3.access-key-id".to_string(), "s3_access".to_string()),
+            ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
+            ("s3.session-token".to_string(), "s3_token".to_string()),
+            ("s3.region".to_string(), "us-west-2".to_string()),
+        ]))?;
+
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"s3_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"s3_secret".to_string())
+        );
+        assert_eq!(props.get("s3.session-token"), Some(&"s3_token".to_string()));
+        assert_eq!(props.get("s3.region"), Some(&"us-west-2".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn storage_catalog_rejects_partial_explicit_s3_credentials() {
+        let err = with_s3_file_io_aliases(&HashMap::from([(
+            "s3.access-key-id".to_string(),
+            "s3_access".to_string(),
+        )]))
+        .unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("s3.access-key-id and s3.secret-access-key must be configured together")
+        );
+    }
+
+    #[test]
+    fn storage_catalog_rejects_session_token_without_explicit_s3_key_pair() {
+        let err = with_s3_file_io_aliases(&HashMap::from([(
+            "s3.session-token".to_string(),
+            "s3_token".to_string(),
+        )]))
+        .unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("s3.session-token requires s3.access-key-id and s3.secret-access-key")
+        );
     }
 }

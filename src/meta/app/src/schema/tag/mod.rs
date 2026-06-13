@@ -20,10 +20,8 @@ pub mod ref_ident;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_kvapi::kvapi::KeyBuilder;
-use databend_common_meta_kvapi::kvapi::KeyError;
-use databend_common_meta_kvapi::kvapi::KeyParser;
-use databend_common_meta_types::SeqV;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::SeqV;
 pub use error::TagError;
 pub use id_ident::TagId;
 pub use id_ident::TagIdIdent;
@@ -40,6 +38,7 @@ pub use ref_ident::TagIdObjectRefIdent;
 pub use ref_ident::TagIdObjectRefIdentRaw;
 
 use crate::data_id::DataId;
+use crate::principal::UserIdentity;
 use crate::schema::tag::id_ident::Resource;
 use crate::tenant::Tenant;
 
@@ -95,12 +94,16 @@ pub struct TagInfo {
 }
 
 /// Objects that can be tagged.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, kvapi::KeyCodec)]
 pub enum TaggableObject {
     Database { db_id: u64 },
     Table { table_id: u64 },
     Stage { name: String },
+    User { user: UserIdentity },
+    Role { name: String },
     Connection { name: String },
+    UDF { name: String },
+    Procedure { name: String, args: String },
 }
 
 impl std::fmt::Display for TaggableObject {
@@ -109,7 +112,13 @@ impl std::fmt::Display for TaggableObject {
             TaggableObject::Database { db_id } => write!(f, "database(id={})", db_id),
             TaggableObject::Table { table_id } => write!(f, "table(id={})", table_id),
             TaggableObject::Stage { name } => write!(f, "stage({})", name),
+            TaggableObject::User { user } => write!(f, "user({})", user.display()),
+            TaggableObject::Role { name } => write!(f, "role({})", name),
             TaggableObject::Connection { name } => write!(f, "connection({})", name),
+            TaggableObject::UDF { name } => write!(f, "udf({})", name),
+            TaggableObject::Procedure { name, args } => {
+                write!(f, "procedure({}({}))", name, args)
+            }
         }
     }
 }
@@ -120,40 +129,11 @@ impl TaggableObject {
             TaggableObject::Database { .. } => "database",
             TaggableObject::Table { .. } => "table",
             TaggableObject::Stage { .. } => "stage",
+            TaggableObject::User { .. } => "user",
+            TaggableObject::Role { .. } => "role",
             TaggableObject::Connection { .. } => "connection",
-        }
-    }
-
-    fn encode_to_key(&self, b: KeyBuilder) -> KeyBuilder {
-        let b = b.push_raw(self.type_str());
-        match self {
-            TaggableObject::Database { db_id } => b.push_u64(*db_id),
-            TaggableObject::Table { table_id } => b.push_u64(*table_id),
-            TaggableObject::Stage { name } => b.push_str(name),
-            TaggableObject::Connection { name } => b.push_str(name),
-        }
-    }
-
-    fn decode_from_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-        let type_str = parser.next_raw()?;
-        match type_str {
-            "database" => Ok(TaggableObject::Database {
-                db_id: parser.next_u64()?,
-            }),
-            "table" => Ok(TaggableObject::Table {
-                table_id: parser.next_u64()?,
-            }),
-            "stage" => Ok(TaggableObject::Stage {
-                name: parser.next_str()?,
-            }),
-            "connection" => Ok(TaggableObject::Connection {
-                name: parser.next_str()?,
-            }),
-            _ => Err(KeyError::InvalidSegment {
-                i: parser.index(),
-                expect: "database|table|stage|connection".to_string(),
-                got: type_str.to_string(),
-            }),
+            TaggableObject::UDF { .. } => "udf",
+            TaggableObject::Procedure { .. } => "procedure",
         }
     }
 }
@@ -205,4 +185,97 @@ pub struct TagReferenceInfo {
     pub taggable_object: TaggableObject,
     /// The tag value with sequence number for optimistic concurrency control.
     pub tag_value: SeqV<ObjectTagIdRefValue>,
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::KeyCodec;
+
+    use super::TaggableObject;
+    use crate::principal::UserIdentity;
+
+    /// Encodes `obj`, asserts the resulting key matches `expected`,
+    /// confirms `segment_count()` matches the actual segment count, and
+    /// verifies the round-trip back to the original value. Wire-format
+    /// changes here are breaking — every variant that ships a key into
+    /// the meta-store needs a snapshot.
+    fn round_trip(obj: TaggableObject, expected: &str) {
+        let encoded = obj.encode_key(kvapi::KeyBuilder::new()).done();
+        assert_eq!(expected, encoded, "encode mismatch for {:?}", obj);
+
+        // segment_count must equal the actual number of `/`-separated
+        // segments. A mismatch would cause `to_string_key` (which uses
+        // segment_count to size the Builder budget) to silently truncate.
+        assert_eq!(
+            expected.split('/').count(),
+            obj.segment_count(),
+            "segment_count mismatch for {:?}",
+            obj,
+        );
+
+        let mut p = kvapi::KeyParser::new(&encoded);
+        let decoded = TaggableObject::decode_key(&mut p).expect("decode");
+        assert_eq!(obj, decoded, "round-trip mismatch");
+    }
+
+    #[test]
+    fn test_taggable_object_key_format() {
+        round_trip(TaggableObject::Database { db_id: 7 }, "database/7");
+        round_trip(TaggableObject::Table { table_id: 42 }, "table/42");
+        round_trip(
+            TaggableObject::Stage {
+                name: "my_stage".to_string(),
+            },
+            "stage/my_stage",
+        );
+        // `UserIdentity::encode` wraps username/host in single quotes
+        // joined by `@`; `push_str` then percent-escapes those literals
+        // (`'` -> `%27`, `@` -> `%40`).
+        round_trip(
+            TaggableObject::User {
+                user: UserIdentity::new("alice", "localhost"),
+            },
+            "user/%27alice%27%40%27localhost%27",
+        );
+        round_trip(
+            TaggableObject::Role {
+                name: "admin".to_string(),
+            },
+            "role/admin",
+        );
+        round_trip(
+            TaggableObject::Connection {
+                name: "s3conn".to_string(),
+            },
+            "connection/s3conn",
+        );
+        round_trip(
+            TaggableObject::UDF {
+                name: "my_udf".to_string(),
+            },
+            "udf/my_udf",
+        );
+        // Procedure pushes 3 segments (tag + name + args). The `,` in
+        // `args` escapes to `%2c`, confirming the field still routes
+        // through `push_str`.
+        round_trip(
+            TaggableObject::Procedure {
+                name: "my_proc".to_string(),
+                args: "u32,String".to_string(),
+            },
+            "procedure/my_proc/u32%2cString",
+        );
+    }
+
+    #[test]
+    fn test_taggable_object_decode_unknown_tag() {
+        let mut p = kvapi::KeyParser::new("nonsuch/123");
+        let err = TaggableObject::decode_key(&mut p).unwrap_err();
+        assert!(
+            matches!(err, kvapi::KeyError::InvalidSegment { .. }),
+            "expected InvalidSegment, got {:?}",
+            err,
+        );
+    }
 }

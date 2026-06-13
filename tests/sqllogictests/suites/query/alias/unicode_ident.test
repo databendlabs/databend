@@ -1,0 +1,33 @@
+query T
+SELECT 'a' AS 中文
+----
+a
+
+query T
+SELECT 'hello' AS 価格
+----
+hello
+
+query TI
+SELECT 'x' AS 名前, 1 AS 数値
+----
+x 1
+
+statement ok
+CREATE OR REPLACE TABLE 测试表 (列名 STRING, 数量 INT)
+
+statement ok
+INSERT INTO 测试表 VALUES ('foo', 42)
+
+query TI
+SELECT 列名, 数量 FROM 测试表
+----
+foo 42
+
+query TI
+SELECT 列名 AS 名前, 数量 AS 値 FROM 测试表
+----
+foo 42
+
+statement ok
+DROP TABLE IF EXISTS 测试表

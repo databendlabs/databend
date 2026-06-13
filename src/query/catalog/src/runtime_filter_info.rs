@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -61,7 +62,9 @@ pub struct RuntimeFilterEntry {
     pub id: usize,
     pub probe_expr: Expr<String>,
     pub bloom: Option<RuntimeFilterBloom>,
+    pub spatial: Option<RuntimeFilterSpatial>,
     pub inlist: Option<Expr<String>>,
+    pub inlist_value_count: usize,
     pub min_max: Option<Expr<String>>,
     pub stats: Arc<RuntimeFilterStats>,
     pub build_rows: usize,
@@ -75,6 +78,14 @@ pub struct RuntimeFilterBloom {
     pub filter: RuntimeBloomFilter,
 }
 
+#[derive(Clone)]
+pub struct RuntimeFilterSpatial {
+    pub column_name: String,
+    pub srid: i32,
+    pub rtrees: Arc<Vec<u8>>,
+    pub rtree_bounds: Option<[f64; 4]>,
+}
+
 #[derive(Default)]
 pub struct RuntimeFilterStats {
     bloom_time_ns: AtomicU64,
@@ -82,6 +93,9 @@ pub struct RuntimeFilterStats {
     inlist_min_max_time_ns: AtomicU64,
     min_max_rows_filtered: AtomicU64,
     min_max_partitions_pruned: AtomicU64,
+    spatial_time_ns: AtomicU64,
+    spatial_rows_filtered: AtomicU64,
+    spatial_partitions_pruned: AtomicU64,
 }
 
 impl RuntimeFilterStats {
@@ -104,6 +118,14 @@ impl RuntimeFilterStats {
             .fetch_add(partitions_pruned, Ordering::Relaxed);
     }
 
+    pub fn record_spatial(&self, time_ns: u64, rows_filtered: u64, partitions_pruned: u64) {
+        self.spatial_time_ns.fetch_add(time_ns, Ordering::Relaxed);
+        self.spatial_rows_filtered
+            .fetch_add(rows_filtered, Ordering::Relaxed);
+        self.spatial_partitions_pruned
+            .fetch_add(partitions_pruned, Ordering::Relaxed);
+    }
+
     pub fn snapshot(&self) -> RuntimeFilterStatsSnapshot {
         RuntimeFilterStatsSnapshot {
             bloom_time_ns: self.bloom_time_ns.load(Ordering::Relaxed),
@@ -111,6 +133,9 @@ impl RuntimeFilterStats {
             inlist_min_max_time_ns: self.inlist_min_max_time_ns.load(Ordering::Relaxed),
             min_max_rows_filtered: self.min_max_rows_filtered.load(Ordering::Relaxed),
             min_max_partitions_pruned: self.min_max_partitions_pruned.load(Ordering::Relaxed),
+            spatial_time_ns: self.spatial_time_ns.load(Ordering::Relaxed),
+            spatial_rows_filtered: self.spatial_rows_filtered.load(Ordering::Relaxed),
+            spatial_partitions_pruned: self.spatial_partitions_pruned.load(Ordering::Relaxed),
         }
     }
 }
@@ -122,6 +147,9 @@ pub struct RuntimeFilterStatsSnapshot {
     pub inlist_min_max_time_ns: u64,
     pub min_max_rows_filtered: u64,
     pub min_max_partitions_pruned: u64,
+    pub spatial_time_ns: u64,
+    pub spatial_rows_filtered: u64,
+    pub spatial_partitions_pruned: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -137,14 +165,83 @@ pub struct RuntimeFilterReady {
     pub runtime_filter_watcher: Sender<Option<()>>,
     /// A dummy receiver to make runtime_filter_watcher channel open.
     pub _runtime_filter_dummy_receiver: Receiver<Option<()>>,
+    statistics_column_names: Vec<String>,
+}
+
+impl RuntimeFilterReady {
+    pub fn with_statistics_column_names(
+        column_names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let (watcher, dummy_receiver) = watch::channel(None);
+        let statistics_column_names = column_names
+            .into_iter()
+            .map(Into::into)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        Self {
+            runtime_filter_watcher: watcher,
+            _runtime_filter_dummy_receiver: dummy_receiver,
+            statistics_column_names,
+        }
+    }
+
+    pub fn for_statistics_probe_exprs<'a>(
+        enable_statistics_pruning: bool,
+        probe_exprs: impl IntoIterator<Item = &'a Expr<String>>,
+    ) -> Self {
+        if !enable_statistics_pruning {
+            return Self::default();
+        }
+
+        let statistics_column_names = probe_exprs
+            .into_iter()
+            .flat_map(|expr| expr.column_refs().into_keys())
+            .collect::<BTreeSet<_>>();
+        Self::with_statistics_column_names(statistics_column_names)
+    }
+
+    pub fn has_statistics_pruning(&self) -> bool {
+        !self.statistics_column_names.is_empty()
+    }
+
+    pub fn statistics_column_names(&self) -> &[String] {
+        &self.statistics_column_names
+    }
 }
 
 impl Default for RuntimeFilterReady {
     fn default() -> Self {
-        let (watcher, dummy_receiver) = watch::channel(None);
-        Self {
-            runtime_filter_watcher: watcher,
-            _runtime_filter_dummy_receiver: dummy_receiver,
-        }
+        Self::with_statistics_column_names(Vec::<String>::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Expr;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn runtime_filter_ready_tracks_statistics_probe_columns() {
+        let probe_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "probe_col".to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "probe_col".to_string(),
+        });
+
+        let ready =
+            RuntimeFilterReady::for_statistics_probe_exprs(true, [&probe_expr, &probe_expr]);
+        assert_eq!(ready.statistics_column_names(), ["probe_col"]);
+        assert!(ready.has_statistics_pruning());
+
+        let ready = RuntimeFilterReady::for_statistics_probe_exprs(false, [&probe_expr]);
+        assert!(ready.statistics_column_names().is_empty());
+        assert!(!ready.has_statistics_pruning());
     }
 }

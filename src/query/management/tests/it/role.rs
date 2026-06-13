@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::UpsertKV;
-use databend_common_version::BUILD_INFO;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
 use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
@@ -30,9 +29,9 @@ fn make_role_key(role: &str) -> String {
 mod add {
 
     use databend_common_meta_app::principal::RoleInfo;
-    use databend_common_meta_kvapi::kvapi::KVApi;
-    use databend_common_meta_types::MatchSeq;
-    use databend_common_meta_types::Operation;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::types::MatchSeq;
+    use databend_meta_client::types::Operation;
 
     use super::*;
 
@@ -56,7 +55,7 @@ mod add {
                 ))
                 .await?;
 
-            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
+            let get = role_api.get_role(role_name).await?.unwrap().data;
             assert_eq!("role1".to_string(), get.name);
         }
 
@@ -76,7 +75,7 @@ mod add {
                     None,
                 ))
                 .await?;
-            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
+            let get = role_api.get_role(role_name).await?.unwrap().data;
             assert_eq!("role1".to_string(), get.name);
         }
 
@@ -87,8 +86,8 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
-    let client = test_api.deref().clone();
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>().await;
+    let client = test_api.inner().clone();
 
     let test_api = Arc::new(test_api);
 

@@ -31,15 +31,19 @@ impl<T> ThreadJoinHandle<T> {
         ThreadJoinHandle { inner }
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+
     pub fn join(self) -> Result<T> {
         match self.inner.join() {
             Ok(res) => Ok(res),
             Err(cause) => match cause.downcast_ref::<&'static str>() {
                 None => match cause.downcast_ref::<String>() {
-                    None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    None => Err(ErrorCode::UnwindError("Sorry, unknown panic message")),
+                    Some(message) => Err(ErrorCode::UnwindError(message.to_string())),
                 },
-                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                Some(message) => Err(ErrorCode::UnwindError(message.to_string())),
             },
         }
     }

@@ -1,6 +1,6 @@
 <h1 align="center">Databend</h1>
-<h3 align="center">One Rust Warehouse for Analytics, Search, AI</h3>
-<p align="center">Snowflake + Elasticsearch + Vector Search — unified in one Rust-powered warehouse. Native on S3.</p>
+<h3 align="center">Enterprise Data Warehouse for AI Agents</h3>
+<p align="center">Large-scale analytics, vector search, full-text search — with flexible agent orchestration and secure Python UDF sandboxes. Built for enterprise AI workloads.</p>
 
 <div align="center">
 
@@ -24,32 +24,36 @@
 
 ## 💡 Why Databend?
 
-Databend is an open-source, **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on top of object storage.
+Databend is an open-source enterprise data warehouse built in Rust.
+
+**Core capabilities**: Analytics, vector search, full-text search, auto schema evolution — unified in one engine.
+
+**Agent-ready**: Sandbox UDFs for agent logic, SQL for orchestration, transactions for reliability, branching for safe experimentation on production data.
 
 | | |
 | :--- | :--- |
-| **📊 BI & Analytics**<br>Supercharge your analytics with a high-performance, vectorized SQL query engine. | **✨ Vector Search**<br>Power AI and RAG applications with built-in, high-speed vector similarity search. |
-| **📄 JSON Search**<br>Seamlessly query and analyze semi-structured data with powerful JSON optimization. | **🌍 Geo Search**<br>Efficiently store, index, and query geospatial data for location intelligence. |
-| **🔄 ETL Pipeline**<br>Streamline data ingestion and transformation with built-in Streams and Tasks. | **🌿 Branching**<br>Create isolated Copy-on-Write branches instantly for dev, test, or experiments. |
+| **📊 Core Engine**<br>Analytics, vector search, full-text search, auto schema evolution, transactions. | **🤖 Agent-Ready**<br>Sandbox UDF + SQL orchestration. Build and run agents on your enterprise data. |
+| **🏢 Enterprise Scale**<br>Elastic compute, cloud native. S3/Azure/GCS. | **🌿 Branching**<br>Git-like data versioning. Agents safely operate on production snapshots. |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
 
 ## ⚡ Quick Start
 
 ### 1. Cloud (Recommended)
-[Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) - Production-ready in 60 seconds.
+[Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) — Production-ready in 60 seconds.
 
 ### 2. Local (Python)
-Ideal for development and testing:
+Ideal for development and testing. Requires Python 3.12 or 3.13 and `databend-driver` 0.34.0 or later:
 
 ```bash
-pip install databend
+pip install "databend-driver[local]>=0.34.0"
 ```
 
 ```python
-import databend
-ctx = databend.SessionContext()
-ctx.sql("SELECT 'Hello, Databend!'").show()
+from databend_driver import connect
+
+conn = connect("databend+local:///./local-state")
+print(conn.query_row("SELECT 'Hello, Databend!'").values())
 ```
 
 ### 3. Docker
@@ -59,13 +63,33 @@ Run the full warehouse locally:
 docker run -p 8000:8000 datafuselabs/databend
 ```
 
+## 🤖 Agent-Ready Architecture
+
+Databend's **Sandbox UDF** enables flexible agent orchestration with a three-layer architecture:
+
+- **Control Plane**: Resource scheduling, permission validation, sandbox lifecycle management
+- **Execution Plane** (Databend): SQL orchestration, issues requests via Arrow Flight
+- **Compute Plane** (Sandbox Workers): Isolated sandboxes running your agent logic
+
+```sql
+-- Define your agent logic
+CREATE FUNCTION my_agent(input STRING) RETURNS STRING
+LANGUAGE python HANDLER = 'run'
+AS $$
+def run(input):
+    # Your agent logic: LLM calls, tool use, reasoning...
+    return response
+$$;
+
+-- Orchestrate agents with SQL
+SELECT my_agent(question) FROM tasks;
+```
+
 ## 🚀 Use Cases
 
-- **BI & Analytics**: High-speed SQL on massive datasets. See [Query Processing](https://docs.databend.com/guides/query/sql-analytics).
-- **AI & Vectors**: Built-in vector search and embedding management. See [Vector Database](https://docs.databend.com/guides/query/vector-db).
-- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON). See [JSON Search](https://docs.databend.com/guides/query/json-search).
-- **Geospatial**: Advanced geo-analytics and mapping. See [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics).
-- **Stream & Task**: Continuous data ingestion and transformation. See [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl).
+- **AI Agents**: Sandbox UDF + SQL orchestration + branching for safe operations
+- **Analytics & BI**: Large-scale SQL analytics — [Learn more](https://docs.databend.com/guides/query/sql-analytics)
+- **Search & RAG**: Vector + full-text search — [Learn more](https://docs.databend.com/guides/query/vector-db)
 
 ## 🤝 Community & Support
 
@@ -74,7 +98,7 @@ docker run -p 8000:8000 datafuselabs/databend
 - [🐛 Issue Tracker](https://github.com/databendlabs/databend/issues)
 - [🗺️ Roadmap](https://github.com/databendlabs/databend/issues/14167)
 
-**Contributors are immortalized in the `system.contributors` table! 🏆**
+**Contributors are immortalized in the `system.contributors` table 🏆**
 
 ## 📄 License
 
@@ -83,7 +107,7 @@ docker run -p 8000:8000 datafuselabs/databend
 ---
 
 <div align="center">
-<strong>Redefining what's possible with data</strong><br>
+<strong>Enterprise warehouse, agent ready</strong><br>
 <a href="https://databend.com">🌐 Website</a> •
 <a href="https://x.com/DatabendLabs">🐦 Twitter</a>
 </div>

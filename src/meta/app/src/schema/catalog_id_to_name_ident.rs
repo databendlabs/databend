@@ -36,9 +36,6 @@ impl CatalogIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::schema::CatalogIdToNameIdent;
     use crate::schema::catalog_name_ident::CatalogNameIdentRaw;
     use crate::tenant_key::resource::TenantResource;
 
@@ -51,13 +48,6 @@ mod kvapi_impl {
         type ValueType = CatalogNameIdentRaw;
     }
 
-    impl kvapi::Value for CatalogNameIdentRaw {
-        type KeyType = CatalogIdToNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -65,7 +55,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::CatalogIdToNameIdent;
     use crate::schema::catalog_id_ident::CatalogId;
@@ -75,11 +66,7 @@ mod tests {
     fn test_background_job_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = CatalogIdToNameIdent::new_generic(tenant, CatalogId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_catalog_id_to_name/3");
-
-        assert_eq!(ident, CatalogIdToNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_catalog_id_to_name/3");
     }
 
     #[test]

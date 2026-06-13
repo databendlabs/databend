@@ -42,6 +42,7 @@ use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::NEW_SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
@@ -159,11 +160,11 @@ impl TransformDeserializer {
                         data_block.slice(start..offset)
                     };
 
-                    metas.push(AggregateMeta::Serialized(SerializedPayload {
+                    metas.push(SerializedPayload {
                         bucket: *bucket,
                         data_block: payload_block,
                         max_partition_count: 0,
-                    }));
+                    });
                 }
 
                 if offset != data_block.num_rows() {
@@ -172,7 +173,7 @@ impl TransformDeserializer {
                     ));
                 }
                 Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_partitioned(None, metas),
+                    AggregateMeta::create_partitioned(None, PartitionedData::Serialized(metas)),
                 )])
             }
             SPILLED_TYPE => {
@@ -253,12 +254,10 @@ impl TransformDeserializer {
                 if shuffle_bucket == -1 {
                     todo!()
                 } else {
-                    let payloads = spilled_payloads
-                        .into_iter()
-                        .map(AggregateMeta::NewBucketSpilled)
-                        .collect();
-
-                    let partitioned = AggregateMeta::create_partitioned(None, payloads);
+                    let partitioned = AggregateMeta::create_partitioned(
+                        None,
+                        PartitionedData::NewBucketSpilled(spilled_payloads),
+                    );
                     return Ok(vec![DataBlock::empty_with_meta(partitioned)]);
                 }
             }

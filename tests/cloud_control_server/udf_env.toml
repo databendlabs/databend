@@ -1,0 +1,13 @@
+# UDF sandbox environment variables for the cloud-control mock server.
+#
+# Format:
+# [udf_env]
+# "<tenant>.<udf_name>" = { KEY = "value" }
+#
+# Example:
+# [udf_env]
+# "tenant_a.my_udf" = { API_HOST = "https://api.example.com", FEATURE_FLAG = "true" }
+
+# Used by tests/udf/sandbox_udf.py env_case().
+[udf_env]
+"test_tenant.read_env" = { UDF_ENV_TEST = "sandbox_env_ok" }

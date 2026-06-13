@@ -42,6 +42,26 @@ ndjson/numbers.ndjson 3 0 NULL NULL
 query IIT
 SELECT * FROM number
 ----
-1 100 1e38
-2 200 -1e77
+1 100 1e+38
+2 200 -1e+77
 3 300 null
+
+statement ok
+drop table if exists ndjson_tuple_object_order
+
+statement ok
+create table ndjson_tuple_object_order(id int, t tuple(a int, b string), arr array(tuple(a int, b string)))
+
+query TIITI
+copy into ndjson_tuple_object_order from @data/ndjson/tuple_object_order.ndjson file_format = (type = NDJSON)
+----
+ndjson/tuple_object_order.ndjson 2 0 NULL NULL
+
+query II?II?
+select id, t:a, t:b, arr[1]:a, arr[1]:b from ndjson_tuple_object_order order by id
+----
+1 10 x 20 y
+2 30 z 40 w
+
+statement ok
+drop table ndjson_tuple_object_order

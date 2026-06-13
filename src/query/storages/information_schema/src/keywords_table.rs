@@ -25,14 +25,13 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::ViewTable;
-use databend_common_storages_system::generate_catalog_meta;
+use databend_common_storages_system::generate_default_catalog_meta;
 
 pub struct KeywordsTable {}
 
 impl KeywordsTable {
     pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
-        let all_keywords_vec = all_reserved_keywords();
-        let all_keywords = all_keywords_vec.join(", ");
+        let all_keywords = all_reserved_keywords().collect::<Vec<_>>().join(", ");
         let query = "SELECT '".to_owned() + &all_keywords + "' AS KEYWORDS, 1 AS RESERVED";
 
         let mut options = BTreeMap::new();
@@ -48,7 +47,7 @@ impl KeywordsTable {
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()

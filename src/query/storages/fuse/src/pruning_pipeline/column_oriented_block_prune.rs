@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -42,11 +43,13 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;
 use crate::pruning::BlockPruner;
+use crate::pruning_pipeline::RuntimeFilterPruneContext;
 
 pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,
     column_ids: Vec<ColumnId>,
     sender: Option<Sender<Result<PartInfoPtr>>>,
+    runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
 }
 
 impl ColumnOrientedBlockPruneSink {
@@ -55,6 +58,7 @@ impl ColumnOrientedBlockPruneSink {
         block_pruner: Arc<BlockPruner>,
         sender: Sender<Result<PartInfoPtr>>,
         column_ids: Vec<ColumnId>,
+        runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -62,6 +66,7 @@ impl ColumnOrientedBlockPruneSink {
                 block_pruner,
                 column_ids,
                 sender: Some(sender),
+                runtime_filter_prune_context,
             },
         )))
     }
@@ -88,6 +93,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
         let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
+        let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
+            Some(context) => context.runtime_stats_pruner().await?,
+            None => None,
+        };
 
         let block_num = segment.block_metas.num_rows();
         let location_path_col = segment.location_path_col();
@@ -131,6 +140,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let create_on_col = create_on_col.clone();
             let bloom_index_location_col = bloom_index_location_col.clone();
             let bloom_index_size_col = bloom_index_size_col.clone();
+            let runtime_stats_pruner = runtime_stats_pruner.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
@@ -167,32 +177,38 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
-                    if !range_pruner.should_keep(&columns_stat, None) {
+                    let row_count = row_count_col[block_idx];
+                    let range_input = RangeIndexInput::from_columns(&columns_stat);
+                    if !range_pruner.should_keep(&range_input, None) {
                         return Ok::<_, ()>(());
                     }
 
-                    let row_count = row_count_col[block_idx];
+                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
+                        pruner.should_prune(Some(&columns_stat), row_count as usize)
+                    }) {
+                        return Ok(());
+                    }
+
                     let compression = Compression::from_u8(compression_col[block_idx]);
                     let block_size = block_size_col[block_idx];
+                    let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
+                    let bloom_filter_index_location = match location_scalar {
+                        ScalarRef::Null => None,
+                        ScalarRef::Tuple(tuple) => {
+                            if tuple.len() != 2 {
+                                unreachable!()
+                            }
+                            Some((
+                                tuple[0].as_string().unwrap().to_string(),
+                                *tuple[1].as_number().unwrap().as_u_int64().unwrap(),
+                            ))
+                        }
+                        _ => unreachable!(),
+                    };
+                    let bloom_filter_index_size = bloom_index_size_col[block_idx];
 
                     // Bloom filter pruning
                     if let Some(bloom_pruner) = bloom_pruner {
-                        let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
-                        let index_location = match location_scalar {
-                            ScalarRef::Null => None,
-                            ScalarRef::Tuple(tuple) => {
-                                if tuple.len() != 2 {
-                                    unreachable!()
-                                }
-                                Some((
-                                    tuple[0].as_string().unwrap().to_string(),
-                                    *tuple[1].as_number().unwrap().as_u_int64().unwrap(),
-                                ))
-                            }
-                            _ => unreachable!(),
-                        };
-                        let index_size = bloom_index_size_col[block_idx];
-
                         // used to rebuild bloom index
                         let block_read_info = BlockReadInfo {
                             location: location_path.clone(),
@@ -204,8 +220,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                         if !bloom_pruner
                             .should_keep(
-                                &index_location,
-                                index_size,
+                                &bloom_filter_index_location,
+                                bloom_filter_index_size,
                                 &columns_stat,
                                 column_ids.clone(),
                                 &block_read_info,
@@ -263,9 +279,14 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                     let part_info = FuseBlockPartInfo::create(
                         location_path,
+                        bloom_filter_index_location,
+                        bloom_filter_index_size,
+                        None,
+                        0,
                         row_count,
                         columns_meta,
                         Some(columns_stat),
+                        None,
                         compression,
                         None, // TODO(Sky): sort_min_max
                         Some(block_meta_index),

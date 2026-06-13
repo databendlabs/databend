@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use super::merge::merge_join_runtime_filter_packets;
 use super::packet::JoinRuntimeFilterPacket;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub async fn get_global_runtime_filter_packet(
     broadcast_id: u32,
@@ -37,5 +38,12 @@ pub async fn get_global_runtime_filter_packet(
     while let Ok(data_block) = receiver.recv().await {
         received.push(JoinRuntimeFilterPacket::try_from(data_block)?);
     }
-    merge_join_runtime_filter_packets(received)
+    let settings = ctx.get_settings();
+    merge_join_runtime_filter_packets(
+        received,
+        settings.get_inlist_runtime_filter_threshold()? as usize,
+        settings.get_bloom_runtime_filter_threshold()? as usize,
+        settings.get_min_max_runtime_filter_threshold()? as usize,
+        settings.get_spatial_runtime_filter_threshold()? as usize,
+    )
 }

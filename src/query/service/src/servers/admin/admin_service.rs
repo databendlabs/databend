@@ -25,7 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_http::stack::debug_dump_stack;
-use databend_common_meta_types::anyerror::AnyError;
+use databend_meta_client::types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::Endpoint;
@@ -49,7 +49,7 @@ impl AdminService {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint + use<> {
+    pub fn build_router(&self) -> impl Endpoint + use<> {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
@@ -72,6 +72,43 @@ impl AdminService {
                 get(super::v1::tenant_table_stats::get_tables_stats_handler),
             )
             .at(
+                "/v1/databases/:database/tables/:table/clustering_information",
+                get(super::v1::clustering_information::clustering_information_local_handler),
+            )
+            .at(
+                "/v1/databases/:database/tables/:table/stats",
+                get(super::v1::table_statistics::get_table_stats_local_handler),
+            )
+            .at(
+                "/v1/stream_status",
+                get(super::v1::stream_status::stream_status_local_handler),
+            )
+            .at(
+                "/v1/settings",
+                get(super::v1::settings::list_settings_local),
+            )
+            .at(
+                "/v1/settings/:key",
+                post(super::v1::settings::set_settings_local)
+                    .delete(super::v1::settings::unset_settings_local),
+            )
+            .at(
+                "/v1/user_functions",
+                get(super::v1::user_functions::user_functions_local),
+            )
+            .at(
+                "/v1/procedures",
+                get(super::v1::procedures::list_procedures_local),
+            )
+            .at(
+                "/v1/procedures/:procedure_id",
+                get(super::v1::procedures::get_procedure_by_id_local),
+            )
+            .at(
+                "/v1/procedures/:name",
+                get(super::v1::procedures::get_procedure_by_name_local),
+            )
+            .at(
                 "/v1/cluster/list",
                 get(super::v1::cluster::cluster_list_handler),
             )
@@ -84,7 +121,7 @@ impl AdminService {
             .at("/debug/async_tasks/dump", get(debug_dump_stack));
 
         // Multiple tenants admin api
-        if self.config.query.management_mode {
+        if self.config.query.common.management_mode {
             route = route
                 .at(
                     "/v1/tenants/:tenant/tables",
@@ -112,6 +149,22 @@ impl AdminService {
                     get(super::v1::user_functions::user_functions),
                 )
                 .at(
+                    "/v1/tenants/:tenant/procedures",
+                    get(super::v1::procedures::list_procedures),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:procedure_id",
+                    get(super::v1::procedures::get_procedure_by_id),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:name",
+                    get(super::v1::procedures::get_procedure_by_name),
+                )
+                .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/clustering_information",
+                    get(super::v1::clustering_information::clustering_information_handler),
+                )
+                .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",
                     get(super::v1::table_statistics::get_table_stats_handler),
                 );
@@ -135,8 +188,8 @@ impl AdminService {
 
     fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
         let cfg = OpensslTlsConfig::new()
-            .cert_from_file(config.query.api_tls_server_cert.as_str())
-            .key_from_file(config.query.api_tls_server_key.as_str());
+            .cert_from_file(config.query.common.api_tls_server_cert.as_str())
+            .key_from_file(config.query.common.api_tls_server_key.as_str());
 
         // if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
         //     cfg = cfg.client_auth_required(std::fs::read(
@@ -193,7 +246,7 @@ impl Server for AdminService {
 
     #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
-        let config = &self.config.query;
+        let config = &self.config.query.common;
         let res =
             match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
                 true => self.start_without_tls(listening).await,

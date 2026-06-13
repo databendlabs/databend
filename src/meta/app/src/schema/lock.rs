@@ -19,9 +19,10 @@ use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_kvapi::kvapi::DirName;
+use databend_meta_client::kvapi::DirName;
 
 use crate::schema::TableLockIdent;
+use crate::schema::TableLockIdentV2;
 use crate::tenant::Tenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -93,6 +94,22 @@ impl LockKey {
     pub fn gen_key(&self, revision: u64) -> TableLockIdent {
         match self {
             LockKey::Table { tenant, table_id } => TableLockIdent::new(tenant, *table_id, revision),
+        }
+    }
+
+    pub fn gen_v2_prefix(&self) -> DirName<TableLockIdentV2> {
+        match self {
+            LockKey::Table { tenant, table_id } => {
+                DirName::new(TableLockIdentV2::new(tenant.clone(), *table_id, 0))
+            }
+        }
+    }
+
+    pub fn gen_v2_key(&self, revision: u64) -> TableLockIdentV2 {
+        match self {
+            LockKey::Table { tenant, table_id } => {
+                TableLockIdentV2::new(tenant, *table_id, revision)
+            }
         }
     }
 }

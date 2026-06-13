@@ -116,7 +116,11 @@ impl AsyncSystemTable for ConstraintsTable {
                 let columns = scalar_expr
                     .used_columns()
                     .iter()
-                    .map(|i| binder.bind_context.columns[*i].column_name.clone())
+                    .map(|i| {
+                        binder.bind_context.columns[i.as_field_index()]
+                            .column_name
+                            .clone()
+                    })
                     .collect::<Vec<_>>();
 
                 let mut indexes = String::new();

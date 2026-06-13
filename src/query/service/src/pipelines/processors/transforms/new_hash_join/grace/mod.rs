@@ -13,8 +13,9 @@
 // limitations under the License.
 
 mod grace_join;
-mod grace_memory;
+pub mod grace_memory;
 mod grace_state;
 
 pub use grace_join::GraceHashJoin;
+pub use grace_memory::GraceMemoryJoin;
 pub use grace_state::*;

@@ -25,13 +25,14 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableSchema;
+use log::error;
 
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
-use crate::DUMMY_COLUMN_INDEX;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -50,6 +51,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MutationSource;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
@@ -152,8 +154,10 @@ impl MutationExpression {
                     update_stream_columns = false;
                 }
                 let is_lazy_table = {
+                    let settings = binder.ctx.get_settings();
                     let metadata = binder.metadata.read();
                     *mutation_strategy != MutationStrategy::NotMatchedOnly
+                        && settings.get_enable_merge_into_row_fetch()?
                         && metadata
                             .table(target_table_index)
                             .table()
@@ -259,13 +263,15 @@ impl MutationExpression {
                         columns: bind_context.column_set(),
                         table_index: target_table_index,
                         mutation_type: mutation_type.clone(),
-                        predicates: vec![],
+                        secure_predicates: vec![],
+                        user_predicates: vec![],
                         predicate_column_index: None,
                         read_partition_columns: Default::default(),
                     };
 
-                    s_expr =
-                        SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
+                    // Direct mutation inherits row-access predicates from Scan's
+                    // secure_predicates field.
+                    s_expr = Self::replace_scan_with_mutation_source(&s_expr, mutation_source)?;
 
                     if !predicates.is_empty() {
                         s_expr = SExpr::create_unary(
@@ -286,7 +292,7 @@ impl MutationExpression {
                         bind_context,
                         all_source_columns: None,
                         target_table_index,
-                        target_table_row_id_index: DUMMY_COLUMN_INDEX,
+                        target_table_row_id_index: Symbol::DUMMY_COLUMN,
                     })
                 } else {
                     let is_lazy_table = {
@@ -458,6 +464,40 @@ impl MutationExpression {
             }
         }
     }
+
+    /// Replace the Scan leaf node with a MutationSource, inheriting secure predicates
+    /// directly from the Scan's `secure_predicates` field.
+    fn replace_scan_with_mutation_source(
+        s_expr: &SExpr,
+        mutation_source: MutationSource,
+    ) -> Result<SExpr> {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) => {
+                let mut mutation_source = mutation_source;
+                mutation_source.secure_predicates =
+                    scan.secure_predicates.clone().unwrap_or_default();
+                Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
+                    mutation_source,
+                ))))
+            }
+            _ => {
+                if s_expr.arity() != 1 {
+                    error!(
+                        "Expected unary operator above Scan in mutation target, \
+                         got {:?} with arity {}",
+                        s_expr.plan().rel_op(),
+                        s_expr.arity(),
+                    );
+                    return Err(ErrorCode::Internal(
+                        "Expected unary operator above Scan in mutation target".to_string(),
+                    ));
+                }
+                let child =
+                    Self::replace_scan_with_mutation_source(s_expr.unary_child(), mutation_source)?;
+                Ok(s_expr.replace_children(vec![Arc::new(child)]))
+            }
+        }
+    }
 }
 
 impl Binder {
@@ -468,7 +508,7 @@ impl Binder {
         table_index: usize,
         expr: &mut SExpr,
         mutation_type: MutationType,
-    ) -> Result<usize> {
+    ) -> Result<Symbol> {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),
             table_name: Some(target_table_identifier.table_name().clone()),
@@ -494,9 +534,9 @@ impl Binder {
             }
         };
 
-        let row_id_index: usize = column_binding.index;
+        let row_id_index = column_binding.index;
 
-        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index);
 
         self.metadata
             .write()
@@ -521,12 +561,12 @@ impl Binder {
             let (scalar, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {
                 return Err(ErrorCode::SemanticError(
-                    "filter in mutation statement can't contain window|aggregate|udf functions"
+                    "filter in mutation statement can't contain window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar.span()));
             }
-            let strategy = if !self.has_subquery(&scalar)? {
+            let strategy = if !self.has_subquery(&scalar)? && scalar.get_udf_names()?.is_empty() {
                 MutationStrategy::Direct
             } else {
                 MutationStrategy::MatchedOnly
@@ -565,11 +605,8 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-                    | ScalarExpr::UDFCall(_)
-            )
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AsyncFunctionCall(_)
+            ) || scalar.is_aggregate()
         };
 
         let mut finder = Finder::new(&f);
@@ -584,7 +621,7 @@ pub struct MutationExpressionBindResult {
     pub mutation_type: MutationType,
     pub mutation_strategy: MutationStrategy,
     pub target_table_index: usize,
-    pub target_table_row_id_index: usize,
+    pub target_table_row_id_index: Symbol,
     pub required_columns: ColumnSet,
     pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
 }

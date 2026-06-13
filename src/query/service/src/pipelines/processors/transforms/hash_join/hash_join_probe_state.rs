@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -36,9 +37,7 @@ use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
-use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -53,6 +52,7 @@ use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
@@ -80,9 +80,9 @@ pub struct HashJoinProbeState {
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in probe schema.
-    pub(crate) probe_projections: ColumnSet,
+    pub(crate) probe_projections: BTreeSet<usize>,
     // used in cross join
-    pub(crate) build_projections: ColumnSet,
+    pub(crate) build_projections: BTreeSet<usize>,
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
@@ -100,8 +100,8 @@ impl HashJoinProbeState {
         ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
         hash_join_state: Arc<HashJoinState>,
-        probe_projections: &ColumnSet,
-        build_projections: &ColumnSet,
+        probe_projections: &BTreeSet<usize>,
+        build_projections: &BTreeSet<usize>,
         probe_keys: &[RemoteExpr],
         mut probe_schema: DataSchemaRef,
         join_type: &JoinType,
@@ -165,6 +165,7 @@ impl HashJoinProbeState {
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -376,6 +377,7 @@ impl HashJoinProbeState {
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),

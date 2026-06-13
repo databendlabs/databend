@@ -17,15 +17,18 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropUDFPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DropUserUDFScript {
@@ -77,6 +80,11 @@ impl Interpreter for DropUserUDFScript {
         UserApiProvider::instance()
             .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
             .await??;
+
+        cleanup_object_tags(&tenant, TaggableObject::UDF {
+            name: plan.udf.clone(),
+        })
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }

@@ -14,10 +14,12 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::DefaultHasher;
 use std::hash::Hasher;
 use std::ops::ControlFlow;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -43,6 +45,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
 use databend_common_expression::expr::*;
@@ -66,6 +69,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::visit_expr;
+use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::scalars::CityHasher64;
@@ -74,13 +78,14 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use jsonb::RawJsonb;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::eliminate_cast::is_injective_cast;
+use super::index_common::index_columns_from_parquet_meta;
 use crate::Index;
 use crate::eliminate_cast::cast_const;
+use crate::filters::BinaryFuse32Builder;
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
 use crate::filters::BloomBuilder;
@@ -94,6 +99,36 @@ use crate::filters::Xor8Filter;
 use crate::statistics_to_domain;
 
 const NGRAM_HASH_SEED: u64 = 1575457558;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BloomIndexType {
+    #[default]
+    Xor8,
+    BinaryFuse32,
+}
+
+impl Display for BloomIndexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BloomIndexType::Xor8 => "xor8",
+            BloomIndexType::BinaryFuse32 => "binary_fuse32",
+        })
+    }
+}
+
+impl FromStr for BloomIndexType {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "xor8" => Ok(Self::Xor8),
+            "binary_fuse32" => Ok(Self::BinaryFuse32),
+            _ => Err(ErrorCode::TableOptionInvalid(format!(
+                "invalid bloom_index_type '{s}', must be one of: xor8, binary_fuse32"
+            ))),
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BloomIndexMeta {
@@ -125,44 +160,13 @@ impl TryFrom<Bytes> for BloomIndexMeta {
     }
 }
 
-impl TryFrom<FileMetaData> for BloomIndexMeta {
+impl TryFrom<ParquetMetaData> for BloomIndexMeta {
     type Error = ErrorCode;
 
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        let rg = meta.row_groups.remove(0);
-        let mut col_metas = Vec::with_capacity(rg.columns.len());
-        for x in &rg.columns {
-            match &x.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = SingleColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    let column_name = chunk_meta.path_in_schema[0].to_owned();
-                    col_metas.push((column_name, res));
-                }
-                None => {
-                    panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
-                    )
-                }
-            }
-        }
-        col_metas.shrink_to_fit();
-        Ok(Self { columns: col_metas })
+    fn try_from(meta: ParquetMetaData) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            columns: index_columns_from_parquet_meta(&meta),
+        })
     }
 }
 
@@ -679,6 +683,7 @@ impl NgramArgs {
 impl BloomIndexBuilder {
     pub fn create(
         func_ctx: FunctionContext,
+        bloom_index_type: BloomIndexType,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: &[NgramArgs],
     ) -> Result<Self> {
@@ -690,7 +695,12 @@ impl BloomIndexBuilder {
                 field: field.clone(),
                 gram_size: 0,
                 bloom_size: 0,
-                builder: FilterImplBuilder::Xor(Xor8Builder::create()),
+                builder: match bloom_index_type {
+                    BloomIndexType::Xor8 => FilterImplBuilder::Xor(Xor8Builder::create()),
+                    BloomIndexType::BinaryFuse32 => {
+                        FilterImplBuilder::BinaryFuse32(BinaryFuse32Builder::create())
+                    }
+                },
             });
         }
         for arg in ngram_args.iter() {
@@ -727,7 +737,7 @@ impl BloomIndexBuilder {
 
         for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
             let field_type = &block.data_type(index_column.index);
-            if !Xor8Filter::supported_type(field_type) {
+            if !BloomIndex::supported_type(index_column.field.data_type()) {
                 bloom_keys_to_remove.push(index);
                 continue;
             }
@@ -877,6 +887,49 @@ impl BloomIndexBuilder {
     }
 }
 
+fn eq_bloom_scalar_for_column(
+    scalar: &Scalar,
+    scalar_type: &DataType,
+    column_type: &DataType,
+) -> Option<Scalar> {
+    if scalar_type == column_type {
+        return Some(scalar.clone());
+    }
+    if scalar.is_null() || !Xor8Filter::supported_type(column_type) {
+        return None;
+    }
+
+    // Keep the rewrite one-way: integer column = string constant. The reverse
+    // direction is not safe because string-number comparison can match strings
+    // that are not the canonical cast output, such as "0123" = 123.
+    match (scalar_type.remove_nullable(), column_type.remove_nullable()) {
+        (DataType::String, DataType::Number(num_ty)) if num_ty.is_integer() => {
+            if !string_scalar_parses_as_integer_type(scalar, &num_ty) {
+                return None;
+            }
+
+            let scalar = cast_const(&FunctionContext::default(), column_type.clone(), Constant {
+                span: None,
+                scalar: scalar.clone(),
+                data_type: scalar_type.clone(),
+            })?;
+            (!scalar.is_null()).then_some(scalar)
+        }
+        _ => None,
+    }
+}
+
+fn string_scalar_parses_as_integer_type(scalar: &Scalar, num_ty: &NumberDataType) -> bool {
+    let Some(value) = scalar.as_string() else {
+        return false;
+    };
+
+    with_integer_mapped_type!(|NUM_TYPE| match num_ty {
+        NumberDataType::NUM_TYPE => value.parse::<NUM_TYPE>().is_ok(),
+        _ => false,
+    })
+}
+
 struct Visitor<T: EqVisitor>(T);
 
 impl<T> ExprVisitor<String> for Visitor<T>
@@ -965,17 +1018,13 @@ where T: EqVisitor
                         data_type: column_type,
                         ..
                     }),
-                ] => {
-                    // decimal don't respect datatype equal
-                    // debug_assert_eq!(scalar_type, column_type);
-                    // If the visitor returns a new expression, then replace with the current expression.
-                    if scalar_type == column_type {
+                ] => match eq_bloom_scalar_for_column(scalar, scalar_type, column_type) {
+                    Some(scalar) => {
                         self.0
-                            .enter_target(*span, id, scalar, column_type, return_type, false)?
-                    } else {
-                        ControlFlow::Continue(None)
+                            .enter_target(*span, id, &scalar, column_type, return_type, false)?
                     }
-                }
+                    None => ControlFlow::Continue(None),
+                },
                 // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
                 [
                     Expr::FunctionCall(FunctionCall { id, args, .. }),
@@ -1280,7 +1329,9 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // For any injective function y = f(x), the eq(column, inverse_f(const)) is a necessary condition for eq(f(column), const).
         // For example, the result of col = '+1'::int contains col::string = '+1'.
-        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+        if !Xor8Filter::supported_type(src_type)
+            || !classify_conversion(src_type, dest_type).is_lossless_injective()
+        {
             return Ok(ControlFlow::Break(None));
         }
 
@@ -1412,7 +1463,9 @@ impl EqVisitor for ShortListVisitor {
             let Some((i, field)) = Self::found_field(&self.bloom_fields, id) else {
                 return Ok(ControlFlow::Break(None));
             };
-            if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+            if !Xor8Filter::supported_type(src_type)
+                || !classify_conversion(src_type, dest_type).is_lossless_injective()
+            {
                 return Ok(ControlFlow::Break(None));
             }
 

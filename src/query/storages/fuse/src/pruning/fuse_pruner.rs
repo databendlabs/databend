@@ -13,14 +13,17 @@
 // limitations under the License.
 
 use std::cmp::max;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
@@ -36,12 +39,14 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::SegmentBlockMetasCache;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
 use databend_storages_common_pruner::PagePruner;
 use databend_storages_common_pruner::PagePrunerCreator;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
@@ -69,6 +74,7 @@ use crate::pruning::InvertedIndexPruner;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
+use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
 use crate::pruning::segment_pruner::SegmentPruner;
@@ -88,6 +94,7 @@ pub struct PruningContext {
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
+    pub spatial_index_pruner: Option<Arc<SpatialIndexPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
     pub pruning_cost: PruningCostController,
@@ -104,6 +111,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
@@ -112,8 +120,7 @@ impl PruningContext {
 
         let filter_expr = push_down.as_ref().and_then(|extra| {
             extra
-                .filters
-                .as_ref()
+                .effective_filters(&BUILTIN_FUNCTIONS)
                 .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
@@ -121,7 +128,7 @@ impl PruningContext {
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
@@ -155,15 +162,25 @@ impl PruningContext {
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            filter_expr.as_ref(),
-            bloom_index_cols,
-            ngram_args,
-            bloom_index_builder,
-        )?;
+        let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
+            push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::Lightweight
+        });
+        let enable_proxy_bloom_pruning = ctx.get_settings().get_enable_proxy_bloom_pruning()?;
+
+        let bloom_pruner = if lightweight_pruning && !enable_proxy_bloom_pruning {
+            None
+        } else {
+            BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+                filter_expr.as_ref(),
+                bloom_index_cols,
+                ngram_args,
+                bloom_index_builder,
+            )?
+        };
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -175,10 +192,31 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
+        let inverted_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?
+        };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner = VirtualColumnPruner::try_create(push_down)?;
+        let virtual_column_pruner = if lightweight_pruning {
+            None
+        } else {
+            VirtualColumnPruner::try_create(dal.clone(), push_down)?
+        };
+
+        let spatial_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            SpatialIndexPruner::create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                &spatial_index_columns,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+            )?
+        };
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -210,6 +248,7 @@ impl PruningContext {
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
+            spatial_index_pruner,
             pruning_stats,
             pruning_cost,
         });
@@ -236,9 +275,10 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        Self::create_with_pages(
+        Self::create_with_pages_and_options(
             ctx,
             dal,
             table_schema,
@@ -247,6 +287,7 @@ impl FusePruner {
             vec![],
             bloom_index_cols,
             ngram_args,
+            spatial_index_columns,
             bloom_index_builder,
         )
     }
@@ -261,6 +302,34 @@ impl FusePruner {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
+    ) -> Result<Self> {
+        Self::create_with_pages_and_options(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            ngram_args,
+            spatial_index_columns,
+            bloom_index_builder,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_with_pages_and_options(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+        ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
@@ -290,6 +359,7 @@ impl FusePruner {
             cluster_keys,
             bloom_index_cols,
             ngram_args,
+            spatial_index_columns,
             max_concurrency,
             bloom_index_builder,
         )?;
@@ -373,9 +443,11 @@ impl FusePruner {
                     if delete_pruning {
                         for (segment_location, compact_segment_info) in &pruned_segments {
                             if let Some(range_index) = &inverse_range_index {
-                                if !range_index
-                                    .should_keep(&compact_segment_info.summary.col_stats, None)
-                                {
+                                let range_input = RangeIndexInput::new(
+                                    &compact_segment_info.summary.col_stats,
+                                    compact_segment_info.summary.spatial_stats.as_ref(),
+                                );
+                                if !range_index.should_keep(&range_input, None) {
                                     deleted_segments.push(DeletedSegmentInfo {
                                         index: segment_location.segment_idx,
                                         summary: compact_segment_info.summary.clone(),
@@ -534,6 +606,17 @@ impl FusePruner {
         self.vector_pruning(metas).await
     }
 
+    #[async_backtrace::framed]
+    pub async fn refine_pruned_blocks(
+        &self,
+        block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let block_pruner = BlockPruner::create(self.pruning_ctx.clone())?;
+        let metas = block_pruner.refine_pruning(block_metas).await?;
+        let metas = self.topn_pruning(metas)?;
+        self.vector_pruning(metas).await
+    }
+
     // topn pruner:
     // if there are ordering + limit clause and no filters, use topn pruner
     fn topn_pruning(
@@ -544,8 +627,13 @@ impl FusePruner {
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
-                    || (p.limit.is_some() && p.filter_only_use_index())
+                (!p.order_by.is_empty()
+                    && p.limit.is_some()
+                    && p.filters.is_none()
+                    && p.secure_filters.is_none())
+                    || (p.limit.is_some()
+                        && p.secure_filters.is_none()
+                        && p.filter_only_use_index())
             })
             .is_some()
         {
@@ -597,7 +685,7 @@ impl FusePruner {
         {
             let schema = self.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
-            let filters = push_down.filters.clone();
+            let filters = push_down.effective_filters(&BUILTIN_FUNCTIONS);
             let sort = push_down.order_by.clone();
             let limit = push_down.limit;
             let vector_index = push_down.vector_index.clone().unwrap();
@@ -645,6 +733,12 @@ impl FusePruner {
             stats.get_blocks_vector_index_pruning_after() as usize;
         let blocks_vector_index_pruning_cost = stats.get_blocks_vector_index_pruning_cost();
 
+        let blocks_spatial_index_pruning_before =
+            stats.get_blocks_spatial_index_pruning_before() as usize;
+        let blocks_spatial_index_pruning_after =
+            stats.get_blocks_spatial_index_pruning_after() as usize;
+        let blocks_spatial_index_pruning_cost = stats.get_blocks_spatial_index_pruning_cost();
+
         let blocks_topn_pruning_before = stats.get_blocks_topn_pruning_before() as usize;
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
         let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
@@ -665,6 +759,9 @@ impl FusePruner {
             blocks_vector_index_pruning_before,
             blocks_vector_index_pruning_after,
             blocks_vector_index_pruning_cost,
+            blocks_spatial_index_pruning_before,
+            blocks_spatial_index_pruning_after,
+            blocks_spatial_index_pruning_cost,
             blocks_topn_pruning_before,
             blocks_topn_pruning_after,
             blocks_topn_pruning_cost,

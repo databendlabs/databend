@@ -18,17 +18,20 @@ use databend_common_ast::ast::AlterStageUnsetTarget;
 use databend_common_ast::ast::CreateStageStmt;
 use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::UriLocation;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::UserApiProvider;
 
-use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
 use crate::binder::insert::STAGE_PLACEHOLDER;
-use crate::binder::location::parse_storage_params_from_uri;
+use crate::binder::resolve_file_format;
 use crate::plans::AlterStageActionPlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterStageSetPlan;
@@ -44,7 +47,13 @@ impl Binder {
         location: &str,
         pattern: &str,
     ) -> Result<Plan> {
-        let (stage, path) = resolve_stage_location(self.ctx.as_ref(), location).await?;
+        let (stage, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_stage_location(location, StagePathAccess::Write)
+        .await?;
         let plan_node = RemoveStagePlan {
             path,
             stage,
@@ -89,11 +98,12 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let stage_storage = parse_storage_params_from_uri(
-                    &mut uri,
-                    Some(self.ctx.as_ref()),
-                    "when CREATE STAGE",
-                )
+                let stage_storage = StageResolver::from_table_context(
+                    self.ctx.clone(),
+                    UserApiProvider::instance(),
+                    GlobalConfig::instance().storage.allow_insecure,
+                )?
+                .resolve_storage_params_from_uri(&mut uri, "when CREATE STAGE")
                 .await?;
 
                 let stage_info =
@@ -112,6 +122,11 @@ impl Binder {
         if !file_format_options.is_empty() {
             stage_info.file_format_params =
                 self.try_resolve_file_format(file_format_options).await?;
+            if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
+                return Err(ErrorCode::IllegalStageFileFormat(
+                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                ));
+            }
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
@@ -142,11 +157,12 @@ impl Binder {
                         path: location.path.clone(),
                         connection: location.connection.clone(),
                     };
-                    let stage_storage = parse_storage_params_from_uri(
-                        &mut uri,
-                        Some(self.ctx.as_ref()),
-                        "when ALTER STAGE",
-                    )
+                    let stage_storage = StageResolver::from_table_context(
+                        self.ctx.clone(),
+                        UserApiProvider::instance(),
+                        GlobalConfig::instance().storage.allow_insecure,
+                    )?
+                    .resolve_storage_params_from_uri(&mut uri, "when ALTER STAGE")
                     .await?;
                     let stage_info = StageInfo::new_external_stage(stage_storage.clone(), true)
                         .with_stage_name(&stmt.stage_name);
@@ -165,8 +181,14 @@ impl Binder {
                 };
                 if let Some(file_format) = options.file_format.as_ref() {
                     if !file_format.is_empty() {
-                        set_plan.file_format =
-                            Some(self.try_resolve_file_format(file_format).await?);
+                        let file_format_params = self.try_resolve_file_format(file_format).await?;
+                        if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                            return Err(ErrorCode::IllegalStageFileFormat(
+                                "LANCE file format is only supported in COPY INTO <location>"
+                                    .to_string(),
+                            ));
+                        }
+                        set_plan.file_format = Some(file_format_params);
                     }
                 }
 
@@ -207,7 +229,9 @@ impl Binder {
     ) -> Result<FileFormatParams> {
         let reader = FileFormatOptionsReader::from_ast(options);
         if let Some(name) = reader.options.get("format_name") {
-            self.ctx.get_file_format(name).await
+            let tenant = self.ctx.get_tenant();
+            let user_api = UserApiProvider::instance();
+            resolve_file_format(&tenant, &user_api, name).await
         } else {
             FileFormatParams::try_from_reader(reader, false)
         }

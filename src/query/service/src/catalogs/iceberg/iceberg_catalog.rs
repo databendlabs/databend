@@ -23,7 +23,6 @@ use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
@@ -100,13 +99,14 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_storages_iceberg::IcebergMutableCatalog;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Debug)]
@@ -284,12 +284,20 @@ impl Catalog for IcebergCatalog {
 
     async fn mget_databases(
         &self,
-        _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in ICEBERG catalog",
-        ))
+        let res = self
+            .immutable_catalog
+            .mget_databases(tenant, db_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            if !tables.is_empty() {
+                return Ok(tables);
+            }
+        }
+        self.iceberg_catalog.mget_databases(tenant, db_names).await
     }
 
     #[async_backtrace::framed]
@@ -343,6 +351,27 @@ impl Catalog for IcebergCatalog {
         }
         self.iceberg_catalog
             .get_table(tenant, db_name, table_name)
+            .await
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            if !tables.is_empty() {
+                return Ok(tables);
+            }
+        }
+        self.iceberg_catalog
+            .mget_tables(tenant, db_name, table_names)
             .await
     }
 
@@ -539,7 +568,7 @@ impl Catalog for IcebergCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -550,7 +579,7 @@ impl Catalog for IcebergCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

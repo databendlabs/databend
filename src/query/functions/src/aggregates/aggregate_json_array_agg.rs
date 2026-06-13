@@ -55,7 +55,7 @@ use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug)]
 pub struct JsonArrayAggState<T>
 where
     T: ValueType,
@@ -184,7 +184,7 @@ struct AggregateJsonArrayAggFunction<T> {
 impl<T> AggregateFunction for AggregateJsonArrayAggFunction<T>
 where
     T: ValueType,
-    T::Scalar: borsh::BorshSerialize + borsh::BorshDeserialize,
+    T::Scalar: borsh::BorshSerialize + borsh::BorshDeserialize + Clone,
 {
     fn name(&self) -> &str {
         "AggregateJsonArrayAggFunction"
@@ -307,11 +307,16 @@ where
     fn merge_result(
         &self,
         place: AggrState,
-        _read_only: bool,
+        read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         let state = place.get::<JsonArrayAggState<T>>();
-        state.merge_result(builder)
+        if read_only {
+            let mut state = state.clone();
+            state.merge_result(builder)
+        } else {
+            state.merge_result(builder)
+        }
     }
 
     fn need_manual_drop_state(&self) -> bool {

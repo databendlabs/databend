@@ -1,31 +1,11 @@
->>>> drop user if exists 'owner'
->>>> drop role if exists role1
->>>> create user 'owner' IDENTIFIED BY 'password' with DEFAULT_ROLE='role1'
->>>> create role role1
->>>> grant role role1 to owner
->>>> grant create on default.* to role role1
->>>> drop table if exists t
->>>> drop view if exists v_t
->>>> drop table if exists t_owner
->>>> drop view if exists v_t_owner
->>>> drop view if exists v_t_union
->>>> drop view if exists v_t1
->>>> create table t(id int)
->>>> insert into t values(1)
 1
 1
->>>> revoke create on default.* from role role1
 need failed: with 1063
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'owner'@'%' with roles [public,role1,role2]
 need failed: with 1063
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'owner'@'%' with roles [public,role1,role2]
->>>> grant ownership on default.v_t_owner to role role1
->>>> create view v_t as select * from t
->>>> create view v_t_union as select * from t union all select * from t_owner
 'select * from v_t order by id' failed.
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'v_t' for user 'owner'@'%' with roles [public,role1,role2]
->>>> grant select on default.v_t to owner
->>>> grant select on default.v_t_union to owner
 1
 2
 1
@@ -41,18 +21,5 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is req
 2
 <<<<
 === create view as select view ===
->>>> revoke select on default.v_t from owner
->>>> grant select on default.t to owner
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'v_t' for user 'owner'@'%' with roles [public,role1,role2]
->>>> grant select on default.v_t to owner
->>>> grant select on default.t to owner
->>>> grant select on default.v_t1 to owner
 1
->>>> drop table if exists t
->>>> drop view if exists v_t
->>>> drop table if exists t_owner
->>>> drop view if exists v_t_owner
->>>> drop view if exists v_t_union
->>>> drop view if exists v_t1
->>>> drop user if exists owner
->>>> drop role if exists role1

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Symbol;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::Distribution;
@@ -28,19 +29,9 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum CacheSource {
-    HashJoinBuild((usize, Vec<usize>)),
-}
-
-impl CacheSource {
-    pub fn project(&self, projection: &[usize]) -> Self {
-        match self {
-            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                let column_indexes = column_indexes.iter().map(|idx| projection[*idx]).collect();
-                CacheSource::HashJoinBuild((*cache_index, column_indexes))
-            }
-        }
-    }
+pub struct CacheSource {
+    pub cache_index: usize,
+    pub column_indices: Vec<Symbol>,
 }
 
 // Constant table is a table with constant values.
@@ -53,25 +44,29 @@ pub struct CacheScan {
 
 impl CacheScan {
     pub fn prune_columns(&self, columns: ColumnSet) -> Self {
-        let mut projection = columns
+        let mut projection = self
+            .cache_source
+            .column_indices
             .iter()
-            .map(|index| self.schema.index_of(&index.to_string()).unwrap())
+            .enumerate()
+            .filter_map(|(offset, index)| columns.contains(index).then_some(offset))
             .collect::<Vec<_>>();
         projection.sort();
 
         let schema = Arc::new(self.schema.project(&projection));
-        let cache_source = self.cache_source.project(&projection);
-        let columns = self.columns.intersection(&columns).cloned().collect();
+        let column_indices = projection
+            .iter()
+            .map(|offset| self.cache_source.column_indices[*offset])
+            .collect();
 
         CacheScan {
-            cache_source,
             schema,
-            columns,
+            cache_source: CacheSource {
+                cache_index: self.cache_source.cache_index,
+                column_indices,
+            },
+            columns: self.columns.intersection(&columns).cloned().collect(),
         }
-    }
-
-    pub fn used_columns(&self) -> Result<ColumnSet> {
-        Ok(ColumnSet::new())
     }
 }
 

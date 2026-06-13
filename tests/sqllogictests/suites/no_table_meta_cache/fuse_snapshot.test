@@ -30,6 +30,3 @@ query I
 select count() from fuse_snapshot('test_fuse_snapshot_without_meta_cache', 't') limit 100;
 ----
 3
-
-
-

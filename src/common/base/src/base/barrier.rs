@@ -85,7 +85,10 @@ impl Barrier {
         BarrierWaitResult(is_leader)
     }
 
-    pub fn reduce_quorum(&self, n: usize) {
+    /// Reduces the quorum by `n`. Returns `true` if the quorum reached zero
+    /// purely through reductions (no thread called `wait()`), meaning all
+    /// participants were removed without ever synchronizing.
+    pub fn reduce_quorum(&self, n: usize) -> bool {
         let locked = self.state.lock();
         let mut state = locked.unwrap_or_else(PoisonError::into_inner);
         state.n -= n;
@@ -95,9 +98,12 @@ impl Barrier {
                 .waker
                 .send(state.generation)
                 .expect("there is at least one receiver");
+            let all_reduced = state.arrived == 0;
             state.arrived = 0;
             state.generation += 1;
+            return all_reduced;
         }
+        false
     }
 }
 

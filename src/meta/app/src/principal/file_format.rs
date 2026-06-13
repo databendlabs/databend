@@ -27,6 +27,8 @@ use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use databend_common_io::prelude::BinaryDisplayFormat;
+use encoding_rs::Encoding;
 use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
@@ -42,9 +44,11 @@ const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
+const OPT_QUOTE_STYLE: &str = "quote_style";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
+const OPT_TRIM_SPACE: &str = "trim_space";
 const OPT_QUOTED_EMPTY_FIELD_AS: &str = "quoted_empty_field_as";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
@@ -52,45 +56,59 @@ const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
 const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
+const OPT_ENCODING: &str = "encoding";
+const OPT_ENCODING_ERROR_MODE: &str = "encoding_error_mode";
+const DEFAULT_FILE_FORMAT_ENCODING: &str = "UTF-8";
+const DEFAULT_FILE_FORMAT_ENCODING_ERROR: &str = "strict";
 
 /// File format parameters after checking and parsing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum FileFormatParams {
     Csv(CsvFileFormatParams),
-    Tsv(TsvFileFormatParams),
+    #[serde(alias = "Tsv")]
+    Text(TextFileFormatParams),
     NdJson(NdJsonFileFormatParams),
     Json(JsonFileFormatParams),
     Xml(XmlFileFormatParams),
     Parquet(ParquetFileFormatParams),
     Orc(OrcFileFormatParams),
     Avro(AvroFileFormatParams),
+    Lance(LanceFileFormatParams),
+    Arrow(ArrowFileFormatParams),
+    ArrowStream(ArrowFileFormatParams),
 }
 
 impl FileFormatParams {
     pub fn get_type(&self) -> StageFileFormatType {
         match self {
             FileFormatParams::Csv(_) => StageFileFormatType::Csv,
-            FileFormatParams::Tsv(_) => StageFileFormatType::Tsv,
+            FileFormatParams::Text(_) => StageFileFormatType::Text,
             FileFormatParams::NdJson(_) => StageFileFormatType::NdJson,
             FileFormatParams::Json(_) => StageFileFormatType::Json,
             FileFormatParams::Xml(_) => StageFileFormatType::Xml,
             FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
             FileFormatParams::Orc(_) => StageFileFormatType::Orc,
             FileFormatParams::Avro(_) => StageFileFormatType::Avro,
+            FileFormatParams::Lance(_) => StageFileFormatType::Lance,
+            FileFormatParams::Arrow(_) => StageFileFormatType::Arrow,
+            FileFormatParams::ArrowStream(_) => StageFileFormatType::ArrowStream,
         }
     }
 
     pub fn suffix(&self) -> &str {
         match self {
             FileFormatParams::Csv(_) => ".csv",
-            FileFormatParams::Tsv(_) => ".tsv",
+            FileFormatParams::Text(_) => ".txt",
             FileFormatParams::NdJson(_) => ".ndjson",
             FileFormatParams::Json(_) => ".json",
             FileFormatParams::Xml(_) => ".xml",
             FileFormatParams::Parquet(_) => ".parquet",
             FileFormatParams::Orc(_) => ".orc",
             FileFormatParams::Avro(_) => ".avro",
+            FileFormatParams::Lance(_) => ".lance",
+            FileFormatParams::Arrow(_) => ".arrow",
+            FileFormatParams::ArrowStream(_) => ".arrow_stream",
         }
     }
 
@@ -98,9 +116,11 @@ impl FileFormatParams {
         matches!(
             self,
             FileFormatParams::Csv(_)
-                | FileFormatParams::Tsv(_)
+                | FileFormatParams::Text(_)
                 | FileFormatParams::NdJson(_)
                 | FileFormatParams::Parquet(_)
+                | FileFormatParams::Arrow(_)
+                | FileFormatParams::ArrowStream(_)
         )
     }
 
@@ -110,7 +130,9 @@ impl FileFormatParams {
                 Ok(FileFormatParams::Parquet(ParquetFileFormatParams::default()))
             }
             StageFileFormatType::Csv => Ok(FileFormatParams::Csv(CsvFileFormatParams::default())),
-            StageFileFormatType::Tsv => Ok(FileFormatParams::Tsv(TsvFileFormatParams::default())),
+            StageFileFormatType::Text => {
+                Ok(FileFormatParams::Text(TextFileFormatParams::default()))
+            }
             StageFileFormatType::NdJson => {
                 Ok(FileFormatParams::NdJson(NdJsonFileFormatParams::default()))
             }
@@ -121,6 +143,15 @@ impl FileFormatParams {
             StageFileFormatType::Avro => {
                 Ok(FileFormatParams::Avro(AvroFileFormatParams::default()))
             }
+            StageFileFormatType::Lance => {
+                Ok(FileFormatParams::Lance(LanceFileFormatParams::default()))
+            }
+            StageFileFormatType::Arrow => {
+                Ok(FileFormatParams::Arrow(ArrowFileFormatParams::default()))
+            }
+            StageFileFormatType::ArrowStream => Ok(FileFormatParams::ArrowStream(
+                ArrowFileFormatParams::default(),
+            )),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -131,13 +162,17 @@ impl FileFormatParams {
     pub fn compression(&self) -> StageFileCompression {
         match self {
             FileFormatParams::Csv(v) => v.compression,
-            FileFormatParams::Tsv(v) => v.compression,
+            FileFormatParams::Text(v) => v.compression,
             FileFormatParams::NdJson(v) => v.compression,
             FileFormatParams::Json(v) => v.compression,
             FileFormatParams::Xml(v) => v.compression,
             FileFormatParams::Parquet(v) => v.compression,
             FileFormatParams::Orc(_) => StageFileCompression::None,
             FileFormatParams::Avro(_) => StageFileCompression::None,
+            FileFormatParams::Lance(_) => StageFileCompression::None,
+            FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
+                StageFileCompression::None
+            }
         }
     }
 
@@ -171,6 +206,9 @@ impl FileFormatParams {
             FileFormatParams::NdJson(v) => {
                 v.null_field_as == NullAs::FieldDefault
                     || v.missing_field_as == NullAs::FieldDefault
+            }
+            FileFormatParams::Arrow(v) | FileFormatParams::ArrowStream(v) => {
+                v.missing_field_as == NullAs::FieldDefault
             }
             _ => true,
         }
@@ -234,6 +272,19 @@ impl FileFormatParams {
                     missing_field_as.as_deref(),
                 )?)
             }
+            StageFileFormatType::Lance => FileFormatParams::Lance(LanceFileFormatParams::default()),
+            StageFileFormatType::Arrow => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Arrow(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
+            StageFileFormatType::ArrowStream => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::ArrowStream(ArrowFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
@@ -245,7 +296,11 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let quote_style = reader.take_csv_quote_style(default.quote_style)?;
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let encoding = reader.take_string(OPT_ENCODING, default.encoding);
+                let encoding_error_mode =
+                    reader.take_string(OPT_ENCODING_ERROR_MODE, default.encoding_error_mode);
                 let empty_field_as = reader
                     .options
                     .remove(OPT_EMPTY_FIELD_AS)
@@ -264,6 +319,7 @@ impl FileFormatParams {
                 )?;
                 let allow_quoted_nulls =
                     reader.take_bool(OPT_ALLOW_QUOTED_NULLS, default.allow_quoted_nulls)?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
                 let quoted_empty_field_as = reader
                     .options
                     .remove(OPT_QUOTED_EMPTY_FIELD_AS)
@@ -280,8 +336,12 @@ impl FileFormatParams {
                     nan_display,
                     escape,
                     quote,
+                    quote_style,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
+                    trim_space,
+                    encoding,
+                    encoding_error_mode,
                     quoted_empty_field_as,
                     empty_field_as,
                     binary_format,
@@ -289,8 +349,8 @@ impl FileFormatParams {
                     geometry_format: std::default::Default::default(),
                 })
             }
-            StageFileFormatType::Tsv => {
-                let default = TsvFileFormatParams::default();
+            StageFileFormatType::Text => {
+                let default = TextFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
                 let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
                 let field_delimiter =
@@ -300,7 +360,23 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
-                FileFormatParams::Tsv(TsvFileFormatParams {
+                let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let encoding = reader.take_string(OPT_ENCODING, default.encoding);
+                let encoding_error_mode =
+                    reader.take_string(OPT_ENCODING_ERROR_MODE, default.encoding_error_mode);
+                let empty_field_as = reader
+                    .options
+                    .remove(OPT_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or(EmptyFieldAs::FieldDefault);
+                let error_on_column_count_mismatch = reader.take_bool(
+                    OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
+                    default.error_on_column_count_mismatch,
+                )?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
+                let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
+                FileFormatParams::Text(TextFileFormatParams {
                     compression,
                     headers,
                     field_delimiter,
@@ -308,6 +384,13 @@ impl FileFormatParams {
                     nan_display,
                     quote,
                     escape,
+                    null_display,
+                    encoding,
+                    encoding_error_mode,
+                    error_on_column_count_mismatch,
+                    trim_space,
+                    empty_field_as,
+                    output_header,
                 })
             }
             _ => {
@@ -351,19 +434,35 @@ impl FileFormatParams {
         }
 
         match self {
-            FileFormatParams::Tsv(p) => {
-                check_option!(p, field_delimiter)?;
+            FileFormatParams::Text(p) => {
+                check_field_delimiter_tsv(&p.field_delimiter).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{}'. {msg}",
+                        OPT_FIELD_DELIMITER.to_ascii_uppercase(),
+                        p.field_delimiter
+                    )
+                })?;
                 check_option!(p, record_delimiter)?;
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
+                check_option!(p, encoding)?;
+                check_option!(p, encoding_error_mode)?;
             }
             FileFormatParams::Csv(p) => {
-                check_option!(p, field_delimiter)?;
+                check_field_delimiter_csv(&p.field_delimiter).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{}'. {msg}",
+                        OPT_FIELD_DELIMITER.to_ascii_uppercase(),
+                        p.field_delimiter
+                    )
+                })?;
                 check_option!(p, record_delimiter)?;
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
+                check_option!(p, encoding)?;
+                check_option!(p, encoding_error_mode)?;
             }
             _ => {}
         }
@@ -459,6 +558,13 @@ impl FileFormatOptionsReader {
             None => Ok(default),
         }
     }
+
+    fn take_csv_quote_style(&mut self, default: CsvQuoteStyle) -> Result<CsvQuoteStyle> {
+        match self.options.remove(OPT_QUOTE_STYLE) {
+            Some(v) => CsvQuoteStyle::from_str(&v).map_err(ErrorCode::IllegalFileFormat),
+            None => Ok(default),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -470,7 +576,12 @@ pub struct CsvFileFormatParams {
     pub record_delimiter: String,
     pub escape: String,
     pub quote: String,
+    /// Controls whether CSV output quotes every field or only fields that require quoting.
+    #[serde(default)]
+    pub quote_style: CsvQuoteStyle,
     pub error_on_column_count_mismatch: bool,
+    #[serde(default)]
+    pub trim_space: bool,
 
     // load only options
     pub allow_quoted_nulls: bool,
@@ -486,6 +597,10 @@ pub struct CsvFileFormatParams {
     pub binary_format: BinaryFormat,
     pub geometry_format: GeometryDataType,
     pub null_display: String,
+    #[serde(default = "default_file_format_encoding")]
+    pub encoding: String,
+    #[serde(default = "default_file_format_encoding_error")]
+    pub encoding_error_mode: String,
 }
 
 impl Default for CsvFileFormatParams {
@@ -497,15 +612,19 @@ impl Default for CsvFileFormatParams {
             record_delimiter: "\n".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
+            quote_style: CsvQuoteStyle::default(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             allow_quoted_nulls: false,
-            empty_field_as: Default::default(),
+            empty_field_as: EmptyFieldAs::Null,
             quoted_empty_field_as: EmptyFieldAs::String,
             output_header: false,
             binary_format: Default::default(),
             geometry_format: GeometryDataType::default(),
             nan_display: "NaN".to_string(),
             null_display: NULL_BYTES_ESCAPE.to_string(),
+            encoding: default_file_format_encoding(),
+            encoding_error_mode: default_file_format_encoding_error(),
         }
     }
 }
@@ -520,34 +639,61 @@ impl CsvFileFormatParams {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TsvFileFormatParams {
+#[serde(default)]
+pub struct TextFileFormatParams {
     pub compression: StageFileCompression,
+
+    // basic
     pub headers: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
-    pub nan_display: String,
     pub escape: String,
+    // not used
     pub quote: String,
+    pub error_on_column_count_mismatch: bool,
+    pub trim_space: bool,
+
+    // load only options
+    pub empty_field_as: EmptyFieldAs,
+
+    // header
+    pub output_header: bool,
+
+    // field encoding/decoding
+    pub nan_display: String,
+    pub null_display: String,
+    #[serde(default = "default_file_format_encoding")]
+    pub encoding: String,
+    #[serde(default = "default_file_format_encoding_error")]
+    pub encoding_error_mode: String,
 }
 
-impl Default for TsvFileFormatParams {
+impl Default for TextFileFormatParams {
     fn default() -> Self {
-        TsvFileFormatParams {
+        TextFileFormatParams {
             compression: StageFileCompression::None,
             headers: 0,
             field_delimiter: "\t".to_string(),
             record_delimiter: "\n".to_string(),
-            nan_display: "nan".to_string(),
             escape: "\\".to_string(),
-            quote: "\'".to_string(),
+            // not used, only for compat
+            quote: "\"".to_string(),
+            error_on_column_count_mismatch: true,
+            trim_space: false,
+            empty_field_as: EmptyFieldAs::FieldDefault,
+            output_header: false,
+            nan_display: "NaN".to_string(),
+            null_display: NULL_BYTES_ESCAPE.to_string(),
+            encoding: default_file_format_encoding(),
+            encoding_error_mode: default_file_format_encoding_error(),
         }
     }
 }
 
-impl TsvFileFormatParams {
-    pub fn downcast_unchecked(params: &FileFormatParams) -> &TsvFileFormatParams {
+impl TextFileFormatParams {
+    pub fn downcast_unchecked(params: &FileFormatParams) -> &TextFileFormatParams {
         match params {
-            FileFormatParams::Tsv(p) => p,
+            FileFormatParams::Text(p) => p,
             _ => unreachable!(),
         }
     }
@@ -597,6 +743,46 @@ pub enum EmptyFieldAs {
     Null,
     String,
     FieldDefault,
+}
+
+/// Controls how CSV values are quoted during output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CsvQuoteStyle {
+    /// Quote every non-NULL field in the CSV output.
+    #[default]
+    QuoteNotNull,
+    /// Quote a field only when required by the CSV output format.
+    QuoteMinimal,
+}
+
+impl CsvQuoteStyle {
+    pub fn is_quote_minimal(self) -> bool {
+        matches!(self, Self::QuoteMinimal)
+    }
+}
+
+impl FromStr for CsvQuoteStyle {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "quote_not_null" => Ok(Self::QuoteNotNull),
+            "quote_minimal" => Ok(Self::QuoteMinimal),
+            _ => Err(format!(
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOT_NULL | QUOTE_MINIMAL."
+            )),
+        }
+    }
+}
+
+impl Display for CsvQuoteStyle {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::QuoteNotNull => write!(f, "quote_not_null"),
+            Self::QuoteMinimal => write!(f, "quote_minimal"),
+        }
+    }
 }
 
 impl FromStr for EmptyFieldAs {
@@ -664,6 +850,15 @@ pub enum BinaryFormat {
     #[default]
     Hex,
     Base64,
+}
+
+impl BinaryFormat {
+    pub fn to_display_format(&self) -> BinaryDisplayFormat {
+        match self {
+            BinaryFormat::Hex => BinaryDisplayFormat::Hex,
+            BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
+        }
+    }
 }
 
 impl FromStr for BinaryFormat {
@@ -861,6 +1056,21 @@ impl OrcFileFormatParams {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanceFileFormatParams {}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrowFileFormatParams {
+    pub missing_field_as: NullAs,
+}
+
+impl ArrowFileFormatParams {
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        Ok(Self { missing_field_as })
+    }
+}
+
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -868,40 +1078,51 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = CSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' QUOTE_STYLE = {} ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.quote),
+                    params.quote_style,
                     escape_string(&params.escape),
                     params.headers,
                     params.output_header,
                     escape_string(&params.null_display),
                     escape_string(&params.nan_display),
+                    escape_string(&params.encoding),
+                    escape_string(&params.encoding_error_mode),
                     params.empty_field_as,
                     params.binary_format,
                     params.error_on_column_count_mismatch,
+                    params.trim_space,
                     params.allow_quoted_nulls,
                     params.quoted_empty_field_as,
                 )
             }
-            FileFormatParams::Tsv(params) => {
+            FileFormatParams::Text(params) => {
                 write!(
                     f,
-                    "TYPE = TSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
-                     SKIP_HEADER = {} \
-                     NAN_DISPLAY = '{}'",
+                    "TYPE = TEXT COMPRESSION = {:?} \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' \
+                     SKIP_HEADER = {} OUTPUT_HEADER = {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.escape),
-                    escape_string(&params.quote),
                     params.headers,
+                    params.output_header,
+                    escape_string(&params.null_display),
                     escape_string(&params.nan_display),
+                    escape_string(&params.encoding),
+                    escape_string(&params.encoding_error_mode),
+                    params.empty_field_as,
+                    params.error_on_column_count_mismatch,
+                    params.trim_space,
                 )
             }
             FileFormatParams::Xml(params) => {
@@ -938,6 +1159,23 @@ impl Display for FileFormatParams {
                     params.missing_field_as
                 )
             }
+            FileFormatParams::Lance(_) => {
+                write!(f, "TYPE = LANCE")
+            }
+            FileFormatParams::Arrow(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
+            }
+            FileFormatParams::ArrowStream(params) => {
+                write!(
+                    f,
+                    "TYPE = ARROW_STREAM MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
+            }
         }
     }
 }
@@ -960,6 +1198,26 @@ pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
     }
 }
 
+pub fn check_field_delimiter_tsv(option: &str) -> std::result::Result<(), String> {
+    if option.is_empty() {
+        Ok(())
+    } else {
+        check_field_delimiter(option)
+    }
+}
+
+pub fn check_field_delimiter_csv(option: &str) -> std::result::Result<(), String> {
+    if option.len() == 1 && option.as_bytes()[0].is_ascii_alphanumeric() {
+        Err("Expecting a non-alphanumeric character.".into())
+    } else if option.len() > 20 {
+        Err("Expecting at most 20 bytes.".into())
+    } else if option.is_empty() {
+        Err("Should not be empty.".into())
+    } else {
+        Ok(())
+    }
+}
+
 /// `\r\n` or u8
 pub fn check_record_delimiter(option: &str) -> std::result::Result<(), String> {
     if (option.len() == 1 && (!option.as_bytes()[0].is_ascii_alphanumeric())) || option == "\r\n" {
@@ -971,6 +1229,33 @@ pub fn check_record_delimiter(option: &str) -> std::result::Result<(), String> {
 
 fn check_nan_display(nan_display: &str) -> std::result::Result<(), String> {
     check_choices(nan_display, &["nan", "NaN", "null", "NULL"])
+}
+
+fn default_file_format_encoding() -> String {
+    DEFAULT_FILE_FORMAT_ENCODING.to_string()
+}
+
+fn default_file_format_encoding_error() -> String {
+    DEFAULT_FILE_FORMAT_ENCODING_ERROR.to_string()
+}
+
+pub fn check_encoding(option: &str) -> std::result::Result<(), String> {
+    if option.is_empty() {
+        return Err("Should not be empty.".into());
+    }
+
+    if Encoding::for_label_no_replacement(option.trim().as_bytes()).is_none() {
+        return Err("Unsupported encoding label.".into());
+    }
+
+    Ok(())
+}
+
+pub fn check_encoding_error_mode(option: &str) -> std::result::Result<(), String> {
+    match option.to_ascii_lowercase().as_str() {
+        "strict" | "replace" => Ok(()),
+        _ => Err("The valid values are 'strict', 'replace'.".into()),
+    }
 }
 
 pub fn check_quote(option: &str) -> std::result::Result<(), String> {
@@ -1003,5 +1288,120 @@ fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
                 )))?;
             Ok(values)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_text_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .expect("tsv file format options should parse");
+        match params {
+            FileFormatParams::Text(v) => v,
+            _ => unreachable!("expected tsv params"),
+        }
+    }
+
+    fn get_csv_params(options: BTreeMap<String, String>) -> CsvFileFormatParams {
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .expect("csv file format options should parse");
+        match params {
+            FileFormatParams::Csv(v) => v,
+            _ => unreachable!("expected csv params"),
+        }
+    }
+
+    #[test]
+    fn test_text_field_delimiter_empty_string() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert("field_delimiter".to_string(), "".to_string());
+
+        let params = get_text_params(options);
+        assert_eq!(params.field_delimiter, "".to_string());
+    }
+
+    #[test]
+    fn test_text_extended_options() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert(
+            "error_on_column_count_mismatch".to_string(),
+            "false".to_string(),
+        );
+        options.insert("skip_header".to_string(), "2".to_string());
+        options.insert("output_header".to_string(), "true".to_string());
+        options.insert("null_display".to_string(), "NULL".to_string());
+        options.insert("empty_field_as".to_string(), "string".to_string());
+        options.insert("encoding".to_string(), "gbk".to_string());
+        options.insert("encoding_error_mode".to_string(), "replace".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
+
+        let params = get_text_params(options);
+        assert!(!params.error_on_column_count_mismatch);
+        assert_eq!(params.headers, 2);
+        assert!(params.output_header);
+        assert_eq!(params.null_display, "NULL");
+        assert_eq!(params.encoding, "gbk");
+        assert_eq!(params.encoding_error_mode, "replace");
+        assert_eq!(params.empty_field_as, EmptyFieldAs::String);
+        assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_trim_space_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
+
+        let params = get_csv_params(options);
+        assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_quote_style_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("quote_style".to_string(), "quote_minimal".to_string());
+
+        let params = get_csv_params(options);
+        assert_eq!(params.quote_style, CsvQuoteStyle::QuoteMinimal);
+    }
+
+    #[test]
+    fn test_text_encoding_error_default() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+
+        let params = get_text_params(options);
+        assert_eq!(params.encoding_error_mode, "strict");
+    }
+
+    #[test]
+    fn test_text_invalid_encoding_error() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert("encoding_error_mode".to_string(), "ignore".to_string());
+
+        let err =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .unwrap_err();
+        assert!(err.message().contains("ENCODING_ERROR_MODE"));
+    }
+
+    #[test]
+    fn test_text_invalid_encoding_label() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert("encoding".to_string(), "utf8_typo".to_string());
+
+        let err =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .unwrap_err();
+        assert!(err.message().contains("ENCODING"));
     }
 }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-
 use databend_common_column::binview::BinaryViewColumn;
 use databend_common_column::binview::StringColumn;
 use databend_common_column::binview::Utf8ViewColumn;

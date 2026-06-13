@@ -41,6 +41,7 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
+use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
 pub struct Dataframe {
@@ -51,6 +52,25 @@ pub struct Dataframe {
 }
 
 impl Dataframe {
+    fn apply_select_output(self, select_info: SelectInfo) -> Result<Self> {
+        let Dataframe {
+            query_ctx,
+            mut binder,
+            mut bind_context,
+            s_expr,
+        } = self;
+
+        let s_expr = binder.bind_projection(&mut bind_context, select_info, s_expr)?;
+        let s_expr = binder.add_bound_columns_into_expr(&mut bind_context, s_expr)?;
+
+        Ok(Self {
+            query_ctx,
+            binder,
+            bind_context,
+            s_expr,
+        })
+    }
+
     pub async fn scan(
         query_ctx: Arc<dyn TableContext>,
         db: Option<&str>,
@@ -101,10 +121,9 @@ impl Dataframe {
                 false,
                 false,
                 None,
-                false,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None, &None)
+            binder.bind_base_table(&bind_context, database, table_index, None, &None, true)
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;
@@ -146,23 +165,9 @@ impl Dataframe {
             .binder
             .normalize_select_list(bind_context, select_list)?;
 
-        let (scalar_items, projections) = self.binder.analyze_projection(
-            &bind_context.aggregate_info,
-            &bind_context.windows,
-            &select_list,
-        )?;
+        let select_info = self.binder.analyze_projection(bind_context, &select_list)?;
 
-        self.s_expr = self.binder.bind_projection(
-            &mut self.bind_context,
-            &projections,
-            &scalar_items,
-            self.s_expr,
-        )?;
-        self.s_expr = self
-            .binder
-            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
-
-        Ok(self)
+        self.apply_select_output(select_info)
     }
 
     pub async fn filter(mut self, expr: Expr) -> Result<Self> {
@@ -197,26 +202,15 @@ impl Dataframe {
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
 
-        let (scalar_items, projections) = self.binder.analyze_projection(
-            &self.bind_context.aggregate_info,
-            &self.bind_context.windows,
-            &select_list,
-        )?;
+        let select_info = self
+            .binder
+            .analyze_projection(&self.bind_context, &select_list)?;
 
         self.s_expr = self
             .binder
             .bind_aggregate(&mut self.bind_context, self.s_expr)?;
 
-        self.s_expr = self.binder.bind_projection(
-            &mut self.bind_context,
-            &projections,
-            &scalar_items,
-            self.s_expr,
-        )?;
-        self.s_expr = self
-            .binder
-            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
-        Ok(self)
+        self.apply_select_output(select_info)
     }
 
     pub async fn aggregate(
@@ -237,21 +231,23 @@ impl Dataframe {
             .binder
             .normalize_select_list(&mut self.bind_context, &select_list)?;
 
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let alias_catalog = select_list.alias_catalog();
+        let aliases = alias_catalog.all_aliases();
 
-        self.binder
-            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
+        let group_by_aliases = alias_catalog.group_by_bindings(
+            self.query_ctx
+                .get_settings()
+                .get_enable_group_by_column_first()?,
+        );
+        self.binder.analyze_group_items(
+            &mut self.bind_context,
+            &select_list,
+            &group_by_aliases,
+            &groupby,
+        )?;
 
-        if !self
-            .bind_context
-            .aggregate_info
-            .aggregate_functions
-            .is_empty()
-            || !self.bind_context.aggregate_info.group_items.is_empty()
+        if self.bind_context.aggregate_info.has_aggregate_calls()
+            || self.bind_context.aggregate_info.has_group_items()
         {
             self.s_expr = self
                 .binder
@@ -261,28 +257,17 @@ impl Dataframe {
         if let Some(having) = &having {
             let having =
                 self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, &aliases, having)?;
+                    .analyze_aggregate_having(&mut self.bind_context, aliases, having)?;
             self.s_expr = self
                 .binder
                 .bind_having(&mut self.bind_context, having, self.s_expr)?;
         }
 
-        let (scalar_items, projections) = self.binder.analyze_projection(
-            &self.bind_context.aggregate_info,
-            &self.bind_context.windows,
-            &select_list,
-        )?;
-
-        self.s_expr = self.binder.bind_projection(
-            &mut self.bind_context,
-            &projections,
-            &scalar_items,
-            self.s_expr,
-        )?;
-        self.s_expr = self
+        let select_info = self
             .binder
-            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
-        Ok(self)
+            .analyze_projection(&self.bind_context, &select_list)?;
+
+        self.apply_select_output(select_info)
     }
 
     pub fn distinct_col(self, columns: &[&str]) -> Result<Self> {
@@ -307,28 +292,13 @@ impl Dataframe {
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())?;
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
-        let (mut scalar_items, projections) = self.binder.analyze_projection(
-            &self.bind_context.aggregate_info,
-            &self.bind_context.windows,
-            &select_list,
-        )?;
-        self.s_expr = self.binder.bind_distinct(
-            None,
-            &mut self.bind_context,
-            &projections,
-            &mut scalar_items,
-            self.s_expr.clone(),
-        )?;
-        self.s_expr = self.binder.bind_projection(
-            &mut self.bind_context,
-            &projections,
-            &scalar_items,
-            self.s_expr,
-        )?;
+        let mut select_info = self
+            .binder
+            .analyze_projection(&self.bind_context, &select_list)?;
         self.s_expr = self
             .binder
-            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
-        Ok(self)
+            .bind_distinct(None, &mut select_info, self.s_expr)?;
+        self.apply_select_output(select_info)
     }
 
     pub async fn limit(mut self, limit: Option<usize>, offset: usize) -> Result<Self> {
@@ -338,8 +308,7 @@ impl Dataframe {
             offset,
             lazy_columns: Default::default(),
         };
-        self.s_expr =
-            SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(self.s_expr.clone()));
+        self.s_expr = SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(self.s_expr));
         Ok(self)
     }
 
@@ -391,36 +360,22 @@ impl Dataframe {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
-        let (mut scalar_items, projections) = self.binder.analyze_projection(
-            &self.bind_context.aggregate_info,
-            &self.bind_context.windows,
-            &select_list,
-        )?;
+        let mut select_info = self
+            .binder
+            .analyze_projection(&self.bind_context, &select_list)?;
         let order_items = self.binder.analyze_order_items(
             &mut self.bind_context,
-            &mut scalar_items,
+            &mut select_info,
             &aliases,
-            &projections,
+            None,
             &order,
             distinct,
         )?;
-        self.s_expr = self.binder.bind_order_by(
-            &self.bind_context,
-            order_items,
-            &select_list,
-            self.s_expr,
-        )?;
+        self.binder
+            .refresh_select_output(&self.bind_context, &mut select_info)?;
+        self.s_expr = self.binder.bind_order_by(order_items, self.s_expr)?;
 
-        self.s_expr = self.binder.bind_projection(
-            &mut self.bind_context,
-            &projections,
-            &scalar_items,
-            self.s_expr,
-        )?;
-        self.s_expr = self
-            .binder
-            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
-        Ok(self)
+        self.apply_select_output(select_info)
     }
 
     pub async fn except(mut self, dataframe: Dataframe) -> Result<Self> {

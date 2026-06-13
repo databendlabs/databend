@@ -4,7 +4,7 @@ drop table if exists tit
 statement ok
 create table tit(a string not null, b int not null, c string not null)
 
-query error Invalid CSV option value: FIELD_DELIMITER is currently set to 'x'. Expecting a single one-byte, non-alphanumeric character.
+query error Invalid CSV option value: FIELD_DELIMITER is currently set to 'x'. Expecting a non-alphanumeric character.
 copy into tit from @data/csv/ file_format = (type = CSV field_delimiter = 'x')
 
 query error Invalid CSV option value: RECORD_DELIMITER is currently set to 'x'. Expecting a single one-byte, non-alphanumeric character or '\\r\\n'.
@@ -81,10 +81,7 @@ select * from tt;
  "abc"  xyz
 
 statement ok
-drop table if exists tt2
-
-statement ok
-create table tt2(site string not null, sha string not null)
+create or replace table tt2(site string not null, sha string not null)
 
 query TIITI
 copy into tt2 from @data/csv/crlf_delimiter.csv file_format = (type = CSV)
@@ -104,3 +101,32 @@ apple.com 2265cbcc3ef24106c9e0eddbd04f3cca0d03225da3fcca8e2d86f7a394af9283 64
 google.com d4c9d9027326271a89ce51fcaf328ed673f17be33469ff979e8ab8dd501e664f 64
 google.com d4c9d9027326271a89ce51fcaf328ed673f17be33469ff979e8ab8dd501e664f 64
 
+statement ok
+create or replace table tt2(a string, b string)
+
+statement ok
+copy into tt2 from @data/csv/string_delimiter.csv file_format = (type = CSV, field_delimiter='|+|')
+
+
+query TT
+select * from tt2 order by b
+----
+|+| 1
+a|+| 2
+|+|c 3
+NULL |+|4
+
+statement ok
+create or replace table tt2(a string, b string)
+
+statement ok
+copy into tt2 from @data/csv/utf8_delimiter.csv file_format = (type = CSV, field_delimiter='马')
+
+
+query TT
+select * from tt2 order by b
+----
+马 1
+a马 2
+马c 3
+NULL 马4

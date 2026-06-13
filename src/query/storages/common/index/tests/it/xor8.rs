@@ -14,8 +14,11 @@
 
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::number::NumberScalar;
+use databend_storages_common_index::filters::BinaryFuse32Builder;
+use databend_storages_common_index::filters::BinaryFuse32Filter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterBuilder;
+use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::filters::Xor8Builder;
 use databend_storages_common_index::filters::Xor8Filter;
 use rand::Rng;
@@ -246,6 +249,73 @@ fn test_xor_bitmap_from_digests() -> anyhow::Result<()> {
         size,
         val.len() as f32 / size as f32
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_binary_fuse32_from_duplicate_digests() -> anyhow::Result<()> {
+    let digests = vec![7_u64, 7, 13, 13, 29];
+
+    let mut builder = BinaryFuse32Builder::create();
+    builder.add_digests(&digests);
+    let filter = builder.build()?;
+
+    assert_eq!(filter.len(), Some(3));
+    for digest in [7_u64, 13, 29] {
+        assert!(
+            filter.contains_digest(digest),
+            "digest {} not present",
+            digest
+        );
+    }
+
+    let val = filter.to_bytes()?;
+    let (decoded, n) = BinaryFuse32Filter::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
+    assert_eq!(decoded.len(), Some(3));
+    assert!(decoded.contains_digest(13));
+
+    Ok(())
+}
+
+#[test]
+fn test_filter_impl_dispatch_binary_fuse32() -> anyhow::Result<()> {
+    let digests = vec![3_u64, 5, 8];
+    let mut builder = BinaryFuse32Builder::create();
+    builder.add_digests(&digests);
+    let filter = builder.build()?;
+
+    let bytes = FilterImpl::BinaryFuse32(filter.clone()).to_bytes()?;
+    assert_eq!(bytes[0], b'f');
+
+    let (decoded, n) = FilterImpl::from_bytes(&bytes)?;
+    assert_eq!(n, bytes.len());
+    match decoded {
+        FilterImpl::BinaryFuse32(filter) => {
+            assert_eq!(filter.len(), Some(3));
+            assert!(filter.contains_digest(5));
+        }
+        _ => panic!("expected binary fuse32 filter"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_binary_fuse32_decode_unaligned_bytes() -> anyhow::Result<()> {
+    let digests = vec![11_u64, 23, 47];
+    let mut builder = BinaryFuse32Builder::create();
+    builder.add_digests(&digests);
+    let filter = builder.build()?;
+
+    let mut bytes = vec![0_u8];
+    bytes.extend(filter.to_bytes()?);
+
+    let (decoded, n) = BinaryFuse32Filter::from_bytes(&bytes[1..])?;
+    assert_eq!(n, bytes.len() - 1);
+    assert_eq!(decoded.len(), Some(3));
+    assert!(decoded.contains_digest(23));
 
     Ok(())
 }

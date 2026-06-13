@@ -85,18 +85,18 @@ password = "databend123"
     }
 
     // Test query configuration values
-    assert_eq!(
-        config.query.max_active_sessions, 256,
-        "max_active_sessions should be 256"
-    );
-    assert_eq!(
-        config.query.shutdown_wait_timeout_ms, 5000,
-        "shutdown_wait_timeout_ms should be 5000"
-    );
-    assert_eq!(
-        config.query.flight_record_quota_size, 1048576,
-        "flight_record_quota_size should be 1048576"
-    );
+	assert_eq!(
+		config.query.common.max_active_sessions, 256,
+		"max_active_sessions should be 256"
+	);
+	assert_eq!(
+		config.query.common.shutdown_wait_timeout_ms, 5000,
+		"shutdown_wait_timeout_ms should be 5000"
+	);
+	assert_eq!(
+		config.query.common.flight_record_quota_size, 1048576,
+		"flight_record_quota_size should be 1048576"
+	);
 
     // Test log configuration values
     assert_eq!(

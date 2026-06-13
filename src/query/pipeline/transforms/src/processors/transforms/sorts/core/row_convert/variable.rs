@@ -22,11 +22,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::Scalar;
-use databend_common_expression::SortColumnDescription;
-use databend_common_expression::SortField;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
@@ -55,7 +53,9 @@ use databend_common_expression::with_number_type;
 use jsonb::RawJsonb;
 
 use super::RowConverter;
+use super::RowSortField;
 use super::Rows;
+use super::SortKeyDescription;
 use super::fixed_encode::fixed_encode;
 use super::fixed_encode::fixed_encode_const;
 use super::variable_encode::encoded_len;
@@ -67,6 +67,7 @@ impl Rows for VariableRows {
     const IS_ASC_COLUMN: bool = true;
     type Item<'a> = &'a [u8];
     type Type = BinaryType;
+    type Converter = VariableRowConverter;
 
     fn len(&self) -> usize {
         self.len()
@@ -108,19 +109,14 @@ impl Rows for VariableRows {
 }
 
 impl RowConverter<VariableRows> for VariableRowConverter {
-    fn create(sort_desc: &[SortColumnDescription], output_schema: DataSchemaRef) -> Result<Self> {
-        let sort_fields = sort_desc
-            .iter()
-            .map(|d| {
-                let data_type = output_schema.field(d.offset).data_type();
-                SortField::new_with_options(data_type.clone(), d.asc, d.nulls_first)
-            })
-            .collect::<Vec<_>>();
-        VariableRowConverter::new(sort_fields)
+    fn new(desc: SortKeyDescription) -> Result<Self> {
+        let sort_fields = desc.into_checked_sort_fields(VariableRowConverter::support_data_type)?;
+        Ok(VariableRowConverter { sort_fields })
     }
 
-    fn convert(&self, entries: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
-        Ok(self.convert_columns(entries, num_rows))
+    fn convert(&self, data_block: &DataBlock) -> Result<BinaryColumn> {
+        let entries = SortKeyDescription::collect_sort_entries(&self.sort_fields, data_block);
+        Ok(self.convert_columns(&entries, data_block.num_rows()))
     }
 
     fn support_data_type(d: &DataType) -> bool {
@@ -145,30 +141,17 @@ impl RowConverter<VariableRows> for VariableRowConverter {
 /// Convert column-oriented data into comparable row-oriented data.
 #[derive(Debug)]
 pub struct VariableRowConverter {
-    fields: Box<[SortField]>,
+    sort_fields: Box<[RowSortField]>,
 }
 
 impl VariableRowConverter {
-    fn new(fields: Vec<SortField>) -> Result<Self> {
-        if !fields.iter().all(|f| Self::support_data_type(&f.data_type)) {
-            return Err(ErrorCode::Unimplemented(format!(
-                "Row format is not yet support for {:?}",
-                fields
-            )));
-        }
-
-        Ok(Self {
-            fields: fields.into(),
-        })
-    }
-
     /// Convert columns into [`BinaryColumn`] represented comparable row format.
     fn convert_columns(&self, entries: &[BlockEntry], num_rows: usize) -> BinaryColumn {
-        debug_assert_eq!(entries.len(), self.fields.len());
+        debug_assert_eq!(entries.len(), self.sort_fields.len());
         debug_assert!(
             entries
                 .iter()
-                .zip(self.fields.iter())
+                .zip(self.sort_fields.iter())
                 .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type)
         );
 
@@ -178,7 +161,7 @@ impl VariableRowConverter {
             .collect();
 
         let mut builder = self.new_empty_rows(&entries, num_rows);
-        for (entry, field) in entries.iter().zip(self.fields.iter()) {
+        for (entry, field) in entries.iter().zip(self.sort_fields.iter()) {
             match entry {
                 BlockEntry::Const(scalar, data_type, _) => {
                     let mut visitor = EncodeVisitor {
@@ -503,7 +486,7 @@ impl ValueVisitor for LengthCalculatorVisitor<'_> {
 struct EncodeVisitor<'a> {
     out: &'a mut BinaryColumnBuilder,
     validity: (bool, Option<&'a Bitmap>),
-    field: &'a SortField,
+    field: &'a RowSortField,
 }
 
 impl EncodeVisitor<'_> {
@@ -818,9 +801,13 @@ impl ValueVisitor for EncodeVisitor<'_> {
 
 #[cfg(test)]
 mod tests {
+
     use databend_common_base::base::OrderedFloat;
     use databend_common_expression::Column;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
     use databend_common_expression::SortField;
     use databend_common_expression::types::*;
     use jsonb::OwnedJsonb;
@@ -830,6 +817,29 @@ mod tests {
 
     use super::super::test_util::*;
     use super::*;
+
+    fn create_variable_converter(fields: Vec<SortField>) -> VariableRowConverter {
+        let column_desc = fields
+            .iter()
+            .enumerate()
+            .map(|(offset, field)| SortColumnDescription {
+                offset,
+                asc: field.asc,
+                nulls_first: field.nulls_first,
+            })
+            .collect::<Vec<_>>()
+            .into();
+        let schema = {
+            DataSchemaRefExt::create(
+                fields
+                    .iter()
+                    .map(|f| DataField::new("order_col", f.data_type.clone()))
+                    .collect(),
+            )
+        };
+        VariableRowConverter::new(SortKeyDescription::new(column_desc, schema, true).unwrap())
+            .unwrap()
+    }
 
     #[test]
     fn test_fixed_width() {
@@ -854,11 +864,10 @@ mod tests {
             ]),
         ];
 
-        let converter = VariableRowConverter::new(vec![
+        let converter = create_variable_converter(vec![
             SortField::new(DataType::Number(NumberDataType::Int16).wrap_nullable()),
             SortField::new(DataType::Number(NumberDataType::Float32).wrap_nullable()),
-        ])
-        .unwrap();
+        ]);
 
         let entries: Vec<BlockEntry> = cols.iter().map(|col| col.clone().into()).collect();
         let rows = converter.convert_columns(&entries, cols[0].len());
@@ -872,10 +881,9 @@ mod tests {
 
     #[test]
     fn test_decimal128() {
-        let converter = VariableRowConverter::new(vec![SortField::new(
+        let converter = create_variable_converter(vec![SortField::new(
             DataType::Decimal(DecimalSize::new_unchecked(38, 7)).wrap_nullable(),
-        )])
-        .unwrap();
+        )]);
 
         let col = Decimal128Type::from_opt_data_with_size(
             vec![
@@ -899,10 +907,9 @@ mod tests {
 
     #[test]
     fn test_decimal256() {
-        let converter = VariableRowConverter::new(vec![SortField::new(
+        let converter = create_variable_converter(vec![SortField::new(
             DataType::Decimal(DecimalSize::new_unchecked(76, 7)).wrap_nullable(),
-        )])
-        .unwrap();
+        )]);
 
         let col = Decimal256Type::from_opt_data_with_size(
             vec![
@@ -930,7 +937,7 @@ mod tests {
     fn test_decimal_view() {
         fn run(size: DecimalSize, col: Column) {
             let converter =
-                VariableRowConverter::new(vec![SortField::new(DataType::Decimal(size))]).unwrap();
+                create_variable_converter(vec![SortField::new(DataType::Decimal(size))]);
             let num_rows = col.len();
             let rows = converter.convert_columns(&[col.into()], num_rows);
             for i in 0..num_rows - 1 {
@@ -979,8 +986,7 @@ mod tests {
     #[test]
     fn test_bool() {
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::Boolean.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::Boolean.wrap_nullable())]);
 
         let col = BooleanType::from_opt_data(vec![None, Some(false), Some(true)]);
         let num_rows = col.len();
@@ -991,12 +997,11 @@ mod tests {
         assert!(rows.index(2).unwrap() > rows.index(0).unwrap());
         assert!(rows.index(1).unwrap() > rows.index(0).unwrap());
 
-        let converter = VariableRowConverter::new(vec![SortField::new_with_options(
+        let converter = create_variable_converter(vec![SortField::new_with_options(
             DataType::Boolean.wrap_nullable(),
             false,
             false,
-        )])
-        .unwrap();
+        )]);
 
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
@@ -1008,7 +1013,7 @@ mod tests {
     #[test]
     fn test_null_encoding() {
         let col = Column::Null { len: 10 };
-        let converter = VariableRowConverter::new(vec![SortField::new(DataType::Null)]).unwrap();
+        let converter = create_variable_converter(vec![SortField::new(DataType::Null)]);
         let rows = converter.convert_columns(&[col.into()], 10);
 
         assert_eq!(rows.len(), 10);
@@ -1026,8 +1031,7 @@ mod tests {
         ]);
 
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::Binary.wrap_nullable())]);
         let num_rows = col.len();
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
@@ -1054,8 +1058,7 @@ mod tests {
         let num_rows = col.len();
 
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::Binary.wrap_nullable())]);
         let rows = converter.convert_columns(&[col.clone().into()], num_rows);
 
         for i in 0..rows.len() {
@@ -1071,12 +1074,11 @@ mod tests {
             }
         }
 
-        let converter = VariableRowConverter::new(vec![SortField::new_with_options(
+        let converter = create_variable_converter(vec![SortField::new_with_options(
             DataType::Binary.wrap_nullable(),
             false,
             false,
-        )])
-        .unwrap();
+        )]);
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
         for i in 0..rows.len() {
@@ -1099,8 +1101,7 @@ mod tests {
             StringType::from_opt_data(vec![Some("hello"), Some("he"), None, Some("foo"), Some("")]);
 
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::String.wrap_nullable())]);
         let num_rows = col.len();
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
@@ -1124,8 +1125,7 @@ mod tests {
         let num_rows = col.len();
 
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::String.wrap_nullable())]);
         let rows = converter.convert_columns(&[col.clone().into()], num_rows);
 
         for i in 0..rows.len() {
@@ -1141,12 +1141,11 @@ mod tests {
             }
         }
 
-        let converter = VariableRowConverter::new(vec![SortField::new_with_options(
+        let converter = create_variable_converter(vec![SortField::new_with_options(
             DataType::String.wrap_nullable(),
             false,
             false,
-        )])
-        .unwrap();
+        )]);
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
         for i in 0..rows.len() {
@@ -1189,8 +1188,7 @@ mod tests {
         let col = VariantType::from_opt_data(values);
 
         let converter =
-            VariableRowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())])
-                .unwrap();
+            create_variable_converter(vec![SortField::new(DataType::Variant.wrap_nullable())]);
         let num_rows = col.len();
         let rows = converter.convert_columns(&[col.clone().into()], num_rows);
 
@@ -1205,12 +1203,11 @@ mod tests {
             }
         }
 
-        let converter = VariableRowConverter::new(vec![SortField::new_with_options(
+        let converter = create_variable_converter(vec![SortField::new_with_options(
             DataType::Variant.wrap_nullable(),
             false,
             false,
-        )])
-        .unwrap();
+        )]);
         let rows = converter.convert_columns(&[col.into()], num_rows);
 
         for i in 0..rows.len() {
@@ -1278,7 +1275,7 @@ mod tests {
             let comparator = create_arrow_comparator(&entries, &sort_options);
             let fields = create_sort_fields(&entries, &sort_options);
 
-            let converter = VariableRowConverter::new(fields).unwrap();
+            let converter = create_variable_converter(fields);
             let rows = converter.convert_columns(&entries, num_rows);
 
             for i in 0..num_rows {

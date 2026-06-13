@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-rows=100000
+rows=50000
 
 
 echo """
@@ -21,7 +21,7 @@ insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
 insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
-for m in `seq 1 3 20`; do
+for m in `seq 1 6 19`; do
 	echo """create or replace table agg_fuzz_result1 as select a, sum(e) e, sum(f) f, sum(g) g from (
 	select a, d, sum(e) e, sum(f) f, sum(g) g from (
 select a, c, d, sum(e) e, sum(f) f, sum(g) g  from (

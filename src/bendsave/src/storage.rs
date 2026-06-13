@@ -32,14 +32,17 @@ use databend_common_config::InnerConfig;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
+use databend_meta::configs::MetaServiceConfig;
+use databend_meta_cli_config::MetaConfig;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::types::protobuf::ExportRequest;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
@@ -70,21 +73,23 @@ pub fn load_query_storage(cfg: &InnerConfig) -> Result<Operator> {
 /// Load the configuration file of databend meta.
 ///
 /// The given input is the path to databend meta's configuration file.
-pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
+pub fn load_meta_config(path: &str) -> Result<MetaServiceConfig> {
     let content = std::fs::read_to_string(path)?;
-    let outer_config: databend_meta::configs::outer_v0::Config = toml::from_str(&content)?;
-    let inner_config: databend_meta::configs::Config =
-        outer_config.try_into().map_err(|msg| anyhow!("{msg}"))?;
+    let outer_config: databend_meta_cli_config::Config = toml::from_str(&content)?;
+    let meta_config: MetaConfig = outer_config
+        .try_into()
+        .map_err(|msg: String| anyhow!("{msg}"))?;
+    let service_config = meta_config.service;
 
-    if !inner_config.raft_config.raft_dir.starts_with("/") {
+    if !service_config.raft_config.raft_dir.starts_with("/") {
         return Err(anyhow!(
             "raft_dir of meta service must be an absolute path, but got: {:?}",
-            inner_config.raft_config.raft_dir
+            service_config.raft_config.raft_dir
         ));
     }
 
-    debug!("databend meta storage loaded: {:?}", inner_config);
-    Ok(inner_config)
+    debug!("databend meta storage loaded: {:?}", service_config);
+    Ok(service_config)
 }
 
 /// Init databend query instance so that we can read meta and check license
@@ -109,7 +114,7 @@ pub async fn verify_query_license(cfg: &InnerConfig, version: BuildInfoRef) -> R
     RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
-        cfg.meta.to_meta_grpc_client_conf(version.semver()),
+        cfg.meta.to_meta_grpc_client_conf(),
         &CacheConfig::default(),
         BuiltIn::default(),
         &cfg.query.tenant_id,
@@ -142,11 +147,11 @@ pub async fn verify_query_license(cfg: &InnerConfig, version: BuildInfoRef) -> R
 /// {"xx": "bb"}\n
 /// ```
 pub async fn load_databend_meta() -> Result<(
-    Arc<ClientHandle>,
+    Arc<ClientHandle<DatabendRuntime>>,
     impl TryStream<Ok = Bytes, Error = anyhow::Error>,
 )> {
     let cfg = GlobalConfig::instance();
-    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.semver());
+    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf();
     debug!("connect meta services on {:?}", grpc_client_conf.endpoints);
 
     let meta_client = MetaGrpcClient::try_new(&grpc_client_conf)?;

@@ -212,7 +212,7 @@ impl Processor for TransformSortRoute {
     }
 }
 
-pub struct SortDummyRoute {}
+pub struct SortDummyRoute;
 
 impl Transform for SortDummyRoute {
     const NAME: &'static str = "SortDummyRoute";

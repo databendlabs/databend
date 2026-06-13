@@ -15,7 +15,6 @@
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::local_block_meta_serde;
 use enum_as_inner::EnumAsInner;
 pub use sort_broadcast::*;
@@ -28,6 +27,7 @@ pub use sort_merge_limit::*;
 pub use sort_merge_stream::*;
 pub use sort_multi_merge::*;
 pub use sort_partial::*;
+pub use sort_rank_limit::*;
 pub use sort_restore::*;
 pub use sort_route::*;
 pub use sort_spill::*;
@@ -46,13 +46,14 @@ mod sort_merge_limit;
 mod sort_merge_stream;
 mod sort_multi_merge;
 mod sort_partial;
+mod sort_rank_limit;
 mod sort_restore;
 mod sort_route;
 mod sort_spill;
+mod sort_spill_regroup;
 
 #[derive(Clone)]
 pub struct Base<S: Send + Clone> {
-    pub schema: DataSchemaRef,
     pub spiller: S,
     pub sort_row_offset: usize,
     pub limit: Option<usize>,

@@ -22,10 +22,9 @@ pub use kvapi_impl::Resource;
 mod kvapi_impl {
 
     use databend_common_exception::ErrorCode;
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_client::kvapi;
 
     use crate::principal::PasswordPolicy;
-    use crate::principal::PasswordPolicyIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -37,13 +36,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "PasswordPolicyIdent";
         const HAS_TENANT: bool = true;
         type ValueType = PasswordPolicy;
-    }
-
-    impl kvapi::Value for PasswordPolicy {
-        type KeyType = PasswordPolicyIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::ValueWithName for PasswordPolicy {
@@ -67,19 +59,16 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::password_policy_ident::PasswordPolicyIdent;
     use crate::tenant::Tenant;
+
     #[test]
     fn test_password_policy_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = PasswordPolicyIdent::new(tenant.clone(), "test2");
-
-        assert_eq!(ident.to_string_key(), "__fd_password_policies/test/test2");
-        assert_eq!(
-            ident,
-            PasswordPolicyIdent::from_str_key("__fd_password_policies/test/test2").unwrap()
-        );
+        let ident = PasswordPolicyIdent::new(tenant, "test2");
+        assert_round_trip(ident, "__fd_password_policies/test/test2");
     }
 }

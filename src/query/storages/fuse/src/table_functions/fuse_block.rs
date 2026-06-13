@@ -72,6 +72,10 @@ impl TableMetaFunc for FuseBlock {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
+                "spatial_index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
                 "virtual_column_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
@@ -98,6 +102,7 @@ impl TableMetaFunc for FuseBlock {
         let mut inverted_index_size = Vec::with_capacity(len);
         let mut ngram_index_size = Vec::with_capacity(len);
         let mut vector_index_size = Vec::with_capacity(len);
+        let mut spatial_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
@@ -128,6 +133,7 @@ impl TableMetaFunc for FuseBlock {
                     inverted_index_size.push(block.inverted_index_size);
                     ngram_index_size.push(block.ngram_filter_index_size);
                     vector_index_size.push(block.vector_index_size);
+                    spatial_index_size.push(block.spatial_index_size);
                     virtual_column_size.push(
                         block
                             .virtual_block_meta
@@ -156,6 +162,7 @@ impl TableMetaFunc for FuseBlock {
                 UInt64Type::from_opt_data(inverted_index_size).into(),
                 UInt64Type::from_opt_data(ngram_index_size).into(),
                 UInt64Type::from_opt_data(vector_index_size).into(),
+                UInt64Type::from_opt_data(spatial_index_size).into(),
                 UInt64Type::from_opt_data(virtual_column_size).into(),
             ],
             num_rows,

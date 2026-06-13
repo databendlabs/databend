@@ -75,12 +75,10 @@ impl Debug for MemorySettings {
 }
 
 pub struct MemorySettingsBuilder {
-    enable_global_level_spill: bool,
     max_memory_usage: Option<usize>,
 
     enable_group_spill: bool,
 
-    enable_query_level_spill: bool,
     max_query_memory_usage: Option<usize>,
     query_memory_tracking: Option<Arc<MemStat>>,
 
@@ -89,7 +87,6 @@ pub struct MemorySettingsBuilder {
 
 impl MemorySettingsBuilder {
     pub fn with_max_memory_usage(mut self, max: usize) -> Self {
-        self.enable_global_level_spill = true;
         self.max_memory_usage = Some(max);
         self
     }
@@ -99,7 +96,6 @@ impl MemorySettingsBuilder {
         max: usize,
         tracking: Option<Arc<MemStat>>,
     ) -> Self {
-        self.enable_query_level_spill = true;
         self.max_query_memory_usage = Some(max);
         self.query_memory_tracking = tracking;
         self
@@ -118,12 +114,15 @@ impl MemorySettingsBuilder {
     pub fn build(self) -> MemorySettings {
         MemorySettings {
             enable_group_spill: self.enable_group_spill,
+
+            enable_global_level_spill: self.max_memory_usage.is_some(),
             max_memory_usage: self.max_memory_usage.unwrap_or(usize::MAX),
-            enable_global_level_spill: self.enable_global_level_spill,
             global_memory_tracking: &GLOBAL_MEM_STAT,
-            enable_query_level_spill: self.enable_query_level_spill,
+
+            enable_query_level_spill: self.max_query_memory_usage.is_some(),
             max_query_memory_usage: self.max_query_memory_usage.unwrap_or(usize::MAX),
             query_memory_tracking: self.query_memory_tracking,
+
             spill_unit_size: self.spill_unit_size.unwrap_or(0),
         }
     }
@@ -132,12 +131,10 @@ impl MemorySettingsBuilder {
 impl MemorySettings {
     pub fn builder() -> MemorySettingsBuilder {
         MemorySettingsBuilder {
-            enable_global_level_spill: false,
             max_memory_usage: None,
 
             enable_group_spill: true,
 
-            enable_query_level_spill: false,
             max_query_memory_usage: None,
             query_memory_tracking: None,
 
@@ -146,29 +143,25 @@ impl MemorySettings {
     }
 
     pub fn check_spill(&self) -> bool {
-        if self.enable_global_level_spill
-            && self.global_memory_tracking.get_memory_usage() >= self.max_memory_usage
+        if let Some(remain) = self.check_global()
+            && remain <= 0
         {
             return true;
         }
 
-        if self.enable_group_spill
-            && let Some(workload_group) = ThreadTracker::workload_group()
+        if let Some(remain) = self.check_workload_group()
+            && remain <= 0
         {
-            let workload_group_memory_usage = workload_group.mem_stat.get_memory_usage();
-            let max_memory_usage = workload_group.max_memory_usage.load(Ordering::Relaxed);
-
-            if max_memory_usage != 0 && workload_group_memory_usage >= max_memory_usage {
-                return true;
-            }
+            return true;
         }
 
-        let Some(query_memory_tracking) = self.query_memory_tracking.as_ref() else {
-            return false;
-        };
-
-        self.enable_query_level_spill
-            && query_memory_tracking.get_memory_usage() >= self.max_query_memory_usage
+        if let Some(remain) = self.check_query()
+            && remain <= 0
+        {
+            true
+        } else {
+            false
+        }
     }
 
     fn check_global(&self) -> Option<isize> {
@@ -207,8 +200,7 @@ impl MemorySettings {
             return None;
         }
 
-        let query_memory_tracking = self.query_memory_tracking.as_ref()?;
-        let usage = query_memory_tracking.get_memory_usage();
+        let usage = self.query_memory_tracking.as_ref()?.get_memory_usage();
 
         Some(if usage >= self.max_query_memory_usage {
             -((usage - self.max_query_memory_usage) as isize)

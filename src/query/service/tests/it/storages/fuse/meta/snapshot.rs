@@ -35,6 +35,8 @@ fn default_snapshot() -> TableSnapshot {
         stats,
         vec![],
         None,
+        None,
+        None,
         TestFixture::default_table_meta_timestamps(),
     )
     .unwrap()
@@ -56,6 +58,8 @@ fn snapshot_timestamp_monotonic_increase() {
         schema,
         Default::default(),
         vec![],
+        None,
+        None,
         None,
         TestFixture::default_table_meta_timestamps(),
     )
@@ -80,6 +84,8 @@ fn snapshot_timestamp_time_skew_tolerance() {
         schema,
         Default::default(),
         vec![],
+        None,
+        None,
         None,
         table_meta_timestamps,
     )

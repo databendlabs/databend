@@ -13,4 +13,3 @@
 // limitations under the License.
 
 mod dns_resolver;
-mod grpc_token;

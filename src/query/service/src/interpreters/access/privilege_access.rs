@@ -19,7 +19,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,7 +41,6 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
@@ -56,6 +54,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
@@ -63,6 +62,10 @@ use crate::interpreters::access::AccessChecker;
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -266,7 +269,11 @@ impl PrivilegeAccess {
         }
 
         let user_api = UserApiProvider::instance();
-        let ownerships = user_api.role_api(tenant).list_ownerships().await?;
+        let ownerships = user_api
+            .role_api(tenant)
+            .list_ownerships()
+            .await
+            .map_err(meta_service_error)?;
         Ok((roles_name, ownerships))
     }
 
@@ -624,12 +631,42 @@ impl PrivilegeAccess {
                     }
                 }
             }
+            TagSetObject::User(_) | TagSetObject::Role(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
+            }
             TagSetObject::Connection(target) => {
                 self.validate_connection_access(
                     target.connection_name.clone(),
                     UserPrivilegeType::AccessConnection,
                 )
                 .await
+            }
+            TagSetObject::View(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::Stream(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.stream,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
             }
         }
     }
@@ -1467,6 +1504,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumVirtualColumn(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
 
             // Table.
             Plan::ShowCreateTable(plan) => {
@@ -1615,10 +1655,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropTableClusterKey(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
-            Plan::CreateTableRef(plan) => {
+            Plan::CreateTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
-            Plan::DropTableRef(plan) => {
+            Plan::CreateTableTag(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableBranch(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableTag(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::RefreshTableCache(_) | Plan::RefreshDatabaseCache(_) => {
@@ -1856,6 +1902,17 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CopyIntoTable(plan) => {
                 self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                 self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
+                if plan.enable_schema_evolution && plan.query.is_none() && !plan.no_file_to_copy {
+                    self.validate_table_access(
+                        plan.catalog_info.catalog_name(),
+                        &plan.database_name,
+                        &plan.table_name,
+                        UserPrivilegeType::Alter,
+                        false,
+                        false,
+                    )
+                    .await?;
+                }
                 if let Some(query) = &plan.query {
                     self.check(ctx, query).await?;
                 }
@@ -1947,12 +2004,17 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
             | Plan::DescUser(_)
+            | Plan::ShowPublicKeys(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_) => {
+            | Plan::AlterTask(_)
+            | Plan::CreateWorker(_)
+            | Plan::AlterWorker(_)
+            | Plan::DropWorker(_)
+            | Plan::ShowWorkers => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -2232,8 +2294,9 @@ async fn has_priv(
         }
     }
 
+    let grant_set_roles: Vec<String> = grant_set.roles_vec();
     Ok(RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
+        .find_related_roles(tenant, &grant_set_roles)
         .await?
         .into_iter()
         .map(|role| role.grants)

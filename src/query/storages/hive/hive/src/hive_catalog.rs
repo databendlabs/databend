@@ -103,8 +103,8 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::*;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
@@ -398,12 +398,14 @@ impl Catalog for HiveCatalog {
 
     async fn mget_databases(
         &self,
-        _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in HIVE catalog",
-        ))
+        let mut dbs = Vec::with_capacity(db_names.len());
+        for name in db_names {
+            dbs.push(self.get_database(tenant, name.database_name()).await?);
+        }
+        Ok(dbs)
     }
 
     async fn mget_database_names_by_ids(
@@ -456,6 +458,21 @@ impl Catalog for HiveCatalog {
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
 
         Ok(res)
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let mut tables = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Ok(table) = self.get_table(tenant, db_name, table_name).await {
+                tables.push(table);
+            }
+        }
+        Ok(tables)
     }
 
     #[fastrace::trace]
@@ -702,7 +719,7 @@ impl Catalog for HiveCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -713,7 +730,7 @@ impl Catalog for HiveCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

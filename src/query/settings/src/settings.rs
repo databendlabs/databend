@@ -21,10 +21,14 @@ use std::sync::atomic::Ordering;
 
 use dashmap::DashMap;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
 use itertools::Itertools;
+use jiff::tz::TimeZone;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -72,6 +76,54 @@ pub struct Settings {
     pub(crate) changes: Arc<DashMap<String, ChangeValue>>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
     pub(crate) query_level_change: Arc<AtomicBool>,
+}
+
+impl Settings {
+    pub fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        let tz = self.get_timezone()?;
+        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
+            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
+        })?;
+        let geometry_format = self.get_geometry_output_format()?;
+        let binary_format = self.get_binary_output_format()?;
+        let is_rounding_mode = self
+            .get_numeric_cast_option()
+            .map(|s| s == "rounding")
+            .unwrap_or(true);
+        let disable_variant_check = self.get_disable_variant_check()?;
+        let enable_auto_detect_datetime_format = self.get_enable_auto_detect_datetime_format()?;
+        Ok(InputFormatSettings {
+            jiff_timezone,
+            geometry_format,
+            binary_format,
+            is_rounding_mode,
+            disable_variant_check,
+            enable_auto_detect_datetime_format,
+        })
+    }
+
+    pub fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        let tz = self.get_timezone()?;
+        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
+            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
+        })?;
+        let geometry_format = self.get_geometry_output_format()?;
+        let binary_format = self.get_binary_output_format()?;
+        let http_json_result_mode = self.get_http_json_result_mode()?;
+        let format_null_as_str = self.get_format_null_as_str()?;
+        Ok(OutputFormatSettings {
+            jiff_timezone,
+            geometry_format,
+            binary_format,
+            http_json_result_mode,
+            headers: 0,
+            http_arrow_use_jsonb: false,
+            http_arrow_use_decimal64: true,
+            json_compact: false,
+            json_strings: false,
+            format_null_as_str,
+        })
+    }
 }
 
 impl serde::Serialize for Settings {
@@ -287,6 +339,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
 
     use crate::ChangeValue;
+    use crate::DefaultSettings;
     use crate::ScopeLevel;
     use crate::Settings;
 
@@ -311,6 +364,15 @@ mod tests {
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_spill_writer_memory_pool_setting_default() -> Result<()> {
+        assert_eq!(
+            DefaultSettings::try_get_u64("spill_writer_memory_pool_size_mb")?,
+            20
+        );
         Ok(())
     }
 }

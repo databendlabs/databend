@@ -16,10 +16,20 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
+
     - name: Iceberg Setup for (ubuntu-latest only)
       shell: bash
       run: |
         docker compose -f tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml up -d
+        # Wait for rustfs to be ready
+        for i in $(seq 1 30); do
+          curl -sf http://127.0.0.1:9002/health/ready && break
+          echo "Waiting for rustfs... ($i)"
+          sleep 2
+        done
+        curl -sf http://127.0.0.1:9002/health/ready || { echo "rustfs failed to start after 60s"; exit 1; }
 
         # Prepare Iceberg TPCH data
         data_dir="tests/sqllogictests/data"
@@ -29,11 +39,12 @@ runs:
         fi
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
-        uv sync
+        script_dir="tests/sqllogictests/scripts"
+        (cd "$script_dir" && uv sync)
         echo "Running prepare_iceberg_tpch_data.py..."
-        uv run python tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
+        uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
-        uv run python tests/sqllogictests/scripts/prepare_iceberg_test_data.py
+        uv run tests/sqllogictests/scripts/prepare_iceberg_test_data.py
 
 
     - name: Run sqllogic Tests with Standalone lib

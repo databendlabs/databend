@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -43,15 +42,18 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_sql::binder::resolve_stage_location;
+use databend_common_sql::binder::StagePathAccess;
+use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use futures_util::StreamExt;
 use futures_util::stream::Chunks;
 
+use crate::sessions::TableContext;
 use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
 
 const LIST_STAGE: &str = "list_stage";
@@ -181,8 +183,15 @@ impl ListStagesSource {
     }
 
     async fn do_list(&mut self) -> Result<StageFileInfoStream> {
-        let (stage_info, path) =
-            resolve_stage_location(self.ctx.as_ref(), &self.args_parsed.location).await?;
+        let (stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            databend_common_users::UserApiProvider::instance(),
+            databend_common_config::GlobalConfig::instance()
+                .storage
+                .allow_insecure,
+        )?
+        .resolve_stage_location(&self.args_parsed.location, StagePathAccess::Read)
+        .await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
@@ -204,7 +213,7 @@ impl ListStagesSource {
                 )));
             }
         }
-        let op = StageTable::get_op(&stage_info)?;
+        let op = init_stage_operator(&stage_info)?;
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
         let files_info = StageFilesInfo {
@@ -212,6 +221,12 @@ impl ListStagesSource {
             files: self.args_parsed.files_info.files.clone(),
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         let files = files_info.list_stream(&op, thread_num, None).await?;
         Ok(files)
     }

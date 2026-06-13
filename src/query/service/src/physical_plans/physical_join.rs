@@ -30,7 +30,27 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
-    RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+    RangeJoin {
+        range: Vec<ScalarExpr>,
+        other: Vec<ScalarExpr>,
+    },
+}
+
+fn asof_hash_join_type(join_type: JoinType) -> JoinType {
+    match join_type {
+        JoinType::Asof => JoinType::Inner,
+        // ASOF rewrite swaps children to:
+        //   probe = window(original right)
+        //   build = original left
+        //
+        // HashJoin preserves the probe side for LEFT joins and the build side
+        // for RIGHT joins, so outer ASOF joins need the opposite mapping here
+        // to preserve the original SQL null-preserving side.
+        JoinType::LeftAsof => JoinType::Right,
+        JoinType::RightAsof => JoinType::Left,
+        JoinType::FullAsof => JoinType::Full,
+        _ => join_type,
+    }
 }
 
 // Choose physical join type by join conditions
@@ -40,6 +60,10 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             "ANY JOIN only supports equality-based hash joins",
         ));
     }
+
+    let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+    let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let right_stat_info = right_rel_expr.derive_cardinality()?;
 
     if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
@@ -51,9 +75,6 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
-    let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
-    let right_stat_info = right_rel_expr.derive_cardinality()?;
     if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
         || right_stat_info.cardinality == 1.0
     {
@@ -61,22 +82,22 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    let left_prop = left_rel_expr.derive_relational_prop()?;
-    let right_prop = right_rel_expr.derive_relational_prop()?;
-    let (range_conditions, other_conditions) = join
-        .non_equi_conditions
-        .iter()
-        .cloned()
-        .partition::<Vec<_>, _>(|condition| {
-            is_range_join_condition(condition, &left_prop, &right_prop).is_some()
-        });
+    if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+        let left_prop = left_rel_expr.derive_relational_prop()?;
+        let right_prop = right_rel_expr.derive_relational_prop()?;
+        let (range, other) = join
+            .non_equi_conditions
+            .iter()
+            .cloned()
+            .partition::<Vec<_>, _>(|condition| {
+                is_range_join_condition(condition, &left_prop, &right_prop).is_some()
+            });
 
-    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
-        return Ok(PhysicalJoinType::RangeJoin(
-            range_conditions,
-            other_conditions,
-        ));
+        if !range.is_empty() {
+            return Ok(PhysicalJoinType::RangeJoin { range, other });
+        }
     }
+
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
@@ -127,6 +148,31 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
+            if !join.equi_conditions.is_empty() {
+                // Binder rewrites ASOF into:
+                //   1. the original inequality; and
+                //   2. a window-derived boundary that guarantees at most one build row
+                //      matches inside each equi-key partition.
+                //
+                // When equi conditions are present, we can therefore reuse the existing
+                // hash join path to first shrink candidates by the equi keys, then apply
+                // the ASOF residual predicates as post-join filters.
+                let mut hash_join = join.clone();
+                hash_join.join_type = asof_hash_join_type(hash_join.join_type);
+
+                return self
+                    .build_hash_join(
+                        &hash_join,
+                        s_expr,
+                        required,
+                        others_required,
+                        left_required,
+                        right_required,
+                        stat_info,
+                    )
+                    .await;
+            }
+
             let left_prop = s_expr.left_child().derive_relational_prop()?;
             let right_prop = s_expr.right_child().derive_relational_prop()?;
 
@@ -170,7 +216,7 @@ impl PhysicalPlanBuilder {
                     )
                     .await
                 }
-                PhysicalJoinType::RangeJoin(range, other) => {
+                PhysicalJoinType::RangeJoin { range, other } => {
                     self.build_range_join(
                         join.join_type,
                         s_expr,

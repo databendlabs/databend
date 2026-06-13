@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
+use databend_common_meta_api::name_id_value_api::CreateIdValueMode;
+use databend_common_meta_api::name_id_value_api::CreateIdValueResult;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::KeyWithTenant;
@@ -38,13 +40,13 @@ use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
 use databend_common_meta_app::principal::procedure_name_ident::ProcedureName;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnRequest;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
@@ -62,6 +64,7 @@ impl ProcedureMgr {
     }
 
     /// Add a PROCEDURE to /tenant/procedure-name.
+    /// Returns `ExistError` if the procedure already exists and `overriding` is false.
     #[async_backtrace::framed]
     pub async fn create_procedure(
         &self,
@@ -75,6 +78,11 @@ impl ProcedureMgr {
         let name_ident = &req.name_ident;
         let meta = &req.meta;
         let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
+        let create_mode = if overriding {
+            CreateIdValueMode::CreateOrReplace
+        } else {
+            CreateIdValueMode::CreateOnly
+        };
 
         let tenant = &self.tenant;
         let create_res = self
@@ -82,7 +90,7 @@ impl ProcedureMgr {
             .create_id_value(
                 name_ident,
                 meta,
-                overriding,
+                create_mode,
                 |id| {
                     vec![(
                         ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
@@ -106,8 +114,8 @@ impl ProcedureMgr {
             .await?;
 
         match create_res {
-            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
-            Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
+            CreateIdValueResult::Created(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
+            CreateIdValueResult::Existing(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }
 
@@ -134,7 +142,7 @@ impl ProcedureMgr {
     ) -> Result<Option<GetProcedureReply>, MetaError> {
         debug!(req :? =(req); "SchemaApi: {}", func_name!());
 
-        let res = self.kv_api.get_id_value(&req.inner).await?;
+        let res = self.kv_api.get_id_and_value(&req.inner).await?;
 
         let Some((seq_id, seq_meta)) = res else {
             return Ok(None);

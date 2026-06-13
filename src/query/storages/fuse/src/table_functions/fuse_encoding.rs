@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,12 +48,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_native::read::reader::NativeReader;
-use databend_common_native::stat::ColumnInfo;
-use databend_common_native::stat::PageBody;
-use databend_common_native::stat::stat_simple;
-use databend_storages_common_io::MergeIOReader;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream;
@@ -60,9 +56,8 @@ use futures::stream::TryStreamExt;
 use opendal::Operator;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::Encoding as ParquetEncoding;
-use parquet::format::Type as ParquetPhysicalType;
+use parquet::basic::Type as ParquetPhysicalType;
 
-use crate::BlockReadResult;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
@@ -222,16 +217,6 @@ impl<'a> FuseEncodingImpl<'a> {
             let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
 
             match table.storage_format {
-                FuseStorageFormat::Native => {
-                    self.collect_native_rows(
-                        table,
-                        snapshot.as_ref(),
-                        &segments_io,
-                        chunk_size,
-                        &mut rows,
-                    )
-                    .await?;
-                }
                 FuseStorageFormat::Parquet => {
                     self.collect_parquet_rows(
                         table,
@@ -242,6 +227,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     )
                     .await?;
                 }
+                FuseStorageFormat::Unsupported => continue,
             }
         }
 
@@ -313,74 +299,6 @@ impl<'a> FuseEncodingImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn collect_native_rows(
-        &self,
-        table: &'a FuseTable,
-        snapshot: &TableSnapshot,
-        segments_io: &SegmentsIO,
-        chunk_size: usize,
-        rows: &mut Vec<EncodingRow>,
-    ) -> Result<()> {
-        let schema = table.schema();
-        let fields = schema.fields();
-        for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
-                .await?;
-            for segment in segments {
-                let segment = segment?;
-                for block in segment.blocks.iter() {
-                    for field in fields {
-                        if field.is_nested() {
-                            continue;
-                        }
-                        if !self.column_matches(field.name()) {
-                            continue;
-                        }
-                        let column_id = field.column_id;
-                        let Some(column_meta) = block.col_metas.get(&column_id) else {
-                            continue;
-                        };
-                        let (offset, len) = column_meta.offset_length();
-                        let ranges = vec![(column_id, offset..(offset + len))];
-                        let read_settings = ReadSettings::from_ctx(&self.ctx)?;
-                        let merge_io_result = MergeIOReader::merge_io_read(
-                            &read_settings,
-                            table.operator.clone(),
-                            &block.location.0,
-                            &ranges,
-                        )
-                        .await?;
-
-                        let block_read_res =
-                            BlockReadResult::create(merge_io_result, vec![], vec![]);
-                        let column_chunks = block_read_res.columns_chunks()?;
-                        let pages = column_chunks
-                            .get(&column_id)
-                            .unwrap()
-                            .as_raw_data()
-                            .unwrap()
-                            .to_bytes();
-                        let pages = std::io::Cursor::new(pages);
-                        let page_metas = column_meta.as_native().unwrap().pages.clone();
-                        let reader = NativeReader::new(pages, page_metas, vec![]);
-                        let column_info = stat_simple(reader, field.clone())?;
-                        self.push_native_column_rows(
-                            table.name(),
-                            table.storage_format,
-                            &block.location.0,
-                            field,
-                            column_info,
-                            rows,
-                        );
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
     async fn collect_parquet_block_rows_from_meta(
         operator: Operator,
         location: String,
@@ -392,15 +310,15 @@ impl<'a> FuseEncodingImpl<'a> {
         column_name_filter: Arc<Option<String>>,
     ) -> Result<Vec<EncodingRow>> {
         let file_meta = read_thrift_file_metadata(operator, &location, Some(file_size)).await?;
-        if file_meta.row_groups.len() != 1 {
+        if file_meta.row_groups().len() != 1 {
             return Err(ErrorCode::ParquetFileInvalid(format!(
                 "invalid parquet file {}, expects one row group but got {}",
                 location,
-                file_meta.row_groups.len()
+                file_meta.row_groups().len()
             )));
         }
-        let row_group = &file_meta.row_groups[0];
-        let columns = &row_group.columns;
+        let row_group = &file_meta.row_groups()[0];
+        let columns = row_group.columns();
         let mut block_rows = Vec::new();
 
         for field in fields.iter() {
@@ -418,23 +336,15 @@ impl<'a> FuseEncodingImpl<'a> {
                 // Missing column caused by schema evolutions
                 continue;
             };
-            let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
+            let compressed_size = u64::try_from(column_chunk.compressed_size()).map_err(|_| {
                 ErrorCode::ParquetFileInvalid(format!(
-                    "invalid parquet file {}, meta data of column {} is empty",
-                    location, column_id
+                    "invalid parquet file {}, compressed size overflow for column {}",
+                    location,
+                    field.name()
                 ))
             })?;
-
-            let compressed_size =
-                u64::try_from(chunk_meta.total_compressed_size).map_err(|_| {
-                    ErrorCode::ParquetFileInvalid(format!(
-                        "invalid parquet file {}, compressed size overflow for column {}",
-                        location,
-                        field.name()
-                    ))
-                })?;
             let uncompressed_size =
-                u64::try_from(chunk_meta.total_uncompressed_size).map_err(|_| {
+                u64::try_from(column_chunk.uncompressed_size()).map_err(|_| {
                     ErrorCode::ParquetFileInvalid(format!(
                         "invalid parquet file {}, uncompressed size overflow for column {}",
                         location,
@@ -442,7 +352,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     ))
                 })?;
 
-            let physical_type = parquet_physical_type_to_string(chunk_meta.type_);
+            let physical_type = parquet_physical_type_to_string(column_chunk.column_type());
             block_rows.push(EncodingRow {
                 table_name: table_name.as_str().to_string(),
                 storage_format,
@@ -452,8 +362,8 @@ impl<'a> FuseEncodingImpl<'a> {
                 validity_size: None,
                 compressed_size,
                 uncompressed_size,
-                level_one: parquet_encodings_to_string(&chunk_meta.encodings),
-                level_two: Some(parquet_codec_to_string(chunk_meta.codec)),
+                level_one: parquet_encodings_to_string(column_chunk.encodings()),
+                level_two: Some(parquet_codec_to_string(column_chunk.compression())),
             });
         }
 
@@ -539,40 +449,8 @@ impl<'a> FuseEncodingImpl<'a> {
         Ok(())
     }
 
-    fn push_native_column_rows(
-        &self,
-        table_name: &str,
-        storage_format: FuseStorageFormat,
-        block_location: &str,
-        field: &TableField,
-        column_info: ColumnInfo,
-        rows: &mut Vec<EncodingRow>,
-    ) {
-        let column_name = field.name().clone();
-        let column_type = field.data_type().sql_name();
-        let block_location = block_location.to_string();
-        for page in column_info.pages {
-            rows.push(EncodingRow {
-                table_name: table_name.to_string(),
-                storage_format,
-                block_location: block_location.clone(),
-                column_name: column_name.clone(),
-                column_type: column_type.clone(),
-                validity_size: page.validity_size,
-                compressed_size: page.compressed_size as u64,
-                uncompressed_size: page.uncompressed_size as u64,
-                level_one: encoding_to_string(&page.body),
-                level_two: native_level_two_encoding(&page.body),
-            });
-        }
-    }
-
     fn table_matches(&self, table_name: &str) -> bool {
         Self::filter_matches(&self.table_name_filter, table_name)
-    }
-
-    fn column_matches(&self, column_name: &str) -> bool {
-        Self::filter_matches(&self.column_name_filter, column_name)
     }
 
     fn filter_matches(filter: &Option<String>, value: &str) -> bool {
@@ -610,69 +488,41 @@ impl<'a> FuseEncodingImpl<'a> {
     }
 }
 
-fn encoding_to_string(page_body: &PageBody) -> String {
-    match page_body {
-        PageBody::Dict(_) => "Dict".to_string(),
-        PageBody::Freq(_) => "Freq".to_string(),
-        PageBody::OneValue => "OneValue".to_string(),
-        PageBody::Rle => "Rle".to_string(),
-        PageBody::Patas => "Patas".to_string(),
-        PageBody::Bitpack => "Bitpack".to_string(),
-        PageBody::DeltaBitpack => "DeltaBitpack".to_string(),
-        PageBody::Common(c) => format!("Common({:?})", c),
-    }
-}
-
-fn native_level_two_encoding(page_body: &PageBody) -> Option<String> {
-    match page_body {
-        PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
-        PageBody::Freq(freq) => freq
-            .exceptions
-            .as_ref()
-            .map(|e| encoding_to_string(&e.body)),
-        _ => None,
-    }
-}
-
-fn parquet_encodings_to_string(encodings: &[parquet::format::Encoding]) -> String {
+fn parquet_encodings_to_string(encodings: impl Iterator<Item = ParquetEncoding>) -> String {
+    let encodings = encodings
+        .map(parquet_encoding_to_string)
+        .collect::<Vec<_>>();
     if encodings.is_empty() {
         "unknown".to_string()
     } else {
-        encodings
-            .iter()
-            .map(|encoding| parquet_encoding_to_string(*encoding))
-            .collect::<Vec<_>>()
-            .join(",")
+        encodings.join(",")
     }
 }
 
-fn parquet_encoding_to_string(encoding: parquet::format::Encoding) -> &'static str {
-    match ParquetEncoding::try_from(encoding) {
-        Ok(ParquetEncoding::PLAIN) => "plain",
-        Ok(ParquetEncoding::PLAIN_DICTIONARY) => "plain_dictionary",
-        Ok(ParquetEncoding::RLE) => "rle",
-        #[allow(deprecated)]
-        Ok(ParquetEncoding::BIT_PACKED) => "bit_packed",
-        Ok(ParquetEncoding::DELTA_BINARY_PACKED) => "delta_binary_packed",
-        Ok(ParquetEncoding::DELTA_LENGTH_BYTE_ARRAY) => "delta_length_byte_array",
-        Ok(ParquetEncoding::DELTA_BYTE_ARRAY) => "delta_byte_array",
-        Ok(ParquetEncoding::RLE_DICTIONARY) => "rle_dictionary",
-        Ok(ParquetEncoding::BYTE_STREAM_SPLIT) => "byte_stream_split",
-        Err(_) => "unknown",
+fn parquet_encoding_to_string(encoding: ParquetEncoding) -> &'static str {
+    match encoding {
+        ParquetEncoding::PLAIN => "plain",
+        ParquetEncoding::PLAIN_DICTIONARY => "plain_dictionary",
+        ParquetEncoding::RLE => "rle",
+        ParquetEncoding::BIT_PACKED => "bit_packed",
+        ParquetEncoding::DELTA_BINARY_PACKED => "delta_binary_packed",
+        ParquetEncoding::DELTA_LENGTH_BYTE_ARRAY => "delta_length_byte_array",
+        ParquetEncoding::DELTA_BYTE_ARRAY => "delta_byte_array",
+        ParquetEncoding::RLE_DICTIONARY => "rle_dictionary",
+        ParquetEncoding::BYTE_STREAM_SPLIT => "byte_stream_split",
     }
 }
 
-fn parquet_codec_to_string(codec: parquet::format::CompressionCodec) -> String {
-    match ParquetCompression::try_from(codec) {
-        Ok(ParquetCompression::UNCOMPRESSED) => "uncompressed".to_string(),
-        Ok(ParquetCompression::SNAPPY) => "snappy".to_string(),
-        Ok(ParquetCompression::GZIP(_)) => "gzip".to_string(),
-        Ok(ParquetCompression::LZO) => "lzo".to_string(),
-        Ok(ParquetCompression::BROTLI(_)) => "brotli".to_string(),
-        Ok(ParquetCompression::LZ4) => "lz4".to_string(),
-        Ok(ParquetCompression::ZSTD(_)) => "zstd".to_string(),
-        Ok(ParquetCompression::LZ4_RAW) => "lz4_raw".to_string(),
-        Err(_) => format!("compression_codec({})", codec.0),
+fn parquet_codec_to_string(codec: ParquetCompression) -> String {
+    match codec {
+        ParquetCompression::UNCOMPRESSED => "uncompressed".to_string(),
+        ParquetCompression::SNAPPY => "snappy".to_string(),
+        ParquetCompression::GZIP(_) => "gzip".to_string(),
+        ParquetCompression::LZO => "lzo".to_string(),
+        ParquetCompression::BROTLI(_) => "brotli".to_string(),
+        ParquetCompression::LZ4 => "lz4".to_string(),
+        ParquetCompression::ZSTD(_) => "zstd".to_string(),
+        ParquetCompression::LZ4_RAW => "lz4_raw".to_string(),
     }
 }
 
@@ -686,7 +536,6 @@ fn parquet_physical_type_to_string(ty: ParquetPhysicalType) -> &'static str {
         ParquetPhysicalType::DOUBLE => "DOUBLE",
         ParquetPhysicalType::BYTE_ARRAY => "BYTE_ARRAY",
         ParquetPhysicalType::FIXED_LEN_BYTE_ARRAY => "FIXED_LEN_BYTE_ARRAY",
-        parquet::format::Type(_) => "UNKNOWN",
     }
 }
 

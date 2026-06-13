@@ -135,6 +135,7 @@ impl CaptureLogSettings {
 
 pub struct TrackingPayload {
     pub query_id: Option<String>,
+    pub warehouse_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
@@ -146,10 +147,65 @@ pub struct TrackingPayload {
     pub process_rows: AtomicUsize,
 }
 
+/// Extension trait for wrapping a future with thread tracking context.
+///
+/// This trait provides an ergonomic way to associate a [`TrackingPayload`] with a future,
+/// enabling memory tracking, query ID propagation, and other per-query context.
+///
+/// # Example
+///
+/// ```ignore
+/// let mut payload = ThreadTracker::new_tracking_payload();
+/// payload.query_id = Some(query_id.clone());
+/// payload.mem_stat = Some(mem_stat);
+///
+/// payload.tracking(async {
+///     // This future runs with the tracking context
+///     do_work().await
+/// }).await;
+/// ```
+pub trait TrackingPayloadExt {
+    /// Wraps a future with this tracking payload.
+    ///
+    /// The returned [`TrackingFuture`] will set up the tracking context before polling
+    /// and restore the previous context when the future completes or is dropped.
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future;
+}
+
+impl TrackingPayloadExt for Option<Arc<TrackingPayload>> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self)
+    }
+}
+
+impl TrackingPayloadExt for Arc<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(self))
+    }
+}
+
+impl TrackingPayloadExt for TrackingPayload {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(Arc::new(self)))
+    }
+}
+
+impl TrackingPayloadExt for Option<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self.map(Arc::new))
+    }
+}
+
 impl Clone for TrackingPayload {
     fn clone(&self) -> Self {
         TrackingPayload {
             query_id: self.query_id.clone(),
+            warehouse_id: self.warehouse_id.clone(),
             profile: self.profile.clone(),
             mem_stat: self.mem_stat.clone(),
             metrics: self.metrics.clone(),
@@ -237,6 +293,7 @@ impl ThreadTracker {
                 metrics: None,
                 mem_stat: None,
                 query_id: None,
+                warehouse_id: None,
                 capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
@@ -286,6 +343,18 @@ impl ThreadTracker {
 
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
         TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
+    }
+
+    pub fn tracking_future_with_payload<T: Future>(
+        future: T,
+        payload: Option<Arc<TrackingPayload>>,
+    ) -> TrackingFuture<T> {
+        TRACKER.with(move |x| {
+            TrackingFuture::create(
+                future,
+                payload.unwrap_or_else(|| x.borrow().payload.clone()),
+            )
+        })
     }
 
     pub fn tracking_function<F, T>(f: F) -> impl FnOnce() -> T
@@ -340,6 +409,19 @@ impl ThreadTracker {
                     .query_id
                     .as_ref()
                     .map(|query_id| unsafe { &*(query_id as *const String) })
+            })
+            .unwrap_or(None)
+    }
+
+    pub fn warehouse_id() -> Option<&'static String> {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .warehouse_id
+                    .as_ref()
+                    .map(|warehouse_id| unsafe { &*(warehouse_id as *const String) })
             })
             .unwrap_or(None)
     }

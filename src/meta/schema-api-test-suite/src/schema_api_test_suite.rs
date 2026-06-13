@@ -36,11 +36,12 @@ use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
-use databend_common_meta_api::LockApi;
+use databend_common_meta_api::LockApi2;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
+use databend_common_meta_api::TagApi;
 use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
@@ -73,6 +74,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -106,8 +108,12 @@ use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -131,6 +137,9 @@ use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::TagError;
+use databend_common_meta_app::schema::TagMeta;
+use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -150,12 +159,12 @@ use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::UpsertKV;
 use fastrace::func_name;
 use log::debug;
 use log::info;
@@ -169,6 +178,61 @@ use crate::support::delete_test_data;
 use crate::support::upsert_test_data;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockMetaSummary {
+    user: String,
+    node: String,
+    query_id: String,
+    lock_type: LockType,
+    extra_info: BTreeMap<String, String>,
+    is_acquired: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockRevisionSummary {
+    revision: u64,
+    meta: LockMetaSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockSummary {
+    table_id: u64,
+    revision: u64,
+    meta: LockMetaSummary,
+}
+
+fn summarize_lock_meta(meta: &LockMeta) -> LockMetaSummary {
+    LockMetaSummary {
+        user: meta.user.clone(),
+        node: meta.node.clone(),
+        query_id: meta.query_id.clone(),
+        lock_type: meta.lock_type.clone(),
+        extra_info: meta.extra_info.clone(),
+        is_acquired: meta.acquired_on.is_some(),
+    }
+}
+
+fn summarize_lock_revisions(revisions: &[(u64, LockMeta)]) -> Vec<LockRevisionSummary> {
+    revisions
+        .iter()
+        .map(|(revision, meta)| LockRevisionSummary {
+            revision: *revision,
+            meta: summarize_lock_meta(meta),
+        })
+        .collect()
+}
+
+fn summarize_locks(locks: &[LockInfo]) -> Vec<LockSummary> {
+    locks
+        .iter()
+        .map(|lock| LockSummary {
+            table_id: lock.table_id,
+            revision: lock.revision,
+            meta: summarize_lock_meta(&lock.meta),
+        })
+        .collect()
+}
 
 /// Test suite of `SchemaApi`.
 ///
@@ -190,11 +254,12 @@ impl SchemaApiTestSuite {
             + DictionaryApi
             + GarbageCollectionApi
             + IndexApi
-            + LockApi
+            + LockApi2
             + SecurityApi
             + DatamaskApi
             + SequenceApi
             + RowAccessPolicyApi
+            + TagApi
             + 'static,
     {
         let suite = SchemaApiTestSuite {};
@@ -312,7 +377,7 @@ impl SchemaApiTestSuite {
             + DatabaseApi
             + GarbageCollectionApi
             + IndexApi
-            + LockApi
+            + LockApi2
             + TableApi
             + 'static,
     {
@@ -371,10 +436,12 @@ impl SchemaApiTestSuite {
     async fn run_miscellaneous_tests<B, MT>(&self, b: &B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + 'static,
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + TagApi + 'static,
     {
         self.get_table_name_by_id(&b.build().await).await?;
         self.get_db_name_by_id(&b.build().await).await?;
+        self.tag_unknown_reference_is_tolerated(&b.build().await)
+            .await?;
 
         Ok(())
     }
@@ -2128,7 +2195,7 @@ impl SchemaApiTestSuite {
                 db_id: *util.db_id(),
             };
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(id_to_name_key))
                 .await?;
         }
 
@@ -2151,7 +2218,7 @@ impl SchemaApiTestSuite {
             // remove db id list
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant, db);
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(dbid_idlist.clone()))
                 .await?;
 
             // drop db
@@ -2178,7 +2245,7 @@ impl SchemaApiTestSuite {
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant2, db);
 
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(dbid_idlist))
                 .await?;
 
             let res = mt
@@ -2220,7 +2287,7 @@ impl SchemaApiTestSuite {
             table_name: table.to_string(),
         };
         util.meta_api()
-            .upsert_kv(UpsertKV::delete(table_id_idlist.to_string_key()))
+            .upsert_pb(&UpsertPB::delete(table_id_idlist.clone()))
             .await?;
 
         // drop table
@@ -5401,7 +5468,6 @@ impl SchemaApiTestSuite {
                 prev_table_id: None,
                 new_table: true,
                 orphan_table_name: None,
-                spec_vec: None,
             };
             let cur_db = util.get_database().await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -6103,6 +6169,63 @@ impl SchemaApiTestSuite {
                 assert_eq!(ErrorCode::UNKNOWN_DATABASE_ID, err.code());
             }
         }
+        Ok(())
+    }
+
+    async fn tag_unknown_reference_is_tolerated<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + TagApi {
+        let tenant = Tenant::new_literal("tenant_tag_unknown_reference_is_tolerated");
+        let tag_name = TagNameIdent::new(&tenant, "unknown_ref_tag");
+
+        info!("--- create tag for unknown reference compatibility test");
+        let create_tag_res = mt
+            .create_tag(CreateTagReq {
+                name_ident: tag_name.clone(),
+                meta: TagMeta {
+                    allowed_values: None,
+                    comment: "unknown ref compatibility test".to_string(),
+                    created_on: Utc::now(),
+                    updated_on: None,
+                    drop_on: None,
+                },
+            })
+            .await?;
+
+        let tag_id = match create_tag_res {
+            Ok(reply) => reply.tag_id,
+            Err(err) => panic!("create_tag failed unexpectedly: {err}"),
+        };
+
+        info!("--- inject unknown tag-object reference key directly into kv");
+        let unknown_ref_key = format!(
+            "__fd_tag_object_ref/{}/{}/stream/stream_1",
+            tenant.tenant_name(),
+            tag_id
+        );
+        mt.upsert_kv(UpsertKV::update(&unknown_ref_key, b"x"))
+            .await?;
+
+        info!("--- list_tag_references should skip unknown object type");
+        let refs = mt.list_tag_references(&tenant, tag_id).await?;
+        assert!(
+            refs.is_empty(),
+            "unknown object type should be skipped by list_tag_references"
+        );
+
+        info!("--- drop_tag should still be blocked by unknown references");
+        let drop_res = mt.drop_tag(&tag_name).await?;
+        match drop_res {
+            Err(TagError::TagHasUnrecognizedReferences {
+                unrecognized_reference_count,
+                ..
+            }) => {
+                assert_eq!(1, unrecognized_reference_count);
+            }
+            other => {
+                panic!("expect TagHasUnrecognizedReferences for unknown ref, got: {other:?}");
+            }
+        }
+
         Ok(())
     }
 
@@ -7312,7 +7435,7 @@ impl SchemaApiTestSuite {
     }
 
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
-    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + LockApi {
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + LockApi2 {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_literal(tenant_name);
 
@@ -7327,85 +7450,113 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- create table lock revision 1");
-            let req1 = CreateLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
-                },
-                ttl: std::time::Duration::from_secs(2),
-                user: "root".to_string(),
-                node: "node1".to_string(),
-                query_id: "query1".to_string(),
+            let lock_key = || LockKey::Table {
+                tenant: tenant.clone(),
+                table_id,
             };
-            let res1 = mt.create_lock_revision(req1).await?;
+
+            info!("--- create table lock revision 1");
+            let req1 = CreateLockRevReq::new(
+                lock_key(),
+                "root".to_string(),
+                "node1".to_string(),
+                "query1".to_string(),
+                std::time::Duration::from_secs(2),
+            );
+            let res1 = mt.create_lock_revision_v2(req1).await?;
 
             info!("--- create table lock revision 2");
-            let req2 = CreateLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
-                },
-                ttl: std::time::Duration::from_secs(2),
-                user: "root".to_string(),
-                node: "node1".to_string(),
-                query_id: "query2".to_string(),
-            };
-            let res2 = mt.create_lock_revision(req2).await?;
+            let req2 = CreateLockRevReq::new(
+                lock_key(),
+                "root".to_string(),
+                "node1".to_string(),
+                "query2".to_string(),
+                std::time::Duration::from_secs(2),
+            );
+            let res2 = mt.create_lock_revision_v2(req2).await?;
             assert!(res2.revision > res1.revision);
 
-            info!("--- list table lock revisiosn");
-            let req3 = ListLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
+            info!("--- list table lock revisions");
+            let req3 = ListLockRevReq::new(lock_key());
+            let res3 = mt.list_lock_revisions_v2(req3).await?;
+            assert_eq!(summarize_lock_revisions(&res3), vec![
+                LockRevisionSummary {
+                    revision: res1.revision,
+                    meta: LockMetaSummary {
+                        user: "root".to_string(),
+                        node: "node1".to_string(),
+                        query_id: "query1".to_string(),
+                        lock_type: LockType::TABLE,
+                        extra_info: BTreeMap::new(),
+                        is_acquired: false,
+                    },
                 },
-            };
-            let res3 = mt.list_lock_revisions(req3).await?;
-            assert_eq!(res3.len(), 2);
-            assert_eq!(res3[0].0, res1.revision);
-            assert_eq!(res3[1].0, res2.revision);
+                LockRevisionSummary {
+                    revision: res2.revision,
+                    meta: LockMetaSummary {
+                        user: "root".to_string(),
+                        node: "node1".to_string(),
+                        query_id: "query2".to_string(),
+                        lock_type: LockType::TABLE,
+                        extra_info: BTreeMap::new(),
+                        is_acquired: false,
+                    },
+                },
+            ]);
 
             info!("--- extend table lock revision 2 expire");
-            let req4 = ExtendLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
-                },
-                ttl: std::time::Duration::from_secs(4),
-                revision: res2.revision,
-                acquire_lock: true,
-            };
-            mt.extend_lock_revision(req4).await?;
+            let req4 = ExtendLockRevReq::new(
+                lock_key(),
+                res2.revision,
+                std::time::Duration::from_secs(4),
+                true,
+            );
+            mt.extend_lock_revision_v2(req4).await?;
 
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
-            let req5 = ListLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
+            let req5 = ListLockRevReq::new(lock_key());
+            let res5 = mt.list_lock_revisions_v2(req5).await?;
+            assert_eq!(summarize_lock_revisions(&res5), vec![LockRevisionSummary {
+                revision: res2.revision,
+                meta: LockMetaSummary {
+                    user: "root".to_string(),
+                    node: "node1".to_string(),
+                    query_id: "query2".to_string(),
+                    lock_type: LockType::TABLE,
+                    extra_info: BTreeMap::new(),
+                    is_acquired: true,
                 },
-            };
-            let res5 = mt.list_lock_revisions(req5).await?;
-            assert_eq!(res5.len(), 1);
-            assert_eq!(res5[0].0, res2.revision);
+            }]);
+
+            info!("--- list table locks");
+            let req6 = ListLocksReq::create_with_table_ids(&tenant, vec![table_id]);
+            let res6 = mt.list_locks_v2(req6).await?;
+            assert_eq!(summarize_locks(&res6), vec![LockSummary {
+                table_id,
+                revision: res2.revision,
+                meta: LockMetaSummary {
+                    user: "root".to_string(),
+                    node: "node1".to_string(),
+                    query_id: "query2".to_string(),
+                    lock_type: LockType::TABLE,
+                    extra_info: BTreeMap::new(),
+                    is_acquired: true,
+                },
+            }]);
 
             info!("--- delete table lock revision 2");
-            let req6 = DeleteLockRevReq {
-                lock_key: LockKey::Table {
-                    tenant: tenant.clone(),
-                    table_id,
-                },
-                revision: res2.revision,
-            };
-            mt.delete_lock_revision(req6).await?;
+            let req7 = DeleteLockRevReq::new(lock_key(), res2.revision);
+            mt.delete_lock_revision_v2(req7).await?;
 
             info!("--- check table locks is empty");
-            let req7 = ListLockRevReq {
-                lock_key: LockKey::Table { tenant, table_id },
-            };
-            let res7 = mt.list_lock_revisions(req7).await?;
-            assert_eq!(res7.len(), 0);
+            let req8 = ListLockRevReq::new(lock_key());
+            let res8 = mt.list_lock_revisions_v2(req8).await?;
+            assert_eq!(res8, Vec::<(u64, LockMeta)>::new());
+
+            let req9 = ListLocksReq::create_with_table_ids(&tenant, vec![table_id]);
+            let res9 = mt.list_locks_v2(req9).await?;
+            assert_eq!(res9, Vec::<LockInfo>::new());
         }
 
         Ok(())

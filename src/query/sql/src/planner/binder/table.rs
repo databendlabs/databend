@@ -26,6 +26,7 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -33,8 +34,6 @@ use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -59,14 +58,16 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
-use log::info;
 
 use crate::BaseTableColumn;
 use crate::BindContext;
@@ -81,6 +82,7 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
+use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
@@ -88,7 +90,6 @@ use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -128,17 +129,24 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
-        case_sensitive: bool,
+        on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-        let max_column_position = self.metadata.read().get_max_column_position();
+        let (max_column_position, has_column_name_ref) = {
+            let metadata = self.metadata.read();
+            (
+                metadata.get_max_column_position(),
+                metadata.has_column_name_ref(),
+            )
+        };
         let table = table_ctx
             .create_stage_table(
                 stage_info,
                 files_info,
                 files_to_copy,
                 max_column_position,
-                case_sensitive,
+                has_column_name_ref,
+                on_error_mode,
             )
             .await?;
 
@@ -158,11 +166,10 @@ impl Binder {
             false,
             true,
             None,
-            bind_context.allow_virtual_column,
         );
 
         let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None, &None)?;
+            self.bind_base_table(bind_context, "system", table_index, None, &None, false)?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -182,16 +189,18 @@ impl Binder {
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
+            bound_virtual_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
             in_grouping: false,
-            view_info: None,
+            binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
+            udf_cache: bind_context.udf_cache.clone(),
             inverted_index_map: Box::default(),
             vector_index_map: Box::default(),
             allow_virtual_column: false,
@@ -312,6 +321,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
                 table_name,
+                logical_recursive_cte_id: cte_info.logical_recursive_cte_id,
             }))),
             new_bind_ctx,
         ))
@@ -365,6 +375,7 @@ impl Binder {
         table_index: IndexType,
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
+        case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
@@ -405,6 +416,7 @@ impl Binder {
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
                     .virtual_expr(virtual_expr.clone())
+                    .case_sensitive(case_sensitive)
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);
@@ -467,7 +479,7 @@ impl Binder {
                 table, table
             )));
         }
-        // Check for row_access_policy and wrap with SecureFilter if present
+        // Check for row_access_policy and write secure predicates into Scan
         let final_s_expr = if let Some(policy) = &table
             .table()
             .get_table_info()
@@ -479,7 +491,7 @@ impl Binder {
                 &mut bind_context,
                 scan_s_expr,
                 policy,
-                &table.table().get_table_info().meta.schema.fields,
+                &table.table().schema().fields,
             )?
         } else {
             scan_s_expr
@@ -498,12 +510,13 @@ impl Binder {
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
-        // Collect arguments: only include fields whose column_id is in policy.columns_ids
-        let arguments: Vec<Expr> = fields
+        // Collect arguments in policy.columns_ids order (matches the policy parameter list).
+        // Previously this iterated `fields` (schema order) with a contains-filter, which
+        // silently reordered arguments when USING column order differed from schema order.
+        let arguments: Vec<Expr> = policy
+            .columns_ids
             .iter()
-            .filter(|t| policy.columns_ids.contains(&t.column_id))
+            .filter_map(|col_id| fields.iter().find(|t| t.column_id == *col_id))
             .map(|t| Expr::ColumnRef {
                 span: None,
                 column: ColumnRef {
@@ -514,26 +527,28 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
-        let start = std::time::Instant::now();
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
-            meta_api,
-            &self.ctx.get_tenant(),
+        let tenant = self.ctx.get_tenant();
+        let cache = SecurityPolicyCacheManager::instance();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let tenant_clone = tenant.clone();
+        let res = cache.get_cached_or_load_sync(
+            PolicyType::RowAccessPolicy,
+            &tenant,
             policy,
-        ))?;
-        let fetch_elapsed = start.elapsed();
-        info!(
-            "row_access_policy: policy_id={}, fetch_ms={:.3}",
-            policy,
-            fetch_elapsed.as_secs_f64() * 1000.0,
-        );
-        let body = res.data.body;
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(&body)?;
-        let expr = parse_expr(&tokens, sql_dialect)?;
+            || async move {
+                let handler = get_row_access_policy_handler();
+                let seq_v = handler
+                    .get_row_access_policy_by_id(meta_api, &tenant_clone, policy)
+                    .await?;
+                let meta = seq_v.data;
+                Ok(RawPolicyDef {
+                    body: meta.body,
+                    args: meta.args,
+                })
+            },
+        )?;
 
         let parameters = res
-            .data
             .args
             .iter()
             .map(|arg| arg.0.to_string())
@@ -546,7 +561,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&expr, |nest_expr| {
+        let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match
@@ -562,6 +577,9 @@ impl Binder {
         Ok(res.0)
     }
 
+    /// Bind a Row Access Policy predicate and store it in the Scan's
+    /// `secure_predicates` field. These predicates are later enforced by a
+    /// Filter [SECURE] operator in the physical pipeline.
     pub fn bind_secure_filter(
         &mut self,
         bind_context: &mut BindContext,
@@ -579,12 +597,43 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
 
-        let filter_plan = SecureFilter {
-            predicates: split_conjunctions(&scalar),
-            table_index,
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
+        let secure_predicates = split_conjunctions(&scalar);
+
+        // Write secure predicates directly into the Scan node.
+        let new_expr =
+            Self::inject_secure_predicates_into_scan(&child, table_index, secure_predicates)?;
         Ok((new_expr, scalar))
+    }
+
+    /// Recursively find the Scan for `table_index` and inject secure predicates into it.
+    fn inject_secure_predicates_into_scan(
+        s_expr: &SExpr,
+        table_index: IndexType,
+        secure_predicates: Vec<ScalarExpr>,
+    ) -> Result<SExpr> {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) if scan.table_index == table_index => {
+                let mut scan = scan.clone();
+                match scan.secure_predicates.as_mut() {
+                    Some(existing) => existing.extend(secure_predicates),
+                    None => scan.secure_predicates = Some(secure_predicates),
+                }
+                Ok(SExpr::create_leaf(Arc::new(scan.into())))
+            }
+            _ => {
+                // The Scan should be the direct child in normal table binding.
+                // But handle the general case by recursing.
+                let mut children = Vec::with_capacity(s_expr.arity());
+                for child in s_expr.children() {
+                    children.push(Arc::new(Self::inject_secure_predicates_into_scan(
+                        child,
+                        table_index,
+                        secure_predicates.clone(),
+                    )?));
+                }
+                Ok(s_expr.replace_children(children))
+            }
+        }
     }
 
     pub fn resolve_data_source(
@@ -604,7 +653,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table_with_batch(
+                .resolve_data_source(
                     catalog_name,
                     database_name,
                     table_name,
@@ -626,9 +675,12 @@ impl Binder {
         temporal: &Option<TemporalClause>,
     ) -> Result<Option<TimeNavigation>> {
         match temporal {
-            Some(TemporalClause::TimeTravel(point)) => {
+            Some(TemporalClause::TimeTravel { point, no_check }) => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
-                Ok(Some(TimeNavigation::TimeTravel(point)))
+                Ok(Some(TimeNavigation::TimeTravel {
+                    point,
+                    no_check: *no_check,
+                }))
             }
             Some(TemporalClause::Changes(interval)) => {
                 let end = match &interval.end_point {
@@ -647,30 +699,68 @@ impl Binder {
         }
     }
 
+    fn fold_travel_point_expr(
+        &self,
+        bind_context: &mut BindContext,
+        expr: &Expr,
+    ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let box (scalar, _) = type_checker.resolve(expr)?;
+        let scalar_expr = scalar.as_expr()?;
+        let (new_expr, _) = ConstantFolder::fold(
+            &scalar_expr,
+            &self.ctx.get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
+        Ok(new_expr)
+    }
+
     pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
-            TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
-            TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
+            TimeTravelPoint::Snapshot(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                match new_expr {
+                    databend_common_expression::Expr::Constant(Constant {
+                        scalar: databend_common_expression::Scalar::String(s),
+                        ..
+                    }) => Ok(NavigationPoint::SnapshotID(s)),
+                    _ => {
+                        if let Some(executor) = &self.subquery_executor {
+                            let result = execute_subquery_for_scalar(executor, expr)?;
+                            match result {
+                                databend_common_expression::Scalar::String(s) => {
+                                    Ok(NavigationPoint::SnapshotID(s))
+                                }
+                                _ => Err(ErrorCode::InvalidArgument(format!(
+                                    "TimeTravelPoint for 'Snapshot' must resolve to a string value, \
+                                    got: {}",
+                                    result
+                                ))),
+                            }
+                        } else {
+                            Err(ErrorCode::InvalidArgument(format!(
+                                "TimeTravelPoint for 'Snapshot' must resolve to a constant string value. \
+                                Provided expression '{}' is not a constant string",
+                                expr
+                            )))
+                        }
+                    }
+                }
+            }
+            TimeTravelPoint::Timestamp(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 match new_expr {
                     databend_common_expression::Expr::Constant(Constant {
@@ -693,22 +783,7 @@ impl Binder {
                 }
             }
             TimeTravelPoint::Offset(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
-
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 let v: i64 = check_number(
                     None,
@@ -734,13 +809,9 @@ impl Binder {
                 database,
                 name,
             } => self.resolve_stream_data_travel_point(catalog, database, name),
-            TimeTravelPoint::TableRef { typ, name } => {
-                let name = self.normalize_identifier(name).name;
-                Ok(NavigationPoint::TableRef {
-                    typ: typ.into(),
-                    name,
-                })
-            }
+            TimeTravelPoint::TableTag(name) => Ok(NavigationPoint::TableTag(
+                self.normalize_identifier(name).name,
+            )),
         }
     }
 

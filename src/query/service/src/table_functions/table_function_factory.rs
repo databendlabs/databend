@@ -19,10 +19,10 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
+use databend_common_storages_fuse::table_functions::FuseBlockStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
@@ -37,24 +37,33 @@ use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_meta_client::types::MetaId;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskDependentsEnableTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskDependentsTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskHistoryTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::BillingUsageDailyTable;
 use super::LicenseInfoTable;
 use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
+use crate::storages::fuse::table_functions::FuseTagFunc;
+#[cfg(feature = "task-support")]
+use crate::table_functions::PrivateTaskHistoryTable;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
-use crate::table_functions::cloud::TaskDependentsEnableTable;
-use crate::table_functions::cloud::TaskDependentsTable;
-use crate::table_functions::cloud::TaskHistoryTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
+#[cfg(feature = "storage-stage")]
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -142,6 +151,14 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "fuse_tag".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseTagFunc>::create),
+            ),
+        );
+
+        creators.insert(
             "fuse_dump_snapshots".to_string(),
             (
                 next_id(),
@@ -186,6 +203,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_block_statistics".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseBlockStatisticsFunc>::create),
             ),
         );
 
@@ -260,6 +285,7 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
         );
 
+        #[cfg(feature = "storage-stage")]
         creators.insert(
             "infer_schema".to_string(),
             (next_id(), Arc::new(InferSchemaTable::create)),
@@ -302,7 +328,13 @@ impl TableFunctionFactory {
             ),
         );
 
-        if !config.task.on {
+        #[cfg(feature = "task-support")]
+        if config.task.on {
+            creators.insert(
+                "task_history".to_string(),
+                (next_id(), Arc::new(PrivateTaskHistoryTable::create)),
+            );
+        } else {
             creators.insert(
                 "task_dependents".to_string(),
                 (next_id(), Arc::new(TaskDependentsTable::create)),
@@ -316,6 +348,18 @@ impl TableFunctionFactory {
             creators.insert(
                 "task_history".to_string(),
                 (next_id(), Arc::new(TaskHistoryTable::create)),
+            );
+        }
+
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_some()
+        {
+            creators.insert(
+                "billing_usage_daily".to_string(),
+                (next_id(), Arc::new(BillingUsageDailyTable::create)),
             );
         }
 

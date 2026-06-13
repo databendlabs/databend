@@ -24,19 +24,21 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
+use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -87,8 +89,8 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub column_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
-    pub histograms: HashMap<IndexType, Option<Histogram>>,
+    pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
+    pub histograms: HashMap<Symbol, Option<Histogram>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -96,6 +98,13 @@ pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
     pub push_down_predicates: Option<Vec<ScalarExpr>>,
+    /// Row Access Policy predicates. Set during binding when a table has an
+    /// associated RAP. Carried through the optimizer to physical plan building,
+    /// where they are constant-folded and enforced by a Filter [SECURE] pipeline
+    /// operator. They may also be included in storage pushdown/prewhere for
+    /// pruning and row selection, but are redacted from plan display and still
+    /// enforced by the secure filter.
+    pub secure_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
@@ -109,7 +118,6 @@ pub struct Scan {
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
     pub scan_id: usize,
-
     pub statistics: Arc<Statistics>,
 }
 
@@ -135,6 +143,7 @@ impl Scan {
             table_index: self.table_index,
             columns,
             push_down_predicates: self.push_down_predicates.clone(),
+            secure_predicates: self.secure_predicates.clone(),
             limit: self.limit,
             order_by: self.order_by.clone(),
             statistics: Arc::new(Statistics {
@@ -154,13 +163,48 @@ impl Scan {
         }
     }
 
+    /// Create a derived scan for decorrelation with new columns and scan_id.
+    /// Only query-semantic read-path metadata (sample, indexes, security quals) is preserved.
+    /// Everything else is explicitly defaulted — the derived scan sits on the
+    /// build side of a decorrelated SEMI/ANTI join, not the mutation target.
+    pub fn derive_decorrelated_scan(&self, columns: ColumnSet, scan_id: usize) -> Self {
+        Scan {
+            table_index: self.table_index,
+            columns,
+            scan_id,
+            // Read-path metadata: preserve from the original scan.
+            sample: self.sample.clone(),
+            inverted_index: self.inverted_index.clone(),
+            vector_index: self.vector_index.clone(),
+            // Security fields: must be preserved (binding-phase, not optimizer annotation).
+            // Note: column references inside secure_predicates are NOT remapped here.
+            // The caller (clone_outer_scan) is responsible for remap if needed.
+            secure_predicates: self.secure_predicates.clone(),
+            // Everything else: explicit default.
+            change_type: None,
+            update_stream_columns: false,
+            is_lazy_table: false,
+            push_down_predicates: None,
+            limit: None,
+            order_by: None,
+            prewhere: None,
+            agg_index: None,
+            statistics: Arc::new(Statistics::default()),
+        }
+    }
+
     pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
         self.update_stream_columns = update_stream_columns;
     }
 
-    fn used_columns(&self) -> ColumnSet {
+    pub(crate) fn used_columns(&self) -> ColumnSet {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
+            for pred in preds.iter() {
+                used_columns.extend(pred.used_columns());
+            }
+        }
+        if let Some(preds) = &self.secure_predicates {
             for pred in preds.iter() {
                 used_columns.extend(pred.used_columns());
             }
@@ -172,6 +216,34 @@ impl Scan {
         used_columns.extend(self.columns.iter());
         used_columns
     }
+
+    pub fn has_secure_predicates_not_applied_by_prewhere(&self) -> bool {
+        let Some(secure_predicates) = &self.secure_predicates else {
+            return false;
+        };
+        if secure_predicates.is_empty() {
+            return false;
+        }
+
+        let Some(prewhere) = &self.prewhere else {
+            return true;
+        };
+
+        secure_predicates
+            .iter()
+            .any(|secure_predicate| !prewhere.predicates.contains(secure_predicate))
+    }
+}
+
+fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> NdvEstimate {
+    let max_non_null_count = num_rows
+        .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
+        .unwrap_or(u64::MAX as f64);
+
+    match ndv {
+        Some(ndv) => NdvEstimate::exact(ndv as f64),
+        None => NdvEstimate::upper_bound(max_non_null_count),
+    }
 }
 
 impl PartialEq for Scan {
@@ -179,6 +251,7 @@ impl PartialEq for Scan {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
+            && self.secure_predicates == other.secure_predicates
     }
 }
 
@@ -191,6 +264,7 @@ impl std::hash::Hash for Scan {
             column.hash(state);
         }
         self.push_down_predicates.hash(state);
+        self.secure_predicates.hash(state);
     }
 }
 
@@ -201,6 +275,8 @@ impl Operator for Scan {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         let push_down_iter = self.push_down_predicates.iter().flatten();
+
+        let secure_predicates_iter = self.secure_predicates.iter().flatten();
 
         let prewhere_iter = self
             .prewhere
@@ -221,6 +297,7 @@ impl Operator for Scan {
         // Chain all iterators together
         Box::new(
             push_down_iter
+                .chain(secure_predicates_iter)
                 .chain(prewhere_iter)
                 .chain(agg_index_pred_iter)
                 .chain(agg_index_selection_iter),
@@ -262,7 +339,7 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v.clone() {
+            if let Some(col_stat) = v {
                 let Some(min) = col_stat.min.clone() else {
                     continue;
                 };
@@ -270,25 +347,8 @@ impl Operator for Scan {
                     continue;
                 };
 
-                // NOTE: don't touch the original num_rows, since it will be used in other places.
-                let ndv = match col_stat.ndv {
-                    Some(ndv) => Ndv::Stat(ndv as f64),
-                    None => Ndv::Max(
-                        num_rows
-                            .and_then(|n| n.checked_sub(col_stat.null_count))
-                            .unwrap_or(u64::MAX) as _,
-                    ),
-                };
-
-                // Alter ndv based on min and max if the datum is uint or int.
-                let ndv = match (&max, &min) {
-                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv.reduce((m - n + 1) as _),
-                    (Datum::Int(m), Datum::Int(n)) if m >= n => {
-                        ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
-                    }
-                    _ if max == min => Ndv::Stat(1.0),
-                    _ => ndv,
-                };
+                let null_count = StatCount::exact(col_stat.null_count);
+                let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
@@ -300,9 +360,9 @@ impl Operator for Scan {
                         if num_rows == 0 {
                             return None;
                         }
-                        let Ndv::Stat(ndv) = ndv else { return None };
+                        let ndv = col_stat.ndv?;
                         HistogramBuilder::from_ndv(
-                            ndv as _,
+                            ndv,
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
@@ -314,7 +374,7 @@ impl Operator for Scan {
                     min,
                     max,
                     ndv,
-                    null_count: col_stat.null_count,
+                    null_count,
                     histogram,
                 });
             }
@@ -329,7 +389,10 @@ impl Operator for Scan {
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(column_stats, precise_cardinality as f64);
+                let mut sb = SelectivityEstimator::new(
+                    column_stats,
+                    StatCardinality::exact(precise_cardinality),
+                );
                 let cardinality = sb.apply(&prewhere.predicates)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -344,6 +407,30 @@ impl Operator for Scan {
         } else {
             None
         };
+
+        // SECURITY: When row access policy is active, apply selectivity from
+        // secure predicates first (for reasonable cardinality estimation and
+        // join ordering), then suppress column statistics to prevent data
+        // leakage through statistical inference.
+        if self.secure_predicates.is_some() {
+            let cardinality = match &self.secure_predicates {
+                Some(preds) if !preds.is_empty() => {
+                    let input_cardinality = precise_cardinality
+                        .map(StatCardinality::exact)
+                        .unwrap_or_else(|| StatCardinality::estimate(cardinality));
+                    SelectivityEstimator::new(column_stats, input_cardinality).apply(preds)?
+                }
+                _ => cardinality,
+            };
+            return Ok(Arc::new(StatInfo {
+                cardinality,
+                statistics: OpStatistics {
+                    precise_cardinality: None,
+                    column_stats: Default::default(),
+                },
+            }));
+        }
+
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: OpStatistics {
@@ -364,5 +451,66 @@ impl Operator for Scan {
         Err(ErrorCode::Internal(
             "Cannot compute required property for children of scan".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_derive_scan_preserves_bind_time_metadata() {
+        let original = Scan {
+            table_index: 42,
+            columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
+                .into_iter()
+                .collect(),
+            scan_id: 10,
+            sample: Some(SampleConfig {
+                row_level: None,
+                block_level: Some(50.0),
+            }),
+            change_type: Some(ChangeType::Append),
+            update_stream_columns: true,
+            is_lazy_table: true,
+            secure_predicates: Some(vec![]),
+            // Optimizer-phase fields set to non-default to verify they get reset.
+            limit: Some(100),
+            order_by: Some(vec![]),
+            ..Default::default()
+        };
+
+        let new_columns = [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+            .into_iter()
+            .collect();
+        let derived = original.derive_decorrelated_scan(new_columns, 99);
+
+        // New columns and scan_id must be replaced.
+        assert_eq!(
+            derived.columns,
+            [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+                .into_iter()
+                .collect()
+        );
+        assert_eq!(derived.scan_id, 99);
+        assert_eq!(derived.table_index, 42);
+
+        // Query-semantic read-path metadata must be preserved.
+        assert_eq!(derived.sample, original.sample);
+
+        // Security fields must be preserved.
+        assert_eq!(derived.secure_predicates, Some(vec![]));
+
+        // Everything else must be reset to default.
+        assert_eq!(derived.change_type, None);
+        assert!(!derived.update_stream_columns);
+        assert!(!derived.is_lazy_table);
+
+        // Optimizer-phase fields must be reset.
+        assert!(derived.push_down_predicates.is_none());
+        assert!(derived.limit.is_none());
+        assert!(derived.order_by.is_none());
+        assert!(derived.prewhere.is_none());
+        assert!(derived.agg_index.is_none());
     }
 }

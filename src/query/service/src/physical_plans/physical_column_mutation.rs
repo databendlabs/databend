@@ -162,17 +162,15 @@ impl IPhysicalPlan for ColumnMutation {
                 });
             }
 
-            // Keep the original order of the columns.
-            let num_output_columns =
-                self.input_num_columns - self.has_filter_column as usize - self.udf_col_num;
-            let mut projection = Vec::with_capacity(num_output_columns);
-            for idx in 0..num_output_columns {
-                if let Some(index) = schema_offset_to_new_offset.get(&idx) {
-                    projection.push(*index);
-                } else {
-                    projection.push(idx);
-                }
-            }
+            // Keep only table fields in their schema order. Mutation input may
+            // carry derived UDF argument/result columns that must not be
+            // serialized back into the table.
+            let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
+            projection.sort_by_key(|(field_id, _)| *field_id);
+            let projection = projection
+                .into_iter()
+                .map(|(_, schema_index)| *schema_index)
+                .collect::<Vec<_>>();
             block_operators.push(BlockOperator::Project { projection });
 
             builder.main_pipeline.add_transformer(|| {
@@ -186,7 +184,7 @@ impl IPhysicalPlan for ColumnMutation {
 
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         let block_thresholds = table.get_block_thresholds();

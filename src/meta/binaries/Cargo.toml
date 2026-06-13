@@ -10,38 +10,32 @@ edition = { workspace = true }
 [features]
 default = ["jemalloc"]
 memory-profiling = [
-    "databend-meta/memory-profiling",
+    "databend-meta-admin/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
 jemalloc = ["databend-common-base/jemalloc"]
-io-uring = [
-    "databend-meta/io-uring",
-    "databend-common-meta-store/io-uring",
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
-]
 
 [dependencies]
 databend-base = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-client = { workspace = true }
 databend-common-meta-control = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-semaphore = { workspace = true }
-databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-admin = { workspace = true }
+databend-meta-cli-config = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-meta-plugin-semaphore = { workspace = true }
+databend-meta-runtime = { workspace = true }
+databend-meta-ver = { workspace = true }
 
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+base2histogram = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 display-more = { workspace = true }
@@ -50,7 +44,6 @@ futures = { workspace = true }
 log = { workspace = true }
 mlua = { workspace = true }
 num_cpus = { workspace = true }
-raft-log = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

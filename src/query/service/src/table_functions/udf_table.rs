@@ -22,7 +22,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,10 +39,12 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::StageLocationParam;
-use databend_common_sql::binder::resolve_stage_location;
+use databend_common_sql::binder::StagePathAccess;
+use databend_common_sql::binder::StageResolver;
 
 use crate::pipelines::builders::UdtfFunctionDesc;
 use crate::pipelines::builders::UdtfServerSource;
+use crate::sessions::TableContext;
 
 pub struct UDTFTable {
     desc: UdtfFunctionDesc,
@@ -83,8 +84,16 @@ impl UDTFTable {
                         "invalid parameter {argument} for udf function, expected constant string",
                     )));
                 };
-                let (stage_info, relative_path) =
-                    databend_common_base::runtime::block_on(resolve_stage_location(ctx, location))?;
+                let stage_resolver = StageResolver::from_table_context_for_stage(
+                    ctx,
+                    databend_common_users::UserApiProvider::instance(),
+                    databend_common_config::GlobalConfig::instance()
+                        .storage
+                        .allow_insecure,
+                )?;
+                let (stage_info, relative_path) = databend_common_base::runtime::block_on(
+                    stage_resolver.resolve_stage_location(location, StagePathAccess::Read),
+                )?;
 
                 if !matches!(stage_info.stage_type, StageType::External) {
                     return Err(ErrorCode::SemanticError(format!(

@@ -57,6 +57,11 @@ pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
 
+pub type SpatialIndexMetaCache = HybridCache<SpatialIndexMeta>;
+pub type SpatialIndexFileCache = HybridCache<SpatialIndexFile>;
+
+pub type VirtualColumnMetaCache = HybridCache<VirtualColumnFileMeta>;
+
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
@@ -163,17 +168,10 @@ impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
     }
 }
 
-impl CachedObject<VectorIndexFile> for VectorIndexFile {
-    type Cache = VectorIndexFileCache;
+impl CachedObject<VirtualColumnFileMeta> for VirtualColumnFileMeta {
+    type Cache = VirtualColumnMetaCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_vector_index_file_cache()
-    }
-}
-
-impl CachedObject<VectorIndexMeta> for VectorIndexMeta {
-    type Cache = VectorIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_vector_index_meta_cache()
+        CacheManager::instance().get_virtual_column_meta_cache()
     }
 }
 
@@ -316,8 +314,8 @@ impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
     }
 }
 
-impl From<VectorIndexMeta> for CacheValue<VectorIndexMeta> {
-    fn from(value: VectorIndexMeta) -> Self {
+impl From<IndexMeta> for CacheValue<IndexMeta> {
+    fn from(value: IndexMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
@@ -325,11 +323,20 @@ impl From<VectorIndexMeta> for CacheValue<VectorIndexMeta> {
     }
 }
 
-impl From<VectorIndexFile> for CacheValue<VectorIndexFile> {
-    fn from(value: VectorIndexFile) -> Self {
+impl From<IndexFile> for CacheValue<IndexFile> {
+    fn from(value: IndexFile) -> Self {
         CacheValue {
-            mem_bytes: std::mem::size_of::<VectorIndexFile>() + value.data.len(),
+            mem_bytes: std::mem::size_of::<IndexFile>() + value.data.len(),
             inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<VirtualColumnFileMeta> for CacheValue<VirtualColumnFileMeta> {
+    fn from(value: VirtualColumnFileMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
         }
     }
 }

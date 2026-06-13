@@ -23,6 +23,7 @@ current_date -> today
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
+datefromparts -> date_from_parts
 day -> to_day_of_month
 dayofmonth -> to_day_of_month
 dayofyear -> to_day_of_year
@@ -30,7 +31,6 @@ diff_dows -> diff_days
 diff_doys -> diff_days
 diff_epochs -> diff_seconds
 diff_isodows -> diff_days
-hex -> to_hex
 hex_decode_binary -> from_hex
 hex_encode -> to_hex
 intdiv -> div
@@ -66,11 +66,13 @@ sha1 -> sha
 siphash -> siphash64
 st_asbinary -> st_aswkb
 st_astext -> st_aswkt
-st_geogfromewkt -> st_geographyfromewkt
-st_geogfromtext -> st_geographyfromewkt
-st_geogfromwkt -> st_geographyfromewkt
-st_geographyfromtext -> st_geographyfromewkt
-st_geographyfromwkt -> st_geographyfromewkt
+st_geogetryfromwkb -> st_geographyfromwkb
+st_geogfromewkb -> st_geographyfromwkb
+st_geogfromtext -> st_geographyfromwkt
+st_geogfromwkb -> st_geographyfromwkb
+st_geogfromwkt -> st_geographyfromwkt
+st_geographyfromewkt -> st_geographyfromwkt
+st_geographyfromtext -> st_geographyfromwkt
 st_geom_point -> st_makegeompoint
 st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
@@ -92,6 +94,8 @@ substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
 subtract -> minus
+timestampfromparts -> timestamp_from_parts
+timestamptzfromparts -> timestamp_tz_from_parts
 to_char -> to_string
 to_datetime -> to_timestamp
 to_number -> to_decimal
@@ -182,10 +186,12 @@ Functions overloads:
 3 array_compact(Array(Nothing) NULL) :: Array(Nothing) NULL
 4 array_compact(Array(T0)) :: Array(T0)
 5 array_compact(Array(T0) NULL) :: Array(T0) NULL
-0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
-1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_concat(Array(T0), Array(T0)) :: Array(T0)
-3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Variant, Variant) :: Variant
+1 array_concat(Variant NULL, Variant NULL) :: Variant NULL
+2 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+3 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_concat(Array(T0), Array(T0)) :: Array(T0)
+5 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_construct FACTORY
 0 array_count FACTORY
 0 array_distinct(Variant) :: Variant
@@ -1348,6 +1354,10 @@ Functions overloads:
 28 contains(Array(Boolean), Boolean) :: Boolean
 29 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 30 contains(Array(T0) NULL, T0) :: Boolean
+0 conv(String, Int64, Int64) :: String
+1 conv(String NULL, Int64 NULL, Int64 NULL) :: String NULL
+2 conv(Int64, Int64, Int64) :: String
+3 conv(Int64 NULL, Int64 NULL, Int64 NULL) :: String NULL
 0 convert_timezone(String, Timestamp) :: Timestamp
 1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
@@ -1372,6 +1382,8 @@ Functions overloads:
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp
 3 date_add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 date_from_parts(Int64, Int64, Int64) :: Date
+1 date_from_parts(Int64 NULL, Int64 NULL, Int64 NULL) :: Date NULL
 0 date_subtract_months(Date, Int64) :: Date
 1 date_subtract_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_subtract_months(Timestamp, Int64) :: Timestamp
@@ -1974,6 +1986,7 @@ Functions overloads:
 0 from_hex(String) :: Binary
 1 from_hex(String NULL) :: Binary NULL
 0 gen_random_uuid() :: String
+0 generate_series FACTORY
 0 geo_distance(Float64, Float64, Float64, Float64) :: Float32
 1 geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 geo_to_h3(Float64, Float64, UInt8) :: UInt64
@@ -2249,6 +2262,12 @@ Functions overloads:
 1 h3_unidirectional_edge_is_valid(UInt64 NULL) :: Boolean NULL
 0 haversine(Float64, Float64, Float64, Float64) :: Float64
 1 haversine(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float64 NULL
+0 hex(String) :: String
+1 hex(String NULL) :: String NULL
+2 hex(Int64) :: String
+3 hex(Int64 NULL) :: String NULL
+4 hex(Binary) :: String
+5 hex(Binary NULL) :: String NULL
 0 hilbert_range_index FACTORY
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
@@ -3854,36 +3873,82 @@ Functions overloads:
 19 sqrt(Float64 NULL) :: Float64 NULL
 0 st_area(Geometry) :: Float64
 1 st_area(Geometry NULL) :: Float64 NULL
+2 st_area(Geography) :: Float64
+3 st_area(Geography NULL) :: Float64 NULL
 0 st_asewkb(Geometry) :: Binary
 1 st_asewkb(Geometry NULL) :: Binary NULL
+2 st_asewkb(Geography) :: Binary
+3 st_asewkb(Geography NULL) :: Binary NULL
 0 st_asewkt(Geometry) :: String
 1 st_asewkt(Geometry NULL) :: String NULL
+2 st_asewkt(Geography) :: String
+3 st_asewkt(Geography NULL) :: String NULL
 0 st_asgeojson(Geometry) :: Variant
 1 st_asgeojson(Geometry NULL) :: Variant NULL
+2 st_asgeojson(Geography) :: Variant
+3 st_asgeojson(Geography NULL) :: Variant NULL
 0 st_aswkb(Geometry) :: Binary
 1 st_aswkb(Geometry NULL) :: Binary NULL
+2 st_aswkb(Geography) :: Binary
+3 st_aswkb(Geography NULL) :: Binary NULL
 0 st_aswkt(Geometry) :: String
 1 st_aswkt(Geometry NULL) :: String NULL
+2 st_aswkt(Geography) :: String
+3 st_aswkt(Geography NULL) :: String NULL
+0 st_azimuth(Geometry, Geometry) :: Float64 NULL
+1 st_azimuth(Geometry NULL, Geometry NULL) :: Float64 NULL
+0 st_buffer(Geometry, Float64) :: Geometry NULL
+1 st_buffer(Geometry NULL, Float64 NULL) :: Geometry NULL
+0 st_centroid(Geometry) :: Geometry NULL
+1 st_centroid(Geometry NULL) :: Geometry NULL
 0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_convexhull(Geometry) :: Geometry
 1 st_convexhull(Geometry NULL) :: Geometry NULL
+0 st_coveredby(Geometry, Geometry) :: Boolean
+1 st_coveredby(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_covers(Geometry, Geometry) :: Boolean
+1 st_covers(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_difference(Geometry, Geometry) :: Geometry NULL
+1 st_difference(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
+2 st_dimension(Geography) :: Int32 NULL
+3 st_dimension(Geography NULL) :: Int32 NULL
 0 st_disjoint(Geometry, Geometry) :: Boolean
 1 st_disjoint(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_distance(Geometry, Geometry) :: Float64
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
+2 st_distance(Geography, Geography) :: Float64
+3 st_distance(Geography NULL, Geography NULL) :: Float64 NULL
+0 st_dwithin(Geometry, Geometry, Float64) :: Boolean
+1 st_dwithin(Geometry NULL, Geometry NULL, Float64 NULL) :: Boolean NULL
 0 st_endpoint(Geometry) :: Geometry NULL
 1 st_endpoint(Geometry NULL) :: Geometry NULL
+2 st_endpoint(Geography) :: Geography NULL
+3 st_endpoint(Geography NULL) :: Geography NULL
+0 st_envelope(Geometry) :: Geometry NULL
+1 st_envelope(Geometry NULL) :: Geometry NULL
 0 st_equals(Geometry, Geometry) :: Boolean
 1 st_equals(Geometry NULL, Geometry NULL) :: Boolean NULL
-0 st_geographyfromewkt(String) :: Geography
-1 st_geographyfromewkt(String NULL) :: Geography NULL
+0 st_geogfromgeohash(String) :: Geography
+1 st_geogfromgeohash(String NULL) :: Geography NULL
+0 st_geogpointfromgeohash(String) :: Geography
+1 st_geogpointfromgeohash(String NULL) :: Geography NULL
+0 st_geographyfromwkb(String) :: Geography
+1 st_geographyfromwkb(String NULL) :: Geography NULL
+2 st_geographyfromwkb(Binary) :: Geography
+3 st_geographyfromwkb(Binary NULL) :: Geography NULL
+0 st_geographyfromwkt(String) :: Geography
+1 st_geographyfromwkt(String NULL) :: Geography NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String
 3 st_geohash(Geometry NULL, Int32 NULL) :: String NULL
+4 st_geohash(Geography) :: String
+5 st_geohash(Geography NULL) :: String NULL
+6 st_geohash(Geography, Int32) :: String
+7 st_geohash(Geography NULL, Int32 NULL) :: String NULL
 0 st_geometryfromwkb(String) :: Geometry
 1 st_geometryfromwkb(String NULL) :: Geometry NULL
 2 st_geometryfromwkb(Binary) :: Geometry
@@ -3900,46 +3965,96 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_hausdorffdistance(Geometry, Geometry) :: Float64
+1 st_hausdorffdistance(Geometry NULL, Geometry NULL) :: Float64 NULL
+0 st_hilbert(Geometry) :: UInt64 NULL
+1 st_hilbert(Geometry NULL) :: UInt64 NULL
+2 st_hilbert(Geometry, Array(Float64)) :: UInt64 NULL
+3 st_hilbert(Geometry NULL, Array(Float64) NULL) :: UInt64 NULL
+4 st_hilbert(Geography) :: UInt64 NULL
+5 st_hilbert(Geography NULL) :: UInt64 NULL
+6 st_hilbert(Geography, Array(Float64)) :: UInt64 NULL
+7 st_hilbert(Geography NULL, Array(Float64) NULL) :: UInt64 NULL
+0 st_intersection(Geometry, Geometry) :: Geometry NULL
+1 st_intersection(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_intersects(Geometry, Geometry) :: Boolean
 1 st_intersects(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_isvalid(Geometry) :: Boolean
+1 st_isvalid(Geometry NULL) :: Boolean NULL
 0 st_length(Geometry) :: Float64
 1 st_length(Geometry NULL) :: Float64 NULL
+2 st_length(Geography) :: Float64
+3 st_length(Geography NULL) :: Float64 NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
+2 st_makeline(Geography, Geography) :: Geography
+3 st_makeline(Geography NULL, Geography NULL) :: Geography NULL
 0 st_makepoint(Float64, Float64) :: Geography
 1 st_makepoint(Float64 NULL, Float64 NULL) :: Geography NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
+2 st_makepolygon(Geography) :: Geography
+3 st_makepolygon(Geography NULL) :: Geography NULL
+0 st_makepolygonoriented(Geometry) :: Geometry
+1 st_makepolygonoriented(Geometry NULL) :: Geometry NULL
 0 st_npoints(Geometry) :: UInt32
 1 st_npoints(Geometry NULL) :: UInt32 NULL
+2 st_npoints(Geography) :: UInt32
+3 st_npoints(Geography NULL) :: UInt32 NULL
+0 st_perimeter(Geometry) :: Float64
+1 st_perimeter(Geometry NULL) :: Float64 NULL
 0 st_pointn(Geometry, Int32) :: Geometry NULL
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
+2 st_pointn(Geography, Int32) :: Geography NULL
+3 st_pointn(Geography NULL, Int32 NULL) :: Geography NULL
 0 st_setsrid(Geometry, Int32) :: Geometry
 1 st_setsrid(Geometry NULL, Int32 NULL) :: Geometry NULL
+0 st_simplify(Geometry, Float64) :: Geometry
+1 st_simplify(Geometry NULL, Float64 NULL) :: Geometry NULL
 0 st_srid(Geometry) :: Int32
 1 st_srid(Geometry NULL) :: Int32 NULL
+2 st_srid(Geography) :: Int32
+3 st_srid(Geography NULL) :: Int32 NULL
 0 st_startpoint(Geometry) :: Geometry NULL
 1 st_startpoint(Geometry NULL) :: Geometry NULL
+2 st_startpoint(Geography) :: Geography NULL
+3 st_startpoint(Geography NULL) :: Geography NULL
+0 st_symdifference(Geometry, Geometry) :: Geometry NULL
+1 st_symdifference(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_transform(Geometry, Int32) :: Geometry
 1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
 2 st_transform(Geometry, Int32, Int32) :: Geometry
 3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
+0 st_union(Geometry, Geometry) :: Geometry NULL
+1 st_union(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_within(Geometry, Geometry) :: Boolean
 1 st_within(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_x(Geometry) :: Float64
 1 st_x(Geometry NULL) :: Float64 NULL
+2 st_x(Geography) :: Float64
+3 st_x(Geography NULL) :: Float64 NULL
 0 st_xmax(Geometry) :: Float64 NULL
 1 st_xmax(Geometry NULL) :: Float64 NULL
+2 st_xmax(Geography) :: Float64 NULL
+3 st_xmax(Geography NULL) :: Float64 NULL
 0 st_xmin(Geometry) :: Float64 NULL
 1 st_xmin(Geometry NULL) :: Float64 NULL
+2 st_xmin(Geography) :: Float64 NULL
+3 st_xmin(Geography NULL) :: Float64 NULL
 0 st_y(Geometry) :: Float64
 1 st_y(Geometry NULL) :: Float64 NULL
+2 st_y(Geography) :: Float64
+3 st_y(Geography NULL) :: Float64 NULL
 0 st_ymax(Geometry) :: Float64 NULL
 1 st_ymax(Geometry NULL) :: Float64 NULL
+2 st_ymax(Geography) :: Float64 NULL
+3 st_ymax(Geography NULL) :: Float64 NULL
 0 st_ymin(Geometry) :: Float64 NULL
 1 st_ymin(Geometry NULL) :: Float64 NULL
+2 st_ymin(Geography) :: Float64 NULL
+3 st_ymin(Geography NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
@@ -3993,6 +4108,8 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 timestamp_diff(Timestamp, Timestamp) :: Interval
 1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
+0 timestamp_from_parts FACTORY
+0 timestamp_tz_from_parts FACTORY
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(Variant) :: Binary NULL
@@ -4121,6 +4238,12 @@ Functions overloads:
 23 to_float64(Float32 NULL) :: Float64 NULL
 24 to_float64(Boolean) :: Float64
 25 to_float64(Boolean NULL) :: Float64 NULL
+0 to_geography(Variant) :: Geography
+1 to_geography(Variant NULL) :: Geography NULL
+2 to_geography(String) :: Geography
+3 to_geography(String NULL) :: Geography NULL
+4 to_geography(Binary) :: Geography
+5 to_geography(Binary NULL) :: Geography NULL
 0 to_geometry(String) :: Geometry
 1 to_geometry(String NULL) :: Geometry NULL
 2 to_geometry(String, Int32) :: Geometry
@@ -4456,8 +4579,10 @@ Functions overloads:
 42 to_string(Bitmap NULL) :: String NULL
 43 to_string(Geometry) :: String
 44 to_string(Geometry NULL) :: String NULL
-45 to_string(Interval) :: String
-46 to_string(Interval NULL) :: String NULL
+45 to_string(Geography) :: String
+46 to_string(Geography NULL) :: String NULL
+47 to_string(Interval) :: String
+48 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -4785,6 +4910,12 @@ Functions overloads:
 23 try_to_float64(Float32 NULL) :: Float64 NULL
 24 try_to_float64(Boolean) :: Float64 NULL
 25 try_to_float64(Boolean NULL) :: Float64 NULL
+0 try_to_geography(Variant) :: Geography NULL
+1 try_to_geography(Variant NULL) :: Geography NULL
+2 try_to_geography(String) :: Geography NULL
+3 try_to_geography(String NULL) :: Geography NULL
+4 try_to_geography(Binary) :: Geography NULL
+5 try_to_geography(Binary NULL) :: Geography NULL
 0 try_to_geometry(Variant) :: Geometry NULL
 1 try_to_geometry(Variant NULL) :: Geometry NULL
 2 try_to_geometry(Variant, Int32) :: Geometry NULL

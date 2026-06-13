@@ -12,7 +12,6 @@ path = "src/bin/codegen.rs"
 
 [dependencies]
 databend-common-expression = { workspace = true }
-itertools = { workspace = true }
 
 [lints]
 workspace = true

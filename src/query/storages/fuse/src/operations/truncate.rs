@@ -25,6 +25,7 @@ use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
+use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -39,6 +40,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
+        self.check_format_supported()?;
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             self.build_truncate_pipeline(ctx, pipeline, mode, prev_snapshot)?;
         }
@@ -67,6 +69,7 @@ impl FuseTable {
                     new_segment_locs: vec![],
                     table_id: self.get_id(),
                     virtual_schema: None,
+                    virtual_schema_mode: VirtualSchemaMode::Merge,
                     hll: HashMap::new(),
                 };
                 let block = DataBlock::empty_with_meta(Box::new(meta));

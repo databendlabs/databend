@@ -14,6 +14,7 @@
 
 use logos::Lexer;
 use logos::Logos;
+use memchr::memchr_iter;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -97,6 +98,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                         TokenKind::INSERT
                             | TokenKind::SELECT
                             | TokenKind::REPLACE
+                            | TokenKind::MERGE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
                             | TokenKind::COPY
@@ -136,6 +138,58 @@ impl<'a> Iterator for Tokenizer<'a> {
     }
 }
 
+/// Returns true if `c` can start an unquoted identifier.
+///
+/// ASCII letters and underscore are accepted, plus any Unicode character with
+/// the Alphabetic derived property (`char::is_alphabetic()` — covers CJK,
+/// Cyrillic, Arabic, etc. while excluding separators, punctuation, and symbols).
+pub fn is_ident_start(c: char) -> bool {
+    c == '_' || c.is_alphabetic()
+}
+
+/// Returns true if `c` can continue an unquoted identifier.
+///
+/// Same as `is_ident_start`, plus ASCII digits and `$`.
+/// Non-ASCII digits are also accepted via `char::is_alphanumeric()`.
+pub fn is_ident_continue(c: char) -> bool {
+    c == '_' || c == '$' || c.is_alphanumeric()
+}
+
+fn bump_ident_continue(lex: &mut Lexer<TokenKind>) {
+    loop {
+        match lex.remainder().chars().next() {
+            Some(c) if is_ident_continue(c) => lex.bump(c.len_utf8()),
+            _ => break,
+        }
+    }
+}
+
+fn lex_ascii_ident(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    bump_ident_continue(lex);
+    logos::FilterResult::Emit(())
+}
+
+fn lex_unicode_ident(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    if !is_ident_start(lex.slice().chars().next().unwrap()) {
+        return logos::FilterResult::Error;
+    }
+    bump_ident_continue(lex);
+    logos::FilterResult::Emit(())
+}
+
+fn lex_comment_block(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let remainder = lex.remainder().as_bytes();
+
+    for idx in memchr_iter(b'*', remainder) {
+        if remainder.get(idx + 1) == Some(&b'/') {
+            lex.bump(idx + 2);
+            return logos::FilterResult::Skip;
+        }
+    }
+
+    logos::FilterResult::Error
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
@@ -150,10 +204,11 @@ pub enum TokenKind {
     #[regex(r"--[^\n\f]*", logos::skip)]
     Comment,
 
-    #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
+    #[token("/*", lex_comment_block)]
     CommentBlock,
 
-    #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#, lex_ascii_ident)]
+    #[regex(r"[^\x00-\x7f]", lex_unicode_ident)]
     Ident,
 
     #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
@@ -375,6 +430,10 @@ pub enum TokenKind {
     AND,
     #[token("ARRAY", ignore(ascii_case))]
     ARRAY,
+    #[token("ARROW_STREAM", ignore(ascii_case))]
+    ARROW_STREAM,
+    #[token("ARROW", ignore(ascii_case))]
+    ARROW,
     #[token("AS", ignore(ascii_case))]
     AS,
     #[token("ASOF", ignore(ascii_case))]
@@ -617,6 +676,10 @@ pub enum TokenKind {
     ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
+    #[token("ENCODING", ignore(ascii_case))]
+    ENCODING,
+    #[token("ENCODING_ERROR_MODE", ignore(ascii_case))]
+    ENCODING_ERROR_MODE,
     #[token("END", ignore(ascii_case))]
     END,
     #[token("ENDPOINT", ignore(ascii_case))]
@@ -650,6 +713,8 @@ pub enum TokenKind {
     ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("NO_CHECK", ignore(ascii_case))]
+    NO_CHECK,
     #[token("FETCH", ignore(ascii_case))]
     FETCH,
     #[token("FIELDS", ignore(ascii_case))]
@@ -670,6 +735,8 @@ pub enum TokenKind {
     FILES,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FINGERPRINT", ignore(ascii_case))]
+    FINGERPRINT,
     #[token("FLASHBACK", ignore(ascii_case))]
     FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
@@ -818,8 +885,14 @@ pub enum TokenKind {
     JWT,
     #[token("KEY", ignore(ascii_case))]
     KEY,
+    #[token("KEYS", ignore(ascii_case))]
+    KEYS,
+    #[token("KEY_PAIR", ignore(ascii_case))]
+    KEY_PAIR,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LABEL", ignore(ascii_case))]
+    LABEL,
     #[token("LAST_DAY", ignore(ascii_case))]
     LAST_DAY,
     #[token("LATERAL", ignore(ascii_case))]
@@ -843,6 +916,8 @@ pub enum TokenKind {
     L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
+    #[token("LANCE", ignore(ascii_case))]
+    LANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -919,6 +994,8 @@ pub enum TokenKind {
     NOTENANTSETTING,
     #[token("DEFAULT_ROLE", ignore(ascii_case))]
     DEFAULT_ROLE,
+    #[token("DEFAULT_WAREHOUSE", ignore(ascii_case))]
+    DEFAULT_WAREHOUSE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
@@ -1011,6 +1088,10 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PUBLIC_KEY", ignore(ascii_case))]
+    PUBLIC_KEY,
+    #[token("PUBLIC", ignore(ascii_case))]
+    PUBLIC,
     #[token("PARTIAL", ignore(ascii_case))]
     PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]
@@ -1019,6 +1100,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTE_STYLE", ignore(ascii_case))]
+    QUOTE_STYLE,
     #[token("QUOTED_EMPTY_FIELD_AS", ignore(ascii_case))]
     QUOTED_EMPTY_FIELD_AS,
     #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
@@ -1117,6 +1200,8 @@ pub enum TokenKind {
     SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMA_EVOLUTION", ignore(ascii_case))]
+    SCHEMA_EVOLUTION,
     #[token("SCHEMAS", ignore(ascii_case))]
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
@@ -1139,6 +1224,8 @@ pub enum TokenKind {
     SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("SPATIAL", ignore(ascii_case))]
+    SPATIAL,
     #[token("VARIABLES", ignore(ascii_case))]
     VARIABLES,
     #[token("STAGES", ignore(ascii_case))]
@@ -1223,6 +1310,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("STATISTICS", ignore(ascii_case))]
     STATISTICS,
+    #[token("STATS_TRUNCATE_LEN", ignore(ascii_case))]
+    STATS_TRUNCATE_LEN,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
@@ -1283,6 +1372,8 @@ pub enum TokenKind {
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
+    #[token("TRIM_SPACE", ignore(ascii_case))]
+    TRIM_SPACE,
     #[token("TRUE", ignore(ascii_case))]
     TRUE,
     #[token("TRUNCATE", ignore(ascii_case))]
@@ -1383,6 +1474,8 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("PROXY", ignore(ascii_case))]
+    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]
@@ -1433,6 +1526,8 @@ pub enum TokenKind {
     TOP,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
+    #[token("WORKER", ignore(ascii_case))]
+    WORKER,
     #[token("SCHEDULE", ignore(ascii_case))]
     SCHEDULE,
     #[token("SUSPEND_TASK_AFTER_NUM_FAILURES", ignore(ascii_case))]
@@ -1501,6 +1596,8 @@ pub enum TokenKind {
     SUNDAY,
     #[token("WAREHOUSES", ignore(ascii_case))]
     WAREHOUSES,
+    #[token("WORKERS", ignore(ascii_case))]
+    WORKERS,
     #[token("INSPECT", ignore(ascii_case))]
     INSPECT,
     #[token("ASSIGN", ignore(ascii_case))]
@@ -1887,10 +1984,8 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
-            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
@@ -1923,10 +2018,24 @@ impl TokenKind {
     }
 }
 
-pub fn all_reserved_keywords() -> Vec<String> {
-    let mut result = Vec::new();
-    for token in TokenKind::iter() {
-        result.push(format!("{:?}", token));
+pub fn all_reserved_keywords() -> impl Iterator<Item = String> {
+    TokenKind::iter()
+        .filter(TokenKind::is_keyword)
+        .filter(|token| token.is_reserved_ident(false) || token.is_reserved_function_name())
+        .map(|token| format!("{:?}", token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_reserved_keywords;
+
+    #[test]
+    fn test_all_reserved_keywords_only_returns_reserved_keywords() {
+        let keywords = all_reserved_keywords().collect::<Vec<_>>();
+
+        assert!(keywords.contains(&"SELECT".to_string()));
+        assert!(keywords.contains(&"TABLE".to_string()));
+        assert!(!keywords.contains(&"DATABASE".to_string()));
+        assert!(!keywords.contains(&"Whitespace".to_string()));
     }
-    result
 }

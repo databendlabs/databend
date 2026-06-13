@@ -54,7 +54,7 @@ test_format() {
 
 test_format "CSV"
 
-test_format "TSV"
+test_format "TEXT"
 
 test_format "NDJSON"
 

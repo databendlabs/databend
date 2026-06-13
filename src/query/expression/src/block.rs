@@ -237,6 +237,18 @@ impl BlockEntry {
             BlockEntry::Column(column) => Ok(ColumnView::Column(T::try_downcast_column(column)?)),
         }
     }
+
+    pub fn into_nullable(self) -> BlockEntry {
+        match self {
+            BlockEntry::Const(scalar, data_type, n) if !data_type.is_nullable_or_null() => {
+                BlockEntry::Const(scalar, DataType::Nullable(Box::new(data_type)), n)
+            }
+            entry @ BlockEntry::Const(_, _, _)
+            | entry @ BlockEntry::Column(Column::Nullable(_))
+            | entry @ BlockEntry::Column(Column::Null { .. }) => entry,
+            BlockEntry::Column(column) => column.wrap_nullable(None).into(),
+        }
+    }
 }
 
 impl From<Column> for BlockEntry {
@@ -372,6 +384,17 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     fn override_block_schema(&self) -> Option<DataSchemaRef> {
         None
     }
+
+    // For meta-only blocks, this can provide profile statistics hints.
+    fn output_stats(&self) -> Option<BlockProfileStatistics> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockProfileStatistics {
+    pub rows: usize,
+    pub bytes: usize,
 }
 
 pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
@@ -494,7 +517,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
+    pub fn empty_with_schema(schema: &DataSchema) -> Self {
         let columns = schema
             .fields()
             .iter()
@@ -566,6 +589,16 @@ impl DataBlock {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
+    }
+
+    #[inline]
+    pub fn profile_statistics(&self) -> BlockProfileStatistics {
+        self.get_meta()
+            .and_then(|meta| meta.output_stats())
+            .unwrap_or(BlockProfileStatistics {
+                rows: self.num_rows(),
+                bytes: self.memory_size(),
+            })
     }
 
     pub fn data_type(&self, offset: usize) -> DataType {
@@ -653,24 +686,6 @@ impl DataBlock {
         if remain_rows > 0 {
             res.push(self.slice(offset..(offset + remain_rows)));
         }
-        res
-    }
-
-    pub fn split_by_rows_if_needed_no_tail(&self, rows_per_block: usize) -> Vec<Self> {
-        // Since rows_per_block represents the expected number of rows per block,
-        // and the minimum number of rows per block is 0.8 * rows_per_block,
-        // the maximum is taken as 1.8 * rows_per_block.
-        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
-        let mut res = vec![];
-        let mut offset = 0;
-        let mut remain_rows = self.num_rows;
-        while remain_rows >= max_rows_per_block {
-            let cut = self.slice(offset..(offset + rows_per_block));
-            res.push(cut);
-            offset += rows_per_block;
-            remain_rows -= rows_per_block;
-        }
-        res.push(self.slice(offset..(offset + remain_rows)));
         res
     }
 
@@ -902,10 +917,9 @@ impl DataBlock {
     pub fn project(mut self, projections: &ColumnSet) -> Self {
         let mut entries = Vec::with_capacity(projections.len());
         for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) {
-                continue;
+            if projections.contains(&index) {
+                entries.push(column);
             }
-            entries.push(column);
         }
         self.entries = entries;
         self
@@ -946,10 +960,15 @@ impl DataBlock {
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.
     /// This function is used to estimate the memory footprint of a `DataBlock` when writing it to storage.
-    pub fn estimate_block_size(&self) -> usize {
+    /// `num_columns` is the number of leading columns to include in the estimate.
+    /// Temporary columns appended for sorting/statistics, such as extra cluster key columns,
+    /// should not be included when they are not written.
+    pub fn estimate_block_size(&self, num_columns: usize) -> usize {
+        debug_assert!(num_columns <= self.entries.len());
         let num_rows = self.num_rows();
         self.columns()
             .iter()
+            .take(num_columns)
             .map(|entry| match entry {
                 BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,
@@ -959,7 +978,7 @@ impl DataBlock {
                 BlockEntry::Const(s, data_type, _) => {
                     s.as_ref().estimated_scalar_repeat_size(num_rows, data_type)
                 }
-                _ => entry.memory_size(),
+                _ => entry.memory_size_with_options(true),
             })
             .sum()
     }

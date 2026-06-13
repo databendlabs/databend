@@ -12,27 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::F64;
-use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_integer_mapped_type;
-use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::divide_function;
-use databend_functions_scalar_numeric_basic_arithmetic::register_basic_arithmetic;
-use databend_functions_scalar_numeric_basic_arithmetic::register_divide;
-use databend_functions_scalar_numeric_basic_arithmetic::register_intdiv;
-use databend_functions_scalar_numeric_basic_arithmetic::register_minus;
-use databend_functions_scalar_numeric_basic_arithmetic::register_modulo;
-use databend_functions_scalar_numeric_basic_arithmetic::register_multiply;
-use databend_functions_scalar_numeric_basic_arithmetic::register_plus;
-use databend_functions_scalar_numeric_basic_arithmetic::vectorize_modulo;
-use num_traits::AsPrimitive;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_divide;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_intdiv;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_minus;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_modulo;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_multiply;
+use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::register_plus;
 
 pub fn register_integer_basic_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_INTEGER_TYPES {
@@ -40,7 +29,12 @@ pub fn register_integer_basic_arithmetic(registry: &mut FunctionRegistry) {
             with_integer_mapped_type!(|L| match left {
                 NumberDataType::L => with_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_basic_arithmetic!(L, R, registry);
+                        register_plus::<L, R>(registry);
+                        register_minus::<L, R>(registry);
+                        register_multiply::<L, R>(registry);
+                        register_divide::<L, R>(registry);
+                        register_intdiv::<L, R>(registry);
+                        register_modulo::<L, R>(registry);
                     }
                     _ => unreachable!(),
                 }),

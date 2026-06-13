@@ -23,6 +23,7 @@ mod stream_partition;
 mod take;
 mod take_chunks;
 mod take_compact;
+mod take_index;
 mod take_ranges;
 mod topk;
 
@@ -34,4 +35,6 @@ pub use sort::*;
 pub use sort_compare::*;
 pub use stream_partition::*;
 pub use take_chunks::*;
+pub use take_index::RepeatIndex;
+pub use take_index::TakeIndex;
 pub use topk::*;

@@ -15,12 +15,16 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::TypeName;
+use crate::ast::UserIdentity;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -59,7 +63,7 @@ impl Display for CreateTagStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TagSetItem {
     pub tag_name: Identifier,
     pub tag_value: String,
@@ -112,7 +116,7 @@ impl Display for ShowTagsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AlterObjectTagStmt {
     pub object: AlterObjectTagTarget,
     pub action: AlterObjectTagAction,
@@ -125,7 +129,7 @@ impl Display for AlterObjectTagStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AlterObjectTagTarget {
     Database {
         if_exists: bool,
@@ -142,9 +146,38 @@ pub enum AlterObjectTagTarget {
         if_exists: bool,
         stage_name: String,
     },
+    User {
+        if_exists: bool,
+        user: UserIdentity,
+    },
+    Role {
+        if_exists: bool,
+        role_name: String,
+    },
     Connection {
         if_exists: bool,
         connection_name: Identifier,
+    },
+    View {
+        if_exists: bool,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        view: Identifier,
+    },
+    Stream {
+        if_exists: bool,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        stream: Identifier,
+    },
+    Function {
+        if_exists: bool,
+        udf_name: Identifier,
+    },
+    Procedure {
+        if_exists: bool,
+        name: Identifier,
+        arg_types: Vec<TypeName>,
     },
 }
 
@@ -187,6 +220,23 @@ impl Display for AlterObjectTagTarget {
                 }
                 write!(f, "{stage_name}")?;
             }
+            AlterObjectTagTarget::User { if_exists, user } => {
+                write!(f, "USER ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{user}")?;
+            }
+            AlterObjectTagTarget::Role {
+                if_exists,
+                role_name,
+            } => {
+                write!(f, "ROLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{}", QuotedString(role_name, '\''))?;
+            }
             AlterObjectTagTarget::Connection {
                 if_exists,
                 connection_name,
@@ -197,12 +247,65 @@ impl Display for AlterObjectTagTarget {
                 }
                 write!(f, "{connection_name}")?;
             }
+            AlterObjectTagTarget::View {
+                if_exists,
+                catalog,
+                database,
+                view,
+            } => {
+                write!(f, "VIEW ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(view)),
+                )?;
+            }
+            AlterObjectTagTarget::Stream {
+                if_exists,
+                catalog,
+                database,
+                stream,
+            } => {
+                write!(f, "STREAM ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(stream)),
+                )?;
+            }
+            AlterObjectTagTarget::Function {
+                if_exists,
+                udf_name,
+            } => {
+                write!(f, "FUNCTION ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{udf_name}")?;
+            }
+            AlterObjectTagTarget::Procedure {
+                if_exists,
+                name,
+                arg_types,
+            } => {
+                write!(f, "PROCEDURE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{name}(")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, ")")?;
+            }
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AlterObjectTagAction {
     Set { tags: Vec<TagSetItem> },
     Unset { tags: Vec<Identifier> },

@@ -19,11 +19,11 @@ use std::time::Instant;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
@@ -34,15 +34,19 @@ use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
+
+const BYTES_PER_MIB: usize = 1024 * 1024;
 
 struct PayloadWriter {
     path: String,
@@ -50,13 +54,13 @@ struct PayloadWriter {
 }
 
 impl PayloadWriter {
-    fn try_create(prefix: &str) -> Result<Self> {
+    fn try_create(prefix: &str, writer_pool_bytes: usize) -> Result<Self> {
         let data_operator = DataOperator::instance();
-        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
+        let spills_data_writer =
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
 
         Ok(PayloadWriter {
             path: file_path,
@@ -109,16 +113,23 @@ impl WriteStats {
 struct AggregatePayloadWriters {
     spill_prefix: String,
     partition_count: usize,
+    writer_pool_bytes: usize,
     writers: Vec<Option<PayloadWriter>>,
     write_stats: WriteStats,
     ctx: Arc<QueryContext>,
 }
 
 impl AggregatePayloadWriters {
-    pub fn create(prefix: &str, partition_count: usize, ctx: Arc<QueryContext>) -> Self {
+    pub fn create(
+        prefix: &str,
+        partition_count: usize,
+        writer_pool_bytes: usize,
+        ctx: Arc<QueryContext>,
+    ) -> Self {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
+            writer_pool_bytes,
             writers: Self::empty_writers(partition_count),
             write_stats: WriteStats::default(),
             ctx,
@@ -133,7 +144,10 @@ impl AggregatePayloadWriters {
 
     fn ensure_writer(&mut self, bucket: usize) -> Result<&mut PayloadWriter> {
         if self.writers[bucket].is_none() {
-            self.writers[bucket] = Some(PayloadWriter::try_create(&self.spill_prefix)?);
+            self.writers[bucket] = Some(PayloadWriter::try_create(
+                &self.spill_prefix,
+                self.writer_pool_bytes,
+            )?);
         }
 
         Ok(self.writers[bucket].as_mut().unwrap())
@@ -320,6 +334,7 @@ pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
     partition_stream: P,
+    data_schema: DataSchemaRef,
     payload_writers: AggregatePayloadWriters,
 }
 
@@ -327,18 +342,25 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         partition_count: usize,
+        data_schema: DataSchemaRef,
         partition_stream: P,
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
+        let writer_pool_bytes = ctx
+            .get_settings()
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(BYTES_PER_MIB);
 
-        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx);
+        let payload_writers =
+            AggregatePayloadWriters::create(&spill_prefix, partition_count, writer_pool_bytes, ctx);
 
         Ok(Self {
             memory_settings,
             read_setting,
+            data_schema,
             partition_stream,
             payload_writers,
         })
@@ -362,31 +384,36 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         Ok(payloads)
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload)
+    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
+        restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
 pub struct NewAggregateSpillReader {
     read_setting: ReadSettings,
+    data_schema: DataSchemaRef,
 }
 
 impl NewAggregateSpillReader {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<Self> {
         let table_ctx: Arc<dyn TableContext> = ctx;
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
-        Ok(Self { read_setting })
+        Ok(Self {
+            read_setting,
+            data_schema: schema,
+        })
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload)
+    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
+        restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
 fn restore_payload(
     read_setting: ReadSettings,
     payload: NewSpilledPayload,
-) -> Result<AggregateMeta> {
+    data_schema: &DataSchemaRef,
+) -> Result<SerializedPayload> {
     let NewSpilledPayload {
         bucket,
         location,
@@ -401,12 +428,14 @@ fn restore_payload(
     let mut reader = buffer_pool.reader(
         operator.clone(),
         location.clone(),
+        data_schema.clone(),
         vec![row_group.clone()],
         target,
+        read_setting,
     )?;
 
     let instant = Instant::now();
-    let data_block = reader.read(read_setting)?;
+    let data_block = reader.read()?;
     let elapsed = instant.elapsed();
 
     let read_size = reader.read_bytes();
@@ -421,12 +450,12 @@ fn restore_payload(
     );
 
     if let Some(block) = data_block {
-        Ok(AggregateMeta::Serialized(SerializedPayload {
+        Ok(SerializedPayload {
             bucket,
             data_block: block,
             // this field is no longer used in new aggregate
             max_partition_count: 0,
-        }))
+        })
     } else {
         Err(ErrorCode::Internal("read empty block from final aggregate"))
     }
@@ -449,9 +478,11 @@ fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
 
     use databend_common_exception::Result;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
 
@@ -467,8 +498,12 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
-        let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
+        let mut spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            partition_count,
+            Arc::new(DataSchema::empty()),
+            partition_stream,
+        )?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 
@@ -496,8 +531,12 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = LocalPartitionStream::new(1024, 1024 * 1024, partition_count);
-        let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
+        let mut spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            partition_count,
+            Arc::new(DataSchema::empty()),
+            partition_stream,
+        )?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 

@@ -26,9 +26,9 @@ use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::BindContext;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::plans::Operator;
@@ -69,7 +69,7 @@ pub struct Mutation {
     pub row_id_shuffle: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
-    pub row_id_index: IndexType,
+    pub row_id_index: Symbol,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:
@@ -81,7 +81,7 @@ pub struct Mutation {
     pub no_effect: bool,
 
     // MutationStrategy::Direct related variables.
-    pub predicate_column_index: Option<usize>,
+    pub predicate_column_index: Option<Symbol>,
     pub direct_filter: Vec<ScalarExpr>,
     pub truncate_table: bool,
 }

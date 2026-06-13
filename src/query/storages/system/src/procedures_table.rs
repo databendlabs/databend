@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -27,16 +29,40 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
+use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
 use crate::meta_service_error;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+
+// Response for list procedures API (aligned with SHOW PROCEDURES)
+#[derive(serde::Serialize)]
+pub struct ProcedureListItem {
+    name: String,
+    procedure_id: u64,
+    arguments: String,
+    comment: String,
+    description: String,
+    created_on: DateTime<Utc>,
+}
+
+// Response for get procedure details API (aligned with DESC PROCEDURE)
+#[derive(serde::Serialize)]
+pub struct ProcedureDetail {
+    signature: String,
+    returns: String,
+    language: String,
+    body: String,
+}
 
 pub struct ProceduresTable {
     table_info: TableInfo,
@@ -59,13 +85,25 @@ impl AsyncSystemTable for ProceduresTable {
         let tenant = ctx.get_tenant();
         let user_api = UserApiProvider::instance();
         let mgr = user_api.procedure_api(&tenant);
-        let procedures = mgr
+        let all_procedures = mgr
             .list_procedures(ListProcedureReq {
                 tenant,
                 filter: None,
             })
             .await
             .map_err(meta_service_error)?;
+
+        let enable_experimental_rbac_check =
+            ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let procedures = if enable_experimental_rbac_check {
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
+            all_procedures
+                .into_iter()
+                .filter(|p| visibility_checker.check_procedure_visibility(&p.ident.procedure_id()))
+                .collect::<Vec<_>>()
+        } else {
+            all_procedures
+        };
 
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());
@@ -134,5 +172,127 @@ impl ProceduresTable {
         };
 
         AsyncOneBlockSystemTable::create(ProceduresTable { table_info })
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_procedures(tenant: &Tenant) -> Result<Vec<ProcedureListItem>> {
+        let user_api = UserApiProvider::instance();
+        let mgr = user_api.procedure_api(tenant);
+        let procedures = mgr
+            .list_procedures(ListProcedureReq {
+                tenant: tenant.clone(),
+                filter: None,
+            })
+            .await
+            .map_err(meta_service_error)?;
+
+        Ok(procedures
+            .into_iter()
+            .map(|proc_info| ProcedureListItem {
+                name: proc_info.name_ident.procedure_name().name.clone(),
+                procedure_id: *proc_info.ident.procedure_id(),
+                arguments: format!(
+                    "{} RETURN ({})",
+                    proc_info.name_ident.procedure_name(),
+                    proc_info.meta.return_types.iter().join(",")
+                ),
+                comment: proc_info.meta.comment.clone(),
+                description: "user-defined procedure".to_string(),
+                created_on: proc_info.meta.created_on,
+            })
+            .collect())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_procedure(
+        tenant: &Tenant,
+        name: &str,
+        args: &str,
+    ) -> Result<Option<ProcedureDetail>> {
+        let user_api = UserApiProvider::instance();
+        let mgr = user_api.procedure_api(tenant);
+        let req = GetProcedureReq::new(tenant, ProcedureIdentity::new(name, args));
+
+        match mgr.get_procedure(&req).await.map_err(meta_service_error)? {
+            Some(reply) => {
+                // Format signature as (arg1,arg2,...)
+                let signature = if reply.procedure_meta.arg_names.is_empty() {
+                    "()".to_string()
+                } else {
+                    format!("({})", reply.procedure_meta.arg_names.join(","))
+                };
+
+                // Format returns as (Type1,Type2,...)
+                let returns = if reply.procedure_meta.return_types.is_empty() {
+                    "()".to_string()
+                } else {
+                    format!(
+                        "({})",
+                        reply
+                            .procedure_meta
+                            .return_types
+                            .iter()
+                            .map(|t| t.to_string())
+                            .join(",")
+                    )
+                };
+
+                Ok(Some(ProcedureDetail {
+                    signature,
+                    returns,
+                    language: reply.procedure_meta.procedure_language.clone(),
+                    body: reply.procedure_meta.script.clone(),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_procedure_by_id(
+        tenant: &Tenant,
+        procedure_id: u64,
+    ) -> Result<Option<ProcedureDetail>> {
+        let user_api = UserApiProvider::instance();
+        let mgr = user_api.procedure_api(tenant);
+
+        match mgr
+            .get_procedure_by_id(procedure_id)
+            .await
+            .map_err(meta_service_error)?
+        {
+            Some(seq_meta) => {
+                let procedure_meta = seq_meta.data;
+
+                // Format signature as (arg1,arg2,...)
+                let signature = if procedure_meta.arg_names.is_empty() {
+                    "()".to_string()
+                } else {
+                    format!("({})", procedure_meta.arg_names.join(","))
+                };
+
+                // Format returns as (Type1,Type2,...)
+                let returns = if procedure_meta.return_types.is_empty() {
+                    "()".to_string()
+                } else {
+                    format!(
+                        "({})",
+                        procedure_meta
+                            .return_types
+                            .iter()
+                            .map(|t| t.to_string())
+                            .join(",")
+                    )
+                };
+
+                Ok(Some(ProcedureDetail {
+                    signature,
+                    returns,
+                    language: procedure_meta.procedure_language.clone(),
+                    body: procedure_meta.script.clone(),
+                }))
+            }
+            None => Ok(None),
+        }
     }
 }

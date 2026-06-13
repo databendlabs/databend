@@ -43,6 +43,14 @@ use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
 use crate::servers::flight::v1::packets::DataPacket;
 
+/// Parameters for a do_exchange RPC call, serialized as JSON in metadata.
+#[derive(Serialize, Deserialize)]
+pub struct DoExchangeParams {
+    pub query_id: String,
+    pub exchange_id: String,
+    pub num_threads: usize,
+}
+
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
 }
@@ -202,6 +210,34 @@ impl FlightClient {
             Ok(res) => Ok(res.into_inner()),
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
         }
+    }
+
+    pub fn do_exchange(
+        &mut self,
+        request_rx: Receiver<FlightData>,
+        params: DoExchangeParams,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::result::Result<Streaming<FlightData>, Status>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let mut request = Request::new(request_rx);
+
+            let params_json = serde_json::to_string(&params).map_err(|e| {
+                Status::internal(format!("Failed to serialize DoExchangeParams: {}", e))
+            })?;
+            if let Ok(value) = params_json.parse() {
+                request.metadata_mut().insert("x-exchange-params", value);
+            }
+
+            match self.inner.do_exchange(request).await {
+                Ok(response) => Ok(response.into_inner()),
+                Err(status) => Err(status),
+            }
+        })
     }
 }
 

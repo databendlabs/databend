@@ -17,7 +17,6 @@ use std::collections::HashMap;
 
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::plan::StreamColumnType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -33,6 +32,7 @@ use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
+use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::plans::BoundColumnRef;
@@ -45,6 +45,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
@@ -157,7 +158,7 @@ impl AddStreamColumn {
                 span: None,
                 column: ColumnBindingBuilder::new(
                     stream_column.column_name().to_string(),
-                    schema_index,
+                    Symbol::from_field_index(schema_index),
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
@@ -178,7 +179,7 @@ impl AddStreamColumn {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ID_COL_NAME.to_string(),
-                            num_fields + 1,
+                            Symbol::from_field_index(num_fields + 1),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
@@ -191,7 +192,7 @@ impl AddStreamColumn {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ROW_NUM_COL_NAME.to_string(),
-                            num_fields,
+                            Symbol::from_field_index(num_fields),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
@@ -218,8 +219,7 @@ impl AddStreamColumn {
 
             exprs.push(
                 new_stream_column_scalar_expr
-                    .as_expr()?
-                    .project_column_ref(|col| Ok(col.index))?
+                    .as_field_index_expr()?
                     .as_remote_expr(),
             );
         }

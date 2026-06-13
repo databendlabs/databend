@@ -21,6 +21,7 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
@@ -67,7 +68,7 @@ impl QueryExecutorTasksQueue {
 
     /// Pull task from the global task queue
     /// Method is thread unsafe and require thread safe call
-    pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
+    pub fn steal_task_to_context(&self, graph: &RunningGraph, context: &mut ExecutorWorkerContext) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         if !workers_tasks.is_empty() {
@@ -102,7 +103,8 @@ impl QueryExecutorTasksQueue {
 
         // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
         let workers_condvar = context.get_workers_condvar();
-        if !workers_condvar.has_waiting_async_task()
+
+        if graph.is_all_nodes_finished()
             && workers_tasks.workers_waiting_status.is_last_active_worker()
         {
             drop(workers_tasks);
@@ -161,7 +163,7 @@ impl QueryExecutorTasksQueue {
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
         let mut workers_tasks = self.workers_tasks.lock();
 
-        let mut worker_id = task.worker_id;
+        let mut worker_id = task.worker_id % workers_tasks.workers_completed_async_tasks.len();
         workers_tasks.tasks_size += 1;
         workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
 

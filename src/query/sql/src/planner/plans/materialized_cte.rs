@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::ColumnBinding;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -30,20 +29,14 @@ use crate::plans::RelOp;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
-    pub cte_output_columns: Option<Vec<ColumnBinding>>,
     pub ref_count: usize,
     pub channel_size: Option<usize>,
 }
 
 impl MaterializedCTE {
-    pub fn new(
-        cte_name: String,
-        output_columns: Option<Vec<ColumnBinding>>,
-        channel_size: Option<usize>,
-    ) -> Self {
+    pub fn new(cte_name: String, channel_size: Option<usize>) -> Self {
         Self {
             cte_name,
-            cte_output_columns: output_columns,
             // ref_count is set to 0 by default, will be updated by CleanupUnusedCTEOptimizer
             ref_count: 0,
             channel_size,

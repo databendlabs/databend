@@ -76,6 +76,8 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_created_time = Vec::with_capacity(processes_info.len());
         let mut processes_status = Vec::with_capacity(processes_info.len());
         let mut processes_current_query_id = Vec::with_capacity(processes_info.len());
+        let mut processes_query_hash = Vec::with_capacity(processes_info.len());
+        let mut processes_query_parameterized_hash = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             let data_metrics = &process_info.data_metrics;
@@ -122,6 +124,8 @@ impl SyncSystemTable for ProcessesTable {
                     .clone()
                     .unwrap_or("".to_owned()),
             );
+            processes_query_hash.push(process_info.query_hash.clone());
+            processes_query_parameterized_hash.push(process_info.query_parameterized_hash.clone());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -143,6 +147,8 @@ impl SyncSystemTable for ProcessesTable {
             TimestampType::from_data(processes_created_time),
             StringType::from_data(processes_status),
             StringType::from_data(processes_current_query_id),
+            StringType::from_data(processes_query_hash),
+            StringType::from_data(processes_query_parameterized_hash),
         ]))
     }
 }
@@ -186,6 +192,8 @@ impl ProcessesTable {
             TableField::new("created_time", TableDataType::Timestamp),
             TableField::new("status", TableDataType::String),
             TableField::new("current_query_id", TableDataType::String),
+            TableField::new("query_hash", TableDataType::String),
+            TableField::new("query_parameterized_hash", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

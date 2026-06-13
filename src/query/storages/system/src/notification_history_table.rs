@@ -91,7 +91,12 @@ impl AsyncSystemTable for NotificationHistoryTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot view system.notification_history table without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));

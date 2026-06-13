@@ -21,10 +21,7 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::principal::user_token::QueryTokenInfo;
-    use crate::principal::user_token_ident::TokenIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -34,18 +31,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = QueryTokenInfo;
     }
-
-    impl kvapi::Value for QueryTokenInfo {
-        type KeyType = TokenIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::user_token_ident::TokenIdent;
     use crate::tenant::Tenant;
@@ -53,10 +44,7 @@ mod tests {
     #[test]
     fn test_setting_ident() {
         let tenant = Tenant::new_literal("tenant1");
-        let ident = TokenIdent::new(tenant.clone(), "test");
-        assert_eq!("__fd_token/tenant1/test", ident.to_string_key());
-
-        let got = TokenIdent::from_str_key(&ident.to_string_key()).unwrap();
-        assert_eq!(ident, got);
+        let ident = TokenIdent::new(tenant, "test");
+        assert_round_trip(ident, "__fd_token/tenant1/test");
     }
 }

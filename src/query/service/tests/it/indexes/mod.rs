@@ -15,4 +15,5 @@
 mod aggregating_index;
 mod inverted_index;
 mod ngram_index;
+mod spatial_index;
 mod vector_index;

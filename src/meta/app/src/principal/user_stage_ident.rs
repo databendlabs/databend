@@ -35,9 +35,6 @@ impl StageIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use super::StageIdent;
     use crate::principal::StageInfo;
     use crate::tenant_key::resource::TenantResource;
 
@@ -48,18 +45,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = StageInfo;
     }
-
-    impl kvapi::Value for StageInfo {
-        type KeyType = StageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::user_stage_ident::StageIdent;
     use crate::tenant::Tenant;
@@ -68,9 +59,6 @@ mod tests {
     fn test_stage_ident() {
         let tenant = Tenant::new_literal("test");
         let stage = StageIdent::new(tenant, "stage");
-
-        let key = stage.to_string_key();
-        assert_eq!(key, "__fd_stages/test/stage");
-        assert_eq!(stage, StageIdent::from_str_key(&key).unwrap());
+        assert_round_trip(stage, "__fd_stages/test/stage");
     }
 }

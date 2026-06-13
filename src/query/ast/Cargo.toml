@@ -1,6 +1,6 @@
 [package]
 name = "databend-common-ast"
-version = "0.2.3"
+version = "0.2.5"
 publish = true
 description = "SQL parser for Databend"
 authors = { workspace = true }
@@ -9,21 +9,23 @@ edition = { workspace = true }
 repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 
 [dependencies]
+databend-common-ast-visit-derive = { workspace = true }
 derive-visitor = { workspace = true }
 educe = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fast-float2 = { workspace = true }
 fastrace = { workspace = true }
+hex = { workspace = true }
 indent = { workspace = true }
 itertools = { workspace = true }
 logos = { workspace = true }
+memchr = { workspace = true }
 nom = { workspace = true }
 nom-rule = { workspace = true }
 ordered-float = { workspace = true }
 percent-encoding = { workspace = true }
 pratt = { workspace = true }
-pretty_assertions = { workspace = true }
 recursive = { workspace = true }
 rspack-codespan-reporting = { workspace = true }
 serde = { workspace = true }

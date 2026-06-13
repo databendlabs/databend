@@ -25,13 +25,15 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
@@ -136,7 +138,11 @@ async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
     };
 
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan1)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let index_names = vec![index_name1.clone()];
     check_index_data(ctx.clone(), table.clone(), index_names).await?;
@@ -152,7 +158,11 @@ async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
     };
 
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan2)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let index_names = vec![index_name1.clone(), index_name2.clone()];
     check_index_data(ctx.clone(), table.clone(), index_names).await?;
@@ -189,7 +199,11 @@ async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
     };
 
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan3)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let index_names = vec![index_name1, index_name2];
     check_index_data(ctx.clone(), table.clone(), index_names).await?;

@@ -37,10 +37,6 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
             ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
-            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -102,8 +98,6 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
-            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -136,7 +130,7 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
             assert!(configured.cache.enable_table_meta_cache);
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert_eq!(10240, configured.cache.table_meta_segment_bytes);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
@@ -166,10 +160,6 @@ fn test_env_config_fs() -> anyhow::Result<()> {
             ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
             ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
-            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -228,8 +218,6 @@ fn test_env_config_fs() -> anyhow::Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
-            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -261,7 +249,7 @@ fn test_env_config_fs() -> anyhow::Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
@@ -292,10 +280,6 @@ fn test_env_config_gcs() -> anyhow::Result<()> {
             ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
             ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
-            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -354,8 +338,6 @@ fn test_env_config_gcs() -> anyhow::Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
-            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -395,7 +377,7 @@ fn test_env_config_gcs() -> anyhow::Result<()> {
             assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
             assert!(configured.cache.enable_table_meta_cache);
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
             assert_eq!(10240, configured.cache.table_meta_segment_bytes);
@@ -425,10 +407,6 @@ fn test_env_config_oss() -> anyhow::Result<()> {
             ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
             ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
-            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -492,8 +470,6 @@ fn test_env_config_oss() -> anyhow::Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
-            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -568,10 +544,6 @@ fn test_env_config_webhdfs() -> anyhow::Result<()> {
             ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
             ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
             ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
-            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
-            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
             ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
             ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
@@ -631,8 +603,6 @@ fn test_env_config_webhdfs() -> anyhow::Result<()> {
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
             assert_eq!(255, configured.query.max_active_sessions);
-            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
-            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
             assert_eq!("1.2.3.4", configured.query.http_handler_host);
             assert_eq!(8001, configured.query.http_handler_port);
 
@@ -713,10 +683,6 @@ mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
 max_active_sessions = 256
 max_server_memory_usage = 0
-clickhouse_handler_host = "127.0.0.1"
-clickhouse_handler_port = 9000
-clickhouse_http_handler_host = "127.0.0.1"
-clickhouse_http_handler_port = 8124
 http_handler_host = "127.0.0.1"
 http_handler_port = 8000
 http_handler_result_timeout_secs = 60
@@ -868,15 +834,13 @@ path = "_cache"
             // config in `catalogs` field, with name of "my_hive"
             assert!(cfg.catalogs.contains_key("my_hive"), "catalogs is none!");
 
-            let inner = cfg.catalogs["my_hive"].clone().try_into();
-            assert!(inner.is_ok(), "casting must success");
-            let cfg = inner.unwrap();
-            match cfg {
-                CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.metastore_address, "address incorrect");
-                    assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
-                }
-            }
+            let inner: CatalogConfig = cfg.catalogs["my_hive"].clone();
+            assert_eq!("hive", inner.ty);
+            assert_eq!(
+                "127.0.0.1:9083", inner.hive.metastore_address,
+                "address incorrect"
+            );
+            assert_eq!("binary", inner.hive.protocol, "protocol incorrect");
         },
     );
 
@@ -909,13 +873,14 @@ protocol = "binary"
         || {
             let cfg = InnerConfig::load_for_test().expect("config load success");
 
-            assert_eq!(
-                cfg.catalogs["hive"],
-                CatalogConfig::Hive(CatalogHiveConfig {
+            assert_eq!(cfg.catalogs["hive"], CatalogConfig {
+                ty: "hive".to_string(),
+                hive: CatalogHiveConfig {
                     metastore_address: "1.1.1.1:10000".to_string(),
-                    protocol: ThriftProtocol::Binary,
-                })
-            );
+                    meta_store_address: None,
+                    protocol: ThriftProtocol::Binary.to_string(),
+                },
+            });
         },
     );
 
@@ -981,13 +946,14 @@ protocol = "binary"
         || {
             let cfg = InnerConfig::load_for_test().expect("config load success");
 
-            assert_eq!(
-                cfg.catalogs["my_hive"],
-                CatalogConfig::Hive(CatalogHiveConfig {
+            assert_eq!(cfg.catalogs["my_hive"], CatalogConfig {
+                ty: "hive".to_string(),
+                hive: CatalogHiveConfig {
                     metastore_address: "1.1.1.1:12000".to_string(),
-                    protocol: ThriftProtocol::Binary,
-                })
-            );
+                    meta_store_address: None,
+                    protocol: ThriftProtocol::Binary.to_string(),
+                },
+            });
         },
     );
 

@@ -1,0 +1,22 @@
+statement ok
+create or replace database issue_16885
+
+statement ok
+use issue_16885
+
+statement ok
+create or replace table t40(c0 bool, c1 TINYINT, c2 SMALLINT, c3 int)
+
+query II
+MERGE INTO t40 USING (
+    SELECT NULL AS cqErrg0 FROM generate_series(to_timestamp(5964463314946), to_timestamp(5964463324946))) AS tQyf13(cqErrg0)
+    ON c3 <= 1211599673896589479
+    WHEN NOT MATCHED AND t40.$1
+        THEN INSERT (c0, c1) VALUES(FALSE, 10)
+    WHEN MATCHED AND c0
+        THEN UPDATE SET c3 = c3
+----
+0 0
+
+statement ok
+drop database issue_16885

@@ -22,7 +22,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -50,6 +49,7 @@ use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::VirtualSchemaMode;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -58,6 +58,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
@@ -65,6 +67,9 @@ pub struct MutationSource {
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
+    pub display_filters: Option<Filters>,
+    #[serde(default)]
+    pub has_hidden_secure_filters: bool,
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
@@ -107,6 +112,8 @@ impl IPhysicalPlan for MutationSource {
             table_index: self.table_index,
             table_info: self.table_info.clone(),
             filters: self.filters.clone(),
+            display_filters: self.display_filters.clone(),
+            has_hidden_secure_filters: self.has_hidden_secure_filters,
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
@@ -119,7 +126,7 @@ impl IPhysicalPlan for MutationSource {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
         let is_delete = self.input_type == MutationType::Delete;
@@ -134,6 +141,7 @@ impl IPhysicalPlan for MutationSource {
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
                         virtual_schema: None,
+                        virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
@@ -143,8 +151,11 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> =
-            self.read_partition_columns.clone().into_iter().collect();
+        let read_partition_columns: Vec<usize> = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_field_index())
+            .collect();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -191,7 +202,11 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self.read_partition_columns.clone().into_iter().collect();
+        let col_indices = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_field_index())
+            .collect();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(
@@ -224,10 +239,24 @@ impl PhysicalPlanBuilder {
         &mut self,
         mutation_source: &databend_common_sql::plans::MutationSource,
     ) -> Result<PhysicalPlan> {
-        let filters = if !mutation_source.predicates.is_empty() {
+        let all_predicates: Vec<ScalarExpr> = mutation_source
+            .secure_predicates
+            .iter()
+            .chain(mutation_source.user_predicates.iter())
+            .cloned()
+            .collect();
+        let filters = if !all_predicates.is_empty() {
             Some(create_push_down_filters(
                 &self.ctx.get_function_context()?,
-                &mutation_source.predicates,
+                &all_predicates,
+            )?)
+        } else {
+            None
+        };
+        let display_filters = if !mutation_source.user_predicates.is_empty() {
+            Some(create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &mutation_source.user_predicates,
             )?)
         } else {
             None
@@ -269,6 +298,8 @@ impl PhysicalPlanBuilder {
             output_schema,
             table_info: mutation_info.table_info.clone(),
             filters,
+            display_filters,
+            has_hidden_secure_filters: !mutation_source.secure_predicates.is_empty(),
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             truncate_table,

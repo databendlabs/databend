@@ -32,8 +32,15 @@ use super::binary::BinaryColumn;
 use super::column_type_error;
 use super::domain_type_error;
 use super::scalar_type_error;
+use crate::BlockEntry;
+use crate::Chunk;
+use crate::ChunkIndex;
+use crate::ColumnView;
 use crate::ScalarRef;
+use crate::TakeIndex;
 use crate::property::Domain;
+use crate::types::NullableType;
+use crate::types::nullable::NullableColumnBuilder;
 use crate::values::Column;
 use crate::values::Scalar;
 
@@ -335,6 +342,21 @@ impl StringColumnBuilder {
         self.data.extend_values(other.iter());
     }
 
+    pub fn append_column_for_concat(&mut self, other: &StringColumn) {
+        debug_assert!(
+            self.row_buffer.is_empty(),
+            "append_column_for_concat expects no pending row data"
+        );
+
+        let source = other.clone().maybe_gc();
+        unsafe {
+            self.data.append_views_unchecked(
+                source.views().as_slice().iter(),
+                source.data_buffers().as_ref(),
+            );
+        }
+    }
+
     pub fn build(self) -> StringColumn {
         self.data.into()
     }
@@ -358,6 +380,100 @@ impl StringColumnBuilder {
 
     pub fn pop(&mut self) -> Option<String> {
         self.data.pop()
+    }
+
+    pub fn take_from_views(views: &[ColumnView<StringType>], indices: &ChunkIndex) -> BlockEntry {
+        let mut builder = Self::with_capacity(indices.num_rows());
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    let view = &views[block as usize];
+                    for row in TakeIndex::iter(rows) {
+                        let scalar = unsafe { view.index_unchecked(row) };
+                        builder.put_and_commit(scalar);
+                    }
+                }
+                Chunk::Repeat { block, rows } => {
+                    let view = &views[block as usize];
+                    let scalar = unsafe { view.index_unchecked(rows.row as usize) };
+                    builder.push_repeat(scalar, rows.count as _);
+                }
+                Chunk::Range { block, row, len } => {
+                    let view = &views[block as usize];
+                    for r in row..(row + len) {
+                        let scalar = unsafe { view.index_unchecked(r as usize) };
+                        builder.put_and_commit(scalar);
+                    }
+                }
+            }
+        }
+        let column = StringType::build_column(builder);
+        StringType::upcast_column(column).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StringColumn;
+    use super::StringColumnBuilder;
+
+    #[test]
+    fn test_append_column_copies_sparse_string_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let sparse = source.sliced(7, 1);
+
+        let mut builder = StringColumnBuilder::with_capacity(1);
+        builder.append_column(&sparse);
+        let result = builder.build();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
+        assert!(
+            result.total_buffer_len() < sparse.total_buffer_len(),
+            "append_column should not retain the full source buffers"
+        );
+    }
+}
+
+impl NullableColumnBuilder<StringType> {
+    pub fn take_from_views(
+        views: &[ColumnView<NullableType<StringType>>],
+        indices: &ChunkIndex,
+    ) -> BlockEntry {
+        let mut builder = Self::with_capacity(indices.num_rows(), &[]);
+
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    let view = &views[block as usize];
+                    for row in TakeIndex::iter(rows) {
+                        match unsafe { view.index_unchecked(row) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+                Chunk::Repeat { block, rows } => {
+                    let view = &views[block as usize];
+                    match unsafe { view.index_unchecked(rows.row as usize) } {
+                        Some(value) => builder.push_repeat(value, rows.count as usize),
+                        None => builder.push_repeat_null(rows.count as usize),
+                    }
+                }
+                Chunk::Range { block, row, len } => {
+                    let view = &views[block as usize];
+                    for r in row..(row + len) {
+                        match unsafe { view.index_unchecked(r as usize) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+            }
+        }
+
+        let nullable = builder.build();
+        NullableType::<StringType>::upcast_column(nullable).into()
     }
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
@@ -375,7 +376,14 @@ impl NumDesc {
 
     fn i64_to_num_part(&self, value: i64) -> Result<NumPart> {
         if self.flag.contains(NumFlag::Roman) {
-            return Err(ErrorCode::Unimplemented("to_char RN (Roman numeral)"));
+            let number = Roman::try_from_i64(value)
+                .map(|roman| roman.to_string())
+                .unwrap_or_else(Roman::overflow);
+            return Ok(NumPart {
+                sign: value >= 0,
+                number,
+                out_pre_spaces: 0,
+            });
         }
 
         if self.flag.contains(NumFlag::Eeee) {
@@ -437,7 +445,15 @@ impl NumDesc {
 
     fn float_to_num_part(&mut self, value: f64, float_digits: usize) -> Result<NumPart> {
         if self.flag.contains(NumFlag::Roman) {
-            return Err(ErrorCode::Unimplemented("to_char RN (Roman numeral)"));
+            let number = Roman::try_from_f64(value)
+                .map(|roman| roman.to_string())
+                .unwrap_or_else(Roman::overflow);
+
+            return Ok(NumPart {
+                sign: !value.is_sign_negative(),
+                number,
+                out_pre_spaces: 0,
+            });
         }
 
         if self.flag.contains(NumFlag::Eeee) {
@@ -504,6 +520,64 @@ struct NumPart {
     sign: bool,
     number: String,
     out_pre_spaces: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Roman(u16);
+
+impl Roman {
+    const MAX_LEN: usize = 15;
+    const DIGITS_1: [&'static str; 9] = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+    const DIGITS_10: [&'static str; 9] = ["X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"];
+    const DIGITS_100: [&'static str; 9] = ["C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"];
+
+    fn overflow() -> String {
+        "#".repeat(Self::MAX_LEN)
+    }
+
+    fn try_from_i64(value: i64) -> Option<Self> {
+        (1..=3999).contains(&value).then_some(Self(value as u16))
+    }
+
+    fn try_from_f64(value: f64) -> Option<Self> {
+        if !value.is_finite() {
+            return None;
+        }
+        let rounded = value.round_ties_even();
+        (1.0..=3999.0)
+            .contains(&rounded)
+            .then_some(Self(rounded as u16))
+    }
+}
+
+impl std::fmt::Display for Roman {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut value = self.0;
+
+        for _ in 0..(value / 1000) {
+            f.write_char('M')?;
+        }
+        value %= 1000;
+
+        let hundreds = (value / 100) as usize;
+        if hundreds > 0 {
+            f.write_str(Roman::DIGITS_100[hundreds - 1])?;
+        }
+        value %= 100;
+
+        let tens = (value / 10) as usize;
+        if tens > 0 {
+            f.write_str(Roman::DIGITS_10[tens - 1])?;
+        }
+        value %= 10;
+
+        let ones = value as usize;
+        if ones > 0 {
+            f.write_str(Roman::DIGITS_1[ones - 1])?;
+        }
+
+        Ok(())
+    }
 }
 
 fn parse_format(
@@ -818,32 +892,53 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
     // Roman correction
     if np.desc.flag.contains(NumFlag::Roman) {
-        unimplemented!()
+        let lower = nodes.iter().any(|n| {
+            matches!(
+                n,
+                FormatNode::Action(KeyWord {
+                    id: NumPoz::Tkrn,
+                    ..
+                })
+            )
+        });
+        let fill_mode = np.desc.flag.contains(NumFlag::FillMode);
+        return Ok(match (lower, fill_mode) {
+            (false, true) => String::from_iter(np.number.iter()),
+            (true, true) => String::from_iter(np.number.iter().flat_map(|c| c.to_lowercase())),
+            (false, false) => format!(
+                "{:>width$}",
+                String::from_iter(np.number.iter()),
+                width = Roman::MAX_LEN
+            ),
+            (true, false) => format!(
+                "{:>width$}",
+                String::from_iter(np.number.iter().flat_map(|c| c.to_lowercase())),
+                width = Roman::MAX_LEN
+            ),
+        });
     }
 
     // Sign
 
     // MI/PL/SG - write sign itself and not in number
     if np.desc.flag.intersects(NumFlag::Plus | NumFlag::Minus) {
-        // if np.desc.flag.contains(NumFlag::Plus) && !np.desc.flag.contains(NumFlag::Minus) {
-        //     np.sign_wrote = false; /* need sign */
-        // } else {
-        // TODO: Why is this not the same as the postgres implementation?
-        np.sign_wrote = true; // needn't sign
-    // }
+        np.sign_wrote = {
+            // Databend models sign suppression with `sign_wrote` only.
+            // PostgreSQL also tracks sign position state; we do not, so PL/MI/SG
+            // mark `sign_wrote = true` to prevent numpart_to_char() from writing an
+            // extra implicit sign before digits.
+
+            // !np.desc.flag.contains(NumFlag::Plus) || np.desc.flag.contains(NumFlag::Minus);
+            true
+        };
     } else {
         if np.sign && np.desc.flag.contains(NumFlag::FillMode) {
             np.desc.flag.remove(NumFlag::Bracket)
         }
 
-        if np.sign
+        np.sign_wrote = np.sign
             && np.desc.flag.contains(NumFlag::FillMode)
-            && !np.desc.flag.contains(NumFlag::LSign)
-        {
-            np.sign_wrote = true // needn't sign
-        } else {
-            np.sign_wrote = false // need sign
-        }
+            && !np.desc.flag.contains(NumFlag::LSign);
         if matches!(np.desc.lsign, Some(NumLSign::Pre)) && np.desc.pre == np.desc.pre_lsign_num {
             np.desc.lsign = Some(NumLSign::Post)
         }
@@ -977,6 +1072,30 @@ mod tests {
     }
 
     #[test]
+    fn test_roman_type() {
+        assert_eq!(
+            Roman::try_from_i64(485).map(|roman| roman.to_string()),
+            Some("CDLXXXV".to_string())
+        );
+        assert_eq!(
+            Roman::try_from_i64(3999).map(|roman| roman.to_string()),
+            Some("MMMCMXCIX".to_string())
+        );
+        assert_eq!(Roman::try_from_i64(0), None);
+        assert_eq!(Roman::try_from_i64(4000), None);
+
+        assert_eq!(
+            Roman::try_from_f64(485.0).map(|roman| roman.to_string()),
+            Some("CDLXXXV".to_string())
+        );
+        assert_eq!(
+            Roman::try_from_f64(2.5).map(|roman| roman.to_string()),
+            Some("II".to_string())
+        );
+        assert_eq!(Roman::try_from_f64(f64::NAN), None);
+    }
+
+    #[test]
     fn test_i64() -> Result<()> {
         assert_eq!(" 123", i64_to_char(123, "999")?);
         assert_eq!("-123", i64_to_char(-123, "999")?);
@@ -1069,6 +1188,10 @@ mod tests {
         assert_eq!("+485", i64_to_char(485, "S999")?);
         assert_eq!("-485", i64_to_char(-485, "S999")?);
 
+        assert_eq!("###############", i64_to_char(0, "FMRN")?);
+        assert_eq!("###############", i64_to_char(4000, "FMRN")?);
+        assert_eq!("###############", i64_to_char(-1, "FMRN")?);
+
         Ok(())
     }
 
@@ -1121,9 +1244,10 @@ mod tests {
             f32_to_char(1.234_567e-3, "99999999999D999999")?
         );
 
-        // assert_eq!("        CDLXXXV", f64_to_char(485, "RN")?);
-        // assert_eq!("CDLXXXV", f64_to_char(485, "FMRN")?);
-        // assert_eq!("V", f64_to_char(5.2, "FMRN")?);
+        assert_eq!("        CDLXXXV", f64_to_char(485.0, "RN")?);
+        assert_eq!("CDLXXXV", f64_to_char(485.0, "FMRN")?);
+        assert_eq!("cdlxxxv", f64_to_char(485.0, "FMrn")?);
+        assert_eq!("V", f64_to_char(5.2, "FMRN")?);
 
         // assert_eq!(" 482nd", f64_to_char(482, "999th")?);
 

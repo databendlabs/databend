@@ -40,8 +40,8 @@ use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
+use parquet::arrow::arrow_writer::ArrowRowGroupWriterFactory;
 use parquet::arrow::arrow_writer::compute_leaves;
-use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaData;
@@ -57,7 +57,6 @@ use super::Location;
 use super::SpillerInner;
 use super::SpillsBufferPool;
 use super::async_buffer::BufferWriter;
-use super::async_buffer::SpillTarget;
 
 pub struct Properties {
     schema: Arc<Schema>,
@@ -86,7 +85,7 @@ impl Properties {
     }
 
     pub fn new_encoder(&self) -> RowGroupEncoder {
-        RowGroupEncoder::new(&self.writer_props, self.schema.clone(), &self.parquet)
+        RowGroupEncoder::new(&self.writer_props, self.schema.clone(), &self.parquet, 0)
     }
 }
 
@@ -97,8 +96,19 @@ pub struct RowGroupEncoder {
 }
 
 impl RowGroupEncoder {
-    fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
-        let writers = get_column_writers(parquet, props, &schema).unwrap();
+    fn new(
+        props: &WriterPropertiesPtr,
+        schema: Arc<Schema>,
+        parquet: &SchemaDescriptor,
+        row_group_index: usize,
+    ) -> Self {
+        let file_writer =
+            SerializedFileWriter::new(Vec::new(), parquet.root_schema_ptr(), props.clone())
+                .unwrap();
+        let row_group_factory = ArrowRowGroupWriterFactory::new(&file_writer, schema.clone());
+        let writers = row_group_factory
+            .create_column_writers(row_group_index)
+            .unwrap();
         Self {
             schema,
             props: props.clone(),
@@ -166,7 +176,7 @@ impl RowGroupEncoder {
             .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {
-            return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
+            return Ok(DataBlock::empty_with_schema(&data_schema));
         }
 
         let block = if blocks.len() == 1 {
@@ -204,6 +214,7 @@ impl<W: Write + Send> FileWriter<W> {
             self.writer.properties(),
             self.schema.clone(),
             self.writer.schema_descr(),
+            self.row_groups.len(),
         )
     }
 
@@ -235,12 +246,13 @@ impl<W: Write + Send> FileWriter<W> {
         let file_metadata = writer.finish()?;
         let tp = writer.schema_descr().root_schema_ptr();
         let schema_descr = Arc::new(SchemaDescriptor::new(tp));
+        let file_metadata = file_metadata.file_metadata();
 
         let metadata = parquet::file::metadata::FileMetaData::new(
-            file_metadata.version,
-            file_metadata.num_rows,
-            file_metadata.created_by.clone(),
-            file_metadata.key_value_metadata.clone(),
+            file_metadata.version(),
+            file_metadata.num_rows(),
+            file_metadata.created_by().map(ToString::to_string),
+            file_metadata.key_value_metadata().cloned(),
             schema_descr,
             None,
         );
@@ -468,7 +480,7 @@ impl<A> SpillerInner<A> {
 
         let remote_location = self.create_unique_location();
         let remote =
-            pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
+            pool.buffer_writer(op.clone(), remote_location.clone(), self.writer_pool_bytes)?;
 
         Ok(AnyFileWriter::Remote {
             path: remote_location.clone(),

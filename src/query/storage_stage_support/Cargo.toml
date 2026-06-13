@@ -1,0 +1,18 @@
+[package]
+name = "databend-query-storage-stage-support"
+description = "Storage stage support integrations for Databend query"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[features]
+default = []
+storage-stage = ["dep:databend-common-storages-stage"]
+
+[dependencies]
+databend-common-storages-stage = { workspace = true, optional = true }
+
+[lints]
+workspace = true

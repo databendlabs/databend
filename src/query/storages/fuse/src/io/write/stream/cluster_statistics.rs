@@ -87,7 +87,7 @@ impl ClusterStatisticsBuilder {
             }]
         };
         Ok(Arc::new(Self {
-            cluster_key_id: table.cluster_key_meta.as_ref().unwrap().0,
+            cluster_key_id: table.cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
             func_ctx: ctx.get_function_context()?,

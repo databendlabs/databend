@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -81,7 +83,7 @@ impl Display for CreateDictionaryStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropDictionaryStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -106,7 +108,7 @@ impl Display for DropDictionaryStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCreateDictionaryStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -126,7 +128,7 @@ impl Display for ShowCreateDictionaryStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowDictionariesStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -145,7 +147,7 @@ impl Display for ShowDictionariesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameDictionaryStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,

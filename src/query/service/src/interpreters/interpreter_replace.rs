@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -51,6 +50,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
+#[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
@@ -66,6 +66,10 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct ReplaceInterpreter {
     ctx: Arc<QueryContext>,
@@ -250,9 +254,7 @@ impl ReplaceInterpreter {
                 ));
             }
             let delete_column_name = delete_column_binding.unwrap().column_name.clone();
-            let filter = cast_expr_to_non_null_boolean(
-                scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?,
-            )?;
+            let filter = cast_expr_to_non_null_boolean(scalar.as_field_index_expr()?)?;
 
             let filter = filter.as_remote_expr();
 
@@ -393,11 +395,11 @@ impl ReplaceInterpreter {
     async fn connect_input_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
-        table_info: TableInfo,
+        _table_info: TableInfo,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
-        table_meta_timestamps: TableMetaTimestamps,
+        _purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values(source) => self
@@ -412,17 +414,18 @@ impl ReplaceInterpreter {
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
             }
+            #[cfg(feature = "storage-stage")]
             InsertInputSource::Stage(plan) => match *plan.clone() {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
                     let (physical_plan, _, _) = interpreter
-                        .build_physical_plan(table_info, &copy_plan, table_meta_timestamps)
+                        .build_physical_plan(_table_info, &copy_plan, _table_meta_timestamps)
                         .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
-                    *purge_info = Some((
+                    *_purge_info = Some((
                         copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
                         copy_plan.stage_table_info.stage_info.clone(),
                         copy_plan.stage_table_info.copy_into_table_options.clone(),
@@ -436,6 +439,10 @@ impl ReplaceInterpreter {
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
+            #[cfg(not(feature = "storage-stage"))]
+            InsertInputSource::Stage(_) => Err(ErrorCode::Unimplemented(
+                "Stage COPY source support is disabled, rebuild with cargo feature 'storage-stage'",
+            )),
             InsertInputSource::StreamingLoad { .. } => {
                 unreachable!("replace with streaming not supported yet")
             }

@@ -13,15 +13,18 @@
 // limitations under the License.
 
 mod async_crash_me;
-mod cloud;
+mod billing_usage_daily;
 mod copy_history;
 mod fuse_vacuum2;
-mod infer_schema;
+#[cfg(feature = "storage-stage")]
+pub(crate) mod infer_schema;
 mod inspect_parquet;
 mod list_stage;
 mod numbers;
 mod others;
 mod policy_references;
+#[cfg(feature = "task-support")]
+mod private_task_history;
 mod show_grants;
 mod show_roles;
 mod show_sequences;
@@ -35,6 +38,7 @@ mod tag_references;
 mod temporary_tables_table;
 mod udf_table;
 
+pub use billing_usage_daily::BillingUsageDailyTable;
 pub use copy_history::CopyHistoryTable;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
@@ -42,6 +46,8 @@ pub use numbers::generate_numbers_parts;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use policy_references::PolicyReferencesTable;
+#[cfg(feature = "task-support")]
+pub use private_task_history::PrivateTaskHistoryTable;
 pub use system::TableStatisticsFunc;
 pub use system::get_fuse_table_snapshot;
 pub use system::get_fuse_table_statistics;

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -27,14 +26,14 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_ast::ast::SnapshotRefType as AstSnapshotRefType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaId;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaId;
 use maplit::hashmap;
 
 use super::CatalogInfo;
@@ -49,8 +48,10 @@ use crate::tenant::Tenant;
 
 mod ident;
 mod ops;
+mod refs;
 
 pub use ident::*;
+pub use refs::*;
 
 // serde is required by [`TableInfo`]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -106,9 +107,20 @@ impl TableInfo {
                 self.engine()
             )));
         }
-        let database_name = self.desc.split('.').next().unwrap();
-        let database_name = &database_name[1..database_name.len() - 1];
-        Ok(database_name)
+        // desc format is "'db_name'.'table_name'"
+        let raw = self
+            .desc
+            .split('.')
+            .next()
+            .ok_or_else(|| ErrorCode::Internal(format!("empty desc in table {}", self.name)))?;
+        raw.strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected desc format: {} in table {}",
+                    raw, self.name
+                ))
+            })
     }
 }
 
@@ -156,23 +168,26 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
+    /// Deprecated, will be removed later.
+    /// Original cluster key as a string. Use `cluster_key_v2` instead.
     pub cluster_key: Option<String>,
-    /// A sequential number that uniquely identifies changes to the cluster key.
-    /// This value increments by 1 each time the cluster key is created or modified,
-    /// ensuring a unique identifier for each version of the cluster key.
-    /// It remains unchanged when the cluster key is dropped.
+    /// Cluster key for the table, including an id.
+    pub cluster_key_v2: Option<(u32, String)>,
+    /// Global monotonically increasing sequence for cluster key changes, to
+    /// ensuring a unique identifier for each version of cluster key.
     pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
     pub field_comments: Vec<String>,
+    /// Per-column string stats truncation length, keyed by ColumnId.
+    /// Absent means use the default (STATS_STRING_PREFIX_LEN = 16).
+    pub field_stats_truncate_len: BTreeMap<ColumnId, u64>,
     pub virtual_schema: Option<VirtualDataSchema>,
 
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
-    // shared by share_id
-    pub shared_by: BTreeSet<u64>,
     // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
     // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
@@ -186,74 +201,36 @@ pub struct TableMeta {
     pub row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
-
-    pub refs: BTreeMap<String, SnapshotRef>,
 }
 
-// Inspired by iceberg(https://github.com/apache/iceberg-rust/blob/main/crates/iceberg/src/spec/snapshot.rs#L443-L449)
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct SnapshotRef {
-    /// The unique id of the reference.
-    /// It is allocated from a global sequence and is unique cluster-wide.
-    pub id: u64,
-    /// After this timestamp, the reference becomes inactive.
-    pub expire_at: Option<DateTime<Utc>>,
-    /// The type of the reference.
-    pub typ: SnapshotRefType,
-    /// The location of the snapshot that this reference points to.
-    pub loc: String,
-}
+impl TableMeta {
+    /// Returns the cluster key defined on the main branch, if any.
+    pub fn cluster_key_meta(&self) -> Option<(u32, String)> {
+        // - Prefer `cluster_key_v2` if present (branch-aware)
+        // - Otherwise fallback to old `cluster_key` + global `cluster_key_seq`
+        self.cluster_key_v2.clone().or_else(|| {
+            self.cluster_key
+                .as_ref()
+                .map(|k| (self.cluster_key_seq, k.clone()))
+        })
+    }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    num_derive::FromPrimitive,
-    Hash,
-)]
-pub enum SnapshotRefType {
-    Branch = 0,
-    Tag = 1,
-}
-
-impl From<&AstSnapshotRefType> for SnapshotRefType {
-    fn from(v: &AstSnapshotRefType) -> Self {
-        match v {
-            AstSnapshotRefType::Branch => SnapshotRefType::Branch,
-            AstSnapshotRefType::Tag => SnapshotRefType::Tag,
+    pub fn cluster_key_str(&self) -> Option<&str> {
+        if let Some((_, ref key)) = self.cluster_key_v2 {
+            Some(key.as_str())
+        } else {
+            self.cluster_key.as_deref()
         }
     }
-}
 
-impl Display for SnapshotRefType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SnapshotRefType::Branch => write!(f, "BRANCH"),
-            SnapshotRefType::Tag => write!(f, "TAG"),
+    pub fn cluster_key_id(&self) -> Option<u32> {
+        if let Some((id, _)) = &self.cluster_key_v2 {
+            Some(*id)
+        } else if self.cluster_key.is_some() {
+            Some(self.cluster_key_seq)
+        } else {
+            None
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct BranchInfo {
-    pub name: String,
-    pub info: SnapshotRef,
-}
-
-impl BranchInfo {
-    pub fn branch_name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn branch_id(&self) -> u64 {
-        self.info.id
-    }
-
-    pub fn branch_type(&self) -> SnapshotRefType {
-        self.info.typ.clone()
     }
 }
 
@@ -286,6 +263,7 @@ pub enum TableIndexType {
     Inverted = 0,
     Ngram = 1,
     Vector = 2,
+    Spatial = 3,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -381,11 +359,9 @@ impl TableInfo {
         self
     }
 
+    /// Returns the cluster key defined on the main branch, if any.
     pub fn cluster_key(&self) -> Option<(u32, String)> {
-        self.meta
-            .cluster_key
-            .clone()
-            .map(|k| (self.meta.cluster_key_seq, k))
+        self.meta.cluster_key_meta()
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
@@ -393,48 +369,6 @@ impl TableInfo {
             .get(opt_key)
             .and_then(|s| s.parse::<T>().ok())
             .unwrap_or(default)
-    }
-
-    pub fn get_table_ref(&self, typ: Option<&SnapshotRefType>, name: &str) -> Result<&SnapshotRef> {
-        let Some(table_ref) = self.meta.refs.get(name) else {
-            return Err(ErrorCode::UnknownReference(format!(
-                "Unknown reference '{}' in table {}",
-                name, self.desc
-            )));
-        };
-        let ref_type = &table_ref.typ;
-        if let Some(typ) = typ {
-            if ref_type != typ {
-                return Err(ErrorCode::MismatchedReferenceType(format!(
-                    "'{}' is a {} reference, please use 'AT({} => {})' instead.",
-                    name, ref_type, ref_type, name,
-                )));
-            }
-        }
-        if table_ref.expire_at.is_some_and(|v| v < Utc::now()) {
-            return Err(ErrorCode::ReferenceExpired(format!(
-                "{} '{}' in table {} is expired",
-                ref_type, name, self.desc,
-            )));
-        }
-        Ok(table_ref)
-    }
-
-    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
-        self.meta
-            .refs
-            .iter()
-            .find(|(_, r)| r.id == id)
-            .map(|(name, info)| BranchInfo {
-                name: name.clone(),
-                info: info.clone(),
-            })
-            .ok_or_else(|| {
-                ErrorCode::UnknownReference(format!(
-                    "Unknown reference '{}' in table {}",
-                    id, self.desc
-                ))
-            })
     }
 }
 
@@ -464,22 +398,22 @@ impl Default for TableMeta {
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
             cluster_key: None,
+            cluster_key_v2: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             comment: "".to_string(),
             field_comments: vec![],
+            field_stats_truncate_len: BTreeMap::new(),
             virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),
-            shared_by: BTreeSet::new(),
             column_mask_policy: None,
             column_mask_policy_columns_ids: BTreeMap::new(),
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
-            refs: BTreeMap::new(),
         }
     }
 }
@@ -522,6 +456,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Vector => {
                 write!(f, "VECTOR")
+            }
+            TableIndexType::Spatial => {
+                write!(f, "SPATIAL")
             }
         }
     }
@@ -645,8 +582,6 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, removed table id)
-    pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -1181,7 +1116,9 @@ pub struct GcDroppedTableReq {
     pub drop_ids: Vec<DroppedId>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// `__fd_table_id_to_name/<table_id> -> DBIdTableName`
+#[derive(Clone, Debug, Default, Eq, PartialEq, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_id_to_name")]
 pub struct TableIdToName {
     pub table_id: u64,
 }
@@ -1256,14 +1193,9 @@ pub struct TruncateTableReply {}
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_client::kvapi;
 
     use crate::schema::DBIdTableName;
-    use crate::schema::DatabaseId;
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -1272,169 +1204,65 @@ mod kvapi_key_impl {
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
 
-    impl kvapi::KeyCodec for DBIdTableName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.table_name)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            Ok(Self { db_id, table_name })
-        }
-    }
-
-    /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
-        const PREFIX: &'static str = "__fd_table";
-
         type ValueType = TableId;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
     }
 
-    impl kvapi::KeyCodec for TableIdToName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
     impl kvapi::Key for TableIdToName {
-        const PREFIX: &'static str = "__fd_table_id_to_name";
-
         type ValueType = DBIdTableName;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
-    impl kvapi::KeyCodec for TableId {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_by_id/<tb_id> -> TableMeta"
     impl kvapi::Key for TableId {
-        const PREFIX: &'static str = "__fd_table_by_id";
-
         type ValueType = TableMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
     }
 
-    impl kvapi::KeyCodec for TableIdHistoryIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.database_id).push_str(&self.table_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = b.next_u64()?;
-            let table_name = b.next_str()?;
-            Ok(Self {
-                database_id: db_id,
-                table_name,
-            })
-        }
-    }
-
-    /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
     impl kvapi::Key for TableIdHistoryIdent {
-        const PREFIX: &'static str = "__fd_table_id_list";
-
         type ValueType = TableIdList;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.database_id).to_string_key())
-        }
     }
 
     impl kvapi::KeyCodec for TableCopiedFileNameIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             // TODO: file is not escaped!!!
             //       There already are non escaped data stored on disk.
             //       We can not change it anymore.
             b.push_u64(self.table_id).push_raw(&self.file)
         }
 
-        fn decode_key(p: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let table_id = p.next_u64()?;
             let file = p.tail_raw()?.to_string();
             Ok(Self { table_id, file })
         }
+
+        fn segment_count(&self) -> usize {
+            2
+        }
     }
 
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
-    impl kvapi::Key for TableCopiedFileNameIdent {
+    impl kvapi::StructKey for TableCopiedFileNameIdent {
         const PREFIX: &'static str = "__fd_table_copied_files";
+    }
 
+    impl kvapi::Key for TableCopiedFileNameIdent {
         type ValueType = TableCopiedFileInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for TableId {
-        type KeyType = DBIdTableName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
-        }
-    }
-
-    impl kvapi::Value for DBIdTableName {
-        type KeyType = TableIdToName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for TableMeta {
-        type KeyType = TableId;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for TableIdList {
-        type KeyType = TableIdHistoryIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| TableId::new(*id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for TableCopiedFileInfo {
-        type KeyType = TableCopiedFileNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::StructKey;
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableIdToName;
+    use crate::schema::TableMeta;
+
+    #[test]
+    fn test_table_id_to_name_key_format() {
+        assert_round_trip(TableIdToName { table_id: 9 }, "__fd_table_id_to_name/9");
+    }
 
     #[test]
     fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {
@@ -1479,6 +1307,62 @@ mod tests {
                 table_id: 2,
                 file: "".to_string(),
             });
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_cluster_key_meta() -> databend_common_exception::Result<()> {
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+
+            assert_eq!(table_meta.cluster_key_meta(), None);
+            assert_eq!(table_meta.cluster_key_id(), None);
+            assert_eq!(table_meta.cluster_key_str(), None);
+        }
+
+        // only cluster_key
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((2, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(2));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // both cluster_key and cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
         }
         Ok(())
     }

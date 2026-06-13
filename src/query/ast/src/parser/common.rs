@@ -78,7 +78,7 @@ pub fn any_token(i: Input<'_>) -> IResult<'_, &Token<'_>> {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
-            ErrorKind::Other("expected any token but reached the end"),
+            ErrorKind::other("expected any token but reached the end"),
         ))),
     }
 }
@@ -160,7 +160,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             let QuotedIdent(ident, quote) = token.text().parse().map_err(|_| {
                 nom::Err::Error(Error::from_error_kind(
                     i,
-                    ErrorKind::Other("invalid identifier"),
+                    ErrorKind::other("invalid identifier"),
                 ))
             })?;
             Ok((i2, Identifier {
@@ -286,6 +286,34 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     .parse(i)
 }
 
+/// Parse a table reference for DDL that supports an optional `/branch` suffix.
+///
+/// Examples:
+/// - `table`
+/// - `db.table`
+/// - `catalog.db.table`
+/// - `table/branch`
+/// - `db.table/branch`
+/// - `catalog.db.table/branch`
+pub fn table_reference_only_with_branch(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #table_ref
+        }),
+        |(span, table)| TableReference::Table {
+            span: transform_span(span.tokens),
+            table,
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+    )
+    .parse(i)
+}
+
 pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> {
     map(
         consumed(rule! {
@@ -326,7 +354,7 @@ pub fn column_position(i: Input) -> IResult<ColumnID> {
             .parse::<usize>()
             .map_err(|e| nom::Err::Failure(e.into()))?;
         if pos == 0 {
-            return Err(nom::Err::Failure(ErrorKind::Other(
+            return Err(nom::Err::Failure(ErrorKind::other(
                 "column position must be greater than 0",
             )));
         }
@@ -636,7 +664,7 @@ where
     move |input: Input| match match_error.parse(input) {
         Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
             input,
-            ErrorKind::Other(message),
+            ErrorKind::other(message),
         ))),
         Err(_) => Ok((input, ())),
     }
@@ -711,24 +739,24 @@ where
             input.backtrace.clear();
 
             let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting an operand"),
+                PrattError::EmptyInput => ErrorKind::other("expecting an operand"),
                 PrattError::UnexpectedNilfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the element")
+                    ErrorKind::other("unable to parse the element")
                 }
                 PrattError::UnexpectedPrefix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the prefix operator")
+                    ErrorKind::other("unable to parse the prefix operator")
                 }
                 PrattError::UnexpectedInfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("missing lhs or rhs for the binary operator")
+                    ErrorKind::other("missing lhs or rhs for the binary operator")
                 }
                 PrattError::UnexpectedPostfix(i) => {
                     *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the postfix operator")
+                    ErrorKind::other("unable to parse the postfix operator")
                 }
-                PrattError::UserError(err) => ErrorKind::Other(err),
+                PrattError::UserError(err) => ErrorKind::other(err),
             };
 
             let span = span
@@ -757,7 +785,7 @@ where F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
                 i.backtrace.clear();
                 let error = Error::from_error_kind(
                     input,
-                    ErrorKind::Other("variable is only available in SQL template"),
+                    ErrorKind::other("variable is only available in SQL template"),
                 );
                 Err(nom::Err::Failure(error))
             }
@@ -791,7 +819,7 @@ macro_rules! declare_experimental_feature {
                         i.backtrace.clear();
                         let error = Error::from_error_kind(
                             input,
-                            ErrorKind::Other(
+                            ErrorKind::other(
                                 concat!(
                                     $feature_name,
                                     " only works in experimental dialect, try `set sql_dialect = 'experimental'`"

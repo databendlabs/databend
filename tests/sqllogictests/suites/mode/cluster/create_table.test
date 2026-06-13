@@ -20,10 +20,10 @@ EvalScalar
         ├── sort keys: [number ASC NULLS LAST]
         ├── estimated rows: 3333333.33
         └── Exchange
-            ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
+            ├── output columns: [max(number) (#1), numbers.number (#0)]
             ├── exchange type: Merge
             └── Sort(Partial)
-                ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
+                ├── output columns: [max(number) (#1), numbers.number (#0)]
                 ├── sort keys: [number ASC NULLS LAST]
                 ├── estimated rows: 3333333.33
                 └── AggregateFinal

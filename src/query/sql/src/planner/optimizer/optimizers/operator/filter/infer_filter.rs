@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -25,6 +26,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnSet;
+use crate::Symbol;
 use crate::optimizer::optimizers::operator::filter::check_float_range;
 use crate::optimizer::optimizers::operator::filter::check_int_range;
 use crate::optimizer::optimizers::operator::filter::check_uint_range;
@@ -189,7 +191,9 @@ impl<'a> InferFilterOptimizer<'a> {
         let Ok(right_ty) = right.data_type() else {
             return false;
         };
-        if !Self::check_equal_expr_type(&left_ty, &right_ty) {
+        if !common_super_type_with_conversion(left_ty, right_ty)
+            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+        {
             return false;
         }
         match self.expr_index.get(left) {
@@ -203,26 +207,6 @@ impl<'a> InferFilterOptimizer<'a> {
         };
 
         true
-    }
-
-    // equal expr must have the same type, otherwise the function may fail on execution.
-    fn check_equal_expr_type(left_ty: &DataType, right_ty: &DataType) -> bool {
-        match (left_ty.remove_nullable(), right_ty.remove_nullable()) {
-            (DataType::Number(l), DataType::Number(r)) => {
-                (l.is_integer() && r.is_integer()) || (l.is_float() && r.is_float())
-            }
-            (DataType::Decimal(_), DataType::Decimal(_)) => true,
-            (DataType::Array(box l), DataType::Array(box r)) => Self::check_equal_expr_type(&l, &r),
-            (DataType::Map(box l), DataType::Map(box r)) => Self::check_equal_expr_type(&l, &r),
-            (DataType::Tuple(l_tys), DataType::Tuple(r_tys)) => {
-                l_tys.len() == r_tys.len()
-                    && l_tys
-                        .iter()
-                        .zip(r_tys.iter())
-                        .all(|(l_ty, r_ty)| Self::check_equal_expr_type(l_ty, r_ty))
-            }
-            (_, _) => left_ty.eq(right_ty),
-        }
     }
 
     fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) -> Result<()> {
@@ -753,7 +737,7 @@ impl<'a> InferFilterOptimizer<'a> {
             // The equal ScalarExprs of each ScalarExpr.
             expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
             // The columns used by the predicate.
-            column_set: HashSet<usize>,
+            column_set: HashSet<Symbol>,
             // If the predicate can be replaced to generate a new predicate.
             can_replace: bool,
         }
@@ -841,7 +825,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 continue;
             }
 
-            if new_predicate != predicate {
+            if new_predicate != predicate && new_predicate.data_type().is_ok() {
                 result_predicates.push(new_predicate);
             }
 

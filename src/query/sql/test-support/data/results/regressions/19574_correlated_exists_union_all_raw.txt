@@ -1,0 +1,25 @@
+EvalScalar
+├── scalars: [f1 (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#3)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: 1 (#3)
+    │       └── UnionAll
+    │           ├── output: [1 (#3)]
+    │           ├── left: [1 (#1)]
+    │           ├── right: [2 (#2)]
+    │           ├── cte_scan_names: []
+    │           ├── logical_recursive_cte_id: None
+    │           ├── EvalScalar
+    │           │   ├── scalars: [1 AS (#1)]
+    │           │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+    │           └── EvalScalar
+    │               ├── scalars: [2 AS (#2)]
+    │               └── Filter
+    │                   ├── filters: [eq(f1 (#0), 1)]
+    │                   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+    └── ConstantTableScan
+        ├── columns: [f1 (#0)]
+        └── num_rows: [1]
+

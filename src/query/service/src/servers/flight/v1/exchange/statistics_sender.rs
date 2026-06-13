@@ -21,7 +21,6 @@ use databend_common_base::JoinHandle;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;
@@ -37,6 +36,11 @@ use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
@@ -132,6 +136,10 @@ impl StatisticsSender {
                         warn!("Perf send has error, cause: {:?}.", error);
                     }
 
+                    if let Err(error) = Self::send_perf_counters(&ctx, &executor, &tx).await {
+                        warn!("PerfCounters send has error, cause: {:?}.", error);
+                    }
+
                     if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
                         warn!("PartStatistics send has error, cause: {:?}.", error);
                     }
@@ -146,24 +154,22 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
+    pub async fn shutdown(&mut self, error: Option<ErrorCode>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
-        futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(error).await {
-                warn!(
-                    "Cannot send data via flight exchange, cause: {:?}",
-                    error_code
-                );
-            }
+        if let Err(error_code) = shutdown_flag_sender.send(error).await {
+            warn!(
+                "Cannot send data via flight exchange, cause: {:?}",
+                error_code
+            );
+        }
 
-            shutdown_flag_sender.close();
+        shutdown_flag_sender.close();
 
-            if let Some(join_handle) = join_handle {
-                let _ = join_handle.await;
-            }
-        });
+        if let Some(join_handle) = join_handle {
+            let _ = join_handle.await;
+        }
     }
 
     #[async_backtrace::framed]
@@ -189,7 +195,7 @@ impl StatisticsSender {
 
     #[async_backtrace::framed]
     async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
-        let copy_status = ctx.get_copy_status();
+        let copy_status = ctx.copy_state().copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
             flight_sender.send(data_packet).await?;
@@ -203,8 +209,8 @@ impl StatisticsSender {
         flight_sender: &FlightSender,
     ) -> Result<()> {
         let mutation_status = {
-            let binding = ctx.get_mutation_status();
-            let status = binding.read();
+            let binding = ctx.mutation_state().mutation_status();
+            let status = binding.read().unwrap();
             MutationStatus {
                 insert_rows: status.insert_rows,
                 deleted_rows: status.deleted_rows,
@@ -280,6 +286,21 @@ impl StatisticsSender {
             let dumped = QueryPerf::dump(profiler_guard)?;
             let data_packet = DataPacket::QueryPerf(dumped);
             flight_sender.send(data_packet).await?;
+        }
+        Ok(())
+    }
+
+    async fn send_perf_counters(
+        ctx: &Arc<QueryContext>,
+        executor: &Arc<PipelineExecutor>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        if ctx.get_perf_config().has_hw_counters() {
+            let counters = executor.fetch_perf_counters();
+            if !counters.counters.is_empty() {
+                let data_packet = DataPacket::QueryPerfCounters(counters);
+                flight_sender.send(data_packet).await?;
+            }
         }
         Ok(())
     }

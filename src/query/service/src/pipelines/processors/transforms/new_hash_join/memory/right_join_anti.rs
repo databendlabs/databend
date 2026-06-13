@@ -18,20 +18,19 @@ use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::with_join_hash_method;
-use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::memory::right_join_semi::SemiRightHashJoinStream;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
@@ -39,6 +38,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct AntiRightHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -47,6 +47,10 @@ pub struct AntiRightHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
+    pub(crate) inlist_threshold: usize,
+    pub(crate) bloom_threshold: usize,
+    pub(crate) min_max_threshold: usize,
+    pub(crate) spatial_threshold: usize,
 
     pub(crate) finished: bool,
 }
@@ -61,15 +65,20 @@ impl AntiRightHashJoin {
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
+        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
+        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
+        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
+        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(AntiRightHashJoin {
@@ -78,6 +87,10 @@ impl AntiRightHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
+            inlist_threshold,
+            bloom_threshold,
+            min_max_threshold,
+            spatial_threshold,
             finished: false,
         })
     }
@@ -100,7 +113,13 @@ impl Join for AntiRightHashJoin {
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
         let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(packets)
+        merge_join_runtime_filter_packets(
+            packets,
+            self.inlist_threshold,
+            self.bloom_threshold,
+            self.min_max_threshold,
+            self.spatial_threshold,
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -112,7 +131,7 @@ impl Join for AntiRightHashJoin {
         let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -121,6 +140,9 @@ impl Join for AntiRightHashJoin {
 
                 let probe_data = ProbeData::new(probe_keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
+            }
+            HashJoinHashTable::NestedLoop(_) => {
+                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -188,8 +210,10 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 0 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as _,
+                        row_index: idx as _,
+                    });
                 }
             }
 
@@ -216,7 +240,6 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };

@@ -16,7 +16,7 @@ INSERT INTO t1 VALUES(1, '2022-12-30')
 statement ok
 INSERT INTO t1 VALUES(2, '2023-01-01')
 
-query IT
+query I?
 SELECT * FROM t1 ORDER BY b
 ----
 1 2022-12-30
@@ -47,7 +47,7 @@ Fragment 2:
         └── source fragment: [0]
 (empty)
 
-query IT
+query I?
 SELECT * FROM t1 ORDER BY b
 ----
 1 2022-12-30

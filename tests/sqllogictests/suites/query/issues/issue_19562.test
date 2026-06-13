@@ -1,0 +1,26 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/19562
+
+query B
+SELECT 'a' LIKE 'a' ESCAPE ''
+----
+1
+
+query B
+SELECT 'a' LIKE concat('a') ESCAPE ''
+----
+1
+
+query B
+SELECT '%' LIKE '\\\\%' ESCAPE ''
+----
+0
+
+query B
+SELECT like_any('%', '\\\\%', '')
+----
+0
+
+query B
+SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''
+----
+1

@@ -36,6 +36,10 @@ use super::aggregate_bitmap::aggregate_bitmap_xor_function_desc;
 use super::aggregate_boolean::aggregate_boolean_function_desc;
 use super::aggregate_covariance::aggregate_covariance_population_desc;
 use super::aggregate_covariance::aggregate_covariance_sample_desc;
+use super::aggregate_geographic_agg::aggregate_st_collect_function_desc;
+use super::aggregate_geographic_agg::aggregate_st_envelope_agg_function_desc;
+use super::aggregate_geographic_agg::aggregate_st_intersection_agg_function_desc;
+use super::aggregate_geographic_agg::aggregate_st_union_agg_function_desc;
 use super::aggregate_histogram::aggregate_histogram_function_desc;
 use super::aggregate_json_array_agg::aggregate_json_array_agg_function_desc;
 use super::aggregate_json_object_agg::aggregate_json_object_agg_function_desc;
@@ -55,7 +59,6 @@ use super::aggregate_quantile_tdigest_weighted::aggregate_quantile_tdigest_weigh
 use super::aggregate_range_bound::aggregate_range_bound_function_desc;
 use super::aggregate_retention::aggregate_retention_function_desc;
 use super::aggregate_skewness::aggregate_skewness_function_desc;
-use super::aggregate_st_collect::aggregate_st_collect_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
 use super::aggregate_stddev::aggregate_stddev_samp_function_desc;
 use super::aggregate_string_agg::aggregate_string_agg_function_desc;
@@ -182,6 +185,12 @@ impl Aggregators {
         factory.register("mode", aggregate_mode_function_desc());
 
         factory.register("st_collect", aggregate_st_collect_function_desc());
+        factory.register("st_union_agg", aggregate_st_union_agg_function_desc());
+        factory.register(
+            "st_intersection_agg",
+            aggregate_st_intersection_agg_function_desc(),
+        );
+        factory.register("st_envelope_agg", aggregate_st_envelope_agg_function_desc());
 
         factory.register("markov_train", aggregate_markov_train_function_desc());
     }

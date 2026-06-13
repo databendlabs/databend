@@ -1,0 +1,244 @@
+=== comparison_predicates ===
+description: Comparison predicates should update estimated rows and column stats consistently.
+expr          : a = 5
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a = 15
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(15), max: UInt(15), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : a != 5
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a != 15
+cardinality   : 100
+estimated     : 90
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999999[..10.0], null_count: 0, histogram: None }
+
+expr          : a > 5
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a > 10
+cardinality   : 100
+estimated     : 90
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(11), max: UInt(19), ndv: 9.0, null_count: 0, histogram: None }
+
+expr          : a > 16
+cardinality   : 100
+estimated     : 30
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(17), max: UInt(19), ndv: 3.0, null_count: 0, histogram: None }
+
+expr          : a > 19
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a > 25
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a >= 5
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a >= 10
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a >= 16
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(16), max: UInt(19), ndv: 4.0, null_count: 0, histogram: None }
+
+expr          : a >= 19
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(19), max: UInt(19), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : a >= 25
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a < 5
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a < 10
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a < 16
+cardinality   : 100
+estimated     : 60
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(15), ndv: 6.0, null_count: 0, histogram: None }
+
+expr          : a < 19
+cardinality   : 100
+estimated     : 90
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(18), ndv: 9.0, null_count: 0, histogram: None }
+
+expr          : a < 25
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a <= 5
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a <= 10
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(10), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : a <= 16
+cardinality   : 100
+estimated     : 70
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
+
+expr          : a <= 19
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a <= 25
+cardinality   : 100
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a + 1 = 15
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~6.513215599[..10.0], null_count: 0, histogram: None }
+
+=== reversed_comparison_predicates ===
+description: Comparison predicates should apply the same column constraint when the constant is on the left.
+expr          : 15 = a
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(15), max: UInt(15), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : 16 < a
+cardinality   : 100
+estimated     : 30
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(17), max: UInt(19), ndv: 3.0, null_count: 0, histogram: None }
+
+expr          : 16 <= a
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(16), max: UInt(19), ndv: 4.0, null_count: 0, histogram: None }
+
+expr          : 16 > a
+cardinality   : 100
+estimated     : 60
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(15), ndv: 6.0, null_count: 0, histogram: None }
+
+expr          : 16 >= a
+cardinality   : 100
+estimated     : 70
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
+

@@ -27,7 +27,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -61,7 +60,6 @@ pub struct Session {
     pub(in crate::sessions) session_ctx: Box<SessionContext>,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
-    format_settings: FormatSettings,
 }
 
 impl Session {
@@ -78,7 +76,6 @@ impl Session {
             status,
             session_ctx,
             mysql_connection_id,
-            format_settings: FormatSettings::default(),
         })
     }
 
@@ -220,15 +217,6 @@ impl Session {
         Ok(QueryContext::create_from_shared(shared))
     }
 
-    // only used for values and mysql output
-    pub fn set_format_settings(&mut self, other: FormatSettings) {
-        self.format_settings = other
-    }
-
-    pub fn get_format_settings(&self) -> FormatSettings {
-        self.format_settings.clone()
-    }
-
     pub fn get_current_query_id(&self) -> Option<String> {
         self.session_ctx.get_current_query_id()
     }
@@ -264,8 +252,30 @@ impl Session {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(&mut self, tenant: Tenant) {
+    pub fn set_current_tenant(&mut self, tenant: Tenant) -> Result<()> {
+        if tenant.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty("set_current_tenant"));
+        }
+
+        let config = GlobalConfig::instance();
+        let configured_tenant = &config.query.tenant_id;
+        let allow_tenant_override = config.query.common.management_mode
+            || config.query.common.internal_enable_sandbox_tenant
+            || matches!(self.get_type(), SessionType::Local);
+
+        // Runtime tenant override is only valid for management, sandbox tenant,
+        // and local sessions. In normal mode, callers may still pass the
+        // configured tenant in tests or setup paths.
+        if !allow_tenant_override && &tenant != configured_tenant {
+            return Err(ErrorCode::BadArguments(format!(
+                "tenant override is not allowed: requested tenant `{}`, configured tenant `{}`",
+                tenant.tenant_name(),
+                configured_tenant.tenant_name()
+            )));
+        }
+
         self.session_ctx.set_current_tenant(tenant);
+        Ok(())
     }
 
     pub fn get_current_user(&self) -> Result<UserInfo> {
@@ -384,10 +394,15 @@ impl Session {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         self.privilege_mgr()
             .get_visibility_checker(ignore_ownership, object)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr().get_db_table_grant_checker().await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

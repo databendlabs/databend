@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Write;
-
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
@@ -28,6 +26,7 @@ use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::date_helper::timestamp_tz_components_via_lut;
 use databend_common_expression::date_helper::today_date;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
@@ -58,11 +57,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn register_string_to_interval(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<StringType, IntervalType, _, _>(
-        "to_interval",
-        |_, _| FunctionDomain::MayThrow,
-        eval_string_to_interval,
-    );
+    registry
+        .scalar_builder("to_interval")
+        .function()
+        .typed_1_arg::<StringType, IntervalType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(eval_string_to_interval)
+        .register();
     registry.register_combine_nullable_1_arg::<StringType, IntervalType, _, _>(
         "try_to_interval",
         |_, _| FunctionDomain::Full,
@@ -93,14 +95,14 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
 }
 
 fn register_interval_to_string(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<IntervalType, StringType, _, _>(
-        "to_string",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<IntervalType, StringType>(|interval, output, _| {
-            write!(output.row_buffer, "{}", interval_to_string(&interval)).unwrap();
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("to_string")
+        .function()
+        .typed_1_arg::<IntervalType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .each_row(|interval, _| interval_to_string(&interval).to_string())
+        .register();
 }
 
 fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
@@ -406,101 +408,111 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         );
 
     // age(ts) == age(now() at midnight, ts);
-    registry.register_passthrough_nullable_1_arg::<TimestampType, IntervalType, _, _>(
-        "age",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<TimestampType, IntervalType>(|t2, output, ctx| {
-            let mut is_negative = false;
-            let tz = &ctx.func_ctx.tz;
+    registry
+        .scalar_builder("age")
+        .function()
+        .typed_1_arg::<TimestampType, IntervalType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<TimestampType, IntervalType>(
+            |t2, output, ctx| {
+                let mut is_negative = false;
+                let tz = &ctx.func_ctx.tz;
 
-            let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
-            match calc_date_to_timestamp(today_date, tz) {
-                Ok(t) => {
-                    let mut t1 = t;
-                    let mut t2_val = t2;
+                let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
+                match calc_date_to_timestamp(today_date, tz) {
+                    Ok(t) => {
+                        let mut t1 = t;
+                        let mut t2_val = t2;
 
-                    if t1 < t2_val {
-                        std::mem::swap(&mut t1, &mut t2_val);
-                        is_negative = true;
-                    }
-                    if let (Some(c1), Some(c2)) = (
-                        fast_components_from_timestamp(t1, tz),
-                        fast_components_from_timestamp(t2_val, tz),
-                    ) {
-                        output.push(calc_age_from_components(&c1, &c2, is_negative));
-                    } else {
-                        let mut t1 = t1.to_timestamp(tz);
-                        let mut t2 = t2_val.to_timestamp(tz);
-
-                        if t1 < t2 {
-                            std::mem::swap(&mut t1, &mut t2);
+                        if t1 < t2_val {
+                            std::mem::swap(&mut t1, &mut t2_val);
                             is_negative = true;
                         }
-                        output.push(calc_age(t1, t2, is_negative));
+                        if let (Some(c1), Some(c2)) = (
+                            fast_components_from_timestamp(t1, tz),
+                            fast_components_from_timestamp(t2_val, tz),
+                        ) {
+                            output.push(calc_age_from_components(&c1, &c2, is_negative));
+                        } else {
+                            let mut t1 = t1.to_timestamp(tz);
+                            let mut t2 = t2_val.to_timestamp(tz);
+
+                            if t1 < t2 {
+                                std::mem::swap(&mut t1, &mut t2);
+                                is_negative = true;
+                            }
+                            output.push(calc_age(t1, t2, is_negative));
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), e);
+                        output.push(months_days_micros::new(0, 0, 0));
                     }
                 }
-                Err(e) => {
-                    ctx.set_error(output.len(), e);
-                    output.push(months_days_micros::new(0, 0, 0));
-                }
-            }
-        }),
-    );
+            },
+        ))
+        .register();
 
     // age(ts) == age(now() at midnight, ts);
-    registry.register_passthrough_nullable_1_arg::<TimestampTzType, IntervalType, _, _>(
-        "age",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<TimestampTzType, IntervalType>(|t2, output, ctx| {
-            let fn_eval_age = |t2: timestamp_tz, ctx: &mut EvalContext| {
-                let mut is_negative = false;
+    registry
+        .scalar_builder("age")
+        .function()
+        .typed_1_arg::<TimestampTzType, IntervalType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(
+            vectorize_with_builder_1_arg::<TimestampTzType, IntervalType>(|t2, output, ctx| {
+                let fn_eval_age = |t2: timestamp_tz, ctx: &mut EvalContext| {
+                    let mut is_negative = false;
 
-                let offset = Offset::from_seconds(t2.seconds_offset())?;
-                let zone = TimeZone::fixed(offset);
-                let today_date = today_date(&ctx.func_ctx.now, &zone);
-                let t1_raw = calc_date_to_timestamp(today_date, &zone)?;
-                let t2_raw = t2.timestamp();
-                let today_ts = timestamp_tz::new(t1_raw, t2.seconds_offset());
-                let (t1, t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
-                    (t1_raw, t2_raw, today_ts, t2)
-                } else {
-                    is_negative = true;
-                    (t2_raw, t1_raw, t2, today_ts)
+                    let offset = Offset::from_seconds(t2.seconds_offset())?;
+                    let zone = TimeZone::fixed(offset);
+                    let today_date = today_date(&ctx.func_ctx.now, &zone);
+                    let t1_raw = calc_date_to_timestamp(today_date, &zone)?;
+                    let t2_raw = t2.timestamp();
+                    let today_ts = timestamp_tz::new(t1_raw, t2.seconds_offset());
+                    let (t1, t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
+                        (t1_raw, t2_raw, today_ts, t2)
+                    } else {
+                        is_negative = true;
+                        (t2_raw, t1_raw, t2, today_ts)
+                    };
+
+                    if let (Some(c1), Some(c2)) = (
+                        timestamp_tz_components_via_lut(later_ts),
+                        timestamp_tz_components_via_lut(earlier_ts),
+                    ) {
+                        return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                    }
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1, &zone),
+                        fast_components_from_timestamp(t2_micros, &zone),
+                    ) {
+                        return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                    }
+                    let mut t1 = Timestamp::from_microsecond(t1)?.to_zoned(zone.clone());
+                    let mut t2 = Timestamp::from_microsecond(t2_micros)?.to_zoned(zone.clone());
+
+                    if t1 < t2 {
+                        std::mem::swap(&mut t1, &mut t2);
+                        is_negative = true;
+                    }
+                    Result::Ok(calc_age(t1, t2, is_negative))
                 };
 
-                if let (Some(c1), Some(c2)) = (
-                    timestamp_tz_components_via_lut(later_ts),
-                    timestamp_tz_components_via_lut(earlier_ts),
-                ) {
-                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                match fn_eval_age(t2, ctx) {
+                    Ok(result) => {
+                        output.push(result);
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), e.to_string());
+                        output.push(months_days_micros::new(0, 0, 0));
+                    }
                 }
-                if let (Some(c1), Some(c2)) = (
-                    fast_components_from_timestamp(t1, &zone),
-                    fast_components_from_timestamp(t2_micros, &zone),
-                ) {
-                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
-                }
-                let mut t1 = Timestamp::from_microsecond(t1)?.to_zoned(zone.clone());
-                let mut t2 = Timestamp::from_microsecond(t2_micros)?.to_zoned(zone.clone());
-
-                if t1 < t2 {
-                    std::mem::swap(&mut t1, &mut t2);
-                    is_negative = true;
-                }
-                Result::Ok(calc_age(t1, t2, is_negative))
-            };
-
-            match fn_eval_age(t2, ctx) {
-                Ok(result) => {
-                    output.push(result);
-                }
-                Err(e) => {
-                    ctx.set_error(output.len(), e.to_string());
-                    output.push(months_days_micros::new(0, 0, 0));
-                }
-            }
-        }),
-    );
+            }),
+        )
+        .register();
 
     registry.register_passthrough_nullable_2_arg::<Int64Type, IntervalType, IntervalType, _, _>(
         "multiply",
@@ -638,181 +650,104 @@ fn apply_interval_to_date(
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_centuries",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new((val * 100 * 12) as i32, 0, 0);
-            output.push(res);
-        }),
-    );
+    fn register_i64_to_interval<F>(registry: &mut FunctionRegistry, name: &'static str, func: F)
+    where F: Fn(i64, &mut EvalContext) -> months_days_micros + Send + Sync + Copy + 'static {
+        registry
+            .scalar_builder(name)
+            .function()
+            .typed_1_arg::<Int64Type, IntervalType>()
+            .passthrough_nullable()
+            .each_row(func)
+            .register();
+    }
 
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_days",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, val as i32, 0);
-            output.push(res);
-        }),
-    );
+    fn register_interval_to_i64<F>(registry: &mut FunctionRegistry, name: &'static str, func: F)
+    where F: Fn(months_days_micros, &mut EvalContext) -> i64 + Send + Sync + Copy + 'static {
+        registry
+            .scalar_builder(name)
+            .function()
+            .typed_1_arg::<IntervalType, Int64Type>()
+            .passthrough_nullable()
+            .each_row(func)
+            .register();
+    }
 
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_weeks",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, (val * 7) as i32, 0);
-            output.push(res);
-        }),
-    );
+    fn register_interval_to_f64<F>(registry: &mut FunctionRegistry, name: &'static str, func: F)
+    where F: Fn(months_days_micros, &mut EvalContext) -> <Float64Type as AccessType>::Scalar
+            + Send
+            + Sync
+            + Copy
+            + 'static {
+        registry
+            .scalar_builder(name)
+            .function()
+            .typed_1_arg::<IntervalType, Float64Type>()
+            .passthrough_nullable()
+            .each_row(func)
+            .register();
+    }
 
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_decades",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new((val * 10 * 12) as i32, 0, 0);
-            output.push(res);
-        }),
-    );
+    register_i64_to_interval(registry, "to_centuries", |val, _| {
+        months_days_micros::new((val * 100 * 12) as i32, 0, 0)
+    });
+    register_i64_to_interval(registry, "to_days", |val, _| {
+        months_days_micros::new(0, val as i32, 0)
+    });
+    register_i64_to_interval(registry, "to_weeks", |val, _| {
+        months_days_micros::new(0, (val * 7) as i32, 0)
+    });
+    register_i64_to_interval(registry, "to_decades", |val, _| {
+        months_days_micros::new((val * 10 * 12) as i32, 0, 0)
+    });
+    register_i64_to_interval(registry, "to_hours", |val, _| {
+        months_days_micros::new(0, 0, val * 3600 * 1_000_000)
+    });
+    register_i64_to_interval(registry, "to_microseconds", |val, _| {
+        months_days_micros::new(0, 0, val)
+    });
+    register_i64_to_interval(registry, "to_millennia", |val, _| {
+        months_days_micros::new((val * 1000 * 12) as i32, 0, 0)
+    });
+    register_i64_to_interval(registry, "to_milliseconds", |val, _| {
+        months_days_micros::new(0, 0, val * 1000)
+    });
+    register_i64_to_interval(registry, "to_minutes", |val, _| {
+        months_days_micros::new(0, 0, val * 60 * 1_000_000)
+    });
+    register_i64_to_interval(registry, "to_months", |val, _| {
+        months_days_micros::new(val as i32, 0, 0)
+    });
+    register_i64_to_interval(registry, "to_seconds", |val, _| {
+        months_days_micros::new(0, 0, val * 1_000_000)
+    });
+    register_i64_to_interval(registry, "to_years", |val, _| {
+        months_days_micros::new((val * 12) as i32, 0, 0)
+    });
 
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_hours",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val * 3600 * 1_000_000);
-            output.push(res);
-        }),
-    );
+    register_interval_to_i64(registry, "to_year", |val, _| val.months() as i64 / 12);
+    register_interval_to_i64(registry, "to_month", |val, _| val.months() as i64 % 12);
+    register_interval_to_i64(registry, "to_day_of_month", |val, _| val.days() as i64);
+    register_interval_to_i64(registry, "to_hour", |val, _| {
+        let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
+        (total_seconds / 3600.0) as i64
+    });
+    register_interval_to_i64(registry, "to_minute", |val, _| {
+        let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
+        ((total_seconds % 3600.0) / 60.0) as i64
+    });
+    register_interval_to_i64(registry, "to_microsecond", |val, _| {
+        val.microseconds() % 60_000_000
+    });
 
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_microseconds",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_millennia",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new((val * 1000 * 12) as i32, 0, 0);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_milliseconds",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val * 1000);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_minutes",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val * 60 * 1_000_000);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_months",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(val as i32, 0, 0);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_seconds",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val * 1_000_000);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "to_years",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new((val * 12) as i32, 0, 0);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_year",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            output.push(val.months() as i64 / 12);
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_month",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            output.push(val.months() as i64 % 12);
-        }),
-    );
-    // Directly return interval days. Extract need named to_day_of_month
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_day_of_month",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            output.push(val.days() as i64);
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_hour",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
-            let hours = (total_seconds / 3600.0) as i64;
-            output.push(hours);
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_minute",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
-            let minutes = ((total_seconds % 3600.0) / 60.0) as i64;
-            output.push(minutes);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Float64Type, _, _>(
-        "to_second",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Float64Type>(|val, output, _| {
-            let microseconds = val.microseconds() % 60_000_000;
-            let seconds = microseconds as f64 / 1_000_000.0;
-            output.push(seconds.into());
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
-        "to_microsecond",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            let microseconds = val.microseconds() % 60_000_000;
-            output.push(microseconds);
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<IntervalType, Float64Type, _, _>(
-        "epoch",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, Float64Type>(|val, output, _| {
-            let total_seconds = (val.total_micros() as f64) / 1_000_000.0;
-            output.push(total_seconds.into());
-        }),
-    );
+    register_interval_to_f64(registry, "to_second", |val, _| {
+        let microseconds = val.microseconds() % 60_000_000;
+        let seconds = microseconds as f64 / 1_000_000.0;
+        seconds.into()
+    });
+    register_interval_to_f64(registry, "epoch", |val, _| {
+        let total_seconds = (val.total_micros() as f64) / 1_000_000.0;
+        total_seconds.into()
+    });
 }
 
 fn calc_age_from_components(

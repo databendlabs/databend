@@ -95,6 +95,7 @@ pub enum Distribution {
     Serial,
     Broadcast,
     NodeToNodeHash(Vec<ScalarExpr>),
+    GlobalHash(Vec<ScalarExpr>),
 }
 
 impl Default for Distribution {
@@ -112,12 +113,15 @@ impl Distribution {
             (Distribution::Any, _)
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
-            | (Distribution::Broadcast, Distribution::Broadcast)
-            | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
+            | (Distribution::Broadcast, Distribution::Broadcast) => true,
 
             (Distribution::NodeToNodeHash(keys), Distribution::NodeToNodeHash(other_keys)) => {
                 keys == other_keys
             }
+            (Distribution::GlobalHash(keys), Distribution::GlobalHash(other_keys)) => {
+                keys == other_keys
+            }
+            (Distribution::GlobalHash(_), Distribution::Broadcast) => true,
             _ => false,
         }
     }
@@ -131,6 +135,14 @@ impl Display for Distribution {
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
             Distribution::NodeToNodeHash(keys) => write!(
+                f,
+                "Hash({})",
+                keys.iter()
+                    .map(|s| s.as_raw_expr().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Distribution::GlobalHash(keys) => write!(
                 f,
                 "Hash({})",
                 keys.iter()

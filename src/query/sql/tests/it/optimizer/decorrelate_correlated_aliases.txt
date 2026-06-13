@@ -1,0 +1,157 @@
+=== nested_filter_alias_reaches_limit_rewrite ===
+description: Filter-derived correlated aliases must remain visible while rewriting a deeper correlated LIMIT subtree.
+sql: 
+        SELECT *
+        FROM (VALUES (1, 1)) AS t1(a, b)
+        WHERE EXISTS (
+            SELECT 1
+            FROM (
+                SELECT t2.a
+                FROM (VALUES (1, 1)) AS t2(a, b)
+                WHERE t2.b = t1.b
+                LIMIT 1
+            ) AS s
+            WHERE s.a = t1.a
+        )
+    
+raw_plan:
+EvalScalar
+├── scalars: [a (#0) AS (#0), b (#1) AS (#1)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#4)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: 1 (#4)
+    │       └── EvalScalar
+    │           ├── scalars: [1 AS (#4)]
+    │           └── Filter
+    │               ├── filters: [eq(a (#2), a (#0))]
+    │               └── Limit
+    │                   ├── limit: [1]
+    │                   ├── offset: [0]
+    │                   └── EvalScalar
+    │                       ├── scalars: [a (#2) AS (#2)]
+    │                       └── Filter
+    │                           ├── filters: [eq(b (#3), b (#1))]
+    │                           └── ConstantTableScan
+    │                               ├── columns: [a (#2), b (#3)]
+    │                               └── num_rows: [1]
+    └── ConstantTableScan
+        ├── columns: [a (#0), b (#1)]
+        └── num_rows: [1]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#6) AS (#8)]
+    └── Filter
+        ├── filters: [is_true(marker (#6))]
+        └── Join(RightMark)
+            ├── build keys: [a (#2), b (#3)]
+            ├── probe keys: [a (#0), b (#1)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── EvalScalar
+            │       ├── scalars: [a (#2) AS (#2), b (#3) AS (#3), 1 AS (#4), correlated_limit_row_number (#5) AS (#7)]
+            │       └── Filter
+            │           ├── filters: [lte(correlated_limit_row_number (#5), 1)]
+            │           └── Window
+            │               ├── aggregate function: row_number
+            │               ├── partition items: [a (#2) AS (#2), b (#3) AS (#3)]
+            │               ├── order by items: []
+            │               ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+            │               └── Sort
+            │                   ├── sort keys: [a (#2) ASC NULLS LAST, b (#3) ASC NULLS LAST]
+            │                   ├── limit: [NONE]
+            │                   ├── window top: 1
+            │                   ├── window function: RowNumber
+            │                   └── Exchange(Hash)
+            │                       ├── Exchange(Hash): keys: [a (#2), b (#3)]
+            │                       └── ConstantTableScan
+            │                           ├── columns: [a (#2), b (#3)]
+            │                           └── num_rows: [1]
+            └── ConstantTableScan
+                ├── columns: [a (#0), b (#1)]
+                └── num_rows: [1]
+
+
+=== nested_filter_alias_survives_deeper_join_rewrite ===
+description: A deeper join remap must override a stale filter-local alias instead of collapsing the correlated predicate into a self-equality.
+sql: 
+        SELECT *
+        FROM (VALUES (1, 1)) AS t1(a, b)
+        WHERE EXISTS (
+            SELECT 1
+            FROM (
+                SELECT t2.a
+                FROM (VALUES (1, 1)) AS t2(a, b)
+                JOIN (VALUES (1)) AS t3(c)
+                  ON t2.a = t1.a
+                WHERE t2.b = t1.b
+            ) AS s
+            WHERE s.a = t1.a
+        )
+    
+raw_plan:
+EvalScalar
+├── scalars: [a (#0) AS (#0), b (#1) AS (#1)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#5)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: 1 (#5)
+    │       └── EvalScalar
+    │           ├── scalars: [1 AS (#5)]
+    │           └── Filter
+    │               ├── filters: [eq(a (#2), a (#0))]
+    │               └── EvalScalar
+    │                   ├── scalars: [a (#2) AS (#2)]
+    │                   └── Filter
+    │                       ├── filters: [eq(b (#3), b (#1))]
+    │                       └── Join(Inner)
+    │                           ├── build keys: []
+    │                           ├── probe keys: []
+    │                           ├── other filters: [eq(a (#2), a (#0))]
+    │                           ├── ConstantTableScan
+    │                           │   ├── columns: [c (#4)]
+    │                           │   └── num_rows: [1]
+    │                           └── ConstantTableScan
+    │                               ├── columns: [a (#2), b (#3)]
+    │                               └── num_rows: [1]
+    └── ConstantTableScan
+        ├── columns: [a (#0), b (#1)]
+        └── num_rows: [1]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#6) AS (#9)]
+    └── Filter
+        ├── filters: [is_true(marker (#6))]
+        └── Join(RightMark)
+            ├── build keys: [a (#2), b (#3)]
+            ├── probe keys: [a (#0), b (#1)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── EvalScalar
+            │       ├── scalars: [a (#2) AS (#2), b (#3) AS (#3), 1 AS (#5), a (#7) AS (#8)]
+            │       └── EvalScalar
+            │           ├── scalars: [a (#2) AS (#2), a (#2) AS (#2), b (#3) AS (#3), a (#0) AS (#7)]
+            │           └── Filter
+            │               ├── filters: [eq(a (#2), a (#0))]
+            │               └── Join(Cross)
+            │                   ├── build keys: []
+            │                   ├── probe keys: []
+            │                   ├── other filters: []
+            │                   ├── Exchange(Broadcast)
+            │                   │   └── ConstantTableScan
+            │                   │       ├── columns: [c (#4)]
+            │                   │       └── num_rows: [1]
+            │                   └── ConstantTableScan
+            │                       ├── columns: [a (#2), b (#3)]
+            │                       └── num_rows: [1]
+            └── ConstantTableScan
+                ├── columns: [a (#0), b (#1)]
+                └── num_rows: [1]
+
+

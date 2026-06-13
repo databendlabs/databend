@@ -20,12 +20,16 @@ echo "alter table t2 set options(abc = '1')" | $BENDSQL_CLIENT_CONNECT
 echo "alter table t2 set options(block_per_segment = 2000)" | $BENDSQL_CLIENT_CONNECT
 echo "alter table t2 set options(storage_format = 'memory')" | $BENDSQL_CLIENT_CONNECT
 echo "alter table t2 set options(bloom_index_columns = 'b')" | $BENDSQL_CLIENT_CONNECT
+echo "alter table t2 set options(bloom_index_type = 'binary_fuse32')" | $BENDSQL_CLIENT_CONNECT
+echo "alter table t2 set options(bloom_index_type = 'nope')" | $BENDSQL_CLIENT_CONNECT
 
 # valid bloom index column data type.
 echo "create or replace table t3(a decimal(4,2) not null)" | $BENDSQL_CLIENT_CONNECT
 echo "alter table t3 set options(bloom_index_columns = 'a')" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace table t4(a int not null) bloom_index_type = 'binary_fuse32'" | $BENDSQL_CLIENT_CONNECT
 
 #drop table
 echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t3" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists t4" | $BENDSQL_CLIENT_CONNECT

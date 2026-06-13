@@ -22,8 +22,8 @@ use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -32,7 +32,6 @@ use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_client::MetaGrpcClient;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_storage::init_operator;
@@ -40,6 +39,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
 use databend_common_tracing::get_all_history_table_names;
 use databend_common_tracing::init_history_tables;
+use databend_meta_client::MetaGrpcClient;
 use futures_util::TryStreamExt;
 use futures_util::future::join_all;
 use log::debug;
@@ -64,8 +64,10 @@ use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 
 const DEAD_IN_SECS: u64 = 60;
 
@@ -91,9 +93,8 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        let meta_client =
-            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.semver()))
-                .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
+            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(
@@ -208,8 +209,9 @@ impl GlobalHistoryLog {
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
+        tracking_payload
+            .tracking(self.do_execute(sql, query_id))
+            .await?;
         Ok(())
     }
 
@@ -219,7 +221,9 @@ impl GlobalHistoryLog {
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let stream = executor.execute(context).await?;
+        let stream = executor
+            .execute_with_hooks(context, QueryFinishHooks::nested_with_hooks())
+            .await?;
         let _: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }

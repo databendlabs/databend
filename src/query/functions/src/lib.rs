@@ -17,10 +17,6 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(associated_type_defaults)]
-#![allow(clippy::let_and_return)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::manual_is_multiple_of)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;
@@ -31,7 +27,6 @@ pub mod aggregates;
 mod cast_rules;
 pub mod scalars;
 pub mod srfs;
-pub mod test_utils;
 
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);
@@ -58,7 +53,11 @@ pub fn is_cacheable_function(name: &str) -> bool {
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const ASYNC_FUNCTIONS: [Ascii<&str>; 2] = [Ascii::new("nextval"), Ascii::new("dict_get")];
+pub const ASYNC_FUNCTIONS: [Ascii<&str>; 3] = [
+    Ascii::new("nextval"),
+    Ascii::new("dict_get"),
+    Ascii::new("read_file"),
+];
 
 pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 5] = [
     Ascii::new("array_agg"),
@@ -110,6 +109,16 @@ pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [
     Ascii::new("match"),
     Ascii::new("query"),
     Ascii::new("score"),
+];
+
+// The function names and the number of arguments that support spatial index
+pub const SPATIAL_INDEX_FUNCTIONS: [(Ascii<&str>, usize); 6] = [
+    (Ascii::new("st_contains"), 2),
+    (Ascii::new("st_intersects"), 2),
+    (Ascii::new("st_within"), 2),
+    (Ascii::new("st_dwithin"), 3),
+    (Ascii::new("st_covers"), 2),
+    (Ascii::new("st_coveredby"), 2),
 ];
 
 fn builtin_functions() -> FunctionRegistry {

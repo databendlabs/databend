@@ -126,28 +126,28 @@ where
             })
         };
 
-        if let Some((row, val)) = acc {
-            if self.change(&val) {
-                self.update(val, arg_col.index(row).unwrap())
-            }
+        if let Some((row, val)) = acc
+            && self.change(&val)
+        {
+            self.update(val, arg_col.index(row).unwrap())
         }
         Ok(())
     }
 
     fn merge_from(&mut self, rhs: Self) -> Result<()> {
-        if let Some((r_val, r_arg)) = rhs.data {
-            if self.change(&V::to_scalar_ref(&r_val)) {
-                self.data = Some((r_val, r_arg));
-            }
+        if let Some((r_val, r_arg)) = rhs.data
+            && self.change(&V::to_scalar_ref(&r_val))
+        {
+            self.data = Some((r_val, r_arg));
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        if let Some((r_val, r_arg)) = &rhs.data {
-            if self.change(&V::to_scalar_ref(r_val)) {
-                self.data = Some((r_val.to_owned(), r_arg.to_owned()));
-            }
+        if let Some((r_val, r_arg)) = &rhs.data
+            && self.change(&V::to_scalar_ref(r_val))
+        {
+            self.data = Some((r_val.to_owned(), r_arg.to_owned()));
         }
         Ok(())
     }

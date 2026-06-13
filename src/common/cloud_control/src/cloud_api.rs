@@ -19,14 +19,18 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::billing_client::BillingClient;
 use crate::notification_client::NotificationClient;
 use crate::task_client::TaskClient;
+use crate::worker_client::WorkerClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
 pub struct CloudControlApiProvider {
+    pub billing_client: Arc<BillingClient>,
     pub task_client: Arc<TaskClient>,
     pub notification_client: Arc<NotificationClient>,
+    pub worker_client: Arc<WorkerClient>,
     pub timeout: Duration,
 }
 
@@ -40,11 +44,15 @@ impl CloudControlApiProvider {
 
         let endpoint = Self::get_endpoint(endpoint, timeout).await?;
         let channel = endpoint.connect_lazy();
+        let billing_client = BillingClient::new(channel.clone()).await?;
         let task_client = TaskClient::new(channel.clone()).await?;
-        let notification_client = NotificationClient::new(channel).await?;
+        let notification_client = NotificationClient::new(channel.clone()).await?;
+        let worker_client = WorkerClient::new(channel).await?;
         Ok(Arc::new(CloudControlApiProvider {
+            billing_client,
             task_client,
             notification_client,
+            worker_client,
             timeout,
         }))
     }
@@ -81,8 +89,16 @@ impl CloudControlApiProvider {
         self.task_client.clone()
     }
 
+    pub fn get_billing_client(&self) -> Arc<BillingClient> {
+        self.billing_client.clone()
+    }
+
     pub fn get_notification_client(&self) -> Arc<NotificationClient> {
         self.notification_client.clone()
+    }
+
+    pub fn get_worker_client(&self) -> Arc<WorkerClient> {
+        self.worker_client.clone()
     }
     pub fn get_timeout(&self) -> Duration {
         self.timeout

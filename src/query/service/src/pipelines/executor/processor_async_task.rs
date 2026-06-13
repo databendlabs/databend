@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
+use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 use tokio::time::sleep;
@@ -40,6 +41,8 @@ use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
+
+const TARGET_DUMP_GRAPH: &str = "databend::log::dump_graph";
 
 pub enum ExecutorTasksQueue {
     QueryExecutorTasksQueue(Arc<QueryExecutorTasksQueue>),
@@ -124,9 +127,11 @@ impl ProcessorAsyncTask {
         let processor_id = unsafe { processor.id() };
         let processor_name = unsafe { processor.name() };
         let queue_clone = queue.clone();
+        let graph_clone = graph.clone();
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
+            let mut log_graph = false;
 
             loop {
                 let interval = Box::pin(sleep(Duration::from_secs(5)));
@@ -139,6 +144,20 @@ impl ProcessorAsyncTask {
                             "Slow async task detected - query: {:?}, processor: {:?} ({}), elapsed: {:?}, active workers: {:?}",
                             query_id, processor_id, processor_name, elapsed, active_workers
                         );
+                        if elapsed >= Duration::from_secs(200) && active_workers == 0 && !log_graph
+                        {
+                            log_graph = true;
+                            error!(
+                                target: TARGET_DUMP_GRAPH,
+                                "Slow async task running graph dump - query: {:?}, processor: {:?} ({}), elapsed: {:?}, active workers: {:?}, {}",
+                                query_id,
+                                processor_id,
+                                processor_name,
+                                elapsed,
+                                active_workers,
+                                graph_clone.format_graph_nodes(false)
+                            );
+                        }
                     }
                     Either::Right((res, _)) => {
                         return res;

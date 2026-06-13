@@ -1,0 +1,57 @@
+statement ok
+drop role if exists 'role1';
+
+statement ok
+create role 'role1';
+
+statement ok
+grant select on default.* to role 'role1';
+
+statement ok
+create function a as (a) -> (a+1);
+
+statement ok
+drop procedure if exists p1(int);
+
+statement ok
+CREATE PROCEDURE if not exists p1(x int) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    RETURN x;
+END;
+$$;
+
+statement ok
+create connection c1 storage_type = 's3' access_key_id ='11' secret_access_key ='11' ENDPOINT_URL='http://127.0.0.1:9900';
+
+statement ok
+create connection c2 storage_type = 's3' access_key_id ='22' secret_access_key ='22' ENDPOINT_URL='http://127.0.0.1:9900';
+
+statement ok
+create sequence seq1;
+
+statement ok
+create sequence seq2;
+
+statement ok
+drop role if exists 'role2';
+
+statement ok
+create role 'role2';
+
+statement ok
+GRANT OWNERSHIP on udf a to role 'role1';
+
+statement ok
+GRANT OWNERSHIP on procedure p1(int) to role 'role1';
+
+statement ok
+GRANT create warehouse on *.* to role 'role1';
+
+statement ok
+GRANT create connection on *.* to role 'role1';
+
+statement ok
+GRANT create sequence on *.* to role 'role1';
+
+statement ok
+GRANT create procedure on *.* to role 'role1';

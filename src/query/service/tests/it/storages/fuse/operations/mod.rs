@@ -24,6 +24,7 @@ mod internal_column;
 mod mutation;
 mod navigate;
 mod optimize;
+mod prewhere;
 mod purge_drop;
 mod read_plan;
 mod replace_into;

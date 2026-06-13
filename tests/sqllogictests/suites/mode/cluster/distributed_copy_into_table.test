@@ -68,7 +68,7 @@ statement ok
 create or replace table t_query(a int not null,b string not null,c string not null);
 
 statement ok
-create or replace stage st_query FILE_FORMAT = (TYPE = TSV);
+create or replace stage st_query FILE_FORMAT = (TYPE = TEXT);
 
 statement ok
 copy into @st_query from (select a,b,c from table_random limit 1000000);
@@ -142,7 +142,7 @@ statement ok
 create or replace table t_query2(a int not null,b string not null,c string not null);
 
 statement ok
-create or replace stage st_query2 FILE_FORMAT = (TYPE = TSV);
+create or replace stage st_query2 FILE_FORMAT = (TYPE = TEXT);
 
 statement ok
 copy into @st_query2 from (select a,b,c from table_random limit 10);

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_storage::Datum;
+use databend_common_statistics::Datum;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 // #[derive(Debug, Clone)]
@@ -34,8 +34,8 @@ pub struct BasicColumnStatistics {
 impl From<ColumnStatistics> for BasicColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
         Self {
-            min: Datum::from_scalar(value.min),
-            max: Datum::from_scalar(value.max),
+            min: value.min.to_datum(),
+            max: value.max.to_datum(),
             ndv: value.distinct_of_values,
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
@@ -91,8 +91,8 @@ impl BasicColumnStatistics {
             }
             _ => {
                 // Safe to unwrap: min and max are either both Datum::Bytes or neither
-                let min = min.to_double().unwrap();
-                let max = max.to_double().unwrap();
+                let min = min.as_double().unwrap();
+                let max = max.as_double().unwrap();
                 (max - min) as u64
             }
         };

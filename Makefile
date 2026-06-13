@@ -90,9 +90,6 @@ metactl-test:
 	bash ./tests/metactl/test-metactl.sh
 	python ./tests/metactl/test-metactl-restore-new-cluster.py
 
-meta-kvapi-test:
-	bash ./tests/meta-kvapi/test-meta-kvapi.sh
-
 meta-bench: build-release
 	bash ./scripts/benchmark/run-meta-benchmark.sh 10 1000
 
@@ -100,6 +97,12 @@ test: unit-test stateless-test sqllogic-test metactl-test
 
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
+
+heaptrack-meta:
+	HEAPTRACK_TARGET=meta bash ./scripts/ci/ci-run-heaptrack.sh
+
+heaptrack-query:
+	HEAPTRACK_TARGET=query bash ./scripts/ci/ci-run-heaptrack.sh
 
 clean:
 	cargo clean
@@ -113,4 +116,4 @@ genproto:
 	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/notification.proto
 	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/timestamp.proto
 
-.PHONY: setup test run build fmt lint clean docs
+.PHONY: setup test run build fmt lint clean docs heaptrack-meta heaptrack-query

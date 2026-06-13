@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
-use databend_common_storage::Histogram;
+use databend_common_statistics::Histogram;
 use databend_common_storage::MetaHLL12;
 use serde::Deserialize;
 use serde::Serialize;
@@ -34,6 +34,7 @@ pub struct TableSnapshotStatistics {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
     pub hll: HashMap<ColumnId, MetaHLL12>,
+    #[serde(with = "crate::meta::histogram_serde")]
     pub histograms: HashMap<ColumnId, Histogram>,
 }
 

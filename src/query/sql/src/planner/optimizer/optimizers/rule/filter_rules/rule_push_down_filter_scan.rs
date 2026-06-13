@@ -31,7 +31,6 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 
@@ -45,12 +44,9 @@ impl RulePushDownFilterScan {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterScan,
-            // Input:  Filter -> Scan  or  Filter -> SecureFilter -> Scan
+            // Input:  Filter -> Scan
             // Output: Preserve the original plan structure, but write Filter.predicates into Scan.push_down_predicates.
-            matchers: vec![
-                match_op!(Filter -> Scan),
-                match_op!(Filter -> SecureFilter -> Scan),
-            ],
+            matchers: vec![match_op!(Filter -> Scan)],
             metadata,
         }
     }
@@ -178,29 +174,10 @@ impl Rule for RulePushDownFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let i = self
-            .matchers
-            .iter()
-            .position(|matcher| matcher.matches(s_expr))
-            .unwrap();
-        self.apply_matcher(i, s_expr, state)
-    }
-
-    fn apply_matcher(&self, idx: usize, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
 
-        let (mut scan, secure_filter): (Scan, Option<SecureFilter>) = match idx {
-            // Filter -> Scan
-            0 => (child.plan().clone().try_into()?, None),
-            // Filter -> SecureFilter -> Scan
-            1 => {
-                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
-                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
-                (scan, Some(secure_filter))
-            }
-            _ => unreachable!(),
-        };
+        let mut scan: Scan = child.plan().clone().try_into()?;
 
         let add_filters = self.find_push_down_predicates(&filter.predicates, &scan)?;
         match scan.push_down_predicates.as_mut() {
@@ -217,13 +194,8 @@ impl Rule for RulePushDownFilterScan {
         }
 
         let scan_expr = SExpr::create_leaf(Arc::new(scan.into()));
-        let child_expr = if let Some(secure_filter) = secure_filter {
-            SExpr::create_unary(Arc::new(secure_filter.into()), Arc::new(scan_expr))
-        } else {
-            scan_expr
-        };
 
-        let mut result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(child_expr));
+        let mut result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(scan_expr));
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

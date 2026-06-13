@@ -22,10 +22,8 @@ pub type SequenceStorageIdent = TIdent<SequenceStorageRsc>;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
+    use crate::value_id::ValueId;
 
     /// Defines the storage for sequence generator.
     ///
@@ -35,33 +33,16 @@ mod kvapi_impl {
     impl TenantResource for SequenceStorageRsc {
         const PREFIX: &'static str = "__fd_sequence_storage";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<SequenceStorageValue>;
+        type ValueType = ValueId<SequenceStorageValue>;
     }
 
-    impl kvapi::Value for Id<SequenceStorageValue> {
-        type KeyType = super::SequenceStorageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    #[derive(
-        Debug,
-        Clone,
-        Copy,
-        Default,
-        PartialEq,
-        Eq,
-        derive_more::From,
-        derive_more::Deref,
-        derive_more::DerefMut,
-    )]
-    pub struct SequenceStorageValue(pub u64);
+    pub struct SequenceStorageValue;
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::sequence_storage::SequenceStorageIdent;
     use crate::tenant::Tenant;
@@ -70,10 +51,6 @@ mod tests {
     fn test_sequence_storage_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = SequenceStorageIdent::new_generic(tenant, "3".to_string());
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_sequence_storage/dummy/3");
-
-        assert_eq!(ident, SequenceStorageIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_sequence_storage/dummy/3");
     }
 }

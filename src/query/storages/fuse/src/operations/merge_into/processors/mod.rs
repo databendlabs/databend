@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_id_partition_exchange;
 mod processor_merge_into_matched_and_split;
 mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
 mod processor_merge_into_split_row_number_and_log;
 mod transform_matched_mutation_aggregator;
 
+pub use block_id_partition_exchange::BlockIdPartitionExchange;
 pub use processor_merge_into_matched_and_split::MatchedSplitProcessor;
 pub use processor_merge_into_matched_and_split::MixRowIdKindAndLog;
 pub(crate) use processor_merge_into_matched_and_split::RowIdKind;

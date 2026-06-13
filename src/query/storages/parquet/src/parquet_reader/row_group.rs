@@ -31,11 +31,13 @@ use parquet::arrow::arrow_reader::RowSelection;
 use parquet::column::page::PageIterator;
 use parquet::column::page::PageReader;
 use parquet::errors::ParquetError;
+use parquet::file::metadata::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::RowGroupMetaData;
+use parquet::file::page_index::offset_index::PageLocation;
 use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
 use parquet::file::serialized_reader::SerializedPageReader;
-use parquet::format::PageLocation;
 
 use crate::read_settings::ReadSettings;
 
@@ -181,15 +183,29 @@ pub async fn get_ranges(
 
 pub struct RowGroupCore<T> {
     metadata: T,
+    parquet_meta: ParquetMetaData,
     page_locations: Option<Vec<Vec<PageLocation>>>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
 }
 
 impl<T: AsMetaRef> RowGroupCore<T> {
     pub fn new(meta: T, page_locations: Option<Vec<Vec<PageLocation>>>) -> RowGroupCore<T> {
+        let row_group_meta = meta.meta().clone();
+        let parquet_meta = ParquetMetaData::new(
+            FileMetaData::new(
+                0,
+                row_group_meta.num_rows(),
+                None,
+                None,
+                row_group_meta.schema_descr_ptr(),
+                None,
+            ),
+            vec![row_group_meta],
+        );
         RowGroupCore {
             column_chunks: vec![None; meta.meta().num_columns()],
             metadata: meta,
+            parquet_meta,
             page_locations,
         }
     }
@@ -226,7 +242,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         &mut self,
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
-        get_ranges: impl Fn(Vec<Range<u64>>) -> Result<Vec<Bytes>>,
+        get_ranges: impl FnOnce(Vec<Range<u64>>) -> Result<Vec<Bytes>>,
     ) -> Result<()> {
         if let Some((selection, page_locations)) = selection.zip(self.page_locations.as_ref()) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
@@ -318,6 +334,10 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         }
     }
 
+    pub fn fetch_ranges(&self, projection: &ProjectionMask) -> Vec<Range<u64>> {
+        self.get_fetch_ranges_without_index(projection)
+    }
+
     fn get_fetch_ranges_without_index(&self, projection: &ProjectionMask) -> Vec<Range<u64>> {
         self.column_chunks
             .iter()
@@ -373,6 +393,14 @@ impl<T: AsMetaRef> RowGroups for RowGroupCore<T> {
                 }))
             }
         }
+    }
+
+    fn row_groups(&self) -> Box<dyn Iterator<Item = &RowGroupMetaData> + '_> {
+        Box::new(self.parquet_meta.row_groups().iter())
+    }
+
+    fn metadata(&self) -> &databend_storages_common_cache::ParquetMetaData {
+        &self.parquet_meta
     }
 }
 
@@ -434,6 +462,14 @@ impl RowGroups for InMemoryRowGroup<'_> {
 
     fn column_chunks(&self, i: usize) -> parquet::errors::Result<Box<dyn PageIterator>> {
         self.core.column_chunks(i)
+    }
+
+    fn row_groups(&self) -> Box<dyn Iterator<Item = &RowGroupMetaData> + '_> {
+        self.core.row_groups()
+    }
+
+    fn metadata(&self) -> &databend_storages_common_cache::ParquetMetaData {
+        self.core.metadata()
     }
 }
 

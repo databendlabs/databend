@@ -25,8 +25,8 @@ use derive_visitor::VisitorMut as StatementVisitorMut;
 use itertools::Itertools;
 
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
@@ -50,7 +50,7 @@ pub(crate) struct UdfRewriter {
     udf_functions_map: HashMap<String, BoundColumnRef>,
     /// Mapping: (udf function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
-    udf_functions_index_map: HashMap<String, IndexType>,
+    udf_functions_index_map: HashMap<String, Symbol>,
     script_udf: bool,
 }
 
@@ -111,6 +111,14 @@ impl UdfRewriter {
                         for (_, scalar) in update.iter_mut() {
                             self.visit(scalar)?;
                         }
+                    }
+                }
+                for unmatched_evaluator in plan.unmatched_evaluators.iter_mut() {
+                    if let Some(condition) = unmatched_evaluator.condition.as_mut() {
+                        self.visit(condition)?;
+                    }
+                    for scalar in unmatched_evaluator.values.iter_mut() {
+                        self.visit(scalar)?;
                     }
                 }
                 let child_expr = self.create_udf_expr(s_expr.children[0].clone());

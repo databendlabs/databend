@@ -18,7 +18,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -53,6 +53,8 @@ use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -88,8 +90,16 @@ impl RefreshIndexInterpreter {
             let push_downs = plan.push_downs.clone();
             let ctx = self.ctx.clone();
 
-            let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
+            let (_statistics, partitions, _) = fuse_table
+                .prune_snapshot_blocks(
+                    ctx,
+                    push_downs,
+                    table_schema,
+                    lazy_init_segments,
+                    0,
+                    ReadPartitionsPruningMode::Normal,
+                    None,
+                )
                 .await?;
 
             return Ok(Some(partitions));
@@ -109,8 +119,16 @@ impl RefreshIndexInterpreter {
         let push_downs = plan.push_downs.clone();
         let ctx = self.ctx.clone();
 
-        let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, push_downs, table_schema, segments, 0)
+        let (_statistics, partitions, _) = fuse_table
+            .prune_snapshot_blocks(
+                ctx,
+                push_downs,
+                table_schema,
+                segments,
+                0,
+                ReadPartitionsPruningMode::Normal,
+                None,
+            )
             .await?;
 
         Ok(Some(partitions))

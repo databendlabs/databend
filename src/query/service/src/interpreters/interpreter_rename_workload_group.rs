@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -27,6 +26,8 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::util::AuditElement;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
 
 pub struct RenameWorkloadGroupInterpreter {
     ctx: Arc<QueryContext>,

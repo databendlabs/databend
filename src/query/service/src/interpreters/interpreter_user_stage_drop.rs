@@ -20,17 +20,22 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropStagePlan;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::StageFilesInfo;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
+use opendal::Operator;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::RemoveUserStageInterpreter;
 use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
@@ -41,6 +46,19 @@ pub struct DropUserStageInterpreter {
 impl DropUserStageInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: DropStagePlan) -> Result<Self> {
         Ok(DropUserStageInterpreter { ctx, plan })
+    }
+
+    pub async fn remove_all(table_ctx: Arc<dyn TableContext>, op: Operator) -> Result<()> {
+        RemoveUserStageInterpreter::remove_all(
+            table_ctx,
+            op,
+            StageFilesInfo {
+                path: "/".to_string(),
+                ..Default::default()
+            },
+            true,
+        )
+        .await
     }
 }
 
@@ -66,12 +84,24 @@ impl Interpreter for DropUserStageInterpreter {
         // Get stage info first for cleanup operations
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
 
-        // 1. Drop the stage first
+        // 1. Remove stage files for internal stages
+        if let Ok(stage) = &stage {
+            if !matches!(&stage.stage_type, StageType::External) {
+                let op = init_stage_operator(stage)?;
+                Self::remove_all(self.ctx.clone(), op).await?;
+                info!(
+                    "drop stage {:?} with all objects removed in stage",
+                    stage.stage_name
+                );
+            }
+        }
+
+        // 2. Drop the stage
         user_mgr
             .drop_stage(&tenant, &plan.name, plan.if_exists)
             .await?;
 
-        // 2. Revoke ownership (after drop succeeds to prevent permission leak)
+        // 3. Revoke ownership (after drop succeeds to prevent permission leak)
         if let Ok(ref stage) = stage {
             let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::Stage {
@@ -81,23 +111,11 @@ impl Interpreter for DropUserStageInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
-        // 3. Clean up tag references (must be after drop for concurrency safety)
+        // 4. Clean up tag references (must be after drop for concurrency safety)
         let taggable_object = TaggableObject::Stage {
             name: plan.name.clone(),
         };
         cleanup_object_tags(&tenant, taggable_object).await?;
-
-        // 4. Remove stage files for internal stages
-        if let Ok(stage) = stage {
-            if !matches!(&stage.stage_type, StageType::External) {
-                let op = StageTable::get_op(&stage)?;
-                op.remove_all("/").await?;
-                info!(
-                    "drop stage {:?} with all objects removed in stage",
-                    stage.stage_name
-                );
-            }
-        }
 
         Ok(PipelineBuildResult::create())
     }

@@ -14,45 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-//! Process metadata for upgrading purpose.
-//!
-//! [`examples::upgrade_09`] loads metadata from a `raft-dir` and upgrade TableMeta to new version and write them back.
-//! Both in raft-log data and in state-machine data will be converted.
-//!
-//! Usage:
-//!
-//! - Shut down all databend-meta processes.
-//!
-//! - Backup before proceeding: https://docs.databend.com/guides/deploy/upgrade/backup-and-restore-schema
-//!
-//! - To view the current TableMeta version, print all TableMeta records with the following command:
-//!   It should display a list of TableMeta record.
-//!   You need to upgrade only if there is a `ver` that is lower than 24.
-//!
-//!    ```text
-//!    $0 --cmd print --raft-dir "<./your/raft-dir/>"
-//!    # output:
-//!    # TableMeta { ver: 23, ..
-//!    ```
-//!
-//! - Run it:
-//!
-//!   ```text
-//!   $0 --cmd upgrade --raft-dir "<./your/raft-dir/>"
-//!   ```
-//!
-//! - To assert upgrade has finished successfully, print all TableMeta records that are found in meta dir with the following command:
-//!   It should display a list of TableMeta record with a `ver` that is greater or equal 24.
-//!
-//!    ```text
-//!    $0 --cmd print --raft-dir "<./your/raft-dir/>"
-//!    # output:
-//!    # TableMeta { ver: 25, ..
-//!    # TableMeta { ver: 25, ..
-//!    ```
+//! Process metadata dumps for inspection and filtering.
 
-pub mod examples;
-pub mod kv_processor;
-pub mod process;
-pub mod process_meta_dir;
-pub mod rewrite_kv;
+pub mod filter_tenant;
+pub mod pb_value_decoder;

@@ -27,6 +27,7 @@ use databend_common_ast::ast::ShowGranteesOfRoleStmt;
 use databend_common_ast::ast::ShowObjectPrivilegesStmt;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_ast::ast::UserOptionItem;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,11 +41,14 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::PublicKeyEntry;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::normalize_public_key;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_users::UserApiProvider;
+use databend_common_users::validate_public_key_pem;
 
 use crate::BindContext;
 use crate::Binder;
@@ -383,23 +387,51 @@ impl Binder {
         }
         let mut user_option = UserOption::default();
         for option in user_options {
-            if let UserOptionItem::SetWorkloadGroup(name) = &option {
-                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
-                let workload_group = workload_mgr.get_id_by_name(name).await?;
-                user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
-            } else {
-                user_option.apply(option);
+            match option {
+                UserOptionItem::AddPublicKey(_, _)
+                | UserOptionItem::RemovePublicKeyByLabel(_)
+                | UserOptionItem::RemovePublicKeyByFingerprint(_) => {
+                    return Err(ErrorCode::BadArguments(
+                        "ADD/REMOVE PUBLIC_KEY is not allowed in CREATE USER, use IDENTIFIED WITH key_pair BY '<pem>' instead",
+                    ));
+                }
+                UserOptionItem::SetWorkloadGroup(name) => {
+                    let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                    let workload_group = workload_mgr.get_id_by_name(name).await?;
+                    user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+                }
+                _ => {
+                    user_option.apply(option);
+                }
             }
         }
-        UserApiProvider::instance()
-            .verify_password(
-                &self.ctx.get_tenant(),
-                &user_option,
-                auth_option,
-                None,
-                None,
-            )
-            .await?;
+        // Password policy only applies to password-based auth types.
+        // None means no explicit auth type (inherits old type); key_pair users
+        // are already blocked above, so None here is always a password change.
+        let needs_password_policy = matches!(
+            auth_option.auth_type,
+            Some(databend_common_ast::ast::AuthType::Sha256Password)
+                | Some(databend_common_ast::ast::AuthType::DoubleSha1Password)
+                | None
+        );
+        if needs_password_policy {
+            UserApiProvider::instance()
+                .verify_password(
+                    &self.ctx.get_tenant(),
+                    &user_option,
+                    auth_option,
+                    None,
+                    None,
+                )
+                .await?;
+        }
+
+        // Validate public key PEM for key_pair auth
+        if let Some(databend_common_ast::ast::AuthType::KeyPair) = &auth_option.auth_type {
+            if let Some(ref pem) = auth_option.password {
+                validate_public_key_pem(pem)?;
+            }
+        }
 
         // if `must_change_password` is set, user need to change password first
         let need_change = user_option
@@ -457,11 +489,50 @@ impl Binder {
 
         // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
+        let mut key_pair_changed = false;
         for option in user_options {
             if let UserOptionItem::SetWorkloadGroup(name) = &option {
                 let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
                 let workload_group = workload_mgr.get_id_by_name(name).await?;
                 user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+            } else if let UserOptionItem::AddPublicKey(key_input, label) = &option {
+                validate_public_key_pem(key_input)?;
+                let max_keys = self.ctx.get_settings().get_max_public_keys_per_user()?;
+                let current_count = user_info.auth_info.get_public_keys().len() as u64;
+                if current_count >= max_keys {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "cannot add public key: user already has {} keys (max: {})",
+                        current_count, max_keys
+                    )));
+                }
+                let label = label.as_deref().unwrap_or("").trim().to_string();
+                if label.len() > 128 {
+                    return Err(ErrorCode::BadArguments(
+                        "public key label must be 128 characters or fewer",
+                    ));
+                }
+                if !label.is_empty() {
+                    let existing = user_info.auth_info.get_public_keys();
+                    if existing.iter().any(|k| k.label == label) {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "public key label '{}' already exists for this user",
+                            label
+                        )));
+                    }
+                }
+                let entry = PublicKeyEntry {
+                    key: normalize_public_key(key_input)?,
+                    label,
+                    created_at: Utc::now().timestamp(),
+                };
+                user_info.auth_info.add_public_key(entry)?;
+                key_pair_changed = true;
+            } else if let UserOptionItem::RemovePublicKeyByLabel(label) = &option {
+                user_info.auth_info.remove_public_key_by_label(label)?;
+                key_pair_changed = true;
+            } else if let UserOptionItem::RemovePublicKeyByFingerprint(fp) = &option {
+                user_info.auth_info.remove_public_key_by_fingerprint(fp)?;
+                key_pair_changed = true;
             } else {
                 user_option.apply(option);
             }
@@ -475,6 +546,29 @@ impl Binder {
 
         // None means auth info is not changed.
         let new_auth_info = if let Some(auth_option) = &auth_option {
+            // Guard for existing key-pair users:
+            // - IDENTIFIED BY (no auth_type): inherits KeyPair, would rebuild single key
+            // - IDENTIFIED WITH key_pair: would wipe all existing keys
+            // Switching to another explicit auth type (e.g. double_sha1_password) is allowed.
+            if matches!(user_info.auth_info, AuthInfo::KeyPair { .. }) {
+                match &auth_option.auth_type {
+                    None | Some(databend_common_ast::ast::AuthType::KeyPair) => {
+                        return Err(ErrorCode::BadArguments(
+                            "user already uses key-pair authentication, use ADD PUBLIC_KEY / REMOVE PUBLIC_KEY to manage keys, or switch to another auth type with IDENTIFIED WITH <auth_type>",
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            // Validate PEM when switching to key_pair auth
+            if matches!(
+                auth_option.auth_type,
+                Some(databend_common_ast::ast::AuthType::KeyPair)
+            ) {
+                if let Some(ref pem) = auth_option.password {
+                    validate_public_key_pem(pem)?;
+                }
+            }
             // If user is changing self password, always set `need_change` as false,
             // because after this operation, the password is changed.
             // And if user is changing other user's password,
@@ -485,16 +579,18 @@ impl Binder {
                 &auth_option.password,
                 need_change,
             )?;
-            // verify the password if changed
-            UserApiProvider::instance()
-                .verify_password(
-                    &self.ctx.get_tenant(),
-                    &user_option,
-                    auth_option,
-                    Some(&user_info),
-                    Some(&auth_info),
-                )
-                .await?;
+            // Password policy only applies to password-based auth
+            if let AuthInfo::Password { .. } = &auth_info {
+                UserApiProvider::instance()
+                    .verify_password(
+                        &self.ctx.get_tenant(),
+                        &user_option,
+                        auth_option,
+                        Some(&user_info),
+                        Some(&auth_info),
+                    )
+                    .await?;
+            }
             if user_info.auth_info == auth_info {
                 None
             } else {
@@ -508,7 +604,7 @@ impl Binder {
             None
         };
 
-        let change_auth = new_auth_info.is_some();
+        let change_auth = new_auth_info.is_some() || key_pair_changed;
         let change_user_option = user_option != user_info.option;
         let new_user_option = if change_user_option {
             Some(user_option)
@@ -540,15 +636,24 @@ impl Binder {
         let query = if let Some(principal) = principal {
             match principal {
                 AstPrincipalIdentity::User(user) => {
-                    format!("SELECT * FROM show_grants('user', '{}')", user.username)
+                    format!(
+                        "SELECT * FROM show_grants('user', {})",
+                        QuotedString(&user.username, '\'')
+                    )
                 }
                 AstPrincipalIdentity::Role(role) => {
-                    format!("SELECT * FROM show_grants('role', '{}')", role)
+                    format!(
+                        "SELECT * FROM show_grants('role', {})",
+                        QuotedString(role, '\'')
+                    )
                 }
             }
         } else {
             let name = self.ctx.get_current_user()?.name;
-            format!("SELECT * FROM show_grants('user', '{}')", name)
+            format!(
+                "SELECT * FROM show_grants('user', {})",
+                QuotedString(name, '\'')
+            )
         };
 
         let (show_limit, limit_str) =
@@ -566,8 +671,8 @@ impl Binder {
         stmt: &ShowGranteesOfRoleStmt,
     ) -> Result<Plan> {
         let query = format!(
-            "SELECT * FROM show_grants('role_grantee', '{}')",
-            &stmt.name
+            "SELECT * FROM show_grants('role_grantee', {})",
+            QuotedString(&stmt.name, '\'')
         );
 
         let (show_limit, limit_str) =
@@ -593,8 +698,9 @@ impl Binder {
         let query = match object {
             GrantObjectName::Database(db) => {
                 format!(
-                    "SELECT * FROM show_grants('database', '{}', '{}')",
-                    db, catalog
+                    "SELECT * FROM show_grants('database', {}, {})",
+                    QuotedString(db, '\''),
+                    QuotedString(&catalog, '\'')
                 )
             }
             GrantObjectName::Table(db, tb) => {
@@ -604,24 +710,41 @@ impl Binder {
                     self.ctx.get_current_database()
                 };
                 format!(
-                    "SELECT * FROM show_grants('table', '{}', '{}', '{}')",
-                    tb, catalog, db
+                    "SELECT * FROM show_grants('table', {}, {}, {})",
+                    QuotedString(tb, '\''),
+                    QuotedString(&catalog, '\''),
+                    QuotedString(&db, '\'')
                 )
             }
             GrantObjectName::UDF(name) => {
-                format!("SELECT * FROM show_grants('udf', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('udf', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Stage(name) => {
-                format!("SELECT * FROM show_grants('stage', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('stage', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Warehouse(name) => {
-                format!("SELECT * FROM show_grants('warehouse', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('warehouse', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Connection(name) => {
-                format!("SELECT * FROM show_grants('connection', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('connection', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Sequence(name) => {
-                format!("SELECT * FROM show_grants('sequence', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('sequence', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Procedure(p) => {
                 let procedure_ident = ProcedureIdentity::from(p.clone());
@@ -634,7 +757,10 @@ impl Binder {
                     .await
                     .map_err(meta_service_error)?;
                 if let Some(procedure) = procedure {
-                    format!("SELECT * FROM show_grants('procedure', '{}')", procedure.id)
+                    format!(
+                        "SELECT * FROM show_grants('procedure', {})",
+                        QuotedString(procedure.id.to_string(), '\'')
+                    )
                 } else {
                     return Err(ErrorCode::UnknownProcedure(format!(
                         "Unknown procedure {}",
@@ -645,15 +771,15 @@ impl Binder {
             GrantObjectName::MaskingPolicy(policy) => {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
                 format!(
-                    "SELECT * FROM show_grants('masking_policy', '{}')",
-                    policy_id
+                    "SELECT * FROM show_grants('masking_policy', {})",
+                    QuotedString(policy_id.to_string(), '\'')
                 )
             }
             GrantObjectName::RowAccessPolicy(policy) => {
                 let policy_id = self.resolve_row_access_policy_id(policy).await?;
                 format!(
-                    "SELECT * FROM show_grants('row_access_policy', '{}')",
-                    policy_id
+                    "SELECT * FROM show_grants('row_access_policy', {})",
+                    QuotedString(policy_id.to_string(), '\'')
                 )
             }
         };

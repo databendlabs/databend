@@ -17,7 +17,7 @@
 
 use std::fmt::Display;
 
-use databend_common_meta_app_types::non_empty::NonEmptyString;
+use databend_base::non_empty::NonEmptyString;
 
 use crate::app_error::TenantIsEmpty;
 
@@ -63,10 +63,6 @@ impl Tenant {
         &self.tenant
     }
 
-    pub fn to_nonempty(&self) -> NonEmptyString {
-        NonEmptyString::new(self.tenant.clone()).unwrap()
-    }
-
     pub fn display(&self) -> impl Display {
         format!("Tenant{}", self.tenant)
     }
@@ -91,43 +87,36 @@ impl ToTenant for &Tenant {
 
 mod kvapi_key_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_meta_client::kvapi;
 
     use crate::tenant::tenant::Tenant;
 
     impl kvapi::KeyCodec for Tenant {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(&self.tenant)
         }
 
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let tenant = p.next_nonempty()?;
 
             Ok(Self {
                 tenant: tenant.to_string(),
             })
         }
+
+        fn segment_count(&self) -> usize {
+            1
+        }
     }
 
     #[derive(Debug)]
     pub struct EmptyTenantValue;
 
-    impl kvapi::Key for Tenant {
+    impl kvapi::StructKey for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
-        type ValueType = EmptyTenantValue;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
     }
 
-    impl kvapi::Value for EmptyTenantValue {
-        type KeyType = Tenant;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
+    impl kvapi::Key for Tenant {
+        type ValueType = EmptyTenantValue;
     }
 }

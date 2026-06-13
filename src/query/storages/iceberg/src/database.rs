@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::TableCreation;
@@ -99,7 +99,11 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let params = LoadParams {
-            location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+            location: cache::table_cache_key(
+                self.ctl.info().catalog_name(),
+                self.name(),
+                table_name,
+            ),
             len_hint: None,
             ver: 0,
             put_cache: true,
@@ -119,7 +123,11 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn refresh_table(&self, table_name: &str) -> Result<()> {
         let params = LoadParams {
-            location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+            location: cache::table_cache_key(
+                self.ctl.info().catalog_name(),
+                self.name(),
+                table_name,
+            ),
             len_hint: None,
             ver: 0,
             put_cache: true,
@@ -168,6 +176,17 @@ impl Database for IcebergDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        let mut tables = vec![];
+        for table_name in table_names {
+            if let Ok(table) = self.get_table(table_name).await {
+                tables.push(table);
+            }
+        }
+        Ok(tables)
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_names(&self) -> Result<Vec<String>> {
         let table_names = self
             .ctl
@@ -199,7 +218,6 @@ impl Database for IcebergDatabase {
                             table_id_seq: None,
                             db_id: 0,
                             new_table: true,
-                            spec_vec: None,
                             prev_table_id: None,
                             orphan_table_name: None,
                         });
@@ -252,7 +270,6 @@ impl Database for IcebergDatabase {
             table_id_seq: None,
             db_id: 0,
             new_table: true,
-            spec_vec: None,
             prev_table_id: None,
             orphan_table_name: None,
         })
@@ -280,7 +297,11 @@ impl Database for IcebergDatabase {
             }
         } else {
             let params = LoadParams {
-                location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+                location: cache::table_cache_key(
+                    self.ctl.info().catalog_name(),
+                    self.name(),
+                    &req.table_name,
+                ),
                 len_hint: None,
                 ver: 0,
                 put_cache: true,

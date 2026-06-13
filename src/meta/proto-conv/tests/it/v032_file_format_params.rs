@@ -17,7 +17,7 @@ use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use fastrace::func_name;
 
 use crate::common;
@@ -52,12 +52,16 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
+            quote_style: mt::principal::CsvQuoteStyle::QuoteNotNull,
             error_on_column_count_mismatch: true,
+            trim_space: false,
             allow_quoted_nulls: false,
             empty_field_as: Default::default(),
             quoted_empty_field_as: EmptyFieldAs::String,
             binary_format: Default::default(),
             geometry_format: Default::default(),
+            encoding: "UTF-8".to_string(),
+            encoding_error_mode: "strict".to_string(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
@@ -73,7 +77,7 @@ fn test_decode_v32_tsv_file_format_params() -> anyhow::Result<()> {
     ];
 
     let want = || {
-        mt::principal::FileFormatParams::Tsv(TsvFileFormatParams {
+        mt::principal::FileFormatParams::Text(TextFileFormatParams {
             compression: StageFileCompression::Gzip,
             headers: 1,
             field_delimiter: "fd".to_string(),
@@ -81,6 +85,13 @@ fn test_decode_v32_tsv_file_format_params() -> anyhow::Result<()> {
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
+            null_display: "\\N".to_string(),
+            error_on_column_count_mismatch: true,
+            trim_space: false,
+            empty_field_as: EmptyFieldAs::FieldDefault,
+            output_header: false,
+            encoding: "UTF-8".to_string(),
+            encoding_error_mode: "strict".to_string(),
         })
     };
     common::test_pb_from_to(func_name!(), want())?;

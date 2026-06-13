@@ -20,13 +20,13 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::ProjectedBlock;
-use databend_common_hashtable::HashJoinHashMap;
-use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::RawEntry;
-use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
+use crate::pipelines::processors::transforms::hash_join_table::RawEntry;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
@@ -208,14 +208,19 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: b
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.keys.len() {
+            if res.matched_probe.len() == max_rows {
+                break;
+            }
+
+            if !MATCHED && res.unmatched.len() >= max_rows {
+                break;
+            }
+
+            assume(res.unmatched.len() < res.unmatched.capacity());
             assume(res.matched_probe.len() == res.matched_build.len());
             assume(res.matched_build.len() < res.matched_build.capacity());
             assume(res.matched_probe.len() < res.matched_probe.capacity());
             assume(self.key_idx < self.pointers.len());
-
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
 
             if self.probe_entry_ptr == 0 {
                 self.probe_entry_ptr = self.pointers[self.key_idx];
@@ -328,15 +333,19 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRS
         while self.idx < self.selections.len() {
             let key_idx = self.selections[self.idx] as usize;
 
+            if res.matched_probe.len() == max_rows {
+                break;
+            }
+
+            if !MATCHED && res.unmatched.len() >= max_rows {
+                break;
+            }
+
             assume(res.unmatched.len() < res.unmatched.capacity());
             assume(res.matched_probe.len() == res.matched_build.len());
             assume(res.matched_build.len() < res.matched_build.capacity());
             assume(res.matched_probe.len() < res.matched_probe.capacity());
             assume(key_idx < self.pointers.len());
-
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
 
             if self.probe_entry_ptr == 0 {
                 self.probe_entry_ptr = self.pointers[key_idx];

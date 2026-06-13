@@ -27,11 +27,15 @@ select a, b from @s1/t1;
 ----
 1 2
 
-query error column B doesn't exist
+query
 select a, `B` from @s1/t1;
+----
+1 2
 
-query error column b doesn't exist
+query
 select a, b from @s1/t1(case_sensitive=>true);
+----
+1 2
 
 query ??
 select a, `B` from @s1/t1(case_sensitive=>true);
@@ -51,7 +55,7 @@ query error ambiguous
 select a from @s1/t2;
 
 query ??
-select a, `A` from @s1/t2(case_sensitive=>true);
+select `a`, `A` from @s1/t2(case_sensitive=>true);
 ----
 1 2
 
@@ -139,11 +143,15 @@ select a, b from @s1/t1;
 ----
 1 2
 
-query error column B doesn't exist
+query
 select a, `B` from @s1/t1;
+----
+1 2
 
-query error column b doesn't exist
+query
 select a, b from @s1/t1(case_sensitive=>true);
+----
+1 2
 
 query ??
 select a, `B` from @s1/t1(case_sensitive=>true);
@@ -162,8 +170,8 @@ copy into t1 from @s1/t1 return_failed_only=true column_match_mode=CaseSensitive
 query error ambiguous
 select a from @s1/t2;
 
-query ??
-select a, `A` from @s1/t2(case_sensitive=>true);
+query
+select `a`, `A` from @s1/t2(case_sensitive=>true);
 ----
 1 2
 

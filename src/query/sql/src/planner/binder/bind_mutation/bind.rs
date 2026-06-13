@@ -34,6 +34,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -334,9 +335,9 @@ impl Binder {
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -420,9 +421,9 @@ impl Binder {
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "unmatched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -470,9 +471,9 @@ impl Binder {
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
                 let (mut scalar_expr, _) = scalar_binder.bind(expr)?;
-                if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                     return Err(ErrorCode::SemanticError(
-                        "insert clause's can't contain subquery|window|aggregate|udf functions"
+                        "insert clause's can't contain subquery|window|aggregate|async functions"
                             .to_string(),
                     )
                     .set_span(scalar_expr.span()));
@@ -494,7 +495,7 @@ impl Binder {
         }
     }
 
-    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<usize> {
+    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<Symbol> {
         for column_entry in column_entries {
             if col_name == column_entry.name() {
                 return Ok(column_entry.index());
@@ -518,7 +519,7 @@ impl Binder {
 
 fn insert_only(mutation: &crate::plans::Mutation) -> bool {
     let metadata = mutation.metadata.read();
-    let target_table_columns: HashSet<usize> = metadata
+    let target_table_columns: HashSet<Symbol> = metadata
         .columns_by_table_index(mutation.target_table_index)
         .iter()
         .map(|column| column.index())

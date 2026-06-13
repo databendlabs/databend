@@ -15,6 +15,8 @@
 use anyhow::Result;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::import::import_data;
+use databend_meta::configs::MetaServiceConfig;
+use databend_meta_runtime::DatabendRuntime;
 use futures::StreamExt;
 use log::info;
 use opendal::Operator;
@@ -42,7 +44,7 @@ pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn restore_meta(efs: Operator, meta_cfg: &databend_meta::configs::Config) -> Result<()> {
+pub async fn restore_meta(efs: Operator, meta_cfg: &MetaServiceConfig) -> Result<()> {
     let mut stream = efs
         .reader(DATABEND_META_BACKUP_PATH)
         .await?
@@ -69,7 +71,7 @@ pub async fn restore_meta(efs: Operator, meta_cfg: &databend_meta::configs::Conf
         initial_cluster: vec![format!("{id}=127.0.0.1:28004")],
         id,
     };
-    import_data(&import_args).await?;
+    import_data::<DatabendRuntime>(&import_args).await?;
 
     info!("databend meta has been restored");
     Ok(())

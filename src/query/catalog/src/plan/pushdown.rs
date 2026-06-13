@@ -19,15 +19,17 @@ use std::fmt::Debug;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::table::ChangeType;
+use jsonb::keypath::OwnedKeyPaths;
 
 use super::AggIndexInfo;
 use crate::plan::Projection;
@@ -57,7 +59,7 @@ pub struct VirtualColumnField {
     /// The virtual column name.
     pub name: String,
     /// Paths to generate virtual column from source column.
-    pub key_paths: Scalar,
+    pub key_paths: OwnedKeyPaths,
     /// optional cast function name, used to cast value to other type.
     pub cast_func_name: Option<String>,
     /// Virtual column data type.
@@ -150,6 +152,13 @@ pub struct VectorIndexInfo {
     pub query_values: Vec<F32>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ReadPartitionsPruningMode {
+    #[default]
+    Normal,
+    Lightweight,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -184,6 +193,14 @@ pub struct PushDownInfo {
     pub vector_index: Option<VectorIndexInfo>,
     /// Used by table sample
     pub sample: Option<SampleConfig>,
+    /// Controls how much pruning work a storage should do while collecting partitions.
+    /// PROXY uses lightweight mode for route estimation and normal mode for the
+    /// selected target that will actually be scanned.
+    #[serde(default)]
+    pub read_partitions_pruning_mode: ReadPartitionsPruningMode,
+    /// Optional secure filters from Row Access Policy, kept separate for display redaction.
+    #[serde(default)]
+    pub secure_filters: Option<Filters>,
 }
 
 impl PushDownInfo {
@@ -196,6 +213,34 @@ impl PushDownInfo {
             remote_expr_only_uses_index_columns(&filters.filter)
         } else {
             false
+        }
+    }
+
+    pub fn has_secure_filters(&self) -> bool {
+        self.secure_filters.is_some()
+    }
+
+    pub fn effective_filters(&self, fn_registry: &FunctionRegistry) -> Option<Filters> {
+        match (&self.filters, &self.secure_filters) {
+            (Some(f), Some(sf)) => {
+                let a = f.filter.as_expr(fn_registry);
+                let b = sf.filter.as_expr(fn_registry);
+                let combined = check_function(None, "and_filters", &[], &[a, b], fn_registry)
+                    .expect("and_filters must be valid");
+
+                let inv_a = f.inverted_filter.as_expr(fn_registry);
+                let inv_b = sf.inverted_filter.as_expr(fn_registry);
+                let combined_inv = check_function(None, "or", &[], &[inv_a, inv_b], fn_registry)
+                    .expect("or must be valid");
+
+                Some(Filters {
+                    filter: combined.as_remote_expr(),
+                    inverted_filter: combined_inv.as_remote_expr(),
+                })
+            }
+            (Some(f), None) => Some(f.clone()),
+            (None, Some(sf)) => Some(sf.clone()),
+            (None, None) => None,
         }
     }
 }

@@ -77,10 +77,7 @@ impl TenantOwnershipObjectIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::principal::OwnershipInfo;
-    use crate::principal::TenantOwnershipObjectIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -91,13 +88,6 @@ mod kvapi_impl {
         type ValueType = OwnershipInfo;
     }
 
-    impl kvapi::Value for OwnershipInfo {
-        type KeyType = TenantOwnershipObjectIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -105,8 +95,9 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::StructKey;
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::KeyWithTenant;
     use crate::principal::OwnershipObject;
@@ -129,43 +120,31 @@ mod tests {
     #[test]
     fn test_role_grantee_as_kvapi_key() {
         // db with default catalog
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::Database {
                     catalog_name: "default".to_string(),
                     db_id: 1,
                 },
-            );
-
-            let key = role_grantee.to_string_key();
-            assert_eq!("__fd_object_owners/test/database-by-id/1", key);
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
+            ),
+            "__fd_object_owners/test/database-by-id/1",
+        );
 
         // db with catalog
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::Database {
                     catalog_name: "cata/foo".to_string(),
                     db_id: 1,
                 },
-            );
+            ),
+            "__fd_object_owners/test/database-by-catalog-id/cata%2ffoo/1",
+        );
 
-            let key = role_grantee.to_string_key();
-            assert_eq!(
-                "__fd_object_owners/test/database-by-catalog-id/cata%2ffoo/1",
-                key
-            );
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
-
-        // table with default catalog
+        // table with default catalog -- asymmetric: `db_id` is intentionally
+        // dropped during encode, so the decoded value differs from input.
         {
             let obj = TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
@@ -185,7 +164,7 @@ mod tests {
                     Tenant::new_literal("test"),
                     OwnershipObject::Table {
                         catalog_name: "default".to_string(),
-                        db_id: 0, // db_id is not encoded into key
+                        db_id: 0,
                         table_id: 2,
                     }
                 ),
@@ -193,7 +172,7 @@ mod tests {
             );
         }
 
-        // table with catalog
+        // table with catalog -- same asymmetry around `db_id`.
         {
             let obj = TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
@@ -216,7 +195,7 @@ mod tests {
                     Tenant::new_literal("test"),
                     OwnershipObject::Table {
                         catalog_name: "cata/foo".to_string(),
-                        db_id: 0, // db_id is not encoded into key
+                        db_id: 0,
                         table_id: 2,
                     }
                 ),
@@ -225,74 +204,51 @@ mod tests {
         }
 
         // stage
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::Stage {
                     name: "foo".to_string(),
                 },
-            );
-
-            let key = role_grantee.to_string_key();
-            assert_eq!("__fd_object_owners/test/stage-by-name/foo", key);
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
+            ),
+            "__fd_object_owners/test/stage-by-name/foo",
+        );
 
         // udf
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::UDF {
                     name: "foo".to_string(),
                 },
-            );
-
-            let key = role_grantee.to_string_key();
-            assert_eq!("__fd_object_owners/test/udf-by-name/foo", key);
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
+            ),
+            "__fd_object_owners/test/udf-by-name/foo",
+        );
 
         // warehouse
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::Warehouse {
                     id: "n87s".to_string(),
                 },
-            );
-
-            let key = role_grantee.to_string_key();
-            assert_eq!("__fd_object_owners/test/warehouse-by-id/n87s", key);
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
+            ),
+            "__fd_object_owners/test/warehouse-by-id/n87s",
+        );
 
         // masking policy
-        {
-            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+        assert_round_trip(
+            TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("tenant_mask"),
                 OwnershipObject::MaskingPolicy { policy_id: 99 },
-            );
-
-            let key = role_grantee.to_string_key();
-            assert_eq!(
-                "__fd_object_owners/tenant_mask/masking-policy-by-id/99",
-                key
-            );
-
-            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
-            assert_eq!(role_grantee, parsed);
-        }
+            ),
+            "__fd_object_owners/tenant_mask/masking-policy-by-id/99",
+        );
     }
 
     #[test]
     fn test_ownership_seq_list_key() {
-        use databend_common_meta_kvapi::kvapi::Key;
+        use databend_meta_client::kvapi::StructKey;
         let obj = OwnershipObject::Sequence {
             name: "seq1".to_string(),
         };
@@ -307,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_ownership_procedure_list_key() {
-        use databend_common_meta_kvapi::kvapi::Key;
+        use databend_meta_client::kvapi::StructKey;
         let obj = OwnershipObject::Procedure { procedure_id: 1 };
 
         let ident = TenantOwnershipObjectIdent::new(Tenant::new_literal("tenant1"), obj);

@@ -35,6 +35,7 @@ use crate::ast::statements::role::AlterRoleStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
+use crate::ast::statements::worker::ShowWorkersStmt;
 use crate::ast::statements::workload::CreateWorkloadGroupStmt;
 use crate::ast::statements::workload::DropWorkloadGroupStmt;
 use crate::ast::statements::workload::RenameWorkloadGroupStmt;
@@ -153,6 +154,12 @@ pub enum Statement {
     AssignWarehouseNodes(AssignWarehouseNodesStmt),
     UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
+    // Workers
+    ShowWorkers(ShowWorkersStmt),
+    CreateWorker(CreateWorkerStmt),
+    AlterWorker(AlterWorkerStmt),
+    DropWorker(DropWorkerStmt),
+
     // Workloads
     ShowWorkloadGroups(ShowWorkloadGroupsStmt),
     CreateWorkloadGroup(CreateWorkloadGroupStmt),
@@ -190,6 +197,7 @@ pub enum Statement {
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
+    VacuumVirtualColumn(VacuumVirtualColumnStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     ShowStatistics(ShowStatisticsStmt),
@@ -234,6 +242,9 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     DescribeUser {
+        user: UserIdentity,
+    },
+    ShowPublicKeys {
         user: UserIdentity,
     },
     CreateUser(CreateUserStmt),
@@ -443,6 +454,45 @@ impl Statement {
                 attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
                 format!("{}", Statement::AttachTable(attach_clone))
             }
+            Statement::CreateConnection(stmt) => {
+                let mut clone = stmt.clone();
+                clone.storage_params = clone
+                    .storage_params
+                    .iter()
+                    .map(|(k, v)| {
+                        let chars: Vec<char> = v.chars().collect();
+                        let masked = if chars.len() <= 4 {
+                            "***".to_string()
+                        } else {
+                            let head: String = chars[..2].iter().collect();
+                            let tail: String = chars[chars.len() - 2..].iter().collect();
+                            format!("{}***{}", head, tail)
+                        };
+                        (k.clone(), masked)
+                    })
+                    .collect();
+                format!("{}", Statement::CreateConnection(clone))
+            }
+            Statement::AlterTable(stmt) => {
+                let mut clone = stmt.clone();
+                if let AlterTableAction::ModifyConnection { new_connection } = &mut clone.action {
+                    *new_connection = new_connection
+                        .iter()
+                        .map(|(k, v)| {
+                            let chars: Vec<char> = v.chars().collect();
+                            let masked = if chars.len() <= 4 {
+                                "***".to_string()
+                            } else {
+                                let head: String = chars[..2].iter().collect();
+                                let tail: String = chars[chars.len() - 2..].iter().collect();
+                                format!("{}***{}", head, tail)
+                            };
+                            (k.clone(), masked)
+                        })
+                        .collect();
+                }
+                format!("{}", Statement::AlterTable(clone))
+            }
             _ => format!("{}", self),
         }
     }
@@ -496,6 +546,7 @@ impl Statement {
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
+            | Statement::VacuumVirtualColumn(..)
             | Statement::AnalyzeTable(..)
             | Statement::ExistsTable(..)
             | Statement::ShowCreateDictionary(..)
@@ -511,6 +562,7 @@ impl Statement {
             | Statement::ShowVirtualColumns(..)
             | Statement::ShowUsers { .. }
             | Statement::DescribeUser { .. }
+            | Statement::ShowPublicKeys { .. }
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
@@ -545,6 +597,7 @@ impl Statement {
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
+            | Statement::ShowWorkers(..)
             | Statement::ShowOnlineNodes(..)
             | Statement::InspectWarehouse(..) => true,
 
@@ -628,6 +681,9 @@ impl Statement {
             | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
             | Statement::SuspendWarehouse(..)
+            | Statement::CreateWorker(..)
+            | Statement::AlterWorker(..)
+            | Statement::DropWorker(..)
             | Statement::ShowWorkloadGroups(..)
             | Statement::CreateWorkloadGroup(..)
             | Statement::DropWorkloadGroup(..)
@@ -675,7 +731,7 @@ impl Display for Statement {
                             .join(", ")
                     )?;
                 }
-                match *kind {
+                match kind {
                     ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
                     ExplainKind::Graph => write!(f, " GRAPH")?,
@@ -689,7 +745,14 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
-                    ExplainKind::Perf => write!(f, " PERF")?,
+                    ExplainKind::Perf { event_groups } => {
+                        write!(f, " PERF")?;
+                        if !event_groups.is_empty() {
+                            let groups_str: Vec<String> =
+                                event_groups.iter().map(|g| g.join("+")).collect();
+                            write!(f, "(events='{}')", groups_str.join(","))?;
+                        }
+                    }
                 }
                 write!(f, " {query}")?;
             }
@@ -856,6 +919,7 @@ impl Display for Statement {
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,
@@ -887,6 +951,7 @@ impl Display for Statement {
                 }
             }
             Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
+            Statement::ShowPublicKeys { user } => write!(f, "SHOW PUBLIC KEYS FOR USER {user}")?,
             Statement::ShowRoles { show_options } => {
                 write!(f, "SHOW ROLES")?;
                 if let Some(show_options) = show_options {
@@ -969,7 +1034,7 @@ impl Display for Statement {
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::ShowStages { show_options } => {
@@ -993,7 +1058,7 @@ impl Display for Statement {
             Statement::RemoveStage { location, pattern } => {
                 write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
@@ -1109,6 +1174,10 @@ impl Display for Statement {
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
             Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWorkers(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWorker(stmt) => write!(f, "{stmt}")?,
             Statement::ShowWorkloadGroups(stmt) => write!(f, "{stmt}")?,
             Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,

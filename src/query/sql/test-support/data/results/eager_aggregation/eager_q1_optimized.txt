@@ -1,0 +1,27 @@
+Exchange(Merge)
+└── Aggregate(Final)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum(sum_arg_0 (#25)) AS (#26)]
+    └── Aggregate(Partial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(sum_arg_0 (#25)) AS (#26)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [orders.o_orderkey (#16)]
+            └── EvalScalar
+                ├── scalars: [orders.o_orderkey (#16) AS (#16), multiply(lineitem.l_extendedprice (#5), minus(1, lineitem.l_discount (#6))) AS (#25), lineitem.l_orderkey (#0) AS (#27), lineitem.l_returnflag (#8) AS (#28)]
+                └── Join(Inner)
+                    ├── build keys: [orders.o_orderkey (#16)]
+                    ├── probe keys: [lineitem.l_orderkey (#0)]
+                    ├── other filters: []
+                    ├── Exchange(Broadcast)
+                    │   └── Scan
+                    │       ├── table: default.orders (#1)
+                    │       ├── filters: []
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── Scan
+                        ├── table: default.lineitem (#0)
+                        ├── filters: [eq(lineitem.l_returnflag (#8), 'R')]
+                        ├── order by: []
+                        └── limit: NONE
+

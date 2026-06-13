@@ -43,8 +43,6 @@ impl DictionaryNameIdent {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::schema::dictionary_id_ident::DictionaryId;
     use crate::tenant_key::resource::TenantResource;
 
@@ -55,11 +53,22 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = DictionaryId;
     }
+}
 
-    impl kvapi::Value for DictionaryId {
-        type KeyType = super::DictionaryNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi::testing::assert_round_trip;
+
+    use super::DictionaryNameIdent;
+    use crate::schema::DictionaryIdentity;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_dictionary_name_ident_key_format() {
+        let tenant = Tenant::new_literal("tenant1");
+        let name = DictionaryIdentity::new(7, "dict/a");
+        let ident = DictionaryNameIdent::new(tenant, name);
+
+        assert_round_trip(ident, "__fd_dictionaries/tenant1/7/dict%2fa");
     }
 }

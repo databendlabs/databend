@@ -23,10 +23,8 @@ pub type AutoIncrementStorageIdent = TIdent<AutoIncrementStorageRsc, AutoIncreme
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
+    use crate::value_id::ValueId;
 
     /// Defines the storage for autoincrement generator.
     ///
@@ -36,33 +34,16 @@ mod kvapi_impl {
     impl TenantResource for AutoIncrementStorageRsc {
         const PREFIX: &'static str = "__fd_autoincrement_storage";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<AutoIncrementStorageValue>;
+        type ValueType = ValueId<AutoIncrementStorageValue>;
     }
 
-    impl kvapi::Value for Id<AutoIncrementStorageValue> {
-        type KeyType = super::AutoIncrementStorageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    #[derive(
-        Debug,
-        Clone,
-        Copy,
-        Default,
-        PartialEq,
-        Eq,
-        derive_more::From,
-        derive_more::Deref,
-        derive_more::DerefMut,
-    )]
-    pub struct AutoIncrementStorageValue(pub u64);
+    pub struct AutoIncrementStorageValue;
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::AutoIncrementKey;
     use crate::schema::auto_increment_storage::AutoIncrementStorageIdent;
@@ -73,13 +54,6 @@ mod tests {
         let tenant = Tenant::new_literal("dummy");
         let key = AutoIncrementKey::new(0, 3);
         let ident = AutoIncrementStorageIdent::new_generic(tenant, key);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_autoincrement_storage/dummy/0/3");
-
-        assert_eq!(
-            ident,
-            AutoIncrementStorageIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_autoincrement_storage/dummy/0/3");
     }
 }

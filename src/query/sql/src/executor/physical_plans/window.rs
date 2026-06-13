@@ -19,7 +19,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 
 use super::AggregateFunctionDesc;
-use crate::IndexType;
+use crate::Symbol;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum WindowFunction {
@@ -72,14 +72,14 @@ impl Display for WindowFunction {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LagLeadDefault {
     Null,
-    Index(IndexType),
+    Index(Symbol),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LagLeadFunctionDesc {
     pub is_lag: bool,
     pub offset: u64,
-    pub arg: usize,
+    pub arg: Symbol,
     pub return_type: DataType,
     pub default: LagLeadDefault,
 }
@@ -87,7 +87,7 @@ pub struct LagLeadFunctionDesc {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
-    pub arg: usize,
+    pub arg: Symbol,
     pub return_type: DataType,
     pub ignore_null: bool,
 }

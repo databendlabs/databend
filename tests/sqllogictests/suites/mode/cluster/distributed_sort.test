@@ -1,8 +1,8 @@
 statement ok
-drop table if exists t_distributed_sort;
+create or replace table t_distributed_sort (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 statement ok
-create table t_distributed_sort (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
+set max_threads = 3;
 
 # Test full sort
 
@@ -14,10 +14,10 @@ Sort(Final)
 ├── sort keys: [a DESC NULLS LAST]
 ├── estimated rows: 0.00
 └── Exchange
-    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
     ├── exchange type: Merge
     └── Sort(Partial)
-        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 0.00
         └── TableScan
@@ -31,13 +31,101 @@ Sort(Final)
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 0.00
 
-# Test TopN
-
-statement ok
-set lazy_read_threshold = 0;
+query T
+settings(enable_shuffle_sort = 1) explain select * from t_distributed_sort order by a desc;
+----
+Sort(Route)
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── sort keys: [a DESC NULLS LAST]
+├── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+    ├── exchange type: Merge
+    └── Sort(Shuffled)
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+        ├── sort keys: [a DESC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Exchange
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+            ├── exchange type: Hash()
+            └── Sort(Sample)
+                ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+                ├── sort keys: [a DESC NULLS LAST]
+                ├── broadcast id: 0
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_distributed_sort
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 0.00
 
 query T
-explain select * from t_distributed_sort order by a desc limit 2
+explain select * from t_distributed_sort order by a desc, b asc;
+----
+Sort(Final)
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+├── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+    ├── exchange type: Merge
+    └── Sort(Partial)
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+        ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t_distributed_sort
+            ├── scan id: 0
+            ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
+query T
+settings(enable_shuffle_sort = 1) explain select * from t_distributed_sort order by a desc, b asc;
+----
+Sort(Route)
+├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+├── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+    ├── exchange type: Merge
+    └── Sort(Shuffled)
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
+        ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Exchange
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+            ├── exchange type: Hash()
+            └── Sort(Sample)
+                ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+                ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+                ├── broadcast id: 0
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_distributed_sort
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 0.00
+
+# Test TopN
+
+query T
+settings(lazy_read_threshold = 0) explain select * from t_distributed_sort order by a desc limit 2
 ----
 Limit
 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
@@ -49,10 +137,10 @@ Limit
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 0.00
     └── Exchange
-        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+        ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
         ├── exchange type: Merge
         └── Sort(Partial)
-            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
             ├── sort keys: [a DESC NULLS LAST]
             ├── estimated rows: 0.00
             └── TableScan
@@ -66,11 +154,8 @@ Limit
                 ├── push downs: [filters: [], limit: 2]
                 └── estimated rows: 0.00
 
-statement ok
-set lazy_read_threshold = 100;
-
 query T
-explain select * from t_distributed_sort order by a desc limit 2
+settings(lazy_read_threshold = 100) explain select * from t_distributed_sort order by a desc limit 2
 ----
 RowFetch
 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
@@ -86,10 +171,10 @@ RowFetch
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 0.00
         └── Exchange
-            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
+            ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7)]
             ├── exchange type: Merge
             └── Sort(Partial)
-                ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
+                ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7)]
                 ├── sort keys: [a DESC NULLS LAST]
                 ├── estimated rows: 0.00
                 └── TableScan

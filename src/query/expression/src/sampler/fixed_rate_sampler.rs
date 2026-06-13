@@ -17,14 +17,14 @@ use std::collections::VecDeque;
 use rand::Rng;
 use rate_sampling::Sampling;
 
-use crate::BlockRowIndex;
+use crate::BlockIndex;
 use crate::DataBlock;
 
 pub struct FixedRateSampler<R: Rng> {
     columns: Vec<usize>,
     block_size: usize,
 
-    indices: VecDeque<Vec<BlockRowIndex>>,
+    indices: VecDeque<Vec<BlockIndex>>,
     sparse_blocks: Vec<DataBlock>,
     pub dense_blocks: Vec<DataBlock>,
 
@@ -79,10 +79,10 @@ impl<R: Rng> FixedRateSampler<R> {
             change = true;
             cur += self.s;
             match self.indices.back_mut() {
-                Some(back) if back.len() < self.block_size => back.push((block_idx, cur as u32, 1)),
+                Some(back) if back.len() < self.block_size => back.push((block_idx, cur as u32)),
                 _ => {
                     let mut v = Vec::with_capacity(self.block_size);
-                    v.push((block_idx, cur as u32, 1));
+                    v.push((block_idx, cur as u32));
                     self.indices.push_back(v)
                 }
             }
@@ -104,7 +104,7 @@ impl<R: Rng> FixedRateSampler<R> {
             .is_some_and(|indices| indices.len() == self.block_size)
         {
             let indices = self.indices.pop_front().unwrap();
-            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
             self.dense_blocks.push(block)
         }
 
@@ -115,7 +115,7 @@ impl<R: Rng> FixedRateSampler<R> {
         debug_assert!(self.indices.is_empty());
 
         if is_final {
-            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
             self.sparse_blocks.clear();
             self.dense_blocks.push(block);
             return;
@@ -125,7 +125,7 @@ impl<R: Rng> FixedRateSampler<R> {
             self.indices.push_back(indices);
             return;
         }
-        let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+        let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
         self.sparse_blocks.clear();
         for (i, index) in indices.iter_mut().enumerate() {
             index.0 = 0;
@@ -203,21 +203,13 @@ mod tests {
 
         sampler.add_indices(15, 0);
 
-        let want: Vec<BlockRowIndex> = vec![(0, 6, 1), (0, 9, 1), (0, 14, 1)];
+        let want: Vec<_> = vec![(0, 6), (0, 9), (0, 14)];
         assert_eq!(Some(&want), sampler.indices.front());
         assert_eq!(3, sampler.s);
 
         sampler.add_indices(20, 1);
 
-        let want: Vec<BlockRowIndex> = vec![
-            (0, 6, 1),
-            (0, 9, 1),
-            (0, 14, 1),
-            (1, 3, 1),
-            (1, 9, 1),
-            (1, 15, 1),
-            (1, 18, 1),
-        ];
+        let want = vec![(0, 6), (0, 9), (0, 14), (1, 3), (1, 9), (1, 15), (1, 18)];
         assert_eq!(Some(&want), sampler.indices.front());
         assert_eq!(1, sampler.s);
     }
@@ -231,10 +223,7 @@ mod tests {
             DataBlock::new_from_columns(vec![Int32Type::from_data(vec![6, 7, 8, 9, 10])]),
         ];
 
-        let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
-            (1, 1, 1),
-            (1, 2, 1),
-        ]]);
+        let indices = VecDeque::from(vec![vec![(0, 1), (0, 2), (1, 0)], vec![(1, 1), (1, 2)]]);
 
         {
             let core = Sampling::new(3..=6, rng.clone());
@@ -250,7 +239,7 @@ mod tests {
 
             sampler.compact_blocks(false);
 
-            assert_eq!(Some(&vec![(0, 0, 1), (0, 1, 1)]), sampler.indices.front());
+            assert_eq!(Some(&vec![(0, 0), (0, 1)]), sampler.indices.front());
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8]),
                 sampler.sparse_blocks[0].get_last_column()
@@ -291,10 +280,10 @@ mod tests {
         }
 
         {
-            let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
-                (1, 1, 1),
-                (1, 2, 1),
-                (1, 3, 1),
+            let indices = VecDeque::from(vec![vec![(0, 1), (0, 2), (1, 0)], vec![
+                (1, 1),
+                (1, 2),
+                (1, 3),
             ]]);
 
             let core = Sampling::new(3..=6, rng.clone());

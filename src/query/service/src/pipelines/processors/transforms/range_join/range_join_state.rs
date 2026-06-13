@@ -16,12 +16,12 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 
-use databend_common_catalog::table_context::TableContext;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
@@ -39,11 +39,12 @@ use crate::physical_plans::RangeJoinCondition;
 use crate::physical_plans::RangeJoinType;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
-use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct RangeJoinState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) function_context: FunctionContext,
     // The origin data for left/right table
     pub(crate) left_table: RwLock<Vec<DataBlock>>,
     pub(crate) right_table: RwLock<Vec<DataBlock>>,
@@ -67,6 +68,7 @@ pub struct RangeJoinState {
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
     pub(crate) join_type: JoinType,
+    pub(crate) output_schema: DataSchemaRef,
     // A bool indicating for tuple in the LHS if they found a match (used in full outer join)
     pub(crate) left_match: RwLock<MutableBitmap>,
     // A bool indicating for tuple in the RHS if they found a match (used in full outer join)
@@ -75,7 +77,11 @@ pub struct RangeJoinState {
 }
 
 impl RangeJoinState {
-    pub fn new(ctx: Arc<QueryContext>, range_join: &RangeJoin) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        range_join: &RangeJoin,
+        function_context: FunctionContext,
+    ) -> Self {
         let ie_join_state = if matches!(range_join.range_join_type, RangeJoinType::IEJoin) {
             Some(IEJoinState::new(range_join))
         } else {
@@ -83,6 +89,7 @@ impl RangeJoinState {
         };
         Self {
             ctx,
+            function_context,
             left_table: RwLock::new(vec![]),
             right_table: RwLock::new(vec![]),
             right_sorted_blocks: Default::default(),
@@ -100,6 +107,7 @@ impl RangeJoinState {
             completed_pair: AtomicU64::new(0),
             ie_join_state,
             join_type: range_join.join_type,
+            output_schema: range_join.output_schema.clone(),
             left_match: RwLock::new(MutableBitmap::new()),
             right_match: RwLock::new(MutableBitmap::new()),
             partition_count: AtomicU64::new(0),
@@ -109,16 +117,20 @@ impl RangeJoinState {
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        let mut right_block = block;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
-            let validity = Bitmap::new_constant(true, right_block.num_rows());
-            let nullable_right_columns = right_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, right_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            right_block = DataBlock::new(nullable_right_columns, right_block.num_rows());
-        }
+        let right_block = if matches!(
+            self.join_type,
+            JoinType::Left | JoinType::LeftAsof | JoinType::FullAsof
+        ) {
+            let rows = block.num_rows();
+            let nullable_right_columns = block
+                .take_columns()
+                .into_iter()
+                .map(BlockEntry::into_nullable)
+                .collect();
+            DataBlock::new(nullable_right_columns, rows)
+        } else {
+            block
+        };
         right_table.push(right_block);
         Ok(())
     }
@@ -126,16 +138,20 @@ impl RangeJoinState {
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        let mut left_block = block;
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
-            let validity = Bitmap::new_constant(true, left_block.num_rows());
-            let nullable_left_columns = left_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, left_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            left_block = DataBlock::new(nullable_left_columns, left_block.num_rows());
-        }
+        let left_block = if matches!(
+            self.join_type,
+            JoinType::Right | JoinType::RightAsof | JoinType::FullAsof
+        ) {
+            let rows = block.num_rows();
+            let nullable_left_columns = block
+                .take_columns()
+                .into_iter()
+                .map(BlockEntry::into_nullable)
+                .collect();
+            DataBlock::new(nullable_left_columns, rows)
+        } else {
+            block
+        };
         left_table.push(left_block);
         Ok(())
     }
@@ -242,8 +258,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(left_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -272,8 +288,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(right_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -312,7 +328,10 @@ impl RangeJoinState {
         // Add Fill task
         left_offset = 0;
         right_offset = 0;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+        if matches!(
+            self.join_type,
+            JoinType::Left | JoinType::LeftAsof | JoinType::FullAsof
+        ) {
             let mut left_match = self.left_match.write();
             for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
                 row_offset.push((left_offset, 0));
@@ -321,7 +340,10 @@ impl RangeJoinState {
                 left_match.extend_constant(left_block.num_rows(), false);
             }
         }
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+        if matches!(
+            self.join_type,
+            JoinType::Right | JoinType::RightAsof | JoinType::FullAsof
+        ) {
             let mut right_match = self.right_match.write();
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 row_offset.push((0, right_offset));
@@ -330,6 +352,79 @@ impl RangeJoinState {
                 right_match.extend_constant(right_block.num_rows(), false);
             }
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+
+    use databend_common_column::bitmap::MutableBitmap;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::types::number::NumberDataType;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_common_sql::plans::JoinType;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fill_outer_with_empty_inner_table_blocks() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let left_block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2])]);
+
+        let mut left_match = MutableBitmap::new();
+        left_match.extend_constant(left_block.num_rows(), false);
+
+        let state = RangeJoinState {
+            ctx,
+            function_context: FunctionContext::default(),
+            left_table: RwLock::new(vec![left_block]),
+            right_table: RwLock::new(vec![]),
+            right_sorted_blocks: Default::default(),
+            left_sorted_blocks: Default::default(),
+            conditions: vec![],
+            other_conditions: vec![],
+            partition_finished: Mutex::new(true),
+            finished_notify: Arc::new(WatchNotify::new()),
+            left_sinker_count: RwLock::new(0),
+            right_sinker_count: RwLock::new(0),
+            tasks: RwLock::new(vec![(0, 0)]),
+            row_offset: RwLock::new(vec![(0, 0)]),
+            finished_tasks: AtomicU64::new(0),
+            completed_pair: AtomicU64::new(0),
+            ie_join_state: None,
+            join_type: JoinType::Left,
+            output_schema: DataSchemaRefExt::create(vec![
+                DataField::new("left_x", DataType::Number(NumberDataType::Int32)),
+                DataField::new("right_x", DataType::Number(NumberDataType::Int32)),
+            ]),
+            left_match: RwLock::new(left_match),
+            right_match: RwLock::new(MutableBitmap::new()),
+            partition_count: AtomicU64::new(0),
+        };
+
+        let block = state.fill_outer(0, true)?;
+        assert_eq!(block.num_rows(), 2);
+        assert_eq!(block.num_columns(), 2);
+        assert_eq!(
+            block.get_by_offset(0).index(0).expect("row 0 should exist"),
+            ScalarRef::Number(NumberScalar::Int32(1))
+        );
+        assert_eq!(
+            block.get_by_offset(1).index(0).expect("row 0 should exist"),
+            ScalarRef::Null
+        );
         Ok(())
     }
 }

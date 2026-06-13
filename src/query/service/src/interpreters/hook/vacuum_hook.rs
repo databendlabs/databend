@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
@@ -32,6 +31,12 @@ use rand::Rng;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextCte;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
 
 pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let settings = query_ctx.get_settings();
@@ -104,9 +109,18 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    let _ = GlobalIORuntime::instance().block_on(async move {
-        query_ctx.drop_m_cte_temp_table().await?;
-        Ok(())
-    });
+    let (m_cte_cleanup_result, recursive_cte_cleanup_result) = GlobalIORuntime::instance()
+        .block_on(async move {
+            let m_cte_cleanup_result = query_ctx.drop_m_cte_temp_table().await;
+            let recursive_cte_cleanup_result = query_ctx.drop_recursive_cte_temp_table().await;
+            Ok::<_, ErrorCode>((m_cte_cleanup_result, recursive_cte_cleanup_result))
+        })?;
+
+    if let Err(err) = m_cte_cleanup_result {
+        warn!("failed to clean up materialized CTE temp tables: {:?}", err);
+    }
+    if let Err(err) = recursive_cte_cleanup_result {
+        warn!("failed to clean up recursive CTE temp tables: {:?}", err);
+    }
     Ok(())
 }

@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column;
+mod finish_hook;
 mod grant;
 mod metrics;
 mod notification;
 mod query_log;
 mod stream;
 mod table;
-mod task;
 mod util;
+mod worker;
 
+mod log;
 pub mod table_option_validation;
 
+pub use column::*;
+pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
+pub use log::*;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;
 pub use stream::query_build_update_stream_req;
 pub use table::check_referenced_computed_columns;
-pub use task::get_task_client_config;
-pub use task::make_schedule_options;
-pub use task::make_warehouse_options;
 pub use util::check_deduplicate_label;
+pub use worker::get_worker_client_config;
 
 pub use self::metrics::*;

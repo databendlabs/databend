@@ -7,7 +7,7 @@ create or replace table t1 as select number as a from numbers(10);
 statement ok
 create or replace table t2 as select number as b from numbers(100);
 
-query ?? rowsort
+query II rowsort
 select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
 ----
 5 5

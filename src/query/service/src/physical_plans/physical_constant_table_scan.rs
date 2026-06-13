@@ -20,7 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ConstantTableScanFormatter;
@@ -105,7 +105,7 @@ impl PhysicalPlanBuilder {
             scan.schema
                 .fields
                 .iter()
-                .map(|field| field.name().parse::<IndexType>().unwrap())
+                .map(|field| field.name().parse::<Symbol>().unwrap())
                 .collect::<ColumnSet>()
                 .is_superset(&scan.columns)
         );

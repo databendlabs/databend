@@ -38,13 +38,10 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QuotaValue;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_metrics::session::dec_session_running_acquired_queries;
@@ -59,6 +56,9 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_meta_plugin_semaphore::acquirer::Permit;
+use databend_meta_plugin_semaphore::errors::AcquireError;
+use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -70,6 +70,12 @@ use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTelemetry;
 
 pub trait QueueData: Send + Sync + 'static {
     type Key: Send + Sync + Eq + Hash + Display + Clone + ToString + 'static;
@@ -116,21 +122,21 @@ pub struct QueueManager<Data: QueueData> {
 impl<Data: QueueData> QueueManager<Data> {
     pub async fn init(permits: usize, conf: &InnerConfig) -> Result<()> {
         let metastore = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta
-                    .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);
         GlobalInstance::set(Self::create(
             permits,
             metastore,
-            conf.query.global_statement_queue,
+            conf.query.common.global_statement_queue,
         ));
         Ok(())
     }
@@ -478,7 +484,6 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, El
 {
     #[pin]
     inner: T,
-
 
     has_pending: bool,
     is_abort: Arc<AtomicBool>,

@@ -197,6 +197,24 @@ static BLOCK_VECTOR_INDEX_PRUNING_MILLISECONDS: LazyLock<Histogram> = LazyLock::
 });
 static BLOCK_VECTOR_INDEX_READ_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_vector_index_read_bytes"));
+static BLOCK_SPATIAL_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_spatial_index_write_nums"));
+static BLOCK_SPATIAL_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_spatial_index_write_bytes"));
+static BLOCK_SPATIAL_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_spatial_index_write_milliseconds")
+});
+static BLOCK_SPATIAL_INDEX_GENERATE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_spatial_index_generate_milliseconds")
+});
+static BLOCK_SPATIAL_INDEX_READ_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_spatial_index_read_milliseconds")
+});
+static BLOCK_SPATIAL_INDEX_PRUNING_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_spatial_index_pruning_milliseconds")
+});
+static BLOCK_SPATIAL_INDEX_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_spatial_index_read_bytes"));
 static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_compact_block_read_nums"));
 static COMPACT_BLOCK_READ_BYTES: LazyLock<Counter> =
@@ -264,6 +282,14 @@ static BYTES_BLOCK_VECTOR_INDEX_PRUNING_BEFORE: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_bytes_block_vector_index_pruning_before"));
 static BYTES_BLOCK_VECTOR_INDEX_PRUNING_AFTER: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_bytes_block_vector_index_pruning_after"));
+static BLOCKS_SPATIAL_INDEX_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_spatial_index_pruning_before"));
+static BLOCKS_SPATIAL_INDEX_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_spatial_index_pruning_after"));
+static BYTES_BLOCK_SPATIAL_INDEX_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_spatial_index_pruning_before"));
+static BYTES_BLOCK_SPATIAL_INDEX_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_spatial_index_pruning_after"));
 static BLOCKS_TOPN_PRUNING_BEFORE: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_blocks_topn_pruning_before"));
 static BLOCKS_TOPN_PRUNING_AFTER: LazyLock<Counter> =
@@ -648,6 +674,34 @@ pub fn metrics_inc_block_vector_index_read_bytes(c: u64) {
     BLOCK_VECTOR_INDEX_READ_BYTES.inc_by(c);
 }
 
+pub fn metrics_inc_block_spatial_index_write_nums(c: u64) {
+    BLOCK_SPATIAL_INDEX_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_spatial_index_write_bytes(c: u64) {
+    BLOCK_SPATIAL_INDEX_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_spatial_index_write_milliseconds(c: u64) {
+    BLOCK_SPATIAL_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_spatial_index_generate_milliseconds(c: u64) {
+    BLOCK_SPATIAL_INDEX_GENERATE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_spatial_index_read_milliseconds(c: u64) {
+    BLOCK_SPATIAL_INDEX_READ_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_spatial_index_pruning_milliseconds(c: u64) {
+    BLOCK_SPATIAL_INDEX_PRUNING_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_spatial_index_read_bytes(c: u64) {
+    BLOCK_SPATIAL_INDEX_READ_BYTES.inc_by(c);
+}
+
 /// Compact metrics.
 pub fn metrics_inc_compact_block_read_nums(c: u64) {
     COMPACT_BLOCK_READ_NUMS.inc_by(c);
@@ -752,6 +806,22 @@ pub fn metrics_inc_bytes_block_vector_index_pruning_before(c: u64) {
 
 pub fn metrics_inc_bytes_block_vector_index_pruning_after(c: u64) {
     BYTES_BLOCK_VECTOR_INDEX_PRUNING_AFTER.inc_by(c);
+}
+
+pub fn metrics_inc_blocks_spatial_index_pruning_before(c: u64) {
+    BLOCKS_SPATIAL_INDEX_PRUNING_BEFORE.inc_by(c);
+}
+
+pub fn metrics_inc_blocks_spatial_index_pruning_after(c: u64) {
+    BLOCKS_SPATIAL_INDEX_PRUNING_AFTER.inc_by(c);
+}
+
+pub fn metrics_inc_bytes_block_spatial_index_pruning_before(c: u64) {
+    BYTES_BLOCK_SPATIAL_INDEX_PRUNING_BEFORE.inc_by(c);
+}
+
+pub fn metrics_inc_bytes_block_spatial_index_pruning_after(c: u64) {
+    BYTES_BLOCK_SPATIAL_INDEX_PRUNING_AFTER.inc_by(c);
 }
 
 pub fn metrics_inc_blocks_topn_pruning_before(c: u64) {

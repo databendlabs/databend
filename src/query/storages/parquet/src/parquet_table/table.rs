@@ -115,8 +115,8 @@ impl ParquetTable {
         files_to_read: Option<Vec<StageFileInfo>>,
         settings: Arc<Settings>,
         query_kind: QueryKind,
-        case_sensitive: bool,
         fmt: &ParquetFileFormatParams,
+        has_column_name_ref: bool,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
@@ -125,15 +125,20 @@ impl ParquetTable {
         };
 
         let Some(first_file) = first_file else {
-            return ctx.get_zero_table().await;
+            return if has_column_name_ref {
+                Err(ErrorCode::SemanticError(
+                    "no files found. specify a prefix/pattern/files that matches at least one file",
+                ))
+            } else {
+                ctx.get_zero_table().await
+            };
         };
 
         let first_file = first_file.path;
 
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
-        let schema =
-            arrow_to_table_schema(&arrow_schema, case_sensitive, fmt.use_logic_type)?.into();
+        let schema = arrow_to_table_schema(&arrow_schema, true, fmt.use_logic_type)?.into();
         let table_info = create_parquet_table_info(schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 

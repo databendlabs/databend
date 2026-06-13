@@ -1,0 +1,37 @@
+statement ok
+drop table if exists left_values;
+
+statement ok
+drop table if exists right_values;
+
+statement ok
+create table left_values(x int);
+
+statement ok
+create table right_values(x int);
+
+statement ok
+insert into left_values values (1), (2);
+
+statement ok
+insert into right_values values (1), (2);
+
+query II
+select a.x, b.x
+from left_values a
+left join (select * from right_values where 1 = 0) b
+    on a.x between b.x and b.x
+order by a.x;
+----
+1	NULL
+2	NULL
+
+query II
+select a.x, b.x
+from (select * from left_values where 1 = 0) a
+right join right_values b
+    on a.x between b.x and b.x
+order by b.x;
+----
+NULL	1
+NULL	2

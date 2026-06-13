@@ -28,6 +28,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_compress::CompressAlgorithm;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -45,14 +46,18 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::binder::resolve_file_location;
+use databend_common_sql::binder::StagePathAccess;
+use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::resolve_file_format;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
-use databend_common_storages_stage::BytesReader;
-use databend_common_storages_stage::Decompressor;
-use databend_common_storages_stage::InferSchemaPartInfo;
-use databend_common_storages_stage::LoadContext;
 use databend_common_users::Object;
+use databend_common_users::UserApiProvider;
+use databend_query_storage_stage_support::BytesReader;
+use databend_query_storage_stage_support::Decompressor;
+use databend_query_storage_stage_support::InferSchemaPartInfo;
+use databend_query_storage_stage_support::LoadContext;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Scheme;
 
@@ -142,12 +147,18 @@ impl Table for InferSchemaTable {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let stage_resolver = StageResolver::from_table_context(
+            ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?;
+
         let file_location = if let Some(location) =
             self.args_parsed.location.clone().strip_prefix('@')
         {
             FileLocation::Stage(location.to_string())
         } else if let Some(connection_name) = &self.args_parsed.connection_name {
-            let conn = ctx.get_connection(connection_name).await?;
+            let conn = stage_resolver.resolve_connection(connection_name).await?;
             let uri =
                 UriLocation::from_uri(self.args_parsed.location.clone(), conn.storage_params)?;
             let proto = conn.storage_type.parse::<Scheme>()?;
@@ -163,7 +174,9 @@ impl Table for InferSchemaTable {
                 UriLocation::from_uri(self.args_parsed.location.clone(), BTreeMap::default())?;
             FileLocation::Uri(uri)
         };
-        let (stage_info, path) = resolve_file_location(ctx.as_ref(), &file_location).await?;
+        let (stage_info, path) = stage_resolver
+            .resolve_file_location(&file_location, StagePathAccess::Read)
+            .await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
@@ -184,11 +197,34 @@ impl Table for InferSchemaTable {
             path: path.clone(),
             ..self.args_parsed.files_info.clone()
         };
+        validate_stage_files_path_traversal(
+            ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let file_format_params = match &self.args_parsed.file_format {
-            Some(f) => ctx.get_file_format(f).await?,
+            Some(f) => {
+                let tenant = ctx.get_tenant();
+                let user_api = UserApiProvider::instance();
+                resolve_file_format(&tenant, &user_api, f).await?
+            }
             None => stage_info.file_format_params.clone(),
         };
+        let maybe_field_delimiter = match &file_format_params {
+            FileFormatParams::Csv(fmt) => Some(("CSV", fmt.field_delimiter.as_str())),
+            FileFormatParams::Text(fmt) => Some(("TEXT", fmt.field_delimiter.as_str())),
+            _ => None,
+        };
+
+        if let Some((file_format, field_delimiter)) = maybe_field_delimiter
+            && field_delimiter.len() != 1
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "It is not supported to infer {file_format} file with multi-bytes FIELD_DELIMITER",
+            )));
+        }
         let operator = init_stage_operator(&stage_info)?;
         let stage_file_infos = files_info
             .list(&operator, 1, self.args_parsed.max_file_count)
@@ -223,7 +259,7 @@ impl Table for InferSchemaTable {
         let info = InferSchemaPartInfo::from_part(&part)?;
 
         match info.file_format_params {
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) => {
+            FileFormatParams::Csv(_) | FileFormatParams::Text(_) | FileFormatParams::NdJson(_) => {
                 let partitions = info
                     .stage_file_infos
                     .iter()
@@ -297,7 +333,7 @@ impl Table for InferSchemaTable {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet, CSV and NDJSON",
+                    "infer_schema is currently limited to format Parquet, CSV, TEXT and NDJSON",
                 ));
             }
         }

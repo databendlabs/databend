@@ -22,14 +22,19 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::StageTable;
+use crate::append::append_data_to_arrow_files;
+use crate::append::append_data_to_lance_dataset;
 use crate::append::output::SumSummaryTransform;
 use crate::append::parquet_file::append_data_to_parquet_files;
+use crate::append::partition::PartitionByRuntime;
+use crate::append::partition::TransformPartitionBy;
 use crate::append::row_based_file::append_data_to_row_based_files;
 
 pub struct StageSinkTable {
@@ -50,6 +55,10 @@ impl StageSinkTable {
     ) -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo {
             name: "stage_sink".to_string(),
+            meta: TableMeta {
+                engine: "STAGE_SINK".to_string(),
+                ..Default::default()
+            },
             ..Default::default()
         }
         .set_schema(schema.clone());
@@ -61,6 +70,7 @@ impl StageSinkTable {
         }))
     }
 
+    // partition --> limit size (partition merge blocks) --> writer flush
     pub fn do_append_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -69,7 +79,14 @@ impl StageSinkTable {
         let settings = ctx.get_settings();
         let stage_info = &self.info.stage;
 
-        let fmt = self.info.stage.file_format_params.clone();
+        if let Some(expr) = &self.info.partition_by {
+            let func_ctx = ctx.get_function_context()?;
+            let runtime = Arc::new(PartitionByRuntime::try_create(expr.clone(), func_ctx)?);
+            pipeline.add_transform(|input, output| {
+                TransformPartitionBy::try_create(input, output, runtime.clone())
+            })?;
+        }
+
         let mem_limit = settings.get_max_memory_usage()? as usize;
         let mut max_threads = settings.get_max_threads()? as usize;
         if self.info.is_ordered {
@@ -80,6 +97,7 @@ impl StageSinkTable {
         let op = StageTable::get_op(stage_info)?;
         let query_id = ctx.get_id();
         let group_id = AtomicUsize::new(0);
+        let fmt = self.info.stage.file_format_params.clone();
         match fmt {
             FileFormatParams::Parquet(_) => append_data_to_parquet_files(
                 pipeline,
@@ -91,6 +109,27 @@ impl StageSinkTable {
                 mem_limit,
                 max_threads,
                 self.create_by.clone(),
+            )?,
+            FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
+                append_data_to_arrow_files(
+                    pipeline,
+                    self.info.clone(),
+                    self.schema.clone(),
+                    op,
+                    query_id,
+                    &group_id,
+                    mem_limit,
+                    max_threads,
+                )?
+            }
+            FileFormatParams::Lance(_) => append_data_to_lance_dataset(
+                pipeline,
+                self.info.clone(),
+                self.schema.clone(),
+                op,
+                query_id,
+                mem_limit,
+                max_threads,
             )?,
             _ => append_data_to_row_based_files(
                 pipeline,

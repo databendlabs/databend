@@ -24,11 +24,11 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
-use databend_common_version::BUILD_INFO;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::SeqV;
+use databend_meta_runtime::DatabendRuntime;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> anyhow::Result<()> {
@@ -238,7 +238,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaStore>, UdfMgr)> {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>().await;
     let test_api = Arc::new(test_api);
 
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));

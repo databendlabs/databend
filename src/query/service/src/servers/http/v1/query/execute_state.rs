@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use ExecuteState::*;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -45,18 +46,27 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::interpreters::interpreter_plan_sql;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
+use crate::servers::http::v1::http_query_handlers::ArrowFeatures;
+use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
 use crate::spillers::LiteSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 type Sender = SizedChannelSender<LiteSpiller>;
+
+pub(crate) const LEGACY_ARROW_RESULT_VERSION: u64 = 1;
+pub(crate) const ARROW_FEATURE_NEGOTIATION_VERSION: u64 = 3;
+pub(crate) const SERVER_MAX_ARROW_RESULT_VERSION: u64 = ARROW_FEATURE_NEGOTIATION_VERSION;
 
 pub struct ExecutionError;
 
@@ -123,6 +133,8 @@ impl ExecuteState {
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
     pub(crate) sender: Option<Sender>,
+    pub(crate) arrow_result_version: Option<u64>,
+    pub(crate) arrow_features: Option<ArrowFeatures>,
 }
 
 pub struct ExecuteRunning {
@@ -131,7 +143,7 @@ pub struct ExecuteRunning {
     // mainly used to get progress for now
     pub(crate) ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    result_format_settings: Option<ResultFormatSettings>,
+    response_settings: Option<QueryResponseSettings>,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
@@ -139,7 +151,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     pub schema: DataSchemaRef,
-    pub result_format_settings: Option<ResultFormatSettings>,
+    pub response_settings: Option<QueryResponseSettings>,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -201,10 +213,23 @@ impl Executor {
             Stopped(f) => f.schema.clone(),
         };
 
-        let result_format_settings = match &self.state {
+        let response_settings = match &self.state {
             Starting(_) => None,
-            Running(r) => r.result_format_settings.clone(),
-            Stopped(f) => f.result_format_settings.clone(),
+            Running(r) => r.response_settings.clone(),
+            Stopped(f) => f.response_settings.clone(),
+        };
+
+        let arrow_result_version = match &self.state {
+            Starting(s) => s.arrow_result_version,
+            Running(_) | Stopped(_) => response_settings
+                .as_ref()
+                .and_then(|settings| settings.arrow_result_version),
+        };
+        let arrow_features = match &self.state {
+            Starting(s) => s.arrow_features.clone(),
+            Running(_) | Stopped(_) => response_settings
+                .as_ref()
+                .and_then(|settings| settings.arrow_features.clone()),
         };
 
         ResponseState {
@@ -212,7 +237,9 @@ impl Executor {
             progresses: self.get_progress(),
             state: exe_state,
             error: err,
-            result_format_settings,
+            response_settings,
+            arrow_result_version,
+            arrow_features,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema,
@@ -320,7 +347,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Default::default(),
                     schema: Default::default(),
-                    result_format_settings: None,
+                    response_settings: None,
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -343,7 +370,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
-                    result_format_settings: r.result_format_settings.clone(),
+                    response_settings: r.response_settings.clone(),
                     has_result_set: Some(r.has_result_set),
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
@@ -374,21 +401,31 @@ impl ExecuteState {
     pub(crate) async fn try_start_query(
         executor: Arc<Mutex<Executor>>,
         sql: String,
+        params: Option<serde_json::Value>,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
+        arrow_result_version: Option<u64>,
+        arrow_features: Option<ArrowFeatures>,
         mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
-        let make_error = || format!("failed to start query: {sql}");
+        let masked_sql = mask_connection_info(&sql);
+        let make_error = || format!("failed to start query: {masked_sql}");
 
         info!("Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
+        let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true, params.as_ref())
             .await
-            .map_err(|err| err.display_with_sql(&sql))
+            .map_err(|err| err.display_with_sql(&masked_sql))
             .with_context(make_error)?;
 
-        Self::apply_settings(&ctx, &mut block_sender).with_context(make_error)?;
+        Self::apply_settings(
+            &ctx,
+            arrow_result_version,
+            arrow_features.as_ref(),
+            &mut block_sender,
+        )
+        .with_context(make_error)?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -408,9 +445,23 @@ impl ExecuteState {
             .get_geometry_output_format()
             .with_context(make_error)?
             .to_string();
-        let result_format_settings = Some(ResultFormatSettings {
+        let binary_output_format = settings
+            .get_binary_output_format()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
+        let http_json_result_mode = settings
+            .get_http_json_result_mode()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
+        let response_settings = Some(QueryResponseSettings {
             timezone,
             geometry_output_format,
+            binary_output_format,
+            http_json_result_mode,
+            arrow_result_version,
+            arrow_features,
         });
 
         let running_state = ExecuteRunning {
@@ -418,7 +469,7 @@ impl ExecuteState {
             ctx: ctx.clone(),
             queue_guard,
             schema,
-            result_format_settings,
+            response_settings,
             has_result_set,
         };
         info!("Query state changed to Running");
@@ -468,9 +519,13 @@ impl ExecuteState {
             .with_context(make_error)?;
         match data_stream.next().await {
             None => {
-                Self::send_data_block(&mut sender, &executor, DataBlock::empty_with_schema(schema))
-                    .await
-                    .with_context(make_error)?;
+                Self::send_data_block(
+                    &mut sender,
+                    &executor,
+                    DataBlock::empty_with_schema(&schema),
+                )
+                .await
+                .with_context(make_error)?;
                 Executor::stop::<()>(&executor, Ok(()));
                 sender.finish();
             }
@@ -499,8 +554,10 @@ impl ExecuteState {
                                 .with_context(make_error)?;
                         }
                         Err(err) => {
+                            let err = err.with_context(make_error());
+                            Executor::stop(&executor, Err(err.clone()));
                             sender.abort();
-                            return Err(err.with_context(make_error()));
+                            return Err(err);
                         }
                     };
                 }
@@ -526,7 +583,12 @@ impl ExecuteState {
         }
     }
 
-    fn apply_settings(ctx: &Arc<QueryContext>, block_sender: &mut Sender) -> Result<()> {
+    fn apply_settings(
+        ctx: &Arc<QueryContext>,
+        arrow_result_version: Option<u64>,
+        arrow_features: Option<&ArrowFeatures>,
+        block_sender: &mut Sender,
+    ) -> Result<()> {
         let settings = ctx.get_settings();
 
         let spiller = if settings.get_enable_result_set_spilling()? {
@@ -546,6 +608,9 @@ impl ExecuteState {
                 location_prefix,
                 disk_spill,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+                writer_pool_bytes: settings
+                    .get_spill_writer_memory_pool_size_mb()?
+                    .saturating_mul(1024 * 1024),
             };
             let op = DataOperator::instance().spill_operator();
             Some(LiteSpiller::new(op, config)?)
@@ -554,8 +619,80 @@ impl ExecuteState {
         };
 
         // set_var may change settings
-        let format_settings = ctx.get_format_settings()?;
+        let mut format_settings = ctx.get_output_format_settings()?;
+        format_settings.http_arrow_use_jsonb =
+            arrow_result_version == Some(LEGACY_ARROW_RESULT_VERSION);
+        format_settings.http_arrow_use_decimal64 =
+            use_decimal64_for_arrow_result(arrow_result_version, arrow_features);
         block_sender.plan_ready(format_settings, spiller);
         Ok(())
+    }
+}
+
+fn use_decimal64_for_arrow_result(
+    arrow_result_version: Option<u64>,
+    arrow_features: Option<&ArrowFeatures>,
+) -> bool {
+    match arrow_result_version {
+        Some(version) if version >= ARROW_FEATURE_NEGOTIATION_VERSION => !matches!(
+            arrow_features.and_then(|features| features.decimal64),
+            Some(false)
+        ),
+        _ => true,
+    }
+}
+
+pub(crate) fn legacy_bendsql_python_arrow_result_version(user_agent: Option<&str>) -> Option<u64> {
+    const MAX_JSONB_VERSION: (u64, u64, u64) = (0, 33, 7);
+
+    parse_bendsql_python_version(user_agent)
+        .is_some_and(|version| version <= MAX_JSONB_VERSION)
+        .then_some(LEGACY_ARROW_RESULT_VERSION)
+}
+
+fn parse_bendsql_python_version(user_agent: Option<&str>) -> Option<(u64, u64, u64)> {
+    const PREFIX: &str = "databend-driver-python/";
+
+    let version = user_agent?
+        .split_whitespace()
+        .find_map(|part| part.strip_prefix(PREFIX))?;
+    let mut parts = version.splitn(4, '.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts
+        .next()?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()?;
+
+    Some((major, minor, patch))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LEGACY_ARROW_RESULT_VERSION;
+    use super::legacy_bendsql_python_arrow_result_version;
+
+    #[test]
+    fn test_legacy_bendsql_python_arrow_result_version_range() {
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("databend-driver-python/0.33.7")),
+            Some(LEGACY_ARROW_RESULT_VERSION)
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("databend-driver-python/0.1.0")),
+            Some(LEGACY_ARROW_RESULT_VERSION)
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("databend-driver-python/0.33.8")),
+            None
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("bendsql/0.33.7")),
+            None
+        );
+        assert_eq!(legacy_bendsql_python_arrow_result_version(None), None);
     }
 }

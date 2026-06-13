@@ -39,11 +39,11 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -52,6 +52,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -70,12 +71,17 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
+use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_bytes;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -83,7 +89,11 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSession;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -324,7 +334,7 @@ impl CreateTableInterpreter {
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let mut stat = None;
-        if !GlobalConfig::instance().query.management_mode {
+        if !GlobalConfig::instance().query.common.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
                 // using application level data operator is a temp workaround
                 // please see discussions https://github.com/datafuselabs/databend/pull/10424
@@ -402,6 +412,13 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let field_stats_truncate_len = self
+            .plan
+            .field_stats_truncate_len
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt_len)| opt_len.map(|len| (schema.fields()[i].column_id(), len)))
+            .collect();
         let mut options = self.plan.options.clone();
 
         if self.plan.engine == Engine::Fuse {
@@ -421,6 +438,7 @@ impl CreateTableInterpreter {
                 );
             }
         }
+        // Validate storage_format; rejects the removed `native` format.
         if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
             FuseStorageFormat::from_str(storage_format)?;
         }
@@ -437,8 +455,8 @@ impl CreateTableInterpreter {
             storage_params: self.plan.storage_params.clone(),
             options,
             engine_options: self.plan.engine_options.clone(),
-            cluster_key: None,
             field_comments,
+            field_stats_truncate_len,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
@@ -449,8 +467,10 @@ impl CreateTableInterpreter {
 
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
+        is_valid_recluster_depth(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
+        is_valid_bloom_index_type(&table_meta.options)?;
         is_valid_approx_distinct_columns(&table_meta.options, schema)?;
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
@@ -459,11 +479,19 @@ impl CreateTableInterpreter {
         is_valid_data_retention_period(&table_meta.options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&table_meta.options)?;
+        is_valid_data_page_rows(&table_meta.options)?;
+        is_valid_data_page_bytes(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<u64>(
+            &table_meta.options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -478,8 +506,8 @@ impl CreateTableInterpreter {
         }
 
         if let Some(cluster_key) = &self.plan.cluster_key {
-            table_meta.cluster_key = Some(cluster_key.clone());
             table_meta.cluster_key_seq += 1;
+            table_meta.cluster_key_v2 = Some((table_meta.cluster_key_seq, cluster_key.clone()));
         }
 
         let req = CreateTableReq {

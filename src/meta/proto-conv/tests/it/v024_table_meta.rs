@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -136,23 +135,23 @@ fn test_decode_v24_table_meta() -> anyhow::Result<()> {
         storage_params: Some(StorageParams::default()),
         part_prefix: "lulu_".to_string(),
         options: btreemap! {s("xyz") => s("foo")},
-        cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_key: None,
+        cluster_key_v2: Some((0, "(a + 2, b)".to_string())),
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: BTreeSet::new(),
         column_mask_policy: None,
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
 
     common::test_pb_from_to(func_name!(), want())?;

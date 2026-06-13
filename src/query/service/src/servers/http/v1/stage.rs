@@ -14,8 +14,10 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_sql::binder::validate_stage_path_traversal_policy;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use futures_util::AsyncWriteExt;
 use futures_util::io;
@@ -29,7 +31,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-use crate::sessions::TableContext;
+use super::require_upload_filename;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -111,17 +115,20 @@ pub async fn upload_to_stage(
             .map_err(InternalServerError)?
     };
 
-    let op = StageTable::get_op(&stage).map_err(InternalServerError)?;
+    let op = init_stage_operator(&stage).map_err(InternalServerError)?;
+    let path_traversal_policy = context
+        .get_settings()
+        .get_stage_path_traversal_policy()
+        .map_err(InternalServerError)?;
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
-        let name = match field.file_name() {
-            Some(name) => name.to_string(),
-            None => uuid::Uuid::new_v4().to_string(),
-        };
+        let name = require_upload_filename(field.name(), field.file_name())?;
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
+        validate_stage_path_traversal_policy(path_traversal_policy, &file_path, true)
+            .map_err(InternalServerError)?;
 
         // Read field with 1MiB buf.
         let mut r = io::BufReader::with_capacity(1024 * 1024, field.into_async_read().compat());
@@ -141,7 +148,7 @@ pub async fn upload_to_stage(
         files.push(name.clone());
     }
 
-    let mut id = uuid::Uuid::new_v4().to_string();
+    let id = uuid::Uuid::new_v4().to_string();
     Ok(Json(UploadToStageResponse {
         id,
         stage_name: args.stage_name,

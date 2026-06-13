@@ -14,7 +14,6 @@
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
-use databend_common_sql::plans::CacheSource;
 
 use crate::physical_plans::CacheScan;
 use crate::physical_plans::IPhysicalPlan;
@@ -46,17 +45,17 @@ impl<'a> PhysicalFormat for CacheScanFormatter<'a> {
             format_output_columns(self.inner.output_schema()?, ctx.metadata, true)
         )));
 
-        match &self.inner.cache_source {
-            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                let mut column_indexes = column_indexes.clone();
-                column_indexes.sort();
-                children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
-                children.push(FormatTreeNode::new(format!(
-                    "column indexes: {:?}",
-                    column_indexes
-                )));
-            }
-        }
+        let cache_source = &self.inner.cache_source;
+        let mut column_indices = cache_source.column_indices.clone();
+        column_indices.sort();
+        children.push(FormatTreeNode::new(format!(
+            "cache index: {}",
+            cache_source.cache_index
+        )));
+        children.push(FormatTreeNode::new(format!(
+            "column indexes: {:?}",
+            column_indices
+        )));
 
         Ok(FormatTreeNode::with_children(
             "CacheScan".to_string(),

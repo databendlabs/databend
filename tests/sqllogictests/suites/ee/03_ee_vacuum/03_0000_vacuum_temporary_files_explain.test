@@ -1,0 +1,49 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## Verify that EXPLAIN ANALYZE inner pipelines run cleanup hooks
+## (QueryFinishHooks::nested_with_hooks) so spill temp files are vacuumed.
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+statement ok
+EXPLAIN ANALYZE SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+
+query ?
+SELECT COUNT() > 0 as c FROM system.temp_files
+----
+0
+
+statement ok
+EXPLAIN PERF SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+
+query ?
+SELECT COUNT() > 0 as c FROM system.temp_files
+----
+0
+
+statement ok
+SELECT count() FROM (WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 1000) SELECT n::string, count() FROM t GROUP BY n::string);
+
+query ?
+SELECT COUNT() > 0 as c FROM system.temp_files
+----
+0
+
+statement ok
+unset max_threads;
+
+statement ok
+unset force_aggregate_data_spill;

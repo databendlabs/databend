@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -48,6 +49,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -79,6 +81,7 @@ async fn apply_snapshot_pruning(
         push_down,
         bloom_index_cols,
         vec![],
+        HashSet::new(),
         None,
     )?);
 
@@ -89,6 +92,7 @@ async fn apply_snapshot_pruning(
         fuse_pruner.clone(),
         &mut prune_pipeline,
         ctx.clone(),
+        0,
         segment_rx,
         res_tx,
         cache_key,
@@ -122,6 +126,7 @@ async fn apply_snapshot_pruning(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
     };
     let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
 
@@ -170,6 +175,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,
@@ -303,8 +309,10 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        (Some(e3), 3, 3 * row_per_block),
-        (Some(e4), 4, 4 * row_per_block),
+        // TopN asc limit stops after the first block satisfies the limit.
+        (Some(e3), 1, row_per_block),
+        // Desc variant follows the same rule.
+        (Some(e4), 1, row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];
 
@@ -312,6 +320,8 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (10, 10, 10, 10),
         (10, 0, 0, 0),
         (10, 3, 3, 3),
+        // TopN pruning stops after block one, but the range-pruning counters stay at 10
+        // because TopN applies after the range statistics reducer.
         (10, 10, 10, 10),
         (10, 10, 10, 10),
         (10, 10, 10, 2),

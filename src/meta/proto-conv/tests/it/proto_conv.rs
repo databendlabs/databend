@@ -38,7 +38,6 @@ use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
 use maplit::btreemap;
-use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 fn s(ss: impl ToString) -> String {
@@ -143,12 +142,14 @@ fn new_table_meta() -> mt::TableMeta {
         part_prefix: "".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
-        cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_key: None,
+        cluster_key_v2: Some((0, "(a + 2, b)".to_string())),
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: Some(ce::VirtualDataSchema {
             fields: vec![ce::VirtualDataField {
                 name: "field_0".to_string(),
@@ -166,14 +167,12 @@ fn new_table_meta() -> mt::TableMeta {
         }),
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     }
 }
 

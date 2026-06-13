@@ -19,21 +19,18 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::required;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_types::protobuf;
-use semver::Version;
+use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::types::protobuf;
+use databend_meta_runtime::DatabendRuntime;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 
 use crate::args::ExportArgs;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
-pub async fn export_from_running_node(
-    args: &ExportArgs,
-    version: Version,
-) -> Result<(), anyhow::Error> {
+pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
     eprintln!("    From: online meta-service: {}", args.grpc_api_address);
@@ -42,7 +39,7 @@ pub async fn export_from_running_node(
 
     let grpc_api_addr = get_available_socket_addr(args.grpc_api_address.as_str()).await?;
     let addr = grpc_api_addr.to_string();
-    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size, version).await?;
+    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size).await?;
     Ok(())
 }
 
@@ -70,17 +67,15 @@ pub async fn export_from_grpc(
     addr: &str,
     save: String,
     chunk_size: Option<u64>,
-    version: Version,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create_with_features(
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create_with_features(
         vec![addr.to_string()],
-        version,
         "root",
         "xxx",
         None,
         None,
         None,
-        required::export(),
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     let mut grpc_client = client.make_established_client().await?;
@@ -96,7 +91,7 @@ pub async fn export_from_grpc(
 
     let mut stream = exported.into_inner();
 
-    let file: Option<File> = if !save.is_empty() {
+    let mut file: Option<File> = if !save.is_empty() {
         eprintln!("    To:   File: {}", save);
         Some(File::create(&save)?)
     } else {
@@ -119,18 +114,16 @@ pub async fn export_from_grpc(
                 }
             }
 
-            if file.as_ref().is_none() {
-                println!("{}", line);
+            if let Some(ref mut f) = file {
+                f.write_all(format!("{}\n", line).as_bytes())?;
             } else {
-                file.as_ref()
-                    .unwrap()
-                    .write_all(format!("{}\n", line).as_bytes())?;
+                println!("{}", line);
             }
         }
     }
 
-    if file.as_ref().is_some() {
-        file.as_ref().unwrap().sync_all()?;
+    if let Some(ref f) = file {
+        f.sync_all()?;
     }
 
     Ok(())

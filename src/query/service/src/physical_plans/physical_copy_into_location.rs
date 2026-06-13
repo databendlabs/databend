@@ -17,16 +17,16 @@ use std::any::Any;
 use chrono::Duration;
 use databend_common_base::base::Version;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::ColumnBinding;
-use databend_common_storages_stage::StageSinkTable;
+use databend_query_storage_stage_support::StageSinkTable;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -34,6 +34,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextQueryInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoLocation {
@@ -43,6 +44,7 @@ pub struct CopyIntoLocation {
     pub input_data_schema: DataSchemaRef,
     pub input_table_schema: TableSchemaRef,
     pub info: CopyIntoLocationInfo,
+    pub partition_by: Option<RemoteExpr>,
 }
 
 #[typetag::serde]
@@ -89,6 +91,7 @@ impl IPhysicalPlan for CopyIntoLocation {
             input_data_schema: self.input_data_schema.clone(),
             input_table_schema: self.input_table_schema.clone(),
             info: self.info.clone(),
+            partition_by: self.partition_by.clone(),
         })
     }
 

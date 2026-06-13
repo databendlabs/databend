@@ -14,12 +14,18 @@
 
 use std::collections::HashMap;
 
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
+use databend_common_expression::Domain;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::BorrowedDistribution;
+use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::types::DataType;
+use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
 
-use crate::IndexType;
+use crate::Symbol;
 
-pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
+pub type ColumnStatSet = HashMap<Symbol, ColumnStat>;
 
 #[derive(Debug, Clone)]
 /// Statistics information of a column
@@ -31,41 +37,56 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: Ndv,
+    pub ndv: NdvEstimate,
 
     /// Count of null values
-    pub null_count: u64,
+    pub null_count: StatCount,
 
     /// Histogram of column
     pub histogram: Option<Histogram>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Ndv {
-    // safe for selectivity
-    Stat(f64),
-    Max(f64),
-}
-
-impl Ndv {
-    pub fn reduce(self, ndv: f64) -> Self {
-        match self {
-            Ndv::Stat(v) => Ndv::Stat(v.min(ndv)),
-            Ndv::Max(v) => Ndv::Max(v.min(ndv)),
+impl ColumnStat {
+    pub(crate) fn refine_ndv_from_histogram(&mut self, histogram: &Histogram) {
+        let histogram_ndv = histogram.ndv();
+        if histogram.accuracy() {
+            self.ndv = self.ndv.min(histogram_ndv);
+            return;
         }
+
+        let upper = self.ndv.upper.min(histogram_ndv.upper);
+        self.ndv = match histogram_ndv.expected {
+            Some(expected) => NdvEstimate::new(expected.min(upper), upper),
+            None => NdvEstimate::upper_bound(upper),
+        };
     }
 
-    pub fn reduce_by_selectivity(self, selectivity: f64) -> Self {
-        match self {
-            Ndv::Stat(v) => Ndv::Stat((v * selectivity).ceil()),
-            Ndv::Max(v) => Ndv::Max((v * selectivity).ceil()),
-        }
+    pub fn to_arg_stat(&self, data_type: &DataType) -> Result<ArgStat<'_>, String> {
+        let domain = Domain::from_datum(
+            data_type,
+            self.min.clone(),
+            self.max.clone(),
+            self.null_count.upper() > 0.0,
+        )?;
+        Ok(ArgStat {
+            domain,
+            ndv: self.ndv,
+            null_count: self.null_count,
+            distribution: self
+                .histogram
+                .as_ref()
+                .map(BorrowedDistribution::Histogram)
+                .unwrap_or(BorrowedDistribution::Unknown),
+        })
     }
 
-    pub fn value(self) -> f64 {
-        match self {
-            Ndv::Stat(v) => v,
-            Ndv::Max(v) => v,
+    pub fn from_const(datum: Datum) -> Self {
+        Self {
+            min: datum.clone(),
+            max: datum,
+            ndv: NdvEstimate::exact(1.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
         }
     }
 }

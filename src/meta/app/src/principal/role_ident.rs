@@ -36,10 +36,10 @@ impl RoleIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_common_exception::ErrorCode;
 
-    use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
+    use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -50,22 +50,20 @@ mod kvapi_impl {
         type ValueType = RoleInfo;
     }
 
-    impl kvapi::Value for RoleInfo {
-        type KeyType = RoleIdent;
+    // ExistError<Resource> is no longer produced: create_role returns bool.
+    // impl From<ExistError<Resource>> for ErrorCode {
 
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::UnknownRole(err.to_string())
         }
     }
-
-    // // Use these error types to replace usage of ErrorCode if possible.
-    // impl From<ExistError<Resource>> for ErrorCode {
-    // impl From<UnknownError<Resource>> for ErrorCode {
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::RoleIdent;
     use crate::tenant::Tenant;
@@ -74,10 +72,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = RoleIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_roles/test/test1");
-
-        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_roles/test/test1");
     }
 }

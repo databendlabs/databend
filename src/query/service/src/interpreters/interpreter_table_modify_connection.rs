@@ -16,22 +16,25 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table::TableExt;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_sql::binder::parse_storage_params_from_uri;
+use databend_common_sql::binder::StageResolver;
 use databend_common_sql::plans::ModifyTableConnectionPlan;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct ModifyTableConnectionInterpreter {
     ctx: Arc<QueryContext>,
@@ -98,7 +101,7 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         // We don't really this this location to replace the old one, we just parse it out and change the storage parameters on needs.
         let mut location = UriLocation::new(
             // The storage type is not changeable, we just use the old one.
-            old_sp.storage_type(),
+            old_sp.storage_type().to_string(),
             // name is not changeable, we just use a dummy value here.
             "test".to_string(),
             // root is not changeable, we just use a dummy value here.
@@ -106,11 +109,12 @@ impl Interpreter for ModifyTableConnectionInterpreter {
             self.plan.new_connection.clone(),
         );
         // NOTE: never use this storage params directly.
-        let updated_sp = parse_storage_params_from_uri(
-            &mut location,
-            Some(self.ctx.as_ref() as _),
-            "when ALTER TABLE CONNECTION",
-        )
+        let updated_sp = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_storage_params_from_uri(&mut location, "when ALTER TABLE CONNECTION")
         .await?;
 
         debug!("storage params used for update: {updated_sp:?}");
@@ -118,11 +122,13 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         debug!("new storage params been updated: {new_sp:?}");
 
         // Check the storage params via init operator.
-        let op = init_operator(&new_sp).map_err(|err| {
-            ErrorCode::InvalidConfig(format!(
-                "Input storage config for stage is invalid: {err:?}"
-            ))
-        })?;
+        let op = init_operator_with_policy_scope(&new_sp, EndpointPolicyScope::External).map_err(
+            |err| {
+                ErrorCode::InvalidConfig(format!(
+                    "Input storage config for stage is invalid: {err:?}"
+                ))
+            },
+        )?;
         check_operator(&op, &new_sp).await?;
 
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
@@ -132,9 +138,9 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         commit_table_meta(
             &self.ctx,
             table.as_ref(),
-            table_info,
             new_table_meta,
             catalog,
+            |_, _| {},
         )
         .await?;
 

@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -96,7 +96,7 @@ async fn compute_table_segments_diffs(
     let mut table_segments_diffs = HashMap::new();
     let mut table_original_snapshots = HashMap::new();
 
-    for (update_table_meta_req, _) in &req.update_table_metas {
+    for (update_table_meta_req, table_info) in &req.update_table_metas {
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
@@ -118,6 +118,7 @@ async fn compute_table_segments_diffs(
             0,
             update_table_meta_req.new_table_meta.clone(),
             storage_class,
+            table_info.desc.as_str(),
         )?;
 
         let base_snapshot = new_table
@@ -149,7 +150,6 @@ async fn compute_table_segments_diffs(
     Ok((table_segments_diffs, table_original_snapshots))
 }
 
-// Support for transactional branch writes is planned for the next PR.
 async fn try_rebuild_req(
     ctx: Arc<dyn TableContext>,
     req: &mut UpdateMultiTableMetaReq,
@@ -162,8 +162,8 @@ async fn try_rebuild_req(
         update_failed_tbls
     );
     let insert_rows = {
-        let stats = ctx.get_multi_table_insert_status();
-        let status = stats.lock();
+        let stats = ctx.mutation_state().multi_table_insert_status();
+        let status = stats.lock().unwrap();
         status.insert_rows.clone()
     };
     let txn_mgr = ctx.txn_mgr();
@@ -175,7 +175,18 @@ async fn try_rebuild_req(
             )));
         }
         let storage_class = ctx.get_settings().get_s3_storage_class()?;
-        let latest_table = FuseTable::from_table_meta(tid, seq, table_meta, storage_class)?;
+        let (_, table_info) = req
+            .update_table_metas
+            .iter()
+            .find(|(meta, _)| meta.table_id == tid)
+            .unwrap();
+        let latest_table = FuseTable::from_table_meta(
+            tid,
+            seq,
+            table_meta,
+            storage_class,
+            table_info.desc.as_str(),
+        )?;
         let default_cluster_key_id = latest_table.cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req
@@ -305,6 +316,8 @@ async fn try_rebuild_req(
             latest_table.schema().as_ref().clone(),
             merged_summary,
             merged_segments,
+            latest_table.cluster_key_meta(),
+            latest_table.cluster_type(),
             latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;
@@ -313,20 +326,16 @@ async fn try_rebuild_req(
         // write snapshot
         let dal = latest_table.get_operator();
         let location_generator = &latest_table.meta_location_generator;
-        // TODO(zhyass): branch are currently not allowed inside a transaction. So the branch id is none.
-        let location = location_generator.gen_snapshot_location(
-            None,
-            &merged_snapshot.snapshot_id,
-            TableSnapshot::VERSION,
-        )?;
+        let location = location_generator
+            .gen_snapshot_location(&merged_snapshot.snapshot_id, TableSnapshot::VERSION)?;
         dal.write(&location, merged_snapshot.to_bytes()?).await?;
 
         // build new table meta
-        let new_table_meta = latest_table.build_new_table_meta(
+        let new_table_meta = FuseTable::build_new_table_meta(
             &latest_table.table_info.meta,
             &location,
             &merged_snapshot,
-        )?;
+        );
         let table_id = latest_table.table_info.ident.table_id;
         let table_version = latest_table.table_info.ident.seq;
 

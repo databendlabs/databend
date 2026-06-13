@@ -15,10 +15,11 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextQueryState;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -79,7 +80,6 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
             loc.clone(),
             version,
             fuse_table.meta_location_generator().clone(),
-            None,
         )
         .try_collect()
         .await?;
@@ -192,7 +192,6 @@ async fn test_navigate_for_purge() -> anyhow::Result<()> {
             loc.clone(),
             version,
             fuse_table.meta_location_generator().clone(),
-            None,
         )
         .try_collect()
         .await?;

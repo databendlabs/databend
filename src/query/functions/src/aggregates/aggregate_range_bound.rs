@@ -170,13 +170,12 @@ where
     ) -> Result<()> {
         let step = self.total_rows as f64 / range_bound_data.partitions as f64;
 
-        let values = std::mem::take(&mut self.values);
         let mut data = Vec::with_capacity(self.total_samples);
         let mut weights = Vec::with_capacity(self.total_samples);
-        for (num, values) in values.into_iter() {
-            let weight = num as f64 / values.len() as f64;
-            values.into_iter().for_each(|v| {
-                data.push(v);
+        for (num, values) in self.values.iter() {
+            let weight = *num as f64 / values.len() as f64;
+            values.iter().for_each(|v| {
+                data.push(v.clone());
                 weights.push(weight);
             });
         }
@@ -365,12 +364,11 @@ fn get_partitions(
 }
 
 fn get_positive_integer(val: &Scalar, display_name: &str) -> Result<usize> {
-    if let Scalar::Number(number) = val {
-        if let Some(number) = number.integer_to_i128() {
-            if number > 0 {
-                return Ok(number as usize);
-            }
-        }
+    if let Scalar::Number(number) = val
+        && let Some(number) = number.integer_to_i128()
+        && number > 0
+    {
+        return Ok(number as usize);
     }
     Err(ErrorCode::BadDataValueType(format!(
         "The argument of aggregate function {} must be positive int",

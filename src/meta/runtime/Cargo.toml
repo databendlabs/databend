@@ -1,0 +1,23 @@
+[package]
+name = "databend-meta-runtime"
+description = "Runtime adapter for meta-service using databend-common-base"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-tracing = { workspace = true }
+databend-meta = { workspace = true }
+databend-meta-client = { workspace = true }
+fastrace = { workspace = true }
+hyper-util = { workspace = true }
+tokio = { workspace = true }
+tonic_013 = { package = "tonic", version = "0.13.1", features = ["transport", "tls-native-roots"] }
+
+[lints]
+workspace = true

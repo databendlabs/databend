@@ -16,13 +16,6 @@ use std::io::Cursor;
 use std::io::Read;
 use std::time::Duration as SysDuration;
 
-use chrono::DateTime;
-use chrono::Duration;
-use chrono::LocalResult;
-use chrono::MappedLocalTime;
-use chrono::NaiveDateTime;
-use chrono::TimeZone as ChronoTimeZone;
-use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -444,52 +437,14 @@ fn get_local_time(tz: &TimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned
     if let Some(zoned) = fast_local_to_zoned(tz, d, hour, minute, second, 0) {
         return Ok(zoned);
     }
-    tz.to_zoned(d.at(hour as i8, minute as i8, second as i8, 0))
+    let time = Time::new(hour as i8, minute as i8, second as i8, 0)
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            format!("Invalid time {:02}:{:02}:{:02}", hour, minute, second)
+        })?;
+    tz.to_zoned(d.to_datetime(time))
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!("Invalid time provided in times: {:?}", times)
         })
-}
-
-#[inline]
-pub fn unwrap_local_time(
-    tz: &Tz,
-    enable_dst_hour_fix: bool,
-    naive_datetime: &NaiveDateTime,
-) -> Result<DateTime<Tz>> {
-    match tz.from_local_datetime(naive_datetime) {
-        LocalResult::Single(t) => Ok(t),
-        LocalResult::Ambiguous(t1, t2) => {
-            // The local time is _ambiguous_ because there is a _fold_ in the local time.
-            // This variant contains the two possible results, in the order `(earliest, latest)`
-            // e.g.
-            // naive_datetime 1990-09-16T01:00:00 in Aisa/Shanghai
-            // t1.offset.fix = +09:00, t2.offset.fix = +08:00
-            // t1: 1990-09-16T01:00:00CDT, t2: 1990-09-16T01:00:00CST
-            // So if enable_dst_hour_fix = true return t1.
-            if enable_dst_hour_fix {
-                return Ok(t1);
-            }
-            Ok(t2)
-        }
-        LocalResult::None => {
-            if enable_dst_hour_fix
-                && let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600))
-            {
-                return match tz.from_local_datetime(&res2) {
-                    MappedLocalTime::Single(t) => Ok(t),
-                    MappedLocalTime::Ambiguous(t1, _) => Ok(t1),
-                    MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
-                        "Local Time Error: The local time {}, {} can not map to a single unique result with timezone {}",
-                        naive_datetime, res2, tz
-                    ))),
-                };
-            }
-            Err(ErrorCode::BadArguments(format!(
-                "The time {} can not map to a single unique result with timezone {}",
-                naive_datetime, tz
-            )))
-        }
-    }
 }
 
 fn build_best_effort_result(
@@ -539,9 +494,23 @@ fn build_zoned_from_components(
     if let Some(zoned) = fast_local_to_zoned(tz, date, hour, minute, second, micro) {
         return Ok(zoned);
     }
+    let time = Time::new(hour as i8, minute as i8, second as i8, 0).map_err_to_code(
+        ErrorCode::BadBytes,
+        || {
+            format!(
+                "Invalid local time {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                i32::from(date.year()),
+                date.month(),
+                date.day(),
+                hour,
+                minute,
+                second
+            )
+        },
+    )?;
 
     let base = tz
-        .to_zoned(date.at(hour as i8, minute as i8, second as i8, 0))
+        .to_zoned(date.to_datetime(time))
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!(
                 "Invalid local time {:04}-{:02}-{:02} {:02}:{:02}:{:02}",

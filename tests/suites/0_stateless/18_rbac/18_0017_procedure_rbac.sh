@@ -4,11 +4,37 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR/../../../shell_env.sh"
 
+# Use a synchronous stderr filter for this script so expected bendsql errors are
+# emitted before the next numbered step is printed.
+bendsql_client_sync() {
+	local stderr_file status
+
+	stderr_file=$(mktemp) || return 1
+	bendsql "$@" 2>"$stderr_file"
+	status=$?
+	sed -E 's/ \[v[0-9][^]]*\]$//' "$stderr_file" >&2
+	rm -f "$stderr_file"
+	return "$status"
+}
+
+bendsql_query_http_user_connect_sync() {
+	local user="$1"
+	local password="$2"
+	shift 2
+
+	bendsql_client_sync \
+		--host "${QUERY_MYSQL_HANDLER_HOST}" \
+		--port "${QUERY_HTTP_HANDLER_PORT}" \
+		--user "${user}" \
+		--password "${password}" \
+		"$@"
+}
+
 # Define connection strings for each user
 echo "=== Setting up user connection strings ==="
-export USER_ADMIN_USER_CONNECT="bendsql --user=admin_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_DEV_USER_CONNECT="bendsql --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_TEST_USER_CONNECT="bendsql --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_ADMIN_USER_CONNECT="bendsql_query_http_user_connect_sync admin_user 123 -A"
+export USER_DEV_USER_CONNECT="bendsql_query_http_user_connect_sync dev_user 123 -A"
+export USER_TEST_USER_CONNECT="bendsql_query_http_user_connect_sync test_user 123 -A"
 
 # Create roles
 echo "=== Creating roles ==="
@@ -165,20 +191,36 @@ echo "CALL procedure greet();" | $USER_DEV_USER_CONNECT
 echo "30. test_user calls greet (should fail)..."
 echo "CALL procedure greet();" | $USER_TEST_USER_CONNECT
 
+# Test system.procedures visibility
+echo "=== Testing system.procedures visibility ==="
+echo "SET GLOBAL enable_experimental_rbac_check = 1;" | $BENDSQL_CLIENT_CONNECT
+
+echo "31. admin_user queries system.procedures (should see add_numbers, get_current_time via ownership)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_ADMIN_USER_CONNECT
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $BENDSQL_CLIENT_CONNECT
+
+echo "32. dev_user queries system.procedures (should see add_numbers and greet via grant)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_DEV_USER_CONNECT
+
+echo "33. test_user queries system.procedures (should see get_current_time via grant, multiply_numbers via ownership)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_TEST_USER_CONNECT
+
+echo "SET GLOBAL enable_experimental_rbac_check = 0;" | $BENDSQL_CLIENT_CONNECT
+
 # Cleanup
 echo "=== Cleaning up test environment ==="
-echo "31. Dropping users..."
+echo "34. Dropping users..."
 echo "DROP USER IF EXISTS admin_user;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER IF EXISTS dev_user;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER IF EXISTS test_user;" | $BENDSQL_CLIENT_CONNECT
 
-echo "32. Dropping roles..."
+echo "35. Dropping roles..."
 echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS dev_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS test_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS test_with_access;" | $BENDSQL_CLIENT_CONNECT
 
-echo "33. Dropping procedures..."
+echo "36. Dropping procedures..."
 echo "DROP PROCEDURE IF EXISTS add_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS get_current_time();" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT

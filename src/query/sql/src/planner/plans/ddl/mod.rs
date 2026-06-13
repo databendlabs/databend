@@ -32,6 +32,7 @@ mod task;
 mod udf;
 mod view;
 mod warehouse;
+mod worker;
 mod workload;
 
 pub use account::*;
@@ -54,4 +55,5 @@ pub use task::*;
 pub use udf::*;
 pub use view::*;
 pub use warehouse::*;
+pub use worker::*;
 pub use workload::*;

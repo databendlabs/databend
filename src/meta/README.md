@@ -1,18 +1,44 @@
 # Databend Meta
 
+2026 Feb 01
+
+Since v1.2.874, core meta-service implementation is moved to [databend-meta](https://github.com/databendlabs/databend-meta) repository.
+
 Databend Meta is a transactional metadata service.
 
-- [`api`](./api/), the user level api interface exposed based on the KVApi implementation.
-- [`app`](./app/), defines meta data types used by meta-client application.
-- [`grpc`](client/), the client library based on grpc and is used to communicate with meta service.
-- [`protos`](./protos/) defines the protobuf messages a meta client talks to a meta server.
-- [`proto-conv`](./proto-conv/) defines how to convert metadata types in rust from and to protobuf messages.
-- [`raft-store`](./raft-store/), the storage layer implementation of openraft, including the state machine.
-- [`service`](./service/) -> `databend-meta`, the meta service library of Databend.
-- [`sled-store`](./sled-store/) wrapped sled-related operational interfaces.
-- [`store`](./store/), impl with either a local embedded meta store, or a grpc-client of meta service.
-- [`types`](./types/): defines the rust types for metadata.
-- [`ee`](./ee/) contains enterprise functionalities.
+**Application layer**:
+- [`api`](./api/): User-level API interface exposed based on the KVApi implementation.
+- [`app`](./app/): Meta data types used by meta-client applications.
+- [`app-storage`](./app-storage/): Storage-related types split from app.
+- [`store`](./store/): MetaStore impl with either a local embedded store or a grpc-client.
+
+**Serialization**:
+- [`protos`](./protos/): Protobuf message definitions for client-server communication.
+- [`proto-conv`](./proto-conv/): Conversion between protobuf messages and Rust types.
+
+**Higher-level features**:
+- [`admin`](./admin/): Admin HTTP API service for databend-meta.
+- [`cache`](./plugins/cache/): Distributed cache that synchronizes with meta-service via watch API.
+- [`control`](./control/): Meta control utilities.
+- [`process`](./process/): Tools for processing meta-service data.
+- [`semaphore`](./plugins/semaphore/): Distributed semaphore implementation based on meta-service.
+
+**Configuration and runtime**:
+- [`cli-config`](./cli-config/): CLI config parsing for databend-meta.
+- [`runtime`](./runtime/): Runtime adapter for meta-service using databend-common-base.
+
+**Binaries** (`binaries/`):
+- `databend-meta`: The meta service binary.
+- `databend-metabench`: Benchmarking tool.
+- `databend-metactl`: Command-line control tool.
+- `databend-metaverifier`: Data verification tool.
+
+**Test suites**:
+- [`kv-tests`](./kv-tests/): Test suite for KV API implementations.
+- [`schema-api-test-suite`](./schema-api-test-suite/): Test suite for schema API.
+
+**Enterprise**:
+- [`ee`](./ee/): Enterprise functionalities.
 
 
 ## How to add new meta data types to store in meta-service

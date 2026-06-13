@@ -60,6 +60,7 @@ mod user;
 mod view;
 mod virtual_column;
 mod warehouse;
+mod worker;
 mod workload;
 
 pub use call::*;
@@ -110,4 +111,5 @@ pub use user::*;
 pub use view::*;
 pub use virtual_column::*;
 pub use warehouse::*;
+pub use worker::*;
 pub use workload::*;

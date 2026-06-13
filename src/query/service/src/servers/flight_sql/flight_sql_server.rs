@@ -59,8 +59,8 @@ impl FlightSQLServer {
     #[allow(unused)]
     #[async_backtrace::framed]
     async fn server_tls_config(conf: &InnerConfig) -> Result<ServerTlsConfig> {
-        let cert = tokio::fs::read(conf.query.flight_sql_tls_server_cert.as_str()).await?;
-        let key = tokio::fs::read(conf.query.flight_sql_tls_server_key.as_str()).await?;
+        let cert = tokio::fs::read(conf.query.common.flight_sql_tls_server_cert.as_str()).await?;
+        let key = tokio::fs::read(conf.query.common.flight_sql_tls_server_key.as_str()).await?;
         let server_identity = Identity::from_pem(cert, key);
         let tls_conf = ServerTlsConfig::new().identity(server_identity);
         Ok(tls_conf)

@@ -163,5 +163,35 @@ drop table if exists t2;
 statement ok
 set max_block_size = 65536;
 
+# Test left join spill with variant column cast
+statement ok
+drop table if exists t_spill_left;
+
+statement ok
+drop table if exists t_spill_right;
+
+statement ok
+create table t_spill_left(id bigint, flag int);
+
+statement ok
+create table t_spill_right(id bigint, flag int, scores variant);
+
+statement ok
+insert into t_spill_left values (1, 1);
+
+statement ok
+insert into t_spill_right values (1, 1, parse_json('[10,20,30]'));
+
+query T
+select t_spill_right.scores[0]::variant as val from t_spill_left left join t_spill_right using(id, flag);
+----
+10
+
+statement ok
+drop table t_spill_left;
+
+statement ok
+drop table t_spill_right;
+
 statement ok
 unset force_join_data_spill;

@@ -8,7 +8,6 @@ edition = { workspace = true }
 
 [dependencies]
 databend-common-base = { workspace = true }
-databend-common-column = { workspace = true }
 ## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
 ahash = { workspace = true, features = ["no-rng"] }
 bumpalo = { workspace = true }

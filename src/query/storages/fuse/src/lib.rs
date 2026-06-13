@@ -37,6 +37,27 @@ mod fuse_table;
 mod fuse_type;
 mod retry;
 
+#[cfg(test)]
+pub(crate) mod test_utils {
+    use std::sync::OnceLock;
+
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_base::runtime::GlobalIORuntime;
+    use databend_common_config::CacheConfig;
+    use databend_common_exception::Result;
+    use databend_storages_common_cache::CacheManager;
+
+    pub(crate) fn init_test_globals() -> Result<()> {
+        static INIT: OnceLock<Result<()>> = OnceLock::new();
+        INIT.get_or_init(|| {
+            GlobalInstance::init_production();
+            GlobalIORuntime::init(1)?;
+            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
+        })
+        .clone()
+    }
+}
+
 pub mod io;
 pub mod operations;
 pub mod pruning;
@@ -58,6 +79,7 @@ pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use fuse_type::segment_format_from_location;
+pub use fuse_type::unsupported_storage_format_error;
 pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 pub use retry::commit_with_backoff;

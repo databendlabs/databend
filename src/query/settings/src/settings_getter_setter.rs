@@ -21,6 +21,8 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
@@ -61,6 +63,42 @@ pub enum SpillFileFormat {
 pub enum OutofMemoryBehavior {
     Throw,
     Spilling,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StagePathTraversalPolicy {
+    Disable,
+    Enable,
+    ReadOnly,
+}
+
+impl StagePathTraversalPolicy {
+    pub fn allows_read(self) -> bool {
+        matches!(
+            self,
+            StagePathTraversalPolicy::Enable | StagePathTraversalPolicy::ReadOnly
+        )
+    }
+
+    pub fn allows_write(self) -> bool {
+        matches!(self, StagePathTraversalPolicy::Enable)
+    }
+}
+
+impl FromStr for StagePathTraversalPolicy {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "disable" => Ok(StagePathTraversalPolicy::Disable),
+            "enable" => Ok(StagePathTraversalPolicy::Enable),
+            "readonly" => Ok(StagePathTraversalPolicy::ReadOnly),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid StagePathTraversalPolicy: {:?}",
+                s
+            ))),
+        }
+    }
 }
 
 impl SpillFileFormat {
@@ -189,10 +227,6 @@ impl Settings {
             level: ScopeLevel::Session,
         });
         Ok(())
-    }
-
-    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
     }
 
     pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
@@ -343,6 +377,10 @@ impl Settings {
         Ok(self.try_get_u64("purge_duplicated_files_in_copy")? != 0)
     }
 
+    pub fn get_stage_path_traversal_policy(&self) -> Result<StagePathTraversalPolicy> {
+        StagePathTraversalPolicy::from_str(&self.try_get_string("stage_path_traversal_policy")?)
+    }
+
     pub fn get_timezone(&self) -> Result<String> {
         self.try_get_string("timezone")
     }
@@ -350,14 +388,25 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         self.try_get_u64("max_inlist_to_or")
     }
+
     pub fn get_inlist_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("inlist_runtime_filter_threshold")
     }
+
+    pub fn get_inlist_runtime_bloom_prune_threshold(&self) -> Result<u64> {
+        self.try_get_u64("inlist_runtime_bloom_prune_threshold")
+    }
+
     pub fn get_bloom_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("bloom_runtime_filter_threshold")
     }
+
     pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("min_max_runtime_filter_threshold")
+    }
+
+    pub fn get_spatial_runtime_filter_threshold(&self) -> Result<u64> {
+        self.try_get_u64("spatial_runtime_filter_threshold")
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -378,6 +427,10 @@ impl Settings {
 
     pub fn get_enable_cbo(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_cbo")? != 0)
+    }
+
+    pub fn get_enable_cse_optimizer(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cse_optimizer")? != 0)
     }
 
     pub fn get_force_eager_aggregate(&self) -> Result<bool> {
@@ -401,12 +454,20 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_materialized_cte_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("materialized_cte_spilling_memory_ratio")? as usize)
+    }
+
     pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
     pub fn get_join_spilling_buffer_threshold_per_proc(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
+    }
+
+    pub fn get_spill_writer_memory_pool_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spill_writer_memory_pool_size_mb")? as usize)
     }
 
     pub fn get_spilling_file_format(&self) -> Result<SpillFileFormat> {
@@ -419,6 +480,10 @@ impl Settings {
 
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
+    }
+
+    pub fn get_nested_loop_join_threshold(&self) -> Result<u64> {
+        self.try_get_u64("nested_loop_join_threshold")
     }
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
@@ -447,6 +512,10 @@ impl Settings {
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_merge_into_row_fetch")? != 0)
+    }
+
+    pub fn get_enable_mutation_block_id_repartition(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_mutation_block_id_repartition")? != 0)
     }
 
     pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
@@ -574,12 +643,20 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_enable_group_by_column_first(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_group_by_column_first")? != 0)
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
+    }
+
+    pub fn get_lazy_read_across_join_threshold(&self) -> Result<u64> {
+        self.try_get_u64("lazy_read_across_join_threshold")
     }
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
@@ -763,6 +840,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
     }
 
+    pub fn get_prewhere_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("prewhere_selectivity_threshold")
+    }
+
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
     }
@@ -788,6 +869,10 @@ impl Settings {
 
     pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_timeout_secs")
+    }
+
+    pub fn get_udf_cloud_import_presign_expire_secs(&self) -> Result<u64> {
+        self.try_get_u64("udf_cloud_import_presign_expire_secs")
     }
 
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
@@ -831,6 +916,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_strict_datetime_parser")? != 0)
     }
 
+    pub fn get_enable_auto_detect_datetime_format(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_detect_datetime_format")? != 0)
+    }
+
     pub fn get_enable_dst_hour_fix(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dst_hour_fix")? != 0)
     }
@@ -854,16 +943,16 @@ impl Settings {
         self.try_get_u64("cost_factor_network_per_row")
     }
 
-    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
-    }
-
     pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
 
     pub fn get_use_legacy_query_executor(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
+    }
+
+    pub fn get_enable_decimal_sum_widening(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_decimal_sum_widening")? != 0)
     }
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
@@ -873,6 +962,21 @@ impl Settings {
     pub fn get_geometry_output_format(&self) -> Result<GeometryDataType> {
         let v = self.try_get_string("geometry_output_format")?;
         v.parse()
+    }
+
+    pub fn get_binary_output_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_output_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
+    pub fn get_binary_input_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_input_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
+    pub fn get_http_json_result_mode(&self) -> Result<HttpHandlerDataFormat> {
+        let v = self.try_get_string("http_json_result_mode")?;
+        HttpHandlerDataFormat::parse(&v)
     }
 
     pub fn get_script_max_steps(&self) -> Result<u64> {
@@ -897,6 +1001,14 @@ impl Settings {
 
     pub fn get_enable_fixed_rows_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
+    }
+
+    pub fn get_enable_sort_spill_prefetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_prefetch")? == 1)
+    }
+
+    pub fn get_enable_sort_spill_stream_regroup(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_stream_regroup")? == 1)
     }
 
     pub fn get_format_null_as_str(&self) -> Result<bool> {
@@ -957,6 +1069,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_enable_proxy_bloom_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_proxy_bloom_pruning")? == 1)
+    }
+
+    pub fn get_proxy_routing_model(&self) -> Result<String> {
+        self.try_get_string("proxy_routing_model")
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
@@ -973,8 +1093,20 @@ impl Settings {
         self.try_get_u64("flight_connection_retry_interval")
     }
 
+    pub fn get_hash_shuffle_rows_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_rows_threshold")? as usize)
+    }
+
+    pub fn get_hash_shuffle_bytes_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_bytes_threshold")? as usize)
+    }
+
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
+    }
+
+    pub fn get_max_public_keys_per_user(&self) -> Result<u64> {
+        self.try_get_u64("max_public_keys_per_user")
     }
 
     pub fn get_stream_consume_batch_size_hint(&self) -> Result<Option<u64>> {
@@ -1047,6 +1179,10 @@ impl Settings {
         Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
     }
 
+    pub fn get_force_materialized_cte_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_materialized_cte_spill")? == 1)
+    }
+
     pub fn get_enable_auto_vacuum(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_vacuum")? == 1)
     }
@@ -1102,10 +1238,6 @@ impl Settings {
         Ok(self.try_get_u64("enforce_local")? == 1)
     }
 
-    pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
-    }
-
     pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
     }
@@ -1140,11 +1272,19 @@ impl Settings {
         self.try_get_u64("max_aggregate_spill_level")
     }
 
+    pub fn get_max_hash_join_spill_level(&self) -> Result<u64> {
+        self.try_get_u64("max_hash_join_spill_level")
+    }
+
     pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
     }
 
     pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("force_aggregate_shuffle_mode")
+    }
+
+    pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {
+        self.try_get_u64("system_tables_count_db_concurrency")
     }
 }

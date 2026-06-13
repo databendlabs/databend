@@ -43,9 +43,6 @@ impl RowAccessPolicyIdIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::row_access_policy::RowAccessPolicyIdIdent;
     use crate::row_access_policy::RowAccessPolicyMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -57,13 +54,6 @@ mod kvapi_impl {
         type ValueType = RowAccessPolicyMeta;
     }
 
-    impl kvapi::Value for RowAccessPolicyMeta {
-        type KeyType = RowAccessPolicyIdIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -71,7 +61,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::RowAccessPolicyIdIdent;
     use crate::row_access_policy::RowAccessPolicyId;
@@ -81,11 +72,7 @@ mod tests {
     fn test_row_access_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = RowAccessPolicyIdIdent::new_generic(tenant, RowAccessPolicyId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_row_access_policy_by_id/dummy/3");
-
-        assert_eq!(ident, RowAccessPolicyIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_row_access_policy_by_id/dummy/3");
     }
 
     #[test]

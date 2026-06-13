@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +22,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct ManagementModeAccess {}
@@ -38,7 +38,7 @@ impl AccessChecker for ManagementModeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
-        if GlobalConfig::instance().query.management_mode {
+        if GlobalConfig::instance().query.common.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use databend_common_sql::plans::RewriteKind;
@@ -95,6 +95,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateUser(_)
                 | Plan::DropUser(_)
                 | Plan::DescUser(_)
+                | Plan::ShowPublicKeys(_)
 
                 // Roles.
                 | Plan::CreateRole(_)

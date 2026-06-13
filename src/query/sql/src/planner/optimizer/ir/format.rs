@@ -49,7 +49,6 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Join(_) => "Join".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
         RelOperator::Filter(_) => "Filter".to_string(),
-        RelOperator::SecureFilter(_) => "SecureFilter".to_string(),
         RelOperator::Aggregate(_) => "Aggregate".to_string(),
         RelOperator::Sort(_) => "Sort".to_string(),
         RelOperator::Limit(_) => "Limit".to_string(),
@@ -57,6 +56,14 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Exchange(op) => {
             format!("Exchange: ({})", match op {
                 Exchange::NodeToNodeHash(scalars) => format!(
+                    "Hash({})",
+                    scalars
+                        .iter()
+                        .map(|s| s.as_raw_expr().to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+                Exchange::GlobalHash(scalars) => format!(
                     "Hash({})",
                     scalars
                         .iter()
@@ -72,6 +79,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),
+        RelOperator::WindowGroup(_) => "WindowGroup".to_string(),
         RelOperator::ConstantTableScan(s) => s.name().to_string(),
         RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
         RelOperator::CacheScan(_) => "CacheScan".to_string(),

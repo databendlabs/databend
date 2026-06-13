@@ -20,6 +20,7 @@ mod packet_publisher;
 
 pub use packet_data::DataPacket;
 pub use packet_data::FragmentData;
+pub use packet_data::NodePerfCounters;
 pub use packet_data_progressinfo::ProgressInfo;
 pub use packet_executor::QueryFragments;
 pub use packet_fragment::QueryFragment;

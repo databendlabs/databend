@@ -14,6 +14,7 @@
 
 mod authenticator;
 mod jwk;
+pub mod key_pair;
 
 pub use authenticator::CustomClaims;
 pub use authenticator::EnsureUser;
@@ -21,3 +22,6 @@ pub use authenticator::JwtAuthenticator;
 pub use authenticator::PubKey;
 pub use jwk::JwkKey;
 pub use jwk::JwkKeyStore;
+pub use key_pair::decode_jwt_claims_insecure;
+pub use key_pair::validate_public_key_pem;
+pub use key_pair::verify_key_pair_jwt;

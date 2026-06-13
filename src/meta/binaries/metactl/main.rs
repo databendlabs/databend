@@ -22,13 +22,11 @@ use std::sync::Arc;
 use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::DumpRaftLogWalArgs;
 use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::FilterTenantArgs;
 use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
@@ -45,19 +43,22 @@ use databend_common_meta_control::args::UpsertArgs;
 use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
+use databend_common_meta_control::filter_tenant;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::init_logging;
-use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_client::types::protobuf::WatchRequest;
+use databend_meta_runtime::DatabendRuntime;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
 use mlua::Lua;
@@ -82,14 +83,14 @@ impl App {
 
     async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
             None,
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )?;
 
         let res = client.get_cluster_status().await?;
@@ -157,26 +158,26 @@ impl App {
     async fn bench_client_num_conn(&self, args: &BenchArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
         println!(
-            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
-            addr
+            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection, num={}",
+            addr, args.num
         );
         let mut clients = vec![];
-        let mut i = 0;
-        loop {
-            i += 1;
-            let client = MetaGrpcClient::try_create(
+        for i in 1..=args.num {
+            let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
-                BUILD_INFO.semver(),
                 "root",
                 "xxx",
                 None,
                 None,
                 None,
+                DEFAULT_GRPC_MESSAGE_SIZE,
             )?;
             let res = client.get_kv("foo").await;
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
         }
+        println!("bench completed: {} connections created", args.num);
+        Ok(())
     }
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
@@ -200,22 +201,27 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args, BUILD_INFO.semver()).await?;
+                export_from_grpc::export_from_running_node(args).await?;
             }
             Some(ref _dir) => {
-                export_from_disk::export_from_dir(args).await?;
+                export_from_disk::export_from_dir::<DatabendRuntime>(args).await?;
             }
         }
         Ok(())
     }
 
     async fn import(&self, args: &ImportArgs) -> anyhow::Result<()> {
-        import::import_data(args).await?;
+        import::import_data::<DatabendRuntime>(args).await?;
+        Ok(())
+    }
+
+    fn filter_tenant(&self, args: &FilterTenantArgs) -> anyhow::Result<()> {
+        filter_tenant::filter_tenant(args)?;
         Ok(())
     }
 
     async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
-        keys_layout_from_grpc::keys_layout_from_running_node(args, BUILD_INFO.semver()).await?;
+        keys_layout_from_grpc::keys_layout_from_running_node(args).await?;
         Ok(())
     }
 
@@ -261,7 +267,7 @@ impl App {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua, BUILD_INFO.semver())?;
+        lua_support::setup_lua_environment(&lua)?;
 
         let script = match &args.file {
             Some(path) => std::fs::read_to_string(path)?,
@@ -296,7 +302,7 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script, BUILD_INFO.semver()).await? {
+        match lua_support::run_lua_script_with_result(&lua_script).await? {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
@@ -313,32 +319,11 @@ return metrics, nil
         Ok(())
     }
 
-    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        lua_support::new_grpc_client(addresses, BUILD_INFO.semver())
-    }
-
-    async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {
-        use std::path::PathBuf;
-
-        use raft_log::Config;
-        use raft_log::DumpApi;
-
-        let mut wal_dir = PathBuf::from(&args.raft_dir);
-        wal_dir.push("df_meta");
-        wal_dir.push("V004");
-        wal_dir.push("log");
-
-        let config = Arc::new(Config {
-            dir: wal_dir.to_string_lossy().to_string(),
-            ..Default::default()
-        });
-
-        let dump =
-            raft_log::Dump::<databend_common_meta_raft_store::raft_log_v004::RaftLogTypes>::new(
-                config,
-            )?;
-        dump.write_display(io::stdout())?;
-        Ok(())
+    fn new_grpc_client(
+        &self,
+        addresses: Vec<String>,
+    ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
+        lua_support::new_grpc_client(addresses)
     }
 }
 
@@ -398,6 +383,21 @@ enum CtlCommand {
     ///     --initial-cluster 1=localhost:28103 \
     ///     --initial-cluster 2=localhost:28203
     Import(ImportArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Filter an exported metadata dump and keep only one tenant.
+    ///
+    /// The command keeps the export header, skips all raft-log records, and filters
+    /// state-machine GenericKV/Expire records by traversing tenant roots and their
+    /// referenced database/table ids. Every state-machine record must receive an
+    /// explicit keep/drop mark; otherwise the command fails.
+    ///
+    /// Example:
+    ///   metactl filter-tenant --tenant tenant1 --input meta.db --output tenant1.db
+    ///
+    /// Example (stdin/stdout):
+    ///   cat meta.db | metactl filter-tenant --tenant tenant1 > tenant1.db
+    FilterTenant(FilterTenantArgs),
 
     #[command(verbatim_doc_comment)]
     /// Dump state machine keys grouped by prefix.
@@ -661,6 +661,9 @@ async fn main() -> anyhow::Result<()> {
             CtlCommand::Import(args) => {
                 app.import(args).await?;
             }
+            CtlCommand::FilterTenant(args) => {
+                app.filter_tenant(args)?;
+            }
             CtlCommand::KeysLayout(args) => {
                 app.keys_layout(args).await?;
             }
@@ -683,7 +686,7 @@ async fn main() -> anyhow::Result<()> {
                 app.get_metrics(args).await?;
             }
             CtlCommand::DumpRaftLogWal(args) => {
-                app.dump_raft_log_wal(args).await?;
+                databend_common_meta_control::dump_raft_log_wal::dump_raft_log_wal(args)?;
             }
         },
         // for backward compatibility

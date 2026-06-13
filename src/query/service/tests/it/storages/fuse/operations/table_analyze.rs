@@ -29,6 +29,8 @@ use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
+use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
 use databend_query::sql::plans::Plan;
 use databend_query::test_kits::*;
@@ -221,11 +223,8 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
-    let snapshot_loc_1 = location_gen.gen_snapshot_location(
-        None,
-        &snapshot_1.snapshot_id,
-        TableSnapshot::VERSION,
-    )?;
+    let snapshot_loc_1 =
+        location_gen.gen_snapshot_location(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1.write_meta(&operator, &snapshot_loc_1).await?;
 
     // generate table statistics.

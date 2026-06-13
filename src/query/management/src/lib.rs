@@ -30,6 +30,7 @@ mod warehouse;
 
 mod client_session;
 pub mod errors;
+pub use errors::meta_service_error;
 mod procedure;
 pub mod task;
 mod workload;

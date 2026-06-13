@@ -36,12 +36,8 @@ impl TagNameIdentRaw {
 }
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::super::id_ident::TagId;
-    use crate::key_with_tenant::KeyWithTenant;
-    use crate::schema::TagNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -51,19 +47,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = TagId;
     }
-
-    impl kvapi::Value for TagId {
-        type KeyType = TagNameIdent;
-
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TagNameIdent;
     use crate::tenant::Tenant;
@@ -72,9 +61,6 @@ mod tests {
     fn test_tag_name_ident() {
         let tenant = Tenant::new_literal("tenant_a");
         let ident = TagNameIdent::new(tenant, "pii_flag");
-
-        let key = ident.to_string_key();
-        assert_eq!("__fd_tag/tenant_a/pii_flag", key);
-        assert_eq!(ident, TagNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_tag/tenant_a/pii_flag");
     }
 }

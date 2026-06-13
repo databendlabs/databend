@@ -15,14 +15,17 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropUserPlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_object_tag::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DropUserInterpreter {
@@ -54,8 +57,10 @@ impl Interpreter for DropUserInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_user(&tenant, plan.user, plan.if_exists)
+            .drop_user(&tenant, plan.user.clone(), plan.if_exists)
             .await?;
+
+        cleanup_object_tags(&tenant, TaggableObject::User { user: plan.user }).await?;
 
         Ok(PipelineBuildResult::create())
     }

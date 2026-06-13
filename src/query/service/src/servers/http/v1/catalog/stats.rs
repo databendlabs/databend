@@ -38,7 +38,9 @@ async fn handle(ctx: &HttpQueryContext) -> Result<CatalogStatsResponse> {
         .get_visibility_checker(false, Object::All)
         .await?;
 
-    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let catalog = CatalogManager::instance()
+        .get_default_catalog(Default::default())?
+        .disable_table_info_refresh()?;
 
     let mut tables: u64 = 0;
     let mut databases: u64 = 0;

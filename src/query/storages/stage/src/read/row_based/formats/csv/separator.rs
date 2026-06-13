@@ -90,7 +90,7 @@ impl CsvReader {
             Some(format.params.escape.as_bytes()[0])
         };
         let reader = csv_core::ReaderBuilder::new()
-            .delimiter(format.params.field_delimiter.as_bytes()[0])
+            .delimiter_bytes(format.params.field_delimiter.as_bytes())
             .quote(format.params.quote.as_bytes()[0])
             .escape(escape)
             .terminator(match format.params.record_delimiter.as_str().try_into()? {

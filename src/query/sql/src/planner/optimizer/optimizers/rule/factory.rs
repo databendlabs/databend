@@ -127,9 +127,7 @@ impl RuleFactory {
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::DeduplicateSort => Ok(Box::new(RuleDeduplicateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
-            RuleID::MergeFilterIntoMutation => {
-                Ok(Box::new(RuleMergeFilterIntoMutation::new(metadata)))
-            }
+            RuleID::MergeFilterIntoMutation => Ok(Box::new(RuleMergeFilterIntoMutation::new())),
         }
     }
 }

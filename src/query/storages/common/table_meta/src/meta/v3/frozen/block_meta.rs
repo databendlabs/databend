@@ -65,6 +65,9 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             ngram_filter_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            spatial_index_size: None,
+            spatial_index_location: None,
+            spatial_stats: None,
             virtual_block_meta: None,
             compression: value.compression.into(),
             create_on: None,
@@ -100,48 +103,6 @@ impl From<Compression> for crate::meta::Compression {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum ColumnMeta {
     Parquet(ParquetColumnMeta),
-    Native(NativeColumnMeta),
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct NativeColumnMeta {
-    pub offset: u64,
-    pub pages: Vec<PageMeta>,
-}
-
-impl From<NativeColumnMeta> for databend_common_native::ColumnMeta {
-    fn from(value: NativeColumnMeta) -> Self {
-        Self {
-            offset: value.offset,
-            pages: value.pages.into_iter().map(|v| v.into()).collect(),
-        }
-    }
-}
-
-impl From<PageMeta> for databend_common_native::PageMeta {
-    fn from(value: PageMeta) -> Self {
-        Self {
-            length: value.length,
-            num_values: value.num_values,
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct PageMeta {
-    // compressed size of this page
-    pub length: u64,
-    // num values(rows) of this page
-    pub num_values: u64,
-}
-
-impl From<ColumnMeta> for crate::meta::ColumnMeta {
-    fn from(value: ColumnMeta) -> Self {
-        match value {
-            ColumnMeta::Parquet(v) => Self::Parquet(v.into()),
-            ColumnMeta::Native(v) => Self::Native(v.into()),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -152,6 +113,14 @@ pub struct ParquetColumnMeta {
     pub len: u64,
     /// num of "rows"
     pub num_values: u64,
+}
+
+impl From<ColumnMeta> for crate::meta::ColumnMeta {
+    fn from(value: ColumnMeta) -> Self {
+        match value {
+            ColumnMeta::Parquet(v) => Self::Parquet(v.into()),
+        }
+    }
 }
 
 impl From<ParquetColumnMeta> for crate::meta::v0::ColumnMeta {

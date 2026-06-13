@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use rand::Rng;
 use reservoir_sampling::AlgoL;
 
-use crate::BlockRowIndex;
+use crate::BlockIndex;
 use crate::DataBlock;
 
 pub struct FixedSizeSampler<R: Rng> {
@@ -26,7 +26,7 @@ pub struct FixedSizeSampler<R: Rng> {
     block_size: usize,
 
     blocks: Vec<DataBlock>,
-    indices: Vec<BlockRowIndex>,
+    indices: Vec<BlockIndex>,
     core: AlgoL<R>,
 
     s: usize,
@@ -72,7 +72,7 @@ impl<R: Rng> FixedSizeSampler<R> {
         if self.indices.len() < self.k {
             if rows + self.indices.len() <= self.k {
                 for i in 0..rows {
-                    self.indices.push((block_idx, i as u32, 1));
+                    self.indices.push((block_idx, i as u32));
                 }
                 if self.indices.len() == self.k {
                     self.s = self.core.search()
@@ -80,7 +80,7 @@ impl<R: Rng> FixedSizeSampler<R> {
                 return true;
             }
             while self.indices.len() < self.k {
-                self.indices.push((block_idx, cur as u32, 1));
+                self.indices.push((block_idx, cur as u32));
                 cur += 1;
             }
             self.s = self.core.search();
@@ -90,7 +90,7 @@ impl<R: Rng> FixedSizeSampler<R> {
         while rows - cur > self.s {
             change = true;
             cur += self.s;
-            self.indices[self.core.pos()] = (block_idx, cur as u32, 1);
+            self.indices[self.core.pos()] = (block_idx, cur as u32);
             self.core.update_w();
             self.s = self.core.search();
         }
@@ -109,10 +109,9 @@ impl<R: Rng> FixedSizeSampler<R> {
             .chunks_mut(self.block_size)
             .enumerate()
             .map(|(i, indices)| {
-                let rows = indices.len();
-                let block = DataBlock::take_blocks(&self.blocks, indices, rows);
+                let block = DataBlock::take_blocks(&self.blocks, indices);
 
-                for (j, (b, r, _)) in indices.iter_mut().enumerate() {
+                for (j, (b, r)) in indices.iter_mut().enumerate() {
                     *b = i as u32;
                     *r = j as u32;
                 }
@@ -135,8 +134,8 @@ impl<R: Rng> FixedSizeSampler<R> {
     }
 }
 
-fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>) {
-    let used_set: HashSet<_> = indices.iter().map(|&(b, _, _)| b).collect();
+fn compact_indices(indices: &mut Vec<BlockIndex>, blocks: &mut Vec<DataBlock>) {
+    let used_set: HashSet<_> = indices.iter().map(|&(b, _)| b).collect();
     if used_set.len() == blocks.len() {
         return;
     }
@@ -146,7 +145,7 @@ fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>
 
     *indices = indices
         .drain(..)
-        .map(|(b, r, c)| (used.binary_search(&b).unwrap() as u32, r, c))
+        .map(|(b, r)| (used.binary_search(&b).unwrap() as u32, r))
         .collect();
 
     *blocks = blocks
@@ -266,14 +265,13 @@ mod tests {
 
         sampler.add_indices(15, 0);
 
-        let want: Vec<BlockRowIndex> =
-            vec![(0, 10, 1), (0, 1, 1), (0, 2, 1), (0, 8, 1), (0, 12, 1)];
+        let want: Vec<BlockIndex> = vec![(0, 10), (0, 1), (0, 2), (0, 8), (0, 12)];
         assert_eq!(&want, &sampler.indices);
         assert_eq!(0, sampler.s);
 
         sampler.add_indices(20, 1);
 
-        let want: Vec<BlockRowIndex> = vec![(1, 0, 1), (0, 1, 1), (1, 6, 1), (0, 8, 1), (1, 9, 1)];
+        let want: Vec<BlockIndex> = vec![(1, 0), (0, 1), (1, 6), (0, 8), (1, 9)];
         assert_eq!(&want, &sampler.indices);
         assert_eq!(1, sampler.s);
     }

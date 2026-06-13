@@ -23,6 +23,7 @@ pub const NAN_BYTES_SNAKE: &str = "NaN";
 pub const NAN_BYTES_LOWER: &str = "nan";
 pub const INF_BYTES_LOWER: &str = "inf";
 pub const INF_BYTES_LONG: &str = "Infinity";
+pub const NEG_INF_BYTES_LONG: &str = "-Infinity";
 
 // The size of the I/O read/write block buffer by default.
 pub const DEFAULT_BLOCK_BUFFER_SIZE: usize = 125 * 1024 * 1024;

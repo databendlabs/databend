@@ -21,65 +21,55 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::is_internal_column;
 
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::Metadata;
 use crate::MetadataRef;
 use crate::Visibility;
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
+use crate::plans::Operator;
 use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 
-/// Input:
-/// (1)    Filter
+/// Inputs:
+///        Filter
 ///          \
 ///          Scan
-/// (2)    Filter
-///          \
-///          SecureFilter
-///            \
-///            Scan
+///
+///        Scan(with row access policy)
 ///
 /// Output:
-/// Preserve the original plan structure, but write eligible Filter.predicates into Scan.prewhere.
+/// Preserve the original plan structure, but write eligible Filter.predicates and
+/// secure predicates into Scan.prewhere. Secure predicates remain on Scan for the
+/// final secure filter fallback and redacted plan display.
 pub struct RulePushDownPrewhere {
     id: RuleID,
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
 
+enum PrewherePredicateColumns {
+    Supported(ColumnSet),
+    HasVirtualColumn,
+    Unsupported,
+}
+
 impl RulePushDownPrewhere {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownPrewhere,
-            matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::SecureFilter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                },
-            ],
+            matchers: vec![match_op!(Filter -> Scan), match_op!(Scan)],
             metadata,
         }
     }
@@ -154,19 +144,103 @@ impl RulePushDownPrewhere {
         Self::collect_columns_impl(table_index, schema, expr).ok()
     }
 
+    fn collect_prewhere_columns(
+        metadata: &Metadata,
+        table_index: IndexType,
+        schema: &TableSchemaRef,
+        pred: &ScalarExpr,
+    ) -> PrewherePredicateColumns {
+        let Some(columns) = Self::collect_columns(table_index, schema, pred) else {
+            return PrewherePredicateColumns::Unsupported;
+        };
+        let has_virtual_column = columns
+            .iter()
+            .any(|index| matches!(metadata.column(*index), ColumnEntry::VirtualColumn(_)));
+        if has_virtual_column {
+            return PrewherePredicateColumns::HasVirtualColumn;
+        }
+        PrewherePredicateColumns::Supported(columns)
+    }
+
+    fn add_prewhere_predicates(
+        metadata: &Metadata,
+        scan: &mut Scan,
+        predicates: Vec<ScalarExpr>,
+    ) -> bool {
+        if scan.update_stream_columns {
+            return false;
+        }
+
+        let table = metadata.table(scan.table_index).table();
+        if !table.support_prewhere() {
+            return false;
+        }
+
+        let mut prewhere_columns = ColumnSet::new();
+        let mut prewhere_pred = Vec::new();
+        let existing_predicates = scan
+            .prewhere
+            .as_ref()
+            .map(|prewhere| prewhere.predicates.as_slice())
+            .unwrap_or_default();
+
+        for pred in predicates {
+            if existing_predicates.contains(&pred) {
+                continue;
+            }
+            match Self::collect_prewhere_columns(metadata, scan.table_index, &table.schema(), &pred)
+            {
+                PrewherePredicateColumns::Supported(columns) => {
+                    prewhere_pred.push(pred);
+                    prewhere_columns.extend(&columns);
+                }
+                PrewherePredicateColumns::HasVirtualColumn => return false,
+                PrewherePredicateColumns::Unsupported => return false,
+            }
+        }
+
+        if prewhere_pred.is_empty() {
+            return false;
+        }
+
+        if let Some(prewhere) = scan.prewhere.as_ref() {
+            prewhere_pred.extend(prewhere.predicates.clone());
+            prewhere_columns.extend(&prewhere.prewhere_columns);
+        }
+
+        scan.prewhere = Some(Prewhere {
+            output_columns: scan.columns.clone(),
+            prewhere_columns,
+            predicates: prewhere_pred,
+        });
+
+        true
+    }
+
+    fn secure_prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut scan: Scan = s_expr.plan().clone().try_into()?;
+        let Some(secure_predicates) = scan
+            .secure_predicates
+            .as_ref()
+            .filter(|predicates| !predicates.is_empty())
+            .cloned()
+        else {
+            return Ok(s_expr.clone());
+        };
+
+        let metadata = self.metadata.read().clone();
+        if !Self::add_prewhere_predicates(&metadata, &mut scan, secure_predicates) {
+            return Ok(s_expr.clone());
+        }
+
+        Ok(SExpr::create_leaf(Arc::new(scan.into())))
+    }
+
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
 
         let child = s_expr.child(0)?;
-        let (mut scan, secure_filter) = match child.plan() {
-            crate::plans::RelOperator::Scan(_) => (child.plan().clone().try_into()?, None),
-            crate::plans::RelOperator::SecureFilter(_) => {
-                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
-                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
-                (scan, Some(secure_filter))
-            }
-            _ => unreachable!(),
-        };
+        let mut scan: Scan = child.plan().clone().try_into()?;
 
         if scan.update_stream_columns {
             return Ok(s_expr.clone());
@@ -181,39 +255,53 @@ impl RulePushDownPrewhere {
 
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
+        let mut remaining_pred = Vec::new();
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
-            match Self::collect_columns(scan.table_index, &table.schema(), pred) {
-                Some(columns) => {
+            match Self::collect_prewhere_columns(&metadata, scan.table_index, &table.schema(), pred)
+            {
+                PrewherePredicateColumns::Supported(columns) => {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);
                 }
-                None => return Ok(s_expr.clone()),
+                PrewherePredicateColumns::HasVirtualColumn => {
+                    remaining_pred.push(pred.clone());
+                    continue;
+                }
+                PrewherePredicateColumns::Unsupported => return Ok(s_expr.clone()),
             }
         }
 
-        if !prewhere_pred.is_empty() {
-            if let Some(prewhere) = scan.prewhere.as_ref() {
-                prewhere_pred.extend(prewhere.predicates.clone());
-                prewhere_columns.extend(&prewhere.prewhere_columns);
-            }
-
-            scan.prewhere = Some(Prewhere {
-                output_columns: scan.columns.clone(),
-                prewhere_columns,
-                predicates: prewhere_pred,
-            });
+        if prewhere_pred.is_empty() {
+            return Ok(s_expr.clone());
         }
+
+        if let Some(prewhere) = scan.prewhere.as_ref() {
+            prewhere_pred.extend(prewhere.predicates.clone());
+            prewhere_columns.extend(&prewhere.prewhere_columns);
+        }
+
+        scan.prewhere = Some(Prewhere {
+            output_columns: scan.columns.clone(),
+            prewhere_columns,
+            predicates: prewhere_pred,
+        });
 
         let scan_expr = SExpr::create_leaf(Arc::new(scan.into()));
-        if let Some(secure_filter) = secure_filter {
+
+        if remaining_pred.is_empty() {
+            Ok(scan_expr)
+        } else {
             Ok(SExpr::create_unary(
-                Arc::new(secure_filter.into()),
+                Arc::new(
+                    Filter {
+                        predicates: remaining_pred,
+                    }
+                    .into(),
+                ),
                 Arc::new(scan_expr),
             ))
-        } else {
-            Ok(scan_expr)
         }
     }
 }
@@ -228,7 +316,11 @@ impl Rule for RulePushDownPrewhere {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
-        let mut result = self.prewhere_optimize(s_expr)?;
+        let mut result = match s_expr.plan().rel_op() {
+            RelOp::Filter => self.prewhere_optimize(s_expr)?,
+            RelOp::Scan => self.secure_prewhere_optimize(s_expr)?,
+            _ => unreachable!(),
+        };
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

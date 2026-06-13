@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -19,9 +20,11 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
@@ -48,13 +51,24 @@ pub struct ConstraintExprBinder {
 
 impl ConstraintExprBinder {
     pub fn try_new(ctx: Arc<dyn TableContext>, schema: DataSchemaRef) -> Result<Self> {
-        let settings = ctx.get_settings();
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        Self::try_new_with_dialect(ctx, schema, dialect)
+    }
+
+    fn try_new_with_dialect(
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        dialect: Dialect,
+    ) -> Result<Self> {
+        let settings = ctx.get_settings();
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let mut metadata = Metadata::default();
+        for field in schema.fields().iter() {
+            let column_index =
+                metadata.add_derived_column(field.name().clone(), field.data_type().clone());
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                column_index,
                 Box::new(field.data_type().clone()),
                 Visibility::Visible,
             )
@@ -63,7 +77,7 @@ impl ConstraintExprBinder {
             bind_context.add_column_binding(column);
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let metadata = Arc::new(RwLock::new(metadata));
 
         Ok(ConstraintExprBinder {
             bind_context,
@@ -103,8 +117,9 @@ impl ConstraintExprBinder {
         let mut constraint_name = format!("{}_", table);
 
         for i in used_columns.iter() {
-            constraint_name
-                .push_str(format!("{}_", self.bind_context.columns[*i].column_name).as_str());
+            constraint_name.push_str(
+                format!("{}_", self.bind_context.columns[i.as_usize()].column_name).as_str(),
+            );
         }
         match constraint {
             Constraint::Check(_) => constraint_name.push_str("check"),
@@ -131,4 +146,33 @@ impl ConstraintExprBinder {
             .as_expr()?
             .project_column_ref(|col| self.schema.index_of(&col.column_name))
     }
+}
+
+pub fn validate_constraints_by_schema(
+    ctx: Arc<dyn TableContext>,
+    constraints: &BTreeMap<String, Constraint>,
+    schema: &TableSchema,
+) -> Result<()> {
+    if constraints.is_empty() {
+        return Ok(());
+    }
+
+    // Persisted constraint expressions should not be reparsed with the caller session dialect,
+    // otherwise schema validation becomes session-dependent for the same stored metadata.
+    let mut binder = ConstraintExprBinder::try_new_with_dialect(
+        ctx,
+        Arc::new(schema.into()),
+        Dialect::PostgreSQL,
+    )?;
+    for (name, constraint) in constraints {
+        if binder.parse_and_bind(name, &constraint.expr()).is_err() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Constraint '{}' is incompatible with the target schema. \
+                 Please DROP the constraint before proceeding.",
+                name
+            )));
+        }
+    }
+
+    Ok(())
 }

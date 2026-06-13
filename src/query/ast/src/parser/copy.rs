@@ -24,6 +24,8 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::CopySchemaEvolutionOptions;
+use crate::ast::Identifier;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
@@ -34,6 +36,7 @@ use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::*;
+use crate::parser::expr::expr;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
@@ -94,7 +97,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
             for opt in opts {
                 copy_stmt
                     .apply_option(opt)
-                    .map_err(|e| nom::Err::Failure(ErrorKind::Other(e)))?;
+                    .map_err(|e| nom::Err::Failure(ErrorKind::other(e)))?;
             }
             Ok(Statement::CopyIntoTable(copy_stmt))
         },
@@ -123,14 +126,16 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
             ~ #hint?
             ~ INTO ~ #file_location
             ~ ^FROM ~ ^#copy_into_location_source
+            ~ (PARTITION ~ BY ~ "(" ~ #expr ~ ")")?
             ~ #copy_into_location_option*
         },
-        |(with, _copy, opt_hints, _into, dst, _from, src, opts)| {
+        |(with, _copy, opt_hints, _into, dst, _from, src, partition_by, opts)| {
             let mut copy_stmt = CopyIntoLocationStmt {
                 with,
                 hints: opt_hints,
                 src,
                 dst,
+                partition_by: partition_by.map(|(_, _, _, expr, _)| expr),
                 file_format: Default::default(),
                 options: Default::default(),
             };
@@ -147,14 +152,14 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
          #copy_into_location:"`COPY
                 INTO { @<stage_name>[/<path>]  | '<uri>' }
                 FROM { [<database_name>.]<table_name> | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ copyOptions ]`"
          | #copy_into_table: "`COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`"
@@ -217,6 +222,49 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
             |(_, _, return_failed_only)| CopyIntoTableOption::ReturnFailedOnly(return_failed_only),
         ),
+        map_res(
+            rule! { SCHEMA_EVOLUTION ~ "=" ~ "(" ~ #comma_separated_list0(schema_evolution_option) ~ ")" },
+            |(_, _, _, opts, _)| {
+                let mut schema_evolution = CopySchemaEvolutionOptions::default();
+                for (key, value) in opts {
+                    let target = match key.name.to_lowercase().as_str() {
+                        "sample_files" => &mut schema_evolution.sample_files,
+                        "sample_records_per_file" => {
+                            &mut schema_evolution.sample_records_per_file
+                        }
+                        "sample_total_records" => &mut schema_evolution.sample_total_records,
+                        _ => {
+                            return Err(nom::Err::Failure(ErrorKind::other(format!(
+                                "Unknown schema evolution option {}",
+                                key.name
+                            ))));
+                        }
+                    };
+                    if let Some(value) = value {
+                        if value == 0 {
+                            return Err(nom::Err::Failure(ErrorKind::other(format!(
+                                "Schema evolution option {} must be greater than 0",
+                                key.name
+                            ))));
+                        }
+                        *target = Some(value as usize);
+                    } else {
+                        *target = None;
+                    }
+                }
+                Ok(CopyIntoTableOption::SchemaEvolution(schema_evolution))
+            },
+        ),
+    ))
+    .parse(i)
+}
+
+fn schema_evolution_option(i: Input) -> IResult<(Identifier, Option<u64>)> {
+    alt((
+        map(rule! { #ident ~ "=" ~ AUTO }, |(key, _, _)| (key, None)),
+        map(rule! { #ident ~ "=" ~ #literal_u64 }, |(key, _, value)| {
+            (key, Some(value))
+        }),
     ))
     .parse(i)
 }

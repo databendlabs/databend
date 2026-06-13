@@ -17,14 +17,13 @@ use std::time::Duration;
 
 use databend_common_base::runtime::block_on;
 use databend_common_exception::Result;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::Operation;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_plugin_semaphore::Semaphore;
+use databend_meta_plugin_semaphore::acquirer::Permit;
+use databend_meta_runtime::DatabendRuntime;
 
 use crate::meta_service_error;
 
@@ -58,19 +57,19 @@ impl Drop for PermitGuard {
 
 /// refer to [crate::history_tables::meta::HistoryMetaHandle]
 pub struct TaskMetaHandle {
-    meta_client: Arc<ClientHandle>,
+    meta_client: Arc<ClientHandle<DatabendRuntime>>,
     node_id: String,
 }
 
 impl TaskMetaHandle {
-    pub fn new(meta_client: Arc<ClientHandle>, node_id: String) -> Self {
+    pub fn new(meta_client: Arc<ClientHandle<DatabendRuntime>>, node_id: String) -> Self {
         Self {
             meta_client,
             node_id,
         }
     }
 
-    pub fn meta_client(&self) -> &Arc<ClientHandle> {
+    pub fn meta_client(&self) -> &Arc<ClientHandle<DatabendRuntime>> {
         &self.meta_client
     }
 

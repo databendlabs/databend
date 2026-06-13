@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -39,6 +40,7 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -62,10 +64,19 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols, vec![], None)?
-        .read_pruning(segment_locs)
-        .await
-        .map(|v| v.into_iter().map(|(_, v)| v).collect())
+    FusePruner::create(
+        &ctx,
+        op,
+        schema,
+        push_down,
+        bloom_index_cols,
+        vec![],
+        HashSet::new(),
+        None,
+    )?
+    .read_pruning(segment_locs)
+    .await
+    .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -103,6 +114,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,
@@ -236,8 +248,10 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        (Some(e3), 3, 3 * row_per_block),
-        (Some(e4), 4, 4 * row_per_block),
+        // TopN asc limit stops after the first block once its disjoint range satisfies the limit.
+        (Some(e3), 1, row_per_block),
+        // Same behavior applies to the DESC variant.
+        (Some(e4), 1, row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];
 

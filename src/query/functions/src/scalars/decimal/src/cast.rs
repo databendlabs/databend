@@ -33,6 +33,8 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::compute_view::Compute;
 use databend_common_expression::types::decimal::*;
@@ -129,7 +131,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |ctx, d| {
+                calc_domain: domain_evaluator(move |ctx, d| {
                     if d.len() > 1 {
                         return FunctionDomain::MayThrow;
                     }
@@ -138,7 +140,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                         .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
                         .unwrap_or(FunctionDomain::MayThrow)
                 }),
-                eval: Box::new(move |args, ctx| {
+                eval: scalar_evaluator(move |args, ctx| {
                     let desc_type = DecimalDataType::from(decimal_size);
                     convert_to_decimal(
                         &args[0],
@@ -148,6 +150,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                         desc_type,
                     )
                 }),
+                derive_stat: None,
             },
         })
     };
@@ -211,8 +214,11 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Decimal(decimal_size))),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| convert_as_decimal(&args[0], ctx, decimal_type)),
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, ctx| {
+                    convert_as_decimal(&args[0], ctx, decimal_type)
+                }),
+                derive_stat: None,
             },
         }))
     }));
@@ -280,7 +286,11 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
                 args_type: vec![arg_type.clone()],
                 return_type: data_type.clone(),
             },
-            eval: FunctionEval::Scalar { calc_domain, eval },
+            eval: FunctionEval::Scalar {
+                calc_domain,
+                eval,
+                derive_stat: None,
+            },
         };
 
         Some(function)
@@ -348,7 +358,7 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(T::data_type()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|ctx, d| {
+                calc_domain: domain_evaluator(|ctx, d| {
                     let res_fn = move || match d[0].as_decimal().unwrap() {
                         DecimalDomain::Decimal64(d, size) => Some(SimpleDomain::<T> {
                             min: d.min.to_int(size.scale(), ctx.rounding_mode)?,
@@ -368,7 +378,8 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
                         .map(|d| FunctionDomain::Domain(Domain::Number(T::upcast_domain(d))))
                         .unwrap_or(FunctionDomain::MayThrow)
                 }),
-                eval: Box::new(move |args, ctx| decimal_to_int::<T>(&args[0], ctx)),
+                eval: scalar_evaluator(move |args, ctx| decimal_to_int::<T>(&args[0], ctx)),
+                derive_stat: None,
             },
         };
 
@@ -415,37 +426,34 @@ pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let function = Function {
-            signature: FunctionSignature {
-                name: "to_string".to_string(),
-                args_type: vec![DataType::Decimal(size)],
-                return_type: StringType::data_type(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    if let Ok(arg) = args[0].try_downcast::<Decimal64Type>() {
-                        let arg_type = DecimalDataType::Decimal64(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    if let Ok(arg) = args[0].try_downcast::<Decimal128Type>() {
-                        let arg_type = DecimalDataType::Decimal128(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    if let Ok(arg) = args[0].try_downcast::<Decimal256Type>() {
-                        let arg_type = DecimalDataType::Decimal256(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    unreachable!()
-                }),
-            },
+        let signature = FunctionSignature {
+            name: "to_string".to_string(),
+            args_type: vec![DataType::Decimal(size)],
+            return_type: StringType::data_type(),
         };
 
-        if nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
+        let function = Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::Full,
+            scalar_evaluator(move |args, ctx| {
+                if let Ok(arg) = args[0].try_downcast::<Decimal64Type>() {
+                    let arg_type = DecimalDataType::Decimal64(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                if let Ok(arg) = args[0].try_downcast::<Decimal128Type>() {
+                    let arg_type = DecimalDataType::Decimal128(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                if let Ok(arg) = args[0].try_downcast::<Decimal256Type>() {
+                    let arg_type = DecimalDataType::Decimal256(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                unreachable!()
+            }),
+            None,
+            nullable,
+        );
+        Some(Arc::new(function))
     };
     registry.register_function_factory("to_string", FunctionFactory::Closure(Box::new(factory)));
 }

@@ -25,10 +25,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -37,13 +39,13 @@ use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::type_check::check_string;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -58,13 +60,19 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_common_users::has_table_name_grants;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use futures::StreamExt;
+use futures::stream;
+use log::trace;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::collect_visible_tables;
 use crate::util::extract_leveled_strings;
-use crate::util::generate_catalog_meta;
+use crate::util::generate_default_catalog_meta;
+use crate::util::should_use_optimized_visibility_path;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -317,6 +325,224 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         }
     }
 
+    /// Optimized path: use unified visibility API with batch ownership fetching.
+    /// Returns Some(...) with collected data if successful, None to fall back to slow path.
+    #[allow(clippy::too_many_arguments)]
+    async fn try_optimized_path(
+        ctx: &Arc<dyn TableContext>,
+        tenant: &Tenant,
+        user_api: &Arc<UserApiProvider>,
+        ctls: &[(String, Arc<dyn Catalog>)],
+        db_names: &[String],
+        tables_ids: &[u64],
+        tables_names: &mut BTreeSet<String>,
+        get_owner_field: bool,
+    ) -> Result<
+        Option<(
+            Vec<String>,         // catalogs
+            Vec<String>,         // databases
+            Vec<u64>,            // databases_ids
+            Vec<Arc<dyn Table>>, // database_tables
+            Vec<Option<String>>, // owners
+        )>,
+    > {
+        // Fall back if grants use table names (need exact match)
+        if has_table_name_grants(
+            &ctx.get_current_user()?,
+            &ctx.get_all_effective_roles().await?,
+        ) {
+            return Ok(None);
+        }
+
+        let mut catalogs = vec![];
+        let mut databases = vec![];
+        let mut databases_ids = vec![];
+        let mut database_tables = vec![];
+        let mut owners: Vec<Option<String>> = vec![];
+
+        for (ctl_name, ctl) in ctls.iter() {
+            // Resolve table IDs to names first
+            if !tables_ids.is_empty() {
+                match ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
+                    Ok(new_tables) => {
+                        tables_names.extend(new_tables.into_iter().flatten());
+                    }
+                    Err(err) => {
+                        warn!("Failed to resolve table IDs: {}, {}", ctl.name(), err);
+                    }
+                }
+            }
+
+            // Convert BTreeSet to Vec for the unified API
+            let table_names_vec: Vec<String> = tables_names.iter().cloned().collect();
+
+            // Use unified visibility collection from util.rs
+            // Note: collect_visible_tables already short-circuits for account_admin
+            // via has_global_db_table_privilege() → NoCheck strategy
+            let db_with_tables =
+                collect_visible_tables(ctx, ctl, db_names, &table_names_vec).await?;
+
+            // Process visible tables: filter views/streams and batch fetch ownership
+            for db_info in db_with_tables {
+                let db_id = db_info.id;
+                let db_name = db_info.name;
+
+                let filtered_tables: Vec<_> = db_info
+                    .tables
+                    .into_iter()
+                    .filter(|table| {
+                        let is_view = table.get_table_info().engine() == "VIEW";
+                        (is_view || WITHOUT_VIEW) && !table.is_stream()
+                    })
+                    .collect();
+
+                if filtered_tables.is_empty() {
+                    continue;
+                }
+
+                if get_owner_field {
+                    let ownership_objects: Vec<OwnershipObject> = filtered_tables
+                        .iter()
+                        .map(|t| OwnershipObject::Table {
+                            catalog_name: ctl_name.to_string(),
+                            db_id,
+                            table_id: t.get_id(),
+                        })
+                        .collect();
+                    let t = std::time::Instant::now();
+                    let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
+                    trace!(
+                        "try_optimized_path: mget_ownerships({}) took {:?}",
+                        ownership_objects.len(),
+                        t.elapsed()
+                    );
+
+                    for (table, ownership) in filtered_tables.into_iter().zip(ownerships) {
+                        catalogs.push(ctl_name.to_string());
+                        databases.push(db_name.clone());
+                        databases_ids.push(db_id);
+                        database_tables.push(table);
+                        owners.push(ownership.map(|o| o.role));
+                    }
+                } else {
+                    for table in filtered_tables {
+                        catalogs.push(ctl_name.to_string());
+                        databases.push(db_name.clone());
+                        databases_ids.push(db_id);
+                        database_tables.push(table);
+                        owners.push(None);
+                    }
+                }
+            }
+        }
+
+        // Always return Some - empty result is valid (no matching tables)
+        Ok(Some((
+            catalogs,
+            databases,
+            databases_ids,
+            database_tables,
+            owners,
+        )))
+    }
+
+    /// Build a DataBlock with the correct schema but only default-valued constant columns.
+    /// Used exclusively for count-only fast paths where no column data is read.
+    fn build_count_only_block(rows: usize) -> DataBlock {
+        let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
+        let entries = schema
+            .fields()
+            .iter()
+            .map(|field| {
+                let data_type: DataType = field.data_type().into();
+                let scalar = Scalar::default_value(&data_type);
+                BlockEntry::new_const_column(data_type, scalar, rows)
+            })
+            .collect();
+
+        DataBlock::new(entries, rows)
+    }
+
+    /// Count tables across all catalogs for users with global db/table privilege.
+    /// Skips permission checks, ownership lookups, and stats collection.
+    ///
+    /// Errors from `list_databases` or `list_tables` are logged as warnings and
+    /// the affected database is counted as 0. The returned total may therefore be
+    /// lower than the actual table count when individual databases are unreachable.
+    #[async_backtrace::framed]
+    async fn generate_tables_counts(
+        ctx: Arc<dyn TableContext>,
+        tenant: &Tenant,
+        ctls: &[(String, Arc<dyn Catalog>)],
+        db_concurrency: usize,
+    ) -> usize {
+        let mut total = 0usize;
+
+        for (_, ctl) in ctls {
+            let dbs = match ctl.list_databases(tenant).await {
+                Ok(dbs) => dbs,
+                Err(err) => {
+                    let msg = format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
+                    continue;
+                }
+            };
+
+            let db_names = dbs
+                .into_iter()
+                .map(|db| db.name().to_string())
+                .collect::<Vec<_>>();
+
+            let db_total = stream::iter(db_names.into_iter().map(|db_name| {
+                let ctl = ctl.clone();
+                let ctx = ctx.clone();
+                let tenant = tenant.clone();
+
+                async move {
+                    let tables = match Self::list_tables(
+                        &ctl,
+                        &tenant,
+                        &db_name,
+                        WITH_HISTORY,
+                        WITHOUT_VIEW,
+                        false,
+                    )
+                    .await
+                    {
+                        Ok(tables) => tables,
+                        Err(err) => {
+                            let msg = format!(
+                                "Failed to list tables in database: {}.{}, {}",
+                                ctl.name(),
+                                db_name,
+                                err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
+                            return 0usize;
+                        }
+                    };
+
+                    tables
+                        .into_iter()
+                        .filter(|table| {
+                            let is_view = table.get_table_info().engine() == "VIEW";
+                            (is_view || WITHOUT_VIEW) && !table.is_stream()
+                        })
+                        .count()
+                }
+            }))
+            .buffer_unordered(db_concurrency)
+            .fold(0usize, |acc, value| async move { acc + value })
+            .await;
+
+            total += db_total;
+        }
+
+        total
+    }
+
     /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
     /// please note that this function is intended to not wrapped with Result<>, because we do not want to
     /// break ALL the output on reading ANY of the catalog, database or table failed.
@@ -328,12 +554,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         catalog_impl: Arc<dyn Catalog>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-
-        let visibility_checker = if catalog_impl.is_external() {
-            None
-        } else {
-            Some(ctx.get_visibility_checker(false, Object::All).await?)
-        };
 
         let mut catalogs = vec![];
         let mut databases = vec![];
@@ -350,7 +570,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut catalog_name: Vec<String> = Vec::new();
 
         let mut get_stats = true;
-        let mut get_ownership = true;
+        let mut get_owner_field = true;
+        let mut projection_empty = false;
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
         let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
@@ -385,13 +606,14 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let func_ctx = ctx.get_function_context()?;
         if let Some(push_downs) = &push_downs {
             if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
+                projection_empty = v.is_empty();
                 if v.len() == 1 && v[0] == name_field_index {
                     only_get_name = true;
                 }
                 get_stats = v
                     .iter()
                     .any(|field_index| stats_fields_indexes.contains(field_index));
-                get_ownership = v
+                get_owner_field = v
                     .iter()
                     .any(|field_index| owner_field_indexes.contains(field_index));
             }
@@ -448,119 +670,101 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         }
 
         let ctl_name = catalog_impl.name();
+        let is_external_catalog = catalog_impl.is_external();
 
-        let ctls = if !catalog_name.is_empty() {
-            let mut res = vec![];
-            for name in &catalog_name {
-                if *name == ctl_name {
-                    let ctl = ctx.get_catalog(name).await?;
-                    res.push((name.to_string(), ctl));
-                }
-            }
-            // If empty return empty result
-            res
-        } else {
+        let ctls = if catalog_name.is_empty() || catalog_name.iter().any(|name| name == &ctl_name) {
             vec![(ctl_name, catalog_impl)]
+        } else {
+            vec![]
         };
 
-        // from system.tables where database = 'db' and name = 'name'
-        // from system.tables where database = 'db' and table_id = 123
-        if db_name.len() == 1 && tables_names.len() + tables_ids.len() == 1 && !WITH_HISTORY {
-            for (ctl_name, ctl) in ctls.iter() {
-                for db in &db_name {
-                    match ctl.get_database(&tenant, db.as_str()).await {
-                        Ok(database) => dbs.push(database),
-                        Err(err) => {
-                            let msg = format!("Failed to get database: {}, {}", db, err);
-                            warn!("{}", msg);
-                        }
-                    }
-                }
-                match ctl
-                    .mget_table_names_by_ids(&tenant, &tables_ids, false)
-                    .await
-                {
-                    Ok(new_tables) => {
-                        let new_table_names: BTreeSet<_> =
-                            new_tables.into_iter().flatten().collect();
-                        tables_names.extend(new_table_names);
-                    }
-                    Err(err) => {
-                        // swallow the errors related with mget tables
-                        warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                    }
-                }
+        let no_filters = push_downs
+            .as_ref()
+            .and_then(|p| p.filters.as_ref())
+            .is_none();
+        // Fast path for `SELECT count(*) FROM system.tables` (no filters, no projection columns).
+        // Admin can skip all permission/ownership/stats overhead and just count tables directly.
+        let can_use_count_fast_path = projection_empty
+            && no_filters
+            && !WITH_HISTORY
+            && db_name.is_empty()
+            && tables_names.is_empty()
+            && tables_ids.is_empty();
 
-                for table_name in &tables_names {
-                    for db in &dbs {
-                        match ctl.get_table(&tenant, db.name(), table_name).await {
-                            Ok(t) => {
-                                let db_id = db.get_db_info().database_id.db_id;
-                                let table_id = t.get_id();
-                                if let Some(visibility_checker) = &visibility_checker {
-                                    let role = user_api
-                                        .role_api(&tenant)
-                                        .get_ownership(&OwnershipObject::Table {
-                                            catalog_name: ctl_name.to_string(),
-                                            db_id,
-                                            table_id,
-                                        })
-                                        .await?
-                                        .map(|o| o.role);
-                                    if visibility_checker.check_table_visibility(
-                                        ctl_name,
-                                        db.name(),
-                                        table_name,
-                                        db_id,
-                                        t.get_id(),
-                                    ) {
-                                        push_table_info(
-                                            &mut catalogs,
-                                            &mut databases,
-                                            &mut databases_ids,
-                                            &mut database_tables,
-                                            &mut owners,
-                                            ctl_name,
-                                            db.name(),
-                                            db.get_db_info().database_id.db_id,
-                                            t,
-                                            role,
-                                        );
-                                    } else if let Some(role) = role {
-                                        let roles = ctx.get_all_effective_roles().await?;
-                                        if roles.iter().any(|r| r.name == role) {
-                                            push_table_info(
-                                                &mut catalogs,
-                                                &mut databases,
-                                                &mut databases_ids,
-                                                &mut database_tables,
-                                                &mut owners,
-                                                ctl_name,
-                                                db.name(),
-                                                db.get_db_info().database_id.db_id,
-                                                t,
-                                                Some(role),
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                let msg = format!(
-                                    "Failed to get table in database: {}.{}, {}",
-                                    ctl_name,
-                                    db.name(),
-                                    err
-                                );
-                                // warn no need to pad in ctx
-                                warn!("{}", msg);
-                                continue;
-                            }
-                        }
-                    }
-                }
+        if can_use_count_fast_path {
+            let has_global_privilege = ctx
+                .get_visibility_checker(true, Object::All)
+                .await?
+                .has_global_db_table_privilege();
+            if has_global_privilege {
+                let db_concurrency =
+                    ctx.get_settings()
+                        .get_system_tables_count_db_concurrency()? as usize;
+                let total_rows =
+                    Self::generate_tables_counts(ctx.clone(), &tenant, &ctls, db_concurrency).await;
+                debug_assert!(
+                    projection_empty,
+                    "build_count_only_block requires empty projection"
+                );
+                return Ok(Self::build_count_only_block(total_rows));
             }
-        } else {
+        }
+
+        // Optimized path: when filter specifies tables (with or without databases) within reasonable size,
+        // use lightweight permission check without loading all ownerships.
+        // Threshold logic is shared with collect_visible_tables via should_use_optimized_visibility_path.
+        let table_count = tables_names.len() + tables_ids.len();
+        let use_optimized_path = should_use_optimized_visibility_path(db_name.len(), table_count)
+            && !WITH_HISTORY
+            && !is_external_catalog;
+
+        // Use optimized path for precise filters, slow path otherwise
+        let mut used_optimized_path = false;
+        if use_optimized_path {
+            if let Some((opt_catalogs, opt_databases, opt_databases_ids, opt_tables, opt_owners)) =
+                Self::try_optimized_path(
+                    &ctx,
+                    &tenant,
+                    &user_api,
+                    &ctls,
+                    &db_name,
+                    &tables_ids,
+                    &mut tables_names,
+                    get_owner_field,
+                )
+                .await?
+            {
+                catalogs = opt_catalogs;
+                databases = opt_databases;
+                databases_ids = opt_databases_ids;
+                database_tables = opt_tables;
+                owners = opt_owners;
+                used_optimized_path = true;
+            }
+        }
+
+        if !used_optimized_path {
+            // Slow path: need full visibility checker
+            // Load ownership once and reuse for both visibility check and owner column.
+            let (visibility_checker, ownership) = if is_external_catalog {
+                (None, HashMap::new())
+            } else {
+                let checker = ctx.get_visibility_checker(false, Object::All).await?;
+                let own = if get_owner_field {
+                    let t = std::time::Instant::now();
+                    let result = user_api.list_ownerships(&tenant).await.unwrap_or_default();
+                    trace!(
+                        "slow_path: list_ownerships({}) took {:?}",
+                        result.len(),
+                        t.elapsed()
+                    );
+                    result
+                } else {
+                    HashMap::new()
+                };
+                (Some(checker), own)
+            };
+
             let catalog_dbs = visibility_checker
                 .as_ref()
                 .and_then(|c| c.get_visibility_database());
@@ -678,11 +882,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 // Now we get the final dbs, need to clear dbs vec.
                 dbs.clear();
 
-                let ownership = if get_ownership && visibility_checker.is_some() {
-                    user_api.list_ownerships(&tenant).await.unwrap_or_default()
-                } else {
-                    HashMap::new()
-                };
                 let mock_table = ctl.is_external() && only_get_name;
                 for db in final_dbs {
                     let db_id = db.get_db_info().database_id.db_id;
@@ -794,18 +993,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                     })
                                     .map(|role| role.to_string())
                             };
-                            push_table_info(
-                                &mut catalogs,
-                                &mut databases,
-                                &mut databases_ids,
-                                &mut database_tables,
-                                &mut owners,
-                                ctl_name,
-                                db.name(),
-                                db.get_db_info().database_id.db_id,
-                                table,
-                                role,
-                            );
+                            catalogs.push(ctl_name.to_string());
+                            databases.push(db_name.to_string());
+                            databases_ids.push(db.get_db_info().database_id.db_id);
+                            database_tables.push(table);
+                            owners.push(role);
                         }
                     }
                 }
@@ -870,7 +1062,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .collect();
         let total_columns: Vec<u64> = database_tables
             .iter()
-            .map(|v| v.get_table_info().schema().fields().len() as u64)
+            .map(|v| v.schema().fields().len() as u64)
             .collect();
         let engines: Vec<String> = database_tables
             .iter()
@@ -910,9 +1102,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 v.get_table_info()
                     .meta
-                    .cluster_key
-                    .clone()
-                    .unwrap_or_else(|| "".to_owned())
+                    .cluster_key_str()
+                    .unwrap_or_default()
+                    .to_string()
             })
             .collect();
         let is_transients: Vec<String> = database_tables
@@ -1223,7 +1415,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -1231,23 +1423,4 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         AsyncOneBlockSystemTable::create(TablesTable::<WITH_HISTORY, WITHOUT_VIEW> { table_info })
     }
-}
-
-fn push_table_info(
-    catalogs: &mut Vec<String>,
-    databases: &mut Vec<String>,
-    databases_ids: &mut Vec<u64>,
-    database_tables: &mut Vec<Arc<dyn Table>>,
-    owner: &mut Vec<Option<String>>,
-    ctl_name: &str,
-    db_name: &str,
-    db_id: u64,
-    table: Arc<dyn Table>,
-    role: Option<String>,
-) {
-    catalogs.push(ctl_name.to_string());
-    databases.push(db_name.to_string());
-    databases_ids.push(db_id);
-    database_tables.push(table);
-    owner.push(role);
 }

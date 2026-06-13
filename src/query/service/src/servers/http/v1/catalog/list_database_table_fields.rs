@@ -53,7 +53,9 @@ async fn handle(
         .get_visibility_checker(false, Object::All)
         .await?;
 
-    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let catalog = CatalogManager::instance()
+        .get_default_catalog(Default::default())?
+        .disable_table_info_refresh()?;
     let db = catalog.get_database(&tenant, &database).await?;
     if !visibility_checker.check_database_visibility(
         catalog.name().as_str(),
@@ -82,7 +84,7 @@ async fn handle(
 
     let warnings = vec![];
     let mut fields = vec![];
-    for field in &tbl.get_table_info().schema().fields {
+    for field in &tbl.schema().fields {
         fields.push(FieldInfo {
             name: field.name.clone(),
             r#type: field.data_type.to_string(),

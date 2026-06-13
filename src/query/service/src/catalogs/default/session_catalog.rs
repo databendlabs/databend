@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -20,7 +21,6 @@ use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -51,6 +52,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -78,6 +80,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -93,6 +96,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -111,9 +115,9 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
@@ -124,6 +128,7 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use crate::catalogs::Catalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::servers::http::v1::ClientSessionManager;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
@@ -365,9 +370,10 @@ impl Catalog for SessionCatalog {
         let (table_in_txn, is_active) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
+                let desc = format!("'{}'.'{}'", db_name, table_name);
                 (
                     guard
-                        .get_table_from_buffer(tenant, db_name, table_name)
+                        .get_table_from_buffer(&desc)
                         .map(|table_info| self.get_table_by_info(&table_info)),
                     true,
                 )
@@ -388,6 +394,107 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
+    }
+
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+        include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        {
+            let guard = self.txn_mgr.lock();
+            if guard.is_active() {
+                let branch_desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
+                if let Some(table) = guard
+                    .get_table_from_buffer(&branch_desc)
+                    .map(|table_info| self.get_table_by_info(&table_info))
+                {
+                    return table;
+                }
+            }
+        }
+        self.inner
+            .get_table_branch_with_expire_ctl(
+                tenant,
+                db_name,
+                table_name,
+                branch_name,
+                include_expired,
+            )
+            .await
+    }
+
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.inner.create_table_tag(req).await
+    }
+
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.inner.drop_table_tag(req).await
+    }
+
+    async fn get_table_tag(
+        &self,
+        table_id: u64,
+        tag_name: &str,
+        include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        self.inner
+            .get_table_tag(table_id, tag_name, include_expired)
+            .await
+    }
+
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        self.inner.list_table_tags(req).await
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let mut temp_tables = HashMap::new();
+        let mut non_temp_names = Vec::new();
+        {
+            let temp_tbl_mgr = self.temp_tbl_mgr.lock();
+            for table_name in table_names {
+                match temp_tbl_mgr.get_table(db_name, table_name)? {
+                    Some(table_info) => {
+                        let table = self.get_table_by_info(&table_info)?;
+                        temp_tables.insert(table_name.clone(), table);
+                    }
+                    None => non_temp_names.push(table_name.clone()),
+                }
+            }
+        }
+
+        let non_temp_tables = if non_temp_names.is_empty() {
+            Vec::new()
+        } else {
+            self.inner
+                .mget_tables(tenant, db_name, &non_temp_names)
+                .await?
+        };
+        let mut non_temp_map = HashMap::new();
+        for table in non_temp_tables {
+            non_temp_map.insert(table.name().to_string(), table);
+        }
+
+        let mut result = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Some(table) = temp_tables.get(table_name) {
+                result.push(table.clone());
+            } else if let Some(table) = non_temp_map.get(table_name) {
+                result.push(table.clone());
+            }
+        }
+        Ok(result)
     }
 
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -734,7 +841,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         self.inner.get_sequence(req, visibility_checker).await
     }
@@ -745,7 +852,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         self.inner
             .get_sequence_next_value(req, visibility_checker)

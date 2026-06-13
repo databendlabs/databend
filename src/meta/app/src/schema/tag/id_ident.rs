@@ -37,9 +37,7 @@ pub type TagIdIdentRaw = TIdentRaw<Resource, TagId>;
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::TagIdIdent;
     use crate::schema::TagMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -50,19 +48,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = TagMeta;
     }
-
-    impl kvapi::Value for TagMeta {
-        type KeyType = TagIdIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TagId;
     use super::TagIdIdent;
@@ -72,8 +63,6 @@ mod tests {
     fn test_tag_id_ident() {
         let tenant = Tenant::new_literal("t");
         let ident = TagIdIdent::new_generic(tenant, TagId::new(42));
-        let key = ident.to_string_key();
-        assert_eq!("__fd_tag_by_id/t/42", key);
-        assert_eq!(ident, TagIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_tag_by_id/t/42");
     }
 }

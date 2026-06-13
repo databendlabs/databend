@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -24,17 +23,20 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 
+use crate::pipelines::processors::transforms::AutoIncrementNextValFetcher;
+use crate::pipelines::processors::transforms::ReadFileContext;
+use crate::pipelines::processors::transforms::SequenceCounters;
+use crate::pipelines::processors::transforms::SequenceNextValFetcher;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
-use crate::pipelines::processors::transforms::transform_async_function::AutoIncrementNextValFetcher;
-use crate::pipelines::processors::transforms::transform_async_function::SequenceCounters;
-use crate::pipelines::processors::transforms::transform_async_function::SequenceNextValFetcher;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::AsyncFunctionArgument;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.
 pub struct TransformBranchedAsyncFunction {
     pub ctx: Arc<QueryContext>,
     pub branches: Arc<HashMap<SourceSchemaIndex, AsyncFunctionBranch>>,
+    pub read_file_ctx: ReadFileContext,
 }
 
 pub struct AsyncFunctionBranch {
@@ -95,6 +97,17 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(_) => unreachable!(),
+                AsyncFunctionArgument::ReadFile(read_file_arg) => {
+                    self.read_file_ctx
+                        .transform_read_file(
+                            self.ctx.clone(),
+                            &mut block,
+                            &async_func_desc.arg_indices,
+                            &async_func_desc.data_type,
+                            read_file_arg,
+                        )
+                        .await?;
+                }
             }
         }
         Ok(block)

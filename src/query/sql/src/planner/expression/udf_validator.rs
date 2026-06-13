@@ -19,6 +19,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
 use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -27,6 +28,38 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
 use crate::plans::UDFLanguage;
+
+#[derive(Clone, Debug)]
+pub struct UdfValidationConfig {
+    pub enable_udf_js_script: bool,
+    pub enable_udf_python_script: bool,
+    pub enable_udf_wasm_script: bool,
+    pub enable_udf_sandbox: bool,
+    pub enable_udf_server: bool,
+    pub udf_server_allow_insecure: bool,
+    pub udf_server_allow_list: Vec<String>,
+}
+
+impl UdfValidationConfig {
+    pub fn from_inner_config(config: &InnerConfig) -> Self {
+        let common = &config.query.common;
+        Self {
+            enable_udf_js_script: common.enable_udf_js_script,
+            enable_udf_python_script: common.enable_udf_python_script,
+            enable_udf_wasm_script: common.enable_udf_wasm_script,
+            enable_udf_sandbox: common.enable_udf_sandbox,
+            enable_udf_server: common.enable_udf_server,
+            udf_server_allow_insecure: common.udf_server_allow_insecure,
+            udf_server_allow_list: common.udf_server_allow_list.clone(),
+        }
+    }
+}
+
+impl Default for UdfValidationConfig {
+    fn default() -> Self {
+        Self::from_inner_config(&InnerConfig::default())
+    }
+}
 
 #[derive(Default, Visitor)]
 #[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
@@ -95,16 +128,22 @@ impl UDFValidator {
     }
 
     pub fn is_udf_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        Self::is_udf_script_allowed_with_config(
+            lang,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_script_allowed_with_config(
+        lang: &UDFLanguage,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
         match lang {
-            UDFLanguage::JavaScript if GlobalConfig::instance().query.enable_udf_js_script => {
+            UDFLanguage::JavaScript if config.enable_udf_js_script => Ok(()),
+            UDFLanguage::Python if config.enable_udf_python_script || config.enable_udf_sandbox => {
                 Ok(())
             }
-            UDFLanguage::Python if GlobalConfig::instance().query.enable_udf_python_script => {
-                Ok(())
-            }
-            UDFLanguage::WebAssembly if GlobalConfig::instance().query.enable_udf_wasm_script => {
-                Ok(())
-            }
+            UDFLanguage::WebAssembly if config.enable_udf_wasm_script => Ok(()),
             other => Err(ErrorCode::Unimplemented(format!(
                 "UDF {} script is not enabled in config",
                 other
@@ -112,8 +151,43 @@ impl UDFValidator {
         }
     }
 
+    pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        Self::is_udf_cloud_script_allowed_with_config(
+            lang,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_cloud_script_allowed_with_config(
+        lang: &UDFLanguage,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if !config.enable_udf_sandbox {
+            return Err(ErrorCode::Unimplemented(
+                "SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config",
+            ));
+        }
+        // TODO: more lang e.g. JavaScript ..
+        if *lang != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "SandboxUDF only supports python language",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {
-        if !GlobalConfig::instance().query.enable_udf_server {
+        Self::is_udf_server_allowed_with_config(
+            address,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    pub fn is_udf_server_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if !config.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
                 "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
@@ -124,15 +198,13 @@ impl UDFValidator {
                 format!("udf server address '{address}' is invalid, please check the address",)
             })?;
 
-        let udf_server_allow_insecure = GlobalConfig::instance().query.udf_server_allow_insecure;
-        if !udf_server_allow_insecure && url_addr.scheme() != "https" {
+        if !config.udf_server_allow_insecure && url_addr.scheme() != "https" {
             return Err(ErrorCode::Unimplemented(
                 "Insecure UDF server is not allowed, you can enable it by setting 'udf_server_allow_insecure = true' in query node config",
             ));
         }
 
-        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-        if udf_server_allow_list.iter().all(|allow_url| {
+        if config.udf_server_allow_list.iter().all(|allow_url| {
             if let Ok(allow_url) = url::Url::parse(allow_url) {
                 allow_url.host_str() != url_addr.host_str()
             } else {

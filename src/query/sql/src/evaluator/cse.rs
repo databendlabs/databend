@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use databend_common_expression::Cast;
@@ -21,7 +22,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::debug;
 
 use super::BlockOperator;
-use crate::ColumnSet;
 
 /// Eliminate common expression in `Map` operator
 pub fn apply_cse(
@@ -78,8 +78,8 @@ pub fn apply_cse(
                         temp_var_counter += 1;
                     }
 
-                    let projections = projections
-                        .unwrap_or((0..input_num_columns + exprs.len()).collect::<ColumnSet>());
+                    let projections =
+                        projections.unwrap_or((0..input_num_columns + exprs.len()).collect());
 
                     // Regenerate the projections based on the replacements
                     // 1. Initialize the new_projections with the original projections with unchanged indexes
@@ -87,7 +87,7 @@ pub fn apply_cse(
                         .iter()
                         .filter(|idx| **idx < input_num_columns)
                         .copied()
-                        .collect::<ColumnSet>();
+                        .collect::<BTreeSet<_>>();
 
                     for mut expr in exprs {
                         perform_cse_replacement(&mut expr, &cse_replacements);

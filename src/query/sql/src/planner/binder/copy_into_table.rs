@@ -34,7 +34,7 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::runtime::ThreadTracker;
+use databend_common_ast::visit::Walk;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
@@ -61,9 +61,6 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
-use derive_visitor::Drive;
-use log::LevelFilter;
-use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -72,9 +69,10 @@ use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
-use crate::binder::insert::STAGE_PLACEHOLDER;
-use crate::binder::location::parse_uri_location;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -103,11 +101,16 @@ impl Binder {
                 from,
                 alias_name,
             } => {
-                let mut max_column_position = MaxColumnPosition::new();
-                select_list.drive(&mut max_column_position);
-                self.metadata
-                    .write()
-                    .set_max_column_position(max_column_position.max_pos);
+                let mut max_column_position = MaxColumnPosition::default();
+                for target in select_list.iter() {
+                    if let SelectTarget::AliasedExpr { expr, .. } = target {
+                        expr.walk(&mut max_column_position)?;
+                    }
+                }
+                self.metadata.write().set_stage_column_references(
+                    max_column_position.max_pos,
+                    max_column_position.has_name_ref,
+                );
                 let plan = self.bind_copy_into_table_common(stmt, from, true).await?;
 
                 let alias = alias_name.as_ref().map(|name| TableAlias {
@@ -166,9 +169,20 @@ impl Binder {
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
+        let (mut stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_file_location(location, StagePathAccess::Read)
+        .await?;
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
+        }
+        if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
+            return Err(ErrorCode::IllegalFileFormat(
+                "LANCE file format is only supported in COPY INTO <location>".to_string(),
+            ));
         }
         let mut options = stmt.options.clone();
         stage_info
@@ -193,14 +207,21 @@ impl Binder {
             files: stmt.files.clone(),
             pattern,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
 
         let dest_entity_name = format!("{database_name}.{table_name}");
-        let stage_schema = match &stmt.dst_columns {
+        let required_values_table_schema = match &stmt.dst_columns {
             Some(cols) => self.schema_project(&table.schema(), cols, &dest_entity_name)?,
             None => self.schema_project(&table.schema(), &[], &dest_entity_name)?,
         };
 
-        let required_values_schema: DataSchemaRef = Arc::new(stage_schema.clone().into());
+        let required_values_schema: DataSchemaRef =
+            Arc::new(required_values_table_schema.clone().into());
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
@@ -223,7 +244,7 @@ impl Binder {
             no_file_to_copy: false,
             from_attachment: false,
             stage_table_info: StageTableInfo {
-                schema: stage_schema,
+                schema: required_values_table_schema,
                 files_info,
                 stage_info,
                 is_select: false,
@@ -266,15 +287,18 @@ impl Binder {
                     column: ColumnRef {
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier::from_name_with_quoted(
-                            None,
-                            if case_sensitive {
-                                dest_field.name().to_string()
-                            } else {
-                                dest_field.name().to_lowercase().to_string()
-                            },
-                            Some('"'),
-                        )),
+                        column: AstColumnID::Name(if case_sensitive {
+                            Identifier::from_name_with_quoted(
+                                None,
+                                dest_field.name().to_string(),
+                                Some('"'),
+                            )
+                        } else {
+                            Identifier::from_name(
+                                None,
+                                dest_field.name().to_lowercase().to_string(),
+                            )
+                        }),
                     },
                 };
                 // cast types to variant, tuple will be rewrite as `json_object_keep_null`
@@ -309,14 +333,24 @@ impl Binder {
         &mut self,
         attachment: StageAttachment,
     ) -> Result<(StageInfo, StageFilesInfo, CopyIntoTableOptions)> {
-        let (mut stage_info, path) =
-            resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
+        let (mut stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_stage_location(&attachment.location[1..], StagePathAccess::Read)
+        .await?;
 
         if let Some(ref options) = attachment.file_format_options {
             let mut params = FileFormatParams::try_from_reader(
                 FileFormatOptionsReader::from_map(options.clone()),
                 false,
             )?;
+            if matches!(params, FileFormatParams::Lance(_)) {
+                return Err(ErrorCode::IllegalFileFormat(
+                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                ));
+            }
             if let FileFormatParams::Csv(fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.
@@ -343,6 +377,12 @@ impl Binder {
             files: None,
             pattern: None,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &files_info.path,
+            files_info.files.as_deref(),
+            false,
+        )?;
         Ok((stage_info, files_info, copy_options))
     }
 
@@ -474,11 +514,6 @@ impl Binder {
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        let case_sensitive = plan
-            .stage_table_info
-            .copy_into_table_options
-            .column_match_mode
-            == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -489,7 +524,12 @@ impl Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
-                case_sensitive,
+                Some(
+                    plan.stage_table_info
+                        .copy_into_table_options
+                        .on_error
+                        .clone(),
+                ),
             )
             .await?;
 
@@ -505,26 +545,21 @@ impl Binder {
                 ));
             };
         }
-        let (scalar_items, projections) = self.analyze_projection(
-            &from_context.aggregate_info,
-            &from_context.windows,
-            &select_list,
-        )?;
+        let select_info = self.analyze_projection(&from_context, &select_list)?;
 
-        if projections.len() != plan.required_source_schema.num_fields() {
+        if select_info.column_count() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
                 "Number of columns in select list ({}) does not match that of the corresponding table ({})",
-                projections.len(),
+                select_info.column_count(),
                 plan.required_source_schema.num_fields(),
             )));
         }
 
-        let mut s_expr =
-            self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        let mut s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
-        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
+        s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -616,101 +651,5 @@ impl Binder {
             )
             .await?;
         Ok((Arc::new(TableSchema::new(attachment_fields)), const_values))
-    }
-}
-
-/// Named stage(start with `@`):
-///
-/// ```sql
-/// copy into mytable from @my_ext_stage
-///     file_format = (type = csv);
-/// ```
-/// location can be:
-/// - mystage
-/// - mystage/
-/// - mystage/abc
-/// - ~/abc
-/// Returns user's stage info and relative path towards the stage's root.
-///
-/// If input location is empty we will convert it to `/` means the root of stage
-///
-/// - mystage => (mystage, "/")
-///
-/// If input location is endswith `/`, it's a folder.
-///
-/// - mystage/ => (mystage, "/")
-///
-/// Otherwise, it's a file
-///
-/// - mystage/abc => (mystage, "abc")
-///
-/// For internal stage, we will also add prefix `/stage/<stage>/`
-///
-/// - ~/abc => (internal, "/stage/internal/abc")
-#[async_backtrace::framed]
-pub async fn resolve_stage_location(
-    ctx: &dyn TableContext,
-    location: &str,
-) -> Result<(StageInfo, String)> {
-    // my_named_stage/abc/
-    let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
-    if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments(
-            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
-        ));
-    }
-
-    let mut stage = if names[0] == "~" {
-        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
-    } else {
-        UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), names[0])
-            .await?
-    };
-    if ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off)
-    {
-        // History log transform queries use the internal history stage.
-        // Enable credential chain at runtime since the flag is not persisted in meta.
-        stage.allow_credential_chain = true;
-    }
-
-    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
-    let path = if path.is_empty() { "/" } else { path };
-
-    debug!("parsed stage: {stage:?}, path: {path}");
-    Ok((stage, path.to_string()))
-}
-
-#[async_backtrace::framed]
-pub async fn resolve_stage_locations(
-    ctx: &dyn TableContext,
-    locations: &[String],
-) -> Result<Vec<(StageInfo, String)>> {
-    let mut results = Vec::with_capacity(locations.len());
-    for location in locations {
-        results.push(resolve_stage_location(ctx, location).await?);
-    }
-    Ok(results)
-}
-
-#[async_backtrace::framed]
-pub async fn resolve_file_location(
-    ctx: &dyn TableContext,
-    location: &FileLocation,
-) -> Result<(StageInfo, String)> {
-    match location.clone() {
-        FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
-        FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri, Some(ctx)).await?;
-            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-                Err(ErrorCode::StorageInsecure(
-                    "copy from insecure storage is not allowed",
-                ))
-            } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, true);
-                Ok((stage_info, path))
-            }
-        }
     }
 }

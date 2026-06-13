@@ -7,7 +7,6 @@ edition = "2024"
 databend-common-expression = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
 match-template = { workspace = true }
-num-traits = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

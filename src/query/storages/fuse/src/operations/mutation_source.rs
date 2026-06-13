@@ -32,6 +32,7 @@ use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -52,7 +53,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
+        col_indices: Vec<FieldIndex>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
     ) -> Result<()> {
@@ -65,8 +66,7 @@ impl FuseTable {
             };
         let projection = Projection::Columns(col_indices.clone());
         let update_stream_columns = self.change_tracking_enabled();
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
 
         let schema = block_reader.schema().as_ref().clone();
         let filter_expr = Arc::new(filter.map(|v| {
@@ -95,8 +95,6 @@ impl FuseTable {
                     ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
-                    update_stream_columns,
-                    false,
                 )?)
                 .clone(),
             ))
@@ -122,6 +120,7 @@ impl FuseTable {
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
+                    update_stream_columns,
                 )
             },
             max_threads,
@@ -184,6 +183,8 @@ impl FuseTable {
             filters: filters.clone(),
             ..PushDownInfo::default()
         });
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
         let mut pruner = FusePruner::create(
             &ctx,
@@ -191,11 +192,8 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-            Self::create_ngram_index_args(
-                &self.table_info.meta,
-                &self.table_info.meta.schema,
-                false,
-            )?,
+            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
+            spatial_index_columns,
             None,
         )?;
 
@@ -215,7 +213,7 @@ impl FuseTable {
             let range_index = RangeIndex::try_create(
                 func_ctx,
                 &inverse,
-                self.table_info.schema(),
+                self.schema(),
                 StatisticsOfColumns::default(), // TODO default values
             )?;
             pruner.set_inverse_range_index(range_index);
@@ -232,7 +230,8 @@ impl FuseTable {
         if !block_metas.is_empty() {
             if let Some(range_index) = pruner.get_inverse_range_index() {
                 for (block_meta_idx, block_meta) in &block_metas {
-                    if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
+                    let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
+                    if !range_index.should_keep(&range_input, None) {
                         // this block should be deleted completely
                         whole_block_deletions
                             .insert((block_meta_idx.segment_idx, block_meta_idx.block_idx));
@@ -248,7 +247,6 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (statistics, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.schema_with_stream(),
             None,
             &range_block_metas,

@@ -148,8 +148,6 @@ class QueryArgs:
     http_handler_port: Optional[int] = None
     mysql_handler_host: Optional[str] = None
     mysql_handler_port: Optional[int] = None
-    clickhouse_http_handler_host: Optional[str] = None
-    clickhouse_http_handler_port: Optional[int] = None
     flight_sql_handler_host: Optional[str] = None
     flight_sql_handler_port: Optional[int] = None
 
@@ -194,14 +192,6 @@ class QueryArgs:
             query_config["mysql_handler_host"] = self.mysql_handler_host
         if self.mysql_handler_port is not None:
             query_config["mysql_handler_port"] = self.mysql_handler_port
-        if self.clickhouse_http_handler_host is not None:
-            query_config["clickhouse_http_handler_host"] = (
-                self.clickhouse_http_handler_host
-            )
-        if self.clickhouse_http_handler_port is not None:
-            query_config["clickhouse_http_handler_port"] = (
-                self.clickhouse_http_handler_port
-            )
         if self.flight_sql_handler_host is not None:
             query_config["flight_sql_handler_host"] = self.flight_sql_handler_host
         if self.flight_sql_handler_port is not None:
@@ -273,17 +263,6 @@ class QueryArgs:
             cli_args.extend(["--mysql-handler-host", self.mysql_handler_host])
         if self.mysql_handler_port is not None:
             cli_args.extend(["--mysql-handler-port", str(self.mysql_handler_port)])
-        if self.clickhouse_http_handler_host is not None:
-            cli_args.extend(
-                ["--clickhouse-http-handler-host", self.clickhouse_http_handler_host]
-            )
-        if self.clickhouse_http_handler_port is not None:
-            cli_args.extend(
-                [
-                    "--clickhouse-http-handler-port",
-                    str(self.clickhouse_http_handler_port),
-                ]
-            )
         if self.flight_sql_handler_host is not None:
             cli_args.extend(["--flight-sql-handler-host", self.flight_sql_handler_host])
         if self.flight_sql_handler_port is not None:

@@ -125,9 +125,9 @@ impl TableMetaFunc for FuseSegment {
                 .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
                 .await?;
 
-            for (idx, segment) in segments.into_iter().enumerate() {
+            for segment in segments.into_iter() {
                 let segment = segment?;
-                format_versions.push(segment_locations[idx].1);
+                format_versions.push(segment_locations[row_num].1);
                 block_count.push(segment.summary.block_count);
                 row_count.push(segment.summary.row_count);
                 compressed.push(segment.summary.compressed_byte_size);
@@ -139,7 +139,7 @@ impl TableMetaFunc for FuseSegment {
                 vector_index_size.push(segment.summary.vector_index_size);
                 virtual_column_size.push(segment.summary.virtual_column_size);
                 virtual_block_count.push(segment.summary.virtual_block_count);
-                file_location.push(segment_locations[idx].0.clone());
+                file_location.push(segment_locations[row_num].0.clone());
                 segment_stats_size.push(
                     segment
                         .summary

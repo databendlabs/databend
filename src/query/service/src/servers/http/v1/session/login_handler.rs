@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_storages_fuse::TableContext;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::IntoResponse;
@@ -25,7 +24,11 @@ use poem::web::Query;
 use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::http_query_handlers::ArrowFeatures;
+use crate::servers::http::v1::query::execute_state::ARROW_FEATURE_NEGOTIATION_VERSION;
+use crate::servers::http::v1::query::execute_state::SERVER_MAX_ARROW_RESULT_VERSION;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {
@@ -45,6 +48,9 @@ pub(crate) struct TokensInfo {
 pub struct LoginResponse {
     version: String,
     session_id: String,
+    server_max_arrow_result_version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    server_arrow_features: Option<ArrowFeatures>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tokens: Option<TokensInfo>,
 }
@@ -100,18 +106,27 @@ pub async fn login_handler(
         .await
         .map_err(HttpErrorCode::bad_request)?;
     let version = &ctx.version.semantic;
+    let server_arrow_features = (SERVER_MAX_ARROW_RESULT_VERSION
+        >= ARROW_FEATURE_NEGOTIATION_VERSION)
+        .then_some(ArrowFeatures::decimal64_enabled());
     let id_only = || {
         Ok(Json(LoginResponse {
             version: version.to_string(),
             session_id: session_id.clone(),
+            server_max_arrow_result_version: SERVER_MAX_ARROW_RESULT_VERSION,
+            server_arrow_features: server_arrow_features.clone(),
             tokens: None,
         }))
     };
 
     match ctx.credential {
         Credential::Jwt { .. } => id_only(),
-        Credential::Password { .. } if query.disable_session_token.unwrap_or(false) => id_only(),
-        Credential::Password { .. } => {
+        Credential::KeyPair { .. } | Credential::Password { .. }
+            if query.disable_session_token.unwrap_or(false) =>
+        {
+            id_only()
+        }
+        Credential::KeyPair { .. } | Credential::Password { .. } => {
             let (session_id, token_pair) = ClientSessionManager::instance()
                 .new_token_pair(&ctx.session, session_id, None, None)
                 .await
@@ -119,6 +134,8 @@ pub async fn login_handler(
             Ok(Json(LoginResponse {
                 version: version.to_string(),
                 session_id,
+                server_max_arrow_result_version: SERVER_MAX_ARROW_RESULT_VERSION,
+                server_arrow_features: server_arrow_features.clone(),
                 tokens: Some(TokensInfo {
                     session_token_ttl_in_secs: ClientSessionManager::instance()
                         .max_idle_time
@@ -128,6 +145,8 @@ pub async fn login_handler(
                 }),
             }))
         }
-        _ => unreachable!("/session/login endpoint requires password or JWT authentication"),
+        _ => unreachable!(
+            "/session/login endpoint requires password, JWT, or key-pair authentication"
+        ),
     }
 }

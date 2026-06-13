@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -72,6 +73,22 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
+/// Spatial statistics for geometry columns.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default, FrozenAPI)]
+pub struct SpatialStatistics {
+    pub min_x: OrderedFloat<f64>,
+    pub min_y: OrderedFloat<f64>,
+    pub max_x: OrderedFloat<f64>,
+    pub max_y: OrderedFloat<f64>,
+    pub srid: i32,
+    pub has_null: bool,
+    #[serde(default)]
+    pub has_empty_rect: bool,
+    // Srid mixed or all rects are empty.
+    #[serde(default)]
+    pub is_valid: bool,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]
 pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
@@ -106,11 +123,13 @@ pub struct Statistics {
     pub ngram_index_size: Option<u64>,
     pub inverted_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
+    pub spatial_index_size: Option<u64>,
     pub virtual_column_size: Option<u64>,
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub virtual_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
+    pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
 
@@ -276,9 +295,11 @@ impl Statistics {
             ngram_index_size: None,
             inverted_index_size: None,
             vector_index_size: None,
+            spatial_index_size: None,
             virtual_column_size: None,
             col_stats,
             virtual_col_stats: None,
+            spatial_stats: None,
             cluster_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,

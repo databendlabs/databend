@@ -1,0 +1,24 @@
+name: "Test sandbox UDF for databend query"
+description: "Test sandbox Python UDF flow with mock control plane"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+
+    - name: Install uv
+      shell: bash
+      run: pip install uv
+
+    - uses: ./.github/actions/setup_minio
+
+    - uses: wntrblm/nox@2025.05.01
+    - name: Run Sandbox UDF Test
+      shell: bash
+      run: |
+        nox -f tests/nox/noxfile.py -s udf_sandbox
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-sandbox-udf

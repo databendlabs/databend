@@ -209,14 +209,16 @@ fn build_regexp_split_to_table(
                         arg2_type.clone(),
                         arg3_type.unwrap().clone(),
                     ],
-                    return_type: DataType::Tuple(vec![DataType::String]),
+                    return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
+                        DataType::String,
+                    ))]),
                 },
                 eval: FunctionEval::SRF {
                     eval: Box::new(|args, ctx, max_nums_per_row| {
                         let arg = args[0].clone().to_owned();
                         let delimiter = args[1].clone().to_owned();
                         let flag = args[2].clone().to_owned();
-                        let res = (0..ctx.num_rows)
+                        (0..ctx.num_rows)
                             .map(|row| {
                                 match (
                                     arg.index(row).unwrap(),
@@ -235,8 +237,7 @@ fn build_regexp_split_to_table(
                                     _ => unreachable!(),
                                 }
                             })
-                            .collect();
-                        res
+                            .collect()
                     }),
                 },
             })
@@ -245,13 +246,13 @@ fn build_regexp_split_to_table(
             signature: FunctionSignature {
                 name: "regexp_split_to_table".to_string(),
                 args_type: vec![arg_type.clone(), arg2_type.clone()],
-                return_type: DataType::Tuple(vec![DataType::String]),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::String))]),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     let delimiter = args[1].clone().to_owned();
-                    let res = (0..ctx.num_rows)
+                    (0..ctx.num_rows)
                         .map(
                             |row| match (arg.index(row).unwrap(), delimiter.index(row).unwrap()) {
                                 (ScalarRef::String(text), ScalarRef::String(pattern)) => {
@@ -261,8 +262,7 @@ fn build_regexp_split_to_table(
                                 _ => unreachable!(),
                             },
                         )
-                        .collect();
-                    res
+                        .collect()
                 }),
             },
         }),

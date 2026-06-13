@@ -16,18 +16,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_exception::Result;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaSpec;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaSpec;
+use databend_meta_client::types::Operation;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::UpsertKV;
 
 use crate::meta_service_error;
 use crate::result_cache::common::ResultCacheValue;
+use crate::result_cache::common::truncate_sql;
 
 pub struct ResultCacheMetaManager {
     ttl: u64,
@@ -67,7 +68,8 @@ impl ResultCacheMetaManager {
         match raw {
             None => Ok(None),
             Some(SeqV { data, .. }) => {
-                let value = serde_json::from_slice(&data)?;
+                let mut value: ResultCacheValue = serde_json::from_slice(&data)?;
+                value.sql = truncate_sql(&value.sql);
                 Ok(Some(value))
             }
         }
@@ -83,8 +85,8 @@ impl ResultCacheMetaManager {
 
         let mut r = vec![];
         for (_key, val) in result {
-            let u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
-
+            let mut u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
+            u.sql = truncate_sql(&u.sql);
             r.push(u);
         }
 

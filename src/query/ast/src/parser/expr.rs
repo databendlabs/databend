@@ -60,7 +60,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 {
                     Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("expected more tokens for expression"),
+                        ErrorKind::other("expected more tokens for expression"),
                     )))
                 }
                 _ => Ok((rest, elem)),
@@ -1604,11 +1604,21 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             })
         },
     );
-    let hex_uint = map_res(literal_hex_str, |str| {
+    let hex_uint = map_res(mysql_literal_hex_str, |str| {
         Ok(ExprElement::Literal {
             value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
         })
     });
+    let binary = map_res(
+        rule! {
+            PGLiteralHex
+        },
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_binary(token.text()).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
     let decimal_float = map_res(
         verify(
             rule! {
@@ -1757,7 +1767,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         LiteralCodeString => with_span!(code_string).parse(i),
         LiteralInteger => with_span!(decimal_uint).parse(i),
         LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
-        MySQLLiteralHex | PGLiteralHex => with_span!(hex_uint).parse(i),
+        MySQLLiteralHex => with_span!(hex_uint).parse(i),
+        PGLiteralHex => with_span!(binary).parse(i),
         TRUE | FALSE => with_span!(boolean).parse(i),
         NULL => with_span!(null).parse(i),
         ROW => with_span!(column_row).parse(i),
@@ -1811,7 +1822,7 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
+        ErrorKind::other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
     )))
 }
 
@@ -1878,7 +1889,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...",
         ),
     )))
@@ -1904,7 +1915,7 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ...",
         ),
     )))
@@ -1921,7 +1932,13 @@ pub fn literal(i: Input) -> IResult<Literal> {
         },
         |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
     );
-    let mut hex_uint = map_res(literal_hex_str, |str| {
+    let mut binary = map_res(
+        rule! {
+            PGLiteralHex
+        },
+        |token| parse_binary(token.text()).map_err(nom::Err::Failure),
+    );
+    let mut hex_uint = map_res(mysql_literal_hex_str, |str| {
         parse_uint(str, 16).map_err(nom::Err::Failure)
     });
     let mut decimal_float = map_res(
@@ -1936,38 +1953,27 @@ pub fn literal(i: Input) -> IResult<Literal> {
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
         LiteralFloat => decimal_float.parse(i),
-        MySQLLiteralHex | PGLiteralHex => hex_uint(i),
+        MySQLLiteralHex => hex_uint(i),
+        PGLiteralHex => binary.parse(i),
         TRUE | FALSE => boolean.parse(i),
         NULL => null.parse(i),
     );
 
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...",
         ),
     )))
 }
 
-pub fn literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
+pub fn mysql_literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
     // 0XFFFF
-    let mysql_hex = map(
+    map(
         rule! {
             MySQLLiteralHex
         },
         |token| &token.text()[2..],
-    );
-    // x'FFFF'
-    let pg_hex = map(
-        rule! {
-            PGLiteralHex
-        },
-        |token| &token.text()[2..token.text().len() - 1],
-    );
-
-    rule!(
-        #mysql_hex
-        | #pg_hex
     )
     .parse(i)
 }
@@ -1980,7 +1986,7 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
         },
         |token| u64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
     );
-    let hex = map_res(literal_hex_str, |lit| {
+    let hex = map_res(mysql_literal_hex_str, |lit| {
         u64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
     });
 
@@ -1999,7 +2005,7 @@ pub fn literal_i64(i: Input) -> IResult<i64> {
         },
         |token| i64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
     );
-    let hex = map_res(literal_hex_str, |lit| {
+    let hex = map_res(mysql_literal_hex_str, |lit| {
         i64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
     });
 
@@ -2023,7 +2029,7 @@ pub fn literal_string(i: Input) -> IResult<String> {
             let quote::QuotedString(s, quote) = token
                 .text()
                 .parse()
-                .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid escape or unicode")))?;
+                .map_err(|_| nom::Err::Failure(ErrorKind::other("invalid escape or unicode")))?;
 
             if !i.dialect.is_string_quote(quote) {
                 return Err(nom::Err::Error(ErrorKind::ExpectToken(LiteralString)));
@@ -2051,7 +2057,7 @@ pub fn at_string(i: Input) -> IResult<String> {
         let AtString(s) = token
             .text()
             .parse()
-            .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid at string")))?;
+            .map_err(|_| nom::Err::Failure(ErrorKind::other("invalid at string")))?;
         Ok(s)
     })(i)
 }
@@ -2128,10 +2134,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
-                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("precision is too large")))?,
+                    .map_err(|_| nom::Err::Failure(ErrorKind::other("precision is too large")))?,
                 scale: scale
                     .try_into()
-                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("scale is too large")))?,
+                    .map_err(|_| nom::Err::Failure(ErrorKind::other("scale is too large")))?,
             })
         },
     );
@@ -2247,7 +2253,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             Some(true) => Ok(ty.wrap_nullable()),
             Some(false) => {
                 if matches!(ty, TypeName::Nullable(_)) {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "ambiguous NOT NULL constraint",
                     )))
                 } else {
@@ -2678,7 +2684,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         args,
                     })
                 }
-                _ => Err(nom::Err::Error(ErrorKind::Other(
+                _ => Err(nom::Err::Error(ErrorKind::other(
                     "Unsupported function format",
                 ))),
             }
@@ -2840,6 +2846,11 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             scale: 0,
         })
     }
+}
+
+pub fn parse_binary(text: &str) -> Result<Literal, ErrorKind> {
+    let text = &text[2..text.len() - 1];
+    Ok(Literal::Binary(hex::decode(text)?))
 }
 
 fn try_negate_literal(literal: &Literal) -> Option<Literal> {

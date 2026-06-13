@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
+import argparse
 import glob
 import json
 import logging
-import argparse
 
 QUERY_LOGS_DIR = ".databend/vector/query"
 PROFILE_LOGS_DIR = ".databend/vector/profile"
@@ -34,8 +34,7 @@ def check_queries(sql: str):
         assert query["query_text"] == sql
 
 
-def check_profiles(sql: str):
-    keyword = str.replace(sql, "SELECT ", "")
+def check_profiles(keyword: str):
     profiles = []
     for filename in glob.glob(PROFILE_LOGS_DIR + "/*.log"):
         logger.info("checking profile logs: %s", filename)
@@ -60,7 +59,8 @@ def check_profiles(sql: str):
 if __name__ == "__main__":
     argparse = argparse.ArgumentParser()
     argparse.add_argument("--sql", type=str)
+    argparse.add_argument("--profile-keyword", type=str, required=True)
     args = argparse.parse_args()
 
     check_queries(args.sql)
-    check_profiles(args.sql)
+    check_profiles(args.profile_keyword)

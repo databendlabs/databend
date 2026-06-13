@@ -20,7 +20,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct DataSummary {
     pub row_counts: usize,
     pub input_bytes: usize,
@@ -42,7 +42,11 @@ impl DataSummary {
         self.output_bytes += other.output_bytes;
     }
 
-    pub fn to_block(&self) -> DataBlock {
+    pub fn is_empty(&self) -> bool {
+        self.row_counts == 0 && self.input_bytes == 0 && self.output_bytes == 0
+    }
+
+    pub fn to_block(self) -> DataBlock {
         let entries = vec![
             BlockEntry::new_const_column_arg::<UInt64Type>(self.row_counts as _, 1),
             BlockEntry::new_const_column_arg::<UInt64Type>(self.input_bytes as _, 1),
@@ -94,7 +98,7 @@ impl UnloadOutput {
 
     pub fn is_empty(&self) -> bool {
         match self {
-            UnloadOutput::Summary(s) => s.row_counts == 0,
+            UnloadOutput::Summary(s) => s.is_empty(),
             UnloadOutput::Detail(v) => v.is_empty(),
         }
     }

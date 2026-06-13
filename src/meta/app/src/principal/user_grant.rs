@@ -24,7 +24,7 @@ use crate::principal::UserPrivilegeType;
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
+pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 22] = [
     "catalogs",
     "columns",
     "databases",
@@ -44,6 +44,7 @@ pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "one",
     "processes",
     "user_functions",
+    "procedures",
     "functions",
     "indexes",
 ];
@@ -256,12 +257,16 @@ impl UserGrantSet {
         }
     }
 
-    pub fn entries(&self) -> Vec<GrantEntry> {
-        self.entries.clone()
+    pub fn entries(&self) -> &[GrantEntry] {
+        &self.entries
     }
 
-    pub fn roles(&self) -> Vec<String> {
-        self.roles.iter().cloned().collect::<Vec<_>>()
+    pub fn roles(&self) -> &HashSet<String> {
+        &self.roles
+    }
+
+    pub fn roles_vec(&self) -> Vec<String> {
+        self.roles.iter().cloned().collect()
     }
 
     pub fn grant_role(&mut self, role: String) {
@@ -329,7 +334,7 @@ impl ops::BitOrAssign for UserGrantSet {
             self.grant_privileges(&entry.object, entry.privileges.into());
         }
         for role in other.roles() {
-            self.grant_role(role);
+            self.grant_role(role.to_owned());
         }
     }
 }

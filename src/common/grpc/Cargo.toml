@@ -14,10 +14,8 @@ anyerror = { workspace = true }
 hickory-resolver = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
-jwt-simple = { workspace = true }
 log = { workspace = true }
 semver = { workspace = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

@@ -129,21 +129,53 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     }
 
     /// # Safety
-    /// - caller must allocate enough capacity
     /// - caller must ensure the view and buffers match.
     #[inline]
     pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
-        unsafe {
-            let len = v.length;
-            if len <= 12 {
-                self.total_bytes_len += len as usize;
-                self.views.push(v)
-            } else {
+        let len = v.length;
+        if len <= 12 {
+            self.total_bytes_len += len as usize;
+            self.views.push(v)
+        } else {
+            unsafe {
                 let data = buffers.get_unchecked(v.buffer_idx as usize);
                 let offset = v.offset as usize;
                 let bytes = data.get_unchecked(offset..offset + len as usize);
                 let t = T::from_bytes_unchecked(bytes);
                 self.push_value(t)
+            }
+        }
+    }
+
+    /// # Safety
+    /// - caller must ensure the view and buffers match.
+    pub unsafe fn append_views_unchecked<'a>(
+        &mut self,
+        views: impl Iterator<Item = &'a View>,
+        buffers: &[Buffer<u8>],
+    ) {
+        let buffer_size = buffers.iter().map(|buf| buf.len()).sum::<usize>();
+        let (size, _) = views.size_hint();
+        self.reserve(size);
+        if buffer_size == 0 {
+            for view in views {
+                unsafe {
+                    self.push_duplicated_view_unchecked(*view);
+                }
+            }
+        } else {
+            self.total_buffer_len += buffer_size;
+            self.finish_in_progress();
+            let offset = self.completed_buffers.len() as u32;
+            self.completed_buffers.extend_from_slice(buffers);
+            for view in views {
+                let mut view = *view;
+                if view.length > View::MAX_INLINE_SIZE {
+                    view.buffer_idx += offset;
+                }
+                unsafe {
+                    self.push_duplicated_view_unchecked(view);
+                }
             }
         }
     }
@@ -165,7 +197,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
         let mut payload = [0; 16];
         payload[0..4].copy_from_slice(&len.to_le_bytes());
 
-        if len <= 12 {
+        if len <= View::MAX_INLINE_SIZE {
             // |   len   |  prefix  |  remaining(zero-padded)  |
             //     ^          ^             ^
             // | 4 bytes | 4 bytes |      8 bytes              |
@@ -236,34 +268,13 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     }
 
     #[inline]
-    pub fn extend<I, P>(&mut self, iterator: I)
-    where
-        I: Iterator<Item = P>,
-        P: AsRef<T>,
-    {
-        self.reserve(iterator.size_hint().0);
-        for p in iterator {
-            self.push_value(p)
-        }
-    }
-
-    #[inline]
-    pub fn extend_trusted_len<I, P>(&mut self, iterator: I)
-    where
-        I: TrustedLen<Item = P>,
-        P: AsRef<T>,
-    {
-        self.extend(iterator)
-    }
-
-    #[inline]
     pub fn from_iterator<I, P>(iterator: I) -> Self
     where
         I: Iterator<Item = P>,
         P: AsRef<T>,
     {
         let mut builder = Self::with_capacity(iterator.size_hint().0);
-        builder.extend(iterator);
+        builder.extend_values(iterator);
         builder
     }
 
@@ -377,7 +388,7 @@ impl BinaryViewColumnBuilder<str> {
 impl<T: ViewType + ?Sized, P: AsRef<T>> Extend<P> for BinaryViewColumnBuilder<T> {
     #[inline]
     fn extend<I: IntoIterator<Item = P>>(&mut self, iter: I) {
-        Self::extend(self, iter.into_iter())
+        self.extend_values(iter.into_iter());
     }
 }
 
@@ -385,5 +396,102 @@ impl<T: ViewType + ?Sized, P: AsRef<T>> FromIterator<P> for BinaryViewColumnBuil
     #[inline]
     fn from_iter<I: IntoIterator<Item = P>>(iter: I) -> Self {
         Self::from_iterator(iter.into_iter())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::binview::StringColumn;
+    use crate::binview::StringColumnBuilder;
+
+    #[test]
+    fn extend_from_iter() {
+        let mut b = BinaryViewColumnBuilder::<str>::new();
+        b.extend_trusted_len_values(vec!["a", "b"].into_iter());
+
+        let a = b.clone();
+        b.extend_trusted_len_values(a.iter());
+
+        let b: StringColumn = b.into();
+        let c: StringColumn =
+            BinaryViewColumnBuilder::<str>::from_iter(vec!["a", "b", "a", "b"]).into();
+
+        assert_eq!(b, c)
+    }
+
+    #[test]
+    fn new() {
+        assert_eq!(BinaryViewColumnBuilder::<[u8]>::new().len(), 0);
+
+        let a = BinaryViewColumnBuilder::<[u8]>::with_capacity(2);
+        assert_eq!(a.len(), 0);
+        assert_eq!(a.capacity(), 2);
+    }
+
+    #[test]
+    fn from_iter() {
+        let iter = (0..3u8).map(|x| vec![x; x as usize]);
+        let a: BinaryViewColumnBuilder<[u8]> = iter.clone().collect();
+        let mut v_iter = a.iter();
+        assert_eq!(v_iter.next(), Some(&[] as &[u8]));
+        assert_eq!(v_iter.next(), Some(&[1u8] as &[u8]));
+        assert_eq!(v_iter.next(), Some(&[2u8, 2] as &[u8]));
+
+        let b = BinaryViewColumnBuilder::<[u8]>::from_iter(iter);
+        assert_eq!(a.freeze(), b.freeze())
+    }
+
+    #[test]
+    fn test_pop_gc() {
+        let iter = (0..1024).map(|x| format!("{}", x));
+        let mut a: BinaryViewColumnBuilder<str> = iter.clone().collect();
+        let item = a.pop();
+        assert_eq!(item, Some("1023".to_string()));
+
+        let column = a.freeze();
+        let column = column.sliced(10, 10);
+        column.gc();
+    }
+
+    #[test]
+    fn test_append_views_unchecked() {
+        fn run_case(existing: &[&str], appended: &[&str]) {
+            let mut builder = StringColumnBuilder::from_iterator(existing.iter());
+
+            let append_source = StringColumn::from_slice(appended);
+            unsafe {
+                builder.append_views_unchecked(
+                    append_source.views().as_ref().iter(),
+                    append_source.data_buffers().as_ref(),
+                );
+            }
+
+            let expected = StringColumn::from_iter(existing.iter().chain(appended.iter()));
+            let actual = builder.freeze();
+
+            assert_eq!(expected, actual);
+        }
+
+        run_case(&[], &["foo", "bar", "bazqux", "abcdefghijk"]);
+
+        run_case(
+            &[
+                "existing short",
+                "existing long string that definitely exceeds inline storage!",
+            ],
+            &[
+                "append short",
+                "append another extremely long string to force buffer usage!!!",
+            ],
+        );
+
+        run_case(
+            &[
+                "existing short",
+                "existing long string that definitely exceeds inline storage!",
+            ],
+            &["short0", "short1", "short2", "short3", "short4", "short5"],
+        );
     }
 }

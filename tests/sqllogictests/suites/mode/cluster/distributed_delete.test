@@ -114,11 +114,11 @@ delete from t where id in (select id from del_id);
 statement ok
 create view v_after_deletion as select number as id, number * 5 as c1, number * 7 as c2 from numbers(50) where id not in (select * from del_id);
 
-query III
+query 
 select * from v_after_deletion order by id except select * from t order by id;
 ----
 
-query III
+query 
 select * from t order by id except select * from v_after_deletion order by id;
 ----
 

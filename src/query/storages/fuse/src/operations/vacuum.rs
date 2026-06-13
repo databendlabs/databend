@@ -18,36 +18,38 @@ databend_common_tracing::register_module_tag!("[VACUUM]");
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use backoff::backoff::Backoff;
 use chrono::DateTime;
 use chrono::Duration;
+use chrono::TimeDelta;
 use chrono::Utc;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::SnapshotRefType;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_storages_common_cache::Table;
+use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::is_uuid_v7;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
-use log::error;
 use log::info;
 use log::warn;
 use opendal::Entry;
+use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::Scheme;
 
 use crate::FuseTable;
+use crate::RetentionPolicy;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::set_backoff;
 
 /// An assumption of the maximum duration from the time the first block is written to the time the
 /// snapshot is written.
@@ -81,6 +83,13 @@ use crate::operations::set_backoff;
 ///   If the entire cluster is upgraded to the new version that includes the vacuum2 logic,
 ///   the above risks will not exist.
 pub const ASSUMPTION_MAX_TXN_DURATION: Duration = Duration::days(3);
+
+pub struct SnapshotGcSelection {
+    pub gc_root: Arc<TableSnapshot>,
+    pub snapshots_to_gc: Vec<String>,
+    pub gc_root_meta_ts: DateTime<Utc>,
+    pub gc_root_path: String,
+}
 
 /// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
 /// order by object key. Databend leverages this property to enhance the efficiency and thoroughness
@@ -287,18 +296,12 @@ impl FuseTable {
         // Process snapshots in chunks
         for chunk in snapshot_files.chunks(max_threads) {
             // Since we want to get all the snapshot referenced files, so set `ignore_timestamp` true
-            let results = snapshots_io
+            let snapshot_lite_extends = snapshots_io
                 .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), true)
                 .await?;
-
-            results
-                .into_iter()
-                .flatten()
-                .for_each(|snapshot_lite_extend| {
-                    snapshot_lite_extend.segments.iter().for_each(|location| {
-                        segments.insert(location.to_owned());
-                    });
-                });
+            for snapshot_lite_extend in snapshot_lite_extends.into_iter().flatten() {
+                segments.extend(snapshot_lite_extend.segments);
+            }
 
             // Refresh status
             count += chunk.len();
@@ -327,20 +330,17 @@ impl FuseTable {
         T: Fn(String),
     {
         // 1. Read the root snapshot
-        let root_snapshot_location_op = self.snapshot_loc();
-        if root_snapshot_location_op.is_none() {
+        let Some(root_snapshot_location) = self.snapshot_loc() else {
             return Ok(None);
-        }
+        };
 
-        let root_snapshot_location = root_snapshot_location_op.unwrap();
-        let root_snapshot = match SnapshotsIO::read_snapshot_for_vacuum(
+        let Some(root_snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
             self.get_operator(),
             root_snapshot_location.as_str(),
         )
         .await?
-        {
-            Some(snapshot) => snapshot,
-            None => return Ok(None),
+        else {
+            return Ok(None);
         };
 
         let ver = TableMetaLocationGenerator::snapshot_version(root_snapshot_location.as_str());
@@ -351,14 +351,12 @@ impl FuseTable {
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
             table_statistics_location: root_snapshot.table_statistics_location(),
         });
-        drop(root_snapshot);
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.get_operator());
         let operator = self.get_operator();
-        let table_info = self.get_table_info();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
-        // 2. Collect segments from main branch
+        // 2. Collect segments
         let mut segments = HashSet::new();
         Self::collect_snapshots_segments(
             &snapshots_io,
@@ -371,188 +369,320 @@ impl FuseTable {
         )
         .await?;
 
-        // 3. Collect segments from branches and tags
-        for snapshot_ref in table_info.meta.refs.values() {
-            match snapshot_ref.typ {
-                SnapshotRefType::Tag => {
-                    // Read tag snapshot and collect its segments
-                    match SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &snapshot_ref.loc)
-                        .await?
-                    {
-                        Some(snapshot) => {
-                            for seg_loc in &snapshot.segments {
-                                segments.insert(seg_loc.clone());
-                            }
-                        }
-                        None => {
-                            return Ok(None);
-                        }
-                    }
-                }
-                SnapshotRefType::Branch => {
-                    // Read branch head snapshot to create branch-specific root_snapshot_lite
-                    match SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &snapshot_ref.loc)
-                        .await?
-                    {
-                        Some(snapshot) => {
-                            let branch_root_snapshot_lite = Arc::new(SnapshotLiteExtended {
-                                format_version: TableMetaLocationGenerator::snapshot_version(
-                                    &snapshot_ref.loc,
-                                ),
-                                snapshot_id: snapshot.snapshot_id,
-                                timestamp: snapshot.timestamp,
-                                segments: HashSet::from_iter(snapshot.segments.clone()),
-                                table_statistics_location: snapshot.table_statistics_location(),
-                            });
+        // Protect tags on base table as well.
+        let catalog = ctx.get_catalog(self.get_table_info().catalog()).await?;
+        let tags = catalog
+            .list_table_tags(ListTableTagsReq {
+                table_id: self.get_id(),
+                include_expired: false,
+            })
+            .await?;
 
-                            // Collect segments from all branch snapshots using branch's own root_snapshot_lite
-                            Self::collect_snapshots_segments(
-                                &snapshots_io,
-                                &operator,
-                                &snapshot_ref.loc,
-                                branch_root_snapshot_lite,
-                                max_threads,
-                                &mut segments,
-                                &status_callback,
-                            )
-                            .await?;
-                        }
-                        None => {
-                            return Ok(None);
-                        }
-                    }
-                }
+        for (_tag_name, seq_tag) in tags {
+            if let Some(snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
+                self.get_operator(),
+                &seq_tag.data.snapshot_loc,
+            )
+            .await?
+            {
+                segments.extend(snapshot.segments.iter().cloned());
             }
         }
-
-        info!(
-            "gc orphan: collected segments from {} refs, total segments: {}",
-            table_info.meta.refs.len(),
-            segments.len()
-        );
-
         Ok(Some(segments))
     }
 
-    /// Update table metadata with updated refs (expired refs removed)
-    #[async_backtrace::framed]
-    pub async fn update_table_refs_meta(
+    pub async fn prepare_snapshot_gc_selection(
         &self,
         ctx: &Arc<dyn TableContext>,
-        expired_refs: &HashSet<u64>,
-    ) -> Result<Vec<String>> {
-        let catalog = ctx.get_default_catalog()?;
+        respect_flash_back: bool,
+    ) -> Result<Option<SnapshotGcSelection>> {
+        let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+            info!(
+                "Table {} has no snapshot, stopping vacuum",
+                self.table_info.desc
+            );
+            return Ok(None);
+        };
 
-        let mut retries = 0;
-        let mut backoff = set_backoff(None, None, None);
-        let mut latest_table_info = self.get_table_info();
-        // holding the reference of latest table during retries
-        let mut latest_table_ref: Arc<dyn Table>;
-        // Step 1: Update table meta if refs changed
-        loop {
-            let mut new_table_meta = latest_table_info.meta.clone();
-            new_table_meta
-                .refs
-                .retain(|_, val| !expired_refs.contains(&val.id));
-            let req = UpdateTableMetaReq {
-                table_id: latest_table_info.ident.table_id,
-                seq: MatchSeq::Exact(latest_table_info.ident.seq),
-                new_table_meta,
-                base_snapshot_location: self.snapshot_loc(),
-                lvt_check: None,
-            };
-            match catalog
-                .update_single_table_meta(req, latest_table_info)
+        let start = std::time::Instant::now();
+        let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
+        let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
+
+        let mut is_vacuum_all = false;
+        let mut need_update_lvt = false;
+        let mut respect_flash_back_with_lvt = None;
+
+        let snapshots_before_lvt = match retention_policy {
+            RetentionPolicy::ByTimePeriod(delta_duration) => {
+                info!("Using ByTimePeriod policy {:?}", delta_duration);
+                let retention_period = if self.is_transient() {
+                    // For transient table, keep no history data
+                    TimeDelta::zero()
+                } else {
+                    delta_duration
+                };
+
+                // A zero retention period indicates that we should vacuum all the historical snapshots
+                is_vacuum_all = retention_period.is_zero();
+
+                let Some(lvt) = self
+                    .set_lvt(latest_snapshot, ctx.as_ref(), retention_period)
+                    .await?
+                else {
+                    return Ok(None);
+                };
+
+                if respect_flash_back {
+                    respect_flash_back_with_lvt = Some(lvt);
+                }
+
+                ctx.set_status_info(&format!(
+                    "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
+                    self.table_info.desc,
+                    start.elapsed(),
+                    lvt
+                ));
+
+                if is_vacuum_all {
+                    self.list_files_until_prefix(
+                        snapshot_location_prefix,
+                        self.snapshot_loc().unwrap().as_str(),
+                        true,
+                        None,
+                    )
+                    .await?
+                } else {
+                    self.list_files_until_timestamp(snapshot_location_prefix, lvt, true, None)
+                        .await?
+                }
+            }
+            RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
+                info!(
+                    "Using ByNumOfSnapshotsToKeep policy {:?}",
+                    num_snapshots_to_keep
+                );
+                // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
+                let need_one_more = true;
+                let mut snapshots = self
+                    .list_files_until_prefix(
+                        snapshot_location_prefix,
+                        // Safe to unwrap here: we have checked that `fuse_table` has a snapshot
+                        self.snapshot_loc().unwrap().as_str(),
+                        need_one_more,
+                        None,
+                    )
+                    .await?;
+                let len = snapshots.len();
+                if len <= num_snapshots_to_keep {
+                    // Only the current snapshot is there, done
+                    return Ok(None);
+                }
+                if num_snapshots_to_keep == 1 {
+                    // Expecting only one snapshot left, which means that we can use the current snapshot
+                    // as gc root, this flag will be propagated to the select_gc_root func later.
+                    is_vacuum_all = true;
+                }
+                need_update_lvt = true;
+
+                // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
+                // is the candidate, but its commit status is uncertain, so its previous snapshot is used
+                // as the GC root instead (except in the is_vacuum_all case).
+
+                // Therefore, during snapshot truncation, we keep 2 extra snapshots;
+                // see `select_gc_root` for details.
+                let num_candidates = len - num_snapshots_to_keep + 2;
+                snapshots.truncate(num_candidates);
+                snapshots
+            }
+        };
+
+        let elapsed = start.elapsed();
+        ctx.set_status_info(&format!(
+            "Listed snapshots for table {}, elapsed: {:?}, snapshots_dir: {:?}, snapshots: {:?}",
+            self.table_info.desc,
+            elapsed,
+            snapshot_location_prefix,
+            slice_summary(&snapshots_before_lvt)
+        ));
+
+        let Some(selection) = self
+            .select_gc_root(
+                ctx,
+                &snapshots_before_lvt,
+                is_vacuum_all,
+                respect_flash_back_with_lvt,
+            )
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        if need_update_lvt {
+            let cat = ctx.get_default_catalog()?;
+            cat.set_table_lvt(
+                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
+                &LeastVisibleTime::new(selection.gc_root.timestamp.unwrap()),
+            )
+            .await?;
+        }
+
+        ctx.set_status_info(&format!(
+            "Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
+            self.table_info.desc,
+            start.elapsed(),
+            selection.gc_root,
+            slice_summary(&selection.snapshots_to_gc)
+        ));
+        Ok(Some(selection))
+    }
+
+    async fn select_gc_root(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        snapshots_before_lvt: &[Entry],
+        is_vacuum_all: bool,
+        respect_flash_back: Option<DateTime<Utc>>,
+    ) -> Result<Option<SnapshotGcSelection>> {
+        let op = self.get_operator();
+        let gc_root_path = if is_vacuum_all {
+            // safe to unwrap, or we should have stopped vacuuming in set_lvt()
+            self.snapshot_loc().unwrap()
+        } else if let Some(lvt) = respect_flash_back {
+            let latest_location = self.snapshot_loc().unwrap();
+            let gc_root = self
+                .find_location(ctx, latest_location, |snapshot| {
+                    snapshot.timestamp.is_some_and(|ts| ts <= lvt)
+                })
                 .await
-            {
-                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            tokio::time::sleep(d).await;
-                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                            latest_table_info = latest_table_ref.get_table_info();
-                            retries += 1;
-                            continue;
-                        }
-                        None => {
-                            return Err(ErrorCode::StorageOther(format!(
-                                "update table meta failed after {} retries",
-                                retries
-                            )));
+                .ok();
+            let Some(gc_root) = gc_root else {
+                info!("no gc_root found, stop vacuuming");
+                return Ok(None);
+            };
+            gc_root
+        } else {
+            if snapshots_before_lvt.is_empty() {
+                info!("no snapshots before lvt, stop vacuuming");
+                return Ok(None);
+            }
+            let (anchor, _) = SnapshotsIO::read_snapshot(
+                snapshots_before_lvt.last().unwrap().path().to_owned(),
+                op.clone(),
+                false,
+            )
+            .await?;
+            let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id else {
+                info!("anchor has no prev_snapshot_id, stop vacuuming");
+                return Ok(None);
+            };
+            let gc_root_path = self
+                .meta_location_generator()
+                .gen_snapshot_location(&gc_root_id, gc_root_ver)?;
+            if !is_uuid_v7(&gc_root_id) {
+                info!("gc_root {} is not v7", gc_root_path);
+                return Ok(None);
+            }
+            gc_root_path
+        };
+
+        let dal = self.get_operator_ref();
+        let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
+        let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
+            Ok(v) => v.last_modified().ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "Failed to get `last_modified` metadata of the gc root object '{}'",
+                    gc_root_path
+                ))
+            })?,
+            Err(e) => {
+                return if e.kind() == ErrorKind::NotFound {
+                    // Concurrent vacuum, ignore it
+                    Ok(None)
+                } else {
+                    Err(e.into())
+                };
+            }
+        };
+
+        match gc_root {
+            Ok((gc_root, _)) => {
+                info!("gc_root found: {:?}", gc_root);
+                let mut gc_candidates = Vec::with_capacity(snapshots_before_lvt.len());
+
+                for snapshot in snapshots_before_lvt.iter() {
+                    let path = snapshot.path();
+                    let last_part = path.rsplit('/').next().unwrap();
+                    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
+                        gc_candidates.push(path.to_owned());
+                    } else {
+                        // This snapshot is created by a node of the previous version which does not
+                        // support vacuum2, we rely on the `ASSUMPTION_MAX_TXN_DURATION` to identify if
+                        // it is available to be vacuumed.
+                        let last_modified = match snapshot.metadata().last_modified() {
+                            None => dal.stat(path).await?.last_modified().ok_or_else(|| {
+                                ErrorCode::StorageOther(format!(
+                                    "Failed to get `last_modified` metadata of the snapshot object '{}'",
+                                    gc_root_path
+                                ))
+                            })?,
+                            Some(v) => v,
+                        };
+                        if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
+                            gc_candidates.push(path.to_owned());
                         }
                     }
                 }
-                Err(e) => {
-                    return Err(e);
-                }
-                Ok(_) => {
-                    break;
-                }
+
+                let gc_root_idx = gc_candidates.binary_search(&gc_root_path).map_err(|_| {
+                    ErrorCode::Internal(format!(
+                        "gc root path {} should be one of the candidates, candidates: {:?}",
+                        gc_root_path, gc_candidates
+                    ))
+                })?;
+                let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
+                Ok(Some(SnapshotGcSelection {
+                    gc_root,
+                    snapshots_to_gc,
+                    gc_root_meta_ts,
+                    gc_root_path,
+                }))
+            }
+            Err(e) => {
+                info!("read gc_root {} failed: {:?}", gc_root_path, e);
+                Ok(None)
             }
         }
-
-        // Step 2: Cleanup expired ref directories
-        let mut dir_to_gc = Vec::with_capacity(expired_refs.len());
-        let ref_snapshot_location_prefix = self
-            .meta_location_generator()
-            .ref_snapshot_location_prefix();
-        let op = self.get_operator();
-        for ref_id in expired_refs {
-            let dir = format!("{}{}/", ref_snapshot_location_prefix, *ref_id);
-            op.remove_all(&dir).await.inspect_err(|err| {
-                error!("Failed to remove expired ref directory {}: {}", dir, err);
-            })?;
-            dir_to_gc.push(dir);
-        }
-        Ok(dir_to_gc)
     }
 
-    pub async fn cleanup_orphan_ref_dirs(&self) -> Result<Vec<String>> {
-        let prefix = self
-            .meta_location_generator()
-            .ref_snapshot_location_prefix();
-        let op = self.get_operator();
-        let table_info = self.get_table_info();
-        let table_seq = table_info.ident.seq;
-        let active_ids = table_info
-            .meta
-            .refs
-            .values()
-            .map(|snapshot_ref| snapshot_ref.id)
-            .collect::<HashSet<_>>();
-        let mut removed = Vec::new();
-        let mut lister = op.lister(prefix).await?;
-        while let Some(entry) = lister.try_next().await? {
-            if !entry.metadata().is_dir() {
-                continue;
-            }
-
-            let dir_path = entry.path();
-            let id_str = dir_path.trim_end_matches('/').rsplit('/').next().unwrap();
-            let Ok(ref_id) = id_str.parse::<u64>() else {
-                continue;
-            };
-            if table_seq <= ref_id || active_ids.contains(&ref_id) {
-                continue;
-            }
-
-            match op.remove_all(dir_path).await {
-                Ok(_) => {
-                    info!(
-                        "Removed orphan ref directory '{}' for table {}",
-                        dir_path, table_info.desc
-                    );
-                    removed.push(dir_path.to_string());
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to remove orphan ref directory '{}' for table {}: {}",
-                        dir_path, table_info.desc, e
-                    );
-                }
-            }
+    /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
+    ///
+    /// Return `None` means we stop vacuuming, but don't want to report error to user.
+    pub async fn set_lvt(
+        &self,
+        latest_snapshot: Arc<TableSnapshot>,
+        ctx: &dyn TableContext,
+        retention_period: TimeDelta,
+    ) -> Result<Option<DateTime<Utc>>> {
+        if !is_uuid_v7(&latest_snapshot.snapshot_id) {
+            info!(
+                "Latest snapshot is not v7, stopping vacuum: {:?}",
+                latest_snapshot.snapshot_id
+            );
+            return Ok(None);
         }
-        Ok(removed)
+        let catalog = ctx.get_default_catalog()?;
+        // safe to unwrap, as we have checked the version is v4
+        let latest_ts = latest_snapshot.timestamp.unwrap();
+        let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
+
+        let lvt_point = catalog
+            .set_table_lvt(
+                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
+                &LeastVisibleTime::new(lvt_point_candidate),
+            )
+            .await?
+            .time;
+        Ok(Some(lvt_point))
     }
 }
 
@@ -575,4 +705,19 @@ pub async fn vacuum_tables_from_info(
     }
 
     Ok(())
+}
+
+pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
+    if s.len() > 10 {
+        let first_five = &s[..5];
+        let last_five = &s[s.len() - 5..];
+        format!(
+            "First five: {:?}, Last five: {:?},Len: {}",
+            first_five,
+            last_five,
+            s.len()
+        )
+    } else {
+        format!("{:?}", s)
+    }
 }

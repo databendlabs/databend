@@ -27,7 +27,6 @@ use databend_common_expression::VariantDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
-use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,6 +37,7 @@ use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
+use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 use crate::meta::v0;
@@ -191,6 +191,9 @@ pub struct BlockMeta {
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
     pub vector_index_location: Option<Location>,
+    pub spatial_index_size: Option<u64>,
+    pub spatial_index_location: Option<Location>,
+    pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -215,6 +218,9 @@ impl BlockMeta {
         ngram_filter_index_size: Option<u64>,
         vector_index_size: Option<u64>,
         vector_index_location: Option<Location>,
+        spatial_index_size: Option<u64>,
+        spatial_index_location: Option<Location>,
+        spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
         virtual_block_meta: Option<VirtualBlockMeta>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
@@ -233,6 +239,9 @@ impl BlockMeta {
             ngram_filter_index_size,
             vector_index_size,
             vector_index_location,
+            spatial_index_size,
+            spatial_index_location,
+            spatial_stats,
             virtual_block_meta,
             compression,
             create_on,
@@ -245,16 +254,9 @@ impl BlockMeta {
 
     /// Get the page size of the block.
     ///
-    /// - If the format is parquet, its page size is its row count.
-    /// - If the format is native, its page size is the row count of each page.
-    ///
-    /// The row count of the last page may be smaller than the page size
+    /// For the parquet format, the page size is its row count.
     pub fn page_size(&self) -> u64 {
-        if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
-            meta.pages.first().unwrap().num_values
-        } else {
-            self.row_count
-        }
+        self.row_count
     }
 }
 
@@ -323,53 +325,30 @@ impl SegmentInfo {
 )]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
-    Native(NativeColumnMeta),
 }
 
 impl ColumnMeta {
     pub fn total_rows(&self) -> usize {
         match self {
             ColumnMeta::Parquet(v) => v.num_values as usize,
-            ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
         }
     }
 
     pub fn offset_length(&self) -> (u64, u64) {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
-            ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
         }
     }
 
-    pub fn read_rows(&self, range: Option<&Range<usize>>) -> u64 {
+    pub fn read_rows(&self, _range: Option<&Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.num_values,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.num_values)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.num_values).sum(),
-            },
         }
     }
 
-    pub fn read_bytes(&self, range: &Option<Range<usize>>) -> u64 {
+    pub fn read_bytes(&self, _range: &Option<Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.len,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.length)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.length).sum(),
-            },
         }
     }
 }
@@ -398,6 +377,9 @@ impl BlockMeta {
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            spatial_index_size: None,
+            spatial_index_location: None,
+            spatial_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -426,6 +408,9 @@ impl BlockMeta {
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            spatial_index_size: None,
+            spatial_index_location: None,
+            spatial_stats: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

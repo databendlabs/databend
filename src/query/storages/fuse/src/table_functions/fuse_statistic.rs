@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_context::TableContext;
@@ -137,9 +138,9 @@ impl<'a> FuseStatisticImpl<'a> {
                 .await?;
             return self.to_block(&snapshot.summary, &table_statistics);
         }
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            FuseStatisticImpl::schema().into(),
-        )))
+        Ok(DataBlock::empty_with_schema(
+            &FuseStatisticImpl::schema().into(),
+        ))
     }
 
     fn to_block(
@@ -165,9 +166,10 @@ impl<'a> FuseStatisticImpl<'a> {
 
         // convert to BTreeMap to keep the order of column ids
         let col_stats = summary.col_stats.iter().collect::<BTreeMap<_, _>>();
+        let schema = self.table.schema();
         for (i, stats) in col_stats.iter() {
             // Get column name by column id
-            let table_field = self.table.table_info.meta.schema.field_of_column_id(**i)?;
+            let table_field = schema.field_of_column_id(**i)?;
             col_names.push(table_field.name.clone());
             col_ndvs.push(
                 column_distinct_values
@@ -184,7 +186,7 @@ impl<'a> FuseStatisticImpl<'a> {
             );
             if let Some(his_info) = histograms.and_then(|v| v.get(i)) {
                 let mut his_infos = vec![];
-                for (i, bucket) in his_info.buckets.iter().enumerate() {
+                for (i, bucket) in his_info.bucket_iter().enumerate() {
                     let min = bucket.lower_bound().to_string()?;
                     let max = bucket.upper_bound().to_string()?;
                     let ndv = bucket.num_distinct();
@@ -213,12 +215,7 @@ impl<'a> FuseStatisticImpl<'a> {
                 let Ok(virtual_field) = virtual_schema.field_of_column_id(**i) else {
                     continue;
                 };
-                let Ok(source_field) = self
-                    .table
-                    .table_info
-                    .meta
-                    .schema
-                    .field_of_column_id(virtual_field.source_column_id)
+                let Ok(source_field) = schema.field_of_column_id(virtual_field.source_column_id)
                 else {
                     continue;
                 };

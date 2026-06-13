@@ -23,7 +23,7 @@ const __: u8 = 0xff;
 
 // Lookup table of escape sequences.
 // A value of __ means that byte i is not escaped.
-// A value of b'x' at index i means that byte i is escaped as "\x" in TSV.
+// A value of b'x' at index i means that byte i is escaped as "\x" in TEXT.
 static ESCAPE: [u8; 256] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
     ZZ, __, __, __, __, __, __, __, BB, TT, NN, __, FF, RR, __, __, // 0

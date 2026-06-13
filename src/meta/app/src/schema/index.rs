@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 
 use super::CreateOption;
 use crate::KeyWithTenant;
@@ -74,6 +74,7 @@ pub enum MarkedDeletedIndexType {
     INVERTED = 2,
     NGRAM = 3,
     VECTOR = 4,
+    SPATIAL = 5,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

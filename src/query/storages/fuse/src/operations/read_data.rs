@@ -14,36 +14,30 @@
 
 use std::sync::Arc;
 
-use async_channel::Receiver;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::TopK;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 
 use crate::FuseLazyPartInfo;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::build_fuse_parquet_source_pipeline;
-use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
+use crate::operations::read::build_fuse_source_pipeline;
 
 impl FuseTable {
     pub fn create_block_reader(
         &self,
         ctx: Arc<dyn TableContext>,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.schema_with_stream();
@@ -52,8 +46,6 @@ impl FuseTable {
             self.operator.clone(),
             table_schema,
             projection,
-            query_internal_columns,
-            update_stream_columns,
             put_cache,
         )
     }
@@ -71,8 +63,6 @@ impl FuseTable {
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
-            plan.internal_columns.is_some(),
-            plan.update_stream_columns,
             put_cache,
         )
     }
@@ -107,12 +97,6 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
-
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|x| x.top_k(plan.schema().as_ref()));
 
         let index_reader = Arc::new(
             plan.push_downs
@@ -168,10 +152,12 @@ impl FuseTable {
                                 table_schema,
                                 lazy_init_segments,
                                 0,
+                                ReadPartitionsPruningMode::Normal,
+                                None,
                             )
                             .await
                         {
-                            Ok((_, partitions)) => {
+                            Ok((_, partitions, _)) => {
                                 for part in partitions.partitions {
                                     // the sql may be killed or early stop, ignore the error
                                     if let Err(_e) = tx.send(Ok(part)).await {
@@ -199,13 +185,16 @@ impl FuseTable {
             self.pruned_result_receiver.lock().take()
         };
 
-        self.build_fuse_source_pipeline(
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let table_schema = self.schema_with_stream();
+        build_fuse_source_pipeline(
             ctx.clone(),
-            pipeline,
             self.storage_format,
+            table_schema,
+            pipeline,
             block_reader,
+            max_threads,
             plan,
-            topk,
             max_io_requests,
             index_reader,
             virtual_reader,
@@ -213,49 +202,5 @@ impl FuseTable {
         )?;
 
         Ok(())
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn build_fuse_source_pipeline(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        storage_format: FuseStorageFormat,
-        block_reader: Arc<BlockReader>,
-        plan: &DataSourcePlan,
-        top_k: Option<TopK>,
-        max_io_requests: usize,
-        index_reader: Arc<Option<AggIndexReader>>,
-        virtual_reader: Arc<Option<VirtualColumnReader>>,
-        receiver: Option<Receiver<Result<PartInfoPtr>>>,
-    ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let table_schema = self.schema_with_stream();
-        match storage_format {
-            FuseStorageFormat::Native => build_fuse_native_source_pipeline(
-                ctx,
-                table_schema,
-                pipeline,
-                block_reader,
-                max_threads,
-                plan,
-                top_k,
-                max_io_requests,
-                index_reader,
-                receiver,
-            ),
-            FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
-                ctx,
-                table_schema,
-                pipeline,
-                block_reader,
-                plan,
-                max_threads,
-                max_io_requests,
-                index_reader,
-                virtual_reader,
-                receiver,
-            ),
-        }
     }
 }

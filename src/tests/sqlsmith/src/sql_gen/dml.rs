@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
@@ -44,7 +43,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_formats::OutputCommonSettings;
-use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::field_encoder::FieldEncoderBytes;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
@@ -53,7 +52,6 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::deserialize_bitmap;
 use databend_common_sql::resolve_type_name;
 use itertools::join;
-use jiff::tz::TimeZone;
 use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
@@ -474,6 +472,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 };
                 (
                     AlterTableAction::AddColumn {
+                        if_not_exists: false,
                         column: column.clone(),
                         option: option.clone(),
                     },
@@ -504,6 +503,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     expr: None,
                     check: None,
                     comment: None,
+                    stats_truncate_len: None,
                 };
                 (
                     AlterTableAction::ModifyColumn {
@@ -586,17 +586,14 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             0..=9 => {
                 let columns = self.gen_columns(data_types, row_count);
                 let mut buf = Vec::new();
-                let encoder = FieldEncoderValues {
+                let encoder = FieldEncoderBytes {
                     common_settings: OutputCommonSettings {
                         true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                         false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                         null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                        timezone: Tz::UTC,
-                        jiff_timezone: TimeZone::UTC,
-                        binary_format: Default::default(),
-                        geometry_format: Default::default(),
+                        settings: Default::default(),
                     },
                     escape_char: b'\\',
                     quote_char: b'"',
@@ -637,7 +634,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {
-                                encoder.write_field(column, i, &mut buf, true);
+                                encoder
+                                    .write_field(column, i, &mut buf, true)
+                                    .expect("failed to encode column value");
                             }
                         }
                     }

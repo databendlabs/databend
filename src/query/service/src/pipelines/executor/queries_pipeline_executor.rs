@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Weak;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
@@ -25,17 +26,20 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline::core::WakeCallback;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
+use petgraph::graph::NodeIndex;
 
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 
 pub struct QueriesPipelineExecutor {
     threads_num: usize,
@@ -90,6 +94,9 @@ impl QueriesPipelineExecutor {
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        // Bind waker
+        self.bind_waker_for_graph(&graph);
+
         unsafe {
             let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
@@ -102,6 +109,47 @@ impl QueriesPipelineExecutor {
                 .init_sync_tasks(sync_queue, self.workers_condvar.clone());
             Ok(())
         }
+    }
+
+    fn bind_waker_for_graph(self: &Arc<Self>, graph: &Arc<RunningGraph>) {
+        let executor_weak = Arc::downgrade(self);
+        let graph_weak = Arc::downgrade(graph);
+
+        struct QueriesWakeCallback {
+            graph_weak: Weak<RunningGraph>,
+            executor_weak: Weak<QueriesPipelineExecutor>,
+        }
+
+        impl WakeCallback for QueriesWakeCallback {
+            fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
+                let executor = self
+                    .executor_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
+
+                let graph = self
+                    .graph_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Graph has been dropped"))?;
+
+                executor.global_tasks_queue.completed_async_task(
+                    executor.workers_condvar.clone(),
+                    CompletedAsyncTask {
+                        id,
+                        worker_id,
+                        res: Ok(()),
+                        graph,
+                    },
+                );
+
+                Ok(())
+            }
+        }
+
+        graph.get_waker().bind(Arc::new(QueriesWakeCallback {
+            graph_weak,
+            executor_weak,
+        }));
     }
 
     fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {

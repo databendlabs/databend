@@ -71,7 +71,7 @@ impl Binder {
             .await?;
         let table_id = table.get_id();
 
-        let schema = if columns.is_empty() {
+        let required_values_schema = if columns.is_empty() {
             table.schema()
         } else {
             let schema = table.schema();
@@ -87,7 +87,7 @@ impl Binder {
         let on_conflict_fields = on_conflict_columns
             .iter()
             .map(|ident| {
-                schema
+                required_values_schema
                     .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .cloned()
             })
@@ -100,7 +100,7 @@ impl Binder {
                     let new_row = bind_context
                         .exprs_to_scalar(
                             &row,
-                            &Arc::new(schema.clone().into()),
+                            &Arc::new(required_values_schema.clone().into()),
                             self.ctx.clone(),
                             &self.name_resolution_ctx,
                             self.metadata.clone(),
@@ -123,7 +123,7 @@ impl Binder {
                                 catalog_name.clone(),
                                 database_name.clone(),
                                 table_name.clone(),
-                                schema.clone(),
+                                required_values_schema.clone(),
                                 &values_str,
                                 CopyIntoTableMode::Replace,
                             )
@@ -152,7 +152,7 @@ impl Binder {
             table: table_name,
             table_id,
             on_conflict_fields,
-            schema,
+            schema: required_values_schema,
             source: input_source?,
             delete_when: delete_when.clone(),
             lock_guard,

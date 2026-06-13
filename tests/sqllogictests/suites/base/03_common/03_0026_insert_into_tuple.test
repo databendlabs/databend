@@ -95,7 +95,7 @@ create table t4 (a Tuple(Int, Int) not null)
 query TTTTT
 desc t4
 ----
-a TUPLE(1 INT32, 2 INT32) NO (NULL, NULL) (empty)
+a TUPLE(1 INT32, 2 INT32) NO NULL (empty)
 
 # decimal precision <=9, <=18, other are serialize to different underlying types.
 # decimal precision <=38 to Decimal128, >38 to Decimal256

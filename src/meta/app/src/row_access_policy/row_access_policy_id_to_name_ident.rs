@@ -37,10 +37,7 @@ impl RowAccessPolicyIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::row_access_policy::RowAccessPolicyNameIdentRaw;
-    use crate::row_access_policy::row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -50,18 +47,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = true;
         type ValueType = RowAccessPolicyNameIdentRaw;
     }
-
-    impl kvapi::Value for RowAccessPolicyNameIdentRaw {
-        type KeyType = RowAccessPolicyIdToNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::row_access_policy::RowAccessPolicyId;
     use crate::row_access_policy::RowAccessPolicyIdToNameIdent;
@@ -71,13 +62,6 @@ mod tests {
     fn test_row_access_policy_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = RowAccessPolicyIdToNameIdent::new_generic(tenant, RowAccessPolicyId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_row_access_policy_id_to_name/dummy/3");
-
-        assert_eq!(
-            ident,
-            RowAccessPolicyIdToNameIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_row_access_policy_id_to_name/dummy/3");
     }
 }

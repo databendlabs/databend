@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(int_roundings)]
 #![allow(internal_features)]
 #![allow(
     clippy::derivable_impls,
@@ -26,6 +25,8 @@
     clippy::uninlined_format_args,
     clippy::useless_asref
 )]
+#![feature(int_roundings)]
+#![feature(never_type)]
 #![feature(iter_map_windows)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
@@ -48,6 +49,7 @@
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![feature(debug_closure_helpers)]
+#![feature(stmt_expr_attributes)]
 
 extern crate core;
 
@@ -69,7 +71,10 @@ pub mod table_functions;
 pub mod test_kits;
 
 mod global_services;
+#[cfg(feature = "task-support")]
 pub mod task;
+#[cfg(feature = "task-support")]
+mod task_support_context;
 
 pub mod physical_plans;
 
@@ -81,7 +86,7 @@ pub use table_functions::get_fuse_table_statistics;
 
 /// Convert a meta service error to an ErrorCode.
 pub(crate) fn meta_service_error(
-    e: databend_common_meta_types::MetaError,
+    e: databend_meta_client::types::MetaError,
 ) -> databend_common_exception::ErrorCode {
     databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
 }
@@ -95,7 +100,7 @@ pub(crate) fn meta_txn_error(
 
 /// Convert a meta client error to an ErrorCode.
 pub(crate) fn meta_client_error(
-    e: databend_common_meta_types::MetaClientError,
+    e: databend_meta_client::types::MetaClientError,
 ) -> databend_common_exception::ErrorCode {
     databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
 }

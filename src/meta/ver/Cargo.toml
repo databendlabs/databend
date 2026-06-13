@@ -1,0 +1,14 @@
+[package]
+name = "databend-meta-ver"
+description = "Databend binary version compatibility constants between query and meta-service"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+semver = { workspace = true }
+
+[lints]
+workspace = true

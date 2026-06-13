@@ -22,6 +22,7 @@ use databend_common_expression::type_check::check_number;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -38,6 +39,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 
 /// Input:  Filter
 ///           \
@@ -61,16 +63,25 @@ impl RulePushDownFilterWindowTopN {
         Self {
             id: RuleID::PushDownFilterWindowTopN,
             metadata,
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Filter,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Window,
+            matchers: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Sort,
+                        op_type: RelOp::Window,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Sort,
+                            children: vec![Matcher::Leaf],
+                        }],
+                    }],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::WindowGroup,
                         children: vec![Matcher::Leaf],
                     }],
-                }],
-            }],
+                },
+            ],
         }
     }
 }
@@ -83,6 +94,10 @@ impl Rule for RulePushDownFilterWindowTopN {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let window_expr = s_expr.child(0)?;
+        if matches!(window_expr.plan().rel_op(), RelOp::WindowGroup) {
+            return self.apply_window_group(s_expr, filter, window_expr, state);
+        }
+
         let window: Window = window_expr.plan().clone().try_into()?;
         let sort_expr = window_expr.child(0)?;
         let mut sort: Sort = sort_expr.plan().clone().try_into()?;
@@ -142,7 +157,68 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 }
 
-fn extract_top_n(column: usize, predicate: ScalarExpr) -> Option<usize> {
+impl RulePushDownFilterWindowTopN {
+    fn apply_window_group(
+        &self,
+        s_expr: &SExpr,
+        filter: Filter,
+        window_expr: &SExpr,
+        state: &mut TransformResult,
+    ) -> Result<()> {
+        let mut window_group: WindowGroup = window_expr.plan().clone().try_into()?;
+        let mut top_n_windows = Vec::new();
+
+        for (index, window) in window_group.windows.iter().enumerate() {
+            if !is_ranking_function(&window.function) || window.partition_by.is_empty() {
+                continue;
+            }
+
+            let predicates = filter
+                .predicates
+                .iter()
+                .filter_map(|predicate| extract_top_n(window.index, predicate.clone()))
+                .collect::<Vec<_>>();
+            if let Some(top_n) = predicates.into_iter().min() {
+                top_n_windows.push((index, top_n));
+            }
+        }
+
+        let Some((index, top_n)) = top_n_windows.into_iter().min_by_key(|(_, top_n)| *top_n) else {
+            return Ok(());
+        };
+
+        if top_n == 0 {
+            let output_columns = s_expr
+                .plan()
+                .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
+                .output_columns
+                .clone();
+            let metadata = self.metadata.read();
+            let mut columns = output_columns.iter().copied().collect::<Vec<_>>();
+            columns.sort();
+            let fields = columns
+                .into_iter()
+                .map(|col| DataField::new(&col.to_string(), metadata.column(col).data_type()))
+                .collect::<Vec<_>>();
+            let empty_scan =
+                ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
+            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            state.add_result(result);
+            return Ok(());
+        }
+
+        window_group.windows[index].top = Some(top_n);
+        let mut result = s_expr.replace_children(vec![Arc::new(
+            window_expr.replace_plan(Arc::new(window_group.into())),
+        )]);
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+
+        Ok(())
+    }
+}
+
+fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     let ScalarExpr::FunctionCall(call) = predicate else {
         return None;
     };

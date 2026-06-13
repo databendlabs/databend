@@ -51,6 +51,7 @@ fn test_length(file: &mut impl Write) {
 
 fn test_to_hex(file: &mut impl Write) {
     run_ast(file, "to_hex(to_binary('abc'))", &[]);
+    run_ast(file, "hex(to_binary('abc'))", &[]);
     run_ast(file, "to_hex(to_binary(a))", &[(
         "a",
         StringType::from_data(vec!["abc", "def", "databend"]),

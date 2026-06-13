@@ -1,0 +1,29 @@
+# https://github.com/databendlabs/databend/issues/19555
+
+statement ok
+create or replace database issue_19555;
+
+statement ok
+use issue_19555;
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t as
+select d::UInt64 as d
+from (values
+    (0),
+    (18446744073709551615)
+) as v(d);
+
+query T
+select d::String from t order by d;
+----
+0
+18446744073709551615
+
+query I
+select count(*) from t;
+----
+2

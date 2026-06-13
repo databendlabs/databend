@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -24,7 +26,7 @@ use crate::ast::Identifier;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowDatabasesStmt {
     pub catalog: Option<Identifier>,
     pub full: bool,
@@ -49,7 +51,7 @@ impl Display for ShowDatabasesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowDropDatabasesStmt {
     pub catalog: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -69,7 +71,7 @@ impl Display for ShowDropDatabasesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCreateDatabaseStmt {
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -84,7 +86,7 @@ impl Display for ShowCreateDatabaseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateDatabaseStmt {
     pub create_option: CreateOption,
     pub database: DatabaseRef,
@@ -124,7 +126,7 @@ impl Display for CreateDatabaseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropDatabaseStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -143,7 +145,7 @@ impl Display for DropDatabaseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UndropDatabaseStmt {
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -157,7 +159,7 @@ impl Display for UndropDatabaseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AlterDatabaseStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -195,14 +197,14 @@ impl Display for AlterDatabaseStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AlterDatabaseAction {
     RenameDatabase { new_db: Identifier },
     RefreshDatabaseCache,
     SetOptions { options: Vec<SQLProperty> },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum DatabaseEngine {
     Default,
     Share,
@@ -217,7 +219,7 @@ impl Display for DatabaseEngine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct SQLProperty {
     pub name: String,
     pub value: String,

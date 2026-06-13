@@ -110,8 +110,10 @@ impl Plan {
             Plan::DropAllTableRowAccessPolicies(_) => {
                 Ok("DropAllTableRowAccessPolicies".to_string())
             }
-            Plan::CreateTableRef(_) => Ok("CreateTableRef".to_string()),
-            Plan::DropTableRef(_) => Ok("DropTableRef".to_string()),
+            Plan::CreateTableBranch(_) => Ok("CreateTableBranch".to_string()),
+            Plan::CreateTableTag(_) => Ok("CreateTableTag".to_string()),
+            Plan::DropTableBranch(_) => Ok("DropTableBranch".to_string()),
+            Plan::DropTableTag(_) => Ok("DropTableTag".to_string()),
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),
@@ -136,6 +138,7 @@ impl Plan {
 
             // Virtual Columns
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
+            Plan::VacuumVirtualColumn(_) => Ok("VacuumVirtualColumn".to_string()),
 
             // Insert
             Plan::Insert(_) => Ok("Insert".to_string()),
@@ -181,6 +184,7 @@ impl Plan {
             Plan::DropUDF(_) => Ok("DropUDF".to_string()),
             Plan::AlterUser(_) => Ok("AlterUser".to_string()),
             Plan::DescUser(_) => Ok("DescUser".to_string()),
+            Plan::ShowPublicKeys(_) => Ok("ShowPublicKeys".to_string()),
             Plan::CreateRole(_) => Ok("CreateRole".to_string()),
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
@@ -263,8 +267,10 @@ impl Plan {
             Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
             Plan::RenameDictionary(_) => Ok("RenameDictionary".to_string()),
             Plan::ShowWarehouses => Ok("ShowWarehouses".to_string()),
+            Plan::ShowWorkers => Ok("ShowWorkers".to_string()),
             Plan::ShowOnlineNodes => Ok("ShowOnlineNodes".to_string()),
             Plan::DropWarehouse(_) => Ok("DropWarehouse".to_string()),
+            Plan::DropWorker(_) => Ok("DropWorker".to_string()),
             Plan::ResumeWarehouse(_) => Ok("ResumeWarehouse".to_string()),
             Plan::SuspendWarehouse(_) => Ok("SuspendWarehouse".to_string()),
             Plan::RenameWarehouse(_) => Ok("RenameWarehouse".to_string()),
@@ -272,10 +278,12 @@ impl Plan {
             Plan::DropWarehouseCluster(_) => Ok("DropWarehouseCluster".to_string()),
             Plan::RenameWarehouseCluster(_) => Ok("RenameWarehouseCluster".to_string()),
             Plan::CreateWarehouse(_) => Ok("CreateWarehouse".to_string()),
+            Plan::CreateWorker(_) => Ok("CreateWorker".to_string()),
             Plan::UseWarehouse(_) => Ok("UseWarehouse".to_string()),
             Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
             Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
             Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
+            Plan::AlterWorker(_) => Ok("AlterWorker".to_string()),
             Plan::ShowWorkloadGroups => Ok("ShowWorkloadGroups".to_string()),
             Plan::CreateWorkloadGroup(_) => Ok("CreateWorkloadGroup".to_string()),
             Plan::DropWorkloadGroup(_) => Ok("DropWorkloadGroup".to_string()),

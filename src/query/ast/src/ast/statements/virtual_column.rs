@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -56,7 +58,7 @@ impl Display for RefreshVirtualColumnStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowVirtualColumnsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -83,5 +85,25 @@ impl Display for ShowVirtualColumnsStmt {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct VacuumVirtualColumnStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for VacuumVirtualColumnStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM VIRTUAL COLUMN FROM ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )
     }
 }

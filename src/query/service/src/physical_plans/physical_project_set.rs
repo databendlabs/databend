@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
@@ -24,7 +25,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
@@ -42,9 +43,9 @@ use crate::pipelines::processors::transforms::TransformSRF;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProjectSet {
     meta: PhysicalPlanMeta,
-    pub projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
     pub input: PhysicalPlan,
-    pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
+    pub srf_exprs: Vec<(RemoteExpr, Symbol)>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -173,7 +174,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let mut projections = ColumnSet::new();
+        let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);

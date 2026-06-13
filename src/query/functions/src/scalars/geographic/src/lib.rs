@@ -30,3 +30,4 @@ pub mod geo;
 pub mod geo_h3;
 pub mod geography;
 pub mod geometry;
+mod register;

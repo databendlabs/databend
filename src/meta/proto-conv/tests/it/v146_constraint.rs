@@ -22,7 +22,6 @@ use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::Constraint;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -56,15 +55,16 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
         engine_options: BTreeMap::default(),
         options: BTreeMap::default(),
         cluster_key: None,
+        cluster_key_v2: None,
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
         field_comments: vec![],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: None,
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
@@ -74,7 +74,6 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
             "constraint_1".to_string() => Constraint::Check("c1 > 10".to_string()),
             "constraint_2".to_string() => Constraint::Check("c1 != 0".to_string()),
         },
-        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v142.as_slice(), 146, want())?;

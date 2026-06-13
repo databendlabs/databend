@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::DropTableIndexPlan;
-use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropTableIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -61,6 +61,7 @@ impl Interpreter for DropTableIndexInterpreter {
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
+            ast::TableIndexType::Spatial => TableIndexType::Spatial,
         };
 
         let drop_index_req = DropTableIndexReq {

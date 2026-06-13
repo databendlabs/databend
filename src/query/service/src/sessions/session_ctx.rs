@@ -202,14 +202,14 @@ impl SessionContext {
     pub fn get_current_tenant(&self) -> Tenant {
         let conf = GlobalConfig::instance();
 
-        if conf.query.internal_enable_sandbox_tenant {
+        if conf.query.common.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
                 return Tenant::new_or_err(sandbox_tenant, "create from sandbox_tenant").unwrap();
             }
         }
 
-        if conf.query.management_mode || self.typ == SessionType::Local {
+        if conf.query.common.management_mode || self.typ == SessionType::Local {
             if let Some(tenant) = &self.current_tenant {
                 return tenant.clone();
             }

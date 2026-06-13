@@ -109,7 +109,6 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),
-                table.get_branch_id(),
             );
 
             let mut snapshot_ids: Vec<String> = Vec::with_capacity(limit);
@@ -132,9 +131,7 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
 
             return Ok(Some(block));
         }
-        Ok(Some(DataBlock::empty_with_schema(Arc::new(
-            self.schema().into(),
-        ))))
+        Ok(Some(DataBlock::empty_with_schema(&self.schema().into())))
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>

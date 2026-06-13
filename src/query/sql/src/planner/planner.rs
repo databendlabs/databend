@@ -96,7 +96,15 @@ impl Planner {
     }
 
     #[fastrace::trace]
+    pub fn parse_sql_with_params(&self, sql: &str) -> Result<PlanExtras> {
+        self.parse_sql_inner(sql, true)
+    }
+
     pub fn parse_sql(&self, sql: &str) -> Result<PlanExtras> {
+        self.parse_sql_inner(sql, false)
+    }
+
+    fn parse_sql_inner(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -125,7 +133,7 @@ impl Planner {
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT)) && {
+        let is_insert_stmt = !has_params && matches!(first_token, Some(TokenKind::INSERT)) && {
             let mut tokenizer = Tokenizer::new(&final_sql);
             tokenizer.next_chunk::<3>().is_ok_and(|first_three_tokens| {
                 matches!(first_token, Some(TokenKind::INSERT))
@@ -137,7 +145,7 @@ impl Planner {
                     })
             })
         };
-        let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
+        let is_replace_stmt = !has_params && matches!(first_token, Some(TokenKind::REPLACE));
         let is_insert_or_replace_stmt = is_insert_stmt || is_replace_stmt;
         let mut tokens: Vec<Token> = if is_insert_or_replace_stmt {
             (&mut tokenizer)
@@ -241,20 +249,12 @@ impl Planner {
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
-        let planner_cache_key = if enable_planner_cache {
-            Some(Self::planner_cache_key(&stmt.to_string()))
-        } else {
-            None
-        };
 
-        if enable_planner_cache {
-            let (c, plan) = self.get_cache(
-                name_resolution_ctx.clone(),
-                planner_cache_key.as_ref().unwrap(),
-                stmt,
-            );
-            if let Some(plan) = plan {
+        let plan_cache_context =
+            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?;
+
+        if let Some(cache_ctx) = &plan_cache_context {
+            if let Some(plan) = self.get_cache(cache_ctx) {
                 info!(
                     "Logical plan retrieved from cache, elapsed: {:?}",
                     start.elapsed()
@@ -263,7 +263,6 @@ impl Planner {
                 self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
                 return Ok(plan.plan);
             }
-            enable_planner_cache = c;
         }
 
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -310,8 +309,8 @@ impl Planner {
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
-        if enable_planner_cache {
-            self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
+        if let Some(cache_ctx) = plan_cache_context {
+            self.set_cache(cache_ctx, optimized_plan.clone());
         }
 
         info!(

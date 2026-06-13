@@ -14,7 +14,7 @@
 
 use std::io::Write;
 
-use databend_common_expression::BlockRowIndex;
+use databend_common_expression::BlockIndex;
 use databend_common_expression::DataBlock;
 
 type MergeSlice = (usize, usize, usize);
@@ -60,8 +60,8 @@ pub fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
     }
 }
 
-pub fn run_take_block(file: &mut impl Write, indices: &[BlockRowIndex], blocks: &[DataBlock]) {
-    let result = DataBlock::take_blocks(blocks, indices, 0);
+pub fn run_take_block(file: &mut impl Write, indices: &[BlockIndex], blocks: &[DataBlock]) {
+    let result = DataBlock::take_blocks(blocks, indices);
     writeln!(file, "Take Block indices:         {indices:?}").unwrap();
     for (i, block) in blocks.iter().enumerate() {
         writeln!(file, "Block{i}:\n{block}").unwrap();
@@ -85,19 +85,6 @@ pub fn run_take_block_by_slices_with_limit(
     for (i, block) in blocks.iter().enumerate() {
         writeln!(file, "Block{i}:\n{block}").unwrap();
     }
-    writeln!(file, "Result:\n{result}").unwrap();
-    write!(file, "\n\n").unwrap();
-}
-
-pub fn run_take_by_slice_limit(
-    file: &mut impl Write,
-    block: &DataBlock,
-    slice: (usize, usize),
-    limit: Option<usize>,
-) {
-    let result = DataBlock::take_by_slice_limit(block, slice, limit);
-    writeln!(file, "Take Block by slice (limit: {limit:?}): {slice:?}").unwrap();
-    writeln!(file, "Block:\n{block}").unwrap();
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
 }

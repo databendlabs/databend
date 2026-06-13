@@ -30,15 +30,17 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_script::Client;
 use databend_common_script::ir::ColumnAccess;
+use databend_common_sql::Metadata;
 use databend_common_sql::Planner;
 use databend_common_version::BUILD_INFO;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
 
 pub fn check_system_history(
     catalog: &Arc<dyn Catalog>,
@@ -96,8 +98,7 @@ pub fn generate_desc_schema(
             }
 
             None => {
-                let value = Scalar::default_value(&field.data_type().into());
-                default_exprs.push(value.to_string());
+                default_exprs.push("NULL".to_string());
             }
         }
         let extra = match field.computed_expr() {
@@ -159,17 +160,19 @@ impl Client for ScriptClient {
         let plan = planner.plan_stmt(&extras.statement, false).await?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let stream = interpreter.execute(ctx.clone()).await?;
+        let stream = interpreter
+            .execute_with_hooks(ctx.clone(), QueryFinishHooks::nested_with_hooks())
+            .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let mut schema = plan.schema();
         if let Some(real_schema) = interpreter.get_dynamic_schema().await {
             schema = real_schema;
         }
 
-        let block = match blocks.len() {
-            0 => DataBlock::empty_with_schema(schema.clone()),
-            1 => blocks[0].clone(),
-            _ => DataBlock::concat(&blocks)?,
+        let block = match blocks.as_slice() {
+            [] => DataBlock::empty_with_schema(&schema),
+            [block] => block.clone(),
+            blocks => DataBlock::concat(blocks)?,
         };
 
         Ok(QueryResult { schema, block })
@@ -248,6 +251,25 @@ impl Client for ScriptClient {
             _ => scalar_ref_to_string(&value.as_ref()),
         })
     }
+}
+
+/// Check if a view's subquery references itself (directly or indirectly),
+/// which would create a circular dependency.
+pub fn check_view_circular_dependency(
+    metadata: &Metadata,
+    catalog: &str,
+    database: &str,
+    view_name: &str,
+) -> databend_common_exception::Result<()> {
+    if metadata.tables().iter().any(|table| {
+        table.catalog() == catalog && table.database() == database && table.name() == view_name
+    }) {
+        return Err(ErrorCode::ViewDependencyError(format!(
+            "View dependency loop detected (view: {}.{})",
+            database, view_name
+        )));
+    }
+    Ok(())
 }
 
 #[derive(serde::Serialize)]

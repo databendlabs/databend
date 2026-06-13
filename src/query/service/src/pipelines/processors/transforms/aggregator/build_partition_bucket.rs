@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -40,6 +40,8 @@ use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregat
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 fn build_partition_bucket_experimental(
     pipeline: &mut Pipeline,
@@ -49,13 +51,15 @@ fn build_partition_bucket_experimental(
     shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
     let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+    let base_consumed_bits = shuffle_mode.determine_radix_bits();
     match shuffle_mode {
         AggregateShuffleMode::Row => {
+            let schema = params.spill_schema();
             pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
                     input,
                     output,
-                    NewAggregateSpillReader::try_create(ctx.clone())?,
+                    NewAggregateSpillReader::try_create(ctx.clone(), schema.clone())?,
                 )))
             })?;
 
@@ -106,6 +110,7 @@ fn build_partition_bucket_experimental(
 
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
+    let next_task_id = Arc::new(AtomicU64::new(1));
     for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
@@ -114,9 +119,11 @@ fn build_partition_bucket_experimental(
             output_port.clone(),
             params.clone(),
             id,
+            base_consumed_bits,
             ctx.clone(),
             tx.clone(),
             rx.clone(),
+            next_task_id.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }

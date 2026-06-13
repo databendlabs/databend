@@ -15,8 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 
@@ -57,9 +55,7 @@ impl Bounds {
             0 => Ok(Bounds(vec![])),
             1 => Ok(vector.pop().unwrap()),
             _ => {
-                let schema = DataSchema::new(vec![DataField::new("order_col", R::data_type())]);
-                let mut merger =
-                    LoserTreeMerger::<R, _>::create(schema.into(), vector, batch_rows, None);
+                let mut merger = LoserTreeMerger::<R, _>::new(vector, batch_rows, None);
 
                 let mut blocks = Vec::new();
                 while let Some(block) = merger.next_block()? {
@@ -125,18 +121,14 @@ impl Bounds {
             .take(step * n)
             .filter_map(|(i, (block, row))| {
                 if i % step == offset {
-                    Some((block as u32, row as u32, 1))
+                    Some((block as u32, row as u32))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
 
-        Some(Bounds(vec![Column::take_column_indices(
-            &self.0,
-            &indices,
-            indices.len(),
-        )]))
+        Some(Bounds(vec![Column::take_column_indices(&self.0, &indices)]))
     }
 
     #[allow(dead_code)]
@@ -173,7 +165,7 @@ impl Bounds {
                 continue;
             }
 
-            indices.push((b_idx as u32, r_idx as u32, 1));
+            indices.push((b_idx as u32, r_idx as u32));
             target += step;
             if (i as f64) > target && indices.len() < n {
                 step = (total - i) as f64 / (n - indices.len()) as f64;
@@ -182,7 +174,7 @@ impl Bounds {
             last = Some((cur_rows, r_idx));
         }
 
-        let col = Column::take_column_indices(&self.0, &indices, indices.len());
+        let col = Column::take_column_indices(&self.0, &indices);
         Bounds::new_unchecked(col)
     }
 

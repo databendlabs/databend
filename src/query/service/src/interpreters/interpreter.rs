@@ -15,9 +15,7 @@
 // Logs from this module will show up as "[INTERPRETER] ...".
 databend_common_tracing::register_module_tag!("[INTERPRETER]");
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -27,19 +25,13 @@ use databend_common_ast::ast::OptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
-use databend_common_base::runtime::profile::ProfileDesc;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_pipeline::core::ExecutionInfo;
-use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::SourcePipeBuilder;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::PlanExtras;
@@ -48,16 +40,12 @@ use databend_common_sql::plans::Plan;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
-use log::error;
-use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use super::InterpreterMetrics;
-use super::InterpreterQueryLog;
-use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
-use super::hook::vacuum_hook::hook_disk_temp_dir;
-use super::hook::vacuum_hook::hook_vacuum_temp_files;
+use crate::interpreters::common::QueryFinishHooks;
+use crate::interpreters::common::log_query_finished;
+use crate::interpreters::common::log_query_start;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -68,7 +56,14 @@ use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::SessionManager;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSession;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTelemetry;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -86,103 +81,56 @@ pub trait Interpreter: Sync + Send {
 
     fn is_ddl(&self) -> bool;
 
-    /// The core of the databend processor which will execute the logical plan and get the DataBlock
+    /// Top-level entry point for user-facing queries (HTTP/MySQL/FlightSQL handlers).
+    /// Logs Start/Finish, runs hooks, collects profiles.
+    /// Internal callers should use `execute_with_hooks()` with the appropriate `QueryFinishHooks`.
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        log_query_start(&ctx);
-        match self.execute_inner(ctx.clone()).await {
-            Ok(stream) => Ok(stream),
-            Err(err) => {
-                log_query_finished(&ctx, Some(err.clone()), false);
-                Err(err)
-            }
+        self.execute_with_hooks(ctx, QueryFinishHooks::top_level())
+            .await
+    }
+
+    /// Build and run the pipeline with the given lifecycle hooks.
+    /// All logging (start/finish) is handled here based on `hooks.log_finished`.
+    async fn execute_with_hooks(
+        &self,
+        ctx: Arc<QueryContext>,
+        hooks: QueryFinishHooks,
+    ) -> Result<SendableDataBlockStream> {
+        if hooks.log_finished {
+            log_query_start(&ctx);
         }
-    }
+        let log_finished = hooks.log_finished;
 
-    async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
-        None
-    }
-
-    async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        // `on_finished` is installed during build_pipeline_before_execute.
+        // Failures before that need finish logging here; after that, all
+        // failures (including Drop paths) are owned by the pipeline callback,
+        // which is guaranteed by FinishedCallbackChain::apply to fire at most
+        // once.
+        let mut finish_hook_installed = false;
+        let built_pipeline = match build_pipeline_before_execute(
+            self,
+            ctx.clone(),
+            hooks,
+            &mut finish_hook_installed,
+        )
+        .await
         {
-            let mutation_status = ctx.get_mutation_status();
-            let mut mutation_status = mutation_status.write();
-            mutation_status.insert_rows = 0;
-            mutation_status.deleted_rows = 0;
-            mutation_status.update_rows = 0;
-        }
-
-        let make_error = || "failed to execute interpreter";
-
-        ctx.set_status_info("Building execution pipeline");
-        ctx.check_aborting().with_context(make_error)?;
-
-        let allow_disk_cache = {
-            let license_key = ctx.get_license_key();
-            match LicenseManagerSwitch::instance().check_license(license_key.clone()) {
-                Ok(_) => true,
-                Err(e) if !license_key.is_empty() => {
-                    let msg = format!(
-                        "CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
-                        e
-                    );
-                    log::error!("{msg}");
-
-                    // Also log at warning level to ensure the message could be propagated to client applications
-                    // (e.g., BendSQL and MySQL interactive sessions)
-                    log::warn!("{msg}");
-                    false
-                }
-                _ => false,
-            }
-        };
-
-        CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
-
-        let mut build_res = match self.execute2().await {
-            Ok(build_res) => build_res,
+            Ok(built_pipeline) => built_pipeline,
             Err(err) => {
+                if log_finished && !finish_hook_installed {
+                    log_query_finished(&ctx, Some(err.clone()));
+                }
                 return Err(err);
             }
         };
 
-        if build_res.main_pipeline.is_empty() {
-            log_query_finished(&ctx, None, false);
-            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
-        }
+        execute_built_pipeline(self, ctx, built_pipeline).await
+    }
 
-        let query_ctx = ctx.clone();
-        build_res
-            .main_pipeline
-            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                on_execution_finished(info, query_ctx)
-            }));
-
-        ctx.set_status_info("Executing pipeline");
-
-        let settings = ctx.get_settings();
-        build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(ctx.clone())?;
-
-        if build_res.main_pipeline.is_complete_pipeline()? {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
-
-            let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-
-            ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute()?;
-            self.inject_result()
-        } else {
-            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-
-            ctx.set_executor(pulling_executor.get_inner())?;
-            Ok(Box::pin(ProgressStream::try_create(
-                Box::pin(PullingExecutorStream::create(pulling_executor)?),
-                ctx.get_result_progress(),
-            )?))
-        }
+    async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
+        None
     }
 
     /// The core of the databend processor which will execute the logical plan and build the pipeline
@@ -202,46 +150,105 @@ pub trait Interpreter: Sync + Send {
 
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
-fn log_query_start(ctx: &QueryContext) {
-    InterpreterMetrics::record_query_start(ctx);
-    let now = SystemTime::now();
-    let session = ctx.get_current_session();
-    let typ = session.get_type();
-    if typ.is_user_session() {
-        SessionManager::instance().status.write().query_start(now);
+enum BuiltPipeline {
+    Finished(SendableDataBlockStream),
+    Complete(Arc<PipelineCompleteExecutor>),
+    Pulling(PipelinePullingExecutor),
+}
+
+async fn build_pipeline_before_execute(
+    interpreter: &(impl Interpreter + ?Sized),
+    ctx: Arc<QueryContext>,
+    hooks: QueryFinishHooks,
+    finish_hook_installed: &mut bool,
+) -> Result<BuiltPipeline> {
+    {
+        let mutation_status = ctx.mutation_state().mutation_status();
+        let mut mutation_status = mutation_status.write().unwrap();
+        mutation_status.insert_rows = 0;
+        mutation_status.deleted_rows = 0;
+        mutation_status.update_rows = 0;
     }
 
-    if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("Failed to log query start: {:?}", error)
+    let make_error = || "failed to execute interpreter";
+
+    ctx.set_status_info("Building execution pipeline");
+    ctx.check_aborting().with_context(make_error)?;
+
+    let allow_disk_cache = {
+        let license_key = ctx.get_license_key();
+        match LicenseManagerSwitch::instance().check_license(license_key.clone()) {
+            Ok(_) => true,
+            Err(e) if !license_key.is_empty() => {
+                let msg = format!(
+                    "CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                    e
+                );
+                log::error!("{msg}");
+                log::warn!("{msg}");
+                false
+            }
+            _ => false,
+        }
+    };
+
+    CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
+
+    let mut build_res = interpreter.execute2().await?;
+
+    if build_res.main_pipeline.is_empty() {
+        if hooks.log_finished {
+            log_query_finished(&ctx, None);
+        }
+        return Ok(BuiltPipeline::Finished(Box::pin(DataBlockStream::create(
+            None,
+            vec![],
+        ))));
+    }
+
+    let query_ctx = ctx.clone();
+    build_res
+        .main_pipeline
+        .set_on_finished(always_callback(hooks.into_callback(query_ctx)));
+    *finish_hook_installed = true;
+
+    ctx.set_status_info("Executing pipeline");
+
+    let settings = ctx.get_settings();
+    build_res.set_max_threads(settings.get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+
+    if build_res.main_pipeline.is_complete_pipeline()? {
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+
+        let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+
+        ctx.set_executor(complete_executor.get_inner())?;
+        Ok(BuiltPipeline::Complete(complete_executor))
+    } else {
+        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+
+        ctx.set_executor(pulling_executor.get_inner())?;
+        Ok(BuiltPipeline::Pulling(pulling_executor))
     }
 }
 
-fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    InterpreterMetrics::record_query_finished(ctx, error.clone());
-
-    let now = SystemTime::now();
-    let session = ctx.get_current_session();
-
-    session.get_status().write().query_finish();
-    let typ = session.get_type();
-    if typ.is_user_session() {
-        SessionManager::instance().status.write().query_finish(now);
-        SessionManager::instance()
-            .metrics_collector
-            .track_finished_query(
-                ctx.get_scan_progress_value(),
-                ctx.get_write_progress_value(),
-                ctx.get_join_spill_progress_value(),
-                ctx.get_aggregate_spill_progress_value(),
-                ctx.get_group_by_spill_progress_value(),
-                ctx.get_window_partition_spill_progress_value(),
-            );
-    }
-
-    log::info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
-
-    if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("Failed to log query finish: {:?}", error)
+async fn execute_built_pipeline(
+    interpreter: &(impl Interpreter + ?Sized),
+    ctx: Arc<QueryContext>,
+    built_pipeline: BuiltPipeline,
+) -> Result<SendableDataBlockStream> {
+    match built_pipeline {
+        BuiltPipeline::Finished(stream) => Ok(stream),
+        BuiltPipeline::Complete(complete_executor) => {
+            complete_executor.execute().await?;
+            interpreter.inject_result()
+        }
+        BuiltPipeline::Pulling(pulling_executor) => Ok(Box::pin(ProgressStream::try_create(
+            Box::pin(PullingExecutorStream::create(pulling_executor)?),
+            ctx.get_result_progress(),
+        )?)),
     }
 }
 
@@ -254,8 +261,9 @@ pub async fn interpreter_plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
     acquire_queue: bool,
+    params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
-    let result = plan_sql(ctx.clone(), sql, acquire_queue).await;
+    let result = plan_sql(ctx.clone(), sql, acquire_queue, params).await;
     let short_sql = short_sql(
         sql.to_string(),
         ctx.get_settings().get_short_sql_max_length()?,
@@ -266,7 +274,7 @@ pub async fn interpreter_plan_sql(
         // Only log if there's an error
         ctx.attach_query_str(QueryKind::Unknown, short_sql.to_string());
         log_query_start(&ctx);
-        log_query_finished(&ctx, result.as_ref().err().cloned(), false);
+        log_query_finished(&ctx, result.as_ref().err().cloned());
         None
     };
 
@@ -296,6 +304,7 @@ async fn plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
     acquire_queue: bool,
+    params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
@@ -304,8 +313,17 @@ async fn plan_sql(
         ))),
     );
 
-    // Parse the SQL query, get extract additional information.
-    let extras = planner.parse_sql(sql)?;
+    let mut extras = if params.is_some() {
+        planner.parse_sql_with_params(sql)?
+    } else {
+        planner.parse_sql(sql)?
+    };
+
+    if let Some(params) = params {
+        databend_common_ast::ast::substitute_params(&mut extras.statement, params)
+            .map_err(|e| ErrorCode::BadArguments(format!("parameter substitution failed: {e}")))?;
+    }
+
     auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
@@ -356,47 +374,6 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     };
 
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
-}
-
-#[fastrace::trace]
-pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
-    let mut has_profiles = false;
-    query_ctx.add_query_profiles(&info.profiling);
-    let query_profiles = query_ctx.get_query_profiles();
-    if !query_profiles.is_empty() {
-        has_profiles = true;
-        #[derive(serde::Serialize)]
-        struct QueryProfiles {
-            query_id: String,
-            profiles: Vec<PlanProfile>,
-            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
-        }
-
-        info!(
-            target: "databend::log::profile",
-            "{}",
-            serde_json::to_string(&QueryProfiles {
-                query_id: query_ctx.get_id(),
-                profiles: query_profiles.clone(),
-                statistics_desc: get_statistics_desc(),
-            })?
-        );
-    }
-
-    hook_clear_m_cte_temp_table(&query_ctx)?;
-    hook_vacuum_temp_files(&query_ctx)?;
-    hook_disk_temp_dir(&query_ctx)?;
-
-    let err_opt = match &info.res {
-        Ok(_) => None,
-        Err(e) => Some(e.clone()),
-    };
-
-    log_query_finished(&query_ctx, err_opt, has_profiles);
-    match &info.res {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error.clone()),
-    }
 }
 
 /// Check if the statement need acquire a table lock.

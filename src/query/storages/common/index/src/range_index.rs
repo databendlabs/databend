@@ -47,9 +47,19 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use geo::Point;
+use geo::Rect;
 
 use super::eliminate_cast::*;
 use crate::Index;
+use crate::SpatialPredicate;
+use crate::SpatialPredicateOp;
+use crate::collect_spatial_predicates;
+use crate::rect_contains;
+use crate::rects_distance_intersect;
+use crate::rects_intersect;
+use crate::spatial_false_domain;
 
 #[derive(Clone)]
 pub struct RangeIndex {
@@ -59,6 +69,7 @@ pub struct RangeIndex {
 
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,
+    predicates: Vec<SpatialPredicate>,
 }
 
 impl RangeIndex {
@@ -68,11 +79,16 @@ impl RangeIndex {
         schema: TableSchemaRef,
         default_stats: StatisticsOfColumns,
     ) -> Result<Self> {
+        let (expr, predicates) = match collect_spatial_predicates(schema.clone(), expr, None)? {
+            Some(result) => (result.expr, result.predicates),
+            None => (expr.clone(), Vec::new()),
+        };
         Ok(Self {
-            expr: expr.clone(),
+            expr,
             func_ctx,
             schema,
             default_stats,
+            predicates,
         })
     }
 
@@ -87,9 +103,16 @@ impl RangeIndex {
         ))
     }
 
-    pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
-    where F: Fn(&ColumnId) -> bool {
-        let input_domains = self
+    pub fn apply<F>(
+        &self,
+        stats: &StatisticsOfColumns,
+        spatial_stats: Option<&StatisticsOfSpatialColumns>,
+        column_is_default: F,
+    ) -> Result<bool>
+    where
+        F: Fn(&ColumnId) -> bool,
+    {
+        let mut input_domains: HashMap<String, Domain> = self
             .expr
             .column_refs()
             .into_iter()
@@ -126,6 +149,10 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
+
+        for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
+            input_domains.insert(name, domain);
+        }
 
         let mut visitor = RewriteVisitor {
             input_domains,
@@ -167,13 +194,57 @@ impl RangeIndex {
             func_ctx: self.func_ctx.clone(),
             schema: self.schema.clone(),
             default_stats: self.default_stats.clone(),
+            predicates: self.predicates.clone(),
         }
-        .apply(stats, |_| false)
+        .apply(stats, None, |_| false)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {
         let data_type = DataType::from(data_type);
         Self::supported_type(&data_type)
+    }
+
+    fn spatial_predicate_domains(
+        &self,
+        spatial_stats: Option<&StatisticsOfSpatialColumns>,
+    ) -> HashMap<String, Domain> {
+        let mut domains = HashMap::new();
+        let Some(spatial_stats) = spatial_stats else {
+            return domains;
+        };
+        for predicate in &self.predicates {
+            let Some(stat) = spatial_stats.get(&predicate.column_id) else {
+                continue;
+            };
+            if !stat.is_valid || stat.srid != predicate.query_srid {
+                continue;
+            }
+            let block_rect = Rect::new(
+                Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
+                Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
+            );
+            let maybe_match = match predicate.op {
+                // Block spatial stats only store the union bbox of all geometries in the block.
+                // A block bbox extending outside the query rect does not rule out individual
+                // geometries being within the query rect, so `within` can only use intersect
+                // as a necessary condition at this stage.
+                SpatialPredicateOp::Intersects | SpatialPredicateOp::Within => {
+                    rects_intersect(&block_rect, &predicate.query_rect)
+                }
+                SpatialPredicateOp::Contains => rect_contains(&block_rect, &predicate.query_rect),
+                SpatialPredicateOp::Distance(distance) => {
+                    rects_distance_intersect(&block_rect, &predicate.query_rect, distance)
+                }
+            };
+
+            if !maybe_match {
+                domains.insert(
+                    predicate.placeholder.clone(),
+                    spatial_false_domain(&predicate.return_type, stat.has_null),
+                );
+            }
+        }
+        domains
     }
 }
 

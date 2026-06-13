@@ -12,41 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
-use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::FALSE_BYTES_NUM;
-use databend_common_io::constants::INF_BYTES_LONG;
-use databend_common_io::constants::NULL_BYTES_ESCAPE;
-use databend_common_io::constants::TRUE_BYTES_LOWER;
-use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
 
-use crate::FileFormatOptionsExt;
-use crate::OutputCommonSettings;
-use crate::binary::encode_binary;
-use crate::field_encoder::FieldEncoderValues;
+use crate::field_encoder::FieldEncoderBytes;
+use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::write_tsv_escaped_string;
 
+#[derive(Clone)]
+pub struct CsvQuoteSettings {
+    pub quote_char: u8,
+    pub quote_style: CsvQuoteStyle,
+    pub field_delimiter: u8,
+    pub record_delimiter: Vec<u8>,
+    pub escape_char: Option<u8>,
+}
+
+impl CsvQuoteSettings {
+    pub fn from_params(params: &CsvFileFormatParams) -> Self {
+        Self {
+            quote_char: params.quote.as_bytes()[0],
+            quote_style: params.quote_style,
+            field_delimiter: params.field_delimiter.as_bytes()[0],
+            record_delimiter: params.record_delimiter.as_bytes().to_vec(),
+            escape_char: params.escape.as_bytes().first().copied(),
+        }
+    }
+}
+
 pub enum StringFormatter {
-    Csv { quote_char: u8 },
-    Tsv { record_delimiter: u8 },
+    Csv(CsvQuoteSettings),
+    Text { record_delimiter: u8 },
 }
 
 impl StringFormatter {
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
-            StringFormatter::Csv { quote_char } => write_csv_string(bytes, buf, *quote_char),
-            StringFormatter::Tsv { record_delimiter } => {
+            StringFormatter::Csv(settings) => write_csv_string_maybe_quoted(bytes, buf, settings),
+            StringFormatter::Text { record_delimiter } => {
                 write_tsv_escaped_string(bytes, buf, *record_delimiter)
             }
         }
@@ -75,71 +91,69 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     buf.push(quote);
 }
 
+fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
+    bytes.iter().any(|byte| {
+        *byte == settings.quote_char
+            || *byte == settings.field_delimiter
+            || settings.record_delimiter[0] == *byte
+            || settings.escape_char == Some(*byte)
+    })
+}
+
+pub fn write_csv_string_maybe_quoted(bytes: &[u8], buf: &mut Vec<u8>, settings: &CsvQuoteSettings) {
+    if settings.quote_style.is_quote_minimal() && !csv_string_needs_quotes(bytes, settings) {
+        buf.extend_from_slice(bytes);
+    } else {
+        write_csv_string(bytes, buf, settings.quote_char);
+    }
+}
+
 pub struct FieldEncoderCSV {
-    pub simple: FieldEncoderValues,
-    pub nested: FieldEncoderValues,
+    pub simple: FieldEncoderBytes,
+    pub nested: FieldEncoderJSON,
     pub string_formatter: StringFormatter,
 }
 
 impl FieldEncoderCSV {
-    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_csv(params: &CsvFileFormatParams, mut settings: OutputFormatSettings) -> Self {
+        settings.binary_format = params.binary_format.to_display_format();
         Self {
-            nested: FieldEncoderValues::create(options_ext),
-            simple: FieldEncoderValues {
-                common_settings: OutputCommonSettings {
-                    true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                    false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                    null_bytes: params.null_display.as_bytes().to_vec(),
-                    nan_bytes: params.nan_display.as_bytes().to_vec(),
-                    inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                    timezone: options_ext.timezone,
-                    jiff_timezone: options_ext.jiff_timezone.clone(),
-                    binary_format: params.binary_format,
-                    geometry_format: params.geometry_format,
-                },
-                escape_char: 0, // not used
-                quote_char: 0,  // not used
-            },
-            string_formatter: StringFormatter::Csv {
-                quote_char: params.quote.as_bytes()[0],
-            },
+            simple: FieldEncoderBytes::create_for_csv(params, settings.clone()),
+            nested: FieldEncoderJSON::create(settings),
+            string_formatter: StringFormatter::Csv(CsvQuoteSettings::from_params(params)),
         }
     }
 
-    pub fn create_tsv(params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
         Self {
-            nested: FieldEncoderValues::create(options_ext),
-            simple: FieldEncoderValues {
-                common_settings: OutputCommonSettings {
-                    true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                    false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                    null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                    nan_bytes: params.nan_display.as_bytes().to_vec(),
-                    inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                    timezone: options_ext.timezone,
-                    jiff_timezone: options_ext.jiff_timezone.clone(),
-                    binary_format: Default::default(),
-                    geometry_format: Default::default(),
-                },
-                escape_char: 0, // not used
-                quote_char: 0,  // not used
-            },
-            string_formatter: StringFormatter::Tsv {
+            simple: FieldEncoderBytes::create_for_tsv(params, settings.clone()),
+            nested: FieldEncoderJSON::create(settings),
+            string_formatter: StringFormatter::Text {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
             },
         }
     }
 
-    pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
+    pub(crate) fn write_field(
+        &self,
+        column: &Column,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         match &column {
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                let encoded = encode_binary(buf, self.simple.common_settings.binary_format);
+                let encoded = self
+                    .simple
+                    .common_settings
+                    .settings
+                    .binary_format
+                    .encode(buf)?;
                 out_buf.extend_from_slice(&encoded);
             }
-            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
+            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf)?,
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf.as_bytes(), out_buf);
@@ -152,7 +166,8 @@ impl FieldEncoderCSV {
             | Column::Variant(..)
             | Column::Interval(_) => {
                 let mut buf = Vec::new();
-                self.simple.write_field(column, row_index, &mut buf, false);
+                self.simple
+                    .write_field(column, row_index, &mut buf, false)?;
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
@@ -170,7 +185,7 @@ impl FieldEncoderCSV {
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) | Column::Vector(..) => {
                 let mut buf = Vec::new();
-                self.nested.write_field(column, row_index, &mut buf, false);
+                self.nested.write_field(column, row_index, &mut buf)?;
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
@@ -180,8 +195,9 @@ impl FieldEncoderCSV {
             | Column::EmptyArray { .. }
             | Column::EmptyMap { .. }
             | Column::Number(_)
-            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false)?,
         }
+        Ok(())
     }
 
     fn write_decimal_trimmed(
@@ -210,20 +226,30 @@ impl FieldEncoderCSV {
         column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-    ) {
+    ) -> Result<()> {
         if !column.validity.get_bit(row_index) {
-            self.simple.write_null(out_buf)
+            self.simple.write_null(out_buf);
+            Ok(())
         } else {
             self.write_field(&column.column, row_index, out_buf)
         }
     }
 
-    fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_opaque(
+        &self,
+        column: &OpaqueColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let scalar = unsafe { column.index_unchecked(row_index) };
-        let encoded = encode_binary(
-            &scalar.to_le_bytes(),
-            self.simple.common_settings.binary_format,
-        );
+        let bytes = scalar.to_le_bytes();
+        let encoded = self
+            .simple
+            .common_settings
+            .settings
+            .binary_format
+            .encode(&bytes)?;
         out_buf.extend_from_slice(&encoded);
+        Ok(())
     }
 }

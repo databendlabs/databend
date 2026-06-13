@@ -20,9 +20,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -61,7 +63,8 @@ impl SnapshotGenerator for MutationGenerator {
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_id: Option<u32>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -87,7 +90,7 @@ impl SnapshotGenerator for MutationGenerator {
                     let mut new_summary = merge_statistics(
                         previous.summary(),
                         &ctx.merged_statistics,
-                        cluster_key_id,
+                        cluster_key_meta.as_ref().map(|v| v.0),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
 
@@ -104,6 +107,8 @@ impl SnapshotGenerator for MutationGenerator {
                         table_info.schema().as_ref().clone(),
                         new_summary,
                         new_segments,
+                        cluster_key_meta,
+                        cluster_type,
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;

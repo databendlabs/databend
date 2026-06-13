@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::OutofMemoryBehavior;
+use databend_common_settings::Settings;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
 
 pub trait MemorySettingsExt: Sized {
     fn from_join_settings(ctx: &QueryContext) -> Result<Self>;
 
     fn from_sort_settings(ctx: &QueryContext) -> Result<Self>;
+
+    fn from_materialized_cte_settings(ctx: &QueryContext, settings: &Settings) -> Result<Self>;
 
     fn from_window_settings(ctx: &QueryContext) -> Result<Self>;
 
@@ -75,6 +79,36 @@ impl MemorySettingsExt for MemorySettings {
 
         let max_memory_usage = settings.get_max_memory_usage()? as usize;
         let max_memory_ratio = settings.get_sort_spilling_memory_ratio()?;
+        if max_memory_usage != 0 && max_memory_ratio != 0 {
+            let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
+            let global_limit = (max_memory_usage as f64 * ratio) as usize;
+            builder = builder.with_max_memory_usage(global_limit);
+        }
+
+        let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
+        if matches!(
+            settings.get_query_out_of_memory_behavior()?,
+            OutofMemoryBehavior::Spilling
+        ) && max_query_memory_usage != 0
+        {
+            builder = builder.with_max_query_memory_usage(
+                max_query_memory_usage,
+                ctx.get_query_memory_tracking(),
+            );
+        }
+
+        Ok(builder.build())
+    }
+
+    fn from_materialized_cte_settings(ctx: &QueryContext, settings: &Settings) -> Result<Self> {
+        let mut builder = MemorySettings::builder();
+
+        if settings.get_force_materialized_cte_spill()? {
+            return Ok(builder.with_max_memory_usage(0).build());
+        }
+
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
+        let max_memory_ratio = settings.get_materialized_cte_spilling_memory_ratio()?;
         if max_memory_usage != 0 && max_memory_ratio != 0 {
             let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
             let global_limit = (max_memory_usage as f64 * ratio) as usize;
@@ -159,11 +193,12 @@ impl MemorySettingsExt for MemorySettings {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_pipeline_transforms::MemorySettings;
 
     use crate::pipelines::memory_settings::MemorySettingsExt;
+    use crate::sessions::TableContextPartitionStats;
+    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread")]

@@ -446,9 +446,15 @@ impl From<tokio::task::JoinError> for ErrorCode {
                 .map(|s| s.to_string())
                 .or_else(|| cause.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
-            ErrorCode::PanicError(message)
+            ErrorCode::UnwindError(message)
         } else {
             ErrorCode::TokioError("Tokio task is cancelled")
         }
+    }
+}
+
+impl From<!> for ErrorCode {
+    fn from(_: !) -> Self {
+        unreachable!()
     }
 }

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainOption;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -43,4 +46,76 @@ fn test_multi_table_insert_parse_error() {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
     }
+}
+
+#[test]
+fn test_like_escape_display_escapes_escape_literal() {
+    for sql in [
+        r#"SELECT 'a' LIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';"#,
+        r#"SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';"#,
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
+fn test_rewrite_statement_display_escapes_string_literals() {
+    for sql in [
+        r#"SHOW SETTINGS LIKE 'a''b%';"#,
+        r#"SHOW TABLES LIKE 'a''b%';"#,
+        r#"LIST @test_stage PATTERN = 'a''b.*';"#,
+        r#"REMOVE @test_stage PATTERN = 'a''b.*';"#,
+        r#"CALL admin$tenant_quota('a''b');"#,
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
+fn test_parse_sql_nested_join_conditions_without_panic() {
+    let cases = [
+        r#"
+        SELECT * FROM (VALUES(NULL)) AS tbl(i)
+          INNER JOIN (
+            (VALUES(NULL)) AS tbl2(i)
+            INNER JOIN (VALUES(NULL)) AS tbl3(i) ON tbl2.i = tbl3.i
+          ) USING(i);
+        "#,
+        r#"
+        SELECT i1.i AS i1_i, i2.s, i3.i AS i3_i
+          FROM integers1 AS i1
+          LEFT OUTER JOIN (
+            integers2 AS i2
+            LEFT OUTER JOIN integers3 AS i3 ON i2.i = i3.i
+          ) ON NULL;
+        "#,
+    ];
+
+    for sql in cases {
+        test_stmt_display(sql);
+        let tokens = tokenize_sql(sql).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
+fn test_explain_verbose_alias_display() {
+    let tokens = tokenize_sql("EXPLAIN VERBOSE SELECT * FROM t").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::Explain {
+            kind,
+            options: (_, options),
+            ..
+        } => {
+            assert_eq!(kind, &ExplainKind::Plan);
+            assert_eq!(options, &vec![ExplainOption::Verbose]);
+        }
+        _ => panic!("expected EXPLAIN statement"),
+    }
+
+    assert_eq!(stmt.to_string(), "EXPLAIN(VERBOSE) SELECT * FROM t");
+    test_stmt_display("EXPLAIN VERBOSE SELECT * FROM t");
 }

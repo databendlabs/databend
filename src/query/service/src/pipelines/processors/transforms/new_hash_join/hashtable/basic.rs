@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_hashtable::RowPtr;
+
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 
 #[derive(Debug)]
 pub struct ProbedRows {

@@ -81,7 +81,7 @@ impl RuleFilterNulls {
             return None;
         }
 
-        if (column_stats.null_count as f64 / cardinality) >= NULL_THRESHOLD_RATIO {
+        if (column_stats.null_count.expected() / cardinality) >= NULL_THRESHOLD_RATIO {
             Some(join_key_null_filter(key_expr))
         } else {
             None
@@ -116,6 +116,10 @@ impl Rule for RuleFilterNulls {
         let mut left_null_predicates = vec![];
         let mut right_null_predicates = vec![];
         for join_key in join.equi_conditions.iter() {
+            if join_key.is_null_equal {
+                continue;
+            }
+
             let left_key = &join_key.left;
             let right_key = &join_key.right;
             if single_plan(&left_child) {

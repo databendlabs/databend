@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -21,7 +20,6 @@ use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_grpc::RpcClientConf;
 use databend_common_management::ClientSessionMgr;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
@@ -44,12 +42,14 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_cache::Cache;
-use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
+use databend_meta_client::RpcClientConf;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaError;
+use databend_meta_plugin_cache::Cache;
+use databend_meta_runtime::DatabendRuntime;
 use log::debug;
 use tokio::sync::Mutex;
 
@@ -101,14 +101,14 @@ impl UserApiProvider {
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         let meta_store = MetaStoreProvider::new(conf)
-            .create_meta_store()
+            .create_meta_store::<DatabendRuntime>()
             .await
             .map_err(|e| {
                 ErrorCode::MetaServiceError(e.to_string())
                     .add_message_back("(while create meta store)")
             })?;
 
-        let client = meta_store.deref().clone();
+        let client = meta_store.inner().clone();
 
         let cache = if cache_config.meta_service_ownership_cache {
             let cache = RoleMgr::new_cache(client.clone()).await;
@@ -138,7 +138,7 @@ impl UserApiProvider {
         {
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC, None);
             user_mgr
-                .add_role(tenant, public, &CreateOption::CreateIfNotExists)
+                .create_role(tenant, public, &CreateOption::CreateIfNotExists)
                 .await?;
         }
 

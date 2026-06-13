@@ -86,8 +86,8 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert!(!result.data.is_empty());
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
-        5
-    ); // Expect a, b.c, b.d, e[0].f, e[1]
+        4
+    ); // Expect a, b.c, b.d, e
 
     // Check v['a']
     let meta_a = find_virtual_col(
@@ -122,27 +122,16 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert_eq!(meta_bd.name, "['b']['d']");
     assert_eq!(meta_bd.data_type, VariantDataType::Boolean);
 
-    // Check v['e'][0]['f']
+    // Check v['e']
     let meta_bd = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
-        "['e'][0]['f']",
+        "['e']",
     )
-    .expect("Virtual column ['e'][0]['f'] not found");
+    .expect("Virtual column ['e'] not found");
     assert_eq!(meta_bd.source_column_id, 1);
-    assert_eq!(meta_bd.name, "['e'][0]['f']");
-    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
-
-    // Check v['e'][1]
-    let meta_bd = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "['e'][1]",
-    )
-    .expect("Virtual column ['e'][1] not found");
-    assert_eq!(meta_bd.source_column_id, 1);
-    assert_eq!(meta_bd.name, "['e'][1]");
-    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
+    assert_eq!(meta_bd.name, "['e']");
+    assert_eq!(meta_bd.data_type, VariantDataType::Jsonb);
 
     let block = DataBlock::new(
         vec![
@@ -196,7 +185,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // Expected columns: id, create, text, user.id, replies, geo.lat
+    // Expected columns: id, create, text, user.id, replies, geo.lat, shared_data
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
         6
@@ -304,8 +293,14 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // all columns should be discarded due to > 70% nulls
-    assert!(result.data.is_empty());
+    // all columns should be add to shared_column due to > 70% nulls
+    assert!(!result.data.is_empty());
+    assert!(
+        result
+            .draft_virtual_block_meta
+            .virtual_column_metas
+            .is_empty()
+    );
 
     // Test consecutive blocks with different JSON virtual columns
     // This test verifies that when adding consecutive blocks with completely different
@@ -562,16 +557,86 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
     assert_eq!(meta_user_active.name, "['user']['active']");
     assert_eq!(meta_user_active.data_type, VariantDataType::Boolean);
 
-    // Check tags[0] column (only present in the third block)
-    let meta_tags = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "['tags'][0]",
-    )
-    .expect("Virtual column ['tags'][0] not found");
-    assert_eq!(meta_tags.source_column_id, 1);
-    assert_eq!(meta_tags.name, "['tags'][0]");
-    assert_eq!(meta_tags.data_type, VariantDataType::String);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_virtual_column_builder_multi_schema_typed_paths() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let table_info = table.get_table_info();
+    let schema = table_info.meta.schema.clone();
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    let write_settings = fuse_table.get_write_settings();
+    let location = (
+        "_b/h0196236b460676369cfcf6fec0dedefa_v2.parquet".to_string(),
+        0,
+    );
+
+    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+
+    let mut ids = Vec::with_capacity(500);
+    let mut variants = Vec::with_capacity(500);
+    for schema_id in 0..5 {
+        for row in 0..100 {
+            let id = schema_id * 100 + row;
+            ids.push(id);
+            let json = format!(
+                r#"{{"event_{}_id": {}, "event_{}_name": "name_{}"}}"#,
+                schema_id, id, schema_id, row
+            );
+            variants.push(Some(OwnedJsonb::from_str(&json).unwrap().to_vec()));
+        }
+    }
+
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(ids).into(),
+            VariantType::from_opt_data(variants).into(),
+        ],
+        500,
+    );
+
+    builder.add_block(&block)?;
+    let result = builder.finalize(&write_settings, &location)?;
+
+    assert!(!result.data.is_empty());
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        10
+    );
+
+    for schema_id in 0..5 {
+        let id_name = format!("['event_{}_id']", schema_id);
+        let id_meta = find_virtual_col(
+            &result.draft_virtual_block_meta.virtual_column_metas,
+            1,
+            &id_name,
+        )
+        .unwrap_or_else(|| panic!("Virtual column {} not found", id_name));
+        assert_eq!(id_meta.data_type, VariantDataType::UInt64);
+
+        let name_name = format!("['event_{}_name']", schema_id);
+        let name_meta = find_virtual_col(
+            &result.draft_virtual_block_meta.virtual_column_metas,
+            1,
+            &name_name,
+        )
+        .unwrap_or_else(|| panic!("Virtual column {} not found", name_name));
+        assert_eq!(name_meta.data_type, VariantDataType::String);
+    }
 
     Ok(())
 }

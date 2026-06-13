@@ -49,6 +49,7 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterWorkerPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -69,15 +70,17 @@ use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
-use crate::plans::CreateTableRefPlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::CreateTagPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateWarehousePlan;
+use crate::plans::CreateWorkerPlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
@@ -107,13 +110,14 @@ use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
-use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
@@ -121,6 +125,7 @@ use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
+use crate::plans::DropWorkerPlan;
 use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
@@ -169,6 +174,7 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
+use crate::plans::ShowPublicKeysPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SwapTablePlan;
@@ -187,8 +193,10 @@ use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
+use crate::plans::worker_schema;
 
 #[derive(Educe)]
 #[educe(
@@ -225,6 +233,7 @@ pub enum Plan {
     },
     ExplainPerf {
         sql: String,
+        event_groups: Vec<Vec<String>>,
     },
     ReportIssue(String),
 
@@ -252,6 +261,12 @@ pub enum Plan {
     RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
     AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
     UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
+
+    // Workers
+    ShowWorkers,
+    CreateWorker(Box<CreateWorkerPlan>),
+    AlterWorker(Box<AlterWorkerPlan>),
+    DropWorker(Box<DropWorkerPlan>),
 
     // Workloads
     ShowWorkloadGroups,
@@ -303,8 +318,10 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
-    CreateTableRef(Box<CreateTableRefPlan>),
-    DropTableRef(Box<DropTableRefPlan>),
+    CreateTableBranch(Box<CreateTableBranchPlan>),
+    CreateTableTag(Box<CreateTableTagPlan>),
+    DropTableBranch(Box<DropTableBranchPlan>),
+    DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -325,7 +342,7 @@ pub enum Plan {
     },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
+    CopyIntoLocation(Box<CopyIntoLocationPlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -347,12 +364,14 @@ pub enum Plan {
 
     // Virtual Columns
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
+    VacuumVirtualColumn(Box<VacuumVirtualColumnPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
     DescUser(Box<DescUserPlan>),
+    ShowPublicKeys(Box<ShowPublicKeysPlan>),
 
     // UDF
     CreateUDF(Box<CreateUDFPlan>),
@@ -578,6 +597,9 @@ impl Plan {
             Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
+            Plan::RefreshVirtualColumn(plan) => plan.schema(),
+            Plan::VacuumVirtualColumn(plan) => plan.schema(),
+            Plan::RefreshTableIndex(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
@@ -588,6 +610,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::ShowPublicKeys(plan) => plan.schema(),
             Plan::Insert(plan) => plan.schema(),
             Plan::InspectWarehouse(plan) => plan.schema(),
             Plan::ShowWarehouses => DataSchemaRefExt::create(vec![
@@ -595,6 +618,7 @@ impl Plan {
                 DataField::new("type", DataType::String),
                 DataField::new("status", DataType::String),
             ]),
+            Plan::ShowWorkers => worker_schema(),
             Plan::ShowOnlineNodes => DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::String),
                 DataField::new("type", DataType::String),

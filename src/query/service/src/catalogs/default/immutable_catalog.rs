@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -101,9 +101,9 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
@@ -111,6 +111,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)
@@ -314,6 +315,27 @@ impl Catalog for ImmutableCatalog {
         let _db = self.get_database(tenant, db_name).await?;
 
         self.sys_db_meta.get_by_name(db_name, table_name)
+    }
+
+    async fn mget_tables(
+        &self,
+        _tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let tables = self.sys_db_meta.get_all_tables(db_name)?;
+        let mut table_map = HashMap::with_capacity(tables.len());
+        for table in tables {
+            table_map.insert(table.name().to_string(), table);
+        }
+
+        let mut res = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Some(table) = table_map.get(table_name) {
+                res.push(table.clone());
+            }
+        }
+        Ok(res)
     }
 
     #[async_backtrace::framed]
@@ -550,7 +572,7 @@ impl Catalog for ImmutableCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -561,7 +583,7 @@ impl Catalog for ImmutableCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

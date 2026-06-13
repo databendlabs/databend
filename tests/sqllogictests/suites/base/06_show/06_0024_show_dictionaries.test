@@ -42,6 +42,17 @@ show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=local
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d3 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 
+statement ok
+CREATE OR REPLACE DICTIONARY show_dictionary.`a'b_dict`(c1 VARCHAR NOT NULL, c2 VARCHAR NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+query TT????TT
+show dictionaries from show_dictionary like 'a''b%'
+----
+show_dictionary a'b_dict ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
+
+statement ok
+DROP DICTIONARY show_dictionary.`a'b_dict`
+
 query TT????TT
 show dictionaries from show_dictionary WHERE name = 'd2' OR 1 = 1
 ----

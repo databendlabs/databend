@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -39,12 +39,13 @@ use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
+use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -54,6 +55,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -64,6 +66,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::meta_service_error;
 use crate::physical_plans::DistributedInsertSelect;
@@ -73,7 +76,10 @@ use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct ModifyTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -195,9 +201,11 @@ impl ModifyTableColumnInterpreter {
         table: Arc<dyn Table>,
         field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
-        let schema = table.schema().as_ref().clone();
+        let schema = table.schema();
         let table_info = table.get_table_info();
-        let mut new_schema = schema.clone();
+        let mut new_schema = schema.as_ref().clone();
+        let mut modified_cols = HashSet::with_capacity(field_and_comments.len());
+        let mut modified_column_ids = HashSet::new();
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -221,6 +229,11 @@ impl ModifyTableColumnInterpreter {
                 }
 
                 if old_field.data_type != field.data_type {
+                    modified_cols.insert(field.name.clone());
+                    // Aggregating indexes still bind to the existing table column ids, so
+                    // MODIFY COLUMN must check the ids from the current schema instead of the
+                    // freshly analyzed field definition.
+                    modified_column_ids.extend(old_field.column_ids());
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -237,10 +250,45 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let new_schema = Arc::new(new_schema);
+        if !modified_cols.is_empty() {
+            // Only need to validate the data types of modified columns that are referenced
+            // by the cluster key. The cluster key expression itself is already validated
+            // when it is created or altered, so we must NOT re-check the expression type here.
+            if let Some((_, cluster_key)) = table.cluster_key_meta() {
+                let referenced = cluster_key_referenced_columns(&cluster_key)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    let tmp_table = fuse_table.with_schema(new_schema.clone());
+                    if let Err(e) = analyze_cluster_keys(self.ctx.clone(), tmp_table, &cluster_key)
+                    {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Cannot modify column data type, because it is referenced by cluster key '{}': {}",
+                            cluster_key,
+                            e.message()
+                        )));
+                    }
+                }
+            }
+        }
+
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        validate_table_indexes_not_referencing_columns(
+            self.ctx.clone(),
+            catalog.as_ref(),
+            &self.ctx.get_tenant(),
+            table.get_id(),
+            &modified_column_ids,
+        )
+        .await?;
+        validate_constraints_by_schema(
+            self.ctx.clone(),
+            &table_info.meta.constraints,
+            new_schema.as_ref(),
+        )?;
+
         let base_snapshot = fuse_table.read_table_snapshot().await?;
         let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
         let table_meta_timestamps = self
@@ -304,15 +352,16 @@ impl ModifyTableColumnInterpreter {
                                 && old_field.data_type.remove_nullable()
                                     != field.data_type.remove_nullable()
                             {
-                                return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                                    "column `{}` is referenced by inverted index, drop inverted index `{}` first",
-                                    field.name, index_name,
+                                return Err(ErrorCode::ColumnReferencedByIndex(format!(
+                                    "column `{}` is referenced by {} index, drop index `{}` first",
+                                    field.name, index.index_type, index_name,
                                 )));
                             }
                         }
                     }
                 }
 
+                // Ignore column comment modify for table branch.
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
@@ -377,19 +426,23 @@ impl ModifyTableColumnInterpreter {
                     .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
                 modified_default_scalars.insert(field_index, default_scalar);
             }
-            table_info.meta.schema = new_schema.clone().into();
         }
 
-        // if don't need rebuild table, only update table meta.
+        // if don't need to rebuild table, only update table meta.
         if modified_default_scalars.is_empty()
             || base_snapshot.is_none_or(|v| v.summary.row_count == 0)
         {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
-                &table_info,
                 table_info.meta.clone(),
                 catalog,
+                |snapshot_opt, meta| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.schema = new_schema.as_ref().clone();
+                    }
+                    meta.schema = new_schema.clone();
+                },
             )
             .await?;
 
@@ -539,10 +592,16 @@ impl ModifyTableColumnInterpreter {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let sql = format!(
-            "SELECT {} FROM `{}`.`{}`",
-            query_fields, self.plan.database, self.plan.table
-        );
+        let table_ref = if let Some(branch) = &self.plan.branch {
+            format!(
+                "`{}`.`{}`/`{}`",
+                self.plan.database, self.plan.table, branch
+            )
+        } else {
+            format!("`{}`.`{}`", self.plan.database, self.plan.table)
+        };
+        let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
+        table_info.meta.schema = new_schema;
 
         build_select_insert_plan(
             self.ctx.clone(),
@@ -567,13 +626,13 @@ impl ModifyTableColumnInterpreter {
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        let mut table_info = table.get_table_info().clone();
-        table_info.meta.fill_field_comments();
+        let mut new_table_meta = table.get_table_info().meta.clone();
+        new_table_meta.fill_field_comments();
         let mut modify_comment = false;
         for (field, comment) in field_and_comments {
             if let Some((i, _)) = schema.column_with_name(&field.name) {
-                if table_info.meta.field_comments[i] != *comment {
-                    table_info.meta.field_comments[i] = comment.to_string();
+                if new_table_meta.field_comments[i] != *comment {
+                    new_table_meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
                 }
             } else {
@@ -588,9 +647,9 @@ impl ModifyTableColumnInterpreter {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
-                &table_info,
-                table_info.meta.clone(),
+                new_table_meta,
                 catalog,
+                |_, _| {},
             )
             .await?;
         }
@@ -648,9 +707,7 @@ impl ModifyTableColumnInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
-        let table_info = table.get_table_info();
         let schema = table.schema();
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let new_schema = if let Some((i, field)) = schema.column_with_name(&column) {
             match field.computed_expr {
                 Some(ComputedExpr::Stored(_)) => {}
@@ -673,22 +730,19 @@ impl ModifyTableColumnInterpreter {
             )));
         };
 
-        let mut new_table_meta = table_meta;
-        new_table_meta.schema = new_schema.into();
-
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
-            lvt_check: None,
-        };
-
-        let _resp = catalog.update_single_table_meta(req, table_info).await?;
-
+        commit_table_meta(
+            &self.ctx,
+            table.as_ref(),
+            table_meta,
+            catalog,
+            |snapshot_opt, meta| {
+                if let Some(snapshot) = snapshot_opt {
+                    snapshot.schema = new_schema.clone();
+                }
+                meta.schema = Arc::new(new_schema);
+            },
+        )
+        .await?;
         Ok(PipelineBuildResult::create())
     }
 }
@@ -710,7 +764,14 @@ impl Interpreter for ModifyTableColumnInterpreter {
         let tbl_name = self.plan.table.as_str();
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let table = catalog
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                db_name,
+                tbl_name,
+                self.plan.branch.as_deref(),
+            )
+            .await?;
 
         table.check_mutable()?;
 
@@ -840,7 +901,7 @@ pub(crate) async fn build_select_insert_plan(
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
         input: select_plan,
-        table_info: TableInfoWithBranch::new(new_table.get_table_info()),
+        table_info: new_table.get_table_info().clone(),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),

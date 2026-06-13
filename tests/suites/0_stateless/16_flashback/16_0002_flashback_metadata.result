@@ -1,0 +1,110 @@
+#### prepare flashback metadata regression environment
+>>>> DROP DATABASE IF EXISTS db_16_0002
+>>>> CREATE DATABASE db_16_0002
+#### flashback should clear bloom index options tied to dropped columns
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_bloom(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_bloom VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_bloom ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_bloom SET OPTIONS(bloom_index_columns = 'a, c')
+>>>> INSERT INTO db_16_0002.t_bloom VALUES (2, 2, 2)
+#### flashback bloom table to saved snapshot
+>>>> SELECT table_option NOT LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_bloom'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_bloom VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_bloom
+true
+<<<<
+#### flashback should preserve still-compatible bloom index options
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_bloom_keep(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_bloom_keep VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_bloom_keep ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_bloom_keep SET OPTIONS(bloom_index_columns = 'a')
+>>>> INSERT INTO db_16_0002.t_bloom_keep VALUES (2, 2, 2)
+#### flashback compatible bloom table to saved snapshot
+>>>> SELECT table_option LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_bloom_keep'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_bloom_keep VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_bloom_keep
+true
+<<<<
+#### flashback should preserve still-compatible approx distinct options
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_hll_keep(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_hll_keep VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_hll_keep ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_hll_keep SET OPTIONS(approx_distinct_columns = 'a')
+>>>> INSERT INTO db_16_0002.t_hll_keep VALUES (2, 2, 2)
+#### flashback compatible approx distinct table to saved snapshot
+>>>> SELECT table_option LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_hll_keep'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_hll_keep VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_hll_keep
+true
+<<<<
+#### flashback should preserve explicit bloom none option
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_bloom_none(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_bloom_none VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_bloom_none ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_bloom_none SET OPTIONS(bloom_index_columns = '')
+>>>> INSERT INTO db_16_0002.t_bloom_none VALUES (2, 2, 2)
+#### flashback bloom none table to saved snapshot
+>>>> SELECT table_option LIKE '%BLOOM_INDEX_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_bloom_none'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_bloom_none VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_bloom_none
+true
+<<<<
+#### flashback should preserve explicit approx distinct none option
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_hll_none(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_hll_none VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_hll_none ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_hll_none SET OPTIONS(approx_distinct_columns = '')
+>>>> INSERT INTO db_16_0002.t_hll_none VALUES (2, 2, 2)
+#### flashback approx distinct none table to saved snapshot
+>>>> SELECT table_option LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_hll_none'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_hll_none VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_hll_none
+true
+<<<<
+#### flashback should clear approx distinct options tied to dropped columns
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_hll(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_hll VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_hll ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_hll SET OPTIONS(approx_distinct_columns = 'a, c')
+>>>> INSERT INTO db_16_0002.t_hll VALUES (2, 2, 2)
+#### flashback approx distinct table to saved snapshot
+>>>> SELECT table_option NOT LIKE '%APPROX_DISTINCT_COLUMNS=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_hll'
+true
+<<<<
+>>>> INSERT INTO db_16_0002.t_hll VALUES (3, 3)
+>>>> SELECT count(*)=2 FROM db_16_0002.t_hll
+true
+<<<<
+#### flashback should clear cluster metadata tied to dropped columns
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_ck(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_ck VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_ck ADD COLUMN c INT
+>>>> INSERT INTO db_16_0002.t_ck VALUES (2, 2, 2)
+>>>> ALTER TABLE db_16_0002.t_ck CLUSTER BY (c, a)
+#### flashback cluster table to saved snapshot
+>>>> SELECT table_option NOT LIKE '%CLUSTER_TYPE=%' FROM system.tables WHERE database = 'db_16_0002' AND name = 't_ck'
+true
+<<<<
+#### flashback should reject constraints tied to dropped columns
+>>>> CREATE OR REPLACE TABLE db_16_0002.t_constraint(a INT, b INT)
+>>>> INSERT INTO db_16_0002.t_constraint VALUES (1, 1)
+>>>> ALTER TABLE db_16_0002.t_constraint ADD COLUMN c INT
+>>>> ALTER TABLE db_16_0002.t_constraint ADD CONSTRAINT c_positive CHECK (c > 0)
+>>>> INSERT INTO db_16_0002.t_constraint VALUES (2, 2, 2)
+>>>> INSERT INTO db_16_0002.t_constraint VALUES (3, 3, -1)
+<<<< expected failure happened
+#### flashback constrained table to saved snapshot should fail
+>>>> ALTER TABLE db_16_0002.t_constraint FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')
+<<<< expected failure happened
+#### cleanup flashback metadata regression environment
+>>>> DROP DATABASE db_16_0002

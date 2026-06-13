@@ -21,18 +21,21 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStagePlan;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_meta_client::types::MatchSeq;
 use log::debug;
 use log::info;
 
+use crate::interpreters::DropUserStageInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct CreateUserStageInterpreter {
@@ -94,24 +97,24 @@ impl Interpreter for CreateUserStageInterpreter {
             _ => None,
         };
 
-        let mut user_stage = user_stage;
-        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
-        user_stage.created_on = Utc::now();
-        let _ = user_mgr
-            .add_stage(tenant, user_stage.clone(), &plan.create_option)
-            .await?;
-
         // when create or replace stage success, if old stage is not External stage, remove stage files
         if let Some(stage) = old_stage {
             if stage.stage_type != StageType::External {
-                let op = StageTable::get_op(&stage)?;
-                op.remove_all("/").await?;
+                let op = init_stage_operator(&stage)?;
+                DropUserStageInterpreter::remove_all(self.ctx.clone(), op).await?;
                 info!(
                     "create or replace stage {:?} with all objects removed in stage",
                     user_stage.stage_name
                 );
             }
         }
+
+        let mut user_stage = user_stage;
+        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+        user_stage.created_on = Utc::now();
+        let _ = user_mgr
+            .add_stage(tenant, user_stage.clone(), &plan.create_option)
+            .await?;
 
         // create dir if new stage if not external stage
         if user_stage.stage_type != StageType::External {

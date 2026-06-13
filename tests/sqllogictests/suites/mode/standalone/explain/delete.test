@@ -44,6 +44,8 @@ CommitSink
             ├── probe keys: [t1.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
@@ -66,6 +68,7 @@ CommitSink
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
                 └── estimated rows: 4.00
 
 
@@ -97,7 +100,9 @@ CommitSink
             ├── probe keys: [t1.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── estimated rows: 2.00
+            ├── build join filters:
+            │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: 1.75
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── scan id: 1
@@ -109,18 +114,15 @@ CommitSink
             │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             │   ├── push downs: [filters: [], limit: NONE]
             │   └── estimated rows: 2.00
-            └── Filter(Probe)
-                ├── output columns: [t1.a (#0), t1._row_id (#4)]
-                ├── filters: [is_true(t1.b (#1) > 2)]
-                ├── estimated rows: 3.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── scan id: 0
-                    ├── output columns: [a (#0), b (#1), _row_id (#4)]
-                    ├── read rows: 4
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
-                    └── estimated rows: 4.00
+            └── TableScan(Probe)
+                ├── table: default.default.t1
+                ├── scan id: 0
+                ├── output columns: [a (#0), _row_id (#4)]
+                ├── read rows: 4
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 3.50

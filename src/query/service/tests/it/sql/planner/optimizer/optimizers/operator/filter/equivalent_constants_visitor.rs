@@ -17,19 +17,21 @@ use std::sync::Arc;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use databend_common_sql::plans::VisitorMut;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;
 
@@ -39,22 +41,31 @@ async fn test_equivalent_constants() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let cases = [
-        ("a = 1 and b = a", "a = 1 and b = 1"),
+        ("n = 1 and m = n", "n = 1 and m = 1"),
+        (
+            "n = 1 and (m > n and m < (n + m))",
+            "n = 1 and (m > 1 and m < (1 + m))",
+        ),
+        (
+            "(m > n and m < (n + m)) and n = 1",
+            "(m > 1 and m < (1 + m)) and n = 1",
+        ),
+        (
+            "n = 1 or (m > n and m < (n + 2))",
+            "n = 1 or (m > n and m < (n + 2))",
+        ),
+        (
+            "n = 1 or (n = 2 and m > n and m < (n + m))",
+            "n = 1 or (n = 2 and m > 2 and m < (2 + m))",
+        ),
+        ("a = 1 and b = a", "a = 1 and b = a"),
         (
             "a = 1 and (b > a and b < (a + b))",
-            "a = 1 and (b > 1 and b < (1 + b))",
-        ),
-        (
-            "(b > a and b < (a + b)) and a = 1",
-            "(b > 1 and b < (1 + b)) and a = 1",
-        ),
-        (
-            "a = 1 or (b > a and b < (a + 2))",
-            "a = 1 or (b > a and b < (a + 2))",
+            "a = 1 and (b > a and b < (a + b))",
         ),
         (
             "a = 1 or (a = 2 and b > a and b < (a + b))",
-            "a = 1 or (a = 2 and b > 2 and b < (2 + b))",
+            "a = 1 or (a = 2 and b > a and b < (a + b))",
         ),
     ];
 
@@ -105,11 +116,12 @@ fn test_bind_context() -> BindContext {
         column_position: None,
         table_index: None,
         column_name: "a".to_string(),
-        index: 0,
+        index: Symbol::new(0),
         data_type: Box::new(DataType::String),
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
     });
     bind_context.add_column_binding(ColumnBinding {
         database_name: None,
@@ -117,11 +129,38 @@ fn test_bind_context() -> BindContext {
         column_position: None,
         table_index: None,
         column_name: "b".to_string(),
-        index: 1,
+        index: Symbol::new(1),
         data_type: Box::new(DataType::String),
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
+    });
+    bind_context.add_column_binding(ColumnBinding {
+        database_name: None,
+        table_name: None,
+        column_position: None,
+        table_index: None,
+        column_name: "n".to_string(),
+        index: Symbol::new(2),
+        data_type: Box::new(DataType::Number(NumberDataType::Int64)),
+        visibility: Visibility::Visible,
+        virtual_expr: None,
+        is_srf: false,
+        column_name_lower: None,
+    });
+    bind_context.add_column_binding(ColumnBinding {
+        database_name: None,
+        table_name: None,
+        column_position: None,
+        table_index: None,
+        column_name: "m".to_string(),
+        index: Symbol::new(3),
+        data_type: Box::new(DataType::Number(NumberDataType::Int64)),
+        visibility: Visibility::Visible,
+        virtual_expr: None,
+        is_srf: false,
+        column_name_lower: None,
     });
     bind_context
 }

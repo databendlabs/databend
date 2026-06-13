@@ -38,6 +38,7 @@ use crate::basic::shuffle_processor::MergePartitionProcessor;
 use crate::basic::shuffle_processor::PartitionProcessor;
 use crate::core::Callback;
 use crate::core::ExecutionInfo;
+use crate::core::ExecutorWaker;
 use crate::core::FinishedCallbackChain;
 use crate::core::InputPort;
 use crate::core::LockGuard;
@@ -49,6 +50,7 @@ use crate::core::SourcePipeBuilder;
 use crate::core::TransformPipeBuilder;
 use crate::core::processor::ProcessorPtr;
 use crate::core::profile::PlanScope;
+use crate::core::waker::ProxyWakeCallback;
 
 #[derive(Clone)]
 pub struct Node {
@@ -107,6 +109,8 @@ pub struct Pipeline {
     lock_guards: Vec<Arc<LockGuard>>,
 
     on_finished_chain: FinishedCallbackChain,
+
+    waker: Arc<ExecutorWaker>,
 }
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
@@ -122,6 +126,7 @@ impl Pipeline {
             on_init: None,
             lock_guards: vec![],
             on_finished_chain: FinishedCallbackChain::create(),
+            waker: ExecutorWaker::create(),
         }
     }
 
@@ -255,6 +260,18 @@ impl Pipeline {
 
     pub fn get_max_threads(&self) -> usize {
         self.max_threads
+    }
+
+    /// Get the executor waker
+    ///
+    /// Processor can hold this waker and use it to wake itself up after the executor is created.
+    ///
+    /// # Warning
+    /// The waker directly affects the executor's scheduling behavior. Using it incorrectly
+    /// may cause unexpected scheduling issues or deadlocks. Do not use this unless you
+    /// clearly understand how the executor scheduling works.
+    pub fn get_waker(&self) -> Arc<ExecutorWaker> {
+        self.waker.clone()
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
@@ -577,6 +594,12 @@ impl Pipeline {
     }
 
     pub fn merge(&mut self, mut other: Self) -> Result<VecDeque<(NodeIndex, usize)>> {
+        if !Arc::ptr_eq(&self.waker, &other.waker) {
+            let target_waker = self.waker.clone();
+            let proxy_callback = ProxyWakeCallback::create(target_waker);
+            other.waker.bind(proxy_callback);
+        }
+
         self.max_threads = std::cmp::max(self.max_threads, other.max_threads);
         let offset = self.graph.node_count();
 
@@ -627,5 +650,47 @@ impl Drop for Pipeline {
                 .on_finished_chain
                 .apply(ExecutionInfo::create(cause, HashMap::new()));
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+    use crate::core::waker::WakeCallback;
+
+    #[test]
+    fn test_merge_pipeline_waker_proxy() -> Result<()> {
+        let mut left = Pipeline::create();
+        let right = Pipeline::create();
+
+        let left_waker = left.get_waker();
+        let right_waker = right.get_waker();
+
+        assert!(!left_waker.is_bound());
+        assert!(!right_waker.is_bound());
+
+        let _ = left.merge(right)?;
+
+        assert!(right_waker.is_bound());
+
+        let wake_count = Arc::new(AtomicUsize::new(0));
+
+        struct TestWakeCallback(Arc<AtomicUsize>);
+
+        impl WakeCallback for TestWakeCallback {
+            fn wake(&self, _id: NodeIndex, _worker_id: usize) -> Result<()> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+        left_waker.bind(Arc::new(TestWakeCallback(wake_count.clone())));
+
+        right_waker.wake(NodeIndex::new(7), 0)?;
+        assert_eq!(wake_count.load(Ordering::SeqCst), 1);
+        Ok(())
     }
 }

@@ -19,4 +19,11 @@ pub trait FlightScatter: Sync + Send {
     fn name(&self) -> &'static str;
 
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
+
+    /// Compute per-row partition indices for use with BlockPartitionStream.
+    /// Returns None if this scatter type doesn't support index-based partitioning
+    /// (e.g., broadcast scatter clones the entire block to all destinations).
+    fn scatter_indices(&self, _data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
+        Ok(None)
+    }
 }

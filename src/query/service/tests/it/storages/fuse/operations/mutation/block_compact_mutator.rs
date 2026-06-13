@@ -36,7 +36,9 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
+use databend_query::sessions::TableContextTableManagement;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -157,7 +159,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
-        executor.execute()?;
+        executor.execute().await?;
         Ok(true)
     } else {
         Ok(false)
@@ -230,6 +232,8 @@ async fn test_safety() -> anyhow::Result<()> {
             schema.as_ref().clone(),
             summary,
             locations.clone(),
+            None,
+            None,
             None,
             TestFixture::default_table_meta_timestamps(),
         )?;

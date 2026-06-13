@@ -2,6 +2,7 @@ import pytest
 import databend_driver
 
 from ..utils import DATABEND_DSL
+from .copy_utils import unload_and_read_stage_text
 
 test_empty_data = [
     # test empty_field_as
@@ -35,7 +36,7 @@ def test_empty(tid, val, typ, options, expected):
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test copy
@@ -79,7 +80,7 @@ def test_null(tid, val, typ, options, expected):
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test copy
@@ -124,7 +125,7 @@ def test_null_display_empty(
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{data},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{data},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test
@@ -162,7 +163,7 @@ def test_column_not_match(data, check, exp):
     conn.exec(f"create or replace stage {name}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{data}') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{data}') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     copy_sql = f"copy into {name} from @{name} file_format=(type=csv error_on_column_count_mismatch={check}) on_error=continue"
@@ -178,3 +179,25 @@ def test_column_not_match(data, check, exp):
 
     res = conn.query_row(select_sql)
     assert res.values()[0] == exp
+
+
+def test_trim_space(copy_env):
+    conn = copy_env.conn
+    name = copy_env.uniq_name
+    path = f"@{name}/trim_space.csv"
+
+    content = unload_and_read_stage_text(
+        copy_env,
+        path,
+        """(select ' 42 ,"  hello  " ,  NULL  ')""",
+        "file_format=(type=TSV)",
+    )
+    assert content == ' 42 ,"  hello  " ,  NULL  \n'
+
+    conn.exec("create or replace table t_trim_csv (a int, b string, c string null)")
+    res = conn.query_row(
+        f"copy into t_trim_csv from {path} "
+        "file_format=(type=csv trim_space=true null_display='NULL')"
+    )
+    assert res.values()[1] == 1
+    assert conn.query_row("select * from t_trim_csv").values() == (42, "hello", None)

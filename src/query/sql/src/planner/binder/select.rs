@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -24,6 +26,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::type_check::common_super_type;
@@ -31,15 +34,19 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Finder;
+use super::aggregate_prepass::AggregateExprInfo;
+use super::reject_grouping_functions;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::NameResolutionContext;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::project::SelectInfo;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
@@ -50,9 +57,8 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
-use crate::plans::Visitor as _;
+use crate::plans::Visitor;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -60,11 +66,368 @@ pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ClauseAliasBindings {
+    preferred: Vec<(String, ScalarExpr)>,
+    available: Vec<(String, ScalarExpr)>,
+    prior_group_aliases: Vec<(String, ScalarExpr)>,
+    group_by_column_first: bool,
+}
+
+pub(crate) type ClauseAliasLookup<'a> = (
+    Option<&'a [(String, ScalarExpr)]>,
+    Option<&'a [(String, ScalarExpr)]>,
+);
+
+impl ClauseAliasBindings {
+    pub(crate) fn group_item_aliases(
+        &self,
+        expr: &Expr,
+        disable_select_alias_fallback: bool,
+    ) -> ClauseAliasLookup<'_> {
+        // Complex GROUP BY items bind input columns first, then fall back to
+        // SELECT aliases only for unresolved names in a normal GROUP BY.
+        //
+        // `SELECT i AS k FROM t GROUP BY k` may bind `k` as the alias for `i`.
+        // `SELECT 1 AS k FROM t GROUP BY k + 1` may bind `k` from the SELECT
+        // list if there is no input column named `k`.
+        // `GROUP BY k, abs(k)` should still prefer the earlier GROUP BY item
+        // alias inside later complex items, even if an input column conflicts.
+        if Self::simple_unqualified_column_name(expr).is_none() {
+            // GROUPING SETS keep prior alias reuse scoped to the current
+            // generated set. A complex item in a later set must not bypass that
+            // boundary by falling back to SELECT aliases directly.
+            let fallback_aliases = if disable_select_alias_fallback || self.available.is_empty() {
+                None
+            } else {
+                Some(self.available.as_slice())
+            };
+
+            return (
+                (!self.prior_group_aliases.is_empty())
+                    .then_some(self.prior_group_aliases.as_slice()),
+                fallback_aliases,
+            );
+        }
+
+        // With `enable_group_by_column_first`, the first binding pass should
+        // use input columns only. Alias fallback is still available for simple
+        // names that do not exist in the input scope.
+        if self.group_by_column_first {
+            return (
+                None,
+                (!self.available.is_empty()).then_some(self.available.as_slice()),
+            );
+        }
+
+        let preferred = (!self.preferred.is_empty()).then_some(self.preferred.as_slice());
+        let fallback =
+            (self.preferred.len() != self.available.len()).then_some(self.available.as_slice());
+
+        (preferred, fallback)
+    }
+
+    pub(crate) fn matched_group_item_alias(
+        &self,
+        expr: &Expr,
+        scalar_expr: &ScalarExpr,
+    ) -> Option<String> {
+        let column_name = Self::simple_unqualified_column_name(expr)?;
+        self.available
+            .iter()
+            .find(|(alias, scalar)| {
+                alias.eq_ignore_ascii_case(column_name) && scalar == scalar_expr
+            })
+            .map(|(alias, _)| alias.clone())
+    }
+
+    pub(crate) fn register_group_item_alias(&mut self, alias: String, scalar: ScalarExpr) {
+        if !self
+            .prior_group_aliases
+            .iter()
+            .any(|(existing_alias, existing_scalar)| {
+                existing_alias.eq_ignore_ascii_case(&alias) && existing_scalar == &scalar
+            })
+        {
+            self.prior_group_aliases.push((alias, scalar));
+        }
+    }
+
+    fn simple_unqualified_column_name(expr: &Expr) -> Option<&str> {
+        let Expr::ColumnRef {
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column,
+                },
+            ..
+        } = expr
+        else {
+            return None;
+        };
+
+        Some(column.name())
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AggregateAliasFeature {
+    pub(crate) ref_aggregate: bool,
+    pub(crate) ref_window: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct SelectClauseFact {
+    pub(crate) expr_info: AggregateExprInfo,
+    pub(crate) alias_feature: AggregateAliasFeature,
+}
+
+impl SelectClauseFact {
+    pub(crate) fn needs_order_by_select_item_replacement(&self) -> bool {
+        !self.expr_info.referenced_aliases.is_empty()
+    }
+
+    pub(crate) fn contains_or_references_aggregate(&self) -> bool {
+        self.expr_info.contains_aggregate || self.alias_feature.ref_aggregate
+    }
+
+    pub(crate) fn contains_or_references_window(&self) -> bool {
+        self.expr_info.contains_window || self.alias_feature.ref_window
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GroupByAliasPolicy {
+    Preferred,
+    FallbackOnly,
+}
+
+impl GroupByAliasPolicy {
+    fn from_item(item: &SelectItem<'_>) -> Self {
+        if item.used_functions.iter().any(|name| {
+            BUILTIN_FUNCTIONS
+                .get_property(name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
+        }) {
+            return Self::FallbackOnly;
+        }
+
+        let mut finder = Finder::new(&|expr| {
+            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
+        });
+        finder.visit(&item.scalar).unwrap();
+        if finder.scalars().is_empty() {
+            Self::Preferred
+        } else {
+            Self::FallbackOnly
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SelectAliasEntry {
+    alias_index: usize,
+    explicit_expr_alias: bool,
+    group_by_policy: GroupByAliasPolicy,
+    aggregate_expr_info: Option<AggregateExprInfo>,
+}
+
+impl SelectAliasEntry {
+    fn new(alias_index: usize, item: &SelectItem<'_>) -> Self {
+        Self {
+            alias_index,
+            explicit_expr_alias: matches!(item.select_target, SelectTarget::AliasedExpr {
+                alias: Some(_),
+                ..
+            }),
+            group_by_policy: GroupByAliasPolicy::from_item(item),
+            aggregate_expr_info: None,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct SelectAliasCatalog {
+    aliases: Vec<(String, ScalarExpr)>,
+    by_name: HashMap<String, Vec<usize>>,
+    items: Vec<SelectAliasEntry>,
+}
+
+impl SelectAliasCatalog {
+    pub(crate) fn all_aliases(&self) -> &[(String, ScalarExpr)] {
+        &self.aliases
+    }
+
+    pub(crate) fn group_by_bindings(&self, group_by_column_first: bool) -> ClauseAliasBindings {
+        let mut bindings = ClauseAliasBindings {
+            group_by_column_first,
+            ..Default::default()
+        };
+        for item in &self.items {
+            if !item.explicit_expr_alias {
+                continue;
+            }
+
+            let entry = self.aliases[item.alias_index].clone();
+            if item.group_by_policy == GroupByAliasPolicy::Preferred {
+                bindings.preferred.push(entry.clone());
+            }
+            bindings.available.push(entry);
+        }
+        bindings
+    }
+}
+
+impl SelectList<'_> {
+    pub(crate) fn alias_catalog(&self) -> SelectAliasCatalog {
+        let aliases = self
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect();
+
+        let by_name = self.items.iter().enumerate().fold(
+            HashMap::<_, Vec<_>>::new(),
+            |mut by_name, (i, item)| {
+                by_name.entry(item.alias.clone()).or_default().push(i);
+                by_name
+            },
+        );
+
+        let items = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| SelectAliasEntry::new(i, item))
+            .collect();
+
+        SelectAliasCatalog {
+            aliases,
+            by_name,
+            items,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
+    pub used_functions: HashSet<String>,
+}
+
+impl SelectAliasCatalog {
+    pub(super) fn analyze_aggregate_prepass_exprs(
+        &mut self,
+        select_list: &SelectList<'_>,
+        name_resolution_ctx: &NameResolutionContext,
+        udaf_names: &HashSet<String>,
+    ) {
+        let alias_names = select_list
+            .items
+            .iter()
+            .filter_map(|item| match item.select_target {
+                SelectTarget::AliasedExpr { .. } => Some(item.alias.as_str()),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+
+        for (item, entry) in select_list.items.iter().zip(self.items.iter_mut()) {
+            let SelectTarget::AliasedExpr { expr, .. } = item.select_target else {
+                continue;
+            };
+
+            entry.aggregate_expr_info = Some(AggregateExprInfo::analyze(
+                name_resolution_ctx,
+                udaf_names,
+                &alias_names,
+                expr,
+            ));
+        }
+    }
+
+    pub(super) fn aggregate_prepass_alias_names(&self) -> HashSet<&str> {
+        self.by_name
+            .iter()
+            .filter(|(_, indices)| {
+                indices
+                    .iter()
+                    .any(|index| self.items[*index].aggregate_expr_info.is_some())
+            })
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
+
+    pub(super) fn aggregate_alias_feature(&self, names: &[String]) -> AggregateAliasFeature {
+        let mut usage = AggregateAliasFeature::default();
+        let mut reachability = AggregateAliasReachability {
+            catalog: self,
+            visiting: BTreeSet::new(),
+        };
+
+        for name in names {
+            if reachability.alias_reaches(name, &mut usage) {
+                return usage;
+            }
+        }
+
+        usage
+    }
+
+    pub(super) fn unique_aggregate_prepass_expr_info(
+        &self,
+        name: &str,
+    ) -> Option<&AggregateExprInfo> {
+        let mut matches = self
+            .by_name
+            .get(name)?
+            .iter()
+            .filter_map(|index| self.items[*index].aggregate_expr_info.as_ref());
+        let info = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some(info)
+    }
+}
+
+struct AggregateAliasReachability<'a> {
+    catalog: &'a SelectAliasCatalog,
+    visiting: BTreeSet<String>,
+}
+
+impl<'a> AggregateAliasReachability<'a> {
+    fn alias_reaches(&mut self, name: &str, usage: &mut AggregateAliasFeature) -> bool {
+        let Some(alias) = self.catalog.unique_aggregate_prepass_expr_info(name) else {
+            return false;
+        };
+
+        if usage.ref_aggregate && usage.ref_window {
+            return true;
+        }
+
+        if !self.visiting.insert(name.to_string()) {
+            return false;
+        }
+
+        usage.ref_aggregate |= alias.contains_aggregate;
+        usage.ref_window |= alias.contains_window;
+        if usage.ref_aggregate && usage.ref_window {
+            self.visiting.remove(name);
+            return true;
+        }
+
+        for dep in &alias.referenced_aliases {
+            if self.alias_reaches(dep, usage) {
+                break;
+            }
+        }
+        self.visiting.remove(name);
+        usage.ref_aggregate && usage.ref_window
+    }
 }
 
 impl Binder {
@@ -75,40 +438,40 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        let last_expr_context = bind_context.expr_context.clone();
-        bind_context.set_expr_context(ExprContext::WhereClause);
+        bind_context.with_expr_context(
+            ExprContext::WhereClause,
+            |bind_context| -> Result<(SExpr, ScalarExpr)> {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    aliases,
+                );
+                let (scalar, _) = scalar_binder.bind(expr)?;
+                let f = |scalar: &ScalarExpr| {
+                    scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
+                };
 
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            aliases,
-        );
-        let (scalar, _) = scalar_binder.bind(expr)?;
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
-            )
-        };
+                let mut finder = Finder::new(&f);
+                finder.visit(&scalar)?;
+                if !finder.scalars().is_empty() {
+                    return Err(ErrorCode::SemanticError(
+                        "Where clause can't contain aggregate or window functions".to_string(),
+                    )
+                    .set_span(scalar.span()));
+                }
 
-        let mut finder = Finder::new(&f);
-        finder.visit(&scalar)?;
-        if !finder.scalars().is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Where clause can't contain aggregate or window functions".to_string(),
-            )
-            .set_span(scalar.span()));
-        }
+                reject_grouping_functions(Some(&scalar), "Where clause")?;
 
-        let filter_plan = Filter {
-            predicates: split_conjunctions(&scalar),
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-        bind_context.set_expr_context(last_expr_context);
+                let filter_plan = Filter {
+                    predicates: split_conjunctions(&scalar),
+                };
+                let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
 
-        Ok((new_expr, scalar))
+                Ok((new_expr, scalar))
+            },
+        )
     }
 
     #[recursive::recursive]
@@ -286,11 +649,19 @@ impl Binder {
         }
 
         let output_indexes = new_bind_context.columns.iter().map(|x| x.index).collect();
+        let logical_recursive_cte_id = cte_name.as_ref().and_then(|cte_name| {
+            new_bind_context
+                .cte_context
+                .cte_map
+                .get(cte_name)
+                .and_then(|cte_info| cte_info.logical_recursive_cte_id)
+        });
 
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
             cte_scan_names,
+            logical_recursive_cte_id,
             output_indexes,
         };
 
@@ -301,14 +672,9 @@ impl Binder {
         );
 
         if distinct {
-            let columns = new_bind_context.all_column_bindings().to_vec();
-            new_expr = self.bind_distinct(
-                left_span,
-                &mut new_bind_context,
-                &columns,
-                &mut HashMap::new(),
-                new_expr,
-            )?;
+            let mut select_info =
+                SelectInfo::from_columns(new_bind_context.all_column_bindings().to_vec());
+            new_expr = self.bind_distinct(left_span, &mut select_info, new_expr)?;
         }
 
         Ok((new_expr, new_bind_context))
@@ -379,14 +745,8 @@ impl Binder {
             .set_cte_context(right_context.cte_context);
 
         // then apply distinct
-        let columns = left_context.all_column_bindings().to_vec();
-        let s_expr = self.bind_distinct(
-            left_span,
-            &mut left_context,
-            &columns,
-            &mut HashMap::new(),
-            s_expr,
-        )?;
+        let mut select_info = SelectInfo::from_columns(left_context.all_column_bindings().to_vec());
+        let s_expr = self.bind_distinct(left_span, &mut select_info, s_expr)?;
         Ok((s_expr, left_context))
     }
 
@@ -402,8 +762,8 @@ impl Binder {
         mut coercion_types: Vec<DataType>,
     ) -> Result<(
         BindContext,
-        Vec<(IndexType, Option<ScalarExpr>)>,
-        Vec<(IndexType, Option<ScalarExpr>)>,
+        Vec<(Symbol, Option<ScalarExpr>)>,
+        Vec<(Symbol, Option<ScalarExpr>)>,
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
@@ -486,13 +846,13 @@ impl Binder {
         &self,
         bind_context: &BindContext,
         stmt: &SelectStmt,
-        scalar_items: &HashMap<IndexType, ScalarItem>,
+        select_info: &SelectInfo,
         select_list: &SelectList,
         where_scalar: &Option<ScalarExpr>,
         order_by: &[OrderItem],
         limit: usize,
     ) -> Result<()> {
-        // Only simple single table queries with limit are supported.
+        // Only simple queries with limit are supported.
         // e.g.
         // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
@@ -500,16 +860,15 @@ impl Binder {
             || stmt.having.is_some()
             || stmt.distinct
             || stmt.qualify.is_some()
-            || !bind_context.aggregate_info.group_items.is_empty()
-            || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || bind_context.aggregate_info.has_group_items()
+            || bind_context.aggregate_info.has_aggregate_calls()
             || bind_context.has_srf_recursive()
         {
             return Ok(());
         }
 
         let mut metadata = self.metadata.write();
-        if metadata.tables().len() != 1 {
-            // Only support single table query.
+        if metadata.tables().is_empty() {
             return Ok(());
         }
 
@@ -560,16 +919,14 @@ impl Binder {
             return Ok(());
         }
 
-        if !metadata
-            .table(0)
-            .table()
-            .supported_internal_column(ROW_ID_COLUMN_ID)
-        {
-            return Ok(());
-        }
-
-        if !metadata.table(0).table().supported_lazy_materialize() {
-            return Ok(());
+        if metadata.tables().len() != 1 {
+            let across_join_threshold =
+                self.ctx
+                    .get_settings()
+                    .get_lazy_read_across_join_threshold()? as usize;
+            if across_join_threshold == 0 || limit > across_join_threshold {
+                return Ok(());
+            }
         }
 
         let cols = metadata.columns();
@@ -586,7 +943,7 @@ impl Binder {
 
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
-            if let Some(scalar) = scalar_items.get(&o.index) {
+            if let Some(scalar) = select_info.source_scalar_item(o.index) {
                 let cols = scalar.scalar.used_columns();
                 order_by_cols.extend(cols);
             } else {
@@ -628,19 +985,38 @@ impl Binder {
         // add previous(subquery) stored non_lazy_columns to non_lazy_cols
         non_lazy_cols.extend(metadata.non_lazy_columns());
 
-        let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
-        metadata.add_lazy_columns(lazy_cols);
+        let lazy_cols: ColumnSet = select_cols.difference(&non_lazy_cols).copied().collect();
+        let mut lazy_table_indexes = BTreeSet::new();
+        let mut supported_lazy_cols = ColumnSet::new();
+        for index in lazy_cols.iter() {
+            let table_index = match metadata.column(*index) {
+                ColumnEntry::BaseTableColumn(c) => c.table_index,
+                _ => continue,
+            };
+            let table = metadata.table(table_index).table();
+            if !table.supported_internal_column(ROW_ID_COLUMN_ID)
+                || !table.supported_lazy_materialize()
+            {
+                continue;
+            }
+            supported_lazy_cols.insert(*index);
+            lazy_table_indexes.insert(table_index);
+        }
 
-        // Single table, the table index is 0.
-        let table_index = 0;
-        if !metadata.lazy_columns().is_empty()
-            && metadata.row_id_index_by_table_index(table_index).is_none()
-        {
-            let internal_column = INTERNAL_COLUMN_FACTORY
-                .get_internal_column(ROW_ID_COL_NAME)
-                .unwrap();
-            let index = metadata.add_internal_column(table_index, internal_column);
-            metadata.set_table_row_id_index(table_index, index);
+        if supported_lazy_cols.is_empty() {
+            return Ok(());
+        }
+
+        metadata.add_lazy_columns(supported_lazy_cols);
+
+        for table_index in lazy_table_indexes {
+            if metadata.row_id_index_by_table_index(table_index).is_none() {
+                let internal_column = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(ROW_ID_COL_NAME)
+                    .unwrap();
+                let index = metadata.add_internal_column(table_index, internal_column);
+                metadata.set_table_row_id_index(table_index, index);
+            }
         }
 
         Ok(())

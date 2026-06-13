@@ -135,3 +135,33 @@ SELECT to_string(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 
 statement ok
 DROP TABLE agg_bitmap_test
+
+# Test bitmap functions with bitmap containers (>4096 elements per container).
+# Previously BitmapReader::decode used BITMAP_LENGTH=1024 instead of 8192,
+# causing truncated data and panics in intersection_with_serialized_unchecked.
+
+statement ok
+DROP TABLE IF EXISTS agg_bitmap_large_test
+
+statement ok
+CREATE TABLE agg_bitmap_large_test(id Int, v Bitmap)
+
+statement ok
+INSERT INTO agg_bitmap_large_test SELECT 1, bitmap_or_agg(to_bitmap(number)) FROM numbers(5000) UNION ALL SELECT 1, bitmap_or_agg(to_bitmap(number + 100)) FROM numbers(5000)
+
+statement ok
+INSERT INTO agg_bitmap_large_test SELECT 2, bitmap_or_agg(to_bitmap(number)) FROM numbers(5000) UNION ALL SELECT 2, bitmap_or_agg(to_bitmap(number)) FROM numbers(5000)
+
+query II
+SELECT id, bitmap_and_count(v) FROM agg_bitmap_large_test GROUP BY id ORDER BY id
+----
+1 4900
+2 5000
+
+query I
+SELECT bitmap_count(bitmap_or_agg(to_bitmap(number))) FROM numbers(5000)
+----
+5000
+
+statement ok
+DROP TABLE agg_bitmap_large_test

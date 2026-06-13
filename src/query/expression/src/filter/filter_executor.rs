@@ -81,6 +81,7 @@ impl FilterExecutor {
     // Filter a DataBlock, return the filtered DataBlock.
     pub fn filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         if self.func_ctx.enable_selector_executor {
+            debug_assert!(data_block.num_rows() <= self.max_block_size);
             let origin_count = data_block.num_rows();
             if self.max_block_size < origin_count {
                 self.incr_max_block_size(origin_count);
@@ -103,6 +104,7 @@ impl FilterExecutor {
 
     // Store the filtered indices of data_block in `true_selection` and return the number of filtered indices.
     pub fn select(&mut self, data_block: &DataBlock) -> Result<usize> {
+        debug_assert!(data_block.num_rows() <= self.max_block_size);
         let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
         let selector = Selector::new(evaluator, data_block.num_rows());
         selector.select(
@@ -210,6 +212,10 @@ impl FilterExecutor {
 
     pub fn mutable_true_selection(&mut self) -> &mut [u32] {
         &mut self.true_selection
+    }
+
+    pub fn max_block_size(&self) -> usize {
+        self.max_block_size
     }
 
     fn incr_max_block_size(&mut self, new_max_block_size: usize) {

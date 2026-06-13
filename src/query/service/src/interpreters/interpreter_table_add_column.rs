@@ -14,20 +14,18 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
-use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AddColumnOption;
@@ -37,6 +35,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
@@ -45,11 +44,14 @@ use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct AddTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -78,7 +80,15 @@ impl Interpreter for AddTableColumnInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                db_name,
+                tbl_name,
+                self.plan.branch.as_deref(),
+            )
+            .await?;
         // check mutability
         tbl.check_mutable()?;
 
@@ -96,9 +106,22 @@ impl Interpreter for AddTableColumnInterpreter {
                 &self.plan.database, &self.plan.table
             )));
         }
-
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let field = self.plan.field.clone();
+        let index = match &self.plan.option {
+            AddColumnOption::First => 0,
+            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
+            AddColumnOption::End => table_info.meta.schema.num_fields(),
+        };
+        if self.plan.if_not_exists {
+            if table_info
+                .meta
+                .schema
+                .index_of(self.plan.field.name())
+                .is_ok()
+            {
+                return Ok(PipelineBuildResult::create());
+            }
+        }
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
@@ -121,11 +144,6 @@ impl Interpreter for AddTableColumnInterpreter {
             let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }
         is_valid_column(field.name())?;
-        let index = match &self.plan.option {
-            AddColumnOption::First => 0,
-            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
-            AddColumnOption::End => table_info.meta.schema.num_fields(),
-        };
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;
@@ -155,11 +173,16 @@ impl Interpreter for AddTableColumnInterpreter {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let sql = format!(
-                "SELECT {} FROM `{}`.`{}`",
-                query_fields, self.plan.database, self.plan.table
-            );
+            let table_ref = if let Some(branch) = &self.plan.branch {
+                format!(
+                    "`{}`.`{}`/`{}`",
+                    self.plan.database, self.plan.table, branch
+                )
+            } else {
+                format!("`{}`.`{}`", self.plan.database, self.plan.table)
+            };
 
+            let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
             return build_select_insert_plan(
                 self.ctx.clone(),
                 sql,
@@ -172,6 +195,12 @@ impl Interpreter for AddTableColumnInterpreter {
         }
 
         let need_update = num_rows > 0 && !self.plan.is_deterministic;
+        if self.plan.branch.is_some() && need_update {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
+                table_info.desc
+            )));
+        }
         if need_update && tbl.change_tracking_enabled() {
             // Rebuild table while change tracking is active may break the consistency
             // of tracked changes, leading to incorrect change records.
@@ -181,13 +210,16 @@ impl Interpreter for AddTableColumnInterpreter {
             )));
         }
 
-        let new_table_meta = table_info.meta.clone();
         commit_table_meta(
             &self.ctx,
             tbl.as_ref(),
-            &table_info,
-            new_table_meta,
+            table_info.meta.clone(),
             catalog,
+            |snapshot_opt, _| {
+                if let Some(snapshot) = snapshot_opt {
+                    snapshot.schema = table_info.meta.schema.as_ref().clone();
+                }
+            },
         )
         .await?;
 
@@ -213,7 +245,9 @@ impl Interpreter for AddTableColumnInterpreter {
                     schema,
                     mutation.metadata.clone(),
                 )?;
-                let _ = interpreter.execute(self.ctx.clone()).await?;
+                let _ = interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                    .await?;
                 return Ok(PipelineBuildResult::create());
             }
         }
@@ -221,36 +255,51 @@ impl Interpreter for AddTableColumnInterpreter {
     }
 }
 
-pub(crate) async fn commit_table_meta(
+pub(crate) async fn commit_table_meta<F>(
     ctx: &QueryContext,
     tbl: &dyn Table,
-    table_info: &TableInfo,
     mut new_table_meta: TableMeta,
     catalog: Arc<dyn Catalog>,
-) -> Result<()> {
+    f: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut Option<TableSnapshot>, &mut TableMeta),
+{
     if let Ok(fuse_tbl) = FuseTable::try_from_table(tbl) {
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
+        let mut new_snapshot = if let Some(prev) = fuse_tbl.read_table_snapshot().await? {
+            // Build new snapshot from previous
+            Some(TableSnapshot::try_from_previous(
+                prev.clone(),
+                Some(fuse_tbl.get_table_info().ident.seq),
+                ctx.get_table_meta_timestamps(fuse_tbl, Some(prev.clone()))?,
+            )?)
+        } else {
+            info!("Snapshot not found, no need to generate new snapshot");
+            None
+        };
 
-        let new_snapshot_location =
-            generate_new_snapshot(ctx, fuse_tbl, &new_table_meta.schema).await?;
+        f(&mut new_snapshot, &mut new_table_meta);
 
-        if let Some(new_snapshot_location) = &new_snapshot_location {
+        let mut new_snapshot_location = None;
+        if let Some(new_snapshot) = new_snapshot {
+            // Persist the snapshot
+            let new_snapshot_loc = fuse_tbl
+                .meta_location_generator()
+                .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+
+            let data = new_snapshot.to_bytes()?;
+            fuse_tbl
+                .get_operator_ref()
+                .write(&new_snapshot_loc, data)
+                .await?;
             new_table_meta.options.insert(
                 OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                new_snapshot_location.clone(),
+                new_snapshot_loc.clone(),
             );
-        };
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta: new_table_meta.clone(),
-            base_snapshot_location: fuse_tbl.snapshot_loc(),
-            lvt_check: None,
-        };
-
-        catalog.update_single_table_meta(req, table_info).await?;
+            new_snapshot_location = Some(new_snapshot_loc);
+        }
+        new_table_meta.updated_on = Utc::now();
+        update_table_meta(fuse_tbl, &new_table_meta, catalog).await?;
 
         if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
@@ -266,37 +315,22 @@ pub(crate) async fn commit_table_meta(
     Ok(())
 }
 
-async fn generate_new_snapshot(
-    ctx: &dyn TableContext,
-    fuse_table: &FuseTable,
-    new_table_schema: &TableSchema,
-) -> Result<Option<String>> {
-    if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-        let mut new_snapshot = TableSnapshot::try_from_previous(
-            snapshot.clone(),
-            Some(fuse_table.get_table_info().ident.seq),
-            ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
-        )?;
-
-        // replace schema
-        new_snapshot.schema = new_table_schema.clone();
-
-        // write down new snapshot
-        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
-            None,
-            &new_snapshot.snapshot_id,
-            TableSnapshot::VERSION,
-        )?;
-
-        let data = new_snapshot.to_bytes()?;
-        fuse_table
-            .get_operator_ref()
-            .write(&new_snapshot_location, data)
-            .await?;
-
-        Ok(Some(new_snapshot_location))
-    } else {
-        info!("Snapshot not found, no need to generate new snapshot");
-        Ok(None)
-    }
+pub(crate) async fn update_table_meta(
+    fuse_tbl: &FuseTable,
+    new_table_meta: &TableMeta,
+    catalog: Arc<dyn Catalog>,
+) -> Result<()> {
+    let mut table_info = fuse_tbl.get_table_info().clone();
+    let table_id = table_info.ident.table_id;
+    let table_version = table_info.ident.seq;
+    let req = UpdateTableMetaReq {
+        table_id,
+        seq: MatchSeq::Exact(table_version),
+        new_table_meta: new_table_meta.clone(),
+        base_snapshot_location: fuse_tbl.snapshot_loc(),
+        lvt_check: None,
+    };
+    table_info.meta = new_table_meta.clone();
+    catalog.update_single_table_meta(req, &table_info).await?;
+    Ok(())
 }

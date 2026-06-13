@@ -19,8 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
-use databend_common_hashtable::HashJoinHashtableLike;
-use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
@@ -28,6 +26,8 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 
 impl HashJoinProbeState {
     pub(crate) fn inner_join<
@@ -88,6 +88,7 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
+
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,
@@ -135,6 +136,7 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
+
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,

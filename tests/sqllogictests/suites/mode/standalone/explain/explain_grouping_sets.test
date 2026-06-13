@@ -291,7 +291,7 @@ Sequence
     │           ├── estimated rows: 11.11
     │           └── MaterializeCTERef
     │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-    │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+    │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
     │               └── estimated rows: 33.33
     └── Sequence
         ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_cols_1_3
@@ -306,7 +306,7 @@ Sequence
         │           ├── estimated rows: 11.11
         │           └── MaterializeCTERef
         │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-        │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+        │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
         │               └── estimated rows: 33.33
         └── Sequence
             ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_cols_2_3
@@ -321,7 +321,7 @@ Sequence
             │           ├── estimated rows: 11.11
             │           └── MaterializeCTERef
             │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-            │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+            │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
             │               └── estimated rows: 33.33
             └── Sequence
                 ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_cols_1
@@ -336,7 +336,7 @@ Sequence
                 │           ├── estimated rows: 11.11
                 │           └── MaterializeCTERef
                 │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-                │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+                │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                 │               └── estimated rows: 33.33
                 └── Sequence
                     ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_cols_2
@@ -351,7 +351,7 @@ Sequence
                     │           ├── estimated rows: 11.11
                     │           └── MaterializeCTERef
                     │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-                    │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+                    │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                     │               └── estimated rows: 33.33
                     └── Sequence
                         ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_cols_3
@@ -366,7 +366,7 @@ Sequence
                         │           ├── estimated rows: 11.11
                         │           └── MaterializeCTERef
                         │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-                        │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+                        │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                         │               └── estimated rows: 33.33
                         └── Sequence
                             ├── MaterializedCTE: cte_hierarchical_groupingsets_16366510952463710337_empty
@@ -381,7 +381,7 @@ Sequence
                             │           ├── estimated rows: 1.00
                             │           └── MaterializeCTERef
                             │               ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-                            │               ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+                            │               ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                             │               └── estimated rows: 33.33
                             └── UnionAll
                                 ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -410,7 +410,7 @@ Sequence
                                 │   │   │   │   │   │   │   ├── estimated rows: 33.33
                                 │   │   │   │   │   │   │   └── MaterializeCTERef
                                 │   │   │   │   │   │   │       ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2_3
-                                │   │   │   │   │   │   │       ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2), c (#3)]
+                                │   │   │   │   │   │   │       ├── cte_schema: [a (#1), b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │   │   │   │   │   │       └── estimated rows: 33.33
                                 │   │   │   │   │   │   └── EvalScalar
                                 │   │   │   │   │   │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -418,7 +418,7 @@ Sequence
                                 │   │   │   │   │   │       ├── estimated rows: 11.11
                                 │   │   │   │   │   │       └── MaterializeCTERef
                                 │   │   │   │   │   │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_2
-                                │   │   │   │   │   │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), b (#2)]
+                                │   │   │   │   │   │           ├── cte_schema: [a (#1), b (#2), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │   │   │   │   │           └── estimated rows: 11.11
                                 │   │   │   │   │   └── EvalScalar
                                 │   │   │   │   │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -426,7 +426,7 @@ Sequence
                                 │   │   │   │   │       ├── estimated rows: 11.11
                                 │   │   │   │   │       └── MaterializeCTERef
                                 │   │   │   │   │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1_3
-                                │   │   │   │   │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1), c (#3)]
+                                │   │   │   │   │           ├── cte_schema: [a (#1), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │   │   │   │           └── estimated rows: 11.11
                                 │   │   │   │   └── EvalScalar
                                 │   │   │   │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -434,7 +434,7 @@ Sequence
                                 │   │   │   │       ├── estimated rows: 11.11
                                 │   │   │   │       └── MaterializeCTERef
                                 │   │   │   │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_2_3
-                                │   │   │   │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), b (#2), c (#3)]
+                                │   │   │   │           ├── cte_schema: [b (#2), c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │   │   │           └── estimated rows: 11.11
                                 │   │   │   └── EvalScalar
                                 │   │   │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -442,7 +442,7 @@ Sequence
                                 │   │   │       ├── estimated rows: 11.11
                                 │   │   │       └── MaterializeCTERef
                                 │   │   │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_1
-                                │   │   │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#1)]
+                                │   │   │           ├── cte_schema: [a (#1), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │   │           └── estimated rows: 11.11
                                 │   │   └── EvalScalar
                                 │   │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -450,7 +450,7 @@ Sequence
                                 │   │       ├── estimated rows: 11.11
                                 │   │       └── MaterializeCTERef
                                 │   │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_2
-                                │   │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), b (#2)]
+                                │   │           ├── cte_schema: [b (#2), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │   │           └── estimated rows: 11.11
                                 │   └── EvalScalar
                                 │       ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]
@@ -458,7 +458,7 @@ Sequence
                                 │       ├── estimated rows: 11.11
                                 │       └── MaterializeCTERef
                                 │           ├── cte_name: cte_hierarchical_groupingsets_16366510952463710337_cols_3
-                                │           ├── cte_schema: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), c (#3)]
+                                │           ├── cte_schema: [c (#3), min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11)]
                                 │           └── estimated rows: 11.11
                                 └── EvalScalar
                                     ├── output columns: [min(number) (#8), max(number) (#9), sum(number) (#10), count(number) (#11), a (#12), b (#13), c (#14), sum(number) / if(count(number) = 0, 1, count(number)) (#15)]

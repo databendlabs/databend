@@ -1,0 +1,88 @@
+Sort(Final)
+├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7)]
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) DESC NULLS LAST, o_orderdate ASC NULLS LAST]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7), #_order_col]
+    ├── exchange type: Merge
+    └── Sort(Partial)
+        ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7), #_order_col]
+        ├── sort keys: [sum(l_extendedprice * (1 - l_discount)) DESC NULLS LAST, o_orderdate ASC NULLS LAST]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7)]
+            ├── group by: [l_orderkey, o_orderdate, o_shippriority]
+            ├── aggregate functions: [sum(sum_arg_0)]
+            ├── estimated rows: 1.00
+            └── Exchange
+                ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7)]
+                ├── exchange type: Hash(0, 1, 2)
+                └── AggregatePartial
+                    ├── group by: [l_orderkey, o_orderdate, o_shippriority]
+                    ├── aggregate functions: [sum(sum_arg_0)]
+                    ├── estimated rows: 1.00
+                    └── EvalScalar
+                        ├── output columns: [orders.o_orderdate (#4), orders.o_shippriority (#7), lineitem.l_orderkey (#17), sum_arg_0 (#33)]
+                        ├── expressions: [lineitem.l_extendedprice (#22) * (1 - lineitem.l_discount (#23))]
+                        ├── estimated rows: 0.00
+                        └── HashJoin
+                            ├── output columns: [orders.o_orderdate (#4), orders.o_shippriority (#7), lineitem.l_extendedprice (#22), lineitem.l_discount (#23), lineitem.l_orderkey (#17)]
+                            ├── join type: INNER
+                            ├── build keys: [lineitem.l_orderkey (#17)]
+                            ├── probe keys: [orders.o_orderkey (#0)]
+                            ├── keys is null equal: [false]
+                            ├── filters: []
+                            ├── build join filters:
+                            │   └── filter id:1, build key:lineitem.l_orderkey (#17), probe targets:[orders.o_orderkey (#0)@scan0], filter type:bloom,inlist,min_max
+                            ├── estimated rows: 0.00
+                            ├── Exchange(Build)
+                            │   ├── output columns: [lineitem.l_orderkey (#17), lineitem.l_extendedprice (#22), lineitem.l_discount (#23)]
+                            │   ├── exchange type: Broadcast
+                            │   └── TableScan
+                            │       ├── table: default.default.lineitem
+                            │       ├── scan id: 2
+                            │       ├── output columns: [l_orderkey (#17), l_extendedprice (#22), l_discount (#23)]
+                            │       ├── read rows: 0
+                            │       ├── read size: 0
+                            │       ├── partitions total: 0
+                            │       ├── partitions scanned: 0
+                            │       ├── push downs: [filters: [lineitem.l_shipdate (#27) > '1995-03-15'], limit: NONE]
+                            │       └── estimated rows: 0.00
+                            └── HashJoin(Probe)
+                                ├── output columns: [orders.o_orderkey (#0), orders.o_orderdate (#4), orders.o_shippriority (#7)]
+                                ├── join type: INNER
+                                ├── build keys: [customer.c_custkey (#9)]
+                                ├── probe keys: [orders.o_custkey (#1)]
+                                ├── keys is null equal: [false]
+                                ├── filters: []
+                                ├── build join filters:
+                                │   └── filter id:0, build key:customer.c_custkey (#9), probe targets:[orders.o_custkey (#1)@scan0], filter type:bloom,inlist,min_max
+                                ├── estimated rows: 0.00
+                                ├── Exchange(Build)
+                                │   ├── output columns: [customer.c_custkey (#9)]
+                                │   ├── exchange type: Broadcast
+                                │   └── TableScan
+                                │       ├── table: default.default.customer
+                                │       ├── scan id: 1
+                                │       ├── output columns: [c_custkey (#9)]
+                                │       ├── read rows: 0
+                                │       ├── read size: 0
+                                │       ├── partitions total: 0
+                                │       ├── partitions scanned: 0
+                                │       ├── push downs: [filters: [customer.c_mktsegment (#15) = 'BUILDING'], limit: NONE]
+                                │       └── estimated rows: 0.00
+                                └── Exchange(Probe)
+                                    ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderdate (#4), orders.o_shippriority (#7)]
+                                    ├── exchange type: Hash(orders.o_custkey (#1))
+                                    └── TableScan
+                                        ├── table: default.default.orders
+                                        ├── scan id: 0
+                                        ├── output columns: [o_orderkey (#0), o_custkey (#1), o_orderdate (#4), o_shippriority (#7)]
+                                        ├── read rows: 0
+                                        ├── read size: 0
+                                        ├── partitions total: 0
+                                        ├── partitions scanned: 0
+                                        ├── push downs: [filters: [orders.o_orderdate (#4) < '1995-03-15'], limit: NONE]
+                                        ├── apply join filters: [#1, #0]
+                                        └── estimated rows: 0.00
+

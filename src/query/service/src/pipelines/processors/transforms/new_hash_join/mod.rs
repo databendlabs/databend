@@ -24,8 +24,12 @@ mod runtime_filter;
 mod transform_hash_join;
 
 pub use grace::GraceHashJoin;
+pub use grace::GraceMemoryJoin;
 pub use hash_join_factory::HashJoinFactory;
+pub use hybrid::HybridHashJoin;
+pub use hybrid::HybridHashJoinState;
 pub use join::Join;
+pub use join::JoinStream;
 pub use memory::BasicHashJoinState;
 pub use memory::InnerHashJoin;
 pub use runtime_filter::RuntimeFiltersDesc;

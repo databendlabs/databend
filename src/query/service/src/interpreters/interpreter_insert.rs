@@ -18,7 +18,6 @@ use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -29,6 +28,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+#[cfg(feature = "storage-stage")]
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::binder::ConstraintExprBinder;
@@ -38,7 +38,8 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::operations::TransformConstraintVerify;
-use databend_common_storages_stage::build_streaming_load_pipeline;
+#[cfg(feature = "storage-stage")]
+use databend_query_storage_stage_support::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
 
@@ -61,6 +62,10 @@ use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::stream::DataBlockStream;
 
 pub struct InsertInterpreter {
@@ -115,12 +120,11 @@ impl Interpreter for InsertInterpreter {
                 .get_table_by_info(table_info)?
         } else {
             self.ctx
-                .get_table_with_batch(
+                .get_table_with_branch(
                     &self.plan.catalog,
                     &self.plan.database,
                     &self.plan.table,
                     self.plan.branch.as_deref(),
-                    None,
                 )
                 .await?
         };
@@ -221,8 +225,7 @@ impl Interpreter for InsertInterpreter {
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
-                    let table_info = TableInfoWithBranch::new(table1.get_table_info())
-                        .with_branch(self.plan.branch.clone());
+                    let table_info = table1.get_table_info().clone();
                     if table.support_distributed_insert()
                         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {
@@ -286,6 +289,7 @@ impl Interpreter for InsertInterpreter {
 
                 return Ok(build_res);
             }
+            #[cfg(feature = "storage-stage")]
             InsertInputSource::StreamingLoad(plan) => {
                 build_streaming_load_pipeline(
                     self.ctx.clone(),
@@ -308,6 +312,12 @@ impl Interpreter for InsertInterpreter {
                         )
                     })?;
                 }
+            }
+            #[cfg(not(feature = "storage-stage"))]
+            InsertInputSource::StreamingLoad(_) => {
+                return Err(ErrorCode::Unimplemented(
+                    "Streaming load support is disabled, rebuild with cargo feature 'storage-stage'",
+                ));
             }
         };
         if !table_constraints.is_empty() {
@@ -351,8 +361,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let binding = self.ctx.get_mutation_status();
-        let status = binding.read();
+        let binding = self.ctx.mutation_state().mutation_status();
+        let status = binding.read().unwrap();
         let blocks = vec![DataBlock::new_from_columns(vec![UInt64Type::from_data(
             vec![status.insert_rows],
         )])];

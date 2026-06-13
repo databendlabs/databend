@@ -12,8 +12,6 @@ mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3310
 http_handler_host = "0.0.0.0"
 http_handler_port = 8003
-clickhouse_http_handler_host = "0.0.0.0"
-clickhouse_http_handler_port = 8127
 flight_sql_handler_host = "0.0.0.0"
 flight_sql_handler_port = 8903
 

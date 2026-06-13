@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[META_CLIENT]", "databend_meta_client");
+
 pub(crate) mod local;
 
 use std::ops::Deref;
@@ -21,19 +23,35 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_grpc::RpcClientConf;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
-use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_semaphore::errors::AcquireError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::protobuf::WatchResponse;
+use databend_meta::runtime_api::RuntimeApi;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::MGetKVReq;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::RpcClientConf;
+use databend_meta_client::Streamed;
+use databend_meta_client::errors::CreationError;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KVStream;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::fail_fast;
+use databend_meta_client::kvapi::limit_stream;
+use databend_meta_client::types::Change;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::TxnReply;
+use databend_meta_client::types::TxnRequest;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_client::types::protobuf::WatchRequest;
+use databend_meta_client::types::protobuf::WatchResponse;
+use databend_meta_plugin_semaphore::Semaphore;
+use databend_meta_plugin_semaphore::acquirer::Permit;
+use databend_meta_plugin_semaphore::errors::AcquireError;
+use databend_meta_runtime::DatabendRuntime;
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
 pub use local::LocalMetaService;
 use log::info;
 use log::warn;
-use semver::Version;
 use tokio::time::Instant;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
@@ -47,33 +65,35 @@ pub struct MetaStoreProvider {
     rpc_conf: RpcClientConf,
 }
 
-/// MetaStore is impl with either a local meta-service, or a grpc-client of metasrv
+/// MetaStore is impl with either a local meta-service, or a grpc-client of metasrv.
+///
+/// `MetaStore` implements `KVApi` directly (not via `Deref`) to decouple the KV API
+/// from the underlying gRPC client. This allows `ClientHandle` to be a pure
+/// communication layer without depending on `kvapi`.
 #[derive(Clone)]
 pub enum MetaStore {
     L(Arc<LocalMetaService>),
-    R(Arc<ClientHandle>),
+    R(Arc<ClientHandle<DatabendRuntime>>),
 }
 
-/// Internally [`MetaStore`] contains a [`ClientHandle`] which is a client to either a local
-/// databend-meta service or a remote databend-meta service accessed via gRPC.
-impl Deref for MetaStore {
-    type Target = Arc<ClientHandle>;
-
-    fn deref(&self) -> &Self::Target {
+impl MetaStore {
+    /// Returns a reference to the inner `ClientHandle`.
+    ///
+    /// This provides access to the underlying gRPC client for operations
+    /// not covered by `KVApi`.
+    pub fn inner(&self) -> &Arc<ClientHandle<DatabendRuntime>> {
         match self {
             MetaStore::L(l) => l.deref(),
             MetaStore::R(grpc_client) => grpc_client,
         }
     }
-}
 
-impl MetaStore {
     /// Create a local meta service for testing.
     ///
     /// It is required to assign a base port as the port number range.
-    pub async fn new_local_testing(version: Version) -> Self {
+    pub async fn new_local_testing<RT: RuntimeApi>() -> Self {
         MetaStore::L(Arc::new(
-            LocalMetaService::new("MetaStore-new-local-testing", version)
+            LocalMetaService::new::<RT>("MetaStore-new-local-testing")
                 .await
                 .unwrap(),
         ))
@@ -91,8 +111,17 @@ impl MetaStore {
     }
 
     pub async fn get_local_addr(&self) -> Result<String, MetaError> {
-        let client_info = self.get_client_info().await?;
+        let client_info = self.inner().get_client_info().await?;
         Ok(client_info.client_addr)
+    }
+
+    /// Watch for changes on a key prefix.
+    ///
+    /// This method delegates to the underlying `ClientHandle::watch`.
+    pub async fn watch(&self, watch: WatchRequest) -> Result<WatchStream, MetaError> {
+        let strm = self.inner().watch(watch).await?;
+        let strm = strm.map_err(MetaError::from);
+        Ok(Box::pin(strm))
     }
 
     pub async fn new_acquired(
@@ -102,7 +131,7 @@ impl MetaStore {
         id: impl ToString,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
-        let client = self.deref();
+        let client = self.inner();
         Semaphore::new_acquired(client.clone(), prefix, capacity, id, lease).await
     }
 
@@ -168,7 +197,7 @@ impl MetaStore {
         lease: Duration,
         retry_timeout: Option<Duration>,
     ) -> Result<Result<Permit, AcquireError>, Elapsed> {
-        let client = self.deref().clone();
+        let client = self.inner().clone();
 
         let timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
         let retry_timeout = retry_timeout.unwrap_or(Duration::from_secs(365 * 86400));
@@ -186,7 +215,7 @@ impl MetaStoreProvider {
         MetaStoreProvider { rpc_conf }
     }
 
-    pub async fn create_meta_store(&self) -> Result<MetaStore, CreationError> {
+    pub async fn create_meta_store<RT: RuntimeApi>(&self) -> Result<MetaStore, CreationError> {
         if self.rpc_conf.local_mode() {
             info!(
                 conf :? =(&self.rpc_conf);
@@ -195,10 +224,9 @@ impl MetaStoreProvider {
 
             // NOTE: This can only be used for test: data will be removed when program quit.
             Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new_with_fixed_dir(
+                LocalMetaService::new_with_fixed_dir::<RT>(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
-                    self.rpc_conf.version.clone(),
                 )
                 .await
                 .unwrap(),
@@ -208,5 +236,64 @@ impl MetaStoreProvider {
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
             Ok(MetaStore::R(client))
         }
+    }
+}
+
+#[tonic::async_trait]
+impl kvapi::KVApi for MetaStore {
+    type Error = MetaError;
+
+    #[fastrace::trace]
+    async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
+        self.inner().upsert_kv(req).await
+    }
+
+    #[fastrace::trace]
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        let strm = self.inner().list(opts.prefix).await?;
+
+        let strm = strm.map_err(MetaError::from);
+        Ok(limit_stream(strm, opts.limit))
+    }
+
+    #[fastrace::trace]
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        // For remote client, collect keys first then use batch request.
+        // fail_fast stops at first error; we save it to append to output stream.
+        let mut collected = Vec::new();
+        let mut input_error = None;
+        let mut keys = std::pin::pin!(fail_fast(keys));
+        while let Some(result) = keys.next().await {
+            match result {
+                Ok(key) => collected.push(key),
+                Err(e) => input_error = Some(e),
+            }
+        }
+
+        // Make batch request for successfully collected keys.
+        // Use the streaming request directly to preserve keys in the response.
+        let strm = self
+            .inner()
+            .request(Streamed(MGetKVReq { keys: collected }))
+            .await?;
+
+        let strm = strm.map_err(MetaError::from);
+
+        // If there was an input error, append it to the output stream
+        match input_error {
+            None => Ok(strm.boxed()),
+            Some(e) => Ok(strm.chain(futures::stream::once(async { Err(e) })).boxed()),
+        }
+    }
+
+    #[fastrace::trace]
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
+        self.inner().transaction(txn).await
     }
 }

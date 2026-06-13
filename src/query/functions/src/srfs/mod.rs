@@ -13,14 +13,19 @@
 // limitations under the License.
 
 mod array;
+mod range;
 pub(crate) mod string;
 mod variant;
 
 use databend_common_expression::FunctionRegistry;
+pub use range::NormalizedSeries;
+pub use range::normalize_series_params;
+pub use range::series_type_from_data_type;
 pub use string::regexp_split_to_vec;
 
 pub fn register(registry: &mut FunctionRegistry) {
     array::register(registry);
+    range::register(registry);
     variant::register(registry);
     string::register(registry);
 }

@@ -23,7 +23,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::string_value;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -49,16 +48,17 @@ use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::ListOptions;
 
 use crate::meta_service_error;
+use crate::sessions::TableContext;
 
 const POLICY_REFERENCES_FUNC: &str = "policy_references";
 const POLICY_REFERENCES_ENGINE: &str = "POLICY_REFERENCES";
@@ -227,7 +227,7 @@ impl AsyncSource for PolicyReferencesSource {
 
         let rows = collect_policy_reference_rows(self.ctx.clone(), self.args.clone()).await?;
         let block = if rows.is_empty() {
-            DataBlock::empty_with_schema(self.schema.clone())
+            DataBlock::empty_with_schema(&self.schema)
         } else {
             let mut policy_names = Vec::with_capacity(rows.len());
             let mut policy_kinds = Vec::with_capacity(rows.len());

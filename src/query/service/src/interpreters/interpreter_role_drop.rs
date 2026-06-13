@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropRolePlan;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
@@ -25,9 +26,11 @@ use log::debug;
 use log::warn;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_object_tag::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DropRoleInterpreter {
@@ -68,7 +71,7 @@ impl Interpreter for DropRoleInterpreter {
         }
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_role(&tenant, plan.role_name, plan.if_exists)
+            .drop_role(&tenant, plan.role_name.clone(), plan.if_exists)
             .await?;
 
         let session = self.ctx.get_current_session();
@@ -83,6 +86,12 @@ impl Interpreter for DropRoleInterpreter {
         }
 
         RoleCacheManager::instance().force_reload(&tenant).await?;
+
+        cleanup_object_tags(&tenant, TaggableObject::Role {
+            name: plan.role_name,
+        })
+        .await?;
+
         Ok(PipelineBuildResult::create())
     }
 }

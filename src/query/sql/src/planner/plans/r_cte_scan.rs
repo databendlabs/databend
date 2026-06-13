@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
+use databend_common_expression::Symbol;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::Distribution;
@@ -34,13 +35,14 @@ use crate::plans::RelOp;
 pub struct RecursiveCteScan {
     pub fields: Vec<DataField>,
     pub table_name: String,
+    pub logical_recursive_cte_id: Option<u32>,
 }
 
 impl RecursiveCteScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for field in self.fields.iter() {
-            used_columns.insert(field.name().parse()?);
+            used_columns.insert(field.name().parse::<Symbol>()?);
         }
         Ok(used_columns)
     }
@@ -49,6 +51,7 @@ impl RecursiveCteScan {
 impl Hash for RecursiveCteScan {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.table_name.hash(state);
+        self.logical_recursive_cte_id.hash(state);
         for field in self.fields.iter() {
             field.name().hash(state);
         }

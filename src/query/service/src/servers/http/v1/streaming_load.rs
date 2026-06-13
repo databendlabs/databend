@@ -23,6 +23,7 @@ use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,7 +32,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
-use databend_common_storages_stage::BytesBatch;
+use databend_query_storage_stage_support::BytesBatch;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
@@ -55,6 +56,7 @@ use tokio::sync::mpsc::Sender;
 use super::HttpQueryContext;
 use super::HttpSessionConf;
 use super::HttpSessionStateInternal;
+use super::require_upload_filename;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
@@ -65,7 +67,9 @@ use crate::servers::http::v1::http_query_handlers::get_http_tracing_span;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {
@@ -81,6 +85,7 @@ fn execute_query(
     mem_stat: Arc<MemStat>,
 ) -> impl Future<Output = Result<()>> {
     let id = http_query_context.query_id.clone();
+    let warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
     let fut = async move {
         let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
@@ -92,10 +97,11 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
-    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
     let root = get_http_tracing_span("http::execute_query", &http_query_context, &id);
-    ThreadTracker::tracking_future(fut.in_span(root))
+    tracking_payload.tracking(fut.in_span(root))
 }
 
 #[poem::handler]
@@ -109,7 +115,7 @@ pub async fn streaming_load_handler(
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(ctx.query_id.clone());
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
-    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
     let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);
     let mut session_conf: Option<HttpSessionConf> =
         match req.headers().get(HEADER_QUERY_CONTEXT) {
@@ -128,11 +134,12 @@ pub async fn streaming_load_handler(
             }
             None => None,
         };
-    let res = ThreadTracker::tracking_future(
-        streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
-            .in_span(root),
-    )
-    .await;
+    let res = tracking_payload
+        .tracking(
+            streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
+                .in_span(root),
+        )
+        .await;
     let is_failed = res.is_err();
 
     let mut resp = match res {
@@ -297,6 +304,12 @@ async fn read_multi_part(
     tx: Sender<Result<DataBlock>>,
     input_read_buffer_size: usize,
 ) -> poem::Result<()> {
+    if matches!(file_format, FileFormatParams::Lance(_)) {
+        return Err(poem::Error::from_string(
+            "Streaming load does not support LANCE file format",
+            StatusCode::BAD_REQUEST,
+        ));
+    }
     loop {
         match multipart.next_field().await {
             Err(cause) => {
@@ -323,13 +336,15 @@ async fn read_multi_part(
                         StatusCode::BAD_REQUEST,
                     ));
                 }
-                let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
+                let filename = require_upload_filename(name, field.file_name())?;
                 debug!("Started reading file: {}", &filename);
                 let mut reader = field.into_async_read();
                 match file_format {
                     FileFormatParams::Parquet(_)
                     | FileFormatParams::Avro(_)
-                    | FileFormatParams::Orc(_) => {
+                    | FileFormatParams::Orc(_)
+                    | FileFormatParams::Arrow(_)
+                    | FileFormatParams::ArrowStream(_) => {
                         let mut data = Vec::new();
                         let mut buf = vec![0; input_read_buffer_size];
                         loop {
@@ -354,7 +369,7 @@ async fn read_multi_part(
                         }
                     }
                     FileFormatParams::Csv(_)
-                    | FileFormatParams::Tsv(_)
+                    | FileFormatParams::Text(_)
                     | FileFormatParams::NdJson(_) => {
                         let mut offset = 0;
                         loop {

@@ -47,25 +47,29 @@
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
 #![feature(iter_map_windows)]
+#![feature(likely_unlikely)]
+#![feature(portable_simd)]
+
 #[allow(dead_code)]
 mod block;
 
 pub mod aggregate;
+mod block_vec;
 mod constant_folder;
+pub mod conversion;
 pub mod converts;
 mod evaluator;
 mod expression;
 pub mod filter;
 mod function;
+pub mod geographic;
 pub mod hash_util;
 mod hilbert;
 mod kernels;
 mod projected_block;
 mod property;
-mod register;
-mod register_comparison;
-#[allow(dead_code)]
-mod register_vectorize;
+mod stat_evaluator;
+mod symbol;
 
 pub mod row_encoding;
 pub mod sampler;
@@ -79,19 +83,24 @@ pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
+pub use crate::block_vec::DataBlockVec;
 pub use crate::constant_folder::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::filter::*;
+pub use crate::function::function_factory::*;
+pub use crate::function::register::*;
+pub use crate::function::register_comparison::*;
+pub use crate::function::register_vectorize::*;
 pub use crate::function::*;
 pub use crate::hilbert::*;
 pub use crate::kernels::*;
 pub use crate::projected_block::*;
 pub use crate::property::*;
-pub use crate::register_comparison::*;
-pub use crate::register_vectorize::*;
 pub use crate::row_encoding::*;
 pub use crate::schema::*;
+pub use crate::stat_evaluator::*;
+pub use crate::symbol::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

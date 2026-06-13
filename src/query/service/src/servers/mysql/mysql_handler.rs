@@ -162,7 +162,7 @@ impl Server for MySQLHandler {
             None => Err(ErrorCode::Internal("MySQLHandler already running.")),
             Some(registration) => {
                 let rejected_rt = Arc::new(Runtime::with_worker_threads(
-                    1,
+                    2,
                     Some("mysql-handler".to_string()),
                 )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;

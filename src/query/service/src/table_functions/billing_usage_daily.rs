@@ -1,0 +1,710 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::any::Any;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use chrono::DateTime;
+use chrono::NaiveDate;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::BillingError as PbBillingError;
+use databend_common_cloud_control::pb::GetBillingUsageDailyRequest;
+use databend_common_cloud_control::pb::GetBillingUsageDailyResponse;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FromData;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::VariantType;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_storages_factory::Table;
+use jsonb::OwnedJsonb;
+
+pub struct BillingUsageDailyTable {
+    table_info: TableInfo,
+    args_parsed: BillingUsageDailyArgsParsed,
+    table_args: TableArgs,
+}
+
+impl BillingUsageDailyTable {
+    pub fn create(
+        database_name: &str,
+        table_func_name: &str,
+        table_id: u64,
+        table_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        let args_parsed = BillingUsageDailyArgsParsed::parse(&table_args)?;
+        let table_info = TableInfo {
+            ident: TableIdent::new(table_id, 0),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
+            name: String::from("billing_usage_daily"),
+            meta: TableMeta {
+                schema: infer_table_schema(&billing_usage_daily_schema())
+                    .expect("failed to infer billing_usage_daily schema"),
+                engine: String::from(table_func_name),
+                created_on: DateTime::from_timestamp(0, 0).unwrap(),
+                updated_on: DateTime::from_timestamp(0, 0).unwrap(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        Ok(Arc::new(Self {
+            table_info,
+            args_parsed,
+            table_args,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
+impl Table for BillingUsageDailyTable {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
+    }
+
+    async fn read_partitions(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
+    }
+
+    fn table_args(&self) -> Option<TableArgs> {
+        Some(self.table_args.clone())
+    }
+
+    fn read_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        _put_cache: bool,
+    ) -> Result<()> {
+        pipeline.add_source(
+            |output| BillingUsageDailySource::create(ctx.clone(), output, self.args_parsed.clone()),
+            1,
+        )?;
+        Ok(())
+    }
+}
+
+struct BillingUsageDailySource {
+    is_finished: bool,
+    args_parsed: BillingUsageDailyArgsParsed,
+    ctx: Arc<dyn TableContext>,
+}
+
+impl BillingUsageDailySource {
+    fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        args_parsed: BillingUsageDailyArgsParsed,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, Self {
+            ctx,
+            args_parsed,
+            is_finished: false,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for BillingUsageDailySource {
+    const NAME: &'static str = "billing_usage_daily";
+
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished {
+            return Ok(None);
+        }
+        self.is_finished = true;
+
+        if GlobalConfig::instance()
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
+            return Err(ErrorCode::CloudControlNotEnabled(
+                "cannot view billing_usage_daily without cloud control enabled, please set cloud_control_grpc_server_address in config",
+            ));
+        }
+
+        ensure_billing_usage_privilege(&self.ctx).await?;
+
+        let cloud_api = CloudControlApiProvider::instance();
+        let tenant = self.ctx.get_tenant();
+        let query_id = self.ctx.get_id();
+        let user = self
+            .ctx
+            .get_current_user()?
+            .identity()
+            .display()
+            .to_string();
+
+        let cfg = build_client_config(
+            tenant.tenant_name().to_string(),
+            user.clone(),
+            query_id.clone(),
+            cloud_api.get_timeout(),
+        );
+        let req = GetBillingUsageDailyRequest {
+            tenant_id: tenant.tenant_name().to_string(),
+            start_date: self.args_parsed.start_date.clone(),
+            end_date: self.args_parsed.end_date.clone(),
+            sql_user: user,
+            query_id,
+        };
+        let resp = cloud_api
+            .get_billing_client()
+            .get_billing_usage_daily(make_request(req, cfg))
+            .await?;
+        Ok(Some(parse_billing_usage_daily_response(resp)?))
+    }
+}
+
+async fn ensure_billing_usage_privilege(ctx: &Arc<dyn TableContext>) -> Result<()> {
+    match ctx
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            if err.code() != ErrorCode::PERMISSION_DENIED {
+                return Err(err);
+            }
+
+            let user = ctx.get_current_user()?.identity().display().to_string();
+            Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: privilege [SUPER] is required on *.* to query billing_usage_daily for user {user}",
+            )))
+        }
+    }
+}
+
+impl TableFunction for BillingUsageDailyTable {
+    fn function_name(&self) -> &str {
+        self.name()
+    }
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a {
+        self
+    }
+}
+
+#[derive(Clone, Debug)]
+struct BillingUsageDailyArgsParsed {
+    start_date: String,
+    end_date: String,
+}
+
+impl BillingUsageDailyArgsParsed {
+    fn parse(table_args: &TableArgs) -> Result<Self> {
+        let args = table_args.expect_all_named("billing_usage_daily")?;
+        if args.is_empty() || args.len() > 2 {
+            return Err(ErrorCode::BadArguments(
+                "billing_usage_daily requires named argument: start_date, and optional argument: end_date".to_string(),
+            ));
+        }
+
+        let mut start_date = None;
+        let mut end_date = None;
+        for (k, v) in &args {
+            match k.to_lowercase().as_str() {
+                "start_date" => start_date = v.as_string().cloned(),
+                "end_date" => end_date = v.as_string().cloned(),
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unknown param {} for billing_usage_daily",
+                        k
+                    )));
+                }
+            }
+        }
+
+        let start_date = start_date.ok_or_else(|| {
+            ErrorCode::BadArguments(
+                "billing_usage_daily requires named string argument: start_date".to_string(),
+            )
+        })?;
+        let start = parse_date_arg("start_date", &start_date)?;
+
+        let end_date = end_date.unwrap_or_else(|| start_date.clone());
+        let end = parse_date_arg("end_date", &end_date)?;
+        if end < start {
+            return Err(ErrorCode::BadArguments(
+                "end_date must be greater than or equal to start_date".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            start_date,
+            end_date,
+        })
+    }
+}
+
+fn parse_date_arg(name: &str, date: &str) -> Result<NaiveDate> {
+    parse_date(date)
+        .map_err(|_| ErrorCode::BadArguments(format!("invalid {name} format, expected YYYY-MM-DD")))
+}
+
+fn parse_date(date: &str) -> std::result::Result<NaiveDate, chrono::ParseError> {
+    NaiveDate::parse_from_str(date, "%Y-%m-%d")
+}
+
+fn usage_decimal_size() -> DecimalSize {
+    DecimalSize::new_unchecked(38, 0)
+}
+
+fn money_decimal_size() -> DecimalSize {
+    DecimalSize::new_unchecked(38, 12)
+}
+
+fn billing_usage_daily_schema() -> DataSchemaRef {
+    Arc::new(DataSchema::new(vec![
+        DataField::new("usage_date", DataType::Date),
+        DataField::new("usage_type", DataType::String),
+        DataField::new("service_type", DataType::String),
+        DataField::new("resource_name", DataType::String),
+        DataField::new("usage", DataType::Decimal(usage_decimal_size())),
+        DataField::new("usage_unit", DataType::String),
+        DataField::new(
+            "rate",
+            DataType::Nullable(Box::new(DataType::Decimal(money_decimal_size()))),
+        ),
+        DataField::new("rate_unit", DataType::String),
+        DataField::new("usage_in_currency", DataType::Decimal(money_decimal_size())),
+        DataField::new("currency", DataType::String),
+        DataField::new("tags", DataType::Variant),
+        DataField::new("details", DataType::Variant),
+    ]))
+}
+
+fn parse_billing_usage_daily_response(resp: GetBillingUsageDailyResponse) -> Result<DataBlock> {
+    if let Some(error) = resp.error.as_ref() {
+        return Err(billing_error_to_error_code(
+            "get_billing_usage_daily",
+            error,
+        ));
+    }
+
+    parse_billing_usage_daily_to_datablock(resp)
+}
+
+fn billing_error_to_error_code(operation: &str, error: &PbBillingError) -> ErrorCode {
+    ErrorCode::CloudControlConnectError(format!(
+        "cloud control {operation} failed: {} (kind: {}, code: {})",
+        error.message, error.kind, error.code
+    ))
+}
+
+fn parse_billing_usage_daily_to_datablock(resp: GetBillingUsageDailyResponse) -> Result<DataBlock> {
+    let mut usage_date = Vec::with_capacity(resp.rows.len());
+    let mut usage_type = Vec::with_capacity(resp.rows.len());
+    let mut service_type = Vec::with_capacity(resp.rows.len());
+    let mut resource_name = Vec::with_capacity(resp.rows.len());
+    let mut usage = Vec::with_capacity(resp.rows.len());
+    let mut usage_unit = Vec::with_capacity(resp.rows.len());
+    let mut rate = Vec::with_capacity(resp.rows.len());
+    let mut rate_unit = Vec::with_capacity(resp.rows.len());
+    let mut usage_in_currency = Vec::with_capacity(resp.rows.len());
+    let mut currency = Vec::with_capacity(resp.rows.len());
+    let mut tags = Vec::with_capacity(resp.rows.len());
+    let mut details = Vec::with_capacity(resp.rows.len());
+
+    for row in resp.rows {
+        usage_date.push(parse_usage_date("usage_date", &row.usage_date)?);
+        usage_type.push(row.usage_type);
+        service_type.push(row.service_type);
+        resource_name.push(row.resource_name);
+        usage.push(parse_decimal_field(
+            "usage",
+            &row.usage,
+            usage_decimal_size(),
+        )?);
+        usage_unit.push(row.usage_unit);
+        rate.push(parse_optional_decimal_field(
+            "rate",
+            &row.rate,
+            money_decimal_size(),
+        )?);
+        rate_unit.push(row.rate_unit);
+        usage_in_currency.push(parse_decimal_field(
+            "usage_in_currency",
+            &row.usage_in_currency,
+            money_decimal_size(),
+        )?);
+        currency.push(row.currency);
+        let tags_json = serde_json::to_string(&row.tags).map_err(|err| {
+            ErrorCode::Internal(format!("failed to serialize billing usage tags: {err}"))
+        })?;
+        tags.push(json_text_to_variant("tags", &tags_json)?);
+        details.push(json_text_to_variant("details", &row.details)?);
+    }
+
+    Ok(DataBlock::new_from_columns(vec![
+        DateType::from_data(usage_date),
+        StringType::from_data(usage_type),
+        StringType::from_data(service_type),
+        StringType::from_data(resource_name),
+        Decimal128Type::from_data_with_size(usage, Some(usage_decimal_size())),
+        StringType::from_data(usage_unit),
+        Decimal128Type::from_opt_data_with_size(rate, Some(money_decimal_size())),
+        StringType::from_data(rate_unit),
+        Decimal128Type::from_data_with_size(usage_in_currency, Some(money_decimal_size())),
+        StringType::from_data(currency),
+        VariantType::from_data(tags),
+        VariantType::from_data(details),
+    ]))
+}
+
+fn parse_usage_date(field: &str, raw: &str) -> Result<i32> {
+    let date = parse_date(raw).map_err(|err| {
+        ErrorCode::BadBytes(format!("invalid billing usage {field} date value: {err}"))
+    })?;
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+    Ok(date.signed_duration_since(epoch).num_days() as i32)
+}
+
+fn parse_optional_decimal_field(field: &str, raw: &str, size: DecimalSize) -> Result<Option<i128>> {
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    parse_decimal_field(field, raw, size).map(Some)
+}
+
+fn parse_decimal_field(field: &str, raw: &str, size: DecimalSize) -> Result<i128> {
+    parse_decimal(raw.trim(), size).map_err(|err| {
+        ErrorCode::BadBytes(format!(
+            "invalid billing usage {field} decimal value '{raw}': {err}"
+        ))
+    })
+}
+
+fn parse_decimal(raw: &str, size: DecimalSize) -> std::result::Result<i128, String> {
+    if raw.is_empty() {
+        return Err("empty value".to_string());
+    }
+
+    let (negative, digits) = match raw.as_bytes()[0] {
+        b'+' => (false, &raw[1..]),
+        b'-' => (true, &raw[1..]),
+        _ => (false, raw),
+    };
+    if digits.is_empty() {
+        return Err("missing digits".to_string());
+    }
+
+    let mut parts = digits.split('.');
+    let int_part = parts.next().unwrap();
+    let frac_part = parts.next().unwrap_or("");
+    if parts.next().is_some() {
+        return Err("multiple decimal points".to_string());
+    }
+    if int_part.is_empty() && frac_part.is_empty() {
+        return Err("missing digits".to_string());
+    }
+    if !int_part.bytes().all(|b| b.is_ascii_digit())
+        || !frac_part.bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err("unexpected character".to_string());
+    }
+
+    let scale = size.scale() as usize;
+    let integer_digits_limit = (size.precision() - size.scale()) as usize;
+    let integer_digits = int_part.trim_start_matches('0').len();
+    if integer_digits > integer_digits_limit {
+        return Err("decimal overflow".to_string());
+    }
+
+    if frac_part.len() > scale && frac_part.as_bytes()[scale..].iter().any(|b| *b != b'0') {
+        return Err(format!(
+            "scale exceeds declared decimal scale {}",
+            size.scale()
+        ));
+    }
+
+    let mut value = 0_i128;
+    for b in int_part.bytes().chain(frac_part.bytes().take(scale)) {
+        value = value
+            .checked_mul(10)
+            .and_then(|v| v.checked_add((b - b'0') as i128))
+            .ok_or_else(|| "decimal overflow".to_string())?;
+    }
+    for _ in frac_part.len()..scale {
+        value = value
+            .checked_mul(10)
+            .ok_or_else(|| "decimal overflow".to_string())?;
+    }
+
+    if negative {
+        value = value
+            .checked_neg()
+            .ok_or_else(|| "decimal overflow".to_string())?;
+    }
+    Ok(value)
+}
+
+fn json_text_to_variant(field: &str, raw: &str) -> Result<Vec<u8>> {
+    let json = if raw.trim().is_empty() { "{}" } else { raw };
+    let jsonb = OwnedJsonb::from_str(json).map_err(|err| {
+        ErrorCode::BadBytes(format!("invalid billing usage {field} JSON value: {err}"))
+    })?;
+    Ok(jsonb.to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::collections::HashMap;
+
+    use databend_common_catalog::table_args::TableArgs;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DecimalScalar;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_args_accepts_start_date_only() {
+        let args = TableArgs::new_named(HashMap::from([(
+            "start_date".to_string(),
+            Scalar::String("2026-03-02".to_string()),
+        )]));
+
+        let parsed = BillingUsageDailyArgsParsed::parse(&args).unwrap();
+        assert_eq!(parsed.start_date, "2026-03-02");
+        assert_eq!(parsed.end_date, "2026-03-02");
+    }
+
+    #[test]
+    fn test_parse_args_accepts_uppercase_named_date_range() {
+        let args = TableArgs::new_named(HashMap::from([
+            (
+                "START_DATE".to_string(),
+                Scalar::String("2026-03-01".to_string()),
+            ),
+            (
+                "END_DATE".to_string(),
+                Scalar::String("2026-03-31".to_string()),
+            ),
+        ]));
+
+        let parsed = BillingUsageDailyArgsParsed::parse(&args).unwrap();
+        assert_eq!(parsed.start_date, "2026-03-01");
+        assert_eq!(parsed.end_date, "2026-03-31");
+    }
+
+    #[test]
+    fn test_parse_args_rejects_non_named_or_invalid_date_range() {
+        let positioned = TableArgs::new_positioned(vec![Scalar::String("2026-03-01".to_string())]);
+        assert!(BillingUsageDailyArgsParsed::parse(&positioned).is_err());
+
+        let missing = TableArgs::new_named(HashMap::new());
+        assert!(BillingUsageDailyArgsParsed::parse(&missing).is_err());
+
+        let invalid = TableArgs::new_named(HashMap::from([(
+            "start_date".to_string(),
+            Scalar::String("20260301".to_string()),
+        )]));
+        assert!(BillingUsageDailyArgsParsed::parse(&invalid).is_err());
+
+        let reversed = TableArgs::new_named(HashMap::from([
+            (
+                "start_date".to_string(),
+                Scalar::String("2026-03-02".to_string()),
+            ),
+            (
+                "end_date".to_string(),
+                Scalar::String("2026-03-01".to_string()),
+            ),
+        ]));
+        assert!(BillingUsageDailyArgsParsed::parse(&reversed).is_err());
+    }
+
+    #[test]
+    fn test_parse_usage_daily_response_to_datablock() {
+        let expected_tags = OwnedJsonb::from_str(r#"{"env":"test"}"#).unwrap().to_vec();
+        let expected_details =
+            OwnedJsonb::from_str(r#"{"cluster_name":"cl-00000","max_clusters":1,"size":"XSmall"}"#)
+                .unwrap()
+                .to_vec();
+
+        let block = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
+            rows: vec![databend_common_cloud_control::pb::BillingUsageDailyRow {
+                usage_date: "2026-03-02".to_string(),
+                usage_type: "compute".to_string(),
+                service_type: "WAREHOUSE_METERING".to_string(),
+                resource_name: "default".to_string(),
+                usage: "2653".to_string(),
+                usage_unit: "second".to_string(),
+                rate: "".to_string(),
+                rate_unit: "second".to_string(),
+                usage_in_currency: "0.737".to_string(),
+                currency: "¥".to_string(),
+                tags: BTreeMap::from([("env".to_string(), "test".to_string())]),
+                details: "{\"cluster_name\":\"cl-00000\",\"max_clusters\":1,\"size\":\"XSmall\"}"
+                    .to_string(),
+            }],
+            error: None,
+        })
+        .unwrap();
+
+        assert_eq!(block.num_rows(), 1);
+        assert_eq!(block.num_columns(), 12);
+
+        assert_eq!(
+            block.get_by_offset(0).index(0).unwrap(),
+            ScalarRef::Date(parse_usage_date("usage_date", "2026-03-02").unwrap())
+        );
+        assert_eq!(
+            block.get_by_offset(1).index(0).unwrap(),
+            ScalarRef::String("compute")
+        );
+        assert_eq!(
+            block.get_by_offset(4).index(0).unwrap(),
+            ScalarRef::Decimal(DecimalScalar::Decimal128(2653, usage_decimal_size()))
+        );
+        assert_eq!(block.get_by_offset(6).index(0).unwrap(), ScalarRef::Null);
+        assert_eq!(
+            block.get_by_offset(8).index(0).unwrap(),
+            ScalarRef::Decimal(DecimalScalar::Decimal128(
+                737_000_000_000,
+                money_decimal_size()
+            ))
+        );
+        assert_eq!(
+            block.get_by_offset(9).index(0).unwrap(),
+            ScalarRef::String("¥")
+        );
+
+        match block.get_by_offset(10).index(0).unwrap() {
+            ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_tags.as_slice()),
+            other => panic!("unexpected scalar type for tags: {other:?}"),
+        }
+
+        match block.get_by_offset(11).index(0).unwrap() {
+            ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_details.as_slice()),
+            other => panic!("unexpected scalar type for details: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_usage_daily_response_rejects_invalid_typed_values() {
+        let err = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
+            rows: vec![databend_common_cloud_control::pb::BillingUsageDailyRow {
+                usage_date: "2026-03-02".to_string(),
+                usage_type: "compute".to_string(),
+                service_type: "WAREHOUSE_METERING".to_string(),
+                resource_name: "default".to_string(),
+                usage: "1.1".to_string(),
+                usage_unit: "second".to_string(),
+                rate: "".to_string(),
+                rate_unit: "second".to_string(),
+                usage_in_currency: "0.737".to_string(),
+                currency: "$".to_string(),
+                tags: BTreeMap::new(),
+                details: "{}".to_string(),
+            }],
+            error: None,
+        })
+        .expect_err("fractional usage should be rejected for Decimal(38, 0)");
+
+        assert!(
+            err.message()
+                .contains("invalid billing usage usage decimal value")
+        );
+    }
+
+    #[test]
+    fn test_parse_usage_daily_response_rejects_invalid_details_json() {
+        let err = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
+            rows: vec![databend_common_cloud_control::pb::BillingUsageDailyRow {
+                usage_date: "2026-03-02".to_string(),
+                usage_type: "storage".to_string(),
+                service_type: "STORAGE".to_string(),
+                resource_name: String::new(),
+                usage: "1580580967006".to_string(),
+                usage_unit: "byte".to_string(),
+                rate: "".to_string(),
+                rate_unit: "tb_day".to_string(),
+                usage_in_currency: "1.067".to_string(),
+                currency: "$".to_string(),
+                tags: BTreeMap::new(),
+                details: "not-json".to_string(),
+            }],
+            error: None,
+        })
+        .expect_err("invalid details JSON should be rejected");
+
+        assert!(
+            err.message()
+                .contains("invalid billing usage details JSON value")
+        );
+    }
+
+    #[test]
+    fn test_parse_usage_daily_response_surfaces_task_error() {
+        let err = parse_billing_usage_daily_response(GetBillingUsageDailyResponse {
+            rows: vec![],
+            error: Some(PbBillingError {
+                kind: "Internal".to_string(),
+                message: "billing usage unavailable".to_string(),
+                code: 500,
+            }),
+        })
+        .expect_err("billing error should be returned");
+
+        assert!(err.message().contains("get_billing_usage_daily"));
+        assert!(err.message().contains("billing usage unavailable"));
+        assert!(err.message().contains("Internal"));
+        assert!(err.message().contains("500"));
+    }
+}

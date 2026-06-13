@@ -1219,3 +1219,9 @@ select to_date('9999/12/31','%Y/%m/%d');
 
 statement ok
 unset timezone;
+
+query TT
+settings (timezone='America/New_York') select try_to_timestamp('2024-11-03 05:30:00'), try_to_timestamp_tz('2024-11-03 05:30:00');
+----
+2024-11-03 05:30:00.000000 2024-11-03 05:30:00.000000 -0500
+

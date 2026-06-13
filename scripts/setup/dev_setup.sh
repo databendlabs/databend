@@ -659,6 +659,17 @@ function install_typos_cli {
 	"${typos_bin}/typos" --version
 }
 
+function install_cargo_valgrind {
+	echo "==> installing cargo-valgrind..."
+	if cargo valgrind --version &>/dev/null; then
+		echo "cargo-valgrind is already installed"
+		return
+	fi
+
+	cargo install cargo-valgrind
+	cargo valgrind --version
+}
+
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -694,6 +705,7 @@ Build tools (since -b or no option was provided):
   * protobuf-compiler
   * openjdk
   * python3-dev
+  * cargo-valgrind
 EOF
 	fi
 
@@ -711,7 +723,7 @@ EOF
 Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, ruff, yamllint, ...)
-  * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
+  * python database drivers (mysql-connector-python, pymysql, sqlalchemy)
 EOF
 	fi
 
@@ -881,6 +893,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_sccache "v0.12.0"
 	install_cargo_nextest
+	install_cargo_valgrind
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
@@ -908,7 +921,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" shfmt-py toml yamllint ruff
 	# drivers
-	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
+	python3 -m pip install --quiet pymysql sqlalchemy
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector-python==8.0.30
 fi

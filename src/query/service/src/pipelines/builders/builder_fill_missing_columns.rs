@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::Pipeline;
@@ -29,6 +28,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {
@@ -57,12 +57,12 @@ impl PipelineBuilder {
                     TransformAsyncFunction::create_sequence_counters(async_funcs.len());
 
                 pipeline.try_add_async_transformer(|| {
-                    Ok(TransformAsyncFunction::new(
+                    TransformAsyncFunction::new(
                         ctx.clone(),
                         async_funcs.clone(),
                         BTreeMap::new(),
                         sequence_counters.clone(),
-                    ))
+                    )
                 })?;
                 if new_default_schema != new_default_schema_no_cast {
                     pipeline.try_add_transformer(|| {

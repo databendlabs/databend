@@ -28,6 +28,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Buffer;
@@ -269,10 +270,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return_type,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                    eval: Box::new(move |args, _ctx| {
+                    calc_domain: Box::new(FunctionDomain::Full),
+                    eval: scalar_evaluator(move |args, _ctx| {
                         calculate_distance(args, is_nullable, cosine_distance)
                     }),
+                    derive_stat: None,
                 },
             }))
         }));
@@ -288,10 +290,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, _ctx| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, l1_distance)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -307,10 +310,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, _ctx| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, l2_distance)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -326,10 +330,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, _ctx| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, inner_product)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -355,8 +360,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, _ctx| match &args[0] {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, _ctx| match &args[0] {
                     Value::Scalar(scalar) => match scalar {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         Scalar::Vector(vector) => Value::Scalar(Scalar::Number(
@@ -380,6 +385,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -405,8 +411,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, _ctx| match &args[0] {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, _ctx| match &args[0] {
                     Value::Scalar(scalar) => match scalar {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         Scalar::Vector(vector) => {
@@ -442,6 +448,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));

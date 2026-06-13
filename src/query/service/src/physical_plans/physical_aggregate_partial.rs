@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
@@ -24,14 +23,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_pipeline_transforms::sorts::TransformSortPartial;
-use databend_common_sql::IndexType;
+use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_storage::DataOperator;
@@ -51,12 +49,13 @@ use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggr
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub group_by: Vec<IndexType>,
+    pub group_by: Vec<Symbol>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub group_by_display: Vec<String>,
 
@@ -221,8 +220,8 @@ impl IPhysicalPlan for AggregatePartial {
         if let Some((sort_desc, limit)) =
             self.resolve_rank_limit_descriptions(&schema_before_group_by)
         {
-            builder.main_pipeline.add_transformer(|| {
-                TransformSortPartial::new(LimitType::LimitRank(limit), sort_desc.clone())
+            builder.main_pipeline.add_accumulating_transformer(|| {
+                TransformRankLimitSort::new(limit, sort_desc.clone(), max_block_rows)
             });
         }
 
@@ -235,7 +234,7 @@ impl IPhysicalPlan for AggregatePartial {
             };
             let shared_partition_streams = SharedPartitionStream::new(
                 builder.main_pipeline.output_len(),
-                max_block_rows,
+                0,
                 max_block_bytes,
                 bucket_num,
             );

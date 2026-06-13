@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -23,12 +24,14 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionCall;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::infer_table_schema;
@@ -40,6 +43,9 @@ use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
+use crate::Binder;
+use crate::ClusterKeyNormalizer;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
@@ -65,14 +71,14 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         false,
         false,
         None,
-        false,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
-    for (index, column) in columns.iter().enumerate() {
+    for column in columns.iter() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn(BaseTableColumn {
+                column_index,
                 column_name,
                 data_type,
                 path_indices,
@@ -86,7 +92,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 };
                 ColumnBindingBuilder::new(
                     column_name.clone(),
-                    index,
+                    *column_index,
                     Box::new(data_type.into()),
                     visibility,
                 )
@@ -110,18 +116,29 @@ pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<Vec<Expr>> {
+) -> Result<Vec<Expr<ColumnBinding>>> {
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     parse_ast_exprs(ctx, table_meta, ast_exprs)
 }
 
+pub fn parse_exprs_to_field_index(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<Vec<Expr<FieldIndex>>> {
+    parse_exprs(ctx, table_meta, sql)?
+        .into_iter()
+        .map(|expr| expr.project_column_ref(|binding| Ok(binding.index.as_field_index())))
+        .collect()
+}
+
 fn parse_ast_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
-) -> Result<Vec<Expr>> {
+) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -139,7 +156,7 @@ fn parse_ast_exprs(
         .iter()
         .map(|ast| {
             let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+            let expr = scalar.as_expr()?;
             Ok(expr)
         })
         .collect::<Result<_>>()?;
@@ -153,12 +170,16 @@ pub fn parse_to_filters(
     sql: &str,
 ) -> Result<Filters> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?;
-    let exprs: Vec<RemoteExpr<String>> = exprs
-        .iter()
+    let exprs = parse_exprs(ctx, table_meta, sql)?
+        .into_iter()
         .map(|expr| {
             Ok(expr
-                .project_column_ref(|index| Ok(schema.field(*index).name().to_string()))?
+                .project_column_ref(|binding| {
+                    Ok(schema
+                        .field(binding.index.as_field_index())
+                        .name()
+                        .to_string())
+                })?
                 .as_remote_expr())
         })
         .collect::<Result<Vec<_>>>()?;
@@ -190,29 +211,29 @@ pub fn parse_computed_expr(
     ctx: Arc<dyn TableContext>,
     schema: DataSchemaRef,
     sql: &str,
-) -> Result<Expr> {
+) -> Result<Expr<ColumnBinding>> {
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
     for (index, field) in schema.fields().iter().enumerate() {
+        let table_field = table_schema.field(index);
+        let column_index = metadata.add_base_table_column(
+            table_field.name().clone(),
+            table_field.data_type().clone(),
+            0,
+            None,
+            index as ColumnId,
+            None,
+            None,
+        );
         let column = ColumnBindingBuilder::new(
             field.name().clone(),
-            index,
+            column_index,
             Box::new(field.data_type().clone()),
             Visibility::Visible,
         )
         .build();
         bind_context.add_column_binding(column);
-        let table_field = table_schema.field(index);
-        metadata.add_base_table_column(
-            table_field.name().clone(),
-            table_field.data_type().clone(),
-            0,
-            None,
-            None,
-            None,
-            None,
-        );
     }
 
     let settings = ctx.get_settings();
@@ -237,8 +258,17 @@ pub fn parse_computed_expr(
     }
     let ast = asts.remove(0);
     let (scalar, _) = *type_checker.resolve(&ast)?;
-    let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+    let expr = scalar.as_expr()?;
     Ok(expr)
+}
+
+pub fn parse_computed_field_index_expr(
+    ctx: Arc<dyn TableContext>,
+    schema: DataSchemaRef,
+    sql: &str,
+) -> Result<Expr<FieldIndex>> {
+    parse_computed_expr(ctx, schema, sql)?
+        .project_column_ref(|binding| Ok(binding.index.as_field_index()))
 }
 
 pub fn parse_computed_expr_to_string(
@@ -249,24 +279,24 @@ pub fn parse_computed_expr_to_string(
 ) -> Result<String> {
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
-    for (index, field) in table_schema.fields().iter().enumerate() {
-        bind_context.add_column_binding(
-            ColumnBindingBuilder::new(
-                field.name().clone(),
-                index,
-                Box::new(field.data_type().into()),
-                Visibility::Visible,
-            )
-            .build(),
-        );
-        metadata.add_base_table_column(
+    for field in table_schema.fields().iter() {
+        let column_index = metadata.add_base_table_column(
             field.name().clone(),
             field.data_type().clone(),
             0,
             None,
-            Some(field.column_id),
+            field.column_id,
             None,
             None,
+        );
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                field.name().clone(),
+                column_index,
+                Box::new(field.data_type().into()),
+                Visibility::Visible,
+            )
+            .build(),
         );
     }
 
@@ -319,19 +349,10 @@ pub fn parse_lambda_expr(
     // Use parent metadata if provided (for masking policies on outer columns)
     // Otherwise create empty metadata (for better performance in community edition)
     let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
-    lambda_context.set_expr_context(ExprContext::InLambdaFunction);
+    lambda_context.expr_context = ExprContext::InLambdaFunction;
 
-    // The column index may not be consecutive, and the length of columns
-    // cannot be used to calculate the column index of the lambda argument.
-    // We need to start from the current largest column index.
-    let mut column_index = lambda_context
-        .all_column_bindings()
-        .iter()
-        .map(|c| c.index)
-        .max()
-        .unwrap_or_default();
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-        column_index += 1;
+        let column_index = lambda_context.next_column_index();
         lambda_context.add_column_binding(
             ColumnBindingBuilder::new(
                 lambda_column.clone(),
@@ -433,29 +454,26 @@ pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<(String, Vec<Expr>)> {
-    let settings = ctx.get_settings();
-    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
-    let tokens = tokenize_sql(sql)?;
-    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    // unwrap tuple.
-    if ast_exprs.len() == 1 {
-        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
-            ast_exprs = exprs.clone();
-        }
-    }
-
+) -> Result<(String, Vec<Expr<Symbol>>)> {
+    let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
-        ctx,
+        ctx.clone(),
         &name_resolution_ctx,
         metadata,
         &[],
         true,
     )?;
 
+    let settings = ctx.get_settings();
+    let mut normalizer = ClusterKeyNormalizer {
+        force_quoted_ident: false,
+        unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+        quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+        sql_dialect: settings.get_sql_dialect()?,
+    };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(exprs.len());
     for ast in ast_exprs {
@@ -467,7 +485,7 @@ pub fn analyze_cluster_keys(
             )));
         }
 
-        let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+        let expr = scalar.as_symbol_expr()?;
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is not deterministic",
@@ -475,16 +493,8 @@ pub fn analyze_cluster_keys(
             )));
         }
 
-        let data_type = expr.data_type().remove_nullable();
-        if !matches!(
-            data_type,
-            DataType::Number(_)
-                | DataType::String
-                | DataType::Timestamp
-                | DataType::Date
-                | DataType::Boolean
-                | DataType::Decimal(_)
-        ) {
+        let data_type = expr.data_type();
+        if !Binder::valid_cluster_key_type(data_type) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Unsupported data type '{}' for cluster by expression `{:#}`",
                 data_type, ast
@@ -494,7 +504,6 @@ pub fn analyze_cluster_keys(
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();
-        let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
         cluster_by.drive_mut(&mut normalizer);
         cluster_keys.push(format!("{:#}", &cluster_by));
     }

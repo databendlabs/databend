@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
@@ -29,7 +31,6 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
-use crate::ast::SnapshotRefType;
 use crate::ast::TableRef;
 use crate::ast::WindowDefinition;
 use crate::ast::quote::QuotedString;
@@ -93,7 +94,7 @@ impl Display for Query {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct With {
     pub span: Span,
     pub recursive: bool,
@@ -112,7 +113,7 @@ impl Display for With {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
@@ -222,7 +223,7 @@ impl Display for SelectStmt {
 }
 
 /// Group by Clause.
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum GroupBy {
     /// GROUP BY expr [, expr]*
     Normal(Vec<Expr>),
@@ -565,7 +566,7 @@ impl Display for Indirection {
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(String),
+    Snapshot(Box<Expr>),
     Timestamp(Box<Expr>),
     Offset(Box<Expr>),
     Stream {
@@ -573,17 +574,14 @@ pub enum TimeTravelPoint {
         database: Option<Identifier>,
         name: Identifier,
     },
-    TableRef {
-        typ: SnapshotRefType,
-        name: Identifier,
-    },
+    TableTag(Identifier),
 }
 
 impl Display for TimeTravelPoint {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            TimeTravelPoint::Snapshot(sid) => {
-                write!(f, "(SNAPSHOT => '{sid}')")?;
+            TimeTravelPoint::Snapshot(expr) => {
+                write!(f, "(SNAPSHOT => {expr})")?;
             }
             TimeTravelPoint::Timestamp(ts) => {
                 write!(f, "(TIMESTAMP => {ts})")?;
@@ -603,8 +601,8 @@ impl Display for TimeTravelPoint {
                 )?;
                 write!(f, ")")?;
             }
-            TimeTravelPoint::TableRef { typ, name } => {
-                write!(f, "({} => {})", typ, name)?;
+            TimeTravelPoint::TableTag(name) => {
+                write!(f, "(TAG => {name})")?;
             }
         }
 
@@ -612,14 +610,14 @@ impl Display for TimeTravelPoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum PivotValues {
     ColumnValues(Vec<Expr>),
     Subquery(Box<Query>),
     Any { order_by: Option<Vec<OrderByExpr>> },
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct Pivot {
     pub aggregate: Expr,
     pub value_column: Identifier,
@@ -649,7 +647,7 @@ impl Display for Pivot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UnpivotName {
     pub ident: Identifier,
     pub alias: Option<String>,
@@ -666,7 +664,7 @@ impl Display for UnpivotName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct Unpivot {
     pub value_column: Identifier,
     pub unpivot_column: Identifier,
@@ -745,18 +743,36 @@ impl Display for ChangesInterval {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TemporalClause {
-    TimeTravel(TimeTravelPoint),
+    TimeTravel {
+        point: TimeTravelPoint,
+        no_check: bool,
+    },
     Changes(ChangesInterval),
 }
 
 impl Display for TemporalClause {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            TemporalClause::TimeTravel(point) => {
-                write!(f, "AT {}", point)?;
+            TemporalClause::TimeTravel { point, no_check } => {
+                if *no_check {
+                    write!(f, "AT ")?;
+                    match point {
+                        TimeTravelPoint::Snapshot(expr) => {
+                            write!(f, "(SNAPSHOT => {expr}, NO_CHECK => true)")?;
+                        }
+                        TimeTravelPoint::Timestamp(ts) => {
+                            write!(f, "(TIMESTAMP => {ts}, NO_CHECK => true)")?;
+                        }
+                        _ => {
+                            write!(f, "{point}")?;
+                        }
+                    }
+                } else {
+                    write!(f, "AT {point}")?;
+                }
             }
             TemporalClause::Changes(changes) => {
-                write!(f, "{}", changes)?;
+                write!(f, "{changes}")?;
             }
         }
         Ok(())
@@ -1060,6 +1076,9 @@ impl Display for TableReference {
                     JoinOperator::RightAsof => {
                         write!(f, " ASOF RIGHT JOIN")?;
                     }
+                    JoinOperator::FullAsof => {
+                        write!(f, " ASOF FULL JOIN")?;
+                    }
                     JoinOperator::InnerAny => {
                         write!(f, " INNER ANY JOIN")?;
                     }
@@ -1070,7 +1089,11 @@ impl Display for TableReference {
                         write!(f, " RIGHT ANY JOIN")?;
                     }
                 }
-                write!(f, " {}", join.right)?;
+                if matches!(join.right.as_ref(), TableReference::Join { .. }) {
+                    write!(f, " ({})", join.right)?;
+                } else {
+                    write!(f, " {}", join.right)?;
+                }
                 match &join.condition {
                     JoinCondition::On(expr) => {
                         write!(f, " ON {expr}")?;
@@ -1102,7 +1125,7 @@ impl Display for TableReference {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TableAlias {
     pub name: Identifier,
     pub columns: Vec<Identifier>,
@@ -1147,6 +1170,7 @@ pub enum JoinOperator {
     Asof,
     LeftAsof,
     RightAsof,
+    FullAsof,
     // Any
     InnerAny,
     LeftAny,

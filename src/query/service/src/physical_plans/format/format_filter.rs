@@ -43,12 +43,15 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
 
     #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        let filter = self
-            .inner
-            .predicates
-            .iter()
-            .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .join(", ");
+        let filter = if self.inner.is_secure {
+            "ROW ACCESS POLICY APPLIED".to_string()
+        } else {
+            self.inner
+                .predicates
+                .iter()
+                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ")
+        };
 
         let mut node_children = vec![
             FormatTreeNode::new(format!(
@@ -65,8 +68,13 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
         let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
+        let name = if self.inner.is_secure {
+            "Filter [SECURE]"
+        } else {
+            "Filter"
+        };
         Ok(FormatTreeNode::with_children(
-            "Filter".to_string(),
+            name.to_string(),
             node_children,
         ))
     }
@@ -78,12 +86,15 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
 
     #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        let filter = self
-            .inner
-            .predicates
-            .iter()
-            .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .join(", ");
+        let filter = if self.inner.is_secure {
+            "ROW ACCESS POLICY APPLIED".to_string()
+        } else {
+            self.inner
+                .predicates
+                .iter()
+                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ")
+        };
         let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
         if let Some(info) = &self.inner.stat_info {
             let items = plan_stats_info_to_format_tree(info);
@@ -94,9 +105,11 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
         let input_formatter = self.inner.input.formatter()?;
         children.push(input_formatter.partial_format(ctx)?);
 
-        Ok(FormatTreeNode::with_children(
-            "Filter".to_string(),
-            children,
-        ))
+        let name = if self.inner.is_secure {
+            "Filter [SECURE]"
+        } else {
+            "Filter"
+        };
+        Ok(FormatTreeNode::with_children(name.to_string(), children))
     }
 }

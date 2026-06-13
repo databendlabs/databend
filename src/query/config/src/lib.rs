@@ -16,6 +16,7 @@
 #![allow(clippy::derivable_impls)]
 
 mod builtin;
+
 /// Config mods provide config support.
 ///
 /// We are providing two config types:

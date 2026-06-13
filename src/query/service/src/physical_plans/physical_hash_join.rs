@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
@@ -29,6 +31,7 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -38,14 +41,20 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
+use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
+use databend_storages_common_index::scalar_to_distance_threshold;
 use tokio::sync::Barrier;
+use unicase::Ascii;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
+use super::runtime_filter::SpatialRuntimeFilterMode;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -54,6 +63,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::resolve_scalar;
 use crate::physical_plans::runtime_filter::build_runtime_filter;
 use crate::pipelines::HashJoinStateRef;
 use crate::pipelines::PipelineBuilder;
@@ -73,15 +83,23 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
 
+type JoinNonEquiConditionsResult = (
+    Vec<RemoteExpr>,
+    Vec<RemoteExpr>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
+    Vec<Option<IndexType>>,
+    Vec<SpatialRuntimeFilterMode>,
+);
+
 type ProjectionsResult = (
-    ColumnSet,
-    ColumnSet,
-    Option<(usize, HashMap<IndexType, usize>)>,
+    BTreeSet<usize>,
+    BTreeSet<usize>,
+    Option<(usize, HashMap<Symbol, usize>)>,
 );
 
 /// Type alias for runtime filter expression result
@@ -90,7 +108,7 @@ type RuntimeFilterExpr = Option<(
     databend_common_expression::Expr<String>,
     usize,
     usize,
-    IndexType,
+    Symbol,
 )>;
 
 type MergedFieldsResult = (
@@ -101,15 +119,21 @@ type MergedFieldsResult = (
 );
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct NestedLoopFilterInfo {
+    pub predicates: Vec<RemoteExpr>,
+    pub projection: Vec<usize>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
     pub meta: PhysicalPlanMeta,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
     // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
     // we will use projections for final column elimination.
-    pub projections: ColumnSet,
-    pub probe_projections: ColumnSet,
-    pub build_projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
+    pub probe_projections: BTreeSet<usize>,
+    pub build_projections: BTreeSet<usize>,
 
     pub build: PhysicalPlan,
     pub probe: PhysicalPlan,
@@ -118,7 +142,7 @@ pub struct HashJoin {
     pub is_null_equal: Vec<bool>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
-    pub marker_index: Option<IndexType>,
+    pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
@@ -137,10 +161,11 @@ pub struct HashJoin {
 
     // Hash join build side cache information for ExpressionScan, which includes the cache index and
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
-    pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+    pub build_side_cache_info: Option<(usize, HashMap<Symbol, usize>)>,
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
+    pub nested_loop_filter: Option<NestedLoopFilterInfo>,
 }
 
 #[typetag::serde]
@@ -262,10 +287,15 @@ impl IPhysicalPlan for HashJoin {
             build_side_cache_info: self.build_side_cache_info.clone(),
             runtime_filter: self.runtime_filter.clone(),
             broadcast_id: self.broadcast_id,
+            nested_loop_filter: self.nested_loop_filter.clone(),
         })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        if self.join_type.is_any_join() {
+            return Err(ErrorCode::Unimplemented("ANY JOIN is not supported yet"));
+        }
+
         let desc = Arc::new(HashJoinDesc::create(self)?);
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
@@ -386,7 +416,7 @@ impl HashJoin {
             output_len,
             self.broadcast_id,
         )?;
-        build_state.add_runtime_filter_ready();
+        build_state.add_runtime_filter_ready()?;
 
         let create_sink_processor = |input| {
             Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(
@@ -541,14 +571,16 @@ impl PhysicalPlanBuilder {
         &self,
         required: &mut ColumnSet,
         others_required: &mut ColumnSet,
-    ) -> (Vec<IndexType>, Vec<IndexType>) {
-        let retained_columns = self.metadata.read().get_retained_column().clone();
-        *required = required.union(&retained_columns).cloned().collect();
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+    ) -> (Vec<Symbol>, Vec<Symbol>) {
+        {
+            let metadata = self.metadata.read();
+            let retained_columns = metadata.get_retained_column();
+            required.extend(retained_columns);
+            others_required.extend(retained_columns);
+        }
 
-        *others_required = others_required.union(&retained_columns).cloned().collect();
-        let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
-
+        let column_projections = required.iter().copied().collect();
+        let pre_column_projections = others_required.iter().copied().collect();
         (column_projections, pre_column_projections)
     }
 
@@ -570,6 +602,7 @@ impl PhysicalPlanBuilder {
             | JoinType::LeftAny
             | JoinType::LeftSingle
             | JoinType::LeftAsof
+            | JoinType::FullAsof
             | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
@@ -606,7 +639,11 @@ impl PhysicalPlanBuilder {
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
+            JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::RightAsof
+            | JoinType::FullAsof
+            | JoinType::Full => {
                 let probe_schema = probe_side.output_schema()?;
                 // Wrap nullable type for columns in probe side
                 let probe_schema = DataSchemaRefExt::create(
@@ -749,9 +786,9 @@ impl PhysicalPlanBuilder {
         right_condition: &ScalarExpr,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        column_projections: &[IndexType],
+        column_projections: &[Symbol],
         probe_to_build_index: &mut Vec<((usize, bool), usize)>,
-        pre_column_projections: &mut Vec<IndexType>,
+        pre_column_projections: &mut Vec<Symbol>,
     ) -> Result<()> {
         if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
             (left_condition, right_condition)
@@ -798,8 +835,8 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        column_projections: &[IndexType],
-        pre_column_projections: &mut Vec<IndexType>,
+        column_projections: &[Symbol],
+        pre_column_projections: &mut Vec<Symbol>,
     ) -> Result<JoinConditionsResult> {
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
@@ -881,8 +918,17 @@ impl PhysicalPlanBuilder {
             // Process runtime filter expressions
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
                 .map(|(expr, scan_id, table_index, column_idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
-                        .map(|casted_expr| (casted_expr, scan_id, table_index, column_idx))
+                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS).map(
+                        |casted_expr| {
+                            (
+                                casted_expr,
+                                scan_id,
+                                table_index,
+                                column_idx,
+                                condition.is_null_equal,
+                            )
+                        },
+                    )
                 })
                 .transpose()?;
 
@@ -892,23 +938,31 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter =
-                left_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
                     (
                         ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
                         scan_id,
                         table_index,
                         column_idx,
+                        is_null_equal,
                     )
-                });
+                },
+            );
 
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
             left_join_conditions_rt.push(left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx)| {
-                    (expr.as_remote_expr(), scan_id, table_index, column_idx)
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
+                    (
+                        expr.as_remote_expr(),
+                        scan_id,
+                        table_index,
+                        column_idx,
+                        is_null_equal,
+                    )
                 },
             ));
             build_table_indexes.push(build_table_index);
@@ -940,7 +994,7 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        pre_column_projections: &[IndexType],
+        pre_column_projections: &[Symbol],
         probe_to_build_index: &mut Vec<((usize, bool), usize)>,
     ) -> Result<ProjectionsResult> {
         // Handle cache columns
@@ -952,8 +1006,8 @@ impl PhysicalPlanBuilder {
         };
 
         // Prepare projections
-        let mut probe_projections = ColumnSet::new();
-        let mut build_projections = ColumnSet::new();
+        let mut probe_projections = BTreeSet::new();
+        let mut build_projections = BTreeSet::new();
 
         for column in pre_column_projections.iter() {
             if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
@@ -993,8 +1047,8 @@ impl PhysicalPlanBuilder {
         &self,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        probe_projections: &ColumnSet,
-        build_projections: &mut ColumnSet,
+        probe_projections: &BTreeSet<usize>,
+        build_projections: &mut BTreeSet<usize>,
         probe_to_build_index: &mut [((usize, bool), usize)],
     ) -> Result<MergedFieldsResult> {
         let mut merged_fields =
@@ -1044,7 +1098,7 @@ impl PhysicalPlanBuilder {
         }
 
         // Add tail fields
-        build_fields.extend(tail_fields.clone());
+        build_fields.extend_from_slice(&tail_fields);
         merged_fields.extend(tail_fields);
 
         Ok((merged_fields, probe_fields, build_fields, probe_to_build))
@@ -1065,8 +1119,8 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_fields: Vec<DataField>,
         build_fields: Vec<DataField>,
-        column_projections: &[IndexType],
-    ) -> Result<(Vec<DataField>, DataSchemaRef, ColumnSet)> {
+        column_projections: &[Symbol],
+    ) -> Result<(Vec<DataField>, DataSchemaRef, BTreeSet<usize>)> {
         // Create merged fields based on join type
         let merged_fields = match join.join_type {
             JoinType::Cross
@@ -1095,7 +1149,7 @@ impl PhysicalPlanBuilder {
                 // Check for invalid column access in ANTI or SEMI joins
                 for field in dropped_fields.iter() {
                     if result_fields.iter().all(|x| x.name() != field.name())
-                        && let Ok(index) = field.name().parse::<usize>()
+                        && let Ok(index) = field.name().parse::<Symbol>()
                         && column_projections.contains(&index)
                     {
                         let metadata = self.metadata.read();
@@ -1144,15 +1198,17 @@ impl PhysicalPlanBuilder {
                 ));
                 result
             }
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof => unreachable!(
-                "Invalid join type {} during building physical hash join.",
-                join.join_type
-            ),
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof | JoinType::FullAsof => {
+                unreachable!(
+                    "Invalid join type {} during building physical hash join.",
+                    join.join_type
+                )
+            }
         };
 
         // Create projections and output schema
-        let mut projections = ColumnSet::new();
-        let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
+        let mut projections = BTreeSet::new();
+        let projected_schema = DataSchema::new(merged_fields.clone());
 
         for column in column_projections.iter() {
             if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
@@ -1176,16 +1232,136 @@ impl PhysicalPlanBuilder {
     ///
     /// # Arguments
     /// * `join` - Join operation
+    /// * `probe_schema` - Probe schema
+    /// * `build_schema` - Build schema
     /// * `merged_schema` - Merged schema
     ///
     /// # Returns
-    /// * `Result<Vec<RemoteExpr>>` - Processed non-equi conditions
+    /// * Tuple containing processed non equi join conditions and related data
     fn process_non_equi_conditions(
         &self,
         join: &Join,
+        probe_schema: &DataSchemaRef,
+        build_schema: &DataSchemaRef,
         merged_schema: &DataSchemaRef,
-    ) -> Result<Vec<RemoteExpr>> {
-        join.non_equi_conditions
+    ) -> Result<JoinNonEquiConditionsResult> {
+        let mut spatial_right_join_conditions = Vec::new();
+        let mut spatial_left_join_conditions_rt = Vec::new();
+        let mut spatial_build_table_indexes = Vec::new();
+        let mut spatial_modes = Vec::new();
+
+        let resolve_geometry_column = |expr: &ScalarExpr| -> Option<Symbol> {
+            let column_idx = match expr {
+                ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+                _ => None,
+            }?;
+            let binding = self.metadata.read();
+            let column = binding.column(column_idx);
+            if !matches!(column, ColumnEntry::BaseTableColumn(_)) {
+                return None;
+            }
+            let data_type = column.data_type().remove_nullable();
+            if !matches!(data_type, DataType::Geometry) {
+                return None;
+            }
+            Some(column_idx)
+        };
+
+        let extract_distance_threshold = |expr: &ScalarExpr| match expr {
+            ScalarExpr::ConstantExpr(constant) => scalar_to_distance_threshold(&constant.value),
+            _ => None,
+        };
+
+        // collect spatial functions to build runtime filters.
+        for scalar in &join.non_equi_conditions {
+            let ScalarExpr::FunctionCall(func) = scalar else {
+                continue;
+            };
+
+            let func_name = func.func_name.as_ref();
+            let uni_case_func_name = Ascii::new(func_name);
+            if !SPATIAL_INDEX_FUNCTIONS.contains(&(uni_case_func_name, func.arguments.len())) {
+                continue;
+            }
+
+            let Some(left_idx) = resolve_geometry_column(&func.arguments[0]) else {
+                continue;
+            };
+            let Some(right_idx) = resolve_geometry_column(&func.arguments[1]) else {
+                continue;
+            };
+            let spatial_mode = if func.arguments.len() == 3 {
+                let Some(distance) = extract_distance_threshold(&func.arguments[2]) else {
+                    continue;
+                };
+                SpatialRuntimeFilterMode::DistanceWithin(distance)
+            } else {
+                SpatialRuntimeFilterMode::Intersects
+            };
+            let left_arg = &func.arguments[0];
+            let right_arg = &func.arguments[1];
+
+            let left_in_probe = probe_schema
+                .column_with_name(&left_idx.to_string())
+                .is_some();
+            let right_in_probe = probe_schema
+                .column_with_name(&right_idx.to_string())
+                .is_some();
+            let left_in_build = build_schema
+                .column_with_name(&left_idx.to_string())
+                .is_some();
+            let right_in_build = build_schema
+                .column_with_name(&right_idx.to_string())
+                .is_some();
+
+            let (probe_arg, build_arg) = if left_in_probe && right_in_build {
+                (left_arg, right_arg)
+            } else if left_in_build && right_in_probe {
+                (right_arg, left_arg)
+            } else {
+                continue;
+            };
+
+            let build_expr = build_arg
+                .type_check(build_schema.as_ref())?
+                .project_column_ref(|index| build_schema.index_of(&index.to_string()))?;
+            let (build_expr, _) =
+                ConstantFolder::fold(&build_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            spatial_right_join_conditions.push(build_expr.as_remote_expr());
+
+            let probe_expr_for_runtime_filter = self.prepare_runtime_filter_expr(probe_arg)?;
+            let probe_expr_for_runtime_filter =
+                probe_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
+                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    (
+                        expr.as_remote_expr(),
+                        scan_id,
+                        table_index,
+                        column_idx,
+                        false,
+                    )
+                });
+            spatial_left_join_conditions_rt.push(probe_expr_for_runtime_filter);
+
+            let build_table_index = if build_arg.used_columns().len() == 1 {
+                let column_idx = *build_arg.used_columns().iter().next().unwrap();
+                if matches!(
+                    self.metadata.read().column(column_idx),
+                    ColumnEntry::BaseTableColumn(_)
+                ) {
+                    self.metadata.read().column(column_idx).table_index()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            spatial_build_table_indexes.push(build_table_index);
+            spatial_modes.push(spatial_mode);
+        }
+
+        let non_equi_conditions = join
+            .non_equi_conditions
             .iter()
             .map(|scalar| {
                 let expr = scalar
@@ -1194,82 +1370,92 @@ impl PhysicalPlanBuilder {
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
-            .collect::<Result<_>>()
+            .collect::<Result<_>>()?;
+
+        Ok((
+            non_equi_conditions,
+            spatial_right_join_conditions,
+            spatial_left_join_conditions_rt,
+            spatial_build_table_indexes,
+            spatial_modes,
+        ))
     }
 
-    /// Creates a HashJoin physical plan
-    ///
-    /// # Arguments
-    /// * `join` - Join operation
-    /// * `probe_side` - Probe side physical plan
-    /// * `build_side` - Build side physical plan
-    /// * `is_broadcast` - Whether this is a broadcast join
-    /// * `projections` - Column projections
-    /// * `probe_projections` - Probe side projections
-    /// * `build_projections` - Build side projections
-    /// * `left_join_conditions` - Left join conditions
-    /// * `right_join_conditions` - Right join conditions
-    /// * `is_null_equal` - Null equality flags
-    /// * `non_equi_conditions` - Non-equi conditions
-    /// * `probe_to_build` - Probe to build mapping
-    /// * `output_schema` - Output schema
-    /// * `build_side_cache_info` - Build side cache info
-    /// * `runtime_filter` - Runtime filter
-    /// * `stat_info` - Statistics info
-    ///
-    /// # Returns
-    /// * `Result<PhysicalPlan>` - The HashJoin physical plan
-    #[allow(clippy::too_many_arguments)]
-    fn create_hash_join(
+    fn build_nested_loop_filter_info(
         &self,
-        s_expr: &SExpr,
         join: &Join,
-        probe_side: PhysicalPlan,
-        build_side: PhysicalPlan,
-        projections: ColumnSet,
-        probe_projections: ColumnSet,
-        build_projections: ColumnSet,
-        left_join_conditions: Vec<RemoteExpr>,
-        right_join_conditions: Vec<RemoteExpr>,
-        is_null_equal: Vec<bool>,
-        non_equi_conditions: Vec<RemoteExpr>,
-        probe_to_build: Vec<(usize, (bool, bool))>,
-        output_schema: DataSchemaRef,
-        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
-        runtime_filter: PhysicalRuntimeFilters,
-        stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
-        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
-        let broadcast_id = if build_side_data_distribution
-            .as_ref()
-            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::NodeToNodeHash(_)))
-        {
-            Some(self.ctx.get_next_broadcast_id())
-        } else {
-            None
+        probe_schema: &DataSchema,
+        build_schema: &DataSchema,
+        target_schema: &DataSchema,
+    ) -> Result<Option<NestedLoopFilterInfo>> {
+        if !matches!(join.join_type, JoinType::Inner) {
+            return Ok(None);
+        }
+
+        let merged = DataSchema::new(
+            probe_schema
+                .fields
+                .iter()
+                .cloned()
+                .chain(build_schema.fields.iter().cloned())
+                .collect(),
+        );
+
+        let mut predicates =
+            Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
+
+        let is_simple_expr = |expr: &ScalarExpr| {
+            matches!(
+                expr,
+                ScalarExpr::BoundColumnRef(_)
+                    | ScalarExpr::ConstantExpr(_)
+                    | ScalarExpr::TypedConstantExpr(_, _)
+            )
         };
-        Ok(PhysicalPlan::new(HashJoin {
-            projections,
-            build_projections,
-            probe_projections,
-            build: build_side,
-            probe: probe_side,
-            join_type: join.join_type,
-            build_keys: right_join_conditions,
-            probe_keys: left_join_conditions,
-            is_null_equal,
-            non_equi_conditions,
-            marker_index: join.marker_index,
-            meta: PhysicalPlanMeta::new("HashJoin"),
-            from_correlated_subquery: join.from_correlated_subquery,
-            probe_to_build,
-            output_schema,
-            need_hold_hash_table: join.need_hold_hash_table,
-            stat_info: Some(stat_info),
-            single_to_inner: join.single_to_inner,
-            build_side_cache_info,
-            runtime_filter,
-            broadcast_id,
+
+        for condition in &join.equi_conditions {
+            if !is_simple_expr(&condition.left) || !is_simple_expr(&condition.right) {
+                // todo: Filtering after cross join cause expression to be evaluated multiple times
+                return Ok(None);
+            }
+
+            if condition.is_null_equal {
+                return Ok(None);
+            }
+
+            let scalar = condition_to_expr(condition)?;
+            match resolve_scalar(&scalar, &merged) {
+                Ok(expr) => predicates.push(expr),
+                Err(err) => return Err(err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} equi_conditions: {:#?}",
+                    join.equi_conditions
+                ))),
+            }
+        }
+
+        for scalar in &join.non_equi_conditions {
+            predicates.push(resolve_scalar(scalar, &merged).map_err(|err|{
+                err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
+                    join.non_equi_conditions
+                ))
+            })?);
+        }
+
+        let projection = target_schema
+            .fields
+            .iter()
+            .map(|column| merged.index_of(column.name()))
+            .collect::<Result<Vec<_>>>()
+            .map_err(|err| {
+                err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} target: {target_schema:#?}",
+                ))
+            })?;
+
+        Ok(Some(NestedLoopFilterInfo {
+            predicates,
+            projection,
         }))
     }
 
@@ -1343,7 +1529,22 @@ impl PhysicalPlanBuilder {
             self.create_output_schema(join, probe_fields, build_fields, &column_projections)?;
 
         // Step 10: Process non-equi conditions
-        let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
+        let (
+            non_equi_conditions,
+            spatial_right_join_conditions,
+            spatial_left_join_conditions_rt,
+            spatial_build_table_indexes,
+            spatial_modes,
+        ) = self.process_non_equi_conditions(join, &probe_schema, &build_schema, &merged_schema)?;
+
+        let mut runtime_filter_right_conditions = right_join_conditions.clone();
+        runtime_filter_right_conditions.extend(spatial_right_join_conditions);
+        let mut runtime_filter_left_conditions_rt = left_join_conditions_rt.clone();
+        runtime_filter_left_conditions_rt.extend(spatial_left_join_conditions_rt);
+        let mut runtime_filter_build_table_indexes = build_table_indexes.clone();
+        runtime_filter_build_table_indexes.extend(spatial_build_table_indexes);
+        let mut runtime_filter_spatial_modes = vec![None; right_join_conditions.len()];
+        runtime_filter_spatial_modes.extend(spatial_modes.into_iter().map(Some));
 
         // Step 11: Build runtime filter
         let runtime_filter = build_runtime_filter(
@@ -1351,30 +1552,77 @@ impl PhysicalPlanBuilder {
             &self.metadata,
             join,
             s_expr,
-            &right_join_conditions,
-            left_join_conditions_rt,
-            build_table_indexes,
+            &runtime_filter_right_conditions,
+            runtime_filter_left_conditions_rt,
+            runtime_filter_build_table_indexes,
+            runtime_filter_spatial_modes,
         )
         .await?;
 
+        let nested_loop_filter =
+            self.build_nested_loop_filter_info(join, &probe_schema, &build_schema, &merged_schema)?;
+
         // Step 12: Create and return the HashJoin
-        self.create_hash_join(
-            s_expr,
-            join,
-            probe_side,
-            build_side,
+        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
+        let broadcast_id = if build_side_data_distribution.as_ref().is_some_and(|e| {
+            matches!(
+                e,
+                databend_common_sql::plans::Exchange::NodeToNodeHash(_)
+                    | databend_common_sql::plans::Exchange::GlobalHash(_)
+            )
+        }) {
+            Some(self.ctx.broadcast_registry().next_broadcast_id())
+        } else {
+            None
+        };
+        Ok(PhysicalPlan::new(HashJoin {
             projections,
-            probe_projections,
             build_projections,
-            left_join_conditions,
-            right_join_conditions,
+            probe_projections,
+            build: build_side,
+            probe: probe_side,
+            join_type: join.join_type,
+            build_keys: right_join_conditions,
+            probe_keys: left_join_conditions,
             is_null_equal,
             non_equi_conditions,
+            marker_index: join.marker_index,
+            meta: PhysicalPlanMeta::new("HashJoin"),
+            from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
+            need_hold_hash_table: join.need_hold_hash_table,
+            stat_info: Some(stat_info),
+            single_to_inner: join.single_to_inner,
             build_side_cache_info,
             runtime_filter,
-            stat_info,
-        )
+            broadcast_id,
+            nested_loop_filter,
+        }))
     }
+}
+
+fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
+    let left_type = condition.left.data_type()?;
+    let right_type = condition.right.data_type()?;
+
+    let arguments = match (&left_type, &right_type) {
+        (DataType::Nullable(box left), right) if left == right => vec![
+            condition.left.clone(),
+            condition.right.clone().unify_to_data_type(&left_type),
+        ],
+        (left, DataType::Nullable(box right)) if left == right => vec![
+            condition.left.clone().unify_to_data_type(&right_type),
+            condition.right.clone(),
+        ],
+        _ => vec![condition.left.clone(), condition.right.clone()],
+    };
+
+    Ok(FunctionCall {
+        span: condition.left.span(),
+        func_name: "eq".to_string(),
+        params: vec![],
+        arguments,
+    }
+    .into())
 }

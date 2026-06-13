@@ -25,10 +25,7 @@ pub use kvapi_impl::IndexIdResource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::schema::IndexMeta;
-    use crate::schema::index_id_ident::IndexIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct IndexIdResource;
@@ -38,20 +35,12 @@ mod kvapi_impl {
         const HAS_TENANT: bool = false;
         type ValueType = IndexMeta;
     }
-
-    impl kvapi::Value for IndexMeta {
-        type KeyType = IndexIdIdent;
-
-        // todo!("IndexId being parent of IndexIdToName can be described with dependency_keys")
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::IndexId;
     use super::IndexIdIdent;
@@ -61,11 +50,7 @@ mod tests {
     fn test_index_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = IndexIdIdent::new_generic(tenant, IndexId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_index_by_id/3");
-
-        assert_eq!(ident, IndexIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_index_by_id/3");
     }
 
     #[test]

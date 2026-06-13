@@ -64,19 +64,13 @@ statement ok
 use default
 
 statement ok
-drop table if exists t1
-
-statement ok
-create table t1(a int, b int)
+create or replace table t1(a int, b int)
 
 statement ok
 insert into t1 values(7, 8), (3, 4), (5, 6)
 
 statement ok
-drop table if exists t2
-
-statement ok
-create table t2(a int, d int)
+create or replace table t2(a int, d int)
 
 statement ok
 insert into t2 values(1, 2), (3, 4), (5, 6)

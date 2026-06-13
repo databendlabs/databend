@@ -79,11 +79,13 @@ fn test_variant() {
     test_array_flatten(file);
     test_array_indexof(file);
     test_array_remove(file);
+    test_array_concat(file);
     test_array_remove_first(file);
     test_array_remove_last(file);
     test_array_reverse(file);
     test_array_unique(file);
     test_array_contains(file);
+    test_array_approx_count_distinct(file);
     test_array_slice(file);
 }
 
@@ -537,6 +539,7 @@ fn test_as_type(file: &mut impl Write) {
     run_ast(file, "as_boolean(parse_json('123'))", &[]);
     run_ast(file, "as_integer(parse_json('true'))", &[]);
     run_ast(file, "as_integer(parse_json('123'))", &[]);
+    run_ast(file, "as_integer(parse_json('123.0'))", &[]);
     run_ast(file, "as_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "as_float(parse_json('12.34'))", &[]);
     run_ast(file, "as_decimal(parse_json('12.34'))", &[]);
@@ -592,6 +595,7 @@ fn test_is_type(file: &mut impl Write) {
     run_ast(file, "is_boolean(parse_json('123'))", &[]);
     run_ast(file, "is_integer(parse_json('true'))", &[]);
     run_ast(file, "is_integer(parse_json('123'))", &[]);
+    run_ast(file, "is_integer(parse_json('123.0'))", &[]);
     run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_float(parse_json('12.34'))", &[]);
     run_ast(
@@ -657,9 +661,13 @@ fn test_to_type(file: &mut impl Write) {
     run_ast(file, "to_uint64(parse_json('null'))", &[]);
     run_ast(file, "to_uint64(parse_json('123'))", &[]);
     run_ast(file, "to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "to_uint64(parse_json('123.0'))", &[]);
+    run_ast(file, "to_uint64(parse_json('\"456.5\"'))", &[]);
     run_ast(file, "to_uint64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "to_int64(parse_json('123'))", &[]);
     run_ast(file, "to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "to_int64(parse_json('123.5'))", &[]);
+    run_ast(file, "to_int64(parse_json('\"-456.2\"'))", &[]);
     run_ast(file, "to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "to_float64(parse_json('\"abc\"'))", &[]);
@@ -787,9 +795,11 @@ fn test_try_to_type(file: &mut impl Write) {
     run_ast(file, "try_to_uint64(parse_json('null'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('123'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('789.0'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "try_to_int64(parse_json('123'))", &[]);
     run_ast(file, "try_to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_int64(parse_json('\"789.5\"'))", &[]);
     run_ast(file, "try_to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "try_to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "try_to_float64(parse_json('\"abc\"'))", &[]);
@@ -2461,6 +2471,40 @@ fn test_array_remove(file: &mut impl Write) {
     ]);
 }
 
+fn test_array_concat(file: &mut impl Write) {
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, \"a\"]'), parse_json('[true, null]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('1'), parse_json('[2, 3]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('3'))",
+        &[],
+    );
+    run_ast(file, "array_concat(null, parse_json('[1]'))", &[]);
+    run_ast(file, "array_concat(parse_json(c1), parse_json(c2))", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2]", "[\"a\"]", "true"]),
+        ),
+        (
+            "c2",
+            StringType::from_data(vec!["[3, 4]", "[\"b\", \"c\"]", "[false]"]),
+        ),
+    ]);
+}
+
 fn test_array_remove_first(file: &mut impl Write) {
     // Test with simple arrays
     run_ast(file, "array_remove_first(parse_json('[1, 2, 3]'))", &[]);
@@ -2549,6 +2593,7 @@ fn test_array_unique(file: &mut impl Write) {
 fn test_array_contains(file: &mut impl Write) {
     // Test with simple arrays
     run_ast(file, "contains(parse_json('[1, 2, 3]'), 3)", &[]);
+    run_ast(file, "array_contains(parse_json('[1, 2, 3]'), 3)", &[]);
     run_ast(file, "contains(parse_json('[]'), 1)", &[]);
     run_ast(file, "contains(parse_json('[1, 2, 3]'), null)", &[]);
 
@@ -2569,6 +2614,30 @@ fn test_array_contains(file: &mut impl Write) {
         ),
         ("c2", StringType::from_data(vec!["a", "b", "c"])),
     ]);
+}
+
+fn test_array_approx_count_distinct(file: &mut impl Write) {
+    run_ast(
+        file,
+        "array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_approx_count_distinct(parse_json('[\"a\", \"b\", \"a\", null]'))",
+        &[],
+    );
+    run_ast(file, "array_approx_count_distinct(parse_json('[]'))", &[]);
+    run_ast(file, "array_approx_count_distinct(parse_json('1'))", &[]);
+    run_ast(
+        file,
+        "array_approx_count_distinct(try_cast(NULL AS Variant))",
+        &[],
+    );
+    run_ast(file, "array_approx_count_distinct(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 1, 2, null]", "[\"a\", \"b\", \"a\"]", "[]"]),
+    )]);
 }
 
 fn test_array_slice(file: &mut impl Write) {

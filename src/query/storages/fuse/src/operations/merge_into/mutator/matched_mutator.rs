@@ -113,8 +113,6 @@ impl MatchedAggregator {
                 target_table_schema.clone(),
                 projection,
                 false,
-                update_stream_columns,
-                false,
             )
         }?;
 
@@ -224,11 +222,13 @@ impl MatchedAggregator {
                         .1
                         .insert(offset as usize);
                 }
-                self.ctx.add_mutation_status(MutationStatus {
-                    insert_rows: 0,
-                    update_rows: 0,
-                    deleted_rows: num_deleted_rows,
-                });
+                self.ctx
+                    .mutation_state()
+                    .add_mutation_status(MutationStatus {
+                        insert_rows: 0,
+                        update_rows: 0,
+                        deleted_rows: num_deleted_rows,
+                    });
             }
         };
         let elapsed_time = start.elapsed().as_millis() as u64;

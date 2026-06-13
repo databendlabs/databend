@@ -6,4 +6,5 @@ Error: APIError: QueryFailed: [1301]table option abc is invalid for alter table 
 Error: APIError: QueryFailed: [1301]invalid block_per_segment option, can't be over 1000
 Error: APIError: QueryFailed: [1301]can't change storage_format for alter table statement
 Error: APIError: QueryFailed: [1006]Unable to get field named "b". Valid fields: ["a"]
+Error: APIError: QueryFailed: [1301]invalid bloom_index_type 'nope', must be one of: xor8, binary_fuse32
 Error: APIError: QueryFailed: [1301]Unsupported data type 'Decimal(4, 2)' for bloom index

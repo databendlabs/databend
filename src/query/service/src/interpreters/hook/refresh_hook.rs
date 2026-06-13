@@ -21,12 +21,10 @@ use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_common_meta_types::MetaId;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
@@ -37,6 +35,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
@@ -44,17 +43,25 @@ use parking_lot::RwLock;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;
 use crate::interpreters::RefreshTableIndexInterpreter;
+use crate::interpreters::hook::resolve_current_table_name_by_id;
+use crate::interpreters::hook::table_id_matches_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct RefreshDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub table_id: Option<u64>,
+    pub enable_refresh_aggregating_index_after_write: Option<bool>,
 }
 
 /// Hook refresh action with a on-finished callback.
@@ -66,43 +73,71 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("Pipeline execution completed successfully, starting refresh job");
-            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
-                Ok(_) => {
-                    info!("Refresh job completed successfully");
-                }
-                Err(e) => {
-                    info!("Refresh job failed: {:?}", e);
-                }
-            }
+            let _ = GlobalIORuntime::instance().block_on(execute_refresh_hook(ctx, desc));
         }
         Ok(())
     });
 }
 
-async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+    info!("Table hook starting refresh job");
+    match do_refresh(ctx, desc).await {
+        Ok(_) => {
+            info!("Refresh job completed successfully");
+        }
+        Err(e) => {
+            info!("Refresh job failed: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+    let Some(desc) = resolve_refresh_desc(&ctx, desc).await? else {
+        return Ok(());
+    };
+
+    if desc.table_id.is_some() {
+        ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
+        ctx.clear_table_meta_timestamps_cache();
+    }
+
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
     let table_id = table.get_id();
+    if !table_id_matches_target(
+        "refresh",
+        desc.table_id,
+        table_id,
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+    ) {
+        return Ok(());
+    }
 
     ctx.clear_table_meta_timestamps_cache();
 
     let mut plans = Vec::new();
 
     // Generate sync aggregating indexes.
-    if ctx
-        .get_settings()
-        .get_enable_refresh_aggregating_index_after_write()?
-    {
+    let enable_refresh_aggregating_index_after_write =
+        match desc.enable_refresh_aggregating_index_after_write {
+            Some(enabled) => enabled,
+            None => ctx
+                .get_settings()
+                .get_enable_refresh_aggregating_index_after_write()?,
+        };
+    if enable_refresh_aggregating_index_after_write {
         let agg_index_plans =
             generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
         plans.extend_from_slice(&agg_index_plans);
     }
 
     // Generate sync inverted indexes.
-    let inverted_index_plans =
-        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table).await?;
+    let inverted_index_plans = generate_refresh_table_index_plan(ctx.clone(), &desc, table).await?;
     plans.extend_from_slice(&inverted_index_plans);
 
     let mut tasks = Vec::with_capacity(std::cmp::min(
@@ -143,7 +178,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                         let complete_executor =
                             PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
                         ctx_cloned.set_executor(complete_executor.get_inner())?;
-                        complete_executor.execute()
+                        complete_executor.execute().await
                     } else {
                         Ok(())
                     }
@@ -180,7 +215,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                         let complete_executor =
                             PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
                         ctx_cloned.set_executor(complete_executor.get_inner())?;
-                        complete_executor.execute()
+                        complete_executor.execute().await
                     } else {
                         Ok(())
                     }
@@ -199,7 +234,7 @@ async fn generate_refresh_index_plan(
     catalog: &str,
     table_id: MetaId,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_written_segment_locations()?;
+    let segment_locs = ctx.written_segment_locations().list();
     let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
@@ -224,6 +259,28 @@ async fn generate_refresh_index_plan(
     }
 
     Ok(plans)
+}
+
+async fn resolve_refresh_desc(
+    ctx: &Arc<QueryContext>,
+    mut desc: RefreshDesc,
+) -> Result<Option<RefreshDesc>> {
+    let Some((database, table)) = resolve_current_table_name_by_id(
+        ctx,
+        "refresh",
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+        desc.table_id,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    desc.database = database;
+    desc.table = table;
+    Ok(Some(desc))
 }
 
 async fn build_refresh_index_plan(
@@ -257,12 +314,12 @@ async fn build_refresh_index_plan(
         .await
 }
 
-async fn generate_refresh_inverted_index_plan(
+async fn generate_refresh_table_index_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_written_segment_locations()?;
+    let segment_locs = ctx.written_segment_locations().list();
     let mut plans = vec![];
 
     let table_meta = &table.get_table_info().meta;
@@ -274,6 +331,7 @@ async fn generate_refresh_inverted_index_plan(
             TableIndexType::Inverted => ast::TableIndexType::Inverted,
             TableIndexType::Ngram => ast::TableIndexType::Ngram,
             TableIndexType::Vector => ast::TableIndexType::Vector,
+            TableIndexType::Spatial => ast::TableIndexType::Spatial,
         };
         let plan = RefreshTableIndexPlan {
             index_type,

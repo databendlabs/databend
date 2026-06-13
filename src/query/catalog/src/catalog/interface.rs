@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -49,6 +50,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -76,6 +78,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -91,6 +94,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -113,9 +117,9 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
@@ -295,6 +299,98 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
+
+    async fn get_table_with_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        match branch {
+            Some(branch_name) => {
+                self.get_table_branch(tenant, db_name, table_name, branch_name)
+                    .await
+            }
+            None => self.get_table(tenant, db_name, table_name).await,
+        }
+    }
+
+    async fn get_table_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table_branch_with_expire_ctl(tenant, db_name, table_name, branch_name, false)
+            .await
+    }
+
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+        _branch_name: &str,
+        _include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_branch_no_expire' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_tag(&self, _req: DropTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn get_table_tag(
+        &self,
+        _table_id: u64,
+        _tag_name: &str,
+        _include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_table_tags(
+        &self,
+        _req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_table_tags' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    /// Get multiple tables by db and table names.
+    /// Returns tables in the same order as the input table_names.
+    /// If a table is not found, it will not be included in the result.
+    async fn mget_tables(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'mget_tables' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     // Get one table identified as dropped by db and table name.
     async fn get_table_history(
@@ -575,7 +671,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply>;
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
@@ -583,7 +679,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;

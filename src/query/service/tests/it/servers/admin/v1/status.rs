@@ -63,7 +63,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .get_current_session()
         .set_authed_user(user, None)
         .await?;
-    let (plan, _, _) = interpreter_plan_sql(query_ctx.clone(), sql, false).await?;
+    let (plan, _, _) = interpreter_plan_sql(query_ctx.clone(), sql, false, None).await?;
 
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
@@ -76,11 +76,12 @@ async fn test_status() -> anyhow::Result<()> {
     let status = get_status(&ep).await;
     assert_eq!(
         (
+            status.inflight_queries_count,
             status.running_queries_count,
             status.last_query_started_at.is_some(),
             status.last_query_finished_at.is_some(),
         ),
-        (0, false, false),
+        (0, 0, false, false),
         "before running"
     );
 
@@ -97,11 +98,11 @@ async fn test_status() -> anyhow::Result<()> {
         let status = get_status(&ep).await;
         assert_eq!(
             (
+                status.inflight_queries_count,
                 status.running_queries_count,
                 status.last_query_started_at.is_some(),
-                status.last_query_finished_at.is_some(),
             ),
-            (1, true, false),
+            (1, 1, true),
             "running"
         );
 
@@ -113,11 +114,12 @@ async fn test_status() -> anyhow::Result<()> {
     let status = get_status(&ep).await;
     assert_eq!(
         (
+            status.inflight_queries_count,
             status.running_queries_count,
             status.last_query_started_at.is_some(),
             status.last_query_finished_at.is_some(),
         ),
-        (0, true, true),
+        (0, 0, true, true),
         "finished"
     );
 

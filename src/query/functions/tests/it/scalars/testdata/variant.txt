@@ -1109,6 +1109,15 @@ output domain  : {123..=123}
 output         : 123
 
 
+ast            : as_integer(parse_json('123.0'))
+raw expr       : as_integer(parse_json('123.0'))
+checked expr   : as_integer<Variant>(CAST<String>("123.0" AS Variant))
+optimized expr : 123_i64
+output type    : Int64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
 ast            : as_float(parse_json('"ab"'))
 raw expr       : as_float(parse_json('"ab"'))
 checked expr   : as_float<Variant>(CAST<String>("\"ab\"" AS Variant))
@@ -1448,6 +1457,15 @@ output         : false
 ast            : is_integer(parse_json('123'))
 raw expr       : is_integer(parse_json('123'))
 checked expr   : is_integer<Variant>(CAST<String>("123" AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_integer(parse_json('123.0'))
+raw expr       : is_integer(parse_json('123.0'))
+checked expr   : is_integer<Variant>(CAST<String>("123.0" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1831,6 +1849,24 @@ error:
 
 
 
+ast            : to_uint64(parse_json('123.0'))
+raw expr       : to_uint64(parse_json('123.0'))
+checked expr   : CAST<Variant>(CAST<String>("123.0" AS Variant) AS UInt64 NULL)
+optimized expr : 123_u64
+output type    : UInt64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
+ast            : to_uint64(parse_json('"456.5"'))
+raw expr       : to_uint64(parse_json('"456.5"'))
+checked expr   : CAST<Variant>(CAST<String>("\"456.5\"" AS Variant) AS UInt64 NULL)
+optimized expr : 457_u64
+output type    : UInt64 NULL
+output domain  : {457..=457}
+output         : 457
+
+
 error: 
   --> SQL:1:1
   |
@@ -1855,6 +1891,24 @@ optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
+
+
+ast            : to_int64(parse_json('123.5'))
+raw expr       : to_int64(parse_json('123.5'))
+checked expr   : CAST<Variant>(CAST<String>("123.5" AS Variant) AS Int64 NULL)
+optimized expr : 124_i64
+output type    : Int64 NULL
+output domain  : {124..=124}
+output         : 124
+
+
+ast            : to_int64(parse_json('"-456.2"'))
+raw expr       : to_int64(parse_json('"-456.2"'))
+checked expr   : CAST<Variant>(CAST<String>("\"-456.2\"" AS Variant) AS Int64 NULL)
+optimized expr : -456_i64
+output type    : Int64 NULL
+output domain  : {-456..=-456}
+output         : -456
 
 
 error: 
@@ -2366,6 +2420,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_uint64(parse_json('789.0'))
+raw expr       : try_to_uint64(parse_json('789.0'))
+checked expr   : TRY_CAST<Variant>(CAST<String>("789.0" AS Variant) AS UInt64 NULL)
+optimized expr : 789_u64
+output type    : UInt64 NULL
+output domain  : {789..=789}
+output         : 789
+
+
 ast            : try_to_uint64(parse_json('"abc"'))
 raw expr       : try_to_uint64(parse_json('"abc"'))
 checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS UInt64 NULL)
@@ -2391,6 +2454,15 @@ optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
+
+
+ast            : try_to_int64(parse_json('"789.5"'))
+raw expr       : try_to_int64(parse_json('"789.5"'))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"789.5\"" AS Variant) AS Int64 NULL)
+optimized expr : 790_i64
+output type    : Int64 NULL
+output domain  : {790..=790}
+output         : 790
 
 
 ast            : try_to_int64(parse_json('"abc"'))
@@ -2576,7 +2648,7 @@ evaluation:
 | Row 0  | 'true'                               | 1          |
 | Row 1  | '123'                                | 123        |
 | Row 2  | '-100'                               | -100       |
-| Row 3  | '12.34'                              | NULL       |
+| Row 3  | '12.34'                              | 12         |
 | Row 4  | NULL                                 | NULL       |
 | Row 5  | '"2020-01-01"'                       | NULL       |
 | Row 6  | '"2021-01-01 20:00:00"'              | NULL       |
@@ -2587,7 +2659,7 @@ evaluation (internal):
 | Column | Data                                                                                                                                          |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] }) |
-| Output | NullableColumn { column: Int64([1, 123, -100, 0, 0, 0, 0, 0]), validity: [0b00000111] }                                                       |
+| Output | NullableColumn { column: Int64([1, 123, -100, 12, 0, 0, 0, 0]), validity: [0b00001111] }                                                      |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -2603,7 +2675,7 @@ evaluation:
 | Row 0  | 'true'                               | 1           |
 | Row 1  | '123'                                | 123         |
 | Row 2  | '-100'                               | NULL        |
-| Row 3  | '12.34'                              | NULL        |
+| Row 3  | '12.34'                              | 12          |
 | Row 4  | NULL                                 | NULL        |
 | Row 5  | '"2020-01-01"'                       | NULL        |
 | Row 6  | '"2021-01-01 20:00:00"'              | NULL        |
@@ -2614,7 +2686,7 @@ evaluation (internal):
 | Column | Data                                                                                                                                          |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] }) |
-| Output | NullableColumn { column: UInt64([1, 123, 0, 0, 0, 0, 0, 0]), validity: [0b00000011] }                                                         |
+| Output | NullableColumn { column: UInt64([1, 123, 0, 12, 0, 0, 0, 0]), validity: [0b00001011] }                                                        |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -6827,6 +6899,74 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
 
 
+ast            : array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))
+raw expr       : array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, 2]" AS Variant), CAST<String>("[3, 4]" AS Variant))
+optimized expr : 0x80000004200000022000000220000002200000025001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3,4]'
+
+
+ast            : array_concat(parse_json('[1, "a"]'), parse_json('[true, null]'))
+raw expr       : array_concat(parse_json('[1, "a"]'), parse_json('[true, null]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, \"a\"]" AS Variant), CAST<String>("[true, null]" AS Variant))
+optimized expr : 0x8000000420000002100000014000000000000000500161
+output type    : Variant
+output domain  : Undefined
+output         : '[1,"a",true,null]'
+
+
+ast            : array_concat(parse_json('1'), parse_json('[2, 3]'))
+raw expr       : array_concat(parse_json('1'), parse_json('[2, 3]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("1" AS Variant), CAST<String>("[2, 3]" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_concat(parse_json('[1, 2]'), parse_json('3'))
+raw expr       : array_concat(parse_json('[1, 2]'), parse_json('3'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, 2]" AS Variant), CAST<String>("3" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_concat(null, parse_json('[1]'))
+raw expr       : array_concat(NULL, parse_json('[1]'))
+checked expr   : array_concat<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(CAST<String>("[1]" AS Variant) AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_concat(parse_json(c1), parse_json(c2))
+raw expr       : array_concat(parse_json(c1::String), parse_json(c2::String))
+checked expr   : array_concat<Variant, Variant>(CAST<String>(c1 AS Variant), CAST<String>(c2 AS Variant))
+evaluation:
++--------+----------------------+--------------------------------+-----------------+
+|        | c1                   | c2                             | Output          |
++--------+----------------------+--------------------------------+-----------------+
+| Type   | String               | String                         | Variant         |
+| Domain | {"[\"a\"]"..="true"} | {"[\"b\", \"c\"]"..="[false]"} | Unknown         |
+| Row 0  | '[1, 2]'             | '[3, 4]'                       | '[1,2,3,4]'     |
+| Row 1  | '["a"]'              | '["b", "c"]'                   | '["a","b","c"]' |
+| Row 2  | 'true'               | '[false]'                      | '[true,false]'  |
++--------+----------------------+--------------------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| c1     | Column(StringColumn[[1, 2], ["a"], true])                                                                                                   |
+| c2     | Column(StringColumn[[3, 4], ["b", "c"], [false]])                                                                                           |
+| Output | Variant([0x80000004200000022000000220000002200000025001500250035004, 0x80000003100000011000000110000001616263, 0x800000024000000030000000]) |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : array_remove_first(parse_json('[1, 2, 3]'))
 raw expr       : array_remove_first(parse_json('[1, 2, 3]'))
 checked expr   : array_remove_first<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
@@ -7077,6 +7217,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : array_contains(parse_json('[1, 2, 3]'), 3)
+raw expr       : array_contains(parse_json('[1, 2, 3]'), 3)
+checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : contains(parse_json('[]'), 1)
 raw expr       : contains(parse_json('[]'), 1)
 checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[]" AS Variant), 1_u8)
@@ -7143,6 +7292,73 @@ evaluation (internal):
 | c2     | Column(StringColumn[a, b, c])               |
 | Output | Boolean([0b_____001])                       |
 +--------+---------------------------------------------+
+
+
+ast            : array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))
+raw expr       : array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[1, 2, 2, 3, null]" AS Variant))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_approx_count_distinct(parse_json('["a", "b", "a", null]'))
+raw expr       : array_approx_count_distinct(parse_json('["a", "b", "a", null]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[\"a\", \"b\", \"a\", null]" AS Variant))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct(parse_json('[]'))
+raw expr       : array_approx_count_distinct(parse_json('[]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_approx_count_distinct(parse_json('1'))
+raw expr       : array_approx_count_distinct(parse_json('1'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("1" AS Variant))
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_approx_count_distinct(try_cast(NULL AS Variant))
+raw expr       : array_approx_count_distinct(TRY_CAST(NULL AS Variant))
+checked expr   : array_approx_count_distinct<Variant NULL>(TRY_CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_approx_count_distinct(parse_json(c1))
+raw expr       : array_approx_count_distinct(parse_json(c1::String))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+----------------------------------+---------+
+|        | c1                               | Output  |
++--------+----------------------------------+---------+
+| Type   | String                           | UInt64  |
+| Domain | {"[\"a\", \"b\", \"a\"]"..="[]"} | Unknown |
+| Row 0  | '[1, 1, 2, null]'                | 3       |
+| Row 1  | '["a", "b", "a"]'                | 2       |
+| Row 2  | '[]'                             | 0       |
++--------+----------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------+
+| Column | Data                                                       |
++--------+------------------------------------------------------------+
+| c1     | Column(StringColumn[[1, 1, 2, null], ["a", "b", "a"], []]) |
+| Output | UInt64([3, 2, 0])                                          |
++--------+------------------------------------------------------------+
 
 
 ast            : slice(parse_json('[]'), 1)

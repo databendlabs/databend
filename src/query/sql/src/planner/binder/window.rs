@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -26,11 +28,12 @@ use itertools::Itertools;
 use super::select::SelectList;
 use crate::BindContext;
 use crate::Binder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -48,17 +51,18 @@ use crate::plans::Window;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
 
 impl Binder {
-    pub(super) fn bind_window_function(
+    pub(super) fn bind_window_functions(
         &mut self,
-        window_info: &WindowFunctionInfo,
+        window_infos: &[WindowFunctionInfo],
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_window_function_info(&self.ctx, window_info, child)
+        bind_window_function_infos(&self.ctx, window_infos, child)
     }
 
     pub(super) fn analyze_window_definition(
@@ -94,9 +98,25 @@ impl Binder {
         let mut window_specs = HashMap::new();
         let mut resolved_window_specs = HashMap::new();
         for window in window_list {
-            window_specs.insert(window.name.name.clone(), window.spec.clone());
-            if window.spec.existing_window_name.is_none() {
-                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
+            let window_name = self.normalize_identifier(&window.name).name;
+            let mut window_spec = window.spec.clone();
+            if let Some(existing_window_name) = &mut window_spec.existing_window_name {
+                *existing_window_name = self.normalize_identifier(existing_window_name);
+            }
+
+            match window_specs.entry(window_name.clone()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(window_spec.clone());
+                }
+                Entry::Occupied(_) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Duplicate window name: {window_name}"
+                    )));
+                }
+            }
+
+            if window_spec.existing_window_name.is_none() {
+                resolved_window_specs.insert(window_name, window_spec);
             }
         }
         Ok((window_specs, resolved_window_specs))
@@ -211,7 +231,7 @@ impl WindowInfo {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowFunctionInfo {
     pub span: Span,
-    pub index: IndexType,
+    pub index: Symbol,
     pub func: WindowFuncType,
     pub display_name: String,
     pub arguments: Vec<ScalarItem>,
@@ -254,8 +274,7 @@ impl<'a> WindowRewriter<'a> {
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let mut arg = arg.clone();
-                    let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut arg)?;
+                    self.rewrite_aggregate_expr(&mut arg)?;
                     let name = format!("{window_func_name}_arg_{i}");
                     let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                     window_args.push(ScalarItem {
@@ -269,8 +288,7 @@ impl<'a> WindowRewriter<'a> {
                     Vec::with_capacity(agg.sort_descs.len());
                 for (i, desc) in agg.sort_descs.iter().enumerate() {
                     let mut expr = desc.expr.clone();
-                    let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut expr)?;
+                    self.rewrite_aggregate_expr(&mut expr)?;
 
                     let name = format!("{window_func_name}_sort_desc_{i}");
                     let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
@@ -310,8 +328,7 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::NthValue(func) => {
                 let mut arg = (*func.arg).clone();
-                let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                aggregate_rewriter.visit(&mut arg)?;
+                self.rewrite_aggregate_expr(&mut arg)?;
                 let name = format!("{window_func_name}_arg");
                 let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                 window_args.push(ScalarItem {
@@ -332,8 +349,7 @@ impl<'a> WindowRewriter<'a> {
         let mut partition_by_items = vec![];
         for (i, part) in window.partition_by.iter().enumerate() {
             let mut part = part.clone();
-            let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-            aggregate_rewriter.visit(&mut part)?;
+            self.rewrite_aggregate_expr(&mut part)?;
             let name = format!("{window_func_name}_part_{i}");
             let (replaced_part, scalar) = self.replace_expr(&name, &part)?;
             partition_by_items.push(ScalarItem {
@@ -348,8 +364,7 @@ impl<'a> WindowRewriter<'a> {
 
         for (i, order) in window.order_by.iter().enumerate() {
             let mut order_expr = order.expr.clone();
-            let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-            aggregate_rewriter.visit(&mut order_expr)?;
+            self.rewrite_aggregate_expr(&mut order_expr)?;
             let name = format!("{window_func_name}_order_{i}");
             let (replaced_order, scalar) = self.replace_expr(&name, &order_expr)?;
             order_by_items.push(WindowOrderByInfo {
@@ -414,8 +429,7 @@ impl<'a> WindowRewriter<'a> {
         f: &LagLeadFunction,
     ) -> Result<(ScalarExpr, Option<Box<ScalarExpr>>)> {
         let mut arg = (*f.arg).clone();
-        let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-        aggregate_rewriter.visit(&mut arg)?;
+        self.rewrite_aggregate_expr(&mut arg)?;
         let name = format!("{window_func_name}_arg");
         let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
         window_args.push(ScalarItem {
@@ -426,8 +440,7 @@ impl<'a> WindowRewriter<'a> {
             None => None,
             Some(d) => {
                 let mut d = (**d).clone();
-                let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                aggregate_rewriter.visit(&mut d)?;
+                self.rewrite_aggregate_expr(&mut d)?;
                 let name = format!("{window_func_name}_default_value");
                 let (replaced_default, scalar) = self.replace_expr(&name, &d)?;
                 window_args.push(ScalarItem {
@@ -448,7 +461,7 @@ impl<'a> WindowRewriter<'a> {
             // For window expr works with group by expr alias, we need to replace the expr with the alias index
             // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
             let mut arg = arg.clone();
-            for group_expr in self.bind_context.aggregate_info.group_items.iter() {
+            for group_expr in self.bind_context.aggregate_info.group_items() {
                 if !group_expr.scalar.is_column_ref() {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),
@@ -473,27 +486,63 @@ impl<'a> WindowRewriter<'a> {
                 .add_derived_column(name.to_string(), ty.clone());
 
             // Generate a ColumnBinding for each argument of aggregates
-            let column = ColumnBindingBuilder::new(
-                name.to_string(),
-                index,
-                Box::new(ty),
-                Visibility::Visible,
-            )
-            .build();
             Ok((
                 BoundColumnRef {
                     span: arg.span(),
-                    column,
+                    column: ColumnBindingBuilder::new(
+                        name.to_string(),
+                        index,
+                        Box::new(ty),
+                        Visibility::Visible,
+                    )
+                    .build(),
                 },
                 arg.clone(),
             ))
         }
     }
 
-    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter<'_> {
-        WindowAggregateRewriter {
-            bind_context: self.bind_context,
+    fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        if self.bind_context.aggregate_info.has_group_items()
+            || self.bind_context.aggregate_info.has_aggregate_calls()
+        {
+            AggregateRewriter::rewrite_expr(
+                &mut self.bind_context.aggregate_info,
+                self.metadata.clone(),
+                expr,
+            )?;
+        } else {
+            AggregateRewriter::rewrite_existing_expr(
+                &self.bind_context.aggregate_info,
+                expr,
+                "Window specification and arguments cannot contain aggregate functions",
+            )?;
         }
+
+        WindowExprChecker.visit(expr)?;
+
+        AggregateRewriter::check_no_aggregate_calls(
+            expr,
+            "window aggregate rewrite must replace aggregate calls with BoundColumnRef",
+        )
+    }
+}
+
+struct WindowExprChecker;
+
+impl<'a> VisitorMut<'a> for WindowExprChecker {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if matches!(expr, ScalarExpr::WindowFunction(_)) {
+            return Err(ErrorCode::SemanticError(
+                "Window function cannot contain another window function".to_string(),
+            ));
+        }
+
+        walk_expr_mut(self, expr)
+    }
+
+    fn visit_subquery_expr(&mut self, _: &'a mut SubqueryExpr) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -523,48 +572,6 @@ impl<'a> VisitorMut<'a> for WindowRewriter<'a> {
     fn visit_subquery_expr(&mut self, _: &'a mut SubqueryExpr) -> Result<()> {
         // TODO(leiysky): should we recursively process subquery here?
         Ok(())
-    }
-}
-
-pub struct WindowAggregateRewriter<'a> {
-    pub bind_context: &'a BindContext,
-}
-
-impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if matches!(expr, ScalarExpr::WindowFunction(_)) {
-            return Err(ErrorCode::SemanticError(
-                "Window function cannot contain another window function".to_string(),
-            ));
-        }
-
-        if let ScalarExpr::AggregateFunction(agg_func) = expr {
-            let Some(agg) = self
-                .bind_context
-                .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
-            else {
-                return Err(ErrorCode::BadArguments("Invalid window function argument"));
-            };
-
-            let column_binding = ColumnBindingBuilder::new(
-                agg_func.display_name.clone(),
-                agg.index,
-                agg_func.return_type.clone(),
-                Visibility::Visible,
-            )
-            .build();
-
-            *expr = BoundColumnRef {
-                span: None,
-                column: column_binding,
-            }
-            .into();
-
-            return Ok(());
-        }
-
-        walk_expr_mut(self, expr)
     }
 }
 
@@ -607,6 +614,7 @@ pub fn bind_window_function_info(
         order_by: window_info.order_by_items.clone(),
         frame: window_info.frame.clone(),
         limit: None,
+        top: None,
     };
 
     // eval scalars before sort
@@ -681,6 +689,127 @@ pub fn bind_window_function_info(
         Arc::new(window_plan.into()),
         Arc::new(child),
     ))
+}
+
+pub fn bind_window_function_infos(
+    ctx: &Arc<dyn TableContext>,
+    window_infos: &[WindowFunctionInfo],
+    child: SExpr,
+) -> Result<SExpr> {
+    if window_infos.is_empty() {
+        return Ok(child);
+    }
+
+    if window_infos.len() == 1 {
+        return bind_window_function_info(ctx, &window_infos[0], child);
+    }
+
+    let mut groups = Vec::new();
+    let mut windows = Vec::new();
+    let mut scalar_items = Vec::new();
+    let mut current_window_key: Option<WindowGroupKey> = None;
+    let mut scalar_indexes = HashSet::new();
+    let mut partition_order_scalar_indexes = HashMap::new();
+
+    for window_info in window_infos {
+        let mut window_plan = Window {
+            span: window_info.span,
+            index: window_info.index,
+            function: window_info.func.clone(),
+            arguments: window_info.arguments.clone(),
+            partition_by: window_info.partition_by_items.clone(),
+            order_by: window_info.order_by_items.clone(),
+            frame: window_info.frame.clone(),
+            limit: None,
+            top: None,
+        };
+
+        let arguments = window_plan.arguments.clone();
+        for item in &mut window_plan.partition_by {
+            canonicalize_window_group_scalar_item(item, &mut partition_order_scalar_indexes);
+        }
+        for order in &mut window_plan.order_by {
+            canonicalize_window_group_scalar_item(
+                &mut order.order_by_item,
+                &mut partition_order_scalar_indexes,
+            );
+        }
+
+        let window_key = WindowGroupKey::from_window(&window_plan);
+        if current_window_key
+            .as_ref()
+            .is_some_and(|current| current != &window_key)
+        {
+            groups.push(WindowGroup {
+                windows: std::mem::take(&mut windows),
+                scalar_items: std::mem::take(&mut scalar_items),
+            });
+            scalar_indexes.clear();
+            partition_order_scalar_indexes.clear();
+        }
+        current_window_key = Some(window_key);
+
+        for item in arguments.iter() {
+            if scalar_indexes.insert(item.index) {
+                scalar_items.push(item.clone());
+            }
+        }
+        for item in &window_plan.partition_by {
+            if scalar_indexes.insert(item.index) {
+                scalar_items.push(item.clone());
+            }
+        }
+        for order in &window_plan.order_by {
+            if scalar_indexes.insert(order.order_by_item.index) {
+                scalar_items.push(order.order_by_item.clone());
+            }
+        }
+        windows.push(window_plan);
+    }
+
+    groups.push(WindowGroup {
+        windows,
+        scalar_items,
+    });
+    groups.sort_by_key(|group| {
+        group
+            .windows
+            .first()
+            .is_none_or(|window| window.partition_by.is_empty())
+    });
+
+    Ok(groups.into_iter().fold(child, |child, window_group| {
+        SExpr::create_unary(Arc::new(window_group.into()), Arc::new(child))
+    }))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WindowGroupKey {
+    partition_by: Vec<ScalarExpr>,
+}
+
+impl WindowGroupKey {
+    fn from_window(window: &Window) -> Self {
+        Self {
+            partition_by: window
+                .partition_by
+                .iter()
+                .map(|item| item.scalar.clone())
+                .collect(),
+        }
+    }
+}
+
+fn canonicalize_window_group_scalar_item(
+    item: &mut ScalarItem,
+    scalar_item_indexes: &mut HashMap<ScalarExpr, Symbol>,
+) {
+    if let Some(index) = scalar_item_indexes.get(&item.scalar) {
+        item.index = *index;
+        return;
+    }
+
+    scalar_item_indexes.insert(item.scalar.clone(), item.index);
 }
 
 impl Binder {

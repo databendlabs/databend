@@ -27,7 +27,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -51,6 +50,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_storages_factory::Table;
 use url::Url;
+
+use crate::sessions::TableContext;
 
 pub struct UdfEchoTable {
     table_info: TableInfo,
@@ -80,7 +81,8 @@ impl UdfEchoTable {
                     format!("udf server address '{address}' is invalid, please check the address",)
                 })?;
 
-            let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+            let udf_server_allow_list =
+                &GlobalConfig::instance().query.common.udf_server_allow_list;
             if udf_server_allow_list.iter().all(|allow_url| {
                 if let Ok(allow_url) = Url::parse(allow_url) {
                     allow_url.host_str() != url_addr.host_str()

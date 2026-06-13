@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::AsyncSExprVisitor;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
@@ -93,11 +94,11 @@ fn create_complex_expr() -> SExpr {
         "t1",
         0,
     );
-    let group_item = builder.scalar_item(0, group_expr);
+    let group_item = builder.scalar_item(Symbol::new(0), group_expr);
 
     // Create aggregate function item (simplified as constant expression)
     let agg_scalar = builder.bool(true);
-    let agg_item = builder.scalar_item(1, agg_scalar);
+    let agg_item = builder.scalar_item(Symbol::new(1), agg_scalar);
 
     let aggregated = builder.aggregate(
         filtered_join,

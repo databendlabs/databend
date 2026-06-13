@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -21,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -31,13 +34,43 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct MaterializedCTERef {
     pub cte_name: String,
-    pub output_columns: Vec<usize>,
+    pub output_columns: Vec<Symbol>,
     pub def: SExpr,
-    pub column_mapping: HashMap<usize, usize>,
+    pub column_mapping: HashMap<Symbol, Symbol>,
+    pub stat_info: Option<Arc<StatInfo>>,
 }
+
+impl fmt::Debug for MaterializedCTERef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let column_mapping = self
+            .column_mapping
+            .iter()
+            .map(|(from, to)| (*from, *to))
+            .collect::<BTreeMap<_, _>>();
+
+        f.debug_struct("MaterializedCTERef")
+            .field("cte_name", &self.cte_name)
+            .field("output_columns", &self.output_columns)
+            .field("def", &self.def)
+            .field("column_mapping", &column_mapping)
+            .field("stat_info", &self.stat_info)
+            .finish()
+    }
+}
+
+impl PartialEq for MaterializedCTERef {
+    fn eq(&self, other: &Self) -> bool {
+        self.cte_name == other.cte_name
+            && self.output_columns == other.output_columns
+            && self.def == other.def
+            && self.column_mapping == other.column_mapping
+    }
+}
+
+impl Eq for MaterializedCTERef {}
 
 impl Hash for MaterializedCTERef {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -57,6 +90,9 @@ impl Operator for MaterializedCTERef {
 
     /// Derive statistics information
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        if let Some(stat_info) = &self.stat_info {
+            return Ok(stat_info.clone());
+        }
         RelExpr::with_s_expr(&self.def).derive_cardinality()
     }
 

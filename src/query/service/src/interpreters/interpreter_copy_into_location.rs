@@ -32,7 +32,8 @@ use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::CopyIntoLocationPlan;
 use crate::sql::plans::Plan;
 
@@ -94,6 +95,11 @@ impl CopyIntoLocationInterpreter {
             input_data_schema: query_result_schema,
             input_table_schema: table_schema,
             info: info.clone(),
+            partition_by: self
+                .plan
+                .partition_by
+                .as_ref()
+                .map(|desc| desc.remote_expr.clone()),
             meta: PhysicalPlanMeta::new("CopyIntoLocation"),
         });
 

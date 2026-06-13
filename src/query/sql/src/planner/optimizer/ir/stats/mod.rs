@@ -13,11 +13,14 @@
 // limitations under the License.
 
 mod column_stat;
-mod histogram;
+mod constraint;
+mod join;
 mod selectivity;
 
 pub use column_stat::*;
-pub use histogram::HistogramBuilder;
-pub use histogram::UniformSampleSet;
+pub use databend_common_statistics::UniformSampleSet;
+pub(crate) use join::JoinConditionColumns;
+pub(crate) use join::JoinKeyStatUpdate;
+pub(crate) use join::JoinStatsEstimator;
 pub use selectivity::MAX_SELECTIVITY;
 pub use selectivity::SelectivityEstimator;

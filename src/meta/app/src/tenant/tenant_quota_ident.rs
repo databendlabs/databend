@@ -22,8 +22,6 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::tenant::TenantQuota;
     use crate::tenant_key::resource::TenantResource;
 
@@ -35,14 +33,6 @@ mod kvapi_impl {
         type ValueType = TenantQuota;
     }
 
-    impl kvapi::Value for TenantQuota {
-        type KeyType = super::TenantQuotaIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -50,7 +40,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TenantQuotaIdent;
     use crate::tenant::Tenant;
@@ -59,10 +50,6 @@ mod tests {
     fn test_tenant_quota_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = TenantQuotaIdent::new(tenant);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_quotas/test");
-
-        assert_eq!(ident, TenantQuotaIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_quotas/test");
     }
 }

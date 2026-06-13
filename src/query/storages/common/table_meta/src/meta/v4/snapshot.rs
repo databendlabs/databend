@@ -46,8 +46,9 @@ use crate::meta::uuid_from_date_time;
 use crate::meta::v2;
 use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
+use crate::table::ClusterType;
 
-#[frozen_api("dba4542b")]
+#[frozen_api("6bef7be1")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -92,8 +93,9 @@ pub struct TableSnapshot {
     pub segments: Vec<Location>,
 
     /// The metadata of the cluster keys.
-    /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
+    #[serde(default)]
+    pub cluster_type: Option<ClusterType>,
     // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
 }
@@ -106,6 +108,8 @@ impl TableSnapshot {
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_type: Option<ClusterType>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -155,7 +159,8 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
-            cluster_key_meta: None,
+            cluster_key_meta,
+            cluster_type,
             table_statistics_location,
         })
     }
@@ -172,6 +177,8 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
+            previous.cluster_key_meta.clone(),
+            previous.cluster_type,
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
@@ -290,6 +297,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             summary: s.summary,
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
+            cluster_type: None,
             table_statistics_location: s.table_statistics_location,
         }
     }
@@ -314,6 +322,7 @@ where T: Into<v3::TableSnapshot>
             summary: s.summary.into(),
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
+            cluster_type: None,
             table_statistics_location: s.table_statistics_location,
         }
     }

@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::PerfCounters;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
@@ -36,6 +38,10 @@ use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
+
+pub(super) fn out_of_limit_error(error: impl Debug) -> ErrorCode {
+    ErrorCode::MemoryExceedsLimit(format!("{error:?}"))
+}
 
 pub enum ExecutorTask {
     None,
@@ -82,6 +88,7 @@ pub struct ExecutorWorkerContext {
     worker_id: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
+    perf_counters: Option<PerfCounters>,
 }
 
 impl ExecutorWorkerContext {
@@ -90,7 +97,14 @@ impl ExecutorWorkerContext {
             worker_id,
             workers_condvar,
             task: ExecutorTask::None,
+            perf_counters: None,
         }
+    }
+
+    /// Initialize hardware performance counters for this worker thread.
+    /// Silently does nothing if perf events are unavailable (non-Linux, no permissions, etc).
+    pub fn init_perf_counters(&mut self, event_groups: &[Vec<PerfEvent>]) {
+        self.perf_counters = PerfCounters::try_new(event_groups);
     }
 
     pub fn has_task(&self) -> bool {
@@ -169,7 +183,23 @@ impl ExecutorWorkerContext {
             let begin = SystemTime::now();
             let instant = Instant::now();
 
+            let perf_enabled = payload.perf_enabled;
+            if perf_enabled {
+                if let Some(counters) = &mut self.perf_counters {
+                    let _ = counters.reset_and_enable();
+                }
+            }
+
             proc.processor.process()?;
+
+            if perf_enabled {
+                if let Some(counters) = &mut self.perf_counters {
+                    if let Ok(values) = counters.disable_and_read() {
+                        Profile::record_perf_counters(values);
+                    }
+                }
+            }
+
             let nanos = instant.elapsed().as_nanos();
             assume(nanos < 18446744073709551615_u128);
             Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
@@ -178,7 +208,7 @@ impl ExecutorWorkerContext {
                 .record_process(begin, nanos as usize / 1_000, process_rows);
 
             if let Err(out_of_limit) = guard.flush() {
-                return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
+                return Err(out_of_limit_error(out_of_limit));
             }
 
             Ok(Some((proc.processor.id(), proc.graph)))
@@ -244,5 +274,23 @@ impl Debug for ExecutorTask {
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::OutOfLimit;
+    use databend_common_exception::ErrorCode;
+
+    use super::out_of_limit_error;
+
+    #[test]
+    fn test_out_of_limit_error_uses_memory_exceeds_limit() {
+        let err = out_of_limit_error(OutOfLimit::new(100, 50));
+
+        assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
+        assert_eq!(err.name(), "MemoryExceedsLimit");
+        assert!(err.message().contains("memory usage"));
+        assert!(err.message().contains("exceeds limit"));
     }
 }

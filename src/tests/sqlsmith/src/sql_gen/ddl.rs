@@ -77,10 +77,10 @@ impl<R: Rng> SqlGenerator<'_, R> {
     ) -> Vec<(DropTableStmt, CreateTableStmt)> {
         let mut tables = Vec::with_capacity(BASE_TABLE_NAMES.len());
 
-        let mut table_options = BTreeMap::new();
-        if self.rng.gen_bool(0.3) {
-            table_options.insert("storage_format".to_string(), "native".to_string());
-        }
+        // `parquet` is the only supported storage format; leaving the options
+        // empty lets the table fall back to it. The removed `native` format is
+        // rejected at CREATE time, so it must not be generated here.
+        let table_options = BTreeMap::new();
         for table_name in BASE_TABLE_NAMES {
             let source = self.gen_table_source();
 
@@ -251,6 +251,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             expr: None,
             check: None,
             comment: None,
+            stats_truncate_len: None,
         }
     }
 
@@ -281,6 +282,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 expr: default_expr,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             };
             column_defs.push(column_def);
         }

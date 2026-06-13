@@ -16,4 +16,5 @@ mod virtual_column_reader;
 mod virtual_column_reader_parquet;
 
 pub use virtual_column_reader::VirtualColumnReader;
+pub use virtual_column_reader::load_virtual_column_file_meta;
 pub use virtual_column_reader_parquet::VirtualBlockReadResult;

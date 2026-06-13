@@ -18,11 +18,13 @@ use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
-use derive_visitor::DriveMut;
 use log::debug;
 
 use crate::BindContext;
@@ -62,7 +64,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.drive_mut(&mut visitor);
+        query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -101,7 +103,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.drive_mut(&mut visitor);
+        query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -172,7 +174,10 @@ impl Binder {
                 .with_column("created_on AS create_time")
                 .with_column("view_query");
         } else {
-            select_builder.with_column(format!("name AS `Views_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Views_in_{database}"), '`')
+            ));
         }
 
         if *with_history {
@@ -184,7 +189,7 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
@@ -195,11 +200,11 @@ impl Binder {
             }
         };
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

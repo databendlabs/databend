@@ -49,7 +49,7 @@ pub fn find_all_related_roles(
         };
         result.push(role.clone());
         for related_role in role.grants.roles() {
-            q.push_back(related_role);
+            q.push_back(related_role.to_owned());
         }
     }
     result

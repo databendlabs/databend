@@ -34,10 +34,7 @@ impl DictionaryIdIdent {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
     use crate::schema::DictionaryMeta;
-    use crate::schema::dictionary_id_ident::DictionaryIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DictionaryIdRsc;
@@ -48,14 +45,6 @@ mod kvapi_impl {
         type ValueType = DictionaryMeta;
     }
 
-    impl kvapi::Value for DictionaryMeta {
-        type KeyType = DictionaryIdIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -63,7 +52,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DictionaryId;
     use super::DictionaryIdIdent;
@@ -73,10 +63,7 @@ mod tests {
     fn test_dictionary_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = DictionaryIdIdent::new_generic(tenant, DictionaryId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_dictionary_by_id/3");
-        assert_eq!(ident, DictionaryIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_dictionary_by_id/3");
     }
 
     #[test]

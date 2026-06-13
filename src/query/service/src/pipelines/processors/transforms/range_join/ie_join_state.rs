@@ -15,7 +15,6 @@
 use core::time::Duration;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
@@ -45,6 +44,7 @@ use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
+use crate::sessions::TableContextSettings;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,
@@ -180,8 +180,12 @@ impl RangeJoinState {
             blocks
         } else {
             if !self.left_match.read().is_empty() {
-                return Ok(vec![self.fill_outer(task_id, true)?]);
-            } else if !self.right_match.read().is_empty() {
+                let left_fill_end = partition_count + self.left_sorted_blocks.read().len();
+                if task_id < left_fill_end {
+                    return Ok(vec![self.fill_outer(task_id, true)?]);
+                }
+            }
+            if !self.right_match.read().is_empty() {
                 return Ok(vec![self.fill_outer(task_id, false)?]);
             }
             Ok(vec![DataBlock::empty()])
@@ -219,9 +223,8 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l1_sort_descriptions.clone(),
             left_sorted_blocks,
-            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
+            self.ctx.get_settings().get_enable_fixed_rows_sort()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-            false,
         )?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
@@ -256,9 +259,8 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
-            settings.get_sort_spilling_batch_bytes()?,
+            settings.get_enable_fixed_rows_sort()?,
             settings.get_enable_loser_tree_merge_sort()?,
-            false,
         )?)?;
 
         // The pos col of l2 sorted blocks is permutation array
@@ -354,12 +356,12 @@ impl RangeJoinState {
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         unsafe { l1_index_column.index_unchecked(j) }
                     {
-                        right_buffer.push((-right - 1) as usize - right_offset);
+                        right_buffer.push(((-right - 1) as usize - right_offset) as u32);
                     }
                     if let ScalarRef::Number(NumberScalar::Int64(left)) =
                         unsafe { l1_index_column.index_unchecked(*p as usize) }
                     {
-                        left_buffer.push((left - 1) as usize - left_offset);
+                        left_buffer.push(((left - 1) as usize - left_offset) as u32);
                     }
                 }
                 j += 1;
@@ -370,28 +372,19 @@ impl RangeJoinState {
         }
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
-        let mut indices = Vec::with_capacity(left_buffer.len());
         let mut buffer = Vec::with_capacity(left_buffer.len());
         for res in left_buffer.iter() {
-            indices.push((0u32, *res as u32, 1usize));
             if !left_match.is_empty() {
-                buffer.push((*res + left_offset) as u64);
+                buffer.push(*res as u64 + left_offset as u64);
             }
         }
-        let mut left_result_block =
-            DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
-        indices.clear();
+        let mut left_result_block = left_table[left_idx].take(left_buffer.as_slice())?;
         for res in right_buffer.iter() {
-            indices.push((0u32, *res as u32, 1usize));
             if !right_match.is_empty() {
-                buffer.push((*res + right_offset) as u64);
+                buffer.push(*res as u64 + right_offset as u64);
             }
         }
-        let right_result_block = DataBlock::take_blocks(
-            &right_table[right_idx..right_idx + 1],
-            &indices,
-            indices.len(),
-        );
+        let right_result_block = right_table[right_idx].take(right_buffer.as_slice())?;
         // Merge left_result_block and right_result_block
         left_result_block.merge_block(right_result_block);
         if !left_match.is_empty() || !right_match.is_empty() {
@@ -406,7 +399,7 @@ impl RangeJoinState {
             ));
         }
         for filter in self.other_conditions.iter() {
-            left_result_block = filter_block(left_result_block, filter)?;
+            left_result_block = filter_block(left_result_block, filter, &self.function_context)?;
         }
         if !left_match.is_empty() || !right_match.is_empty() {
             let column = &left_result_block
@@ -450,25 +443,10 @@ impl RangeJoinState {
         let left_match = self.left_match.read();
         let right_match = self.right_match.read();
 
-        let (outer_idx, inner_idx, outer_offset, outer_table, outer_match, inner_table) = if is_left
-        {
-            (
-                left_idx,
-                right_idx,
-                left_offset,
-                &left_table,
-                &*left_match,
-                &right_table,
-            )
+        let (outer_idx, outer_offset, outer_table, outer_match) = if is_left {
+            (left_idx, left_offset, &left_table, &*left_match)
         } else {
-            (
-                right_idx,
-                left_idx,
-                right_offset,
-                &right_table,
-                &*right_match,
-                &left_table,
-            )
+            (right_idx, right_offset, &right_table, &*right_match)
         };
 
         let mut indices = Vec::with_capacity(block_size);
@@ -479,7 +457,7 @@ impl RangeJoinState {
             .take(outer_table[outer_idx].num_rows())
         {
             if !state {
-                indices.push((0u32, (i - outer_offset) as u32, 1usize));
+                indices.push((i - outer_offset) as u32);
             }
         }
 
@@ -487,18 +465,20 @@ impl RangeJoinState {
             return Ok(DataBlock::empty());
         }
 
-        let outer_result_block = DataBlock::take_blocks(
-            &outer_table[outer_idx..outer_idx + 1],
-            &indices,
-            indices.len(),
-        );
+        let outer_result_block = outer_table[outer_idx].take(indices.as_slice())?;
+        let output_fields = self.output_schema.fields();
+        let inner_fields = if is_left {
+            &output_fields[outer_result_block.num_columns()..]
+        } else {
+            &output_fields[..output_fields.len() - outer_result_block.num_columns()]
+        };
 
-        let null_columns = inner_table[inner_idx]
-            .columns()
+        let null_columns = inner_fields
             .iter()
-            .map(|c| {
+            .map(|field| {
+                let data_type = field.data_type().clone();
                 BlockEntry::new(Value::Scalar(Scalar::Null), || {
-                    (c.data_type().wrap_nullable(), indices.len())
+                    (data_type.wrap_nullable(), indices.len())
                 })
             })
             .collect::<Vec<_>>();

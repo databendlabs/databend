@@ -1,0 +1,91 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+create or replace database stream_tag_refs;
+
+statement ok
+use stream_tag_refs;
+
+statement ok
+drop stream if exists s_tag;
+
+statement ok
+drop table if exists t_tag;
+
+statement ok
+drop tag if exists stream_env_tag;
+
+statement ok
+drop tag if exists stream_owner_tag;
+
+statement ok
+create or replace table t_tag(id int);
+
+statement ok
+create stream s_tag on table t_tag append_only = false;
+
+statement ok
+create tag stream_env_tag allowed_values = ('dev', 'prod');
+
+statement ok
+create tag stream_owner_tag;
+
+query TTTTT
+select * exclude(object_id) from tag_references('stream_tag_refs.s_tag', 'stream');
+----
+
+statement ok
+alter stream s_tag set tag stream_env_tag = 'prod', stream_owner_tag = 'stream_team';
+
+query TTTTT rowsort
+select * exclude(object_id) from tag_references('stream_tag_refs.s_tag', 'stream');
+----
+stream_env_tag prod stream_tag_refs s_tag STREAM
+stream_owner_tag stream_team stream_tag_refs s_tag STREAM
+
+query B
+select object_id is not null from tag_references('stream_tag_refs.s_tag', 'stream') limit 1;
+----
+1
+
+statement ok
+alter stream s_tag unset tag stream_owner_tag;
+
+query TTTTT
+select * exclude(object_id) from tag_references('stream_tag_refs.s_tag', 'stream');
+----
+stream_env_tag prod stream_tag_refs s_tag STREAM
+
+statement ok
+alter stream if exists stream_tag_refs.missing_stream set tag stream_env_tag = 'dev';
+
+statement ok
+alter stream s_tag set tag stream_owner_tag = 'stream_team';
+
+statement ok
+drop stream s_tag;
+
+## verify stream drop cleans tag references; otherwise DROP TAG would fail with TagHasReferences
+statement ok
+drop tag stream_env_tag;
+
+statement ok
+drop tag stream_owner_tag;
+
+statement ok
+drop table t_tag;
+
+statement ok
+drop database stream_tag_refs;

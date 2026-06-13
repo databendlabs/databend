@@ -22,8 +22,6 @@ use super::Finder;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
-use crate::binder::ScalarBinder;
-use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
@@ -41,19 +39,12 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         having: &Expr,
     ) -> Result<ScalarExpr> {
-        bind_context.set_expr_context(ExprContext::HavingClause);
-
-        let mut scalar_binder = ScalarBinder::new(
+        self.bind_and_rewrite_aggregate_expr(
             bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
             aliases,
-        );
-        let (mut scalar, _) = scalar_binder.bind(having)?;
-        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&mut scalar)?;
-        Ok(scalar)
+            ExprContext::HavingClause,
+            having,
+        )
     }
 
     pub fn bind_having(
@@ -62,7 +53,7 @@ impl Binder {
         having: ScalarExpr,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_context.set_expr_context(ExprContext::HavingClause);
+        bind_context.expr_context = ExprContext::HavingClause;
 
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
         let mut finder = Finder::new(&f);
@@ -77,7 +68,7 @@ impl Binder {
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
             let mut having = having;
-            let mut grouping_checker = GroupingChecker::new(bind_context);
+            let mut grouping_checker = GroupingChecker::new(bind_context, None);
             grouping_checker.visit(&mut having)?;
             having
         } else {

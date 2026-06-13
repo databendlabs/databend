@@ -17,6 +17,19 @@ import urllib.request
 from pathlib import Path
 
 
+def parse_version(version: str) -> tuple[int, int, int]:
+    """Parse version string like '1.2.873' into tuple (1, 2, 873)."""
+    parts = version.split(".")
+    return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+
+def has_metactl_upsert(version: str) -> bool:
+    """Check if version has metactl upsert subcommand (added after 1.2.873)."""
+    if version == "current":
+        return True
+    return parse_version(version) > parse_version("1.2.873")
+
+
 def wait_tcp_port(port: int, timeout: int = 20) -> None:
     """Wait for TCP port to become available."""
     print(f" === Waiting for port {port} (timeout: {timeout}s)")
@@ -105,24 +118,40 @@ class TestContext:
         print(f" === databend-meta ver={version} id={node_id} started")
 
     def feed_data(self, node_id: int, number: int = 10) -> None:
-        """Feed test data to node using databend-meta --cmd."""
+        """Feed test data to node.
+
+        For version > 1.2.873, use databend-metactl upsert.
+        For version <= 1.2.873, use databend-meta --cmd kvapi::upsert (metactl didn't have upsert).
+        """
         # Use leader_ver to match the leader's protocol version (only leader accepts writes)
-        # Use databend-meta --cmd for compatibility with older versions that lack metabench
         print(f" === Feeding {number} key-value pairs to node {node_id}")
         for i in range(number):
             key = f"test_key_{i}"
             value = f"test_value_{i}_data"
-            cmd = [
-                str(self.binary(self.leader_ver, "databend-meta")),
-                "--grpc-api-address",
-                self.grpc_addr(node_id),
-                "--cmd",
-                "kvapi::upsert",
-                "--key",
-                key,
-                "--value",
-                value,
-            ]
+            if has_metactl_upsert(self.leader_ver):
+                cmd = [
+                    str(self.binary(self.leader_ver, "databend-metactl")),
+                    "upsert",
+                    "--grpc-api-address",
+                    self.grpc_addr(node_id),
+                    "--key",
+                    key,
+                    "--value",
+                    value,
+                ]
+            else:
+                # Old versions: metactl didn't have upsert, use databend-meta --cmd
+                cmd = [
+                    str(self.binary(self.leader_ver, "databend-meta")),
+                    "--grpc-api-address",
+                    self.grpc_addr(node_id),
+                    "--cmd",
+                    "kvapi::upsert",
+                    "--key",
+                    key,
+                    "--value",
+                    value,
+                ]
             subprocess.run(cmd, stdout=subprocess.DEVNULL, check=True)
         print(f" === Successfully fed {number} entries to node {node_id}")
 

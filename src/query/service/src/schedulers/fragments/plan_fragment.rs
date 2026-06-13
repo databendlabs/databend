@@ -25,7 +25,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_settings::ReplaceIntoShuffleStrategy;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 
@@ -48,6 +47,8 @@ use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]

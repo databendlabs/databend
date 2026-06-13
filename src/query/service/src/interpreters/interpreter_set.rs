@@ -34,10 +34,13 @@ use futures::TryStreamExt;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextVariables;
 
 pub struct SetInterpreter {
     ctx: Arc<QueryContext>,
@@ -106,11 +109,9 @@ impl SetInterpreter {
                     // and switch to it by SET sandbox_tenant = xxx;
                     let config = GlobalConfig::instance();
                     let tenant = scalar.clone();
-                    if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
+                    if config.query.common.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
-                            config.meta.to_meta_grpc_client_conf(
-                                databend_common_version::BUILD_INFO.semver(),
-                            ),
+                            config.meta.to_meta_grpc_client_conf(),
                             &Tenant::new_or_err(tenant, func_name!())?,
                         )
                         .await?;
@@ -126,7 +127,7 @@ impl SetInterpreter {
                     // we will return an error.
                     // TODO: we will remove this setting when queries executor is stable.
                     let config = GlobalConfig::instance();
-                    if !config.query.enable_queries_executor {
+                    if !config.query.common.enable_queries_executor {
                         return Err(ErrorCode::InvalidArgument(
                             "This setting is not allowed when queries executor is not enabled in the configuration",
                         ));
@@ -204,7 +205,9 @@ impl Interpreter for SetInterpreter {
                     false,
                 )?;
 
-                let stream = select_interpreter.execute(self.ctx.clone()).await?;
+                let stream = select_interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                    .await?;
                 let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
                 let datablock = DataBlock::concat(&datablocks)?;
 

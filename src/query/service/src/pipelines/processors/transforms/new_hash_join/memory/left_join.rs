@@ -16,7 +16,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +43,7 @@ use crate::pipelines::processors::transforms::new_hash_join::memory::basic::Basi
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct OuterLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -68,11 +68,12 @@ impl OuterLeftHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(OuterLeftHashJoin {
@@ -110,8 +111,12 @@ impl Join for OuterLeftHashJoin {
                 .map(|x| x.data_type().clone())
                 .collect::<Vec<_>>();
 
-            let build_block = null_block(&types, data.num_rows());
-            let probe_block = Some(data.project(&self.desc.probe_projections));
+            let build_block = match null_block(&types, data.num_rows()) {
+                None => None,
+                Some(data_block) => Some(data_block.project(&self.desc.build_projection)),
+            };
+
+            let probe_block = Some(data.project(&self.desc.probe_projection));
             let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
             return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
         }
@@ -127,7 +132,7 @@ impl Join for OuterLeftHashJoin {
         };
 
         self.desc.remove_keys_nullable(&mut keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -137,6 +142,7 @@ impl Join for OuterLeftHashJoin {
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -206,7 +212,10 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
                 let probe_block = match self.probe_data_block.num_columns() {
                     0 => None,
-                    _ => Some(DataBlock::take(&self.probe_data_block, &unmatched_row_id)?),
+                    _ => Some(DataBlock::take(
+                        &self.probe_data_block,
+                        unmatched_row_id.as_slice(),
+                    )?),
                 };
 
                 let types = &self.join_state.column_types;
@@ -228,7 +237,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -240,7 +249,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     );
 
                     let true_validity = Bitmap::new_constant(true, row_ptrs.len());

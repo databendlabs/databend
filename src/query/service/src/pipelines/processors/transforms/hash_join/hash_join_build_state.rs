@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -22,7 +23,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,6 +31,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
@@ -41,14 +42,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::HashJoinHashMap;
-use databend_common_hashtable::RawEntry;
-use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::STRING_EARLY_SIZE;
-use databend_common_hashtable::StringRawEntry;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use itertools::Itertools;
@@ -72,7 +66,15 @@ use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHas
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
+use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::RawEntry;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
+use crate::pipelines::processors::transforms::hash_join_table::STRING_EARLY_SIZE;
+use crate::pipelines::processors::transforms::hash_join_table::StringRawEntry;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
@@ -95,7 +97,7 @@ pub struct HashJoinBuildState {
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
-    pub(crate) build_projections: ColumnSet,
+    pub(crate) build_projections: BTreeSet<usize>,
     pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
@@ -109,12 +111,19 @@ pub struct HashJoinBuildState {
 }
 
 impl HashJoinBuildState {
+    const BUILD_INTERRUPT_CHECK_INTERVAL: usize = 8192;
+
+    #[inline]
+    fn should_check_build_interrupt(row_index: usize) -> bool {
+        row_index % Self::BUILD_INTERRUPT_CHECK_INTERVAL == 0
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
-        build_projections: &ColumnSet,
+        build_projections: &BTreeSet<usize>,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
         broadcast_id: Option<u32>,
@@ -409,6 +418,7 @@ impl HashJoinBuildState {
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let mut is_interrupted = false;
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, ) => {{
@@ -429,6 +439,12 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             if !valid {
                                 continue;
                             }
@@ -452,6 +468,12 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -473,6 +495,9 @@ impl HashJoinBuildState {
                 }
 
                 local_raw_entry_spaces.push(local_space);
+                if is_interrupted {
+                    return Err(ErrorCode::aborting());
+                }
             }};
         }
 
@@ -507,6 +532,12 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             if !valid {
                                 continue;
                             }
@@ -543,6 +574,12 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -578,6 +615,9 @@ impl HashJoinBuildState {
 
                 local_raw_entry_spaces.push(entry_local_space);
                 local_raw_entry_spaces.push(string_local_space);
+                if is_interrupted {
+                    return Err(ErrorCode::aborting());
+                }
             }};
         }
 
@@ -733,6 +773,7 @@ impl HashJoinBuildState {
                     "Aborted query, because the hash table is uninitialized.",
                 ));
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::UniqueSerializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
@@ -828,21 +869,42 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    pub fn add_runtime_filter_ready(&self) {
-        let mut scan_ids = HashSet::new();
+    pub fn add_runtime_filter_ready(&self) -> Result<()> {
+        let min_max_threshold = self
+            .ctx
+            .get_settings()
+            .get_min_max_runtime_filter_threshold()? as usize;
+        let inlist_threshold = self
+            .ctx
+            .get_settings()
+            .get_inlist_runtime_filter_threshold()? as usize;
+        let mut statistics_probe_exprs_by_scan_id: HashMap<usize, Vec<&Expr<String>>> =
+            HashMap::new();
         for rf in self.runtime_filter_desc() {
-            for (_probe_key, scan_id) in &rf.probe_targets {
-                scan_ids.insert(*scan_id);
+            let enable_statistics_pruning = (rf.enable_min_max_runtime_filter
+                && min_max_threshold > 0)
+                || (rf.enable_inlist_runtime_filter && inlist_threshold > 0);
+            for (probe_key, scan_id) in &rf.probe_targets {
+                let probe_exprs = statistics_probe_exprs_by_scan_id
+                    .entry(*scan_id)
+                    .or_default();
+                if enable_statistics_pruning {
+                    probe_exprs.push(probe_key);
+                }
             }
         }
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let runtime_filter_ready = &mut build_state.runtime_filter_ready;
-        for scan_id in scan_ids.into_iter() {
-            let ready = Arc::new(RuntimeFilterReady::default());
+        for (scan_id, probe_exprs) in statistics_probe_exprs_by_scan_id.into_iter() {
+            let ready = Arc::new(RuntimeFilterReady::for_statistics_probe_exprs(
+                !probe_exprs.is_empty(),
+                probe_exprs,
+            ));
             runtime_filter_ready.push(ready.clone());
             self.ctx.set_runtime_filter_ready(scan_id, ready);
         }
+        Ok(())
     }
 
     pub fn set_bloom_filter_ready(&self) -> Result<()> {
@@ -882,14 +944,18 @@ impl HashJoinBuildState {
             .iter()
             .any(|rf| rf.enable_bloom_runtime_filter)
     }
+}
 
-    /// only used for test
-    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
-        self.hash_join_state
-            .hash_join_desc
-            .runtime_filter
-            .filters
-            .iter()
-            .any(|rf| rf.enable_min_max_runtime_filter)
+#[cfg(test)]
+mod tests {
+    use super::HashJoinBuildState;
+
+    #[test]
+    fn test_should_check_build_interrupt_interval() {
+        assert!(HashJoinBuildState::should_check_build_interrupt(0));
+        assert!(!HashJoinBuildState::should_check_build_interrupt(1));
+        assert!(HashJoinBuildState::should_check_build_interrupt(
+            HashJoinBuildState::BUILD_INTERRUPT_CHECK_INTERVAL,
+        ));
     }
 }

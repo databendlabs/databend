@@ -22,6 +22,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
@@ -35,6 +36,7 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
 use crate::read::row_based::processors::BytesReader;
+use crate::read::row_based::processors::DecodingTransformer;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
 
@@ -121,6 +123,23 @@ impl RowBasedReadPipelineBuilder<'_> {
                 let algo = get_compression_with_path(compression, "")?;
                 pipeline.try_add_accumulating_transformer(|| {
                     Decompressor::try_create(load_ctx.clone(), algo)
+                })?;
+            }
+        }
+
+        let maybe_encoding = match &self.stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Csv(fmt) => {
+                Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+            }
+            FileFormatParams::Text(fmt) => {
+                Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+            }
+            _ => None,
+        };
+        if let Some((encoding, encoding_error_mode)) = maybe_encoding {
+            if DecodingTransformer::needs_processing(&encoding, &encoding_error_mode)? {
+                pipeline.try_add_accumulating_transformer(|| {
+                    DecodingTransformer::try_create(encoding.clone(), encoding_error_mode.clone())
                 })?;
             }
         }

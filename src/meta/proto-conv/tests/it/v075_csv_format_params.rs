@@ -15,6 +15,7 @@
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
@@ -48,12 +49,16 @@ fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
         nan_display: "my_nan".to_string(),
         escape: "|".to_string(),
         quote: "\'".to_string(),
+        quote_style: CsvQuoteStyle::QuoteNotNull,
         error_on_column_count_mismatch: false,
+        trim_space: false,
         allow_quoted_nulls: false,
         empty_field_as: EmptyFieldAs::String,
         quoted_empty_field_as: EmptyFieldAs::String,
         binary_format: BinaryFormat::Base64,
         geometry_format: GeometryDataType::EWKT,
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
     common::test_load_old(
         func_name!(),

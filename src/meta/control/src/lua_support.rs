@@ -13,34 +13,60 @@
 // limitations under the License.
 
 use std::cell::RefCell;
+use std::future::Future;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
 use mlua::Lua;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::UserDataMethods;
 use mlua::Value;
-use semver::Version;
+use serde::Serialize;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
 
 const LUA_UTIL: &str = include_str!("../lua_util.lua");
 
+/// Call an async API method, convert the result to a Lua value, and return
+/// the `(Option<Value>, Option<String>)` tuple expected by Lua methods.
+///
+/// On API error, returns `(nil, "<api_err>: <error>")`.
+/// On Lua serialization error, returns `(nil, "Lua conversion error: <error>")`.
+async fn lua_call<T, E, F, Fut>(
+    lua: &Lua,
+    api_err: &'static str,
+    f: F,
+) -> mlua::Result<(Option<Value>, Option<String>)>
+where
+    T: Serialize,
+    E: std::fmt::Display,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+{
+    match f().await {
+        Ok(result) => match lua.to_value(&result) {
+            Ok(v) => Ok((Some(v), None)),
+            Err(e) => Ok((None, Some(format!("Lua conversion error: {e}")))),
+        },
+        Err(e) => Ok((None, Some(format!("{api_err}: {e}")))),
+    }
+}
+
 pub struct LuaGrpcClient {
-    client: Arc<ClientHandle>,
+    client: Arc<ClientHandle<DatabendRuntime>>,
 }
 
 impl LuaGrpcClient {
-    pub fn new(client: Arc<ClientHandle>) -> Self {
+    pub fn new(client: Arc<ClientHandle<DatabendRuntime>>) -> Self {
         Self { client }
     }
 }
@@ -48,26 +74,14 @@ impl LuaGrpcClient {
 impl UserData for LuaGrpcClient {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_async_method("get", |lua, this, key: String| async move {
-            match this.client.get_kv(&key).await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("gRPC error: {}", e)))),
-            }
+            lua_call(&lua, "gRPC error", || this.client.get_kv(&key)).await
         });
 
         methods.add_async_method(
             "upsert",
             |lua, this, (key, value): (String, String)| async move {
                 let upsert = UpsertKV::update(key, value.as_bytes());
-                match this.client.upsert_kv(upsert).await {
-                    Ok(result) => match lua.to_value(&result) {
-                        Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                        Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                    },
-                    Err(e) => Ok((None::<Value>, Some(format!("gRPC error: {}", e)))),
-                }
+                lua_call(&lua, "gRPC error", || this.client.upsert_kv(upsert)).await
             },
         );
     }
@@ -93,23 +107,11 @@ impl UserData for LuaAdminClient {
         });
 
         methods.add_async_method("status", |lua, this, ()| async move {
-            match this.client.status().await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.status()).await
         });
 
         methods.add_async_method("transfer_leader", |lua, this, to: Option<u64>| async move {
-            match this.client.transfer_leader(to).await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.transfer_leader(to)).await
         });
 
         methods.add_async_method("trigger_snapshot", |_lua, this, ()| async move {
@@ -120,25 +122,16 @@ impl UserData for LuaAdminClient {
         });
 
         methods.add_async_method("list_features", |lua, this, ()| async move {
-            match this.client.list_features().await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.list_features()).await
         });
 
         methods.add_async_method(
             "set_feature",
             |lua, this, (feature, enable): (String, bool)| async move {
-                match this.client.set_feature(&feature, enable).await {
-                    Ok(result) => match lua.to_value(&result) {
-                        Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                        Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                    },
-                    Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-                }
+                lua_call(&lua, "Admin API error", || {
+                    this.client.set_feature(&feature, enable)
+                })
+                .await
             },
         );
     }
@@ -169,7 +162,7 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> {
+pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
@@ -180,12 +173,12 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
         .create_function(move |_lua, address: String| {
             let client = MetaGrpcClient::try_create(
                 vec![address],
-                version.clone(),
                 "root",
                 "xxx",
                 Some(Duration::from_secs(2)),
                 Some(Duration::from_secs(1)),
                 None,
+                DEFAULT_GRPC_MESSAGE_SIZE,
             )
             .map_err(|e| mlua::Error::external(format!("Failed to create gRPC client: {}", e)))?;
 
@@ -266,20 +259,19 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
 
 pub fn new_grpc_client(
     addresses: Vec<String>,
-    version: Version,
-) -> Result<Arc<ClientHandle>, CreationError> {
+) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
         serde_json::to_string(&addresses).unwrap()
     );
     MetaGrpcClient::try_create(
         addresses,
-        version,
         "root",
         "xxx",
         Some(Duration::from_secs(2)),
         Some(Duration::from_secs(1)),
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )
 }
 
@@ -287,10 +279,10 @@ pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str) -> anyhow::Result<()> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, version)?;
+    setup_lua_environment(&lua)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -304,11 +296,10 @@ pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()
 
 pub async fn run_lua_script_with_result(
     script: &str,
-    version: Version,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, version)?;
+    setup_lua_environment(&lua)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();

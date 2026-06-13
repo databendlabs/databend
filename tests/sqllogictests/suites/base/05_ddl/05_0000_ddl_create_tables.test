@@ -10,6 +10,12 @@ DROP TABLE IF EXISTS t3
 statement ok
 DROP TABLE IF EXISTS t4
 
+statement ok
+DROP TABLE IF EXISTS issue_11031
+
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
+
 statement error 1302
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
 
@@ -58,6 +64,42 @@ create table t3(`a` int) ENGINE = Null
 statement ok
 create table t4(a int) ENGINE = Null
 
+# https://github.com/databendlabs/databend/issues/11031
+statement ok
+CREATE TABLE issue_11031 (
+    radio STRING,
+    range INT32,
+    samples INT32
+)
+
+statement ok
+INSERT INTO issue_11031 (radio, range, samples) VALUES ('lte', 10, 1)
+
+query I
+SELECT range FROM issue_11031
+----
+10
+
+query TII
+SELECT radio, range, samples FROM issue_11031
+----
+lte 10 1
+
+# PROPERTIES should be usable as an identifier (column name, table name)
+statement ok
+CREATE TABLE test_properties_as_ident (
+    properties STRING,
+    value INT32
+)
+
+statement ok
+INSERT INTO test_properties_as_ident (properties, value) VALUES ('key1', 100)
+
+query TI
+SELECT properties, value FROM test_properties_as_ident
+----
+key1 100
+
 statement ok
 DROP TABLE IF EXISTS t
 
@@ -69,6 +111,12 @@ DROP TABLE IF EXISTS t3
 
 statement ok
 DROP TABLE IF EXISTS t4
+
+statement ok
+DROP TABLE IF EXISTS issue_11031
+
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
 
 statement ok
 DROP DATABASE IF EXISTS db1
@@ -102,7 +150,7 @@ SELECT a+b FROM db2.test2
 query TTTTT
 DESCRIBE db2.test2
 ----
-a INT NO 0 (empty)
+a INT NO NULL (empty)
 b INT YES NULL (empty)
 
 statement ok
@@ -172,7 +220,7 @@ create table db2.test6(id Int8 not null, a Int8 not null DEFAULT 1 + 2, created 
 query TTTTT
 desc db2.test6
 ----
-id TINYINT NO 0 (empty)
+id TINYINT NO NULL (empty)
 a TINYINT NO 3 (empty)
 created TIMESTAMP NO now() (empty)
 
@@ -193,26 +241,26 @@ create table db2.test7(tiny TINYINT(10) not null, tiny_unsigned TINYINT(10) UNSI
 query TTTTT
 desc db2.test7
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+tiny TINYINT NO NULL (empty)
+tiny_unsigned TINYINT UNSIGNED NO NULL (empty)
+smallint SMALLINT NO NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED NO NULL (empty)
+int INT NO NULL (empty)
+int_unsigned INT UNSIGNED NO NULL (empty)
+bigint BIGINT NO NULL (empty)
+bigint_unsigned BIGINT UNSIGNED NO NULL (empty)
+float FLOAT NO NULL (empty)
+double DOUBLE NO NULL (empty)
+date DATE NO NULL (empty)
+datetime TIMESTAMP NO NULL (empty)
+ts TIMESTAMP NO NULL (empty)
 str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
-map MAP(INT32, STRING) NO {} (empty)
-bitmap BITMAP NO '' (empty)
-variant VARIANT NO 'null' (empty)
+bool BOOLEAN NO NULL (empty)
+arr ARRAY(INT32) NO NULL (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) NO NULL (empty)
+map MAP(INT32, STRING) NO NULL (empty)
+bitmap BITMAP NO NULL (empty)
+variant VARIANT NO NULL (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, bitmap BITMAP not null, variant VARIANT not null)
@@ -220,26 +268,26 @@ create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UN
 query TTTTT
 desc db2.test8
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+tiny TINYINT NO NULL (empty)
+tiny_unsigned TINYINT UNSIGNED NO NULL (empty)
+smallint SMALLINT NO NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED NO NULL (empty)
+int INT NO NULL (empty)
+int_unsigned INT UNSIGNED NO NULL (empty)
+bigint BIGINT NO NULL (empty)
+bigint_unsigned BIGINT UNSIGNED NO NULL (empty)
+float FLOAT NO NULL (empty)
+double DOUBLE NO NULL (empty)
+date DATE NO NULL (empty)
+datetime TIMESTAMP NO NULL (empty)
+ts TIMESTAMP NO NULL (empty)
 str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
-map MAP(STRING, DATE) NO {} (empty)
-bitmap BITMAP NO '' (empty)
-variant VARIANT NO 'null' (empty)
+bool BOOLEAN NO NULL (empty)
+arr ARRAY(STRING) NO NULL (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) NO NULL (empty)
+map MAP(STRING, DATE) NO NULL (empty)
+bitmap BITMAP NO NULL (empty)
+variant VARIANT NO NULL (empty)
 
 
 statement ok
@@ -335,6 +383,9 @@ create table t(a int) snapshot_location='xxx'
 statement error 1301
 create table t(a int) database_id='xxx'
 
+statement error 1301
+create table t(a int) row_avg_depth_threshold='0.001'
+
 statement error 1006
 create table t(a int) bloom_index_columns='b'
 
@@ -346,6 +397,9 @@ create table t(a int)
 
 statement error 1301
 alter table t set options(database_id = "22");
+
+statement error 1301
+alter table t set options(row_avg_depth_threshold = "0.001");
 
 statement ok
 drop table if exists t;
@@ -635,7 +689,7 @@ create or replace table b as select 123 as col1, null  as col2;
 query TTTTT
 desc b;
 ----
-col1 TINYINT UNSIGNED NO 0 (empty)
+col1 TINYINT UNSIGNED NO NULL (empty)
 col2 VARCHAR YES NULL (empty)
 
 query TT
@@ -671,7 +725,7 @@ create or replace table b as select 123 as col1;
 query TTTTT
 desc b;
 ----
-col1 TINYINT UNSIGNED NO 0 (empty)
+col1 TINYINT UNSIGNED NO NULL (empty)
 
 statement ok
 unset ddl_column_type_nullable;

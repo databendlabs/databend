@@ -619,10 +619,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return Ok(());
         }
 
-        if !get_flag(place) {
-            // initial the state to remove the dirty stats
-            self.init_state(place);
-        }
         set_flag(place, true);
         self.nested
             .merge_states(place.remove_last_loc(), rhs.remove_last_loc())
@@ -661,10 +657,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
     }
 
     fn update_flag(&self, place: AggrState) {
-        if !get_flag(place) {
-            // initial the state to remove the dirty stats
-            self.init_state(place);
-        }
         set_flag(place, true);
     }
 }

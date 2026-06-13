@@ -70,6 +70,7 @@ pub fn run_agg_ast(
             .iter()
             .map(|(name, entry)| (*name, entry.data_type()))
             .collect::<Vec<_>>(),
+        &BUILTIN_FUNCTIONS,
     );
 
     let num_rows = entries

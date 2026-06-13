@@ -20,7 +20,9 @@ use std::hint::unlikely;
 use bytesize::ByteSize;
 use databend_common_base::containers::FixedHeap;
 use databend_common_exception::Result;
+use databend_common_expression::ChunkIndex;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataBlockVec;
 
 use super::core::Cursor;
 use super::core::CursorOrder;
@@ -149,39 +151,28 @@ impl<R: Rows> TransformSortMergeLimit<R> {
             return vec![];
         }
 
-        let output_size = self.heap.len();
+        let mut blocks = DataBlockVec::with_capacity(self.buffer.len());
+        for block in self.buffer.values().cloned() {
+            blocks.push(block).unwrap();
+        }
+
+        let mut output_blocks = Vec::with_capacity(self.heap.len().div_ceil(batch_size));
+        let mut output_indices = ChunkIndex::default();
         let block_indices = self.buffer.keys().cloned().collect::<Vec<_>>();
-        let blocks = self.buffer.values().cloned().collect::<Vec<_>>();
-        let mut output_indices = Vec::with_capacity(output_size);
         while let Some(Reverse(cursor)) = self.heap.pop() {
             let block_index = block_indices
                 .iter()
                 .position(|i| *i == cursor.input_index)
                 .unwrap();
+            output_indices.push_merge(block_index as _, cursor.row_index as _);
 
-            output_indices.push((block_index, cursor.row_index));
-        }
-
-        let output_block_num = output_size.div_ceil(batch_size);
-        let mut output_blocks = Vec::with_capacity(output_block_num);
-
-        for i in 0..output_block_num {
-            let start = i * batch_size;
-            let end = (start + batch_size).min(output_indices.len());
-            // Convert indices to merge slice.
-            let mut merge_slices = Vec::with_capacity(output_indices.len());
-            let (block_idx, row_idx) = output_indices[start];
-            merge_slices.push((block_idx, row_idx, 1));
-            for (block_idx, row_idx) in output_indices.iter().take(end).skip(start + 1) {
-                if *block_idx == merge_slices.last().unwrap().0 {
-                    // If the block index is the same as the last one, we can merge them.
-                    merge_slices.last_mut().unwrap().2 += 1;
-                } else {
-                    merge_slices.push((*block_idx, *row_idx, 1));
-                }
+            if output_indices.num_rows() >= batch_size {
+                output_blocks.push(blocks.take(&output_indices));
+                output_indices.clear();
             }
-            let block = DataBlock::take_by_slices_limit_from_blocks(&blocks, &merge_slices, None);
-            output_blocks.push(block);
+        }
+        if output_indices.num_rows() > 0 {
+            output_blocks.push(blocks.take(&output_indices));
         }
 
         self.buffer.clear();

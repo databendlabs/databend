@@ -22,15 +22,47 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use log::warn;
 
+pub struct RangeIndexInput<'a> {
+    pub col_stats: &'a StatisticsOfColumns,
+    pub spatial_stats: Option<&'a StatisticsOfSpatialColumns>,
+}
+
+impl<'a> RangeIndexInput<'a> {
+    pub fn new(
+        col_stats: &'a StatisticsOfColumns,
+        spatial_stats: Option<&'a StatisticsOfSpatialColumns>,
+    ) -> Self {
+        Self {
+            col_stats,
+            spatial_stats,
+        }
+    }
+
+    pub fn from_columns(col_stats: &'a StatisticsOfColumns) -> Self {
+        Self {
+            col_stats,
+            spatial_stats: None,
+        }
+    }
+
+    pub fn from_block_meta(block_meta: &'a BlockMeta) -> Self {
+        Self {
+            col_stats: &block_meta.col_stats,
+            spatial_stats: block_meta.spatial_stats.as_ref(),
+        }
+    }
+}
 pub trait RangePruner {
     // returns true, if target should NOT be pruned (false positive allowed)
     fn should_keep(
         &self,
-        input: &StatisticsOfColumns,
+        input: &RangeIndexInput,
         metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool;
 
@@ -48,7 +80,7 @@ struct KeepTrue;
 impl RangePruner for KeepTrue {
     fn should_keep(
         &self,
-        _input: &StatisticsOfColumns,
+        _input: &RangeIndexInput,
         _metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool {
         true
@@ -60,7 +92,7 @@ struct KeepFalse;
 impl RangePruner for KeepFalse {
     fn should_keep(
         &self,
-        _input: &StatisticsOfColumns,
+        _input: &RangeIndexInput,
         _metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool {
         false
@@ -70,10 +102,10 @@ impl RangePruner for KeepFalse {
 impl RangePruner for RangeIndex {
     fn should_keep(
         &self,
-        stats: &StatisticsOfColumns,
+        input: &RangeIndexInput,
         metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool {
-        let apply = self.apply(stats, |k| {
+        let apply = self.apply(input.col_stats, input.spatial_stats, |k| {
             if let Some(metas) = metas {
                 metas.get(k).is_none()
             } else {
@@ -96,7 +128,7 @@ impl RangePruner for RangeIndex {
         partition_columns: Option<&HashMap<String, Scalar>>,
     ) -> bool {
         match partition_columns {
-            None => self.should_keep(stats, None),
+            None => self.should_keep(&RangeIndexInput::from_columns(stats), None),
             Some(partition_columns) => {
                 match self.apply_with_partition_columns(stats, partition_columns) {
                     Ok(r) => r,
@@ -136,22 +168,15 @@ impl RangePrunerCreator {
         filter_expr: Option<&'a Expr<String>>,
         default_stats: StatisticsOfColumns,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
-        Ok(match filter_expr {
-            Some(exprs) => {
-                let range_filter =
-                    RangeIndex::try_create(func_ctx, exprs, schema.clone(), default_stats)?;
-                match range_filter.try_apply_const() {
-                    Ok(v) => {
-                        if v {
-                            Arc::new(range_filter)
-                        } else {
-                            Arc::new(KeepFalse)
-                        }
-                    }
-                    Err(_) => Arc::new(range_filter),
-                }
-            }
-            _ => Arc::new(KeepTrue),
-        })
+        let Some(exprs) = filter_expr else {
+            return Ok(Arc::new(KeepTrue));
+        };
+
+        let range_filter = RangeIndex::try_create(func_ctx, exprs, schema.clone(), default_stats)?;
+        if let Ok(false) = range_filter.try_apply_const() {
+            return Ok(Arc::new(KeepFalse));
+        }
+
+        Ok(Arc::new(range_filter))
     }
 }

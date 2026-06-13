@@ -384,6 +384,61 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         domains
                     });
                 }
+
+                if function.signature.name == "if" {
+                    if args_expr.len() < 3 || args_expr.len().is_multiple_of(2) {
+                        return (
+                            Expr::FunctionCall(FunctionCall {
+                                span: *span,
+                                id: id.clone(),
+                                function: function.clone(),
+                                generics: generics.clone(),
+                                args: args_expr,
+                                return_type: return_type.clone(),
+                            }),
+                            None,
+                        );
+                    }
+
+                    let mut simplified_args = Vec::with_capacity(args_expr.len());
+                    let mut found_true_branch = false;
+                    for cond_idx in (0..args_expr.len() - 1).step_by(2) {
+                        match args_expr[cond_idx].as_constant().map(|c| &c.scalar) {
+                            Some(Scalar::Boolean(true)) => {
+                                if simplified_args.is_empty() {
+                                    return (args_expr[cond_idx + 1].clone(), None);
+                                }
+                                simplified_args.push(args_expr[cond_idx + 1].clone());
+                                found_true_branch = true;
+                                break;
+                            }
+                            Some(Scalar::Boolean(false) | Scalar::Null) => {}
+                            _ => {
+                                simplified_args.push(args_expr[cond_idx].clone());
+                                simplified_args.push(args_expr[cond_idx + 1].clone());
+                            }
+                        }
+                    }
+
+                    if simplified_args.is_empty() {
+                        return (args_expr.last().unwrap().clone(), None);
+                    }
+                    if !found_true_branch {
+                        simplified_args.push(args_expr.last().unwrap().clone());
+                    }
+                    if simplified_args.len() != args_expr.len() {
+                        if let Ok(func_expr) = check_function(
+                            *span,
+                            "if",
+                            id.params(),
+                            &simplified_args,
+                            self.fn_registry,
+                        ) {
+                            return (func_expr, None);
+                        }
+                    }
+                }
+
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
                 let is_monotonicity = self
                     .fn_registry
@@ -429,14 +484,16 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 });
 
                 let (calc_domain, eval) = match &function.eval {
-                    FunctionEval::Scalar { calc_domain, eval } => (calc_domain, eval),
+                    FunctionEval::Scalar {
+                        calc_domain, eval, ..
+                    } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
                         return (func_expr, None);
                     }
                 };
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
-                    let res = (calc_domain)(self.func_ctx, &domains);
+                    let res = calc_domain.domain_eval(self.func_ctx, &domains);
                     match (res, is_monotonicity) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
                             let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();
@@ -461,7 +518,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 builder.push(max.as_ref());
 
                                 let input = Value::Column(builder.build());
-                                let result = eval(&[input], &mut ctx);
+                                let result = eval.eval(&[input], &mut ctx);
 
                                 if result.is_scalar() {
                                     None
@@ -513,6 +570,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         }),
                         None,
                     );
+                }
+
+                // `grouping` is a placeholder before the aggregate rewriter rewrites it to
+                // `grouping<...>(_grouping_id)`. Folding it here can reach the dummy
+                // implementation and panic on invalid queries.
+                if function.signature.name == "grouping" {
+                    return (func_expr, func_domain);
                 }
 
                 if all_args_is_scalar {
@@ -826,6 +890,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 }
             }
+
+            if self.are_combined_constraints_mutually_exclusive(&constraints) {
+                return Some(true);
+            }
         }
 
         None // No conclusive mutual exclusion found
@@ -951,6 +1019,43 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
+    fn are_combined_constraints_mutually_exclusive(
+        &self,
+        constraints: &[RangeConstraint<Index>],
+    ) -> bool {
+        let mut lower = None;
+        let mut upper = None;
+        let mut not_eq_constants = Vec::new();
+
+        for constraint in constraints {
+            match constraint.operator.as_str() {
+                "gt" => tighten_lower_bound(&mut lower, &constraint.constant, false),
+                "gte" => tighten_lower_bound(&mut lower, &constraint.constant, true),
+                "lt" => tighten_upper_bound(&mut upper, &constraint.constant, false),
+                "lte" => tighten_upper_bound(&mut upper, &constraint.constant, true),
+                "noteq" => not_eq_constants.push(&constraint.constant),
+                _ => {}
+            }
+        }
+
+        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) = (&lower, &upper)
+        else {
+            return false;
+        };
+
+        if lower > upper {
+            return true;
+        }
+        if lower != upper {
+            return false;
+        }
+        if !lower_inclusive || !upper_inclusive {
+            return true;
+        }
+
+        not_eq_constants.contains(&lower)
+    }
+
     #[cfg(test)]
     pub fn new_for_test(
         input_domains: &'a HashMap<Index, Domain>,
@@ -962,6 +1067,24 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             func_ctx,
             fn_registry,
         }
+    }
+}
+
+fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant > current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
+    }
+}
+
+fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant < current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
     }
 }
 

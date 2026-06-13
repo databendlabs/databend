@@ -18,12 +18,11 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_base::runtime::QueryPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::ExchangeSink;
@@ -35,7 +34,12 @@ use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
 
 // Query plan fragment with executor name
 #[derive(Debug)]
@@ -195,8 +199,6 @@ impl QueryFragmentsActions {
         self.fragments_connections(&mut builder)?;
         self.statistics_connections(&mut builder)?;
 
-        let perf_flag = QueryPerf::flag();
-
         Ok(QueryEnv {
             workload_group,
             query_id: self.ctx.get_id(),
@@ -210,7 +212,7 @@ impl QueryFragmentsActions {
                 .ctx
                 .get_settings()
                 .get_create_query_flight_client_with_current_rt()?,
-            perf_flag,
+            perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
         })
     }
@@ -231,13 +233,24 @@ impl QueryFragmentsActions {
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let destinations = exchange.get_destinations();
+                let use_do_exchange = exchange.use_do_exchange();
 
                 for fragment_action in &fragment_actions.fragment_actions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        for channel in exchange.get_channels(destination) {
-                            builder.add_data_edge(&source, destination, &channel)?;
+                        if use_do_exchange {
+                            let channels = exchange.get_channels(destination);
+                            builder.add_exchange_edge(
+                                &source,
+                                destination,
+                                exchange.get_id(),
+                                channels,
+                            )?;
+                        } else {
+                            for channel in exchange.get_channels(destination) {
+                                builder.add_data_edge(&source, destination, &channel)?;
+                            }
                         }
                     }
                 }

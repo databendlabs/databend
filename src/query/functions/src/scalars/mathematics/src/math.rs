@@ -21,10 +21,16 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::OwnedDistribution;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -41,7 +47,7 @@ use num_traits::Pow;
 pub fn register(registry: &mut FunctionRegistry) {
     register_decimal_math(registry);
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "sin",
         |_, _| {
             FunctionDomain::Domain(SimpleDomain {
@@ -52,7 +58,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, _| f.sin(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "cos",
         |_, _| {
             FunctionDomain::Domain(SimpleDomain {
@@ -63,41 +69,78 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, _| f.cos(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "tan",
         |_, _| FunctionDomain::Full,
         |f: F64, _| f.tan(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "cot",
         |_, _| FunctionDomain::Full,
         |f: F64, _| OrderedFloat(1.0f64) / f.tan(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    fn unit_domain_bounds(domain: &SimpleDomain<F64>) -> Option<(F64, F64)> {
+        let min = Ord::max(domain.min, OrderedFloat(-1.0));
+        let max = Ord::min(domain.max, OrderedFloat(1.0));
+
+        if min <= max { Some((min, max)) } else { None }
+    }
+
+    fn has_unit_domain_overflow(domain: &SimpleDomain<F64>) -> bool {
+        domain.min < OrderedFloat(-1.0) || domain.max > OrderedFloat(1.0)
+    }
+
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "acos",
-        |_, _| {
+        |_, domain| {
+            let Some((input_min, input_max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                input_min.acos()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(PI),
+                min: input_max.acos(),
+                max,
             })
         },
         |f: F64, _| f.acos(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "asin",
-        |_, _| {
+        |_, domain| {
+            let Some((min, max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                max.asin()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(2.0 * PI),
+                min: min.asin(),
+                max,
             })
         },
         |f: F64, _| f.asin(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "atan",
         |_, _| {
             FunctionDomain::Domain(SimpleDomain {
@@ -108,7 +151,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, _| f.atan(),
     );
 
-    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _>(
         "atan2",
         |_, _, _| {
             FunctionDomain::Domain(SimpleDomain {
@@ -119,24 +162,39 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, r: F64, _| f.atan2(r),
     );
 
-    registry.register_0_arg_core::<NumberType<F64>, _, _>(
-        "pi",
-        |_| {
+    registry
+        .scalar_builder("pi")
+        .function()
+        .typed_0_arg::<Float64Type>()
+        .calc_domain(|_| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(PI),
                 max: OrderedFloat(PI),
             })
-        },
-        |_| Value::Scalar(OrderedFloat(PI)),
-    );
+        })
+        .derive_stat(|_, _| {
+            Ok(Some(ReturnStat {
+                ndv: NdvEstimate::exact(1.0),
+                null_count: StatCount::exact(0),
+                domain: Float64Type::upcast_domain(SimpleDomain {
+                    min: OrderedFloat(PI),
+                    max: OrderedFloat(PI),
+                }),
+                distribution: OwnedDistribution::Unknown,
+            }))
+        })
+        .vectorized(|_| Value::Scalar(OrderedFloat(PI)))
+        .register();
 
-    let sign = |val: F64| match val.partial_cmp(&OrderedFloat(0.0f64)) {
-        Some(Ordering::Greater) => 1,
-        Some(Ordering::Less) => -1,
-        _ => 0,
-    };
+    fn sign(val: F64) -> i8 {
+        match val.partial_cmp(&OrderedFloat(0.0f64)) {
+            Some(Ordering::Greater) => 1,
+            Some(Ordering::Less) => -1,
+            _ => 0,
+        }
+    }
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<i8>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<i8>, _>(
         "sign",
         move |_, domain| {
             FunctionDomain::Domain(SimpleDomain {
@@ -147,13 +205,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         move |val, _| sign(val),
     );
 
-    registry.register_1_arg::<NumberType<u64>, NumberType<u64>, _, _>(
+    registry.register_1_arg::<NumberType<u64>, NumberType<u64>, _>(
         "abs",
         |_, domain| FunctionDomain::Domain(*domain),
         |val, _| val,
     );
 
-    registry.register_1_arg::<NumberType<i64>, NumberType<u64>, _, _>(
+    registry.register_1_arg::<NumberType<i64>, NumberType<u64>, _>(
         "abs",
         |_, domain| {
             let max = domain.min.unsigned_abs().max(domain.max.unsigned_abs());
@@ -167,7 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| val.unsigned_abs(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "abs",
         |_, domain| {
             let max = Ord::max(domain.min.abs(), domain.max.abs());
@@ -184,7 +242,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_INTEGER_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _>(
                     "ceil",
                     |_, _| FunctionDomain::Full,
                     |val, _| val,
@@ -196,7 +254,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_FLOAT_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "ceil",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).ceil(),
@@ -208,19 +266,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("ceil", &["ceiling"]);
     registry.register_aliases("truncate", &["trunc"]);
 
-    registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u32>, _>(
         "crc32",
         |_, _| FunctionDomain::Full,
         |val, _| crc32fast::hash(val.as_bytes()),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "degrees",
         |_, _| FunctionDomain::Full,
         |val, _| val.to_degrees(),
     );
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "radians",
         |_, _| FunctionDomain::Full,
         |val, _| val.to_radians(),
@@ -229,7 +287,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "exp",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).exp(),
@@ -238,13 +296,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     }
 
-    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "floor",
         |_, _| FunctionDomain::Full,
         |val, _| val.floor(),
     );
 
-    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _>(
         "pow",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
@@ -253,7 +311,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "round",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).round(),
@@ -264,7 +322,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _, _>(
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _>(
                         "round",
                         |_, _, _| FunctionDomain::Full,
                         |val, to, _| match to.cmp(&0) {
@@ -284,7 +342,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "truncate",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).trunc(),
@@ -295,7 +353,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _, _>(
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _>(
                         "truncate",
                         |_, _, _| FunctionDomain::Full,
                         |val, to, _| match to.cmp(&0) {
@@ -315,7 +373,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "sqrt",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).sqrt(),
@@ -325,7 +383,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "cbrt",
                     |_, _| FunctionDomain::Full,
                     |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).cbrt(),
@@ -335,7 +393,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "ln",
                     |_, _| FunctionDomain::Full,
                     |val, _| LnFunction::log(val),
@@ -345,7 +403,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "log2",
                     |_, _| FunctionDomain::Full,
                     |val, _| Log2Function::log(val),
@@ -355,7 +413,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "log10",
                     |_, _| FunctionDomain::Full,
                     |val, _| Log10Function::log(val),
@@ -365,7 +423,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _>(
                     "log",
                     |_, _| FunctionDomain::Full,
                     |val, _| LogFunction::log(val),
@@ -376,7 +434,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<F64>, NumberType<F64>, _, _>(
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<F64>, NumberType<F64>, _>(
                         "log",
                         |_, _, _| FunctionDomain::Full,
                         |base, val, _| LogFunction::log_with_base(base, val),
@@ -389,14 +447,24 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_INTEGER_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
+                registry.register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _>(
                     "factorial",
                     |_, _| FunctionDomain::MayThrow,
                     vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>>(
                         |val, output, ctx| {
-                            let n: i64 = AsPrimitive::<i64>::as_(val);
-                            if n > MAX_FACTORIAL_NUMBER {
+                            let max = AsPrimitive::<NUM_TYPE>::as_(MAX_FACTORIAL_NUMBER);
+                            if val > max {
                                 ctx.set_error(output.len(), format!("factorial number is out of range, max is: {}", MAX_FACTORIAL_NUMBER));
+                                output.push(0);
+                                return;
+                            }
+
+                            let n = AsPrimitive::<i64>::as_(val);
+                            if n < 0 {
+                                ctx.set_error(
+                                    output.len(),
+                                    "factorial number is out of range, min is: 0".to_string(),
+                                );
                                 output.push(0);
                             } else {
                                 output.push(factorial(n));
@@ -412,7 +480,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_FLOAT_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _>(
                     "isnan",
                     |_, _| {
                         FunctionDomain::Domain(BooleanDomain {
@@ -433,7 +501,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for ty in ALL_FLOAT_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _>(
                     "isinf",
                     |_, _| {
                         FunctionDomain::Domain(BooleanDomain {
@@ -509,5 +577,5 @@ type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
 
 fn factorial(n: i64) -> i64 {
-    if n <= 0 { 1 } else { n * factorial(n - 1) }
+    if n == 0 { 1 } else { n * factorial(n - 1) }
 }

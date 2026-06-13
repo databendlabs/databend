@@ -83,7 +83,7 @@ build_exceptions! {
     CatalogNotFound(2320),
 }
 
-// Syntax and Semantic Errors [1005-1010, 1027-1028, 1065]
+// Syntax and Semantic Errors [1005-1010, 1027-1029, 1065]
 build_exceptions! {
     /// Syntax error in query
     SyntaxException(1005),
@@ -99,6 +99,8 @@ build_exceptions! {
     UnknownAggregateFunction(1027),
     /// Number of arguments doesn't match
     NumberArgumentsNotMatch(1028),
+    /// Invalid view dependency
+    ViewDependencyError(1029),
     /// Semantic error
     SemanticError(1065),
 }
@@ -149,8 +151,8 @@ build_exceptions! {
     InitPrometheusFailure(1047),
     /// Numeric overflow
     Overflow(1049),
-    /// Panic occurred
-    PanicError(1104),
+    /// Panic was caught during unwind
+    UnwindError(1104),
     /// Operation timed out
     Timeout(1122),
     /// Data is outdated
@@ -219,7 +221,7 @@ build_exceptions! {
     JiffError(2513),
 }
 
-// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2410, 4013]
+// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2411]
 build_exceptions! {
     /// Cluster node not found
     NotFoundClusterNode(1035),
@@ -249,8 +251,8 @@ build_exceptions! {
     WarehouseClusterAlreadyExists(2409),
     /// Warehouse cluster not exists
     WarehouseClusterNotExists(2410),
-    /// Unsupported cluster type
-    UnsupportedClusterType(4013),
+    /// Memory usage exceeds configured limit
+    MemoryExceedsLimit(2411),
 }
 
 // Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1133]
@@ -333,7 +335,7 @@ build_exceptions! {
     UnsupportedEngineParams(2703),
 }
 
-// Table reference Errors [2745-2749]
+// Table reference Errors [2745-2748]
 build_exceptions! {
     /// Unknown reference
     UnknownReference(2745),
@@ -341,10 +343,8 @@ build_exceptions! {
     ReferenceAlreadyExists(2746),
     /// Illegal reference
     IllegalReference(2747),
-    /// Mismatched reference type
-    MismatchedReferenceType(2748),
     /// Reference expired
-    ReferenceExpired(2749),
+    ReferenceExpired(2748),
 }
 
 // License Errors [1401-1404]
@@ -361,8 +361,8 @@ build_exceptions! {
 
 // Index Errors [1503, 1601-1603, 2720-2726]
 build_exceptions! {
-    /// Column referenced by inverted index
-    ColumnReferencedByInvertedIndex(1111),
+    /// Column referenced by index
+    ColumnReferencedByIndex(1111),
     /// Invalid row ID index
     InvalidRowIdIndex(1503),
     /// Unsupported index
@@ -387,7 +387,7 @@ build_exceptions! {
     IndexColumnIdNotFound(2726),
 }
 
-// Tag Errors [2750-2753]
+// Tag Errors [2750-2754]
 build_exceptions! {
     /// Tag already exists
     TagAlreadyExists(2750),
@@ -397,6 +397,8 @@ build_exceptions! {
     NotAllowedTagValue(2752),
     /// Tag still has references
     TagHasReferences(2753),
+    /// Tag has unrecognized references
+    TagHasUnrecognizedReferences(2754),
 }
 
 // Cloud and Integration Errors [1701-1703]
@@ -607,44 +609,6 @@ build_exceptions! {
     IllegalDynamicTable(2740),
 }
 
-// Sharing and Collaboration Errors [2705-2719, 3111-3112]
-build_exceptions! {
-    /// Share already exists
-    ShareAlreadyExists(2705),
-    /// Unknown share
-    UnknownShare(2706),
-    /// Unknown share ID
-    UnknownShareId(2707),
-    /// Share accounts already exists
-    ShareAccountsAlreadyExists(2708),
-    /// Unknown share accounts
-    UnknownShareAccounts(2709),
-    /// Wrong share object
-    WrongShareObject(2710),
-    /// Wrong share
-    WrongShare(2711),
-    /// Share has no granted database
-    ShareHasNoGrantedDatabase(2712),
-    /// Share has no granted privilege
-    ShareHasNoGrantedPrivilege(2713),
-    /// Share endpoint already exists
-    ShareEndpointAlreadyExists(2714),
-    /// Unknown share endpoint
-    UnknownShareEndpoint(2715),
-    /// Unknown share endpoint ID
-    UnknownShareEndpointId(2716),
-    /// Cannot access share table
-    CannotAccessShareTable(2717),
-    /// Cannot share database created from share
-    CannotShareDatabaseCreatedFromShare(2718),
-    /// Share storage error
-    ShareStorageError(2719),
-    /// Error share endpoint credential
-    ErrorShareEndpointCredential(3111),
-    /// Wrong share privileges
-    WrongSharePrivileges(3112),
-}
-
 // Variable and Configuration Errors [2801-2803]
 build_exceptions! {
     /// Unknown variable
@@ -679,8 +643,10 @@ build_exceptions! {
     IllegalProcedureFormat(3132),
 }
 
-// Storage and I/O Errors [3001-3002, 3901-3905, 4000]
+// Storage and I/O Errors [2719, 3001-3002, 3901-3905, 4000]
 build_exceptions! {
+    /// Share storage error
+    ShareStorageError(2719),
     /// Storage not found
     StorageNotFound(3001),
     /// Storage permission denied
@@ -768,6 +734,8 @@ build_exceptions! {
 mod tests {
     use std::collections::HashMap;
 
+    use crate::ErrorCode;
+
     #[test]
     fn test_error_codes_unique() {
         let text = include_str!("exception_code.rs");
@@ -798,5 +766,21 @@ mod tests {
             }
             panic!("Found duplicate error codes!");
         }
+    }
+
+    #[test]
+    fn test_unwind_error_keeps_code_1104() {
+        let err = ErrorCode::UnwindError("captured from unwind");
+
+        assert_eq!(err.code(), 1104);
+        assert_eq!(err.name(), "UnwindError");
+    }
+
+    #[test]
+    fn test_memory_exceeds_limit_keeps_code_2411() {
+        let err = ErrorCode::MemoryExceedsLimit("memory usage exceeds limit");
+
+        assert_eq!(err.code(), 2411);
+        assert_eq!(err.name(), "MemoryExceedsLimit");
     }
 }

@@ -29,6 +29,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
+use databend_common_users::decode_jwt_claims_insecure;
+use databend_common_users::verify_key_pair_jwt;
 use fastrace::func_name;
 use log::info;
 use serde::Serialize;
@@ -44,6 +46,7 @@ pub struct AuthMgr {
 pub enum CredentialType {
     DatabendToken,
     Jwt,
+    KeyPair,
     Password,
     NoNeed,
 }
@@ -54,6 +57,10 @@ pub enum Credential {
         token: String,
     },
     Jwt {
+        token: String,
+        client_ip: Option<String>,
+    },
+    KeyPair {
         token: String,
         client_ip: Option<String>,
     },
@@ -70,6 +77,7 @@ impl Credential {
         match self {
             Credential::DatabendToken { .. } => CredentialType::DatabendToken,
             Credential::Jwt { .. } => CredentialType::Jwt,
+            Credential::KeyPair { .. } => CredentialType::KeyPair,
             Credential::Password { .. } => CredentialType::Password,
             Credential::NoNeed => CredentialType::NoNeed,
         }
@@ -79,6 +87,7 @@ impl Credential {
         match self {
             Credential::DatabendToken { .. } => None,
             Credential::Jwt { .. } => None,
+            Credential::KeyPair { .. } => None,
             Credential::Password { name, .. } => Some(name.clone()),
             Credential::NoNeed => None,
         }
@@ -120,7 +129,7 @@ impl AuthMgr {
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone());
+                    session.set_current_tenant(tenant.clone())?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
@@ -145,7 +154,7 @@ impl AuthMgr {
                 // setup tenant if the JWT claims contain extra.tenant_id
                 if let Some(tenant) = jwt.custom.tenant_id {
                     let tenant = Tenant::new_or_err(tenant, func_name!())?;
-                    session.set_current_tenant(tenant);
+                    session.set_current_tenant(tenant)?;
                 };
 
                 let tenant = session.get_current_tenant();
@@ -163,7 +172,7 @@ impl AuthMgr {
                             ));
                         }
                         if let Some(ensure_user) = jwt.custom.ensure_user {
-                            let current_roles = user_info.grants.roles();
+                            let current_roles = user_info.grants.roles_vec();
                             // ensure jwt roles to user if not exists
                             if let Some(ref roles) = ensure_user.roles {
                                 for role in roles.iter() {
@@ -184,9 +193,8 @@ impl AuthMgr {
                                 }
                             }
                             if let Some(ref jwt_default_role) = ensure_user.default_role {
-                                let current_roles = user_info.grants.roles();
                                 // grant default role to user if not exists
-                                if !current_roles.contains(jwt_default_role) {
+                                if !user_info.grants.roles().contains(jwt_default_role) {
                                     info!(
                                         "JWT grant default role to user: {} -> {}",
                                         user_info.name, jwt_default_role
@@ -255,7 +263,11 @@ impl AuthMgr {
                         }
                         info!("JWT create user: {}", user_info.name);
                         user_api
-                            .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
+                            .create_user(
+                                &tenant,
+                                user_info.clone(),
+                                &CreateOption::CreateIfNotExists,
+                            )
                             .await?;
                         user_info
                     }
@@ -273,6 +285,64 @@ impl AuthMgr {
                 }
 
                 session.set_authed_user(user, jwt.custom.role).await?;
+                Ok((user_name, None))
+            }
+            Credential::KeyPair {
+                token: t,
+                client_ip,
+            } => {
+                let claims = decode_jwt_claims_insecure(t.as_str())?;
+                let user_name = claims.sub.ok_or_else(|| {
+                    ErrorCode::AuthenticateFailure(
+                        "key-pair authentication failed: 'sub' (username) claim is missing",
+                    )
+                })?;
+
+                // Reject expired tokens early before user lookup
+                let now = chrono::Utc::now().timestamp() as u64;
+                match claims.exp {
+                    Some(exp) if exp < now => {
+                        return Err(ErrorCode::AuthenticateFailure(
+                            "key-pair authentication failed: token has expired",
+                        ));
+                    }
+                    None => {
+                        return Err(ErrorCode::AuthenticateFailure(
+                            "key-pair authentication failed: 'exp' (expiration) claim is required",
+                        ));
+                    }
+                    _ => {}
+                }
+
+                let identity = UserIdentity::new(&user_name, "%");
+                let tenant = session.get_current_tenant();
+                let user = user_api
+                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
+                    .await?;
+
+                match &user.auth_info {
+                    AuthInfo::KeyPair { public_keys } => {
+                        verify_key_pair_jwt(t.as_str(), public_keys)?;
+                    }
+                    _ => {
+                        return Err(ErrorCode::AuthenticateFailure(format!(
+                            "user '{}' is not configured for key-pair authentication",
+                            user_name
+                        )));
+                    }
+                }
+
+                if !user.is_account_admin() && !global_network_policy.is_empty() {
+                    user_api
+                        .enforce_network_policy(
+                            &tenant,
+                            &global_network_policy,
+                            client_ip.as_deref(),
+                        )
+                        .await?;
+                }
+
+                session.set_authed_user(user, None).await?;
                 Ok((user_name, None))
             }
             Credential::Password {

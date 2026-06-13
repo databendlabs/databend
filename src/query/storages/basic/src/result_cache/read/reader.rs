@@ -20,11 +20,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
+use log::info;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
 use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_meta_key;
+use crate::result_cache::common::truncate_sql;
 use crate::result_cache::meta_manager::ResultCacheMetaManager;
 
 pub struct ResultCacheReader {
@@ -35,6 +37,9 @@ pub struct ResultCacheReader {
     /// To ensure the cache is valid.
     partitions_shas: Vec<String>,
 
+    /// Truncated SQL of the current query, used to verify against cached sql to avoid hash collisions.
+    truncated_sql: String,
+
     /// If true, the cache will be used even if it is inconsistent.
     /// In another word, `partitions_sha` will not be checked.
     tolerate_inconsistent: bool,
@@ -44,17 +49,19 @@ impl ResultCacheReader {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         key: &str,
+        sql: &str,
         kv_store: Arc<MetaStore>,
         tolerate_inconsistent: bool,
     ) -> Self {
         let tenant = ctx.get_tenant();
         let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
-        let partitions_shas = ctx.get_partitions_shas();
+        let partitions_shas = ctx.result_cache_state().partitions_shas();
 
         Self {
             meta_mgr: ResultCacheMetaManager::create(kv_store, 0),
             meta_key,
             partitions_shas,
+            truncated_sql: truncate_sql(sql),
             operator: DataOperator::instance().operator(),
             tolerate_inconsistent,
         }
@@ -67,7 +74,16 @@ impl ResultCacheReader {
     #[async_backtrace::framed]
     pub async fn check_cache(&self) -> Result<Option<ResultCacheValue>> {
         if let Some(v) = self.meta_mgr.get(self.meta_key.clone()).await? {
-            if self.tolerate_inconsistent || v.partitions_shas == self.partitions_shas {
+            // If the cached sql is empty (old data), skip sql check.
+            // Otherwise verify truncated sql matches to guard against hash collisions.
+            let sql_match = v.sql == self.truncated_sql;
+            if sql_match
+                && (self.tolerate_inconsistent || v.partitions_shas == self.partitions_shas)
+            {
+                info!(
+                    "Query result cache hit: query_id={}, meta_key={}",
+                    v.query_id, self.meta_key
+                );
                 return Ok(Some(v));
             }
         }

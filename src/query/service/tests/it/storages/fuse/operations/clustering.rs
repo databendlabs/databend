@@ -49,6 +49,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,
@@ -68,6 +69,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        branch: None,
         cluster_keys: vec!["id".to_string()],
         cluster_type: "linear".to_string(),
     };
@@ -77,6 +79,10 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
+    assert_eq!(
+        table_info.meta.cluster_key_v2,
+        Some((1, "(id)".to_string()))
+    );
     assert_eq!(table_info.meta.cluster_key_seq, 1);
     assert_eq!(
         table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE).unwrap(),
@@ -89,6 +95,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        branch: None,
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
@@ -96,7 +103,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.cluster_key, None);
+    assert_eq!(table_info.meta.cluster_key_v2, None);
     assert_eq!(table_info.meta.cluster_key_seq, 1);
 
     Ok(())

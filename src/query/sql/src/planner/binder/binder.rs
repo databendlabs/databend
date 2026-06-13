@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
 use std::str::FromStr;
@@ -23,6 +24,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -60,6 +62,7 @@ use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::ScanRequiredColumns;
 use crate::planner::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
@@ -74,6 +77,7 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
+use crate::plans::ShowPublicKeysPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -362,6 +366,7 @@ impl Binder {
 
             // Virtual Columns
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
+            Statement::VacuumVirtualColumn(stmt) => self.bind_vacuum_virtual_column(stmt).await?,
             Statement::ShowVirtualColumns(stmt) => {
                 self.bind_show_virtual_columns(bind_context, stmt).await?
             }
@@ -375,7 +380,7 @@ impl Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, default_warehouse, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
@@ -385,6 +390,11 @@ impl Binder {
             Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
                 user: user.clone().into(),
             })),
+            Statement::ShowPublicKeys { user } => {
+                Plan::ShowPublicKeys(Box::new(ShowPublicKeysPlan {
+                    user: user.clone().into(),
+                }))
+            }
 
             // Roles
             Statement::ShowRoles { show_options } => {
@@ -444,14 +454,17 @@ impl Binder {
             }
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
-                    format!(", pattern => '{pattern}'")
+                    format!(", pattern => {}", QuotedString(pattern, '\''))
                 } else {
                     "".to_string()
                 };
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM LIST_STAGE(location => {}{pattern})",
+                        QuotedString(format!("@{location}"), '\'')
+                    )
+                    .as_str(),
                     RewriteKind::ListStage,
                 )
                 .await?
@@ -459,8 +472,11 @@ impl Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM default.system.stages WHERE name = {}",
+                        QuotedString(stage_name, '\'')
+                    )
+                    .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?
@@ -572,13 +588,19 @@ impl Binder {
                         "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
+                let file_format_params = FileFormatParams::try_from_reader(
+                    FileFormatOptionsReader::from_ast(file_format_options),
+                    false,
+                )?;
+                if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                    return Err(ErrorCode::IllegalFileFormat(
+                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                    ));
+                }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: FileFormatParams::try_from_reader(
-                        FileFormatOptionsReader::from_ast(file_format_options),
-                        false,
-                    )?,
+                    file_format_params,
                 }))
             }
             Statement::DropFileFormat { if_exists, name } => {
@@ -841,6 +863,10 @@ impl Binder {
             Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
             Statement::AssignWarehouseNodes(v) => self.bind_assign_warehouse_nodes(v)?,
             Statement::UnassignWarehouseNodes(v) => self.bind_unassign_warehouse_nodes(v)?,
+            Statement::ShowWorkers(v) => self.bind_show_workers(v)?,
+            Statement::CreateWorker(v) => self.bind_create_worker(v)?,
+            Statement::AlterWorker(v) => self.bind_alter_worker(v)?,
+            Statement::DropWorker(v) => self.bind_drop_worker(v)?,
             Statement::ShowWorkloadGroups(v) => self.bind_show_workload_groups(v)?,
             Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
             Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,
@@ -871,7 +897,7 @@ impl Binder {
     }
 
     pub(crate) fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
-        normalize_identifier(ident, &self.name_resolution_ctx)
+        self.name_resolution_ctx.normalize_identifier(ident)
     }
 
     /// Bind an expr to a scalar expression.
@@ -937,7 +963,7 @@ impl Binder {
         }
 
         self.ctx
-            .get_settings()
+            .get_shared_settings()
             .set_batch_settings(&hint_settings, true)
     }
 
@@ -1047,26 +1073,9 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
-            )
-        };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
-    }
-
-    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFCall(_)
-                    | ScalarExpr::SubqueryExpr(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-            )
+            ) || scalar.is_aggregate()
         };
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
@@ -1094,17 +1103,17 @@ impl Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    pub(crate) fn add_internal_column_into_expr(
+    pub(crate) fn add_bound_columns_into_expr(
         &mut self,
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        if bind_context.bound_internal_columns.is_empty() {
+        if bind_context.bound_internal_columns.is_empty()
+            && bind_context.bound_virtual_columns.is_empty()
+        {
             return Ok(s_expr);
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
-        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
-        let mut s_expr = s_expr;
 
         let mut has_score = false;
         let mut has_matched = false;
@@ -1121,21 +1130,38 @@ impl Binder {
                     .to_string(),
             ));
         }
-        let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
 
+        let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
         for ((table_index, _), column_index) in bound_internal_columns.iter() {
-            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
-                i.has_score = has_score;
-                i
-            });
-            let vector_index = vector_index_map.shift_remove(table_index);
-            s_expr = s_expr.add_column_index_to_scans(
-                *table_index,
-                *column_index,
-                &inverted_index,
-                &vector_index,
-            );
+            required_columns
+                .entry(*table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
         }
-        Ok(s_expr)
+
+        if !required_columns.is_empty() {
+            let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+            let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
+            for (table_index, required_columns) in required_columns.iter_mut() {
+                required_columns.inverted_index =
+                    inverted_index_map.shift_remove(table_index).map(|mut i| {
+                        i.has_score = has_score;
+                        i
+                    });
+                required_columns.vector_index = vector_index_map.shift_remove(table_index);
+            }
+        }
+
+        let bound_virtual_columns = &bind_context.bound_virtual_columns;
+        for (virtual_column_name, (_, column_index)) in bound_virtual_columns.iter() {
+            required_columns
+                .entry(virtual_column_name.table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
+        }
+
+        Ok(s_expr.add_column_indexes_to_scans(&required_columns))
     }
 }

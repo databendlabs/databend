@@ -36,9 +36,6 @@ impl UdfIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::principal::UdfIdent;
     use crate::principal::UserDefinedFunction;
     use crate::tenant_key::resource::TenantResource;
 
@@ -50,14 +47,6 @@ mod kvapi_impl {
         type ValueType = UserDefinedFunction;
     }
 
-    impl kvapi::Value for UserDefinedFunction {
-        type KeyType = UdfIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
     // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
@@ -65,7 +54,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::UdfIdent;
     use crate::tenant::Tenant;
@@ -74,10 +64,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = UdfIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_udfs/test/test1");
-
-        assert_eq!(ident, UdfIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_udfs/test/test1");
     }
 }

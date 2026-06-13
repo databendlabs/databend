@@ -16,84 +16,54 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::SnapshotRef;
+use databend_common_meta_app::schema::CreateTableTagReq;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::TableLvtCheck;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
-use databend_common_sql::plans::CreateTableRefPlan;
-use databend_common_sql::plans::DropTableRefPlan;
+use databend_common_sql::plans::CreateTableBranchPlan;
+use databend_common_sql::plans::CreateTableTagPlan;
+use databend_common_sql::plans::DropTableBranchPlan;
+use databend_common_sql::plans::DropTableTagPlan;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::meta::is_uuid_v7;
 
 pub struct RealTableRefHandler {}
+
+const LEGACY_TABLE_REF_HANDLER_MESSAGE: &str = "Legacy experimental table refs were removed; binder should reject CREATE/DROP BRANCH|TAG before execution";
 
 #[async_trait::async_trait]
 impl TableRefHandler for RealTableRefHandler {
     #[async_backtrace::framed]
-    async fn do_create_table_ref(
+    async fn do_create_table_branch(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _plan: &CreateTableBranchPlan,
+    ) -> Result<()> {
+        // Keep this placeholder for the upcoming table-ref redesign. The legacy
+        // implementation has been removed, so reaching this handler is unexpected.
+        Err(ErrorCode::Unimplemented(LEGACY_TABLE_REF_HANDLER_MESSAGE))
+    }
+
+    #[async_backtrace::framed]
+    async fn do_create_table_tag(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &CreateTableRefPlan,
+        plan: &CreateTableTagPlan,
     ) -> Result<()> {
-        if !ctx
-            .get_settings()
-            .get_enable_experimental_table_ref()
-            .unwrap_or_default()
-        {
-            return Err(ErrorCode::Unimplemented(
-                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
-            ));
-        }
+        check_table_ref_access(ctx.as_ref())?;
 
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
-
-        let table = catalog
-            .get_table(&tenant, &plan.database, &plan.table)
+        let table = self
+            .load_source_table(ctx.clone(), &plan.catalog, &plan.database, &plan.table)
             .await?;
         let table_info = table.get_table_info();
-        // `seq` is allocated from a global metadata sequence.
-        // It is guaranteed to be globally unique across all tables and refs,
-        // not scoped to a single table.
-        let seq = table_info.ident.seq;
-        let table_id = table_info.ident.table_id;
-
-        let refs = &table_info.meta.refs;
-        if refs.contains_key(&plan.ref_name) {
-            return Err(ErrorCode::ReferenceAlreadyExists(format!(
-                "The table '{}.{}' already has a reference named '{}'",
-                plan.database, plan.table, plan.ref_name
-            )));
-        }
-        if table.is_temp() {
-            return Err(ErrorCode::IllegalReference(format!(
-                "The table '{}.{}' is temporary, can't create {}",
-                plan.database, plan.table, plan.ref_type
-            )));
-        }
-        if table_info.engine() != "FUSE" {
-            return Err(ErrorCode::IllegalReference(format!(
-                "The table '{}.{}' uses engine '{}', only FUSE tables support {} creation",
-                plan.database,
-                plan.table,
-                table_info.engine(),
-                plan.ref_type
-            )));
-        }
-
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        if fuse_table.is_transient() {
-            return Err(ErrorCode::IllegalReference(format!(
-                "The table '{}.{}' is transient, can't create {}",
-                plan.database, plan.table, plan.ref_type
-            )));
-        }
-
         let snapshot_loc = match &plan.navigation {
             Some(navigation) => {
                 fuse_table
@@ -101,126 +71,91 @@ impl TableRefHandler for RealTableRefHandler {
                     .await?
             }
             None => fuse_table.snapshot_loc(),
-        };
+        }
+        .ok_or_else(|| {
+            ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' has no snapshot to create TAG '{}'",
+                plan.database, plan.table, plan.name
+            ))
+        })?;
 
-        let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
-            .read_table_snapshot_with_location(snapshot_loc)
+        let Some(snapshot) = fuse_table
+            .read_table_snapshot_with_location(Some(snapshot_loc.clone()))
             .await?
-        {
-            if snapshot.timestamp.is_none() {
-                return Err(ErrorCode::IllegalReference(format!(
-                    "Table {} snapshot lacks required timestamp. This table was created with a significantly outdated version \
-                    that is no longer directly supported by the current version and requires migration. \
-                    Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
-                    table_id
-                )));
-            }
-            let mut new_snapshot = TableSnapshot::try_from_previous(
-                snapshot.clone(),
-                Some(seq),
-                ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
-            )?;
-            new_snapshot.prev_snapshot_id = None;
-            (new_snapshot, snapshot.timestamp)
-        } else {
-            let new_snapshot = TableSnapshot::try_new(
-                Some(seq),
-                None,
-                table_info.schema().as_ref().clone(),
-                Default::default(),
-                vec![],
-                None,
-                ctx.get_table_meta_timestamps(fuse_table, None)?,
-            )?;
-            (new_snapshot, None)
+        else {
+            return Err(ErrorCode::TableHistoricalDataNotFound(format!(
+                "Snapshot '{}' not found when creating TAG '{}'",
+                snapshot_loc, plan.name
+            )));
         };
 
-        // write down new snapshot
-        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
-            Some(seq),
-            &new_snapshot.snapshot_id,
-            new_snapshot.format_version,
-        )?;
-        let data = new_snapshot.to_bytes()?;
-        fuse_table
-            .get_operator_ref()
-            .write(&new_snapshot_location, data)
-            .await?;
-
-        let expire_at = plan.retain.map(|v| Utc::now() + v);
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta
-            .refs
-            .insert(plan.ref_name.clone(), SnapshotRef {
-                id: seq,
-                expire_at,
-                typ: plan.ref_type.clone(),
-                loc: new_snapshot_location,
-            });
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(seq),
-            new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
-            // check least visible time
-            lvt_check: prev_ts.map(|time| TableLvtCheck { tenant, time }),
-        };
-        // If update fails, cleanup the ref directory
-        if let Err(e) = catalog.update_single_table_meta(req, table_info).await {
-            clearup_ref_dir(fuse_table, seq).await;
-            return Err(e);
+        if !is_uuid_v7(&snapshot.snapshot_id) {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Cannot create TAG '{}': snapshot '{}' is not based on uuid v7",
+                plan.name, snapshot_loc
+            )));
         }
 
-        Ok(())
+        let Some(snapshot_timestamp) = snapshot.timestamp else {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Table {} snapshot lacks required timestamp",
+                table_info.ident.table_id
+            )));
+        };
+
+        let catalog = ctx.get_catalog(&plan.catalog).await?;
+        catalog
+            .create_table_tag(CreateTableTagReq {
+                table_id: table_info.ident.table_id,
+                seq: MatchSeq::Exact(table_info.ident.seq),
+                tag_name: plan.name.clone(),
+                snapshot_loc,
+                expire_at: plan.retain.map(|v| Utc::now() + v),
+                lvt_check: TableLvtCheck {
+                    tenant: ctx.get_tenant(),
+                    time: snapshot_timestamp,
+                },
+            })
+            .await
     }
 
     #[async_backtrace::framed]
-    async fn do_drop_table_ref(
+    async fn do_drop_table_branch(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _plan: &DropTableBranchPlan,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(LEGACY_TABLE_REF_HANDLER_MESSAGE))
+    }
+
+    #[async_backtrace::framed]
+    async fn do_drop_table_tag(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &DropTableRefPlan,
+        plan: &DropTableTagPlan,
     ) -> Result<()> {
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let table = catalog
-            .get_table(&ctx.get_tenant(), &plan.database, &plan.table)
+        check_table_ref_access(ctx.as_ref())?;
+
+        let table = ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-
-        let table_info = table.get_table_info();
-        let refs = &table_info.meta.refs;
-        let Some(table_ref) = refs.get(&plan.ref_name) else {
+        let table_id = table.get_table_info().ident.table_id;
+        let catalog = ctx.get_catalog(&plan.catalog).await?;
+        let seq_tag = catalog.get_table_tag(table_id, &plan.name, true).await?;
+        let Some(seq_tag) = seq_tag else {
             return Err(ErrorCode::UnknownReference(format!(
-                "Unknown {} '{}' in table '{}.{}'",
-                plan.ref_type, plan.ref_name, plan.database, plan.table
+                "Unknown tag '{}'",
+                plan.name
             )));
         };
-        if table_ref.typ != plan.ref_type {
-            return Err(ErrorCode::MismatchedReferenceType(format!(
-                "'{}' is a {} reference, please use 'ALTER TABLE {}.{} DROP {} {}' instead.",
-                plan.ref_name,
-                table_ref.typ,
-                plan.database,
-                plan.table,
-                table_ref.typ,
-                plan.ref_name,
-            )));
-        }
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.refs.remove(&plan.ref_name);
-        let req = UpdateTableMetaReq {
-            table_id: table_info.ident.table_id,
-            seq: MatchSeq::Exact(table_info.ident.seq),
-            new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
-            lvt_check: None,
-        };
-        catalog.update_single_table_meta(req, table_info).await?;
-
-        // clear the ref snapshot.
-        clearup_ref_dir(fuse_table, table_ref.id).await;
-        Ok(())
+        catalog
+            .drop_table_tag(DropTableTagReq {
+                table_id,
+                tag_name: plan.name.clone(),
+                seq: MatchSeq::Exact(seq_tag.seq),
+            })
+            .await
     }
 }
 
@@ -231,21 +166,42 @@ impl RealTableRefHandler {
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
     }
-}
 
-async fn clearup_ref_dir(fuse_table: &FuseTable, table_ref_id: u64) {
-    let ref_dir = format!(
-        "{}{}/",
-        fuse_table
-            .meta_location_generator()
-            .ref_snapshot_location_prefix(),
-        table_ref_id
-    );
-    if let Err(cleanup_err) = fuse_table.get_operator_ref().remove_all(&ref_dir).await {
-        log::warn!(
-            "Failed to cleanup ref directory {}: {}",
-            ref_dir,
-            cleanup_err
-        );
+    #[async_backtrace::framed]
+    async fn load_source_table(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: &str,
+        database: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let table = ctx.get_table(catalog, database, table_name).await?;
+
+        if table.is_temp() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' is temporary, can't create TAG",
+                database, table_name
+            )));
+        }
+
+        let table_info = table.get_table_info();
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' uses engine '{}', only FUSE tables support TAG",
+                database,
+                table_name,
+                table_info.engine(),
+            )));
+        }
+
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        if fuse_table.is_transient() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' is transient, can't create TAG",
+                database, table_name
+            )));
+        }
+
+        Ok(table)
     }
 }

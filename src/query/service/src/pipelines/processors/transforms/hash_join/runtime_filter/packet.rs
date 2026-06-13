@@ -31,7 +31,7 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 
-use crate::pipelines::processors::transforms::RuntimeFilterDesc;
+use crate::physical_plans::SpatialRuntimeFilterMode;
 
 /// Represents a runtime filter that can be transmitted and merged.
 ///
@@ -41,55 +41,77 @@ use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 /// * `inlist` - Deduplicated list of build key column
 /// * `min_max` - The min and max values of the build column
 /// * `bloom` - The deduplicated hashes of the build column
+/// * `spatial` - The RTrees of the Geometry or Geography column
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
 pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
     pub bloom: Option<Vec<u64>>,
+    pub spatial: Option<SpatialPacket>,
 }
 
 impl Debug for RuntimeFilterPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "RuntimeFilterPacket {{ id: {}, inlist: {:?}, min_max: {:?}, bloom: {:?} }}",
+            "RuntimeFilterPacket {{ id: {}, inlist: {:?}, min_max: {:?}, bloom: {:?}, spatial: {:?} }}",
             self.id,
             self.inlist,
             self.min_max,
-            self.bloom.is_some()
+            self.bloom.is_some(),
+            self.spatial.is_some()
         )
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SpatialPacket {
+    pub valid: bool,
+    pub srid: Option<i32>,
+    pub mode: SpatialRuntimeFilterMode,
+    pub rtrees: Vec<u8>,
 }
 
 /// Represents a collection of runtime filter packets that correspond to a join operator.
 ///
 /// # Fields
 ///
-/// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`. When `packets` is `None`, it means that `build_num_rows` is zero.
+/// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`.
 /// * `build_rows` - Total number of rows used when building the runtime filters.
+/// * `disable_all_due_to_spill` - Indicates if this packet comes from a spilled build and should disable all runtime filters globally.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct JoinRuntimeFilterPacket {
     #[serde(default)]
     pub packets: Option<HashMap<usize, RuntimeFilterPacket>>,
     #[serde(default)]
     pub build_rows: usize,
+    #[serde(default)]
+    pub disable_all_due_to_spill: bool,
 }
 
 impl JoinRuntimeFilterPacket {
-    pub fn disable_all(descs: &[RuntimeFilterDesc], build_rows: usize) -> Self {
-        let mut packets = HashMap::new();
-        for desc in descs {
-            packets.insert(desc.id, RuntimeFilterPacket {
-                id: desc.id,
-                inlist: None,
-                min_max: None,
-                bloom: None,
-            });
+    pub fn complete_without_filters(build_rows: usize) -> Self {
+        Self {
+            packets: None,
+            build_rows,
+            disable_all_due_to_spill: false,
         }
+    }
+
+    pub fn complete(packets: HashMap<usize, RuntimeFilterPacket>, build_rows: usize) -> Self {
         Self {
             packets: Some(packets),
             build_rows,
+            disable_all_due_to_spill: false,
+        }
+    }
+
+    pub fn disable_all(build_rows: usize) -> Self {
+        Self {
+            packets: None,
+            build_rows,
+            disable_all_due_to_spill: true,
         }
     }
 }
@@ -100,6 +122,7 @@ struct FlightRuntimeFilterPacket {
     pub bloom: Option<usize>,
     pub inlist: Option<usize>,
     pub min_max: Option<SerializableDomain>,
+    pub spatial: Option<SpatialPacket>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
@@ -108,6 +131,8 @@ struct FlightJoinRuntimeFilterPacket {
     pub build_rows: usize,
     #[serde(default)]
     pub packets: Option<HashMap<usize, FlightRuntimeFilterPacket>>,
+    #[serde(default)]
+    pub disable_all_due_to_spill: bool,
 
     pub schema: DataSchemaRef,
 }
@@ -150,6 +175,7 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
                     bloom: bloom_pos,
                     inlist: inlist_pos,
                     min_max: packet.min_max,
+                    spatial: packet.spatial,
                 });
             }
 
@@ -166,6 +192,7 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
         data_block.add_meta(Some(Box::new(FlightJoinRuntimeFilterPacket {
             build_rows: self.build_rows,
             packets: join_flight_packets,
+            disable_all_due_to_spill: self.disable_all_due_to_spill,
             schema,
         })))
     }
@@ -183,6 +210,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
                 return Ok(JoinRuntimeFilterPacket {
                     packets: None,
                     build_rows: flight_join_rf.build_rows,
+                    disable_all_due_to_spill: flight_join_rf.disable_all_due_to_spill,
                 });
             };
 
@@ -213,12 +241,14 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
                     inlist,
                     id: flight_packet.id,
                     min_max: flight_packet.min_max,
+                    spatial: flight_packet.spatial,
                 });
             }
 
             return Ok(JoinRuntimeFilterPacket {
                 packets: Some(flight_packets),
                 build_rows: flight_join_rf.build_rows,
+                disable_all_due_to_spill: flight_join_rf.disable_all_due_to_spill,
             });
         }
 

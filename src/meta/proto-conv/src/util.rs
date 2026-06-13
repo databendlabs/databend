@@ -194,6 +194,19 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (162, "2025-12-16: Add: tag.proto"),
     (163, "2025-12-31: Add: SnapshotRef"),
     (164, "2026-01-22: Update: user.proto/CsvFileFormatParams add allow_quoted_nulls and quoted_empty_field_as, change null_display to optional", ),
+    (165, "2026-01-24: Add: add cluster_key_v2 on TableMeta"),
+    (166, "2026-02-13: Add: UserOption::default_warehouse"),
+    (167, "2026-02-28: Add: file_format.proto Lance file format"),
+    (168, "2026-03-11: Remove: share_by in TableMeta/DatabaseMeta and refs in TableMeta, Remove SnapshotRef"),
+    (169, "2026-03-23: Update: user.proto/TextFileFormatParams add null_display, allow_column_count_mismatch, empty_field_as and output_header"),
+    (170, "2026-03-25: Add: TableTag"),
+    (171, "2026-04-02: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add encoding and encoding_error_mode"),
+    (172, "2026-04-09: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add trim_space"),
+    (173, "2026-04-16: Update: file_format.proto/CsvFileFormatParams add quote_style"),
+    (174, "2026-04-28: Add: AuthInfo::KeyPair for key-pair authentication"),
+    (175, "2026-05-08: Add: field_stats_truncate_len per-column string stats truncation in TableMeta"),
+    (176, "2026-05-25: Add: task.proto/Task.script_sql"),
+    (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
@@ -236,4 +249,25 @@ pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Inc
 pub fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
     let s = reason.to_string();
     move || Incompatible::new(s)
+}
+
+/// Convert a value using `TryFrom`, wrapping errors in [`Incompatible`].
+///
+/// The error message names the field and the target type so callers only need
+/// to pass the field name, e.g.:
+///
+/// ```ignore
+/// let size_limit: usize = convert_field(p.size_limit, "CopyOptions.size_limit")?;
+/// ```
+pub fn convert_field<T, U>(value: T, field_name: &str) -> Result<U, Incompatible>
+where
+    U: TryFrom<T>,
+    <U as TryFrom<T>>::Error: std::fmt::Display,
+{
+    U::try_from(value).map_err(|err| {
+        Incompatible::new(format!(
+            "{field_name} cannot be converted to {}: {err}",
+            std::any::type_name::<U>()
+        ))
+    })
 }

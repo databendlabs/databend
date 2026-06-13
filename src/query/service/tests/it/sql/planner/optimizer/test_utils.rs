@@ -26,6 +26,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
+use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::Binder;
@@ -46,9 +47,9 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
-use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
 
 // TPC-DS Test Utilities
 
@@ -91,7 +92,7 @@ pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
 
 /// Creates a column reference with the given index, name, data type, table name and table index
 pub fn create_table_bound_column_ref(
-    index: IndexType,
+    index: Symbol,
     name: &str,
     data_type: DataType,
     table_name: Option<&str>,
@@ -108,6 +109,7 @@ pub fn create_table_bound_column_ref(
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }
@@ -167,7 +169,7 @@ pub fn get_function_name(expr: &ScalarExpr) -> Option<&str> {
 }
 
 /// Extracts the column index from a scalar expression
-pub fn get_column_index(expr: &ScalarExpr) -> Option<IndexType> {
+pub fn get_column_index(expr: &ScalarExpr) -> Option<Symbol> {
     if let ScalarExpr::BoundColumnRef(col_ref) = expr {
         Some(col_ref.column.index)
     } else {
@@ -209,6 +211,7 @@ pub fn find_predicate(
     col_index: IndexType,
     value: Option<i64>,
 ) -> bool {
+    let col_index = Symbol::new(col_index);
     for pred in predicates {
         if let ScalarExpr::FunctionCall(func) = pred {
             if func.func_name != func_name {
@@ -237,8 +240,8 @@ pub fn find_predicate(
 #[allow(dead_code)]
 fn find_equality_predicate(
     predicates: &[ScalarExpr],
-    left_col_index: IndexType,
-    right_col_index: IndexType,
+    left_col_index: Symbol,
+    right_col_index: Symbol,
 ) -> bool {
     for pred in predicates {
         if let ScalarExpr::FunctionCall(func) = pred {
@@ -289,9 +292,10 @@ impl ExprBuilder {
         &self,
         predicates: &[ScalarExpr],
         func_name: &str,
-        col_index: IndexType,
+        col_index: usize,
         value: Option<i64>,
     ) -> usize {
+        let col_index = Symbol::new(col_index);
         predicates
             .iter()
             .filter(|expr| {
@@ -311,9 +315,10 @@ impl ExprBuilder {
         &self,
         predicates: &[ScalarExpr],
         func_name: &str,
-        col_index: IndexType,
+        col_index: usize,
         value: Option<i64>,
     ) -> bool {
+        let col_index = Symbol::new(col_index);
         for pred in predicates {
             if let ScalarExpr::FunctionCall(func) = pred {
                 if func.func_name != func_name {
@@ -348,6 +353,7 @@ impl ExprBuilder {
         table_name: &str,
         table_index: IndexType,
     ) -> ScalarExpr {
+        let index = Symbol::new(index);
         self.columns
             .entry(key.to_string())
             .or_insert_with(|| {
@@ -367,7 +373,7 @@ impl ExprBuilder {
     pub fn simple_column(
         &mut self,
         key: &str,
-        index: IndexType,
+        index: Symbol,
         name: &str,
         data_type: DataType,
     ) -> ScalarExpr {
@@ -580,7 +586,7 @@ impl ExprBuilder {
     }
 
     /// Create a scalar item
-    pub fn scalar_item(&self, index: IndexType, scalar: ScalarExpr) -> ScalarItem {
+    pub fn scalar_item(&self, index: Symbol, scalar: ScalarExpr) -> ScalarItem {
         ScalarItem { index, scalar }
     }
 }

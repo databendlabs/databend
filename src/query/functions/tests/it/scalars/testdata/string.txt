@@ -2198,7 +2198,14 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `bin(CAST(e AS Int64))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`
+
+
+hint: no function matches signature `bin(String)`, you might need to add explicit type casts.
+
+candidate functions:
+  bin(Int64) :: String
+  bin(Int64 NULL) :: String NULL, during run expr: `bin(CAST(e AS Int64))`
 
 
 
@@ -2306,20 +2313,27 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `oct(CAST(e AS Int64))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`
+
+
+hint: no function matches signature `oct(String)`, you might need to add explicit type casts.
+
+candidate functions:
+  oct(Int64) :: String
+  oct(Int64 NULL) :: String NULL, during run expr: `oct(CAST(e AS Int64))`
 
 
 
 ast            : hex(a)
 raw expr       : hex(a::Int8)
-checked expr   : to_hex<Int64>(CAST<Int8>(a AS Int64))
+checked expr   : hex<Int64>(CAST<Int8>(a AS Int64))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
 +--------+----------+--------------------+
 | Type   | Int8     | String             |
 | Domain | {-1..=3} | {""..}             |
-| Row 0  | -1       | 'ffffffffffffffff' |
+| Row 0  | -1       | 'FFFFFFFFFFFFFFFF' |
 | Row 1  | 2        | '2'                |
 | Row 2  | 3        | '3'                |
 +--------+----------+--------------------+
@@ -2328,13 +2342,13 @@ evaluation (internal):
 | Column | Data                                 |
 +--------+--------------------------------------+
 | a      | Column(Int8([-1, 2, 3]))             |
-| Output | StringColumn[ffffffffffffffff, 2, 3] |
+| Output | StringColumn[FFFFFFFFFFFFFFFF, 2, 3] |
 +--------+--------------------------------------+
 
 
 ast            : hex(a2)
 raw expr       : hex(a2::UInt8 NULL)
-checked expr   : to_hex<Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL))
+checked expr   : hex<Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2356,7 +2370,7 @@ evaluation (internal):
 
 ast            : hex(b)
 raw expr       : hex(b::Int16)
-checked expr   : to_hex<Int64>(CAST<Int16>(b AS Int64))
+checked expr   : hex<Int64>(CAST<Int16>(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2378,6 +2392,64 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(c::UInt32)
+checked expr   : hex<Int64>(CAST<UInt32>(c AS Int64))
+evaluation:
++--------+-----------+--------+
+|        | c         | Output |
++--------+-----------+--------+
+| Type   | UInt32    | String |
+| Domain | {10..=30} | {""..} |
+| Row 0  | 10        | 'A'    |
+| Row 1  | 20        | '14'   |
+| Row 2  | 30        | '1E'   |
++--------+-----------+--------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| c      | Column(UInt32([10, 20, 30])) |
+| Output | StringColumn[A, 14, 1E]      |
++--------+------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | hex(d)
+  | ^^^^^^ no function matches signature `hex(Float64)`, you might need to add explicit type casts.
+
+candidate functions:
+  hex(String) :: String            : unable to unify `Float64` with `String`
+  hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
+  hex(Int64) :: String             : unable to unify `Float64` with `Int64`
+... and 3 more
+
+
+
+ast            : hex(e)
+raw expr       : hex(e::String)
+checked expr   : hex<String>(e)
+evaluation:
++--------+-----------------+--------------------+
+|        | e               | Output             |
++--------+-----------------+--------------------+
+| Type   | String          | String             |
+| Domain | {"abc"..="def"} | {""..}             |
+| Row 0  | 'abc'           | '616263'           |
+| Row 1  | 'def'           | '646566'           |
+| Row 2  | 'databend'      | '6461746162656e64' |
++--------+-----------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| e      | Column(StringColumn[abc, def, databend])       |
+| Output | StringColumn[616263, 646566, 6461746162656e64] |
++--------+------------------------------------------------+
+
+
+ast            : to_hex(c)
+raw expr       : to_hex(c::UInt32)
 checked expr   : to_hex<Int64>(CAST<UInt32>(c AS Int64))
 evaluation:
 +--------+-----------+--------+
@@ -2398,22 +2470,8 @@ evaluation (internal):
 +--------+------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | hex(d)
-  | ^^^^^^ no function matches signature `to_hex(Float64)`, you might need to add explicit type casts.
-
-candidate functions:
-  to_hex(String) :: String            : unable to unify `Float64` with `String`
-  to_hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
-  to_hex(Int64) :: String             : unable to unify `Float64` with `Int64`
-... and 3 more
-
-
-
-ast            : hex(e)
-raw expr       : hex(e::String)
+ast            : to_hex(e)
+raw expr       : to_hex(e::String)
 checked expr   : to_hex<String>(e)
 evaluation:
 +--------+-----------------+--------------------+
@@ -2432,6 +2490,152 @@ evaluation (internal):
 | e      | Column(StringColumn[abc, def, databend])       |
 | Output | StringColumn[616263, 646566, 6461746162656e64] |
 +--------+------------------------------------------------+
+
+
+ast            : conv('a', 16, 10)
+raw expr       : conv('a', 16, 10)
+checked expr   : conv<String, Int64, Int64>("a", CAST<UInt8>(16_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64))
+optimized expr : "10"
+output type    : String
+output domain  : {"10"..="10"}
+output         : '10'
+
+
+ast            : conv('6E', 18, 8)
+raw expr       : conv('6E', 18, 8)
+checked expr   : conv<String, Int64, Int64>("6E", CAST<UInt8>(18_u8 AS Int64), CAST<UInt8>(8_u8 AS Int64))
+optimized expr : "172"
+output type    : String
+output domain  : {"172"..="172"}
+output         : '172'
+
+
+ast            : conv('zz', 36, 10)
+raw expr       : conv('zz', 36, 10)
+checked expr   : conv<String, Int64, Int64>("zz", CAST<UInt8>(36_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64))
+optimized expr : "1295"
+output type    : String
+output domain  : {"1295"..="1295"}
+output         : '1295'
+
+
+ast            : conv('11', 2, 36)
+raw expr       : conv('11', 2, 36)
+checked expr   : conv<String, Int64, Int64>("11", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(36_u8 AS Int64))
+optimized expr : "3"
+output type    : String
+output domain  : {"3"..="3"}
+output         : '3'
+
+
+ast            : conv(10, 10, 2)
+raw expr       : conv(10, 10, 2)
+checked expr   : conv<Int64, Int64, Int64>(CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : "1010"
+output type    : String
+output domain  : {"1010"..="1010"}
+output         : '1010'
+
+
+ast            : conv(10, 16, 10)
+raw expr       : conv(10, 16, 10)
+checked expr   : conv<Int64, Int64, Int64>(CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(16_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64))
+optimized expr : "16"
+output type    : String
+output domain  : {"16"..="16"}
+output         : '16'
+
+
+ast            : conv(15, 10, 16)
+raw expr       : conv(15, 10, 16)
+checked expr   : conv<Int64, Int64, Int64>(CAST<UInt8>(15_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(16_u8 AS Int64))
+optimized expr : "F"
+output type    : String
+output domain  : {"F"..="F"}
+output         : 'F'
+
+
+ast            : conv(-128, 10, 8)
+raw expr       : conv(-128, 10, 8)
+checked expr   : conv<Int64, Int64, Int64>(CAST<Int8>(-128_i8 AS Int64), CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(8_u8 AS Int64))
+optimized expr : "1777777777777777777600"
+output type    : String
+output domain  : {"1777777777777777777600"..="1777777777777777777600"}
+output         : '1777777777777777777600'
+
+
+ast            : conv(-17, 10, -18)
+raw expr       : conv(-17, 10, -18)
+checked expr   : conv<Int64, Int64, Int64>(CAST<Int8>(-17_i8 AS Int64), CAST<UInt8>(10_u8 AS Int64), CAST<Int8>(-18_i8 AS Int64))
+optimized expr : "-H"
+output type    : String
+output domain  : {"-H"..="-H"}
+output         : '-H'
+
+
+ast            : conv('FFFFFFFFFFFFFFFF', 16, -10)
+raw expr       : conv('FFFFFFFFFFFFFFFF', 16, -10)
+checked expr   : conv<String, Int64, Int64>("FFFFFFFFFFFFFFFF", CAST<UInt8>(16_u8 AS Int64), CAST<Int8>(-10_i8 AS Int64))
+optimized expr : "-1"
+output type    : String
+output domain  : {"-1"..="-1"}
+output         : '-1'
+
+
+ast            : conv('11', -2, 10)
+raw expr       : conv('11', -2, 10)
+checked expr   : conv<String, Int64, Int64>("11", CAST<Int8>(-2_i8 AS Int64), CAST<UInt8>(10_u8 AS Int64))
+optimized expr : "3"
+output type    : String
+output domain  : {"3"..="3"}
+output         : '3'
+
+
+ast            : conv(a, b, c)
+raw expr       : conv(a::String, b::Int64 NULL, c::Int64)
+checked expr   : conv<String NULL, Int64 NULL, Int64 NULL>(CAST<String>(a AS String NULL), b, CAST<Int64>(c AS Int64 NULL))
+evaluation:
++--------+---------------+-------------------+-----------+-------------+
+|        | a             | b                 | c         | Output      |
++--------+---------------+-------------------+-----------+-------------+
+| Type   | String        | Int64 NULL        | Int64     | String NULL |
+| Domain | {"10"..="zz"} | {2..=36} ∪ {NULL} | {10..=16} | Unknown     |
+| Row 0  | '10'          | 2                 | 10        | '2'         |
+| Row 1  | 'a'           | NULL              | 10        | NULL        |
+| Row 2  | 'zz'          | 36                | 16        | '50F'       |
++--------+---------------+-------------------+-----------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------+
+| Column | Data                                                                          |
++--------+-------------------------------------------------------------------------------+
+| a      | Column(StringColumn[10, a, zz])                                               |
+| b      | Column(NullableColumn { column: Int64([2, 16, 36]), validity: [0b_____101] }) |
+| c      | Column(Int64([10, 10, 16]))                                                   |
+| Output | NullableColumn { column: StringColumn[2, 10, 50F], validity: [0b_____101] }   |
++--------+-------------------------------------------------------------------------------+
+
+
+ast            : conv(d, 10, 2)
+raw expr       : conv(d::Int64, 10, 2)
+checked expr   : conv<Int64, Int64, Int64>(d, CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : conv<Int64, Int64, Int64>(d, 10_i64, 2_i64)
+evaluation:
++--------+-------------+--------------------------------------------------------------------+
+|        | d           | Output                                                             |
++--------+-------------+--------------------------------------------------------------------+
+| Type   | Int64       | String                                                             |
+| Domain | {-128..=16} | Unknown                                                            |
+| Row 0  | 10          | '1010'                                                             |
+| Row 1  | 16          | '10000'                                                            |
+| Row 2  | -128        | '1111111111111111111111111111111111111111111111111111111110000000' |
++--------+-------------+--------------------------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------+
+| Column | Data                                                                                        |
++--------+---------------------------------------------------------------------------------------------+
+| d      | Column(Int64([10, 16, -128]))                                                               |
+| Output | StringColumn[1010, 10000, 1111111111111111111111111111111111111111111111111111111110000000] |
++--------+---------------------------------------------------------------------------------------------+
 
 
 ast            : lpad('hi', 2, '?')
@@ -2500,7 +2704,14 @@ error:
   --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`, during run expr: `lpad('hi', CAST(-1 AS UInt64), '?')`
+  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`
+
+
+hint: no function matches signature `lpad(String, Int8, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  lpad(String, UInt64, String) :: String
+  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL, during run expr: `lpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 
@@ -2610,7 +2821,14 @@ error:
   --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`, during run expr: `rpad('hi', CAST(-1 AS UInt64), '?')`
+  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`
+
+
+hint: no function matches signature `rpad(String, Int8, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  rpad(String, UInt64, String) :: String
+  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL, during run expr: `rpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 
@@ -3594,6 +3812,33 @@ output domain  : {"bc"..="bc"}
 output         : 'bc'
 
 
+ast            : substr('abcdef', 2, 3)
+raw expr       : substr('abcdef', 2, 3)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(3_u8 AS UInt64))
+optimized expr : "bcd"
+output type    : String
+output domain  : {"bcd"..="bcd"}
+output         : 'bcd'
+
+
+ast            : substr('abcdef', -2, 2)
+raw expr       : substr('abcdef', -2, 2)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<Int8>(-2_i8 AS Int64), CAST<UInt8>(2_u8 AS UInt64))
+optimized expr : "ef"
+output type    : String
+output domain  : {"ef"..="ef"}
+output         : 'ef'
+
+
+ast            : substr('abcdef', 20, 1)
+raw expr       : substr('abcdef', 20, 1)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<UInt8>(20_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
 ast            : substr('你好世界', 3)
 raw expr       : substr('你好世界', 3)
 checked expr   : substr<String, Int64>("你好世界", CAST<UInt8>(3_u8 AS Int64))
@@ -3603,6 +3848,24 @@ output domain  : {"世界"..="世界"}
 output         : '世界'
 
 
+ast            : substr('你好世界', 3, 1)
+raw expr       : substr('你好世界', 3, 1)
+checked expr   : substr<String, Int64, UInt64>("你好世界", CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "世"
+output type    : String
+output domain  : {"世"..="世"}
+output         : '世'
+
+
+ast            : substr('a你b', 2, 1)
+raw expr       : substr('a你b', 2, 1)
+checked expr   : substr<String, Int64, UInt64>("a你b", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "你"
+output type    : String
+output domain  : {"你"..="你"}
+output         : '你'
+
+
 ast            : substr('こんにちは', 2)
 raw expr       : substr('こんにちは', 2)
 checked expr   : substr<String, Int64>("こんにちは", CAST<UInt8>(2_u8 AS Int64))
@@ -3610,6 +3873,15 @@ optimized expr : "んにちは"
 output type    : String
 output domain  : {"んにちは"..="んにちは"}
 output         : 'んにちは'
+
+
+ast            : substr('こんにちは', 2, 1)
+raw expr       : substr('こんにちは', 2, 1)
+checked expr   : substr<String, Int64, UInt64>("こんにちは", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "ん"
+output type    : String
+output domain  : {"ん"..="ん"}
+output         : 'ん'
 
 
 ast            : substr('abc', pos, len)

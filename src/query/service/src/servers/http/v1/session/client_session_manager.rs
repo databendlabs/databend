@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
@@ -113,15 +113,17 @@ impl ClientSessionManager {
         let mgr = Arc::new(Self {
             session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
             refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
-            max_idle_time: Duration::from_secs(cfg.query.http_session_timeout_secs),
+            max_idle_time: Duration::from_secs(cfg.query.common.http_session_timeout_secs),
             min_refresh_interval: Duration::from_secs(
-                (cfg.query.http_session_timeout_secs / 10).min(300),
+                (cfg.query.common.http_session_timeout_secs / 10).min(300),
             ),
             session_state: Default::default(),
         });
         GlobalInstance::set(mgr.clone());
 
-        GlobalIORuntime::instance().spawn(async move { Self::check_timeout(mgr).await });
+        GlobalControlRuntime::instance()
+            .runtime()
+            .spawn(async move { Self::check_timeout(mgr).await });
         Ok(())
     }
 

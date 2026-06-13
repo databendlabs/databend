@@ -16,8 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use arrow_schema::Field;
-use arrow_schema::Schema;
-use arrow_schema::SchemaRef;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,7 +27,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_native::read::NativeColumnsReader;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
@@ -44,17 +41,26 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) arrow_schema: SchemaRef,
-    pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
-    pub(crate) project_column_nodes: Vec<ColumnNode>,
+    pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
+    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
-    pub query_internal_columns: bool,
-    // used for mutation to update stream columns.
-    pub update_stream_columns: bool,
+    pub(crate) all_field_default_vals: Vec<Scalar>,
     pub put_cache: bool,
 
     pub original_schema: TableSchemaRef,
-    pub native_columns_reader: NativeColumnsReader,
+}
+
+#[derive(Clone)]
+pub struct BlockReadProjection {
+    pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
+}
+
+#[derive(Clone)]
+pub struct BlockReadContext {
+    ctx: Arc<dyn TableContext>,
+    operator: Operator,
+    projection: BlockReadProjection,
+    put_cache: bool,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -85,77 +91,104 @@ fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) 
 }
 
 impl BlockReader {
-    pub fn create(
+    fn project_schema_and_default_vals(
+        schema: &TableSchemaRef,
+        projection: &Projection,
+        all_field_default_vals: &[Scalar],
+    ) -> (TableSchemaRef, Vec<Scalar>) {
+        match projection {
+            Projection::Columns(indices) => {
+                let projected_schema = TableSchemaRef::new(schema.project(indices));
+                let default_vals: Vec<Scalar> = indices
+                    .iter()
+                    .map(|&i| all_field_default_vals[i].clone())
+                    .collect();
+                (projected_schema, default_vals)
+            }
+            Projection::InnerColumns(path_indices) => {
+                let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
+                let default_vals: Vec<Scalar> = path_indices
+                    .values()
+                    .map(|path| {
+                        inner_project_field_default_values(all_field_default_vals, path).unwrap()
+                    })
+                    .collect();
+                (projected_schema, default_vals)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_reader(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
-        schema: TableSchemaRef,
+        original_schema: TableSchemaRef,
+        all_field_default_vals: Vec<Scalar>,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
-        // init projected_schema and default_vals of schema.fields
-        let (projected_schema, default_vals) = match projection {
-            Projection::Columns(ref indices) => {
-                let projected_schema = TableSchemaRef::new(schema.project(indices));
-                // If projection by Columns, just calc default values by projected fields.
-                let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
-                let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
-                for field in projected_schema.fields() {
-                    default_vals.push(default_exprs_binder.get_scalar(field)?);
-                }
+        let arrow_schema = Arc::new(original_schema.as_ref().into());
+        let (projected_schema, default_vals) = Self::project_schema_and_default_vals(
+            &original_schema,
+            &projection,
+            &all_field_default_vals,
+        );
 
-                (projected_schema, default_vals)
-            }
-            Projection::InnerColumns(ref path_indices) => {
-                let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
-                let mut field_default_vals = Vec::with_capacity(schema.fields().len());
-                let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
-
-                // If projection by InnerColumns, first calc default value of all schema fields.
-                for field in schema.fields() {
-                    field_default_vals.push(default_exprs_binder.get_scalar(field)?);
-                }
-
-                // Then calc project scalars by path_indices
-                let mut default_vals = Vec::with_capacity(schema.fields().len());
-                path_indices.values().for_each(|path| {
-                    default_vals.push(
-                        inner_project_field_default_values(&field_default_vals, path).unwrap(),
-                    );
-                });
-
-                (projected_schema, default_vals)
-            }
-        };
-
-        let arrow_schema: Schema = schema.as_ref().into();
-        let native_columns_reader = NativeColumnsReader::new()?;
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
-
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&original_schema));
         let project_column_nodes: Vec<ColumnNode> = projection
             .project_column_nodes(&column_nodes)?
             .iter()
             .map(|c| (*c).clone())
             .collect();
-
-        let project_indices = Self::build_projection_indices(&project_column_nodes);
+        let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
+        let project_column_nodes = Arc::new(project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             ctx,
             operator,
             projection,
             projected_schema,
-            arrow_schema: arrow_schema.into(),
             project_indices,
             project_column_nodes,
             default_vals,
-            query_internal_columns,
-            update_stream_columns,
+            all_field_default_vals,
             put_cache,
-            original_schema: schema,
-            native_columns_reader,
+            original_schema,
         }))
+    }
+
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        operator: Operator,
+        schema: TableSchemaRef,
+        projection: Projection,
+        put_cache: bool,
+    ) -> Result<Arc<BlockReader>> {
+        let mut all_field_default_vals = Vec::with_capacity(schema.fields().len());
+        let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
+        for field in schema.fields() {
+            all_field_default_vals.push(default_exprs_binder.get_scalar(field)?);
+        }
+
+        Self::build_reader(
+            ctx,
+            operator,
+            schema,
+            all_field_default_vals,
+            projection,
+            put_cache,
+        )
+    }
+
+    pub fn change_projection(&self, projection: Projection) -> Result<Arc<BlockReader>> {
+        Self::build_reader(
+            self.ctx.clone(),
+            self.operator.clone(),
+            self.original_schema.clone(),
+            self.all_field_default_vals.clone(),
+            projection,
+            self.put_cache,
+        )
     }
 
     // Build non duplicate leaf_indices to avoid repeated read column from parquet
@@ -179,20 +212,8 @@ impl BlockReader {
         indices
     }
 
-    pub fn query_internal_columns(&self) -> bool {
-        self.query_internal_columns
-    }
-
-    pub fn update_stream_columns(&self) -> bool {
-        self.update_stream_columns
-    }
-
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
-    }
-
-    pub fn arrow_schema(&self) -> SchemaRef {
-        self.arrow_schema.clone()
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {
@@ -203,7 +224,36 @@ impl BlockReader {
         self.schema().into()
     }
 
-    pub fn report_cache_metrics<'a>(
+    pub fn operator(&self) -> Operator {
+        self.operator.clone()
+    }
+
+    pub fn read_context(&self) -> BlockReadContext {
+        BlockReadContext {
+            ctx: self.ctx.clone(),
+            operator: self.operator.clone(),
+            projection: BlockReadProjection {
+                project_indices: self.project_indices.clone(),
+            },
+            put_cache: self.put_cache,
+        }
+    }
+}
+
+impl BlockReadContext {
+    pub fn operator(&self) -> &Operator {
+        &self.operator
+    }
+
+    pub(crate) fn project_indices(&self) -> &BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
+        self.projection.project_indices.as_ref()
+    }
+
+    pub(crate) fn put_cache(&self) -> bool {
+        self.put_cache
+    }
+
+    pub(crate) fn report_cache_metrics<'a>(
         &self,
         block_read_res: &BlockReadResult,
         ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,

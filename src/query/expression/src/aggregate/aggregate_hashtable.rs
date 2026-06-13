@@ -21,24 +21,28 @@ use bumpalo::Bump;
 use databend_common_exception::Result;
 
 use super::BATCH_SIZE;
-use super::Entry;
+use super::HashIndex;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
-use super::hash_index::AdapterImpl;
-use super::hash_index::HashIndex;
+use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
-use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
+use crate::aggregate::AggregateFunctionRef;
 use crate::types::DataType;
 
+const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
+
 pub struct AggregateHashTable {
+    // Hash index entries store RowRef values into these payload pages. Any path
+    // that replaces or repartitions payload must clear or rebuild the index
+    // before probing it again.
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
@@ -73,10 +77,11 @@ impl AggregateHashTable {
         Self {
             direct_append: false,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(
+            payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
                 1 << config.initial_radix_bits,
+                config.partition_start_bit,
                 vec![arena],
             ),
             hash_index: HashIndex::with_capacity(capacity),
@@ -94,26 +99,24 @@ impl AggregateHashTable {
         need_init_entry: bool,
     ) -> Self {
         debug_assert!(capacity.is_power_of_two());
-        let entries = if need_init_entry {
-            vec![Entry::default(); capacity]
+        // if need_init_entry is false, we will directly append rows without probing hash index
+        // so we can use a dummy hash index, which is not allowed to insert any entry
+        let hash_index = if need_init_entry {
+            HashIndex::with_capacity(capacity)
         } else {
-            vec![]
+            HashIndex::dummy()
         };
         Self {
             direct_append: !need_init_entry,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(
+            payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
                 1 << config.initial_radix_bits,
+                config.partition_start_bit,
                 vec![arena],
             ),
-            hash_index: HashIndex {
-                entries,
-                count: 0,
-                capacity,
-                capacity_mask: capacity - 1,
-            },
+            hash_index,
             config,
             hash_index_resize_count: 0,
         }
@@ -234,8 +237,8 @@ impl AggregateHashTable {
 
         if self.config.partial_agg {
             // check size
-            if self.hash_index.count + BATCH_SIZE > self.hash_index.resize_threshold()
-                && self.hash_index.capacity >= self.config.max_partial_capacity
+            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
+                && self.hash_index.capacity() >= self.config.max_partial_capacity
             {
                 self.clear_ht();
             }
@@ -256,15 +259,37 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
-        if row_count + self.hash_index.count > self.hash_index.resize_threshold() {
-            self.resize(self.hash_index.capacity * 2);
+        if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
+            let new_capacity = self.next_resize_capacity();
+            self.resize(new_capacity);
         }
 
+        let mut adapter = AdapterImpl {
+            payload: &mut self.payload,
+            group_columns,
+        };
         self.hash_index
-            .probe_and_create(state, row_count, AdapterImpl {
-                payload: &mut self.payload,
-                group_columns,
-            })
+            .probe_and_create(state, row_count, &mut adapter)
+    }
+
+    fn next_resize_capacity(&self) -> usize {
+        // Use *4 for the first few resizes, then switch back to *2.
+        // SMALL_CAPACITY_RESIZE_COUNT = 4:
+        //
+        // | Quad resizes used | Equivalent double-resize steps |
+        // | 0                 | 0                              |
+        // | 1                 | 2                              |
+        // | 2                 | 4                              |
+        // | 3                 | 6                              |
+        // | 4                 | 8                              |
+        // | 5                 | 9                              |
+        // | 6                 | 10                             |
+        let current = self.hash_index.capacity();
+        if self.hash_index_resize_count < SMALL_CAPACITY_RESIZE_COUNT {
+            current * 4
+        } else {
+            current * 2
+        }
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
@@ -398,37 +423,26 @@ impl AggregateHashTable {
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
         if self.config.partial_agg {
-            if self.hash_index.capacity == self.config.max_partial_capacity {
+            let target = new_capacity.min(self.config.max_partial_capacity);
+            if target == self.hash_index.capacity() {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::with_capacity(new_capacity);
+            self.hash_index = HashIndex::with_capacity(target);
             return;
         }
 
         self.hash_index_resize_count += 1;
-        let mut hash_index = HashIndex::with_capacity(new_capacity);
 
+        let mut hash_index = HashIndex::with_capacity(new_capacity);
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {
                 for idx in 0..page.rows {
-                    let row_ptr = page.data_ptr(idx, payload.tuple_size);
+                    let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
-                    let slot = hash_index.probe_slot(hash);
-
-                    // set value
-                    let entry = hash_index.mut_entry(slot);
-                    debug_assert!(!entry.is_occupied());
-                    entry.set_hash(hash);
-                    entry.set_pointer(row_ptr);
-
-                    debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(entry.get_pointer(), row_ptr);
-                    debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash));
-
-                    hash_index.count += 1;
+                    hash_index.probe_slot_and_set(hash, row_ptr);
                 }
             }
         }

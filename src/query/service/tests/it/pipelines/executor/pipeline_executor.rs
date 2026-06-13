@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,6 +31,7 @@ use databend_common_pipeline::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
@@ -47,6 +47,7 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
     };
 
     {

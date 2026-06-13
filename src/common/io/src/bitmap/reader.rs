@@ -114,7 +114,7 @@ impl BitmapReader<'_> {
         let last_offset = reader.read_u32::<LittleEndian>()?;
 
         const ARRAY_LIMIT: usize = 4096;
-        const BITMAP_LENGTH: usize = 1024;
+        const BITMAP_LENGTH: usize = 8192;
 
         let size = 4
             + last_offset as usize

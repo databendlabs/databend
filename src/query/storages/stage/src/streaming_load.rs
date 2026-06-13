@@ -27,7 +27,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
@@ -43,9 +42,12 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::BytesBatch;
 use crate::compression::get_compression_with_path;
+use crate::read::arrow::ArrowBlockBuilder;
+use crate::read::arrow::ArrowIpcMode;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
+use crate::read::row_based::processors::DecodingTransformer;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
 use crate::transform_generating::DataBlockIterator;
@@ -76,12 +78,13 @@ pub fn build_streaming_load_pipeline(
     // since there are only one source, a few processor is fast enough and avoid both OOM and small DataBlocks.
     let max_threads = max_threads.min(4);
 
-    let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
+    let settings = settings.get_input_format_settings()?;
 
     let load_ctx = Arc::new(LoadContext::try_create(
         ctx.clone(),
         schema,
-        file_format_options_ext,
+        false,
+        settings,
         default_exprs,
         None,
         block_compact_thresholds,
@@ -93,8 +96,37 @@ pub fn build_streaming_load_pipeline(
         FileFormatParams::Parquet(parquet_file_format) => {
             build_parquet(pipeline, load_ctx, parquet_file_format)
         }
+        FileFormatParams::Arrow(format_params) => build_arrow(
+            pipeline,
+            load_ctx,
+            ArrowIpcMode::File,
+            format_params.clone(),
+        ),
+        FileFormatParams::ArrowStream(format_params) => build_arrow(
+            pipeline,
+            load_ctx,
+            ArrowIpcMode::Stream,
+            format_params.clone(),
+        ),
         _ => row_based(pipeline, load_ctx, file_format_params, max_threads),
     }
+}
+
+fn build_arrow(
+    pipeline: &mut Pipeline,
+    load_ctx: Arc<LoadContext>,
+    mode: ArrowIpcMode,
+    format_params: databend_common_meta_app::principal::ArrowFileFormatParams,
+) -> Result<()> {
+    let table_ctx = load_ctx.table_context.clone();
+    pipeline.try_add_accumulating_transformer(|| {
+        ArrowBlockBuilder::create(
+            load_ctx.clone(),
+            mode,
+            format_params.clone(),
+            table_ctx.clone(),
+        )
+    })
 }
 
 fn row_based(
@@ -111,6 +143,21 @@ fn row_based(
             let algo = get_compression_with_path(compression, "")?;
             pipeline.try_add_accumulating_transformer(|| {
                 Decompressor::try_create(load_ctx.clone(), algo)
+            })?;
+        }
+    }
+
+    let maybe_encoding = match file_format_params {
+        FileFormatParams::Csv(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone())),
+        FileFormatParams::Text(fmt) => {
+            Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+        }
+        _ => None,
+    };
+    if let Some((encoding, encoding_error_mode)) = maybe_encoding {
+        if DecodingTransformer::needs_processing(&encoding, &encoding_error_mode)? {
+            pipeline.try_add_accumulating_transformer(|| {
+                DecodingTransformer::try_create(encoding.clone(), encoding_error_mode.clone())
             })?;
         }
     }

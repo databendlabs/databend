@@ -1,0 +1,56 @@
+query T
+select to_hex(read_file('@data/csv/prefix/ab.csv'))
+----
+31
+
+query T
+select to_hex(read_file('@data', 'csv/prefix/ab.csv'))
+----
+31
+
+statement ok
+drop table if exists read_file_rel_paths
+
+statement ok
+create table read_file_rel_paths(path string)
+
+statement ok
+insert into read_file_rel_paths values
+('csv/prefix/ab.csv'),
+('csv/prefix/ab/cd.csv'),
+(NULL)
+
+query TT
+select path, to_hex(read_file('@data', path)) from read_file_rel_paths order by path
+----
+csv/prefix/ab.csv 31
+csv/prefix/ab/cd.csv 32
+NULL NULL
+
+statement ok
+drop table read_file_rel_paths
+
+statement ok
+drop table if exists read_file_paths
+
+statement ok
+create table read_file_paths(path string)
+
+statement ok
+insert into read_file_paths values
+('@data/csv/prefix/ab.csv'),
+('@data/csv/prefix/ab/cd.csv'),
+(NULL)
+
+query TT
+select path, to_hex(read_file(path)) from read_file_paths order by path
+----
+@data/csv/prefix/ab.csv 31
+@data/csv/prefix/ab/cd.csv 32
+NULL NULL
+
+statement ok
+drop table read_file_paths
+
+statement ok
+drop table if exists read_file_paths_nullable

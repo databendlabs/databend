@@ -21,8 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
 use jiff::civil::Date;
+use jiff::civil::Time;
 use jiff::fmt;
-use jiff::tz;
 use jiff::tz::TimeZone;
 
 use super::ArgType;
@@ -196,8 +196,10 @@ fn build_timestamp_tz_from_components(
             year, month, day
         ))
     })?;
+    let time = Time::new(hour as i8, minute as i8, second as i8, 0)
+        .map_err(|err| ErrorCode::BadBytes(format!("Invalid time value: {}", err)))?;
     let mut zoned = date
-        .at(hour as i8, minute as i8, second as i8, 0)
+        .to_datetime(time)
         .to_zoned(TimeZone::UTC)
         .map_err(|err| ErrorCode::BadBytes(format!("Invalid time value: {}", err)))?;
     if micro > 0 {
@@ -234,12 +236,11 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
     match time.offset() {
         None => {
             let datetime = time.to_datetime()?;
-            let timestamp = tz::offset(0).to_timestamp(datetime)?;
-            let offset = fn_tz().to_offset(timestamp);
+            let zoned = datetime.to_zoned(fn_tz().clone())?;
 
             Ok(timestamp_tz::new(
-                timestamp.as_microsecond() - (offset.seconds() as i64 * 1_000_000),
-                offset.seconds(),
+                zoned.timestamp().as_microsecond(),
+                zoned.offset().seconds(),
             ))
         }
         Some(offset) => {

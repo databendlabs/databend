@@ -78,17 +78,14 @@ async fn location_snapshot(
         if let Some(snapshot_id) = snapshot_id {
             // prepare the stream of snapshot
             let snapshot_version = tbl.snapshot_format_version(None)?;
-            let snapshot_location = tbl.meta_location_generator.gen_snapshot_location(
-                tbl.get_branch_id(),
-                &snapshot.snapshot_id,
-                snapshot_version,
-            )?;
+            let snapshot_location = tbl
+                .meta_location_generator
+                .gen_snapshot_location(&snapshot.snapshot_id, snapshot_version)?;
             let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
-                tbl.get_branch_id(),
             );
 
             // find the element by snapshot_id in stream
@@ -147,12 +144,17 @@ where
                 args.table_name.as_str(),
             )
             .await?;
-        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
+        // Don't pass limit when order_by is present - table functions can't do TopN,
+        // so limit must be applied by the upper Sort operator after ordering.
+        let limit = plan
+            .push_downs
+            .as_ref()
+            .and_then(|x| if x.order_by.is_empty() { x.limit } else { None });
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         if let Some(snapshot) = location_snapshot(tbl, args).await? {
             return T::apply(ctx, tbl, snapshot, limit).await;
         } else {
-            Ok(DataBlock::empty_with_schema(Arc::new(T::schema().into())))
+            Ok(DataBlock::empty_with_schema(&T::schema().into()))
         }
     }
 }

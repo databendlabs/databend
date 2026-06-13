@@ -20,6 +20,8 @@ mod xor8;
 
 pub use filter::Filter;
 pub use filter::FilterBuilder;
+pub use xor8::BinaryFuse32Builder;
+pub use xor8::BinaryFuse32Filter;
 pub use xor8::BlockBloomFilterIndexVersion;
 pub use xor8::BlockFilter;
 pub use xor8::BloomBuilder;

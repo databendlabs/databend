@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::types::DataType;
@@ -23,6 +22,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Exchange;
@@ -34,10 +34,12 @@ use databend_common_sql::plans::ScalarExpr;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
+use super::types::SpatialRuntimeFilterMode;
+use crate::sessions::TableContext;
 
 /// Type alias for probe keys with runtime filter information
-/// Contains: (RemoteExpr, scan_id, table_index, column_idx)
-type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>;
+/// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)
+type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>;
 
 /// Check if a data type is supported for bloom filter
 ///
@@ -61,6 +63,7 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
     matches!(
         join_type,
         JoinType::Inner
+            | JoinType::LeftSemi
             | JoinType::Right
             | JoinType::RightSemi
             | JoinType::RightAnti
@@ -91,6 +94,7 @@ pub async fn build_runtime_filter(
     build_keys: &[RemoteExpr],
     probe_keys: ProbeKeysWithRuntimeFilter,
     build_table_indexes: Vec<Option<IndexType>>,
+    spatial_modes: Vec<Option<SpatialRuntimeFilterMode>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
         return Ok(Default::default());
@@ -105,7 +109,10 @@ pub async fn build_runtime_filter(
     if build_side_data_distribution.as_ref().is_some_and(|e| {
         !matches!(
             e,
-            Exchange::Broadcast | Exchange::NodeToNodeHash(_) | Exchange::Merge
+            Exchange::Broadcast
+                | Exchange::NodeToNodeHash(_)
+                | Exchange::GlobalHash(_)
+                | Exchange::Merge
         )
     }) {
         return Ok(Default::default());
@@ -116,13 +123,32 @@ pub async fn build_runtime_filter(
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
-    for (build_key, probe_key, scan_id, _table_index, column_idx, build_table_index) in build_keys
+    for (
+        build_key,
+        probe_key,
+        scan_id,
+        _table_index,
+        column_idx,
+        is_null_equal,
+        build_table_index,
+        spatial_mode,
+    ) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
-        .filter_map(|((b, p), table_idx)| {
-            p.map(|(p, scan_id, table_index, column_idx)| {
-                (b, p, scan_id, table_index, column_idx, table_idx)
+        .zip(spatial_modes.into_iter())
+        .filter_map(|(((b, p), table_idx), spatial_mode)| {
+            p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
+                (
+                    b,
+                    p,
+                    scan_id,
+                    table_index,
+                    column_idx,
+                    is_null_equal,
+                    table_idx,
+                    spatial_mode,
+                )
             })
         })
     {
@@ -150,9 +176,13 @@ pub async fn build_runtime_filter(
             .remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
 
-        let enable_bloom_runtime_filter = is_type_supported_for_bloom_filter(&data_type);
+        let enable_bloom_runtime_filter =
+            !is_null_equal && is_type_supported_for_bloom_filter(&data_type);
 
-        let enable_min_max_runtime_filter = is_type_supported_for_min_max_filter(&data_type);
+        let enable_min_max_runtime_filter =
+            !is_null_equal && is_type_supported_for_min_max_filter(&data_type);
+
+        let enable_inlist_runtime_filter = !is_null_equal && spatial_mode.is_none();
 
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
@@ -161,8 +191,9 @@ pub async fn build_runtime_filter(
             probe_targets,
             build_table_rows,
             enable_bloom_runtime_filter,
-            enable_inlist_runtime_filter: true,
+            enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
+            spatial_mode,
         };
         filters.push(runtime_filter);
     }
@@ -193,10 +224,10 @@ fn find_probe_targets(
     s_expr: &SExpr,
     probe_key: &RemoteExpr<String>,
     probe_scan_id: usize,
-    probe_key_col_idx: IndexType,
+    probe_key_col_idx: Symbol,
 ) -> Result<Vec<(RemoteExpr<String>, usize)>> {
     let mut uf = UnionFind::new();
-    let mut column_to_remote: HashMap<IndexType, (RemoteExpr<String>, usize)> = HashMap::new();
+    let mut column_to_remote: HashMap<Symbol, (RemoteExpr<String>, usize)> = HashMap::new();
     column_to_remote.insert(probe_key_col_idx, (probe_key.clone(), probe_scan_id));
 
     let equi_conditions = collect_equi_conditions(s_expr)?;
@@ -245,7 +276,7 @@ fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
 fn scalar_to_remote_expr(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
-) -> Result<Option<(RemoteExpr<String>, usize, IndexType)>> {
+) -> Result<Option<(RemoteExpr<String>, usize, Symbol)>> {
     if scalar.used_columns().iter().all(|idx| {
         matches!(
             metadata.read().column(*idx),
@@ -271,7 +302,7 @@ fn scalar_to_remote_expr(
 }
 
 struct UnionFind {
-    parent: HashMap<IndexType, IndexType>,
+    parent: HashMap<Symbol, Symbol>,
 }
 
 impl UnionFind {
@@ -281,7 +312,7 @@ impl UnionFind {
         }
     }
 
-    fn find(&mut self, x: IndexType) -> IndexType {
+    fn find(&mut self, x: Symbol) -> Symbol {
         if !self.parent.contains_key(&x) {
             self.parent.insert(x, x);
             return x;
@@ -295,7 +326,7 @@ impl UnionFind {
         *self.parent.get(&x).unwrap()
     }
 
-    fn union(&mut self, x: IndexType, y: IndexType) {
+    fn union(&mut self, x: Symbol, y: Symbol) {
         let root_x = self.find(x);
         let root_y = self.find(y);
         if root_x != root_y {
@@ -303,9 +334,9 @@ impl UnionFind {
         }
     }
 
-    fn get_equivalence_class(&mut self, x: IndexType) -> Vec<IndexType> {
+    fn get_equivalence_class(&mut self, x: Symbol) -> Vec<Symbol> {
         let root = self.find(x);
-        let all_keys: Vec<IndexType> = self.parent.keys().copied().collect();
+        let all_keys: Vec<_> = self.parent.keys().copied().collect();
         all_keys
             .into_iter()
             .filter(|&k| self.find(k) == root)

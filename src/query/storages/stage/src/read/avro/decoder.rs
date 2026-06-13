@@ -119,8 +119,8 @@ fn date_time_to_int(schema: &mut Schema) {
 
 impl AvroDecoder {
     pub fn new(ctx: Arc<LoadContext>, params: AvroFileFormatParams) -> Self {
-        let is_rounding_mode = ctx.file_format_options_ext.is_rounding_mode;
-        let is_select = ctx.file_format_options_ext.is_select;
+        let is_rounding_mode = ctx.settings.is_rounding_mode;
+        let is_select = ctx.is_select;
         Self {
             is_rounding_mode,
             params,

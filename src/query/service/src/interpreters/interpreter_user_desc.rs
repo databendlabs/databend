@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
 use databend_common_sql::plans::DescUserPlan;
@@ -29,7 +30,7 @@ use itertools::Itertools;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct DescUserInterpreter {
@@ -64,6 +65,7 @@ impl Interpreter for DescUserInterpreter {
         let hostnames = vec![user.hostname.clone()];
         let auth_types = vec![user.auth_info.get_type().to_str().to_string()];
         let default_roles = vec![user.option.default_role().cloned().unwrap_or_default()];
+        let default_warehouses = vec![user.option.default_warehouse().cloned().unwrap_or_default()];
         let roles = vec![user.grants.roles().iter().sorted().join(", ").to_string()];
         let disableds = vec![user.option.disabled().cloned().unwrap_or_default()];
         let network_policies = vec![user.option.network_policy().cloned()];
@@ -81,17 +83,28 @@ impl Interpreter for DescUserInterpreter {
             }
         };
 
+        let public_keys = {
+            let keys = user.auth_info.get_public_keys();
+            if keys.is_empty() {
+                vec![None]
+            } else {
+                vec![Some(keys.len() as u64)]
+            }
+        };
+
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(hostnames),
             StringType::from_data(auth_types),
             StringType::from_data(default_roles),
+            StringType::from_data(default_warehouses),
             StringType::from_data(roles),
             BooleanType::from_data(disableds),
             StringType::from_opt_data(network_policies),
             StringType::from_opt_data(password_policies),
             BooleanType::from_opt_data(must_change_passwords),
             StringType::from_opt_data(workload_group),
+            UInt64Type::from_opt_data(public_keys),
         ])])
     }
 }

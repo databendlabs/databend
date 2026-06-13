@@ -34,6 +34,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -55,6 +56,7 @@ use super::WindowFuncType;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::binder::ColumnBinding;
 use crate::optimizer::ir::SExpr;
 
@@ -149,6 +151,13 @@ impl Hash for ScalarExpr {
 }
 
 impl ScalarExpr {
+    pub fn is_aggregate(&self) -> bool {
+        matches!(
+            self,
+            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)
+        )
+    }
+
     pub fn data_type(&self) -> Result<DataType> {
         Ok(self.as_expr()?.data_type().clone())
     }
@@ -250,10 +259,10 @@ impl ScalarExpr {
         (visitor.evaluable, visitor.has_nextval)
     }
 
-    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
         struct ReplaceColumnVisitor {
-            old: IndexType,
-            new: IndexType,
+            old: Symbol,
+            new: Symbol,
         }
 
         impl VisitorMut<'_> for ReplaceColumnVisitor {
@@ -272,11 +281,11 @@ impl ScalarExpr {
 
     pub fn replace_column_binding(
         &mut self,
-        old: IndexType,
+        old: Symbol,
         new_column: &ColumnBinding,
     ) -> Result<()> {
         struct ReplaceColumnBindingVisitor<'a> {
-            old: IndexType,
+            old: Symbol,
             new_column: &'a ColumnBinding,
         }
 
@@ -322,9 +331,34 @@ impl ScalarExpr {
         Ok(())
     }
 
-    pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<usize, DataType> {
+    pub fn replace_column_with_scalar(
+        &mut self,
+        old: Symbol,
+        new_scalar: &ScalarExpr,
+    ) -> Result<()> {
+        struct ReplaceColumnVisitor<'a> {
+            old: Symbol,
+            new_scalar: &'a ScalarExpr,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnVisitor<'_> {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+                if matches!(expr, ScalarExpr::BoundColumnRef(col) if col.column.index == self.old) {
+                    *expr = self.new_scalar.clone();
+                    return Ok(());
+                }
+                walk_expr_mut(self, expr)
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor { old, new_scalar };
+        visitor.visit(self)?;
+        Ok(())
+    }
+
+    pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<Symbol, DataType> {
         struct UsedColumnsVisitor {
-            columns: HashMap<IndexType, DataType>,
+            columns: HashMap<Symbol, DataType>,
             metadata: MetadataRef,
         }
 
@@ -448,6 +482,36 @@ impl ScalarExpr {
         };
         has_subquery.visit(self).unwrap();
         has_subquery.has_subquery
+    }
+
+    pub fn has_set_returning_function(&self) -> bool {
+        struct HasSetReturningFunctionVisitor {
+            has_set_returning_function: bool,
+        }
+
+        impl<'a> Visitor<'a> for HasSetReturningFunctionVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.has_set_returning_function = true;
+                    return Ok(());
+                }
+
+                for expr in &func.arguments {
+                    self.visit(expr)?;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = HasSetReturningFunctionVisitor {
+            has_set_returning_function: false,
+        };
+        visitor.visit(self).unwrap();
+        visitor.has_set_returning_function
     }
 
     pub fn collect_subquery(&self, result: &mut Vec<SubqueryExpr>) {
@@ -918,7 +982,7 @@ impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
         };
 
         Ok(AggregateFunctionSortDesc {
-            index: col.column.index,
+            index: SymbolOrOffset::Symbol(col.column.index),
             is_reuse_index: self.is_reuse_index,
             data_type: expr.data_type()?,
             nulls_first: self.nulls_first,
@@ -1038,7 +1102,7 @@ pub struct CastExpr {
     pub target_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SubqueryType {
     Any,
     All,
@@ -1060,7 +1124,7 @@ pub struct SubqueryExpr {
     pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
-    pub projection_index: Option<IndexType>,
+    pub projection_index: Option<Symbol>,
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]
     pub outer_columns: ColumnSet,
@@ -1207,6 +1271,16 @@ pub enum AsyncFunctionArgument {
     // The dictionary argument is connection URL of remote source, like Redis, MySQL ...
     // Used by `dict_get` function to connect source and read data.
     DictGetFunction(DictGetFunctionArgument),
+    // Used by `read_file` function to read stage files.
+    ReadFile(ReadFileFunctionArgument),
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct ReadFileFunctionArgument {
+    pub stage_name: Option<String>,
+    #[educe(Hash(ignore), PartialEq(ignore))]
+    pub stage_info: Option<Box<StageInfo>>,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1278,7 +1352,7 @@ impl AsyncFunctionCall {
         &self,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
@@ -1313,6 +1387,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::ReadFile(_) => {
+                Err(ErrorCode::Internal("Cannot generate read_file function"))
             }
         }
     }

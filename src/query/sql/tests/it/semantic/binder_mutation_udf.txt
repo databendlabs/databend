@@ -1,0 +1,106 @@
+=== update_where_accepts_script_udf ===
+description: A mutation filter should allow script UDFs and rewrite them before the filter is evaluated.
+sql: UPDATE t SET b = a WHERE add_one(a) > 1
+status: ok
+MergeInto:
+target_table: default.default.t
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set b = t.a (#0)]
+└── Filter
+    ├── filters: [gt(add_one(a) (#3), 1)]
+    └── UdfScript
+        ├── scalars: [add_one(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== delete_where_accepts_script_udf ===
+description: DELETE should allow script UDFs in the mutation filter.
+sql: DELETE FROM t WHERE add_one(a) > 1
+status: ok
+MergeInto:
+target_table: default.default.t
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [gt(add_one(a) (#3), 1)]
+    └── UdfScript
+        ├── scalars: [add_one(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== merge_matched_condition_accepts_script_udf ===
+description: MERGE matched conditions should allow script UDFs.
+sql: MERGE INTO t USING s ON t.a = s.a WHEN MATCHED AND add_one(s.b) > 1 THEN UPDATE SET b = add_one(s.b)
+status: ok
+MergeInto:
+target_table: default.default.t
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: gt(add_one(s.b) (#5), 1),update set b = add_one(s.b) (#5)]
+└── UdfScript
+    ├── scalars: [add_one(s.b (#1)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [s.b (#1) AS (#1)]
+        └── Join(Inner)
+            ├── build keys: [s.a (#0)]
+            ├── probe keys: [t.a (#2)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.s (#0)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.t (#1)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== merge_unmatched_accepts_script_udf ===
+description: MERGE unmatched conditions and insert values should allow script UDFs.
+sql: MERGE INTO t USING s ON t.a = s.a WHEN NOT MATCHED AND add_one(s.b) > 1 THEN INSERT (a, b) VALUES (s.a, add_one(s.b))
+status: ok
+MergeInto:
+target_table: default.default.t
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── unmatched insert: [condition: gt(add_one(s.b) (#5), 1),insert into (a,b) values(CAST(s.a (#0) AS Int32 NULL),CAST(add_one(s.b) (#5) AS Int32 NULL))]
+└── UdfScript
+    ├── scalars: [add_one(s.b (#1)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [s.b (#1) AS (#1)]
+        └── Join(RightAnti)
+            ├── build keys: [s.a (#0)]
+            ├── probe keys: [t.a (#2)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.s (#0)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.t (#1)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+

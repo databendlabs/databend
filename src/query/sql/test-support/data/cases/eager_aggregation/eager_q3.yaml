@@ -1,0 +1,15 @@
+name: "eager_q3"
+description: "Eager aggregation through subquery aggregate input"
+
+sql: |
+  SELECT o_orderkey, sum(revenue)
+      FROM (SELECT l_orderkey, sum(l_extendedprice * (1-l_discount)) as revenue
+          FROM lineitem WHERE l_returnflag = 'R' GROUP BY l_orderkey) as loss, orders
+      WHERE o_orderkey = l_orderkey
+      AND o_orderdate BETWEEN CAST('1995-05-01' as date) AND CAST('1995-05-31' as date)
+      GROUP BY o_orderkey
+
+tables:
+  customer: eager_aggregation/customer.sql
+  orders: eager_aggregation/orders.sql
+  lineitem: eager_aggregation/lineitem.sql

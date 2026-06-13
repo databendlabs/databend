@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 
 use crate::ColumnIndex;
@@ -24,8 +25,14 @@ use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::Scalar;
 use crate::Value;
+use crate::arrow::and_validities;
 use crate::arrow::bitmap_into_mut;
+use crate::types::AnyType;
 use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::StringColumn;
+use crate::types::nullable::NullableColumn;
+use crate::values::Column;
 
 pub struct FilterHelpers;
 
@@ -44,6 +51,76 @@ impl FilterHelpers {
             Value::Scalar(false) => MutableBitmap::from_len_zeroed(rows),
             Value::Column(bitmap) => bitmap_into_mut(bitmap),
         }
+    }
+
+    #[inline]
+    pub fn decode_predicate(value: Value<AnyType>) -> Value<BooleanType> {
+        match value {
+            Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => Value::Scalar(false),
+            Value::Scalar(Scalar::Boolean(true)) => Value::Scalar(true),
+            Value::Column(Column::Nullable(box NullableColumn { column, validity })) => {
+                let boolean_column = column.into_boolean().unwrap();
+                Value::Column(&boolean_column & &validity)
+            }
+            Value::Column(Column::Boolean(boolean_column)) => Value::Column(boolean_column),
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    pub fn is_all_unset_bitmap(bitmap: &Bitmap) -> bool {
+        bitmap.null_count() == bitmap.len()
+    }
+
+    #[inline]
+    pub fn finish_predicate(validity: Option<&Bitmap>, truth: bool) -> Value<AnyType> {
+        match (truth, validity) {
+            (false, _) => Value::Scalar(Scalar::Boolean(false)),
+            (true, Some(bitmap)) if bitmap.null_count() > 0 => {
+                Value::Column(Column::Boolean(bitmap.clone()))
+            }
+            (true, _) => Value::Scalar(Scalar::Boolean(true)),
+        }
+    }
+
+    #[inline]
+    pub fn split_nullable_column(column: Column) -> (Column, Option<Bitmap>) {
+        match column.into_nullable() {
+            Ok(nullable) => (nullable.column, Some(nullable.validity)),
+            Err(column) => (column, None),
+        }
+    }
+
+    #[inline]
+    pub fn split_nullable_string_column(column: Column) -> (StringColumn, Option<Bitmap>) {
+        let (column, validity) = Self::split_nullable_column(column);
+        (column.into_string().unwrap(), validity)
+    }
+
+    #[inline]
+    pub fn split_nullable_value(
+        value: Value<AnyType>,
+        data_type: &DataType,
+    ) -> (Value<AnyType>, Option<Bitmap>) {
+        match (value, data_type) {
+            (Value::Column(column), DataType::Nullable(_)) => {
+                let (column, validity) = Self::split_nullable_column(column);
+                (Value::Column(column), validity)
+            }
+            (value, _) => (value, None),
+        }
+    }
+
+    #[inline]
+    pub fn normalize_compare_values(
+        left: Value<AnyType>,
+        left_data_type: &DataType,
+        right: Value<AnyType>,
+        right_data_type: &DataType,
+    ) -> (Value<AnyType>, Value<AnyType>, Option<Bitmap>) {
+        let (left, left_validity) = Self::split_nullable_value(left, left_data_type);
+        let (right, right_validity) = Self::split_nullable_value(right, right_data_type);
+        (left, right, and_validities(left_validity, right_validity))
     }
 
     pub fn find_leveled_eq_filters<I: ColumnIndex>(

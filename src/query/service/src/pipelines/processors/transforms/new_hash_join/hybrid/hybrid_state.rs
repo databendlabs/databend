@@ -12,9 +12,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
-#[allow(dead_code)]
-pub struct HybridState {
-    grace_state: GraceHashJoinState,
+use concurrent_queue::ConcurrentQueue;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
+
+use crate::pipelines::processors::transforms::HashJoinFactory;
+use crate::pipelines::processors::transforms::HybridHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+
+pub struct HybridHashJoinState {
+    pub ctx: Arc<QueryContext>,
+
+    // Current recursion level (0 = initial)
+    pub level: usize,
+    // Maximum allowed spill level
+    pub max_level: usize,
+
+    // Factory for creating new join states
+    pub factory: Arc<HashJoinFactory>,
+
+    // Flag indicating whether spill has been triggered (for multi-thread sync)
+    pub spilled: AtomicBool,
+    // Flag indicating whether spill has ever happened for this join instance.
+    // Once set, it should never be cleared, so runtime filters stay disabled
+    // for the lifetime of this join.
+    pub ever_spilled: AtomicBool,
+
+    pub transition_queue: ConcurrentQueue<DataBlock>,
+}
+
+impl HybridHashJoinState {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        level: usize,
+        factory: Arc<HashJoinFactory>,
+    ) -> Result<Arc<HybridHashJoinState>> {
+        // On SSE4.2, fast_hash (_mm_crc32_u64) only sets the low 32 bits.
+        #[cfg(target_feature = "sse4.2")]
+        const HASH_JOIN_SPILL_MAX_LEVEL: usize = 7;
+        #[cfg(not(target_feature = "sse4.2"))]
+        const HASH_JOIN_SPILL_MAX_LEVEL: usize = 15;
+
+        let settings = ctx.get_settings();
+        let max_spill_level = settings.get_max_hash_join_spill_level()? as usize;
+        let max_level = (max_spill_level).min(HASH_JOIN_SPILL_MAX_LEVEL);
+
+        Ok(Arc::new(HybridHashJoinState {
+            ctx,
+            level,
+            max_level,
+            factory,
+            spilled: AtomicBool::new(false),
+            ever_spilled: AtomicBool::new(false),
+            transition_queue: ConcurrentQueue::unbounded(),
+        }))
+    }
+
+    pub fn can_next_layer_join(&self) -> bool {
+        self.level < self.max_level
+    }
+
+    pub fn check_spilled(&self) -> bool {
+        self.spilled.load(Ordering::Acquire)
+    }
+
+    pub fn set_spilled(&self) -> bool {
+        self.ever_spilled.store(true, Ordering::Release);
+        !self.spilled.swap(true, Ordering::AcqRel)
+    }
+
+    pub fn has_spilled_once(&self) -> bool {
+        self.ever_spilled.load(Ordering::Acquire)
+    }
+
+    pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {
+        self.factory.create_grace_state(self.level + 1)
+    }
+
+    pub fn create_hybrid_join(&self, typ: JoinType) -> Result<HybridHashJoin> {
+        self.factory.create_hybrid_join(typ, self.level + 1)
+    }
 }

@@ -25,9 +25,9 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -48,10 +48,14 @@ use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
 use super::ShowCreateTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct ReportIssueInterpreter {
@@ -82,8 +86,9 @@ impl Interpreter for ReportIssueInterpreter {
             report_context.logs.clone(),
         ));
 
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.detection_error(&mut report_context)).await?;
+        tracking_payload
+            .tracking(self.detection_error(&mut report_context))
+            .await?;
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(vec![format!("{}", report_context)]),
@@ -139,7 +144,10 @@ impl ReportIssueInterpreter {
             }
         };
 
-        let mut data_stream = match interpreter.execute(self.ctx.clone()).await {
+        let mut data_stream = match interpreter
+            .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+            .await
+        {
             Ok(data_stream) => data_stream,
             Err(error) => {
                 report_context.add_report_error(error);
@@ -345,6 +353,7 @@ impl ReportContext {
         let settings = ShowCreateQuerySettings {
             sql_dialect: Default::default(),
             force_quoted_ident: false,
+            unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: false,
             hide_options_in_show_create_table: true,
         };
@@ -379,6 +388,7 @@ impl ReportContext {
                     }
 
                     let mut table_info = table.table().get_table_info().clone();
+                    let schema = table_info.schema();
 
                     if table_info.engine() == VIEW_ENGINE || table_info.engine() == STREAM_ENGINE {
                         return Err(ErrorCode::Unimplemented(
@@ -387,8 +397,7 @@ impl ReportContext {
                     }
 
                     table_info.meta.comment = String::new();
-                    table_info.meta.field_comments =
-                        vec!["".to_string(); table_info.schema().fields.len()];
+                    table_info.meta.field_comments = vec!["".to_string(); schema.fields.len()];
                     table_info.name = mapping.get(table.name()).unwrap().clone();
                     table_info.desc = format!(
                         "{}.{}",
@@ -398,7 +407,7 @@ impl ReportContext {
 
                     let mut table_schema = TableSchema::empty();
 
-                    for field in table_info.schema().fields() {
+                    for field in schema.fields() {
                         if !mapping.contains_key(field.name()) {
                             mapping.insert(field.name().to_string(), visitor.unique_name());
                         }

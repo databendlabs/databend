@@ -35,7 +35,9 @@ use super::util::TableIdentifier;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::binder::Binder;
-use crate::binder::resolve_stage_location;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -121,17 +123,16 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
-        let schema = self.schema_project(
+        let required_values_schema = self.schema_project(
             &table.schema(),
             columns,
             &format!("{database_name}.{table_name}"),
@@ -144,7 +145,7 @@ impl Binder {
                     let new_row = bind_context
                         .exprs_to_scalar(
                             &row,
-                            &Arc::new(schema.clone().into()),
+                            &Arc::new(required_values_schema.clone().into()),
                             self.ctx.clone(),
                             &self.name_resolution_ctx,
                             self.metadata.clone(),
@@ -174,7 +175,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                schema,
+                                required_values_schema,
                                 &values_str,
                                 CopyIntoTableMode::Insert {
                                     overwrite: *overwrite,
@@ -203,6 +204,11 @@ impl Binder {
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
                 )?;
+                if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                    return Err(ErrorCode::IllegalFileFormat(
+                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                    ));
+                }
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
@@ -211,12 +217,14 @@ impl Binder {
                             ));
                         }
                         let (required_source_schema, values_consts) = if let Some(value) = value {
-                            self.prepared_values(value, &schema, settings).await?
+                            self.prepared_values(value, &required_values_schema, settings)
+                                .await?
                         } else {
-                            (schema.clone(), vec![])
+                            (required_values_schema.clone(), vec![])
                         };
 
-                        let required_values_schema: DataSchemaRef = Arc::new(schema.clone().into());
+                        let required_values_schema: DataSchemaRef =
+                            Arc::new(required_values_schema.clone().into());
 
                         let default_exprs = if file_format_params.need_field_default() {
                             Some(
@@ -246,8 +254,15 @@ impl Binder {
                                 "Insert into branch from stage is not supported yet",
                             ));
                         }
-                        let (mut stage_info, path) =
-                            resolve_stage_location(self.ctx.as_ref(), loc).await?;
+                        let (mut stage_info, path) = StageResolver::from_table_context(
+                            self.ctx.clone(),
+                            databend_common_users::UserApiProvider::instance(),
+                            databend_common_config::GlobalConfig::instance()
+                                .storage
+                                .allow_insecure,
+                        )?
+                        .resolve_stage_location(loc, StagePathAccess::Read)
+                        .await?;
                         stage_info.file_format_params = file_format_params;
 
                         let files_info = StageFilesInfo {
@@ -255,6 +270,12 @@ impl Binder {
                             files: None,
                             pattern: None,
                         };
+                        validate_stage_files_path_traversal(
+                            self.ctx.get_settings().as_ref(),
+                            &files_info.path,
+                            files_info.files.as_deref(),
+                            false,
+                        )?;
                         let options = CopyIntoTableOptions {
                             purge: true,
                             force: true,
@@ -266,7 +287,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                schema,
+                                required_values_schema,
                                 value,
                                 stage_info,
                                 files_info,
@@ -286,7 +307,7 @@ impl Binder {
             database: database_name,
             table: table_name,
             branch: branch_name,
-            schema,
+            schema: required_values_schema,
             overwrite: *overwrite,
             source: input_source?,
             table_info: None,

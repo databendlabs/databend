@@ -82,3 +82,15 @@ create table "user" (id int, name varchar /* the user name */);
 [(CREATE, "create", 0..6), (TABLE, "table", 7..12), (LiteralString, "\"user\"", 13..19), (LParen, "(", 20..21), (Ident, "id", 21..23), (INT, "int", 24..27), (Comma, ",", 27..28), (Ident, "name", 29..33), (VARCHAR, "varchar", 34..41), (RParen, ")", 61..62), (SemiColon, ";", 62..63), (EOI, "", 63..63)]
 
 
+---------- Input ----------
+/**/ select 1;
+---------- Output ---------
+[(SELECT, "select", 5..11), (LiteralInteger, "1", 12..13), (SemiColon, ";", 13..14), (EOI, "", 14..14)]
+
+
+---------- Input ----------
+/***不正常，注释后面多了个星号**/ select 1;
+---------- Output ---------
+[(SELECT, "select", 47..53), (LiteralInteger, "1", 54..55), (SemiColon, ";", 55..56), (EOI, "", 56..56)]
+
+

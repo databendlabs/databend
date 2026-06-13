@@ -18,8 +18,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_io::dedup_file_locations;
 
 // TODO investigate this
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
@@ -115,4 +116,48 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
     check_files_left(&ctx, storage_root, "default", "t1").await?;
 
     Ok(())
+}
+
+/// Verifies that dedup_file_locations correctly removes duplicates and reports samples.
+#[test]
+fn test_dedup_file_locations() {
+    // Simulate the vacuum2 scenario: bloom index paths generated from blocks
+    // with and without the 'h' prefix map to the same location.
+    let mut locations = vec![
+        "548052/604310/_i_b_v2/019bdabd0292702a96f51f3b3ea64335_v4.parquet".to_string(),
+        "548052/604310/_i_b_v2/019bdabd02927061af2ed18c2562b79e_v4.parquet".to_string(),
+        "548052/604310/_i_b_v2/019c0df29e8a7016a6a1be466e094ec3_v4.parquet".to_string(),
+        // Duplicates (same paths appearing again)
+        "548052/604310/_i_b_v2/019bdabd0292702a96f51f3b3ea64335_v4.parquet".to_string(),
+        "548052/604310/_i_b_v2/019bdabd02927061af2ed18c2562b79e_v4.parquet".to_string(),
+    ];
+
+    let (duplicates, samples) = dedup_file_locations(&mut locations);
+
+    assert_eq!(duplicates, 2);
+    assert_eq!(locations.len(), 3);
+    assert_eq!(samples.len(), 2);
+    assert_eq!(
+        samples[0],
+        "548052/604310/_i_b_v2/019bdabd0292702a96f51f3b3ea64335_v4.parquet"
+    );
+    assert_eq!(
+        samples[1],
+        "548052/604310/_i_b_v2/019bdabd02927061af2ed18c2562b79e_v4.parquet"
+    );
+}
+
+#[test]
+fn test_dedup_file_locations_no_duplicates() {
+    let mut locations = vec![
+        "a/b/file1.parquet".to_string(),
+        "a/b/file2.parquet".to_string(),
+        "a/b/file3.parquet".to_string(),
+    ];
+
+    let (duplicates, samples) = dedup_file_locations(&mut locations);
+
+    assert_eq!(duplicates, 0);
+    assert_eq!(locations.len(), 3);
+    assert!(samples.is_empty());
 }

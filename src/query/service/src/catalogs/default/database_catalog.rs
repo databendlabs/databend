@@ -22,7 +22,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -46,6 +45,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -83,6 +84,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -98,6 +100,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -116,9 +119,9 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use log::info;
 
@@ -126,6 +129,7 @@ use super::super::merge_options;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::default::SessionCatalog;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 use crate::table_functions::UDTFTable;
@@ -404,6 +408,76 @@ impl Catalog for DatabaseCatalog {
         }
         self.mutable_catalog
             .get_table(tenant, db_name, table_name)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+        include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        self.mutable_catalog
+            .get_table_branch_with_expire_ctl(
+                tenant,
+                db_name,
+                table_name,
+                branch_name,
+                include_expired,
+            )
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.mutable_catalog.create_table_tag(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.mutable_catalog.drop_table_tag(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_tag(
+        &self,
+        table_id: u64,
+        tag_name: &str,
+        include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        self.mutable_catalog
+            .get_table_tag(table_id, tag_name, include_expired)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        self.mutable_catalog.list_table_tags(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            return Ok(tables);
+        }
+        self.mutable_catalog
+            .mget_tables(tenant, db_name, table_names)
             .await
     }
 
@@ -808,7 +882,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -830,7 +904,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RefreshSelection {
@@ -35,6 +38,25 @@ pub struct RefreshVirtualColumnPlan {
 
 impl RefreshVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "refreshed_blocks",
+            DataType::Number(NumberDataType::UInt64),
+        )]))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumVirtualColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl VacuumVirtualColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "removed_files",
+            DataType::Number(NumberDataType::UInt64),
+        )]))
     }
 }

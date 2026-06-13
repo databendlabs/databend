@@ -28,6 +28,8 @@ use crate::core::Processor;
 #[async_trait]
 pub trait AsyncSink: Send {
     const NAME: &'static str;
+    const CALL_ON_START_ON_ERROR: bool = true;
+    const CALL_ON_FINISH_ON_ERROR: bool = true;
 
     #[async_backtrace::framed]
     async fn on_start(&mut self) -> Result<()> {
@@ -77,11 +79,11 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
                         let called_on_start = self.called_on_start;
                         let called_on_finish = self.called_on_finish;
                         async move {
-                            if !called_on_start {
+                            if !called_on_start && T::CALL_ON_START_ON_ERROR {
                                 let _ = inner.on_start().await;
                             }
 
-                            if !called_on_finish {
+                            if !called_on_finish && T::CALL_ON_FINISH_ON_ERROR {
                                 let _ = inner.on_finish().await;
                             }
                         }

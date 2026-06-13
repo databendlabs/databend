@@ -27,7 +27,8 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct CreateRoleInterpreter {
@@ -70,7 +71,7 @@ impl Interpreter for CreateRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
         user_mgr
-            .add_role(
+            .create_role(
                 &tenant,
                 RoleInfo::new(&role_name, plan.comment),
                 &plan.create_option,

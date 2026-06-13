@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -20,7 +21,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -33,11 +33,8 @@ use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::types::DataType;
-use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::RowPtr;
-use databend_common_sql::ColumnSet;
+use databend_common_sql::Symbol;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::RwLock;
@@ -50,8 +47,11 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sessions::QueryContext;
-use crate::sql::IndexType;
+use crate::sessions::TableContextSettings;
 
 pub type UniqueSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
 pub type UniqueSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;
@@ -74,6 +74,7 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey, const UNIQU
 
 pub enum HashJoinHashTable {
     Null,
+    NestedLoop(Vec<DataBlock>),
     Serializer(SerializerHashJoinHashTable),
     UniqueSerializer(UniqueSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
@@ -142,7 +143,7 @@ pub struct HashJoinState {
 
     /// Build side cache info.
     /// A HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
-    pub(crate) column_map: HashMap<usize, usize>,
+    pub(crate) column_map: HashMap<Symbol, usize>,
     // The index of the next cache block to be read.
     pub(crate) next_cache_block_index: AtomicUsize,
 }
@@ -151,12 +152,12 @@ impl HashJoinState {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         mut build_schema: DataSchemaRef,
-        build_projections: &ColumnSet,
+        build_projections: &BTreeSet<usize>,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
-        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+        build_side_cache_info: Option<(usize, HashMap<Symbol, usize>)>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -295,7 +296,7 @@ impl HashJoinState {
         build_state.generation_state.chunks.len()
     }
 
-    pub fn get_cached_columns(&self, column_index: usize) -> Vec<BlockEntry> {
+    pub fn get_cached_columns(&self, column_index: Symbol) -> Vec<BlockEntry> {
         let index = self.column_map.get(&column_index).unwrap();
         let build_state = unsafe { &*self.build_state.get() };
         let columns = build_state
@@ -330,15 +331,11 @@ impl HashJoinState {
         num_rows: &usize,
     ) -> Result<DataBlock> {
         if *num_rows != 0 {
-            let data_block = DataBlock::take_column_vec(
-                build_columns,
-                build_columns_data_type,
-                row_ptrs,
-                row_ptrs.len(),
-            );
+            let data_block =
+                DataBlock::take_column_vec(build_columns, build_columns_data_type, row_ptrs);
             Ok(data_block)
         } else {
-            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
+            Ok(DataBlock::empty_with_schema(&self.build_schema))
         }
     }
 }

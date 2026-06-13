@@ -17,6 +17,7 @@ databend-common-exception = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 
 [build-dependencies]
 

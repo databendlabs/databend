@@ -19,7 +19,6 @@ use std::time::Instant;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -38,6 +37,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -68,6 +69,10 @@ impl TransformAggregateSpillWriter {
             location_prefix,
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: ctx
+                .get_settings()
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
         };
 
         let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
@@ -194,11 +199,7 @@ pub fn agg_spilling_aggregate_payload(
     let mut rows = 0;
     let mut buckets_count = 0;
     let location = spiller.create_unique_location();
-    for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-        if payload.len() == 0 {
-            continue;
-        }
-
+    for (bucket, payload) in partitioned_payload.into_non_empty_bucket_payloads() {
         let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
         rows += data_block.num_rows();
         buckets_count += 1;

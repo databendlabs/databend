@@ -32,7 +32,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
@@ -40,6 +39,7 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table_context::TableContext;
@@ -52,6 +52,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
@@ -60,9 +61,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
-use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -77,10 +76,13 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -95,6 +97,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -113,16 +116,17 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
-use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_PAGE_BYTES;
+use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -138,7 +142,7 @@ use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
-use crate::statistics::Trim;
+use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
 #[derive(Clone)]
@@ -146,11 +150,11 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
+    pub(crate) bloom_index_type: BloomIndexType,
     pub(crate) approx_distinct_cols: ApproxDistinctColumns,
 
     pub(crate) operator: Operator,
@@ -160,7 +164,6 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
-    pub(crate) table_branch: Option<BranchInfo>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -188,19 +191,29 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
-        let cluster_key_meta = table_info.cluster_key();
-        let (mut operator, table_type) = match table_info.db_type {
+        let (mut operator, table_type) = match table_info.db_type.clone() {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
-                        // Special handling for history tables.
-                        // Since history tables storage params are fully generated from config,
-                        // we can safely allow credential chain.
-                        let sp = allow_system_history_credential_chain(&table_info, sp);
-                        let operator = init_operator(&sp)?;
+                        // Special handling for history tables. Since history
+                        // table storage params are fully generated from server
+                        // config, we both allow the credential chain and treat
+                        // the operator as trusted (skipping the request-time
+                        // endpoint egress policy).
+                        let is_system_history = is_system_history_table(&table_info);
+                        let sp = if is_system_history {
+                            allow_credential_chain_for_s3(sp)
+                        } else {
+                            sp
+                        };
+                        let operator = if is_system_history {
+                            init_operator(&sp)?
+                        } else {
+                            init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?
+                        };
 
                         let table_meta_options = &table_info.meta.options;
                         let table_type = if Self::is_table_attached(table_meta_options) {
@@ -263,6 +276,11 @@ impl FuseTable {
             .get(OPT_KEY_BLOOM_INDEX_COLUMNS)
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
+        let bloom_index_type = table_info
+            .options()
+            .get(OPT_KEY_BLOOM_INDEX_TYPE)
+            .and_then(|s| s.parse::<BloomIndexType>().ok())
+            .unwrap_or_default();
 
         let approx_distinct_cols = table_info
             .options()
@@ -280,17 +298,16 @@ impl FuseTable {
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator,
-            cluster_key_meta,
             bloom_index_cols,
+            bloom_index_type,
             approx_distinct_cols,
             operator,
             data_metrics,
-            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            storage_format: FuseStorageFormat::from_table_option(storage_format.as_str()),
             segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
-            table_branch: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
@@ -300,9 +317,11 @@ impl FuseTable {
         seq: u64,
         table_meta: TableMeta,
         storage_class: S3StorageClass,
+        desc: &str,
     ) -> Result<Box<FuseTable>> {
         let table_info = TableInfo {
             ident: TableIdent { table_id: id, seq },
+            desc: desc.to_string(),
             meta: table_meta,
             ..Default::default()
         };
@@ -318,38 +337,48 @@ impl FuseTable {
         }
     }
 
-    pub fn is_native(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
-    }
-
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, DEFAULT_ROW_PER_PAGE);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let enable_parquet_dictionary_encoding =
             self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, true);
 
+        let data_page_rows = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_PAGE_ROWS)
+            .and_then(|v| v.parse::<usize>().ok());
+        let data_page_bytes = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
+            .and_then(|v| v.parse::<usize>().ok());
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
-            max_page_size,
+            bloom_index_type: self.bloom_index_type,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            data_page_rows,
+            data_page_bytes,
+            col_stats_truncate_lens: self
+                .table_info
+                .meta
+                .field_stats_truncate_len
+                .iter()
+                .map(|(&k, &v)| (k, v as usize))
+                .collect(),
         }
     }
 
-    /// Get max page size.
-    /// For native storage format.
-    pub fn get_max_page_size(&self) -> Option<usize> {
-        match self.storage_format {
-            FuseStorageFormat::Parquet => None,
-            FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
-        }
+    pub fn enable_virtual_column(&self) -> bool {
+        self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
@@ -441,10 +470,6 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
-        if let Some(branch) = self.table_branch.as_ref() {
-            return Some(branch.info.loc.clone());
-        }
-
         let options = self.table_info.options();
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -476,14 +501,6 @@ impl FuseTable {
         &self.operator
     }
 
-    pub fn get_branch_id(&self) -> Option<u64> {
-        self.table_branch.as_ref().map(|v| v.branch_id())
-    }
-
-    pub fn get_branch_name(&self) -> Option<&str> {
-        self.table_branch.as_ref().map(|v| v.branch_name())
-    }
-
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
@@ -497,12 +514,12 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
-    pub fn cluster_key_str(&self) -> Option<&String> {
-        self.cluster_key_meta.as_ref().map(|(_, key)| key)
+    pub fn cluster_key_str(&self) -> Option<&str> {
+        self.table_info.meta.cluster_key_str()
     }
 
     pub fn cluster_key_id(&self) -> Option<u32> {
-        self.cluster_key_meta.clone().map(|v| v.0)
+        self.table_info.meta.cluster_key_id()
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
@@ -514,7 +531,7 @@ impl FuseTable {
         }
 
         let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys(ctx.clone()).unwrap();
+        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
         let cluster_keys = exprs
             .iter()
@@ -533,6 +550,10 @@ impl FuseTable {
         self.bloom_index_cols.clone()
     }
 
+    pub fn bloom_index_type(&self) -> BloomIndexType {
+        self.bloom_index_type
+    }
+
     pub fn approx_distinct_cols(&self) -> ApproxDistinctColumns {
         self.approx_distinct_cols.clone()
     }
@@ -545,7 +566,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys(ctx.clone()) else {
+        let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
         let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
@@ -645,6 +666,28 @@ impl FuseTable {
 
     pub fn get_storage_format(&self) -> FuseStorageFormat {
         self.storage_format
+    }
+
+    /// Reject any data-touching operation on a table whose storage format is no
+    /// longer supported (e.g. the removed `native` format). Such tables can
+    /// still be listed and dropped, but cannot be read from, written to, or
+    /// compacted. The error carries the fully-qualified table name and the
+    /// original storage format string for diagnostics.
+    pub fn check_format_supported(&self) -> Result<()> {
+        if matches!(self.storage_format, FuseStorageFormat::Unsupported) {
+            let format = self
+                .table_info
+                .options()
+                .get(OPT_KEY_STORAGE_FORMAT)
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "table {} uses storage_format '{}' which is no longer supported. \
+                 The table can be dropped, but cannot be queried, written to, or compacted.",
+                self.table_info.desc, format
+            )));
+        }
+        Ok(())
     }
 
     pub fn get_storage_prefix(&self) -> &str {
@@ -838,6 +881,12 @@ impl FuseTable {
                 .cluster_type()
                 .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
     }
+
+    pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {
+        let mut new_table = self.clone();
+        new_table.table_info.meta.schema = schema;
+        Arc::new(new_table)
+    }
 }
 
 #[async_trait::async_trait]
@@ -854,10 +903,6 @@ impl Table for FuseTable {
         &self.table_info
     }
 
-    fn get_table_branch(&self) -> Option<&BranchInfo> {
-        self.table_branch.as_ref()
-    }
-
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
         Some(self.data_metrics.clone())
     }
@@ -867,7 +912,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        !matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_column_projection(&self) -> bool {
@@ -887,7 +932,7 @@ impl Table for FuseTable {
     }
 
     fn cluster_key_meta(&self) -> Option<ClusterKey> {
-        self.cluster_key_meta.clone()
+        self.table_info.cluster_key()
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -920,7 +965,27 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    async fn read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        dry_run: bool,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_format_supported()?;
+        self.do_read_partitions_with_reusable_pruned_metas(
+            ctx,
+            push_downs,
+            dry_run,
+            reusable_pruned_metas,
+        )
+        .await
     }
 
     #[fastrace::trace]
@@ -931,6 +996,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
@@ -940,6 +1006,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
@@ -1046,39 +1113,19 @@ impl Table for FuseTable {
                 }
             }
             _ => {
-                if self.table_branch.is_some() {
-                    let Some(ss) = self.read_table_snapshot().await? else {
-                        return Ok(None);
-                    };
-                    let stats = &ss.summary;
-                    TableStatistics {
-                        num_rows: Some(stats.row_count),
-                        data_size: Some(stats.uncompressed_byte_size),
-                        data_size_compressed: Some(stats.compressed_byte_size),
-                        index_size: Some(stats.index_size),
-                        bloom_index_size: stats.bloom_index_size,
-                        ngram_index_size: stats.ngram_index_size,
-                        inverted_index_size: stats.inverted_index_size,
-                        vector_index_size: stats.vector_index_size,
-                        virtual_column_size: stats.virtual_column_size,
-                        number_of_blocks: Some(stats.block_count),
-                        number_of_segments: Some(ss.segments.len() as u64),
-                    }
-                } else {
-                    let s = &self.table_info.meta.statistics;
-                    TableStatistics {
-                        num_rows: Some(s.number_of_rows),
-                        data_size: Some(s.data_bytes),
-                        data_size_compressed: Some(s.compressed_data_bytes),
-                        index_size: Some(s.index_data_bytes),
-                        bloom_index_size: s.bloom_index_size,
-                        ngram_index_size: s.ngram_index_size,
-                        inverted_index_size: s.inverted_index_size,
-                        vector_index_size: s.vector_index_size,
-                        virtual_column_size: s.virtual_column_size,
-                        number_of_blocks: s.number_of_blocks,
-                        number_of_segments: s.number_of_segments,
-                    }
+                let s = &self.table_info.meta.statistics;
+                TableStatistics {
+                    num_rows: Some(s.number_of_rows),
+                    data_size: Some(s.data_bytes),
+                    data_size_compressed: Some(s.compressed_data_bytes),
+                    index_size: Some(s.index_data_bytes),
+                    bloom_index_size: s.bloom_index_size,
+                    ngram_index_size: s.ngram_index_size,
+                    inverted_index_size: s.inverted_index_size,
+                    vector_index_size: s.vector_index_size,
+                    virtual_column_size: s.virtual_column_size,
+                    number_of_blocks: s.number_of_blocks,
+                    number_of_segments: s.number_of_segments,
                 }
             }
         };
@@ -1191,16 +1238,29 @@ impl Table for FuseTable {
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
+        let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
         let r = reduced
             .into_iter()
             .map(|(k, v)| {
+                let truncate_len = col_stats_truncate_lens
+                    .get(&k)
+                    .map(|&n| n as usize)
+                    .unwrap_or(STATS_STRING_PREFIX_LEN);
+                let min_may_be_truncated = match &v.min {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
+                let max_may_be_truncated = match &v.max {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
                 (k, ColumnRange {
                     min: Bound {
-                        may_be_truncated: v.min.may_be_trimmed(),
+                        may_be_truncated: min_may_be_truncated,
                         value: v.min,
                     },
                     max: Bound {
-                        may_be_truncated: v.max.may_be_trimmed(),
+                        may_be_truncated: max_may_be_truncated,
                         value: v.max,
                     },
                 })
@@ -1217,7 +1277,13 @@ impl Table for FuseTable {
         navigation: &TimeNavigation,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(ctx, point).await?),
+            TimeNavigation::TimeTravel { point, no_check } => {
+                if *no_check {
+                    Ok(self.navigate_to_point_unchecked(ctx, point).await?)
+                } else {
+                    Ok(self.navigate_to_point(ctx, point).await?)
+                }
+            }
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -1236,16 +1302,6 @@ impl Table for FuseTable {
                 Ok(Arc::new(end_point))
             }
         }
-    }
-
-    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
-        let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
-        let mut new_table = self.clone();
-        new_table.table_branch = Some(BranchInfo {
-            name: branch_name.to_string(),
-            info: snapshot_ref.clone(),
-        });
-        Ok(Arc::new(new_table))
     }
 
     #[async_backtrace::framed]
@@ -1305,6 +1361,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: Option<usize>,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_compact_segments(ctx, limit).await
     }
 
@@ -1314,17 +1371,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
         self.do_compact_blocks(ctx, limits).await
-    }
-
-    #[async_backtrace::framed]
-    async fn recluster(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
-    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
     }
 
     #[async_backtrace::framed]
@@ -1333,29 +1381,16 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_revert_to(ctx, point).await
     }
 
     fn support_prewhere(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_index(&self) -> bool {
         true
-    }
-
-    fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
-            // ignore persistent system tables {
-            if let Ok(database_name) = self.table_info.database_name() {
-                if database_name == "persistent_system" {
-                    return false;
-                }
-            }
-            true
-        } else {
-            false
-        }
     }
 
     fn result_can_be_cached(&self) -> bool {
@@ -1363,10 +1398,7 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_branch
-            .as_ref()
-            .is_some_and(|v| v.branch_type() == SnapshotRefType::Tag)
-            || self.table_type.is_readonly()
+        self.table_type.is_readonly()
     }
 
     fn use_own_sample_block(&self) -> bool {
@@ -1446,21 +1478,90 @@ pub enum RetentionPolicy {
     ByNumOfSnapshotsToKeep(usize),
 }
 
-fn allow_system_history_credential_chain(
-    table_info: &TableInfo,
-    storage_params: StorageParams,
-) -> StorageParams {
+/// Returns true if `table_info` belongs to the `system_history` database.
+///
+/// `system_history` storage params are fully generated from server config, so
+/// callers can treat them as trusted (e.g. allow the AWS credential chain and
+/// skip the user-SQL endpoint egress policy).
+fn is_system_history_table(table_info: &TableInfo) -> bool {
+    table_info
+        .database_name()
+        .is_ok_and(|db_name| db_name.eq_ignore_ascii_case("system_history"))
+}
+
+/// Force-enable the AWS credential chain on S3 storage params when it has not
+/// been set explicitly.
+///
+/// The `allow_credential_chain` flag is not persisted through meta proto
+/// conversion, so for storage params that originate from server config (such
+/// as `system_history` tables) we have to re-apply the default at load time;
+/// otherwise EC2/IRSA-only deployments would lose access to the history bucket
+/// after a round-trip through meta.
+fn allow_credential_chain_for_s3(storage_params: StorageParams) -> StorageParams {
     let mut sp = storage_params;
-    let Ok(db_name) = table_info.database_name() else {
-        return sp;
-    };
-    if !db_name.eq_ignore_ascii_case("system_history") {
-        return sp;
-    }
-    if let StorageParams::S3(cfg) = &mut sp {
-        if cfg.allow_credential_chain.is_none() {
-            cfg.allow_credential_chain = Some(true);
-        }
+    if let StorageParams::S3(cfg) = &mut sp
+        && cfg.allow_credential_chain.is_none()
+    {
+        cfg.allow_credential_chain = Some(true);
     }
     sp
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::DatabaseType;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::allow_credential_chain_for_s3;
+    use super::is_system_history_table;
+
+    fn table_info_with_db(db_name: &str) -> TableInfo {
+        // database_name() requires a FUSE engine.
+        let mut meta = TableMeta {
+            storage_params: Some(StorageParams::Memory),
+            ..Default::default()
+        };
+        meta.engine = "FUSE".to_string();
+        TableInfo {
+            ident: TableIdent::new(0, 0),
+            desc: format!("'{}'.'{}'", db_name, "t"),
+            name: "t".to_string(),
+            meta,
+            db_type: DatabaseType::NormalDB,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_matches_case_insensitively() {
+        for db in &["system_history", "SYSTEM_HISTORY", "System_History"] {
+            let info = table_info_with_db(db);
+            assert!(
+                is_system_history_table(&info),
+                "'{db}' should be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_rejects_other_dbs() {
+        // These database names must NOT be treated as system_history.
+        for db in &["user_db", "system_history_backup", "SYSTEM", "default"] {
+            let info = table_info_with_db(db);
+            assert!(
+                !is_system_history_table(&info),
+                "db '{db}' must not be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_allow_credential_chain_for_s3_is_noop_for_non_s3() {
+        let sp = StorageParams::Memory;
+        let result = allow_credential_chain_for_s3(sp.clone());
+        assert_eq!(result, sp);
+    }
 }

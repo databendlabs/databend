@@ -161,6 +161,21 @@ select 'a%b_c\d' like 'a!%b!_c!\\d' escape '!'
 ----
 1
 
+query B
+select 'ababac' like 'abab%%%%%'
+----
+1
+
+query B
+select 'zzabab' like '%%%%abab'
+----
+1
+
+query B
+select '' like '%%%%%'
+----
+1
+
 query TBBBBBB
 select ('PROMO' || number::string) a, a like 'PROMO%',
 	a < 'PROMO1', a > 'PROMO1',

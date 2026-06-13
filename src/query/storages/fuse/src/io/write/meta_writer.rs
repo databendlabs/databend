@@ -142,6 +142,8 @@ mod tests {
                     Statistics::default(),
                     vec![],
                     None,
+                    None,
+                    None,
                     // Dummy timestamps for test
                     TableMetaTimestamps::new(None, Duration::hours(1)),
                 )
@@ -159,6 +161,8 @@ mod tests {
             TableSchema::default(),
             Statistics::default(),
             vec![],
+            None,
+            None,
             None,
             // Dummy timestamps for test
             TableMetaTimestamps::new(None, Duration::hours(1)),

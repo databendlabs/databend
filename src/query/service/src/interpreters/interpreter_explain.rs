@@ -22,14 +22,12 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::always_callback;
@@ -50,7 +48,7 @@ use serde_json;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter::on_execution_finished;
+use crate::interpreters::QueryFinishHooks;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::physical_plans::FormatContext;
@@ -66,6 +64,12 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
@@ -298,7 +302,7 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Raw
             | ExplainKind::Optimized
             | ExplainKind::Decorrelated
-            | ExplainKind::Perf => {
+            | ExplainKind::Perf { .. } => {
                 unreachable!()
             }
         };
@@ -343,10 +347,10 @@ impl ExplainInterpreter {
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
         if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
+            && self.ctx.result_cache_state().cacheable()
             && formatted_ast.is_some()
         {
-            let extras = self.ctx.get_cache_key_extras();
+            let extras = self.ctx.result_cache_state().cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()
             } else {
@@ -357,6 +361,7 @@ impl ExplainInterpreter {
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
+                formatted_ast.as_ref().unwrap(),
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -458,7 +463,7 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        let query_profiles = self.execute_and_get_profiles(build_res).await?;
 
         Ok(GraphicalProfiles {
             query_id: query_ctx.get_id(),
@@ -483,7 +488,7 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        let query_profiles = self.execute_and_get_profiles(build_res).await?;
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
@@ -515,7 +520,7 @@ impl ExplainInterpreter {
                     runtime_filter_reports: runtime_filter_reports.clone(),
                 };
                 let formatter = plan.formatter()?;
-                let format_node = formatter.format(&mut context)?;
+                let format_node = formatter.dispatch(&mut context)?;
                 format_node.format_pretty()?
             }
         };
@@ -533,7 +538,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    fn execute_and_get_profiles(
+    async fn execute_and_get_profiles(
         &self,
         mut build_res: PipelineBuildResult,
     ) -> Result<HashMap<u32, PlanProfile>> {
@@ -541,23 +546,21 @@ impl ExplainInterpreter {
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let ctx = self.ctx.clone();
-        build_res
-            .main_pipeline
-            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                on_execution_finished(info, ctx)
-            }));
+        build_res.main_pipeline.set_on_finished(always_callback(
+            QueryFinishHooks::nested_with_hooks().into_callback(ctx.clone()),
+        ));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
                 let mut pipelines = build_res.sources_pipelines;
                 pipelines.push(build_res.main_pipeline);
 
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-                executor.execute()?;
+                executor.execute().await?;
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
-                while (executor.pull_data()?).is_some() {}
+                while (executor.pull_data().await?).is_some() {}
             }
         }
         Ok(self

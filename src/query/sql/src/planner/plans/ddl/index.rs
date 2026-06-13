@@ -13,13 +13,19 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use databend_common_ast::ast::TableIndexType;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::plans::Plan;
@@ -84,4 +90,13 @@ pub struct RefreshTableIndexPlan {
     pub table: String,
     pub index_name: String,
     pub segment_locs: Option<Vec<Location>>,
+}
+
+impl RefreshTableIndexPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "refreshed_blocks",
+            DataType::Number(NumberDataType::UInt64),
+        )]))
+    }
 }

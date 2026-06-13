@@ -17,7 +17,6 @@
 #![allow(dead_code)]
 #![recursion_limit = "256"]
 
-pub mod count;
 mod metrics;
 
 pub type VecLabels = Vec<(&'static str, String)>;

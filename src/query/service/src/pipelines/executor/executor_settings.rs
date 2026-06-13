@@ -15,9 +15,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_catalog::table_context::TableContext;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+
+use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {
@@ -26,6 +28,7 @@ pub struct ExecutorSettings {
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
+    pub perf_event_groups: Vec<Vec<PerfEvent>>,
 }
 
 impl ExecutorSettings {
@@ -35,7 +38,10 @@ impl ExecutorSettings {
         let max_threads = settings.get_max_threads()?;
         let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
 
-        let config_enable_queries_executor = GlobalConfig::instance().query.enable_queries_executor;
+        let config_enable_queries_executor = GlobalConfig::instance()
+            .query
+            .common
+            .enable_queries_executor;
         let setting_use_legacy_query_executor = settings.get_use_legacy_query_executor()?;
         // If `use_legacy_query_executor` is set to 1, we disable the queries executor
         // Otherwise, we all follow configuration
@@ -51,6 +57,7 @@ impl ExecutorSettings {
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),
+            perf_event_groups: ctx.get_perf_config().event_groups,
         })
     }
 }

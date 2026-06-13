@@ -88,6 +88,7 @@ use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::timestamp_tz::TimestampTzType;
 pub use self::tuple::*;
 pub use self::variant::VariantType;
 pub use self::vector::VectorColumn;
@@ -839,15 +840,9 @@ pub trait ReturnType: ValueType {
         Self::build_column(builder)
     }
 
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        generics: &GenericMap,
-    ) -> Self::Column {
-        let mut col = Self::create_builder(iter.size_hint().0, generics);
-        for item in iter {
-            Self::push_item(&mut col, item);
-        }
-        Self::build_column(col)
+    fn full_domain_with_type(data_type: &DataType) -> Self::Domain {
+        let domain = Domain::full(data_type);
+        Self::try_downcast_domain(&domain).unwrap()
     }
 }
 

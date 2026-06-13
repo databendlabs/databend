@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use clap::Args;
-use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
+use databend_meta::raft_store::config::RaftConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Args)]
@@ -192,6 +192,21 @@ impl From<ImportArgs> for RaftConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
+pub struct FilterTenantArgs {
+    /// Tenant name to keep in the exported dump.
+    #[clap(long)]
+    pub tenant: String,
+
+    /// Input ndjson export file. If empty, read from stdin.
+    #[clap(long, default_value = "")]
+    pub input: String,
+
+    /// Output ndjson export file. If empty, write to stdout.
+    #[clap(long, default_value = "")]
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
 pub struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,
@@ -222,6 +237,10 @@ pub struct ListFeatures {
 pub struct BenchArgs {
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,
+
+    /// Maximum number of connections to create (default: 10000)
+    #[clap(long, default_value = "10000")]
+    pub num: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
@@ -301,4 +320,12 @@ pub struct DumpRaftLogWalArgs {
     /// The dir to store persisted meta state, e.g., `.databend/meta1`
     #[clap(long)]
     pub raft_dir: String,
+
+    /// Decode protobuf-encoded values in UpsertKV and Transaction operations
+    #[clap(short = 'V', long, default_value_t = false)]
+    pub decode_values: bool,
+
+    /// Show raw protobuf bytes for values in UpsertKV and Transaction operations
+    #[clap(short = 'R', long, default_value_t = false)]
+    pub raw: bool,
 }

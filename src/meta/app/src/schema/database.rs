@@ -20,7 +20,8 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_types::SeqV;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::SeqV;
 
 use super::CreateOption;
 use crate::KeyWithTenant;
@@ -36,7 +37,9 @@ pub struct DatabaseInfo {
     pub meta: SeqV<DatabaseMeta>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// `__fd_database_id_to_name/<db_id> -> DatabaseNameIdent`
+#[derive(Clone, Debug, Default, Eq, PartialEq, kvapi::StructKey)]
+#[structkey(prefix = "__fd_database_id_to_name")]
 pub struct DatabaseIdToName {
     pub db_id: u64,
 }
@@ -349,38 +352,24 @@ impl ListDatabaseReq {
 }
 
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_client::kvapi;
 
-    use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
     use crate::schema::database_name_ident::DatabaseNameIdentRaw;
 
-    impl kvapi::KeyCodec for DatabaseIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
     impl kvapi::Key for DatabaseIdToName {
-        const PREFIX: &'static str = "__fd_database_id_to_name";
-
         type ValueType = DatabaseNameIdentRaw;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
     }
+}
 
-    impl kvapi::Value for DatabaseNameIdentRaw {
-        type KeyType = DatabaseIdToName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi::testing::assert_round_trip;
+
+    use super::DatabaseIdToName;
+
+    #[test]
+    fn test_database_id_to_name_key_format() {
+        assert_round_trip(DatabaseIdToName::new(3), "__fd_database_id_to_name/3");
     }
 }

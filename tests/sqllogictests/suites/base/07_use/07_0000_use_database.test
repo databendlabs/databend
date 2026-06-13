@@ -45,29 +45,29 @@ create table Rustlang.t_low(id int);
 statement ok
 create table `Rustlang`.t_up(id int);
 
-onlyif mysql
+
 statement ok
 set quoted_ident_case_sensitive=0;
 
-onlyif mysql
+
 statement ok
 use Rustlang;
 
-onlyif mysql
+
 query T
 show tables;
 ----
 t_low
 
-onlyif mysql
+
 statement ok
 set quoted_ident_case_sensitive=1;
 
-onlyif mysql
+
 statement ok
 use `Rustlang`;
 
-onlyif mysql
+
 query T
 show tables;
 ----

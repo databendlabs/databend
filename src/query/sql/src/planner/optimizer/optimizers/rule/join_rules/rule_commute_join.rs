@@ -25,6 +25,12 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
+
+fn contains_recursive_cte(expr: &SExpr) -> bool {
+    matches!(expr.plan(), RelOperator::RecursiveCteScan(_))
+        || expr.children().any(contains_recursive_cte)
+}
 
 /// Rule to apply commutativity of join operator.
 /// Since we will always use the right child as build side, this
@@ -64,6 +70,13 @@ impl Rule for RuleCommuteJoin {
 
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
+
+        if join.join_type == JoinType::Cross
+            && (contains_recursive_cte(left_child) || contains_recursive_cte(right_child))
+        {
+            return Ok(());
+        }
+
         let left_rel_expr = RelExpr::with_s_expr(left_child);
         let right_rel_expr = RelExpr::with_s_expr(right_child);
         let left_card = left_rel_expr.derive_cardinality()?.cardinality;

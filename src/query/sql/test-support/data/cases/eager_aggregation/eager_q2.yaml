@@ -1,0 +1,13 @@
+name: "eager_q2"
+description: "Double eager aggregation candidate across both join sides"
+
+sql: |
+  SELECT o_orderkey, sum(l_extendedprice), sum(o_totalprice)
+  FROM lineitem, orders
+  WHERE o_orderkey = l_orderkey
+  GROUP BY o_orderkey
+
+tables:
+  customer: eager_aggregation/customer.sql
+  orders: eager_aggregation/orders.sql
+  lineitem: eager_aggregation/lineitem.sql

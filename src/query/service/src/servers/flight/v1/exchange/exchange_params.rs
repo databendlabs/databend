@@ -55,6 +55,7 @@ pub struct BroadcastExchangeParams {
     pub query_id: String,
     pub executor_id: String,
     pub schema: DataSchemaRef,
+    pub exchange_id: String,
     pub destination_channels: Vec<(String, Vec<String>)>,
 }
 
@@ -63,6 +64,7 @@ pub struct GlobalExchangeParams {
     pub query_id: String,
     pub executor_id: String,
     pub schema: DataSchemaRef,
+    pub exchange_id: String,
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
 }
@@ -97,12 +99,12 @@ impl ExchangeParams {
     pub fn take_flight_sender(
         &self,
         senders: &mut HashMap<String, Vec<FlightSender>>,
-    ) -> databend_common_exception::Result<Vec<(String, FlightSender)>> {
+    ) -> Result<Vec<(String, FlightSender)>> {
         match self {
             ExchangeParams::MergeExchange(params) => params.take_flight_sender(senders),
             ExchangeParams::BroadcastExchange(params) => params.take_flight_sender(senders),
             ExchangeParams::NodeShuffleExchange(params) => params.take_flight_sender(senders),
-            ExchangeParams::GlobalShuffleExchange(_params) => unimplemented!(),
+            ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 
@@ -114,7 +116,7 @@ impl ExchangeParams {
             ExchangeParams::MergeExchange(params) => params.take_flight_receiver(receivers),
             ExchangeParams::BroadcastExchange(params) => params.take_flight_receiver(receivers),
             ExchangeParams::NodeShuffleExchange(params) => params.take_flight_receiver(receivers),
-            ExchangeParams::GlobalShuffleExchange(_params) => unimplemented!(),
+            ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 }

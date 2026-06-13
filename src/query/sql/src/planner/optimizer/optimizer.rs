@@ -18,9 +18,12 @@ use async_recursion::async_recursion;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Symbol;
 use log::info;
 
 use crate::InsertInputSource;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::binder::target_probe;
@@ -29,8 +32,10 @@ use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
 use crate::optimizer::optimizers::CascadesOptimizer;
+use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
+use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -46,16 +51,16 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::plans::ConstantTableScan;
-use crate::plans::CopyIntoLocationPlan;
+use crate::plans::EvalScalar;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
-use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::plans::SetScalarsOrQuery;
 
 #[fastrace::trace]
@@ -149,11 +154,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             graphical,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
-        Plan::CopyIntoLocation(CopyIntoLocationPlan { info, from }) => {
-            Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
-                info,
-                from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
-            }))
+        Plan::CopyIntoLocation(mut plan) => {
+            plan.from = Box::new(Box::pin(optimize(opt_ctx, *plan.from)).await?);
+            Ok(Plan::CopyIntoLocation(plan))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
             plan.enable_distributed = opt_ctx.get_enable_distributed_optimization()
@@ -191,6 +194,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
         }
         Plan::InsertMultiTable(mut plan) => {
             plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
+            rewrite_insert_multi_table_whens(opt_ctx, plan.as_mut())?;
             Ok(Plan::InsertMultiTable(plan))
         }
         Plan::Replace(mut plan) => {
@@ -253,6 +257,12 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(RuleNormalizeAggregateOptimizer::new())
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
+        // Common subexpression elimination optimization
+        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
+        .add_if(
+            settings.get_enable_cse_optimizer()?,
+            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
+        )
         // Run default rewrite rules
         .add(RecursiveRuleOptimizer::new(
             opt_ctx.clone(),
@@ -260,6 +270,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ))
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
+        // Sync CTE consumer statistics with the latest producer estimates after pushdown rewrites.
+        .add(SyncMaterializedCTERefOptimizer::new())
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
@@ -295,6 +307,59 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
     let s_expr = pipeline.execute().await?;
 
     Ok(s_expr)
+}
+
+fn rewrite_insert_multi_table_whens(
+    opt_ctx: Arc<OptimizerContext>,
+    plan: &mut crate::plans::InsertMultiTable,
+) -> Result<()> {
+    let Plan::Query { s_expr, .. } = &mut plan.input_source else {
+        return Ok(());
+    };
+
+    let mut source_expr = s_expr.as_ref().clone();
+    let mut rewritten_any = false;
+
+    for (idx, when) in plan.whens.iter_mut().enumerate() {
+        if !when.condition.has_subquery() {
+            continue;
+        }
+
+        let condition_index = opt_ctx.get_metadata().write().add_derived_column(
+            format!("_insert_multi_when_{}", idx),
+            when.condition.data_type()?,
+        );
+        let eval_expr = source_expr.clone().build_unary(EvalScalar {
+            items: vec![ScalarItem {
+                scalar: when.condition.clone(),
+                index: condition_index,
+            }],
+        });
+
+        let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None);
+        let rewritten = rewriter.optimize_sync(&eval_expr)?;
+        let RelOperator::EvalScalar(eval) = rewritten.plan() else {
+            return Err(ErrorCode::Internal(
+                "Subquery rewrite for multi-table insert must keep the top eval scalar".to_string(),
+            ));
+        };
+        let scalar_item = eval.items.first().ok_or_else(|| {
+            ErrorCode::Internal(
+                "Subquery rewrite for multi-table insert must keep one eval scalar item"
+                    .to_string(),
+            )
+        })?;
+
+        when.condition = scalar_item.scalar.clone();
+        source_expr = rewritten.child(0)?.clone();
+        rewritten_any = true;
+    }
+
+    if rewritten_any {
+        *s_expr = Box::new(source_expr);
+    }
+
+    Ok(())
 }
 
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {
@@ -411,29 +476,63 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
             }
         }
         MutationType::Update | MutationType::Delete => {
-            // Helper function to find MutationSource in a chain of operators
-            fn find_mutation_source(s_expr: &SExpr) -> Option<&MutationSource> {
+            #[allow(clippy::type_complexity)]
+            fn finalize_mutation_source(
+                s_expr: &SExpr,
+                metadata: &MetadataRef,
+            ) -> Result<Option<(SExpr, bool, Vec<ScalarExpr>, Option<Symbol>)>> {
                 match s_expr.plan() {
-                    RelOperator::MutationSource(rel) => Some(rel),
-                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) => {
-                        if s_expr.arity() == 1 {
-                            find_mutation_source(s_expr.unary_child())
+                    RelOperator::MutationSource(rel) => {
+                        let mut rel = rel.clone();
+                        rel.refresh_read_partition_columns();
+                        let is_truncate =
+                            rel.mutation_type == MutationType::Delete && !rel.has_predicates();
+                        let direct_filter = rel.all_predicates_cloned();
+                        let predicate_column_index =
+                            rel.ensure_mutation_predicate_column_if_needed(metadata);
+                        let new_s_expr =
+                            SExpr::create_leaf(Arc::new(RelOperator::MutationSource(rel)));
+                        Ok(Some((
+                            new_s_expr,
+                            is_truncate,
+                            direct_filter,
+                            predicate_column_index,
+                        )))
+                    }
+                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) if s_expr.arity() == 1 => {
+                        if let Some((child, is_truncate, direct_filter, pred_idx)) =
+                            finalize_mutation_source(s_expr.unary_child(), metadata)?
+                        {
+                            Ok(Some((
+                                s_expr.replace_children(vec![Arc::new(child)]),
+                                is_truncate,
+                                direct_filter,
+                                pred_idx,
+                            )))
                         } else {
-                            None
+                            Ok(None)
                         }
                     }
-                    _ => None,
+                    _ => Ok(None),
                 }
             }
 
-            if let Some(rel) = find_mutation_source(&input_s_expr) {
-                if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
-                    mutation.truncate_table = true;
-                }
-                mutation.direct_filter = rel.predicates.clone();
-                if let Some(index) = rel.predicate_column_index {
-                    mutation.required_columns.insert(index);
-                    mutation.predicate_column_index = Some(index);
+            // finalize_mutation_source only applies to Direct strategy where the
+            // plan tree contains a MutationSource leaf. Non-direct mutations
+            // (e.g., UPDATE ... FROM, subquery cases) have Join/Filter roots
+            // with no MutationSource node.
+            if mutation.strategy == MutationStrategy::Direct {
+                let metadata = opt_ctx.get_metadata();
+                if let Some((new_s_expr, is_truncate, direct_filter, pred_idx)) =
+                    finalize_mutation_source(&input_s_expr, &metadata)?
+                {
+                    input_s_expr = new_s_expr;
+                    mutation.truncate_table = is_truncate;
+                    mutation.direct_filter = direct_filter;
+                    if let Some(index) = pred_idx {
+                        mutation.required_columns.insert(index);
+                        mutation.predicate_column_index = Some(index);
+                    }
                 }
             }
             input_s_expr

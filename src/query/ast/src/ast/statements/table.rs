@@ -17,6 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -37,7 +39,7 @@ use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -71,7 +73,7 @@ impl Display for ShowTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCreateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -96,7 +98,7 @@ impl Display for ShowCreateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowTablesStatusStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -116,7 +118,7 @@ impl Display for ShowTablesStatusStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowDropTablesStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -136,7 +138,7 @@ impl Display for ShowDropTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ClusterType {
     Linear,
     Hilbert,
@@ -162,7 +164,7 @@ impl std::str::FromStr for ClusterType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ClusterOption {
     pub cluster_type: ClusterType,
     pub cluster_exprs: Vec<Expr>,
@@ -347,7 +349,7 @@ impl Display for CreateTableSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DescribeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -366,7 +368,7 @@ impl Display for DescribeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropTableStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -396,7 +398,7 @@ impl Display for DropTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UndropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -435,21 +437,6 @@ impl Display for AlterTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum SnapshotRefType {
-    Branch,
-    Tag,
-}
-
-impl Display for SnapshotRefType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SnapshotRefType::Branch => write!(f, "BRANCH"),
-            SnapshotRefType::Tag => write!(f, "TAG"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
@@ -458,6 +445,7 @@ pub enum AlterTableAction {
         target_table: Identifier,
     },
     AddColumn {
+        if_not_exists: bool,
         column: ColumnDefinition,
         option: AddColumnOption,
     },
@@ -512,16 +500,17 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
-    CreateTableRef {
-        ref_type: SnapshotRefType,
-        ref_name: Identifier,
-        travel_point: Option<TimeTravelPoint>,
-        #[drive(skip)]
-        retain: Option<Duration>,
+    CreateTableBranch {
+        spec: CreateTableRefSpec,
     },
-    DropTableRef {
-        ref_type: SnapshotRefType,
-        ref_name: Identifier,
+    CreateTableTag {
+        spec: CreateTableRefSpec,
+    },
+    DropTableBranch {
+        branch_name: Identifier,
+    },
+    DropTableTag {
+        tag_name: Identifier,
     },
 }
 
@@ -548,8 +537,16 @@ impl Display for AlterTableAction {
             } => {
                 write!(f, "RENAME COLUMN {old_column} TO {new_column}")?;
             }
-            AlterTableAction::AddColumn { column, option } => {
-                write!(f, "ADD COLUMN {column}{option}")?;
+            AlterTableAction::AddColumn {
+                if_not_exists,
+                column,
+                option,
+            } => {
+                write!(f, "ADD COLUMN ")?;
+                if *if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+                write!(f, "{column}{option}")?;
             }
             AlterTableAction::AddConstraint { constraint } => {
                 write!(f, "ADD {}", constraint)?;
@@ -619,29 +616,17 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
-                travel_point,
-                retain,
-            } => {
-                write!(f, "CREATE {ref_type} {ref_name}")?;
-                if let Some(travel_point) = travel_point {
-                    write!(f, " AT {travel_point}")?;
-                }
-                if let Some(retain) = retain {
-                    let days = Duration::from_secs(60 * 60 * 24);
-                    if retain >= &days {
-                        let days = retain.as_secs() / (60 * 60 * 24);
-                        write!(f, " RETAIN {days} DAYS ")?;
-                    } else {
-                        let seconds = retain.as_secs();
-                        write!(f, " RETAIN {seconds} SECONDS ")?;
-                    }
-                }
+            AlterTableAction::CreateTableBranch { spec } => {
+                write!(f, "CREATE BRANCH {spec}")?;
             }
-            AlterTableAction::DropTableRef { ref_type, ref_name } => {
-                write!(f, "DROP {ref_type} {ref_name}")?;
+            AlterTableAction::CreateTableTag { spec } => {
+                write!(f, "CREATE TAG {spec}")?;
+            }
+            AlterTableAction::DropTableBranch { branch_name } => {
+                write!(f, "DROP BRANCH {branch_name}")?;
+            }
+            AlterTableAction::DropTableTag { tag_name } => {
+                write!(f, "DROP TAG {tag_name}")?;
             }
         };
         Ok(())
@@ -649,6 +634,34 @@ impl Display for AlterTableAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateTableRefSpec {
+    pub name: Identifier,
+    pub travel_point: Option<TimeTravelPoint>,
+    #[drive(skip)]
+    pub retain: Option<Duration>,
+}
+
+impl Display for CreateTableRefSpec {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(travel_point) = &self.travel_point {
+            write!(f, " AT {travel_point}")?;
+        }
+        if let Some(retain) = self.retain {
+            let days = Duration::from_secs(60 * 60 * 24);
+            if retain >= days {
+                let days = retain.as_secs() / (60 * 60 * 24);
+                write!(f, " RETAIN {days} DAYS")?;
+            } else {
+                let seconds = retain.as_secs();
+                write!(f, " RETAIN {seconds} SECONDS")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AddColumnOption {
     End,
     First,
@@ -665,7 +678,7 @@ impl Display for AddColumnOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameTableStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -700,7 +713,7 @@ impl Display for RenameTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -721,7 +734,7 @@ impl Display for TruncateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -745,7 +758,7 @@ impl Display for VacuumTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -823,7 +836,7 @@ impl Display for OptimizeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -849,7 +862,7 @@ impl Display for AnalyzeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ExistsTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -878,6 +891,7 @@ pub enum Engine {
     Random,
     Iceberg,
     Delta,
+    Proxy,
 }
 
 impl Display for Engine {
@@ -890,6 +904,7 @@ impl Display for Engine {
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
             Engine::Delta => write!(f, "DELTA"),
+            Engine::Proxy => write!(f, "PROXY"),
         }
     }
 }
@@ -904,12 +919,13 @@ impl From<&str> for Engine {
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
             "delta" => Engine::Delta,
+            "proxy" => Engine::Proxy,
             _ => unreachable!("invalid engine: {}", s),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum CompactTarget {
     Block,
     Segment,
@@ -955,7 +971,7 @@ impl Display for VacuumDropTableOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
     All,
     Purge { before: Option<TimeTravelPoint> },
@@ -988,7 +1004,7 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
@@ -1035,13 +1051,14 @@ pub enum NullableConstraint {
     NotNull,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
     pub check: Option<Expr>,
     pub comment: Option<String>,
+    pub stats_truncate_len: Option<u64>,
 }
 
 impl Display for ColumnDefinition {
@@ -1055,6 +1072,9 @@ impl Display for ColumnDefinition {
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT {}", QuotedString(comment, '\''))?;
+        }
+        if let Some(len) = self.stats_truncate_len {
+            write!(f, " STATS_TRUNCATE_LEN {len}")?;
         }
         Ok(())
     }
@@ -1089,7 +1109,7 @@ impl Display for TableIndexDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ConstraintDefinition {
     pub name: Option<Identifier>,
     pub constraint_type: ConstraintType,
@@ -1199,14 +1219,14 @@ impl Display for ModifyColumnAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut, Default)]
 pub struct ShowStatisticsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub target: ShowStatsTarget,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut, Default)]
 pub enum ShowStatsTarget {
     #[default]
     Database,

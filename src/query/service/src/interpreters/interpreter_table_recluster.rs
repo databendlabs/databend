@@ -19,7 +19,6 @@ use std::time::SystemTime;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
@@ -36,7 +35,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
-use databend_common_sql::IdentifierNormalizer;
+use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
@@ -51,11 +50,14 @@ use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
+use log::debug;
 use log::error;
 use log::warn;
 
@@ -67,7 +69,6 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
-use crate::physical_plans::CompactSource;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::HilbertPartition;
 use crate::physical_plans::PhysicalPlan;
@@ -82,6 +83,14 @@ use crate::schedulers::ServiceQueryExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
+use crate::sessions::TableContextTelemetry;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -127,7 +136,8 @@ impl Interpreter for ReclusterTableInterpreter {
         loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
-                    "execution of recluster statement aborted. server is shutting down or the query was killed",
+                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
+                    times + 1
                 );
                 return Err(err.with_context("failed to execute"));
             }
@@ -139,6 +149,10 @@ impl Interpreter for ReclusterTableInterpreter {
             match res {
                 Ok(is_break) => {
                     if is_break {
+                        debug!(
+                            "recluster: final loop stop reason=no_recluster_parts round={}",
+                            times + 1,
+                        );
                         break;
                     }
                 }
@@ -152,8 +166,19 @@ impl Interpreter for ReclusterTableInterpreter {
                                 | ErrorCode::UNRESOLVABLE_CONFLICT
                         )
                     {
-                        warn!("Execute recluster error: {:?}", e);
+                        warn!(
+                            "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
+                            times + 1,
+                            e.code(),
+                            e,
+                        );
                     } else {
+                        error!(
+                            "recluster: final loop stop reason=error round={} code={} error={:?}",
+                            times + 1,
+                            e.code(),
+                            e,
+                        );
                         return Err(e);
                     }
                 }
@@ -164,7 +189,7 @@ impl Interpreter for ReclusterTableInterpreter {
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
                     times, elapsed_time
                 );
                 ctx.set_status_info(&status);
@@ -176,8 +201,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "Recluster stopped because the runtime was over {:?}",
-                    timeout
+                    "recluster: final loop stop reason=timeout round={} timeout={:?}",
+                    times, timeout,
                 );
                 break;
             }
@@ -243,8 +268,8 @@ impl ReclusterTableInterpreter {
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    ctx.clear_written_segment_locations()?;
-                    ctx.clear_selected_segment_locations();
+                    ctx.written_segment_locations().clear();
+                    ctx.selected_segment_locations().clear();
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();
@@ -278,7 +303,7 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
+        complete_executor.execute().await?;
 
         // make sure the executor is dropped before the next loop.
         drop(complete_executor);
@@ -322,7 +347,7 @@ impl ReclusterTableInterpreter {
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
         // Determine rows per block based on data size and compression ratio
-        let rows_per_block =
+        let (rows_per_block, _) =
             block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
 
         // Calculate initial partition count based on data volume and block size
@@ -341,7 +366,7 @@ impl ReclusterTableInterpreter {
         }
 
         warn!(
-            "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
+            "recluster: build hilbert plan total_bytes={} total_rows={} total_partitions={}",
             total_bytes, total_rows, total_partitions
         );
 
@@ -493,8 +518,18 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<PhysicalPlan>> {
-        let Some((parts, snapshot)) = tbl
-            .recluster(self.ctx.clone(), push_downs.clone(), limit)
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+        let Some((parts, snapshot)) = fuse_table
+            .do_recluster(
+                self.ctx.clone(),
+                push_downs.clone(),
+                limit,
+                if self.plan.is_final {
+                    ReclusterMode::Final
+                } else {
+                    ReclusterMode::Normal
+                },
+            )
             .await?
         else {
             return Ok(None);
@@ -508,56 +543,33 @@ impl ReclusterTableInterpreter {
 
         let table_info = tbl.get_table_info().clone();
         let is_distributed = parts.is_distributed(self.ctx.clone());
-        let plan = match parts {
-            ReclusterParts::Recluster {
-                tasks,
-                remained_blocks,
+        let ReclusterParts {
+            tasks,
+            remained_blocks,
+            removed_segment_indexes,
+            removed_segment_summary,
+        } = parts;
+        let root = PhysicalPlan::new(Recluster {
+            tasks,
+            table_meta_timestamps,
+
+            table_info: table_info.clone(),
+            meta: PhysicalPlanMeta::new("Recluster"),
+        });
+
+        let plan = Self::add_commit_sink(
+            root,
+            is_distributed,
+            table_info,
+            snapshot,
+            false,
+            Some(ReclusterInfoSideCar {
+                merged_blocks: remained_blocks,
                 removed_segment_indexes,
-                removed_segment_summary,
-            } => {
-                let root = PhysicalPlan::new(Recluster {
-                    tasks,
-                    table_meta_timestamps,
-
-                    table_info: table_info.clone(),
-                    meta: PhysicalPlanMeta::new("Recluster"),
-                });
-
-                Self::add_commit_sink(
-                    root,
-                    is_distributed,
-                    table_info,
-                    snapshot,
-                    false,
-                    Some(ReclusterInfoSideCar {
-                        merged_blocks: remained_blocks,
-                        removed_segment_indexes,
-                        removed_statistics: removed_segment_summary,
-                    }),
-                    table_meta_timestamps,
-                )
-            }
-            ReclusterParts::Compact(parts) => {
-                let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let root = PhysicalPlan::new(CompactSource {
-                    parts,
-                    table_info: table_info.clone(),
-                    column_ids: snapshot.schema.to_leaf_column_id_set(),
-                    table_meta_timestamps,
-                    meta: PhysicalPlanMeta::new("CompactSource"),
-                });
-
-                Self::add_commit_sink(
-                    root,
-                    is_distributed,
-                    table_info,
-                    snapshot,
-                    merge_meta,
-                    None,
-                    table_meta_timestamps,
-                )
-            }
-        };
+                removed_statistics: removed_segment_summary,
+            }),
+            table_meta_timestamps,
+        );
         Ok(Some(plan))
     }
 
@@ -614,13 +626,18 @@ impl ReclusterTableInterpreter {
         let table = &self.plan.table;
         let settings = self.ctx.get_settings();
         let sample_size = settings.get_hilbert_sample_size_per_block()?;
+        let sql_dialect = settings.get_sql_dialect()?;
 
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+        let mut normalizer = ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+            sql_dialect,
+        };
+        let ast_exprs = tbl.resolve_cluster_keys().unwrap();
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {
-            let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
             ast.drive_mut(&mut normalizer);
             cluster_key_strs.push(format!("{:#}", &ast));
         }
@@ -649,7 +666,7 @@ impl ReclusterTableInterpreter {
         let index_bound =
             plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &index_bound_query).await?;
 
-        let quote = settings.get_sql_dialect()?.default_ident_quote();
+        let quote = sql_dialect.default_ident_quote();
         let schema = tbl.schema_with_stream();
         let mut output_with_table = Vec::with_capacity(schema.fields.len());
         for field in &schema.fields {

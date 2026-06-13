@@ -39,7 +39,9 @@ impl ExchangeInjector for SortInjector {
         exchange: &DataExchange,
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         match exchange {
-            DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
+            DataExchange::Merge(_)
+            | DataExchange::Broadcast(_)
+            | DataExchange::GlobalShuffleExchange(_) => unreachable!(),
             DataExchange::NodeToNodeExchange(exchange) => {
                 Ok(Arc::new(Box::new(SortBoundScatter {
                     partitions: exchange.destination_ids.len(),

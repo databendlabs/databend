@@ -17,19 +17,20 @@ use std::time::Instant;
 
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_storages_common_io::Files;
 use log::error;
 use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSession;
 
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
@@ -58,7 +59,7 @@ impl PipelineBuilder {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.
                         // todo(ariesdevil): persist errors with query_id
-                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                        if let Some(error_map) = ctx.copy_state().get_maximum_error_per_file() {
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",
@@ -111,7 +112,7 @@ impl PipelineBuilder {
     pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
         let start = Instant::now();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let op = StageTable::get_op(stage_info);
+        let op = init_stage_operator(stage_info);
 
         match op {
             Ok(op) => {

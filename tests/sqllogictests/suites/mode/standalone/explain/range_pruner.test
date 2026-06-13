@@ -10,22 +10,18 @@ explain select 1 from range_t where c > 'efg'
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.40
-└── Filter
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.range_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(range_t.c (#0) > 'efg')]
-    ├── estimated rows: 0.40
-    └── TableScan
-        ├── table: default.default.range_t
-        ├── scan id: 0
-        ├── output columns: [c (#0)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(range_t.c (#0) > 'efg')], limit: NONE]
-        └── estimated rows: 2.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(range_t.c (#0) > 'efg')], limit: NONE]
+    └── estimated rows: 0.00
 
 
 query T
@@ -40,21 +36,42 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 0.00
-└── Filter
+└── TableScan
+    ├── table: default.default.range_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(range_t.i (#1) > 20)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.range_t
-        ├── scan id: 0
-        ├── output columns: [i (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
-        └── estimated rows: 2.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+create or replace table range_pruner_trust_loan_daily(contract_no varchar, notify_date int)
+
+statement ok
+insert into range_pruner_trust_loan_daily values ('20240508003088208902099794704998', 20240512)
+
+query T
+explain select 1 from range_pruner_trust_loan_daily where notify_date = '20240513' and contract_no = '20240508003088208902099794704998'
+----
+EvalScalar
+├── output columns: [1 (#2)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.range_pruner_trust_loan_daily
+    ├── scan id: 0
+    ├── output columns: []
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [range_pruner_trust_loan_daily.notify_date (#1) = '20240513' and range_pruner_trust_loan_daily.contract_no (#0) = '20240508003088208902099794704998'], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;
@@ -69,3 +86,6 @@ EmptyResultScan
 
 statement ok
 drop table range_t
+
+statement ok
+drop table range_pruner_trust_loan_daily

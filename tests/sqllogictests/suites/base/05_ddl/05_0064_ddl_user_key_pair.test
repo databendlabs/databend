@@ -1,0 +1,59 @@
+statement ok
+DROP USER IF EXISTS 'kp_user'
+
+statement ok
+DROP USER IF EXISTS 'kp_pwd_user'
+
+statement ok
+CREATE USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+statement error 2202
+CREATE USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+statement ok
+CREATE USER IF NOT EXISTS 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+statement error 5100
+CREATE USER 'kp_bad' IDENTIFIED WITH key_pair BY 'not-a-valid-key!!!'
+
+statement ok
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
+
+statement error 1006
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
+
+statement error 5100
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==' LABEL = 'other'
+
+statement ok
+CREATE USER 'kp_pwd_user' IDENTIFIED BY 'password123'
+
+statement error 5100
+ALTER USER 'kp_pwd_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+statement ok
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY LABEL = 'backup'
+
+statement error 5100
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY LABEL = 'nonexistent'
+
+statement ok
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'to-remove'
+
+statement ok
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:sBDVc5gUgq6zgTWMt9K3XDEs6paj3ZDjblsFCb96048'
+
+statement error 5100
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:ygGD6DgPtF3I3Jvytfc3RExRaX1cTQjlBxpFmgXmE+E'
+
+statement error 1006
+ALTER USER 'kp_user' IDENTIFIED BY 'password'
+
+statement error 1006
+ALTER USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ=='
+
+statement ok
+DROP USER IF EXISTS 'kp_user'
+
+statement ok
+DROP USER IF EXISTS 'kp_pwd_user'

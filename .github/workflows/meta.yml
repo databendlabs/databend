@@ -24,7 +24,7 @@ jobs:
       sha: ${{ steps.sha.outputs.sha }}
       target: ${{ steps.sha.outputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
@@ -47,7 +47,7 @@ jobs:
         include:
           - { arch: x86_64, runner: X64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
@@ -68,7 +68,7 @@ jobs:
       - 4c
       - aws
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Download artifact
@@ -79,3 +79,8 @@ jobs:
           artifacts: meta,metactl,metaverifier
       - uses: ./.github/actions/io_delay_chaos
         timeout-minutes: 20
+      - name: Upload failure artifacts
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_meta_container_failure
+        with:
+          name: meta-io-delay-chaos

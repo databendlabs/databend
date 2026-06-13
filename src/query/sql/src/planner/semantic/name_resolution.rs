@@ -18,6 +18,8 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::ident_opt_quote;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,8 +40,29 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
+    // Rely on identifier normalization preserving quote information.
+    pub fn is_case_sensitive(&self, ident: &Identifier) -> bool {
+        (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive)
+    }
+
+    pub fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
+        if (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive)
+        {
+            ident.clone()
+        } else {
+            Identifier {
+                span: ident.span,
+                name: ident.name.to_lowercase(),
+                quote: ident.quote,
+                ident_type: ident.ident_type,
+            }
+        }
+    }
+
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
-        if !ident.name.chars().any(|c| c.is_ascii_uppercase()) {
+        if !ident.name.chars().any(|c| c.is_uppercase()) {
             return None;
         }
         match (
@@ -83,19 +106,7 @@ impl TryFrom<&Settings> for NameResolutionContext {
 
 /// Normalize identifier with given `NameResolutionContext`
 pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext) -> Identifier {
-    if (ident.is_quoted() && context.quoted_ident_case_sensitive)
-        || (!ident.is_quoted() && context.unquoted_ident_case_sensitive)
-    {
-        ident.clone()
-    } else {
-        // Preserve the quote information when creating a new identifier
-        Identifier {
-            span: ident.span,
-            name: ident.name.to_lowercase(),
-            quote: ident.quote,
-            ident_type: ident.ident_type,
-        }
-    }
+    context.normalize_identifier(ident)
 }
 
 pub fn compare_table_name(
@@ -130,7 +141,7 @@ impl<'a> IdentifierNormalizer<'a> {
         // because MapAccessor is used to extract internal fields of nested types,
         // altering the case may prevent the desired data from being retrieved.
         if !self.in_map_accessor {
-            let normalized_ident = normalize_identifier(ident, self.ctx);
+            let normalized_ident = self.ctx.normalize_identifier(ident);
             *ident = normalized_ident;
         }
     }
@@ -172,7 +183,7 @@ impl<'a> VariableNormalizer<'a> {
 
     fn enter_identifier(&mut self, ident: &mut Identifier) {
         if ident.is_variable() {
-            let mut normalized_ident = normalize_identifier(ident, self.ctx);
+            let mut normalized_ident = self.ctx.normalize_identifier(ident);
 
             let scalar = self.table_ctx.get_variable(&normalized_ident.name);
             if let Some(Scalar::String(s)) = scalar {
@@ -191,5 +202,30 @@ impl<'a> VariableNormalizer<'a> {
                 ident.name, ident.name,
             )));
         }
+    }
+}
+
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
+pub struct ClusterKeyNormalizer {
+    pub force_quoted_ident: bool,
+    pub unquoted_ident_case_sensitive: bool,
+    pub quoted_ident_case_sensitive: bool,
+    pub sql_dialect: Dialect,
+}
+
+impl ClusterKeyNormalizer {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
+        let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
+        if !case_sensitive {
+            ident.name = ident.name.to_lowercase();
+        }
+        ident.quote = ident_opt_quote(
+            &ident.name,
+            self.force_quoted_ident,
+            self.quoted_ident_case_sensitive,
+            self.sql_dialect,
+        );
     }
 }

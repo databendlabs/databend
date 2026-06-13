@@ -121,19 +121,19 @@ SELECT foo.v FROM kv AS foo WHERE foo.k = 'a'
 ----
 NULL
 
-onlyif mysql
+
 statement ok
 drop table if exists kw
 
-onlyif mysql
+
 statement ok
 CREATE TABLE kw ("from" INT)
 
-onlyif mysql
+
 statement ok
 INSERT INTO kw VALUES (1)
 
-onlyif mysql
+
 query III
 SELECT *, "from", kw."from" FROM kw
 ----

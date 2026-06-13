@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -24,10 +23,12 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextProgress;
 
 #[derive(Clone)]
 pub enum CacheSourceState {
@@ -47,7 +48,7 @@ impl CacheSourceState {
 #[derive(Clone)]
 pub struct HashJoinCacheState {
     initialized: bool,
-    column_indexes: Vec<usize>,
+    column_indexes: Vec<Symbol>,
     columns: Vec<Vec<BlockEntry>>,
     num_rows: Vec<usize>,
     num_cache_blocks: usize,
@@ -58,7 +59,7 @@ pub struct HashJoinCacheState {
 
 impl HashJoinCacheState {
     pub fn new(
-        column_indexes: Vec<usize>,
+        column_indexes: Vec<Symbol>,
         hash_join_state: Arc<HashJoinState>,
         max_block_size: usize,
     ) -> Self {

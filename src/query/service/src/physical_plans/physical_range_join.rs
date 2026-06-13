@@ -19,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -46,6 +45,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RangeJoin {
@@ -57,7 +57,8 @@ pub struct RangeJoin {
     pub conditions: Vec<RangeJoinCondition>,
     // The other conditions
     pub other_conditions: Vec<RemoteExpr>,
-    // Now only support inner join, will support left/right join later
+    // Now only support inner join, will support left/right join later.
+    // ASOF outer joins reuse this path after the interval-boundary rewrite.
     pub join_type: JoinType,
     pub range_join_type: RangeJoinType,
     pub output_schema: DataSchemaRef,
@@ -141,7 +142,12 @@ impl IPhysicalPlan for RangeJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let state = Arc::new(RangeJoinState::new(builder.ctx.clone(), self));
+        let function_context = builder.ctx.get_function_context()?;
+        let state = Arc::new(RangeJoinState::new(
+            builder.ctx.clone(),
+            self,
+            function_context,
+        ));
         self.build_right(state.clone(), builder)?;
         self.build_left(state, builder)
     }
@@ -232,10 +238,7 @@ impl PhysicalPlanBuilder {
         let left_schema = self.prepare_probe_schema(join_type, &left_side)?;
         let right_schema = self.prepare_build_schema(join_type, &right_side)?;
 
-        let mut output_schema = Vec::clone(left_schema.fields());
-        output_schema.extend_from_slice(right_schema.fields());
-
-        let merged_schema = DataSchemaRefExt::create(
+        let output_schema = DataSchema::new_ref(
             left_schema
                 .fields()
                 .iter()
@@ -262,11 +265,11 @@ impl PhysicalPlanBuilder {
                 .collect::<Result<_>>()?,
             other_conditions: other_conditions
                 .iter()
-                .map(|scalar| resolve_scalar(scalar, &merged_schema))
+                .map(|scalar| resolve_scalar(scalar, &output_schema))
                 .collect::<Result<_>>()?,
             join_type,
             range_join_type,
-            output_schema: Arc::new(DataSchema::new(output_schema)),
+            output_schema,
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }
@@ -343,9 +346,9 @@ fn resolve_range_condition(
     }
 }
 
-fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
+pub fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchema) -> Result<RemoteExpr> {
     let expr = scalar
-        .type_check(schema.as_ref())?
+        .type_check(schema)?
         .project_column_ref(|index| schema.index_of(&index.to_string()))?;
     Ok(expr.as_remote_expr())
 }

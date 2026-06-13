@@ -20,11 +20,11 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
-use databend_common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
 use crate::sql::planner::plans::JoinType;
 
 impl HashJoinProbeState {
@@ -53,13 +53,15 @@ impl HashJoinProbeState {
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::InnerAny | JoinType::RightAny
         ) {
-            let build_num_rows = unsafe {
+            let block_num = unsafe {
                 (*self.hash_join_state.build_state.get())
                     .generation_state
-                    .build_num_rows
+                    .chunks
+                    .len()
             };
-
-            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(build_num_rows))
+            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(
+                block_num * probe_state.max_block_size,
+            ));
         }
         let no_other_predicate = self
             .hash_join_state

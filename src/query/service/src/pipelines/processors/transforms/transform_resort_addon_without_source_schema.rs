@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -30,10 +29,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::parse_exprs;
+use databend_common_sql::parse_exprs_to_field_index;
 use databend_common_storages_factory::Table;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 // this processor will receive 3 kinds of blocks:
 // 1. from update, in this case, the block has entire target_table schema, no need to do anything
@@ -62,7 +62,8 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
-                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+                let expr =
+                    parse_exprs_to_field_index(ctx.clone(), table.clone(), default_expr)?.remove(0);
                 check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
                 // #issue13932
