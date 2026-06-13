@@ -418,7 +418,6 @@ impl Processor for TransformPartitionBucket {
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
                             self.params.num_states(),
-                            self.params.enable_experiment_hash_index,
                             &mut self.flush_state,
                         )? {
                             self.push_bucket_block(
