@@ -86,19 +86,13 @@ struct ServerStatsRecord {
 }
 
 #[derive(Serialize)]
-struct QueryExecutionRecord {
-    node: String,
-    query_id: String,
-    process_rows: u64,
-    process_time_in_micros: u64,
-}
-
-#[derive(Serialize)]
 struct SystemHistoryRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     query_history: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     profile_history: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile_statistics_desc: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
@@ -116,8 +110,6 @@ struct QueryAttempt {
     server_stats: Option<ServerStatsRecord>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     stats_samples: Vec<ServerStatsRecord>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    query_execution: Vec<QueryExecutionRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     system_history: Option<SystemHistoryRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,6 +163,9 @@ fn load_config() -> Result<BenchmarkConfig> {
 
     if version.is_empty() {
         bail!("Please set BENCHMARK_VERSION to run the benchmark.");
+    }
+    if dataset == "load" {
+        bail!("BENCHMARK_DATASET=load is not supported by benchmark-cloud");
     }
 
     let tries: usize = tries_raw
@@ -352,13 +347,6 @@ async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> Quer
 
     let client_wall_ms = start.elapsed().as_millis();
     let query_id = conn.last_query_id();
-    let query_execution = if let Some(query_id) = &query_id {
-        collect_query_execution(conn, query_id)
-            .await
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
     let elapsed_seconds = final_stats
         .as_ref()
         .map(|stats| round3(stats.running_time_ms / 1000.0))
@@ -372,52 +360,15 @@ async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> Quer
         query_id,
         server_stats: final_stats,
         stats_samples,
-        query_execution,
         system_history: None,
         error,
     }
 }
 
-async fn collect_query_execution(
-    conn: &Connection,
-    query_id: &str,
-) -> Result<Vec<QueryExecutionRecord>> {
-    let query_id_literal = quote_literal(query_id);
-    let sql = format!(
-        "select node, query_id, process_rows, process_time_in_micros \
-         from system.query_execution where query_id = '{query_id_literal}' order by node"
-    );
-
-    for delay in [0_u64, 100, 500, 1000, 2000] {
-        if delay > 0 {
-            tokio::time::sleep(Duration::from_millis(delay)).await;
-        }
-        let rows = conn.query_all(&sql).await?;
-        if !rows.is_empty() {
-            let mut records = Vec::with_capacity(rows.len());
-            for row in rows {
-                let (node, query_id, process_rows, process_time_in_micros): (
-                    String,
-                    String,
-                    u64,
-                    u64,
-                ) = row.try_into().map_err(|err: String| anyhow!(err))?;
-                records.push(QueryExecutionRecord {
-                    node,
-                    query_id,
-                    process_rows,
-                    process_time_in_micros,
-                });
-            }
-            return Ok(records);
-        }
-    }
-    Ok(Vec::new())
-}
-
 async fn collect_system_history(conn: &Connection, query_id: &str) -> SystemHistoryRecord {
     let mut query_history = None;
     let mut profile_history = Vec::new();
+    let mut profile_statistics_desc = None;
     let mut error = None;
 
     for delay in [0_u64, 500, 1000, 2000] {
@@ -435,9 +386,10 @@ async fn collect_system_history(conn: &Connection, query_id: &str) -> SystemHist
         }
 
         match collect_profile_history(conn, query_id).await {
-            Ok(records) => {
+            Ok((records, statistics_desc)) => {
                 if !records.is_empty() {
                     profile_history = records;
+                    profile_statistics_desc = statistics_desc;
                 }
             }
             Err(err) => {
@@ -454,6 +406,7 @@ async fn collect_system_history(conn: &Connection, query_id: &str) -> SystemHist
     SystemHistoryRecord {
         query_history,
         profile_history,
+        profile_statistics_desc,
         error,
     }
 }
@@ -506,6 +459,7 @@ fn history_error(error: String) -> SystemHistoryRecord {
     SystemHistoryRecord {
         query_history: None,
         profile_history: Vec::new(),
+        profile_statistics_desc: None,
         error: Some(error),
     }
 }
@@ -597,16 +551,16 @@ async fn collect_query_history(
 async fn collect_profile_history(
     conn: &Connection,
     query_id: &str,
-) -> Result<Vec<serde_json::Value>> {
+) -> Result<(Vec<serde_json::Value>, Option<serde_json::Value>)> {
     let query_id_literal = quote_literal(query_id);
     let sql = format!(
         r#"
         SELECT to_string(object_construct(
             'timestamp', timestamp,
             'query_id', query_id,
-            'profiles', profiles,
-            'statistics_desc', statistics_desc
-        ))
+            'profiles', profiles
+        )),
+        to_string(statistics_desc)
         FROM system_history.profile_history
         WHERE query_id = '{query_id_literal}'
         ORDER BY timestamp
@@ -615,13 +569,19 @@ async fn collect_profile_history(
 
     let rows = conn.query_all(&sql).await?;
     let mut records = Vec::with_capacity(rows.len());
+    let mut statistics_desc = None;
     for row in rows {
-        let (raw,): (Option<String>,) = row.try_into().map_err(|err: String| anyhow!(err))?;
+        let (raw, statistics_desc_raw): (Option<String>, Option<String>) =
+            row.try_into().map_err(|err: String| anyhow!(err))?;
         if let Some(raw) = raw {
             records.push(json_or_raw(&raw));
         }
+        if statistics_desc.is_none() {
+            statistics_desc = statistics_desc_raw.map(|raw| json_or_raw(&raw));
+        }
     }
-    Ok(records)
+
+    Ok((records, statistics_desc))
 }
 
 fn json_or_raw(raw: &str) -> serde_json::Value {
@@ -724,7 +684,6 @@ async fn main() -> Result<()> {
         timing_source: "server_stats.running_time_ms".to_string(),
         detail_sources: vec![
             "databend-driver query_iter_ext".to_string(),
-            "system.query_execution".to_string(),
             "system_history.query_history".to_string(),
             "system_history.profile_history".to_string(),
         ],
@@ -755,16 +714,6 @@ async fn main() -> Result<()> {
     .await?;
     execute_sql(&admin_conn, "SHOW WAREHOUSES;").await?;
     wait_for_warehouse(&admin_conn, &config.warehouse).await?;
-
-    let warehouse_conn = connect(build_dsn(&config, None, Some(&config.warehouse), false)).await?;
-    if config.dataset == "load" {
-        println!("Creating database {} for load dataset...", config.database);
-        execute_sql(
-            &warehouse_conn,
-            &format!("CREATE DATABASE {}", config.database),
-        )
-        .await?;
-    }
 
     let query_conn = connect(build_dsn(
         &config,
@@ -878,14 +827,6 @@ async fn main() -> Result<()> {
 
 async fn cleanup(config: &BenchmarkConfig) -> Result<()> {
     let cleanup_conn = connect(build_dsn(config, None, Some("default"), true)).await?;
-    if config.dataset == "load" {
-        println!("Dropping database {}...", config.database);
-        execute_sql(
-            &cleanup_conn,
-            &format!("DROP DATABASE IF EXISTS {}", config.database),
-        )
-        .await?;
-    }
     println!("Dropping warehouse {}...", config.warehouse);
     execute_sql(
         &cleanup_conn,
