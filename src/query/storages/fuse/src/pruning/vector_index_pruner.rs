@@ -918,8 +918,8 @@ impl VectorScore {
 }
 
 fn compare_lower_bound(left: Option<f32>, right: Option<f32>) -> Ordering {
-    let left = left.unwrap_or(0.0);
-    let right = right.unwrap_or(0.0);
+    let left = left.unwrap_or(f32::INFINITY);
+    let right = right.unwrap_or(f32::INFINITY);
     left.partial_cmp(&right).unwrap_or(Ordering::Equal)
 }
 
