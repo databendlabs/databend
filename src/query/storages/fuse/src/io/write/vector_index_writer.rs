@@ -26,6 +26,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::VectorColumn;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
@@ -33,9 +35,15 @@ use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_mi
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
+use databend_storages_common_index::normalize_vector;
+use databend_storages_common_index::preprocess_vector;
+use databend_storages_common_index::vector_stat_distance;
+use databend_storages_common_index::vector_statistics_distance_type;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::table::TableCompression;
 use log::debug;
 use log::info;
@@ -61,17 +69,23 @@ struct VectorIndexParam {
     m: usize,
     ef_construct: usize,
     distances: Vec<DistanceType>,
+    field_offsets: Vec<(usize, ColumnId)>,
 }
 
 #[derive(Clone)]
 pub struct VectorIndexBuilder {
     // Parameters for each vector index
     index_params: Vec<VectorIndexParam>,
-    field_offsets: Vec<Vec<(usize, ColumnId)>>,
     field_offsets_set: HashSet<usize>,
+    statistics_params: BTreeMap<usize, (ColumnId, DistanceType)>,
 
     // Collected vector columns
     columns: BTreeMap<usize, Vec<Column>>,
+}
+
+pub(crate) struct VectorIndexBuildState {
+    pub(crate) index_state: Option<VectorIndexState>,
+    pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
 }
 
 impl VectorIndexBuilder {
@@ -81,8 +95,8 @@ impl VectorIndexBuilder {
         is_sync: bool,
     ) -> Option<VectorIndexBuilder> {
         let mut index_params = Vec::with_capacity(table_indexes.len());
-        let mut field_offsets = Vec::with_capacity(table_indexes.len());
         let mut field_offsets_set = HashSet::new();
+        let mut statistics_params = BTreeMap::new();
 
         for index in table_indexes.values() {
             if !matches!(index.index_type, TableIndexType::Vector) {
@@ -109,10 +123,6 @@ impl VectorIndexBuilder {
                 );
                 continue;
             }
-            for (offset, _) in &offsets {
-                field_offsets_set.insert(*offset);
-            }
-            field_offsets.push(offsets);
 
             // Parse index parameters
             let m = match index.options.get("m") {
@@ -148,6 +158,16 @@ impl VectorIndexBuilder {
                 );
                 continue;
             }
+            for (offset, column_id) in &offsets {
+                field_offsets_set.insert(*offset);
+                // Vector statistics currently use only the first configured distance type
+                // to avoid scanning the same vectors multiple times during block writing.
+                // If stat-based pruning needs full coverage for multi-distance indexes,
+                // extend statistics_params to keep all distance types per column.
+                statistics_params
+                    .entry(*offset)
+                    .or_insert((*column_id, distances[0]));
+            }
             info!(
                 "Added vector index parameters for {}: m={}, ef_construct={}, distances={:?}",
                 index.name, m, ef_construct, distances
@@ -158,6 +178,7 @@ impl VectorIndexBuilder {
                 m,
                 ef_construct,
                 distances,
+                field_offsets: offsets,
             };
             index_params.push(index_param);
         }
@@ -167,11 +188,11 @@ impl VectorIndexBuilder {
             columns.insert(*offset, vec![]);
         }
 
-        if !field_offsets.is_empty() {
+        if !field_offsets_set.is_empty() {
             Some(VectorIndexBuilder {
                 index_params,
-                field_offsets,
                 field_offsets_set,
+                statistics_params,
                 columns,
             })
         } else {
@@ -197,7 +218,8 @@ impl VectorIndexBuilder {
         let start = Instant::now();
         info!("Start build vector HNSW index for location: {}", location.0);
 
-        let result = self.build_vector_index()?;
+        let concated_columns = self.take_concated_columns()?;
+        let result = self.build_vector_index(&concated_columns)?;
         let VectorIndexResult {
             index_fields,
             index_columns,
@@ -239,8 +261,25 @@ impl VectorIndexBuilder {
         Ok(state)
     }
 
+    pub(crate) fn finalize_block(&mut self, location: &Location) -> Result<VectorIndexBuildState> {
+        let concated_columns = self.take_concated_columns()?;
+        let vector_stats = self.build_vector_statistics(&concated_columns)?;
+        if self.index_params.is_empty() {
+            return Ok(VectorIndexBuildState {
+                index_state: None,
+                vector_stats,
+            });
+        }
+
+        let index_state = self.finalize_with_columns(location, &concated_columns)?;
+        Ok(VectorIndexBuildState {
+            index_state: Some(index_state),
+            vector_stats,
+        })
+    }
+
     #[async_backtrace::framed]
-    pub async fn finalize_with_existing(
+    pub(crate) async fn finalize_with_existing(
         &mut self,
         operator: Operator,
         settings: &ReadSettings,
@@ -248,10 +287,10 @@ impl VectorIndexBuilder {
         existing_location: Option<&Location>,
         existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
         existing_index_meta: Option<BTreeMap<String, String>>,
-    ) -> Result<VectorIndexState> {
+    ) -> Result<VectorIndexBuildState> {
         // If there's no existing vector index, just use the regular finalize method
         if existing_location.is_none() || existing_column_metas.is_none() {
-            return self.finalize(location);
+            return self.finalize_block(location);
         }
 
         // Process new vector index data
@@ -283,7 +322,9 @@ impl VectorIndexBuilder {
             start.elapsed().as_millis() as u64
         );
 
-        let result = self.build_vector_index()?;
+        let concated_columns = self.take_concated_columns()?;
+        let vector_stats = self.build_vector_statistics(&concated_columns)?;
+        let result = self.build_vector_index(&concated_columns)?;
         let VectorIndexResult {
             mut index_fields,
             mut index_columns,
@@ -342,10 +383,60 @@ impl VectorIndexBuilder {
             location.0, size, elapsed_ms
         );
 
+        Ok(VectorIndexBuildState {
+            index_state: Some(state),
+            vector_stats,
+        })
+    }
+
+    fn finalize_with_columns(
+        &self,
+        location: &Location,
+        concated_columns: &BTreeMap<usize, Column>,
+    ) -> Result<VectorIndexState> {
+        let start = Instant::now();
+        info!("Start build vector HNSW index for location: {}", location.0);
+
+        let result = self.build_vector_index(concated_columns)?;
+        let VectorIndexResult {
+            index_fields,
+            index_columns,
+            metadata,
+        } = result;
+
+        let index_schema = TableSchemaRefExt::create(index_fields);
+        let index_block = DataBlock::new(index_columns, 1);
+
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = blocks_to_parquet(
+            index_schema.as_ref(),
+            vec![index_block],
+            &mut data,
+            TableCompression::Zstd,
+            false,
+            Some(metadata),
+        )?;
+
+        let size = data.len() as u64;
+        let state = VectorIndexState {
+            location: location.clone(),
+            size,
+            data,
+        };
+
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        {
+            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
+        }
+        info!(
+            "Finish build vector HNSW index: location={}, size={} bytes in {} ms",
+            location.0, size, elapsed_ms
+        );
+
         Ok(state)
     }
 
-    fn build_vector_index(&mut self) -> Result<VectorIndexResult> {
+    fn take_concated_columns(&mut self) -> Result<BTreeMap<usize, Column>> {
         let mut columns = BTreeMap::new();
         for offset in &self.field_offsets_set {
             columns.insert(*offset, vec![]);
@@ -358,13 +449,20 @@ impl VectorIndexBuilder {
             concated_columns.insert(offset, concated_column);
         }
 
+        Ok(concated_columns)
+    }
+
+    fn build_vector_index(
+        &self,
+        concated_columns: &BTreeMap<usize, Column>,
+    ) -> Result<VectorIndexResult> {
         let mut index_fields = Vec::new();
         let mut index_columns = Vec::new();
         let mut metadata = Vec::with_capacity(self.index_params.len());
 
-        for (field_offsets, index_param) in self.field_offsets.iter().zip(&self.index_params) {
+        for index_param in &self.index_params {
             debug!("Building HNSW index for {}", index_param.index_name);
-            for (offset, column_id) in field_offsets {
+            for (offset, column_id) in &index_param.field_offsets {
                 let Some(column) = concated_columns.get(offset) else {
                     return Err(ErrorCode::Internal("Can't find vector column"));
                 };
@@ -394,10 +492,88 @@ impl VectorIndexBuilder {
         };
         Ok(result)
     }
+
+    fn build_vector_statistics(
+        &self,
+        concated_columns: &BTreeMap<usize, Column>,
+    ) -> Result<Option<StatisticsOfVectorColumns>> {
+        if self.statistics_params.is_empty() {
+            return Ok(None);
+        }
+
+        let mut statistics = StatisticsOfVectorColumns::new();
+        for (offset, (column_id, distance_type)) in &self.statistics_params {
+            let Some(column) = concated_columns.get(offset) else {
+                return Err(ErrorCode::Internal("Can't find vector column"));
+            };
+            let vector_distance_type = vector_statistics_distance_type(*distance_type);
+            if let Some(vector_stats) = vector_statistics_from_column(column, *distance_type)? {
+                statistics.insert((*column_id, vector_distance_type), vector_stats);
+            }
+        }
+
+        Ok((!statistics.is_empty()).then_some(statistics))
+    }
 }
 
 struct VectorIndexResult {
     index_fields: Vec<TableField>,
     index_columns: Vec<BlockEntry>,
     metadata: Vec<KeyValue>,
+}
+
+fn vector_statistics_from_column(
+    column: &Column,
+    distance_type: DistanceType,
+) -> Result<Option<VectorColumnStatistics>> {
+    let column = column.remove_nullable();
+    match &column {
+        Column::Vector(VectorColumn::Float32((values, dimension))) => {
+            vector_statistics_from_vectors(values.as_slice(), *dimension, distance_type)
+        }
+        _ => Ok(None),
+    }
+}
+
+fn vector_statistics_from_vectors(
+    values: &[F32],
+    dimension: usize,
+    distance_type: DistanceType,
+) -> Result<Option<VectorColumnStatistics>> {
+    if dimension == 0 || values.is_empty() || !values.len().is_multiple_of(dimension) {
+        return Ok(None);
+    }
+
+    let rows = values.len() / dimension;
+    let mut centroid = vec![0.0_f64; dimension];
+    for vector in values.chunks_exact(dimension) {
+        let vector = preprocess_vector(vector, distance_type);
+        for (idx, value) in vector.iter().enumerate() {
+            centroid[idx] += *value as f64;
+        }
+    }
+
+    let mut centroid = centroid
+        .into_iter()
+        .map(|value| (value / rows as f64) as f32)
+        .collect::<Vec<_>>();
+    if matches!(distance_type, DistanceType::Dot) {
+        normalize_vector(&mut centroid);
+    }
+
+    let mut radius = 0.0_f32;
+    let vector_distance_type = vector_statistics_distance_type(distance_type);
+    for vector in values.chunks_exact(dimension) {
+        let vector = preprocess_vector(vector, distance_type);
+        radius = radius.max(vector_stat_distance(
+            &vector,
+            &centroid,
+            vector_distance_type,
+        )?);
+    }
+
+    Ok(Some(VectorColumnStatistics {
+        centroid: centroid.into_iter().map(F32::from).collect(),
+        radius: F32::from(radius),
+    }))
 }

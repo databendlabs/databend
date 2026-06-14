@@ -23,9 +23,9 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::SortColumnDescription;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
@@ -43,6 +43,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformVectorClusterKmeans;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -181,11 +182,12 @@ impl IPhysicalPlan for Recluster {
                         .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
                 }
 
+                let input_schema = DataSchema::from(table.schema_with_stream()).into();
                 let cluster_stats_gen = table.get_cluster_stats_gen(
                     builder.ctx.clone(),
                     task.level + 1,
                     block_thresholds,
-                    None,
+                    input_schema,
                 )?;
                 let operators = cluster_stats_gen.operators.clone();
                 if !operators.is_empty() {
@@ -199,27 +201,33 @@ impl IPhysicalPlan for Recluster {
                     });
                 }
 
-                // construct output fields
-                let output_fields = cluster_stats_gen.out_fields.clone();
-                let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs: Vec<_> = cluster_stats_gen
-                    .cluster_key_index
-                    .iter()
-                    .map(|offset| SortColumnDescription {
-                        offset: *offset,
-                        asc: true,
-                        nulls_first: false,
-                    })
-                    .collect();
+                let settings = builder.ctx.get_settings();
+                let max_threads = settings.get_max_threads()? as usize;
 
-                // merge sort
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
                     task.total_rows,
                     task.total_bytes,
                     task.total_compressed,
                 );
 
-                let settings = builder.ctx.get_settings();
+                if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+                    builder.main_pipeline.try_resize(1)?;
+                    builder.main_pipeline.add_accumulating_transformer(move || {
+                        TransformVectorClusterKmeans::new(
+                            vector_operator.vector_column_input_offset,
+                            vector_operator.info.distance_type,
+                            rows_per_block,
+                        )
+                    });
+                    builder.main_pipeline.try_resize(max_threads)?;
+                }
+
+                // construct output fields
+                let output_fields = cluster_stats_gen.out_fields.clone();
+                let schema = DataSchemaRefExt::create(output_fields);
+                let sort_descs = cluster_stats_gen.sort_descs();
+
+                // merge sort
                 let sort_pipeline_builder = SortPipelineBuilder::create(
                     builder.ctx.clone(),
                     schema,
@@ -237,7 +245,6 @@ impl IPhysicalPlan for Recluster {
                 let compact_thresholds = block_thresholds
                     .set_rows_per_block(rows_per_block)
                     .set_bytes_per_block(bytes_per_block);
-                let max_threads = settings.get_max_threads()? as usize;
                 build_ordered_compact_pipeline(
                     &mut builder.main_pipeline,
                     compact_thresholds,

@@ -34,6 +34,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::Buffer;
@@ -48,9 +49,12 @@ use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruni
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::FixedLengthPriorityQueue;
 use databend_storages_common_index::ScoredPointOffset;
+use databend_storages_common_index::vector_distance_lower_bound;
+use databend_storages_common_index::vector_statistics_distance_type;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use futures_util::future;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
@@ -71,6 +75,12 @@ struct VectorTopNParam {
     limit: usize,
 }
 
+#[derive(Clone)]
+struct VectorFilterParam {
+    filter_expr: Expr,
+    max_score: Option<f32>,
+}
+
 /// Vector index pruner.
 #[derive(Clone)]
 pub struct VectorIndexPruner {
@@ -79,6 +89,9 @@ pub struct VectorIndexPruner {
     _schema: TableSchemaRef,
     vector_index: VectorIndexInfo,
     vector_reader: VectorIndexReader,
+    query_values: Vec<f32>,
+    vector_distance_type: VectorDistanceType,
+    vector_filter_param: Option<VectorFilterParam>,
     vector_topn_param: Option<VectorTopNParam>,
 }
 
@@ -113,15 +126,19 @@ impl VectorIndexPruner {
             ),
         ];
 
-        let query_values =
-            unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
+        let vector_distance_type = vector_statistics_distance_type(distance_type);
+        let query_values = vector_index
+            .query_values
+            .iter()
+            .map(|value| value.0)
+            .collect::<Vec<_>>();
 
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
             settings,
             distance_type,
             columns,
-            query_values,
+            query_values.clone(),
         );
 
         // If the filter only has the vector score column, we can filter the scores.
@@ -137,6 +154,10 @@ impl VectorIndexPruner {
         } else {
             None
         };
+        let vector_filter_param = filter_expr.clone().map(|filter_expr| VectorFilterParam {
+            max_score: vector_score_upper_bound(&filter_expr),
+            filter_expr,
+        });
 
         let mut vector_topn_param = None;
         // If the first sort expr is the vector score column and has the limit value,
@@ -162,6 +183,9 @@ impl VectorIndexPruner {
             _schema: schema,
             vector_index,
             vector_reader,
+            query_values,
+            vector_distance_type,
+            vector_filter_param,
             vector_topn_param,
         })
     }
@@ -230,7 +254,13 @@ impl VectorIndexPruner {
             return Ok(pruned_metas);
         }
 
-        // Unable to do prune, fallback to only calculating the score
+        if let Some(param) = &self.vector_filter_param {
+            return self
+                .vector_index_filter_prune(Some(&param.filter_expr), param.max_score, metas)
+                .await;
+        }
+
+        // Unable to do prune, fallback to only calculating the score.
         self.vector_index_scores(metas).await
     }
 
@@ -239,21 +269,44 @@ impl VectorIndexPruner {
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let results = self
-            .process_vector_pruning_tasks(metas, move |vector_reader, row_count, location| {
-                let limit = limit;
-                async move { vector_reader.prune(limit, row_count, &location).await }
-            })
-            .await?;
-
         let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        let len = results.len();
+        let mut candidates = self.vector_prune_candidates(metas)?;
+        let len = candidates.len();
+        candidates.sort_by(|left, right| compare_lower_bound(left.lower_bound, right.lower_bound));
+
         let mut vector_prune_result_map = HashMap::with_capacity(len);
-        for vector_prune_result in results {
+        let mut processed_blocks = 0usize;
+        let filter_max_score = self
+            .vector_filter_param
+            .as_ref()
+            .and_then(|param| param.max_score);
+        for candidate in candidates {
+            if self.can_skip_by_filter_bound(candidate.lower_bound, filter_max_score) {
+                continue;
+            }
+            if self.can_skip_by_lower_bound(candidate.lower_bound, &top_queue, limit) {
+                break;
+            }
+
+            let vector_prune_result = self
+                .process_vector_pruning_candidate(
+                    candidate,
+                    move |vector_reader, row_count, location| async move {
+                        vector_reader.prune(limit, row_count, &location).await
+                    },
+                )
+                .await?;
+            processed_blocks += 1;
             for vector_score in &vector_prune_result.scores {
                 top_queue.push(vector_score.clone());
             }
             vector_prune_result_map.insert(vector_prune_result.block_idx, vector_prune_result);
+        }
+        if processed_blocks < len {
+            info!(
+                "Vector stat lower bound pruned {} blocks before hnsw topn",
+                len - processed_blocks
+            );
         }
 
         let top_scores = top_queue.into_sorted_vec();
@@ -288,6 +341,12 @@ impl VectorIndexPruner {
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if asc {
+            return self
+                .vector_index_topn_prune_by_stat_bounds(filter_expr, limit, metas)
+                .await;
+        }
+
         let results = self
             .process_vector_pruning_tasks(
                 metas,
@@ -373,6 +432,73 @@ impl VectorIndexPruner {
         Ok(pruned_metas)
     }
 
+    async fn vector_index_topn_prune_by_stat_bounds(
+        &self,
+        filter_expr: &Option<Expr>,
+        limit: usize,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let mut top_queue = FixedLengthPriorityQueue::new(limit);
+        let mut candidates = self.vector_prune_candidates(metas)?;
+        let len = candidates.len();
+        candidates.sort_by(|left, right| compare_lower_bound(left.lower_bound, right.lower_bound));
+
+        let mut vector_prune_result_map = HashMap::with_capacity(len);
+        let mut processed_blocks = 0usize;
+        for candidate in candidates {
+            if self.can_skip_by_lower_bound(candidate.lower_bound, &top_queue, limit) {
+                break;
+            }
+
+            let vector_prune_result = self
+                .process_vector_pruning_candidate(
+                    candidate,
+                    |vector_reader, row_count, location| async move {
+                        vector_reader.generate_scores(row_count, &location).await
+                    },
+                )
+                .await?;
+            processed_blocks += 1;
+
+            if self.push_scores_to_top_queue(
+                filter_expr,
+                true,
+                &vector_prune_result,
+                &mut top_queue,
+            )? {
+                vector_prune_result_map.insert(vector_prune_result.block_idx, vector_prune_result);
+            }
+        }
+        if processed_blocks < len {
+            info!(
+                "Vector stat lower bound pruned {} blocks before score topn",
+                len - processed_blocks
+            );
+        }
+
+        let top_scores = top_queue.into_sorted_vec();
+        let top_indexes: HashSet<usize> = top_scores.iter().map(|s| s.index).collect();
+
+        let mut pruned_metas = Vec::with_capacity(top_indexes.len());
+        for index in 0..len {
+            if !top_indexes.contains(&index) {
+                continue;
+            }
+            let vector_prune_result = vector_prune_result_map.remove(&index).unwrap();
+
+            let mut vector_scores = Vec::with_capacity(vector_prune_result.scores.len());
+            for vector_score in &vector_prune_result.scores {
+                vector_scores.push((vector_score.row_idx as usize, vector_score.score));
+            }
+            let mut block_meta_index = vector_prune_result.block_meta_index;
+            block_meta_index.vector_scores = Some(vector_scores);
+
+            pruned_metas.push((block_meta_index, vector_prune_result.block_meta));
+        }
+
+        Ok(pruned_metas)
+    }
+
     async fn vector_index_scores(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
@@ -419,6 +545,70 @@ impl VectorIndexPruner {
             metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
         }
         info!("Vector index calculate score elapsed: {elapsed}");
+
+        Ok(new_metas)
+    }
+
+    async fn vector_index_filter_prune(
+        &self,
+        filter_expr: Option<&Expr>,
+        max_score: Option<f32>,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let start = Instant::now();
+        let mut skipped_blocks = 0usize;
+        let candidates = self.vector_prune_candidates(metas)?;
+        let mut keep_metas = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            if self.can_skip_by_filter_bound(candidate.lower_bound, max_score) {
+                skipped_blocks += 1;
+                continue;
+            }
+            keep_metas.push((candidate.block_meta_index, candidate.block_meta));
+        }
+        if keep_metas.is_empty() {
+            if skipped_blocks > 0 {
+                info!("Vector stat lower bound pruned {skipped_blocks} blocks before score filter");
+            }
+            return Ok(vec![]);
+        }
+
+        let results = self
+            .pruning_ctx
+            .pruning_cost
+            .measure_async(
+                PruningCostKind::BlocksVector,
+                self.process_vector_pruning_tasks(
+                    keep_metas,
+                    |vector_reader, row_count, location| async move {
+                        vector_reader.generate_scores(row_count, &location).await
+                    },
+                ),
+            )
+            .await?;
+
+        let mut new_metas = Vec::with_capacity(results.len());
+        for vector_prune_result in results {
+            if !self.block_matches_vector_filter(filter_expr, &vector_prune_result)? {
+                continue;
+            }
+
+            let mut vector_scores = Vec::with_capacity(vector_prune_result.scores.len());
+            for vector_score in &vector_prune_result.scores {
+                vector_scores.push((vector_score.row_idx as usize, vector_score.score));
+            }
+            let mut block_meta_index = vector_prune_result.block_meta_index;
+            block_meta_index.vector_scores = Some(vector_scores);
+
+            new_metas.push((block_meta_index, vector_prune_result.block_meta));
+        }
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
+        if skipped_blocks > 0 {
+            info!("Vector stat lower bound pruned {skipped_blocks} blocks before score filter");
+        }
+        info!("Vector index calculate score filter elapsed: {elapsed}");
 
         Ok(new_metas)
     }
@@ -498,9 +688,196 @@ impl VectorIndexPruner {
 
         Ok(results)
     }
+
+    async fn process_vector_pruning_candidate<F, Fut>(
+        &self,
+        candidate: VectorPruneCandidate,
+        vector_reader_op: F,
+    ) -> Result<VectorPruneResult>
+    where
+        F: FnOnce(VectorIndexReader, usize, String) -> Fut,
+        Fut: Future<Output = Result<Vec<ScoredPointOffset>>> + Send,
+    {
+        let VectorPruneCandidate {
+            index,
+            block_meta_index,
+            block_meta,
+            ..
+        } = candidate;
+        let Some(location) = &block_meta.vector_index_location else {
+            return Err(ErrorCode::StorageUnavailable(format!(
+                "vector index {} file don't exist, need refresh",
+                self.vector_index.index_name
+            )));
+        };
+
+        let row_count = block_meta.row_count as usize;
+        let score_offsets =
+            vector_reader_op(self.vector_reader.clone(), row_count, location.0.clone()).await?;
+
+        let mut vector_scores = Vec::with_capacity(score_offsets.len());
+        for score_offset in score_offsets {
+            let vector_score = VectorScore {
+                index,
+                row_idx: score_offset.idx,
+                score: F32::from(score_offset.score),
+            };
+            vector_scores.push(vector_score);
+        }
+
+        Ok(VectorPruneResult {
+            block_idx: index,
+            scores: vector_scores,
+            block_meta_index,
+            block_meta,
+        })
+    }
+
+    fn vector_prune_candidates(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<VectorPruneCandidate>> {
+        metas
+            .into_iter()
+            .enumerate()
+            .map(|(index, (block_meta_index, block_meta))| {
+                let lower_bound = self.vector_stat_lower_bound(block_meta.as_ref())?;
+                Ok(VectorPruneCandidate {
+                    index,
+                    block_meta_index,
+                    block_meta,
+                    lower_bound,
+                })
+            })
+            .collect()
+    }
+
+    fn vector_stat_lower_bound(&self, block_meta: &BlockMeta) -> Result<Option<f32>> {
+        let Some(vector_stats) = block_meta.vector_stats.as_ref() else {
+            return Ok(None);
+        };
+        let Some(vector_stat) =
+            vector_stats.get(&(self.vector_index.column_id, self.vector_distance_type))
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(vector_distance_lower_bound(
+            &self.query_values,
+            vector_stat,
+            self.vector_distance_type,
+        )?))
+    }
+
+    fn can_skip_by_lower_bound(
+        &self,
+        lower_bound: Option<f32>,
+        top_queue: &FixedLengthPriorityQueue<VectorScore>,
+        limit: usize,
+    ) -> bool {
+        let Some(lower_bound) = lower_bound else {
+            return false;
+        };
+        if top_queue.len() < limit {
+            return false;
+        }
+
+        top_queue
+            .top()
+            .is_some_and(|score| lower_bound > score.score.0)
+    }
+
+    fn can_skip_by_filter_bound(&self, lower_bound: Option<f32>, max_score: Option<f32>) -> bool {
+        let (Some(lower_bound), Some(max_score)) = (lower_bound, max_score) else {
+            return false;
+        };
+
+        lower_bound > max_score
+    }
+
+    fn block_matches_vector_filter(
+        &self,
+        filter_expr: Option<&Expr>,
+        vector_prune_result: &VectorPruneResult,
+    ) -> Result<bool> {
+        let Some(filter_expr) = filter_expr else {
+            return Ok(true);
+        };
+
+        let num_rows = vector_prune_result.block_meta.row_count as usize;
+        let mut builder = Vec::with_capacity(num_rows);
+        for score in &vector_prune_result.scores {
+            builder.push(F32::from(score.score));
+        }
+        let column = Column::Number(NumberColumn::Float32(Buffer::from(builder)));
+        let block = DataBlock::new(vec![BlockEntry::from(column)], num_rows);
+        let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let res = evaluator.run(filter_expr)?;
+        let res_column = res.into_full_column(filter_expr.data_type(), num_rows);
+        let res_column = res_column.remove_nullable();
+        let bitmap = res_column.as_boolean().unwrap();
+
+        Ok(bitmap.null_count() != num_rows)
+    }
+
+    fn push_scores_to_top_queue(
+        &self,
+        filter_expr: &Option<Expr>,
+        asc: bool,
+        vector_prune_result: &VectorPruneResult,
+        top_queue: &mut FixedLengthPriorityQueue<VectorScore>,
+    ) -> Result<bool> {
+        let mut pushed = false;
+        if let Some(filter_expr) = filter_expr {
+            let num_rows = vector_prune_result.block_meta.row_count as usize;
+            let mut builder = Vec::with_capacity(num_rows);
+            for score in &vector_prune_result.scores {
+                builder.push(F32::from(score.score));
+            }
+            let column = Column::Number(NumberColumn::Float32(Buffer::from(builder)));
+            let block = DataBlock::new(vec![BlockEntry::from(column)], num_rows);
+            let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let res = evaluator.run(filter_expr)?;
+            let res_column = res.into_full_column(filter_expr.data_type(), num_rows);
+            let res_column = res_column.remove_nullable();
+            let bitmap = res_column.as_boolean().unwrap();
+            if bitmap.null_count() == num_rows {
+                return Ok(false);
+            }
+
+            for (idx, vector_score) in vector_prune_result.scores.iter().enumerate() {
+                if bitmap.get_bit(idx) {
+                    if asc {
+                        top_queue.push(vector_score.clone());
+                    } else {
+                        top_queue.push(vector_score.negative_score());
+                    }
+                    pushed = true;
+                }
+            }
+            return Ok(pushed);
+        }
+
+        for vector_score in &vector_prune_result.scores {
+            if asc {
+                top_queue.push(vector_score.clone());
+            } else {
+                top_queue.push(vector_score.negative_score());
+            }
+            pushed = true;
+        }
+        Ok(pushed)
+    }
 }
 
 // result of vector index block pruning
+struct VectorPruneCandidate {
+    index: usize,
+    block_meta_index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    lower_bound: Option<f32>,
+}
+
 struct VectorPruneResult {
     // the block index in segment
     block_idx: usize,
@@ -537,5 +914,67 @@ impl VectorScore {
             row_idx: self.row_idx,
             score: -self.score,
         }
+    }
+}
+
+fn compare_lower_bound(left: Option<f32>, right: Option<f32>) -> Ordering {
+    let left = left.unwrap_or(f32::INFINITY);
+    let right = right.unwrap_or(f32::INFINITY);
+    left.partial_cmp(&right).unwrap_or(Ordering::Equal)
+}
+
+fn vector_score_upper_bound(expr: &Expr) -> Option<f32> {
+    let Expr::FunctionCall(call) = expr else {
+        return None;
+    };
+
+    match call.function.signature.name.as_str() {
+        "and" | "and_filters" => call
+            .args
+            .iter()
+            .filter_map(vector_score_upper_bound)
+            .min_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal)),
+        "lt" | "lte" => comparison_upper_bound(&call.args, true),
+        "gt" | "gte" => comparison_upper_bound(&call.args, false),
+        _ => None,
+    }
+}
+
+fn comparison_upper_bound(args: &[Expr], column_on_left: bool) -> Option<f32> {
+    if args.len() != 2 {
+        return None;
+    }
+
+    if column_on_left {
+        if is_vector_score_expr(&args[0]) {
+            return numeric_constant(&args[1]);
+        }
+    } else if is_vector_score_expr(&args[1]) {
+        return numeric_constant(&args[0]);
+    }
+
+    None
+}
+
+fn is_vector_score_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::ColumnRef(column) => column.id == 0,
+        Expr::Cast(cast) => is_vector_score_expr(&cast.expr),
+        _ => false,
+    }
+}
+
+fn numeric_constant(expr: &Expr) -> Option<f32> {
+    match expr {
+        Expr::Constant(constant) => scalar_to_f32(&constant.scalar),
+        Expr::Cast(cast) => numeric_constant(&cast.expr),
+        _ => None,
+    }
+}
+
+fn scalar_to_f32(scalar: &Scalar) -> Option<f32> {
+    match scalar {
+        Scalar::Number(number) => Some(number.to_f32().0),
+        _ => None,
     }
 }
