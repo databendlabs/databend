@@ -196,7 +196,7 @@ impl HashJoinDesc {
         let build_keys = &self.build_keys;
         let mut _nullable_chunk = None;
         let evaluator = match self.join_type {
-            JoinType::Left => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 let validity = Bitmap::new_constant(true, block.num_rows());
                 let nullable_columns = block
                     .columns()
