@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_blocks::BlockParquetWriter;
 use databend_storages_common_blocks::NdvProvider;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -46,6 +47,7 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use opendal::Buffer;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -131,14 +133,14 @@ impl ArrowParquetWriter {
     }
 
     /// Encode all buffered blocks into a single row group, returning the per-column
-    /// metadata together with the serialized parquet bytes.
-    fn finish(self, schema: &TableSchemaRef) -> Result<(HashMap<ColumnId, ColumnMeta>, Vec<u8>)> {
+    /// metadata together with the serialized parquet bytes as opendal chunks.
+    fn finish(self, schema: &TableSchemaRef) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
         };
-        let (bytes, file_meta) = writer.inner.finish()?;
-        let col_metas = column_parquet_metas(&file_meta, schema)?;
-        Ok((col_metas, bytes))
+        let SerializedParquet { payload, metadata } = writer.inner.finish()?;
+        let col_metas = column_parquet_metas(&metadata, schema)?;
+        Ok((col_metas, Buffer::from(payload)))
     }
 
     fn compressed_size(&self) -> usize {

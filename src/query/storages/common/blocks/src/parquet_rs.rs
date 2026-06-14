@@ -26,13 +26,13 @@ use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
-use parquet::file::metadata::ParquetMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
 use crate::parquet_writer::BlockParquetWriter;
+use crate::parquet_writer::SerializedParquet;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
@@ -44,19 +44,17 @@ const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 << 20);
 /// margin for estimation inaccuracy when row sizes are not uniform.
 pub const MAX_BATCH_MEMORY_SIZE: usize = 1 << 26; // 64MB
 
-/// Serialize data blocks to parquet format.
+/// Serialize data blocks to parquet format, returning the serialized bytes and metadata.
 pub fn blocks_to_parquet(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
-    write_buffer: &mut Vec<u8>,
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
-) -> Result<ParquetMetaData> {
+) -> Result<SerializedParquet> {
     blocks_to_parquet_with_stats(
         table_schema,
         blocks,
-        write_buffer,
         compression,
         enable_dictionary,
         metadata,
@@ -70,23 +68,24 @@ pub fn blocks_to_parquet(
 ///
 /// * `table_schema` - Logical schema used to build Arrow batches.
 /// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
-/// * `write_buffer` - Destination buffer that receives the serialized Parquet bytes.
 /// * `compression` - Compression algorithm specified by table-level settings.
 /// * `enable_dictionary` - Enables dictionary encoding globally before per-column overrides.
 /// * `metadata` - Additional user metadata embedded into the Parquet footer.
 /// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
 ///   before ArrowWriter instantiation disables further changes.
+///
+/// Returns the serialized parquet bytes together with the file metadata; the caller owns the
+/// buffer directly (no intermediate copy into a borrowed buffer).
 pub fn blocks_to_parquet_with_stats(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
-    write_buffer: &mut Vec<u8>,
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
     column_stats: Option<&StatisticsOfColumns>,
     data_page_rows: Option<usize>,
     data_page_bytes: Option<usize>,
-) -> Result<ParquetMetaData> {
+) -> Result<SerializedParquet> {
     assert!(!blocks.is_empty());
 
     // Dictionary heuristics rely only on the first block's NDV (and row count) snapshot,
@@ -109,9 +108,7 @@ pub fn blocks_to_parquet_with_stats(
     // so the previous `write_batch_with_page_limit` splitting is no longer needed.
     let mut writer = BlockParquetWriter::new(arrow_schema, props);
     writer.write_blocks(blocks);
-    let (bytes, file_meta) = writer.finish()?;
-    write_buffer.extend_from_slice(&bytes);
-    Ok(file_meta)
+    writer.finish()
 }
 
 /// Split large batches before writing to avoid arrow-rs page size errors.

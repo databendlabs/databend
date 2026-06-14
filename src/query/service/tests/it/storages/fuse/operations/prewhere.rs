@@ -226,9 +226,8 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
 
     let write_settings = WriteSettings::default();
     let compression: Compression = write_settings.table_compression.into();
-    let mut buf = Vec::new();
-    let column_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
-    let parquet_bytes = bytes::Bytes::from(buf);
+    let (column_metas, buf) = serialize_block(&write_settings, &schema, block)?;
+    let parquet_bytes = buf.to_bytes();
 
     // Create operator (memory-based for testing)
     let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;

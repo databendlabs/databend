@@ -25,16 +25,22 @@
 //! - [`BlockParquetWriter`] (row-oriented, high-level): buffers incoming `DataBlock`s,
 //!   then at `finish` replays them column-by-column through a [`BulkBlockParquetWriter`].
 //!
-//! Both are restricted to a single row group.
+//! Both are restricted to a single row group. The underlying sink is a
+//! [`ChunkedWriteBuffer`] (4 MiB chunks) rather than a single growing `Vec<u8>`, to avoid
+//! repeated reallocation/copy as a large row group is serialized; at `finish` the chunks are
+//! handed out as-is in [`SerializedParquet::payload`] (a `Vec<Bytes>`), so the fuse write
+//! path can forward them straight to opendal with no consolidation copy.
 //!
 //! NOTE: the leaf-value dispatch is reused from arrow-rs via the fork's public
 //! `write_leaf_column`/`write_byte_array_column`. Keep in sync with the pinned fork rev.
 
+use std::io;
 use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Schema;
+use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -51,6 +57,92 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
+
+/// Default chunk size for [`ChunkedWriteBuffer`]: 4 MiB.
+const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+
+/// A `Write` sink backed by a list of fixed-size chunks instead of one growing `Vec<u8>`.
+///
+/// `SerializedFileWriter` needs a `W: Write`. Backing it with a single `Vec<u8>` means every
+/// time the vector outgrows its capacity it reallocates and copies *all* bytes written so
+/// far — for a multi-hundred-MB row group that is repeated large memcpys plus transient 2x
+/// peak memory. Appending into 4 MiB chunks avoids both: existing bytes are never moved, and
+/// growth costs one chunk allocation. At finish the chunks are handed out as-is via
+/// [`Self::into_chunks`] (each `Vec<u8>` becomes a `Bytes` with no copy), so the serialized
+/// payload can travel to IO non-contiguously without ever being consolidated.
+struct ChunkedWriteBuffer {
+    chunk_size: usize,
+    chunks: Vec<Vec<u8>>,
+    len: usize,
+}
+
+impl ChunkedWriteBuffer {
+    fn new(chunk_size: usize) -> Self {
+        Self {
+            chunk_size,
+            chunks: Vec::new(),
+            len: 0,
+        }
+    }
+
+    /// Hand out the chunks as `Bytes` without copying their contents (each `Vec<u8>` is moved
+    /// into a `Bytes`). The caller can write them to IO in order, or join them if a
+    /// contiguous buffer is required.
+    fn into_chunks(self) -> Vec<Bytes> {
+        self.chunks.into_iter().map(Bytes::from).collect()
+    }
+}
+
+impl io::Write for ChunkedWriteBuffer {
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
+        let total = buf.len();
+        while !buf.is_empty() {
+            let need_new_chunk = self
+                .chunks
+                .last()
+                .is_none_or(|c| c.len() >= self.chunk_size);
+            if need_new_chunk {
+                let cap = self.chunk_size.max(buf.len());
+                self.chunks.push(Vec::with_capacity(cap));
+            }
+            let chunk = self.chunks.last_mut().unwrap();
+            let room = chunk.capacity() - chunk.len();
+            let take = room.min(buf.len());
+            chunk.extend_from_slice(&buf[..take]);
+            buf = &buf[take..];
+        }
+        self.len += total;
+        Ok(total)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Result of finishing a [`BulkBlockParquetWriter`] / [`BlockParquetWriter`]: the serialized
+/// single-row-group Parquet bytes plus the file metadata.
+///
+/// `payload` is a list of contiguous chunks (~4 MiB each) rather than one `Vec<u8>`: the
+/// fuse write path forwards it straight to opendal (`Buffer::from(Vec<Bytes>)`) with no
+/// consolidation copy. Callers that genuinely need one contiguous buffer should concat the
+/// chunks themselves (e.g. `payload.concat()`) rather than relying on a helper, so the copy
+/// stays explicit at the call site.
+pub struct SerializedParquet {
+    pub payload: Vec<Bytes>,
+    pub metadata: ParquetMetaData,
+}
+
+impl SerializedParquet {
+    /// Total byte length of the serialized parquet across all chunks.
+    pub fn len(&self) -> usize {
+        self.payload.iter().map(|c| c.len()).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.payload.iter().all(|c| c.is_empty())
+    }
+}
 
 /// Whether a parquet leaf column should be encoded with the specialized
 /// [`ByteArrayEncoder`] (zero-copy byte arrays + dictionary) or the generic
@@ -131,7 +223,7 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 /// fill (no simultaneous encoded column-chunk buffering, unlike `ArrowWriter`). This is the
 /// core primitive the future vertical-merge path drives directly.
 pub struct BulkBlockParquetWriter {
-    file_writer: SerializedFileWriter<Vec<u8>>,
+    file_writer: SerializedFileWriter<ChunkedWriteBuffer>,
     arrow_schema: Arc<Schema>,
     leaf_kinds: Vec<LeafEncoderKind>,
     field_leaf_counts: Vec<usize>,
@@ -146,7 +238,8 @@ impl BulkBlockParquetWriter {
             .with_coerce_types(props.coerce_types())
             .convert(&arrow_schema)?;
         let root = parquet_schema.root_schema_ptr();
-        let file_writer = SerializedFileWriter::new(Vec::new(), root, props)?;
+        let file_writer =
+            SerializedFileWriter::new(ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE), root, props)?;
         let (leaf_kinds, field_leaf_counts) = classify_schema(&arrow_schema);
         debug_assert_eq!(leaf_kinds.len(), parquet_schema.num_columns());
         let columns = vec![Vec::new(); arrow_schema.fields().len()];
@@ -184,7 +277,7 @@ impl BulkBlockParquetWriter {
     /// Encode the buffered columns into the single row group, then write the footer and
     /// return the serialized bytes together with the metadata. Errors if fewer columns were
     /// requested via [`Self::next_column`] than the schema declares.
-    pub fn finish(mut self) -> Result<(Vec<u8>, ParquetMetaData)> {
+    pub fn finish(mut self) -> Result<SerializedParquet> {
         let num_fields = self.arrow_schema.fields().len();
         if self.next_field != num_fields {
             return Err(ErrorCode::Internal(format!(
@@ -211,8 +304,12 @@ impl BulkBlockParquetWriter {
             row_group.close()?;
         }
         let metadata = self.file_writer.finish()?;
-        let buffer = std::mem::take(self.file_writer.inner_mut());
-        Ok((buffer, metadata))
+        let payload = std::mem::replace(
+            self.file_writer.inner_mut(),
+            ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE),
+        )
+        .into_chunks();
+        Ok(SerializedParquet { payload, metadata })
     }
 }
 
@@ -244,7 +341,7 @@ impl BulkColumnParquetWriter<'_> {
 /// Open the next parquet leaf column, stream all `fragments` into it, then close it.
 /// Pages are flushed to the file sink as they fill (no column-chunk buffering).
 fn write_one_leaf(
-    row_group: &mut SerializedRowGroupWriter<'_, Vec<u8>>,
+    row_group: &mut SerializedRowGroupWriter<'_, ChunkedWriteBuffer>,
     kind: LeafEncoderKind,
     fragments: &[&ArrowLeafColumn],
 ) -> Result<()> {
@@ -311,7 +408,7 @@ impl BlockParquetWriter {
 
     /// Encode all buffered blocks into a single row group and return the bytes plus
     /// metadata. Each top-level field is replayed as one fragment per buffered block.
-    pub fn finish(self) -> Result<(Vec<u8>, ParquetMetaData)> {
+    pub fn finish(self) -> Result<SerializedParquet> {
         let mut writer =
             BulkBlockParquetWriter::new(self.arrow_schema.clone(), self.props.clone())?;
         let num_fields = writer.num_fields();
@@ -460,7 +557,8 @@ mod tests {
             }
             column.close().unwrap();
         }
-        writer.finish().unwrap()
+        let SerializedParquet { payload, metadata } = writer.finish().unwrap();
+        (payload.concat(), metadata)
     }
 
     #[test]
@@ -471,10 +569,10 @@ mod tests {
 
         let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
         writer.write_block(block.clone());
-        let (bytes, meta) = writer.finish().unwrap();
+        let serialized = writer.finish().unwrap();
 
-        assert_eq!(meta.num_row_groups(), 1);
-        let (blocks, num_rg) = read_back(bytes);
+        assert_eq!(serialized.metadata.num_row_groups(), 1);
+        let (blocks, num_rg) = read_back(serialized.payload.concat());
         assert_eq!(num_rg, 1);
         let got = DataBlock::concat(&blocks).unwrap();
         assert_blocks_eq(&block, &got);
@@ -489,10 +587,10 @@ mod tests {
         writer.write_block(sample_block());
         writer.write_block(sample_block());
         writer.write_block(sample_block());
-        let (bytes, meta) = writer.finish().unwrap();
+        let serialized = writer.finish().unwrap();
 
-        assert_eq!(meta.num_row_groups(), 1);
-        let (blocks, num_rg) = read_back(bytes);
+        assert_eq!(serialized.metadata.num_row_groups(), 1);
+        let (blocks, num_rg) = read_back(serialized.payload.concat());
         assert_eq!(num_rg, 1);
         let got = DataBlock::concat(&blocks).unwrap();
 
@@ -528,7 +626,7 @@ mod tests {
         let mut buffered = BlockParquetWriter::new(arrow_schema.clone(), props(&schema));
         buffered.write_block(sample_block());
         buffered.write_block(sample_block());
-        let (buffered_bytes, _) = buffered.finish().unwrap();
+        let buffered_bytes = buffered.finish().unwrap().payload.concat();
 
         let blocks = [sample_block(), sample_block()];
         let (streaming_bytes, _) = bulk_write_blocks(arrow_schema, props(&schema), &blocks);
@@ -550,10 +648,10 @@ mod tests {
 
         let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
         writer.write_block(block.clone());
-        let (bytes, meta) = writer.finish().unwrap();
-        assert_eq!(meta.num_row_groups(), 1);
+        let serialized = writer.finish().unwrap();
+        assert_eq!(serialized.metadata.num_row_groups(), 1);
 
-        let (blocks, _) = read_back(bytes);
+        let (blocks, _) = read_back(serialized.payload.concat());
         let got = DataBlock::concat(&blocks).unwrap();
         assert_blocks_eq(&block, &got);
     }
@@ -636,9 +734,9 @@ mod tests {
         let mut high = BlockParquetWriter::new(arrow_schema.clone(), props(&schema));
         high.write_block(wide_block());
         high.write_block(wide_block());
-        let (high_bytes, high_meta) = high.finish().unwrap();
-        assert_eq!(high_meta.num_row_groups(), 1);
-        let (high_blocks, num_rg) = read_back(high_bytes);
+        let high_serialized = high.finish().unwrap();
+        assert_eq!(high_serialized.metadata.num_row_groups(), 1);
+        let (high_blocks, num_rg) = read_back(high_serialized.payload.concat());
         assert_eq!(num_rg, 1);
         assert_blocks_eq(&expected, &DataBlock::concat(&high_blocks).unwrap());
 
@@ -649,5 +747,33 @@ mod tests {
         let (low_blocks, num_rg) = read_back(low_bytes);
         assert_eq!(num_rg, 1);
         assert_blocks_eq(&expected, &DataBlock::concat(&low_blocks).unwrap());
+    }
+
+    #[test]
+    fn test_chunked_write_buffer() {
+        use std::io::Write;
+
+        // Chunk size 4: writes that span chunk boundaries must still reassemble exactly,
+        // and a single write larger than the chunk size must be accepted in one chunk.
+        let mut buf = ChunkedWriteBuffer::new(4);
+        buf.write_all(b"ab").unwrap(); // partial first chunk
+        buf.write_all(b"cde").unwrap(); // spills into a second chunk
+        buf.write_all(b"fghijklm").unwrap(); // larger than chunk_size in one write
+        assert_eq!(buf.len, 13);
+        assert!(
+            buf.chunks.len() > 1,
+            "expected data to span multiple chunks"
+        );
+        assert_eq!(buf.into_chunks().concat(), b"abcdefghijklm");
+
+        // Single write under chunk size yields a single chunk holding all bytes.
+        let mut single = ChunkedWriteBuffer::new(4);
+        single.write_all(b"xy").unwrap();
+        let chunks = single.into_chunks();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks.concat(), b"xy");
+
+        // Empty buffer yields no chunks.
+        assert!(ChunkedWriteBuffer::new(4).into_chunks().is_empty());
     }
 }

@@ -360,6 +360,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
+    use opendal::Buffer;
 
     use super::*;
     use crate::test_utils::init_test_globals;
@@ -627,17 +628,17 @@ mod tests {
             format!("block_bloom_{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)),
             BlockFilter::VERSION,
         );
-        let mut data = Vec::new();
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
-            &mut data,
             TableCompression::None,
             false,
             None,
         )?;
-        let size = data.len() as u64;
-        operator.write(&location.0, data).await?;
+        let size = serialized.len() as u64;
+        operator
+            .write(&location.0, Buffer::from(serialized.payload))
+            .await?;
         Ok((Some(location), size))
     }
 
