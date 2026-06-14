@@ -42,6 +42,7 @@ requires-dist = [
     { name = "grpcio" },
     { name = "grpcio-reflection" },
     { name = "protobuf" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.metadata.requires-dev]
@@ -315,12 +316,12 @@ wheels = [
 
 [[package]]
 name = "pyspark"
-version = "3.5.0"
+version = "3.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "py4j" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/92/11/5c0f24537fa68624cb6271d2a8a8982e81bd05f5cb51e9d2d2a89baa0e1a/pyspark-3.5.0.tar.gz", hash = "sha256:d41a9b76bd2aca370a6100d075c029e22ba44c5940927877e9435a3a9c566558", size = 316890381, upload-time = "2023-09-26T20:30:58.621Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/12/461c29d25f91c246842fb09e9cfb21ab82a9ab8ea8dd35667cc8b708f715/pyspark-3.5.2.tar.gz", hash = "sha256:bbb36eba09fa24e86e0923d7e7a986041b90c714e11c6aa976f9791fe9edde5e", size = 317276210, upload-time = "2024-08-12T14:57:56.062Z" }
 
 [[package]]
 name = "scripts"
@@ -331,7 +332,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyspark", specifier = "===3.5.0" }]
+requires-dist = [{ name = "pyspark", specifier = "===3.5.2" }]
 
 [[package]]
 name = "setuptools"
