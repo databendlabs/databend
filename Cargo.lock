@@ -6619,6 +6619,7 @@ name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
  "arrow-array 58.1.0",
+ "arrow-schema 58.1.0",
  "bytes",
  "databend-common-exception",
  "databend-common-expression",
@@ -13416,7 +13417,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "58.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=333ab8378#333ab8378186b485c18c607b818a4a946dabe634"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=ea4f24f07#ea4f24f073c7eb4baa9cfd863595e53a510ee3ae"
 dependencies = [
  "ahash 0.8.12",
  "arrow-array 58.1.0",

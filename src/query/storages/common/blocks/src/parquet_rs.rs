@@ -32,6 +32,8 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
+use crate::parquet_writer::BlockParquetWriter;
+
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
 
@@ -87,12 +89,12 @@ pub fn blocks_to_parquet_with_stats(
 ) -> Result<ParquetMetaData> {
     assert!(!blocks.is_empty());
 
-    // Writer properties cannot be tweaked after ArrowWriter creation, so we mirror the behavior of
-    // the streaming writer and only rely on the first block's NDV (and row count) snapshot.
+    // Dictionary heuristics rely only on the first block's NDV (and row count) snapshot,
+    // matching the streaming writer's behavior.
     let num_rows = blocks[0].num_rows();
     let arrow_schema = Arc::new(table_schema.into());
 
-    let props = build_parquet_writer_properties(
+    let props = Arc::new(build_parquet_writer_properties(
         compression,
         enable_dictionary,
         column_stats,
@@ -101,18 +103,14 @@ pub fn blocks_to_parquet_with_stats(
         table_schema,
         data_page_rows,
         data_page_bytes,
-    );
+    ));
 
-    let batches = blocks
-        .into_iter()
-        .map(|block| block.to_record_batch_with_arrow_schema(&arrow_schema))
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
-    for batch in batches {
-        write_batch_with_page_limit(&mut writer, &batch, MAX_BATCH_MEMORY_SIZE)?;
-    }
-    let file_meta = writer.close()?;
+    // The low-level streaming writer flushes pages by `data_page_*` limits as they fill,
+    // so the previous `write_batch_with_page_limit` splitting is no longer needed.
+    let mut writer = BlockParquetWriter::new(arrow_schema, props);
+    writer.write_blocks(blocks);
+    let (bytes, file_meta) = writer.finish()?;
+    write_buffer.extend_from_slice(&bytes);
     Ok(file_meta)
 }
 

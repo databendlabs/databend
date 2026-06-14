@@ -8,6 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
