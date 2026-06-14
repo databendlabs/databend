@@ -41,7 +41,6 @@ use crate::operations::ReclusterFinalCarry;
 use crate::operations::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
-use crate::pruning::create_segment_location_vector;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
@@ -94,8 +93,6 @@ impl FuseTable {
         }
         carry.cluster_key_id = mutator.cluster_key_id;
 
-        let segment_locations = create_segment_location_vector(snapshot.segments.clone(), None);
-
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);
         let candidate_window_limit = (max_threads * 4).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW);
@@ -114,7 +111,7 @@ impl FuseTable {
             .enumerate()
             .map(|(idx, location)| (location, idx))
             .collect::<HashMap<_, _>>();
-        let number_segments = segment_locations.len();
+        let number_segments = snapshot.segments.len();
         let mut recluster_blocks_count = 0;
 
         let parts = loop {
@@ -144,20 +141,28 @@ impl FuseTable {
                 .filter(|task| mutator.passes_early_accept(task))
                 .count();
             let scan_locations = if scan_start < scan_end && early_accept_count < max_tasks {
-                let scan_range = &segment_locations[scan_start..scan_end];
-                if valid_carry.is_empty() {
-                    scan_range.to_vec()
-                } else {
-                    let carry_locations = valid_carry
+                let scan_range = &snapshot.segments[scan_start..scan_end];
+                let carry_locations = (!valid_carry.is_empty()).then(|| {
+                    valid_carry
                         .iter()
                         .flat_map(|window| window.segments.iter().map(|(location, _)| location))
-                        .collect::<HashSet<_>>();
-                    scan_range
-                        .iter()
-                        .filter(|segment| !carry_locations.contains(&segment.location))
-                        .cloned()
-                        .collect::<Vec<_>>()
+                        .collect::<HashSet<_>>()
+                });
+                let mut scan_locations = Vec::with_capacity(scan_range.len());
+                for (offset, location) in scan_range.iter().enumerate() {
+                    if carry_locations
+                        .as_ref()
+                        .is_some_and(|locations| locations.contains(location))
+                    {
+                        continue;
+                    }
+                    scan_locations.push(SegmentLocation {
+                        segment_idx: scan_start + offset,
+                        location: location.clone(),
+                        snapshot_loc: None,
+                    });
                 }
+                scan_locations
             } else {
                 Vec::new()
             };
@@ -181,12 +186,12 @@ impl FuseTable {
                     scan_end,
                     compact_segments.len(),
                     scan_end,
-                    segment_locations.len(),
+                    number_segments,
                 );
                 let status = format!(
                     "[FUSE-RECLUSTER] Read segment files: {}/{}, elapsed: {:?}",
                     scan_end,
-                    segment_locations.len(),
+                    number_segments,
                     start.elapsed()
                 );
                 ctx.set_status_info(&status);
