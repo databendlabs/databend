@@ -475,24 +475,26 @@ impl Session {
     }
     pub fn get_temp_table_prefix(&self) -> Result<String> {
         let typ = self.typ.read().clone();
-        let session_id = match typ {
-            SessionType::MySQL => self.id.clone(),
+        let user_name = self.get_current_user()?.name;
+        match typ {
+            SessionType::MySQL => Ok(format!("{}/{}", user_name, self.id.as_str())),
             SessionType::HTTPQuery => {
                 if let Some(id) = self.get_client_session_id() {
-                    id
+                    Ok(temporary_table_session_prefix(
+                        &self.get_current_tenant(),
+                        &user_name,
+                        &id,
+                    ))
                 } else {
-                    return Err(ErrorCode::BadArguments(
+                    Err(ErrorCode::BadArguments(
                         "can not use temp table in http handler if cookie is not enabled",
-                    ));
+                    ))
                 }
             }
-            t => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "can not use temp table in session type {t}"
-                )));
-            }
-        };
-        Ok(format!("{}/{session_id}", self.get_current_user()?.name))
+            t => Err(ErrorCode::BadArguments(format!(
+                "can not use temp table in session type {t}"
+            ))),
+        }
     }
 
     pub fn get_current_workload_group(&self) -> Option<String> {
@@ -501,6 +503,38 @@ impl Session {
 
     pub fn set_current_workload_group(&self, workload_group: String) {
         self.session_ctx.set_current_workload_group(workload_group)
+    }
+}
+
+pub(crate) fn temporary_table_session_prefix(
+    tenant: &Tenant,
+    user_name: &str,
+    session_id: &str,
+) -> String {
+    format!("{}/{user_name}/{session_id}", tenant.tenant_name())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::temporary_table_session_prefix;
+
+    #[test]
+    fn test_temporary_table_session_prefix_is_tenant_scoped() {
+        let tenant_a = Tenant::new_literal("tenant_a");
+        let tenant_b = Tenant::new_literal("tenant_b");
+        let user_name = "analyst";
+        let session_id = "018f2b74-0000-7000-8000-000000000001";
+
+        assert_ne!(
+            temporary_table_session_prefix(&tenant_a, user_name, session_id),
+            temporary_table_session_prefix(&tenant_b, user_name, session_id)
+        );
+        assert_eq!(
+            "tenant_a/analyst/018f2b74-0000-7000-8000-000000000001",
+            temporary_table_session_prefix(&tenant_a, user_name, session_id)
+        );
     }
 }
 
