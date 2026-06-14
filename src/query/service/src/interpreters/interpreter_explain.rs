@@ -280,6 +280,16 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }
+                Plan::InsertMultiTable(plan) => {
+                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                        self.ctx.clone(),
+                        *plan.clone(),
+                    )?
+                    .build_physical_plan()
+                    .await?;
+                    self.explain_physical_fragments(physical_plan, plan.meta_data.clone())
+                        .await?
+                }
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
@@ -429,6 +439,26 @@ impl ExplainInterpreter {
 
         let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
+        self.format_fragments(ctx, fragments, metadata)
+    }
+
+    async fn explain_physical_fragments(
+        &self,
+        plan: PhysicalPlan,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
+        let ctx = self.ctx.clone();
+        let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+
+        self.format_fragments(ctx, fragments, metadata)
+    }
+
+    fn format_fragments(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragments: Vec<crate::schedulers::PlanFragment>,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
 
         for fragment in fragments {
