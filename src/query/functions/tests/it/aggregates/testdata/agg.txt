@@ -1091,7 +1091,7 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------+
 | a      | Column(Int64([4, 3, 2, 1]))                                     |
 | b      | Column(UInt64([1, 2, 3, 4]))                                    |
-| Output | NullableColumn { column: Float64([4]), validity: [0b_______1] } |
+| Output | NullableColumn { column: Float64([3]), validity: [0b_______1] } |
 +--------+-----------------------------------------------------------------+
 
 
