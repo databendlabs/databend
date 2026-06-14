@@ -222,7 +222,6 @@ mod tests {
             None,
             false,
             false,
-            false,
             None,
         )
     }

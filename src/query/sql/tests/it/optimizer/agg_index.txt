@@ -1,0 +1,740 @@
+=== catalog_bound_single_table ===
+description: bind_query_index should attach a catalog-bound aggregating index to the query table.
+sql: select sum(a), b from t where b > 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gt(t.b (#1), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+                    ├── predicates: []
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== catalog_bound_tuple_inner_column ===
+description: Tuple inner fields should keep their base column path identity when matching an aggregating index.
+sql: select sum(x:a), k from t where k > 1 group by k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#3) AS (#3), sum(x:a) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.k (#3) AS (#3)]
+    ├── aggregate functions: [sum(t.x:a (#2)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.x:a (#2) AS (#2), t.k (#3) AS (#3)]
+        └── Filter
+            ├── filters: [gt(t.k (#3), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select k, sum(x:a) from t where k > 1 group by k
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.k (#3) AS (#3), sum(x:a) (#4) AS (#4)]
+      └── Aggregate(Initial)
+          ├── group items: [t.k (#3) AS (#3)]
+          ├── aggregate functions: [sum(t.x:a (#2)) AS (#4)]
+          └── EvalScalar
+              ├── scalars: [t.x:a (#2) AS (#2), t.k (#3) AS (#3)]
+              └── Filter
+                  ├── filters: [gt(t.k (#3), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#3) AS (#3), sum(x:a) (#4) AS (#4)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#3) AS (#3)]
+    ├── aggregate functions: [sum(t.x:a (#2)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#3) AS (#3)]
+        ├── aggregate functions: [sum(t.x:a (#2)) AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.x:a (#2) AS (#2), t.k (#3) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gt(t.k (#3), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #3, index field 1 -> query #4]
+                    ├── predicates: []
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== catalog_bound_multiple_indexes_single_table ===
+description: A table with multiple catalog-bound agg indexes should keep each bound index plan and rewrite with a matching one.
+sql: select sum(a), b from t where b > 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+  - sql: select sum(a), c from t group by c
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.c (#2) AS (#2), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.c (#2) AS (#2)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.c (#2) AS (#2)]
+              └── Scan
+                  ├── table: default.t (#0)
+                  ├── filters: []
+                  ├── order by: []
+                  └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gt(t.b (#1), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+                    ├── predicates: []
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== catalog_bound_cross_database_table ===
+description: The persisted index SQL should bind against the canonical table from the matching database.
+sql: select sum(a), b from other_db.t where b > 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(t.b (#1), 1)]
+            └── Scan
+                ├── table: other_db.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: other_db.t (#0):
+  - sql: select b, sum(a) from other_db.t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: other_db.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: other_db.t (#0)
+                ├── filters: [gt(t.b (#1), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+                    ├── predicates: []
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== catalog_bound_repeated_table_scan ===
+description: Each scan of the same table should receive an agg index bound to its own canonical table index.
+sql: select l.a, r.c from t as l join t as r on l.b = r.b
+raw_plan:
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.c (#5) AS (#5)]
+└── Join(Inner)
+    ├── build keys: [t.b (#4)]
+    ├── probe keys: [t.b (#1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+- table: default.t (#1):
+  - sql: select b, sum(a) from t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#1)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.c (#5) AS (#5), t.b (#1) AS (#6), t.b (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [t.b (#4)]
+    ├── probe keys: [t.b (#1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== rewrite_range_compensation ===
+description: A query with a narrower range can use a wider index and add a compensating predicate.
+sql: select sum(a), b from t where b > 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b > 0 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 0)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gt(t.b (#1), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+                    ├── predicates: [gt(index field 0, 1)]
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== rewrite_range_open_lower_rejected ===
+description: An index with an open lower bound cannot cover a query with the same closed lower bound.
+sql: select sum(a), b from t where b >= 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gte(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b > 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gte(t.b (#1), 1)]
+                ├── order by: []
+                └── limit: NONE
+
+
+=== rewrite_range_open_upper_rejected ===
+description: An index with an open upper bound cannot cover a query with the same closed upper bound.
+sql: select sum(a), b from t where b <= 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [lte(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b < 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [lt(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [lte(t.b (#1), 1)]
+                ├── order by: []
+                └── limit: NONE
+
+
+=== rewrite_range_closed_index_compensation ===
+description: A query with an open range can use an index with the same closed bound and add a compensating predicate.
+sql: select sum(a), b from t where b > 1 group by b
+raw_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(t.b (#1), 1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select b, sum(a) from t where b >= 1 group by b
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.b (#1) AS (#1)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+              └── Filter
+                  ├── filters: [gte(t.b (#1), 1)]
+                  └── Scan
+                      ├── table: default.t (#0)
+                      ├── filters: []
+                      ├── order by: []
+                      └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [gt(t.b (#1), 1)]
+                ├── order by: []
+                ├── limit: NONE
+                └── agg index
+                    ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+                    ├── predicates: [gt(index field 0, 1)]
+                    ├── is agg: true
+                    └── num agg funcs: 1
+
+
+=== rewrite_residual_compensation ===
+description: Residual predicates can be compensated when the index outputs the required expression.
+sql: select a + 1 from t where c + 1 > 3
+raw_plan:
+EvalScalar
+├── scalars: [plus(t.a (#0), 1) AS (#3)]
+└── Filter
+    ├── filters: [gt(plus(t.c (#2), 1), 3)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select a + 1, c from t
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.c (#2) AS (#2), plus(t.a (#0), 1) AS (#3)]
+      └── Scan
+          ├── table: default.t (#0)
+          ├── filters: []
+          ├── order by: []
+          └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [plus(t.a (#0), 1) AS (#3), t.c (#2) AS (#4)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [gt(plus(t.c (#2), 1), 3)]
+    ├── order by: []
+    ├── limit: NONE
+    └── agg index
+        ├── selection: [index field 0 -> query #2, index field 1 -> query #3]
+        ├── predicates: [gt(plus(index field 0, 1), 3)]
+        ├── is agg: false
+        └── num agg funcs: 0
+
+
+=== rewrite_equality_class_compensation ===
+description: Column equivalence predicates must be covered by the query before range compensation is applied.
+sql: select a + 1 from t where b = c and b > 1
+raw_plan:
+EvalScalar
+├── scalars: [plus(t.a (#0), 1) AS (#3)]
+└── Filter
+    ├── filters: [eq(t.b (#1), t.c (#2)), gt(t.b (#1), 1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select a + 1, b, c from t where b = c
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), t.c (#2) AS (#2), plus(t.a (#0), 1) AS (#3)]
+      └── Filter
+          ├── filters: [eq(t.b (#1), t.c (#2))]
+          └── Scan
+              ├── table: default.t (#0)
+              ├── filters: []
+              ├── order by: []
+              └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [plus(t.a (#0), 1) AS (#3), t.b (#1) AS (#4), t.c (#2) AS (#5)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [gt(t.b (#1), 1), gt(t.c (#2), 1), eq(t.b (#1), t.c (#2))]
+    ├── order by: []
+    ├── limit: NONE
+    └── agg index
+        ├── selection: [index field 0 -> query #1, index field 1 -> query #2, index field 2 -> query #3]
+        ├── predicates: [gt(index field 0, 1), gt(index field 1, 1)]
+        ├── is agg: false
+        └── num agg funcs: 0
+
+
+=== rewrite_order_by_selection ===
+description: ORDER BY columns must be selected from the index even when they are not query outputs.
+sql: select a + 1 from t where b > 1 order by b
+raw_plan:
+Sort
+├── sort keys: [t.b (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.b (#1) AS (#1), plus(t.a (#0), 1) AS (#3)]
+    └── Filter
+        ├── filters: [gt(t.b (#1), 1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select a + 1, b from t where b > 0
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.b (#1) AS (#1), plus(t.a (#0), 1) AS (#3)]
+      └── Filter
+          ├── filters: [gt(t.b (#1), 0)]
+          └── Scan
+              ├── table: default.t (#0)
+              ├── filters: []
+              ├── order by: []
+              └── limit: NONE
+optimized_plan:
+Sort
+├── sort keys: [t.b (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.b (#1) AS (#1), plus(t.a (#0), 1) AS (#3)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [gt(t.b (#1), 1)]
+        ├── order by: [t.b (#1) ASC]
+        ├── limit: NONE
+        └── agg index
+            ├── selection: [index field 0 -> query #1, index field 1 -> query #3]
+            ├── predicates: [gt(index field 0, 1)]
+            ├── is agg: false
+            └── num agg funcs: 0
+
+
+=== rewrite_aggregate_group_mismatch ===
+description: Aggregate indexes with different group items should remain bound but not rewrite the scan.
+sql: select sum(a) + 1 from t group by b
+raw_plan:
+EvalScalar
+├── scalars: [plus(sum(a) (#3), 1) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+catalog_bound_agg_indexes:
+- table: default.t (#0):
+  - sql: select sum(a), c from t group by c
+    s_expr:
+      EvalScalar
+      ├── scalars: [t.c (#2) AS (#2), sum(a) (#3) AS (#3)]
+      └── Aggregate(Initial)
+          ├── group items: [t.c (#2) AS (#2)]
+          ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+          └── EvalScalar
+              ├── scalars: [t.a (#0) AS (#0), t.c (#2) AS (#2)]
+              └── Scan
+                  ├── table: default.t (#0)
+                  ├── filters: []
+                  ├── order by: []
+                  └── limit: NONE
+optimized_plan:
+EvalScalar
+├── scalars: [plus(sum(a) (#3), 1) AS (#4)]
+└── Aggregate(Final)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: [t.b (#1) AS (#1)]
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+

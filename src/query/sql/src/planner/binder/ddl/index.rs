@@ -53,17 +53,22 @@ use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
+use crate::AggIndexTableBinding;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::ColumnEntry;
+use crate::Metadata;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+use crate::TableEntry;
 use crate::binder::Binder;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::build_agg_index_plan_for_table;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::plans::CreateIndexPlan;
@@ -162,7 +167,6 @@ impl Binder {
         metadata: &MetadataRef,
     ) -> Result<()> {
         let catalog = self.ctx.get_current_catalog();
-        let database = self.ctx.get_current_database();
         let tables = metadata.read().tables().to_vec();
 
         for table_entry in tables {
@@ -184,29 +188,83 @@ impl Binder {
 
                 let mut s_exprs = Vec::with_capacity(indexes.len());
                 for (index_id, _, index_meta) in indexes {
-                    let tokens = tokenize_sql(&index_meta.query)?;
-                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                    let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                    new_bind_context.planning_agg_index = true;
-                    if let Statement::Query(query) = &stmt {
-                        let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
-                        s_exprs.push((index_id, index_meta.query.clone(), s_expr));
+                    if let Some(agg_index_plan) = self.bind_agg_index_query_locally(
+                        &index_meta,
+                        &table_entry,
+                        index_id,
+                        metadata,
+                    )? {
+                        s_exprs.push(agg_index_plan);
                     }
                 }
                 agg_indexes.extend(s_exprs);
             }
 
             if !agg_indexes.is_empty() {
-                // Should use bound table id.
-                let table_name = table.name();
-                let full_table_name = format!("{catalog}.{database}.{table_name}");
                 metadata
                     .write()
-                    .add_agg_indices(full_table_name, agg_indexes);
+                    .add_agg_indices(table_entry.index(), agg_indexes);
             }
         }
 
         Ok(())
+    }
+
+    fn bind_agg_index_query_locally(
+        &self,
+        index_meta: &IndexMeta,
+        table_entry: &TableEntry,
+        index_id: u64,
+        metadata: &MetadataRef,
+    ) -> Result<Option<crate::AggIndexPlan>> {
+        let tokens = tokenize_sql(&index_meta.query)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let Statement::Query(query) = &stmt else {
+            return Ok(None);
+        };
+
+        let index_metadata = {
+            let metadata = metadata.read();
+            Arc::new(RwLock::new(Metadata::for_agg_index_table(
+                &metadata,
+                table_entry.index(),
+            )))
+        };
+        let initial_table_count = index_metadata.read().tables().len();
+
+        let mut index_binder = Binder::new(
+            self.ctx.clone(),
+            self.catalogs.clone(),
+            self.name_resolution_ctx.clone(),
+            index_metadata,
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
+        let mut index_bind_context = BindContext::new();
+        index_bind_context.planning_agg_index = true;
+        index_bind_context.agg_index_table_binding = Some(AggIndexTableBinding {
+            catalog: table_entry.catalog().to_string(),
+            database: table_entry.database().to_string(),
+            table_name: table_entry.name().to_string(),
+            table_index: table_entry.index(),
+        });
+        let (s_expr, _) = index_binder.bind_query(&mut index_bind_context, query)?;
+        if index_binder.metadata.read().tables().len() != initial_table_count {
+            return Err(ErrorCode::Internal(format!(
+                "aggregating index query introduced unexpected tables while binding `{}`",
+                index_meta.query
+            )));
+        }
+        let agg_index_plan = build_agg_index_plan_for_table(
+            self.ctx.clone(),
+            self.subquery_executor.clone(),
+            index_binder.metadata.clone(),
+            table_entry.index(),
+            index_id,
+            index_meta.query.clone(),
+            s_expr,
+        )?;
+
+        Ok(Some(agg_index_plan))
     }
 
     #[async_backtrace::framed]
@@ -382,18 +440,29 @@ impl Binder {
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
-            let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+            let refresh_metadata = Arc::new(RwLock::new(Metadata::default()));
+            let mut refresh_binder = Binder::new(
+                self.ctx.clone(),
+                self.catalogs.clone(),
+                self.name_resolution_ctx.clone(),
+                refresh_metadata,
+            )
+            .with_subquery_executor(self.subquery_executor.clone());
+            let select_plan = refresh_binder.bind_statement(bind_context, &stmt).await?;
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), refresh_binder.metadata.clone())
                 .set_planning_agg_index(true)
                 .clone();
-            Ok(optimize(opt_ctx, select_plan).await?)
+            Ok((
+                optimize(opt_ctx, select_plan).await?,
+                refresh_binder.metadata.clone(),
+            ))
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
-        let plan = plan?;
+        let (plan, refresh_metadata) = plan?;
         bind_context.planning_agg_index = false;
 
-        let tables = self.metadata.read().tables().to_vec();
+        let tables = refresh_metadata.read().tables().to_vec();
 
         if tables.len() != 1 {
             return Err(ErrorCode::UnsupportedIndex(

@@ -26,6 +26,7 @@ pub mod optimizer;
 mod planner_cache;
 pub mod plans;
 
+pub use binder::AggIndexTableBinding;
 pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;

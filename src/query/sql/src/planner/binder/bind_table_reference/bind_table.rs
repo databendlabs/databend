@@ -137,6 +137,25 @@ impl Binder {
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
+        if let Some(index_table) = &bind_context.agg_index_table_binding {
+            if index_table.matches(catalog.as_str(), database.as_str(), table_name.as_str()) {
+                let (s_expr, mut bind_context) = self.bind_base_table(
+                    bind_context,
+                    database.as_str(),
+                    index_table.table_index,
+                    None,
+                    sample,
+                    true,
+                    true,
+                )?;
+
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                return Ok((s_expr, bind_context));
+            }
+        }
+
         // Resolve table with catalog
         let table_meta = {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
@@ -196,7 +215,6 @@ impl Binder {
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
                 );
@@ -207,6 +225,7 @@ impl Binder {
                     change_type,
                     sample,
                     true,
+                    false,
                 )?;
 
                 if let Some(alias) = alias {
@@ -287,7 +306,6 @@ impl Binder {
                         table_name_alias,
                         false,
                         false,
-                        false,
                         None,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -322,7 +340,6 @@ impl Binder {
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
                 );
@@ -334,6 +351,7 @@ impl Binder {
                     None,
                     sample,
                     true,
+                    false,
                 )?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
