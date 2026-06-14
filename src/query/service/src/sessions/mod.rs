@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[SESSION]");
 mod query_affect;
 pub mod query_ctx;
 mod query_ctx_shared;
+mod query_profiles;
 mod queue_mgr;
 mod runtime_filter_state;
 mod session;

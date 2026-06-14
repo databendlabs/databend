@@ -243,6 +243,7 @@ impl InsertMultiTableInterpreter {
 
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
+        root.assign_profile_group_id();
         Ok(root)
     }
 

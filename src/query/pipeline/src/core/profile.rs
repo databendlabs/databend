@@ -94,6 +94,8 @@ pub struct PlanProfile {
     pub id: Option<u32>,
     pub name: Option<String>,
     pub parent_id: Option<u32>,
+    #[serde(default)]
+    pub group_id: u64,
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
 
@@ -136,6 +138,7 @@ impl PlanProfile {
             id: profile.plan_id,
             name: profile.plan_name.clone(),
             parent_id: profile.plan_parent_id,
+            group_id: profile.plan_group_id,
             title: profile.title.clone(),
             labels: profile.labels.clone(),
             metrics: BTreeMap::new(),
@@ -198,6 +201,8 @@ pub struct PlanScope {
     pub id: u32,
     pub name: String,
     pub parent_id: Option<u32>,
+    /// The execution unit (physical plan tree) this scope belongs to. See `Profile::plan_group_id`.
+    pub group_id: u64,
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
     pub metrics_registry: Arc<ScopedRegistry>,
@@ -211,6 +216,7 @@ impl PlanScope {
     pub fn create(
         id: u32,
         name: String,
+        group_id: u64,
         title: Arc<String>,
         labels: Arc<Vec<ProfileLabel>>,
     ) -> Arc<PlanScope> {
@@ -220,6 +226,7 @@ impl PlanScope {
             labels,
             title,
             parent_id,
+            group_id,
             name,
             metrics_registry: ScopedRegistry::create(None),
         })

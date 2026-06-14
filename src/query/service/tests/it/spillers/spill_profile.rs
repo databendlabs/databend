@@ -31,6 +31,7 @@ fn create_test_profile() -> Arc<Profile> {
         None,
         None,
         None,
+        0,
         Arc::new(String::new()),
         Arc::new(vec![]),
         None,

@@ -72,6 +72,7 @@ use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::query_profiles::QueryProfiles;
 use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
@@ -140,7 +141,7 @@ pub struct QueryContextShared {
     // Client User-Agent
     pub(super) user_agent: Arc<RwLock<String>>,
 
-    pub(super) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+    pub(super) query_profiles: Arc<QueryProfiles>,
 
     pub(super) runtime_filter_state: RuntimeFilterState,
 
@@ -233,7 +234,7 @@ impl QueryContextShared {
             group_by_spill_progress: Arc::new(Progress::create()),
             window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
-            query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            query_profiles: Arc::new(QueryProfiles::default()),
             runtime_filter_state: Default::default(),
             merge_into_join: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
@@ -698,22 +699,21 @@ impl QueryContextShared {
             self.add_query_profiles(&executor.fetch_profiling(false));
         }
 
-        self.query_profiles.read().values().cloned().collect()
+        self.query_profiles.get()
+    }
+
+    /// Profiles of a single execution unit, keyed by their original plan ids (no query-wide
+    /// remapping). Used by EXPLAIN ANALYZE which renders one physical plan tree.
+    pub fn get_query_profiles_by_group(&self, group_id: u64) -> Vec<PlanProfile> {
+        if let Some(executor) = self.executor.read().upgrade() {
+            self.add_query_profiles(&executor.fetch_profiling(false));
+        }
+
+        self.query_profiles.get_by_group(group_id)
     }
 
     pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
-        let mut merged_profiles = self.query_profiles.write();
-
-        for query_profile in profiles.values() {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
-        }
+        self.query_profiles.add(profiles);
     }
 
     pub fn get_query_execution_stats(&self) -> Option<ExecutorStatsSnapshot> {
