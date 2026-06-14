@@ -252,7 +252,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         // Apply statistics aggregation to gather and propagate statistics
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         // Collect statistics for SExpr nodes to support cost estimation
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
+        .add(CollectStatisticsOptimizer::new(opt_ctx.clone())?)
         // Normalize aggregate, it should be executed before RuleSplitAggregate.
         .add(RuleNormalizeAggregateOptimizer::new())
         // Pull up and infer filter.
@@ -369,7 +369,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         // Collect statistics for each leaf node in SExpr.
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
+        .add(CollectStatisticsOptimizer::new(opt_ctx.clone())?)
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
         // Run default rewrite rules

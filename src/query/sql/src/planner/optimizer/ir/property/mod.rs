@@ -21,6 +21,7 @@ pub use builder::RelExpr;
 pub use enforcer::DistributionEnforcer;
 pub use enforcer::Enforcer;
 pub use enforcer::PropertyEnforcer;
+pub use property::ClusterKeyStatistics;
 pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelationalProperty;

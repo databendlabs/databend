@@ -53,6 +53,7 @@ impl Limit {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
+                cluster_key_stats: stat_info.statistics.cluster_key_stats.clone(),
             },
         }))
     }

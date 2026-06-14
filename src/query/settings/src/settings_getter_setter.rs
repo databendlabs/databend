@@ -943,6 +943,10 @@ impl Settings {
         self.try_get_u64("cost_factor_network_per_row")
     }
 
+    pub fn get_cost_factor_cluster_key(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_cluster_key")
+    }
+
     pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
