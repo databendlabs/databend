@@ -184,6 +184,11 @@ impl StatisticsReceiver {
                     .merge_mutation_status(status);
                 Ok(false)
             }
+            Ok(Some(DataPacket::MultiTableInsertStatus(status))) => {
+                log::info!("Merge MultiTableInsertStatus");
+                ctx.mutation_state().merge_multi_table_insert_status(status);
+                Ok(false)
+            }
             Ok(Some(DataPacket::DataCacheMetrics(metrics))) => {
                 ctx.get_data_cache_metrics().merge(metrics);
                 Ok(false)

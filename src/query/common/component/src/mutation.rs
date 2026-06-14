@@ -47,6 +47,11 @@ impl MutationState {
         }
     }
 
+    pub fn merge_multi_table_insert_status(&self, status: MultiTableInsertStatus) {
+        let mut current_status = self.multi_table_insert_status.lock().unwrap();
+        current_status.merge(status);
+    }
+
     pub fn multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
         self.multi_table_insert_status.clone()
     }

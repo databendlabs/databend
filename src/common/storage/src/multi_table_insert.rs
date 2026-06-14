@@ -17,7 +17,20 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct MultiTableInsertStatus {
     pub insert_rows: HashMap<u64, u64>,
+}
+
+impl MultiTableInsertStatus {
+    pub fn merge(&mut self, other: Self) {
+        for (table_id, insert_rows) in other.insert_rows {
+            match self.insert_rows.get_mut(&table_id) {
+                Some(rows) => *rows += insert_rows,
+                None => {
+                    self.insert_rows.insert(table_id, insert_rows);
+                }
+            }
+        }
+    }
 }

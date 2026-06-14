@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::meta::merge_column_hll;
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::SnapshotChanges;
+use crate::operations::SnapshotMerged;
 use crate::operations::VirtualSchemaMode;
 use crate::statistics::merge_statistics;
 
@@ -47,7 +48,7 @@ impl TransformMergeCommitMeta {
         l: ConflictResolveContext,
         r: ConflictResolveContext,
         default_cluster_key_id: Option<u32>,
-    ) -> ConflictResolveContext {
+    ) -> Result<ConflictResolveContext> {
         match (l, r) {
             (
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(l),
@@ -55,37 +56,65 @@ impl TransformMergeCommitMeta {
             ) => {
                 assert!(!l.check_intersect(&r));
 
-                ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-                    removed_segment_indexes: l
-                        .removed_segment_indexes
-                        .into_iter()
-                        .chain(r.removed_segment_indexes)
-                        .collect(),
-                    removed_statistics: merge_statistics(
-                        l.removed_statistics.clone(),
-                        &r.removed_statistics,
-                        default_cluster_key_id,
-                    ),
-                    appended_segments: l
-                        .appended_segments
-                        .into_iter()
-                        .chain(r.appended_segments)
-                        .collect(),
-                    replaced_segments: l
-                        .replaced_segments
-                        .into_iter()
-                        .chain(r.replaced_segments)
-                        .collect(),
-                    merged_statistics: merge_statistics(
-                        l.merged_statistics.clone(),
-                        &r.merged_statistics,
-                        default_cluster_key_id,
-                    ),
-                })
+                Ok(ConflictResolveContext::ModifiedSegmentExistsInLatest(
+                    SnapshotChanges {
+                        removed_segment_indexes: l
+                            .removed_segment_indexes
+                            .into_iter()
+                            .chain(r.removed_segment_indexes)
+                            .collect(),
+                        removed_statistics: merge_statistics(
+                            l.removed_statistics.clone(),
+                            &r.removed_statistics,
+                            default_cluster_key_id,
+                        ),
+                        appended_segments: l
+                            .appended_segments
+                            .into_iter()
+                            .chain(r.appended_segments)
+                            .collect(),
+                        replaced_segments: l
+                            .replaced_segments
+                            .into_iter()
+                            .chain(r.replaced_segments)
+                            .collect(),
+                        merged_statistics: merge_statistics(
+                            l.merged_statistics.clone(),
+                            &r.merged_statistics,
+                            default_cluster_key_id,
+                        ),
+                    },
+                ))
             }
-            _ => unreachable!(
-                "conflict resolve context to be merged should both be ModifiedSegmentExistsInLatest"
-            ),
+            (
+                ConflictResolveContext::AppendOnly((l, l_schema)),
+                ConflictResolveContext::AppendOnly((r, r_schema)),
+            ) => {
+                if l_schema != r_schema {
+                    return Err(ErrorCode::Internal(
+                        "append-only commit meta schemas do not match".to_string(),
+                    ));
+                }
+                Ok(ConflictResolveContext::AppendOnly((
+                    SnapshotMerged {
+                        merged_segments: l
+                            .merged_segments
+                            .into_iter()
+                            .chain(r.merged_segments)
+                            .collect(),
+                        merged_statistics: merge_statistics(
+                            l.merged_statistics.clone(),
+                            &r.merged_statistics,
+                            default_cluster_key_id,
+                        ),
+                    },
+                    l_schema,
+                )))
+            }
+            (ConflictResolveContext::None, ctx) | (ctx, ConflictResolveContext::None) => Ok(ctx),
+            _ => Err(ErrorCode::Internal(
+                "conflict resolve context types do not match".to_string(),
+            )),
         }
     }
 
@@ -218,13 +247,14 @@ impl TransformMergeCommitMeta {
                 l.conflict_resolve_context,
                 r.conflict_resolve_context,
                 default_cluster_key_id,
-            ),
+            )?,
             new_segment_locs: l
                 .new_segment_locs
                 .into_iter()
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
+            insert_rows: l.insert_rows + r.insert_rows,
             virtual_schema,
             virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
@@ -249,12 +279,11 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         if to_merged.is_empty() {
             return Ok(vec![]);
         }
-        let table_id = to_merged[0].table_id;
-        let merged = to_merged
-            .into_iter()
-            .try_fold(CommitMeta::empty(table_id), |acc, x| {
-                Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
-            })?;
+        let mut to_merged = to_merged.into_iter();
+        let first = to_merged.next().unwrap();
+        let merged = to_merged.try_fold(first, |acc, x| {
+            Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
+        })?;
         Ok(vec![merged.into()])
     }
 }

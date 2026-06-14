@@ -52,12 +52,16 @@ use crate::physical_plans::ChunkEvalScalar;
 use crate::physical_plans::ChunkFillAndReorder;
 use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
+use crate::physical_plans::ChunkSerializeCommitMeta;
 use crate::physical_plans::Duplicate;
 use crate::physical_plans::EvalScalar;
+use crate::physical_plans::Exchange;
 use crate::physical_plans::FillAndReorder;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MultiInsertEvalScalar;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::SerializableTable;
 use crate::physical_plans::Shuffle;
@@ -182,61 +186,55 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        root = PhysicalPlan::new(Duplicate {
-            input: root,
-            n: branches.len(),
-            meta: PhysicalPlanMeta::new("Duplicate"),
-        });
-
-        let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = PhysicalPlan::new(Shuffle {
-            input: root,
-            strategy: shuffle_strategy,
-            meta: PhysicalPlanMeta::new("Shuffle"),
-        });
-
-        root = PhysicalPlan::new(ChunkFilter {
-            predicates,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkFilter"),
-        });
-
-        root = PhysicalPlan::new(ChunkEvalScalar {
-            eval_scalars,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
-        });
-
-        root = PhysicalPlan::new(ChunkCastSchema {
-            cast_schemas,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
-        });
-
-        root = PhysicalPlan::new(ChunkFillAndReorder {
-            fill_and_reorders,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
-        });
-
-        root = PhysicalPlan::new(ChunkAppendData {
-            input: root,
-            target_tables: serializable_tables.clone(),
-            meta: PhysicalPlanMeta::new("ChunkAppendData"),
-        });
-
-        root = PhysicalPlan::new(ChunkMerge {
-            group_ids,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkMerge"),
-        });
+        let distributed_insert =
+            branches.support_distributed_insert() && Exchange::from_physical_plan(&root).is_some();
+        let input = if distributed_insert {
+            let exchange = Exchange::from_physical_plan(&root).unwrap();
+            let input = exchange.input.clone();
+            let remote_write_plan = Self::build_write_plan(
+                input,
+                branches.len(),
+                predicates,
+                eval_scalars,
+                cast_schemas,
+                fill_and_reorders,
+                serializable_tables.clone(),
+            );
+            let remote_commit_input = PhysicalPlan::new(ChunkMerge {
+                group_ids: group_ids.clone(),
+                input: remote_write_plan,
+                meta: PhysicalPlanMeta::new("ChunkMerge"),
+            });
+            let remote_commit_meta = PhysicalPlan::new(ChunkSerializeCommitMeta {
+                input: remote_commit_input,
+                targets: deduplicated_serializable_tables.clone(),
+                meta: PhysicalPlanMeta::new("CommitMeta"),
+            });
+            exchange.derive(vec![remote_commit_meta])
+        } else {
+            let write_plan = Self::build_write_plan(
+                root,
+                branches.len(),
+                predicates,
+                eval_scalars,
+                cast_schemas,
+                fill_and_reorders,
+                serializable_tables.clone(),
+            );
+            PhysicalPlan::new(ChunkMerge {
+                group_ids,
+                input: write_plan,
+                meta: PhysicalPlanMeta::new("ChunkMerge"),
+            })
+        };
 
         root = PhysicalPlan::new(ChunkCommitInsert {
             update_stream_meta,
 
-            input: root,
+            input,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
+            input_commit_meta: distributed_insert,
             targets: deduplicated_serializable_tables,
             meta: PhysicalPlanMeta::new("Commit"),
         });
@@ -244,6 +242,58 @@ impl InsertMultiTableInterpreter {
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
+    }
+
+    fn build_write_plan(
+        input: PhysicalPlan,
+        branch_len: usize,
+        predicates: Vec<Option<RemoteExpr>>,
+        eval_scalars: Vec<Option<MultiInsertEvalScalar>>,
+        cast_schemas: Vec<Option<CastSchema>>,
+        fill_and_reorders: Vec<Option<FillAndReorder>>,
+        target_tables: Vec<SerializableTable>,
+    ) -> PhysicalPlan {
+        let root = PhysicalPlan::new(Duplicate {
+            input,
+            n: branch_len,
+            meta: PhysicalPlanMeta::new("Duplicate"),
+        });
+
+        let root = PhysicalPlan::new(Shuffle {
+            input: root,
+            strategy: ShuffleStrategy::Transpose(branch_len),
+            meta: PhysicalPlanMeta::new("Shuffle"),
+        });
+
+        let root = PhysicalPlan::new(ChunkFilter {
+            predicates,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFilter"),
+        });
+
+        let root = PhysicalPlan::new(ChunkEvalScalar {
+            eval_scalars,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
+        });
+
+        let root = PhysicalPlan::new(ChunkCastSchema {
+            cast_schemas,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
+        });
+
+        let root = PhysicalPlan::new(ChunkFillAndReorder {
+            fill_and_reorders,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
+        });
+
+        PhysicalPlan::new(ChunkAppendData {
+            input: root,
+            target_tables,
+            meta: PhysicalPlanMeta::new("ChunkAppendData"),
+        })
     }
 
     async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
@@ -477,6 +527,12 @@ impl InsertIntoBranches {
 
     fn len(&self) -> usize {
         self.len
+    }
+
+    fn support_distributed_insert(&self) -> bool {
+        self.tables
+            .iter()
+            .all(|table| table.support_distributed_insert() && !table.is_temp())
     }
 
     async fn build_serializable_target_tables(
