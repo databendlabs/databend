@@ -27,9 +27,21 @@ use jwt_simple::algorithms::RS512PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 use jwt_simple::prelude::JWTClaims;
 use jwt_simple::prelude::NoCustomClaims;
+use jwt_simple::prelude::VerificationOptions;
 
 /// Minimum RSA key size in bits.
 const RSA_MIN_KEY_BITS: usize = 2048;
+
+const JWT_TIME_TOLERANCE_SECS: u64 = 5;
+
+pub(crate) fn verification_options() -> VerificationOptions {
+    VerificationOptions {
+        time_tolerance: Some(jwt_simple::prelude::Duration::from_secs(
+            JWT_TIME_TOLERANCE_SECS,
+        )),
+        ..Default::default()
+    }
+}
 
 pub enum PublicKeyType {
     RSA(String), // PEM string; parsed into RS256/RS384/RS512 at verify time
@@ -91,17 +103,23 @@ fn verify_token_with_key(
             // which hash the signer used; we attempt all three since the underlying
             // RSA key is the same.
             if let Ok(k) = RS256PublicKey::from_pem(pem) {
-                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                if let Ok(claims) =
+                    k.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+                {
                     return Ok(claims);
                 }
             }
             if let Ok(k) = RS384PublicKey::from_pem(pem) {
-                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                if let Ok(claims) =
+                    k.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+                {
                     return Ok(claims);
                 }
             }
             if let Ok(k) = RS512PublicKey::from_pem(pem) {
-                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                if let Ok(claims) =
+                    k.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+                {
                     return Ok(claims);
                 }
             }
@@ -109,9 +127,15 @@ fn verify_token_with_key(
                 "RSA signature verification failed with RS256, RS384, and RS512",
             ))
         }
-        PublicKeyType::ES256(pk) => pk.verify_token::<NoCustomClaims>(token, None),
-        PublicKeyType::ES384(pk) => pk.verify_token::<NoCustomClaims>(token, None),
-        PublicKeyType::Ed25519(pk) => pk.verify_token::<NoCustomClaims>(token, None),
+        PublicKeyType::ES256(pk) => {
+            pk.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+        }
+        PublicKeyType::ES384(pk) => {
+            pk.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+        }
+        PublicKeyType::Ed25519(pk) => {
+            pk.verify_token::<NoCustomClaims>(token, Some(verification_options()))
+        }
     }
 }
 
