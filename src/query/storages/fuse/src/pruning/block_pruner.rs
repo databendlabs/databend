@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
@@ -22,9 +23,11 @@ use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::InternalColumnPruneResult;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -143,6 +146,48 @@ impl BlockPruner {
         Ok(result)
     }
 
+    #[async_backtrace::framed]
+    pub async fn delete_pruning(
+        &self,
+        segment_location: SegmentLocation,
+        block_metas: Arc<Vec<Arc<BlockMeta>>>,
+    ) -> Result<(Vec<(BlockMetaIndex, Arc<BlockMeta>)>, Vec<BlockMetaIndex>)> {
+        let (block_meta_indexes, whole_block_deletions) =
+            self.internal_column_delete_pruning(&segment_location, &block_metas);
+
+        let block_metas = if self.pruning_ctx.bloom_pruner.is_some()
+            || self.pruning_ctx.inverted_index_pruner.is_some()
+            || self.pruning_ctx.spatial_index_pruner.is_some()
+            || self.pruning_ctx.virtual_column_pruner.is_some()
+        {
+            self.block_pruning(
+                segment_location.clone(),
+                block_metas,
+                block_meta_indexes,
+                None,
+            )
+            .await?
+        } else {
+            self.block_pruning_sync(
+                segment_location.clone(),
+                block_metas,
+                block_meta_indexes,
+                None,
+            )?
+        };
+
+        let whole_block_indexes = whole_block_deletions.into_iter().collect::<HashSet<_>>();
+        let whole_block_deletions = block_metas
+            .iter()
+            .filter_map(|(index, _)| {
+                whole_block_indexes
+                    .contains(&index.block_idx)
+                    .then_some(index.clone())
+            })
+            .collect();
+        Ok((block_metas, whole_block_deletions))
+    }
+
     /// Apply internal column pruning.
     pub fn internal_column_pruning(
         &self,
@@ -162,6 +207,46 @@ impl BlockPruner {
                 .enumerate()
                 .map(|(index, block_meta)| (index, block_meta.clone()))
                 .collect(),
+        }
+    }
+
+    /// Apply internal column pruning for delete and collect blocks that can be
+    /// deleted without reading row data.
+    pub fn internal_column_delete_pruning(
+        &self,
+        segment_location: &SegmentLocation,
+        block_metas: &[Arc<BlockMeta>],
+    ) -> (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>) {
+        match &self.pruning_ctx.internal_column_pruner {
+            Some(pruner) => {
+                let mut whole_block_deletions = Vec::new();
+                let block_meta_indexes = block_metas
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, block_meta)| {
+                        match pruner.eval(&[
+                            (SEGMENT_NAME_COL_NAME, &segment_location.location.0),
+                            (BLOCK_NAME_COL_NAME, &block_meta.location.0),
+                        ]) {
+                            InternalColumnPruneResult::Pruned => None,
+                            InternalColumnPruneResult::Keep => Some((index, block_meta.clone())),
+                            InternalColumnPruneResult::FullMatch => {
+                                whole_block_deletions.push(index);
+                                Some((index, block_meta.clone()))
+                            }
+                        }
+                    })
+                    .collect();
+                (block_meta_indexes, whole_block_deletions)
+            }
+            None => (
+                block_metas
+                    .iter()
+                    .enumerate()
+                    .map(|(index, block_meta)| (index, block_meta.clone()))
+                    .collect(),
+                Vec::new(),
+            ),
         }
     }
 

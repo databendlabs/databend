@@ -27,6 +27,13 @@ use databend_common_expression::types::string::StringDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 /// Only support `_segment_name` and `_block_name` now.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InternalColumnPruneResult {
+    Pruned,
+    Keep,
+    FullMatch,
+}
+
 pub struct InternalColumnPruner {
     func_ctx: FunctionContext,
     expr: Expr<String>,
@@ -58,30 +65,44 @@ impl InternalColumnPruner {
     }
 
     pub fn should_keep(&self, col_name: &str, value: &str) -> bool {
-        if self.input_domains.contains_key(col_name) {
-            let mut input_domains = self.input_domains.clone();
-            let domain = Domain::String(StringDomain {
-                min: value.to_string(),
-                max: Some(value.to_string()),
-            });
-            input_domains.insert(col_name.to_string(), domain);
+        self.eval(&[(col_name, value)]) != InternalColumnPruneResult::Pruned
+    }
 
-            let (folded_expr, _) = ConstantFolder::fold_with_domain(
-                &self.expr,
-                &input_domains,
-                &self.func_ctx,
-                &BUILTIN_FUNCTIONS,
-            );
+    pub fn eval(&self, column_values: &[(&str, &str)]) -> InternalColumnPruneResult {
+        let mut input_domains = self.input_domains.clone();
+        let mut has_internal_column_value = false;
+        for (col_name, value) in column_values {
+            if self.input_domains.contains_key(*col_name) {
+                has_internal_column_value = true;
+                let domain = Domain::String(StringDomain {
+                    min: value.to_string(),
+                    max: Some(value.to_string()),
+                });
+                input_domains.insert((*col_name).to_string(), domain);
+            }
+        }
 
-            !matches!(
-                folded_expr,
-                Expr::Constant(Constant {
-                    scalar: Scalar::Boolean(false),
-                    ..
-                })
-            )
-        } else {
-            true
+        if !has_internal_column_value {
+            return InternalColumnPruneResult::Keep;
+        }
+
+        let (folded_expr, _) = ConstantFolder::fold_with_domain(
+            &self.expr,
+            &input_domains,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+
+        match folded_expr {
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            }) => InternalColumnPruneResult::Pruned,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(true),
+                ..
+            }) => InternalColumnPruneResult::FullMatch,
+            _ => InternalColumnPruneResult::Keep,
         }
     }
 }

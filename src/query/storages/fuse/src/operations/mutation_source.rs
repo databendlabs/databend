@@ -239,6 +239,12 @@ impl FuseTable {
                 }
             }
         }
+        whole_block_deletions.extend(
+            pruner
+                .whole_block_deletions
+                .iter()
+                .map(|index| (index.segment_idx, index.block_idx)),
+        );
 
         let range_block_metas = block_metas
             .clone()
