@@ -204,6 +204,13 @@ impl AsyncSink for CommitMultiTableInsert {
                 self.ctx
                     .mutation_state()
                     .set_multi_table_insert_rows(insert_rows.clone());
+                {
+                    let txn_mgr = self.ctx.txn_mgr();
+                    let mut txn_mgr = txn_mgr.lock();
+                    if txn_mgr.is_active() {
+                        txn_mgr.add_multi_table_insert_rows(insert_rows.clone());
+                    }
+                }
 
                 return Ok(());
             };

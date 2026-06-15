@@ -162,8 +162,8 @@ async fn try_rebuild_req(
         update_failed_tbls
     );
     let insert_rows = {
-        let insert_rows = ctx.mutation_state().multi_table_insert_rows();
-        insert_rows.lock().unwrap().clone()
+        let txn_mgr = ctx.txn_mgr();
+        txn_mgr.lock().multi_table_insert_rows()
     };
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
