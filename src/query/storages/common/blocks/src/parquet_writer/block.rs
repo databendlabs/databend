@@ -24,8 +24,7 @@
 
 use std::sync::Arc;
 
-use arrow_array::ArrayRef;
-use arrow_array::new_empty_array;
+use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
@@ -44,8 +43,9 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::schema::types::SchemaDescPtr;
 
-use super::BulkBlockParquetWriter;
 use super::SerializedParquet;
+use crate::MAX_BATCH_MEMORY_SIZE;
+use crate::PARQUET_PAGE_SIZE_HARD_LIMIT;
 
 /// Parquet file magic bytes (`PAR1`), written at the start of the file and before the footer.
 const PARQUET_MAGIC: &[u8; 4] = b"PAR1";
@@ -99,6 +99,14 @@ impl BlockParquetWriter {
 
     /// Encode and compress the block's columns immediately into the per-leaf column writers.
     /// Returns an error if leaf expansion or encoding fails.
+    ///
+    /// Large batches are split into row-chunks under [`MAX_BATCH_MEMORY_SIZE`] before encoding:
+    /// the column writers flush pages by their `data_page_*` limits, but a single oversized
+    /// `write` of values that all land in one mini-batch can still produce one page exceeding
+    /// parquet's ~2GB page-size hard limit (i32 overflow). Pre-splitting keeps each `write`
+    /// bounded. Row size is assumed roughly uniform (`RecordBatch::slice` shares buffers, so a
+    /// sliced chunk's true size cannot be measured) — see the `LIMITATION` on the old
+    /// `write_batch_with_page_limit`.
     pub fn write_block(&mut self, block: DataBlock) -> Result<()> {
         if block.is_empty() {
             return Ok(());
@@ -106,19 +114,61 @@ impl BlockParquetWriter {
 
         let num_rows = block.num_rows();
         let arrow_schema = self.arrow_schema.clone();
-        let state = self.ensure_state()?;
-        let mut leaf = state.column_writers.iter_mut();
+        // Convert through the arrow schema so the columns line up with the parquet leaves by
+        // schema (name/type/coercion), not by the block's positional column order.
+        let batch = block.to_record_batch_with_arrow_schema(&arrow_schema)?;
+        let batch_size = batch.get_array_memory_size();
 
-        for (field_idx, field) in arrow_schema.fields().iter().enumerate() {
-            let array = ArrayRef::from(&block.get_by_offset(field_idx).to_column());
-            for leaf_column in compute_leaves(field, &array)? {
-                let writer = leaf.next().ok_or_else(|| {
+        // Fast path: the whole batch fits within the soft limit, encode it in one go.
+        if batch_size <= MAX_BATCH_MEMORY_SIZE {
+            self.write_record_batch(&arrow_schema, &batch)?;
+            self.num_rows += num_rows;
+            return Ok(());
+        }
+
+        // A single row cannot be split across pages, so if one row exceeds the ~2GB hard limit
+        // the encode would overflow the i32 page size. Reject it up front with a clear error.
+        if num_rows == 1 {
+            if batch_size > PARQUET_PAGE_SIZE_HARD_LIMIT {
+                return Err(ErrorCode::Internal(format!(
+                    "A single row requires {} bytes which exceeds Parquet's page size limit ({} bytes).",
+                    batch_size, PARQUET_PAGE_SIZE_HARD_LIMIT
+                )));
+            }
+            self.write_record_batch(&arrow_schema, &batch)?;
+            self.num_rows += num_rows;
+            return Ok(());
+        }
+
+        // Split into row-chunks sized to stay under the soft limit, assuming uniform row size.
+        let rows_per_chunk = (((num_rows as f64) * (MAX_BATCH_MEMORY_SIZE as f64)
+            / batch_size as f64)
+            .ceil() as usize)
+            .max(1);
+        let mut offset = 0;
+        while offset < num_rows {
+            let length = rows_per_chunk.min(num_rows - offset);
+            let chunk = batch.slice(offset, length);
+            self.write_record_batch(&arrow_schema, &chunk)?;
+            offset += length;
+        }
+        self.num_rows += num_rows;
+        Ok(())
+    }
+
+    /// Leaf-expand each top-level column of `batch` and feed every leaf fragment into the
+    /// matching column writer, in parquet leaf order.
+    fn write_record_batch(&mut self, arrow_schema: &Schema, batch: &RecordBatch) -> Result<()> {
+        let state = self.ensure_state()?;
+        let mut writers = state.column_writers.iter_mut();
+        for (field, column) in arrow_schema.fields().iter().zip(batch.columns()) {
+            for leaf_column in compute_leaves(field, column)? {
+                let writer = writers.next().ok_or_else(|| {
                     ErrorCode::Internal("more leaf columns than the schema declares")
                 })?;
                 writer.write(&leaf_column)?;
             }
         }
-        self.num_rows += num_rows;
         Ok(())
     }
 
@@ -149,29 +199,18 @@ impl BlockParquetWriter {
     /// list of `Bytes`: the `PAR1` magic, each column chunk's already-encoded `Bytes` pushed
     /// with no copy (its page offsets remapped to absolute file offsets), then the footer.
     /// Returns the payload chunks + metadata.
-    pub fn finish(self) -> Result<SerializedParquet> {
+    pub fn finish(mut self) -> Result<SerializedParquet> {
+        // Build the column writers even when no block was written, so the empty case takes the
+        // same path: each leaf closes into a valid 0-row column chunk that `assemble_parquet`
+        // stitches into an empty-schema file — no separate low-level fallback.
+        self.ensure_state()?;
         let BlockParquetWriter {
-            arrow_schema,
             props,
             state,
             num_rows,
+            ..
         } = self;
-
-        // No data written: fall back to the leaf writer to emit a valid empty-schema file.
-        let Some(state) = state else {
-            let mut writer = BulkBlockParquetWriter::new(arrow_schema.clone(), props)?;
-            for field in arrow_schema.fields() {
-                let leaves = compute_leaves(field, &new_empty_array(field.data_type()))?;
-                for leaf_column in &leaves {
-                    let mut leaf = writer.next_leaf()?;
-                    leaf.write(leaf_column)?;
-                    leaf.close()?;
-                }
-            }
-            return writer.finish();
-        };
-
-        assemble_parquet(props, state, num_rows)
+        assemble_parquet(props, state.unwrap(), num_rows)
     }
 }
 
@@ -393,5 +432,117 @@ mod tests {
         let (blocks, num_rg) = read_back(serialized.payload.concat());
         assert_eq!(num_rg, 1);
         assert_blocks_eq(&expected, &DataBlock::concat(&blocks).unwrap());
+    }
+
+    // A batch far larger than the soft split limit must still round-trip exactly, and the
+    // pre-splitting must produce multiple data pages (rather than one oversized page).
+    #[test]
+    fn test_large_batch_is_split_into_pages() {
+        use parquet::file::reader::FileReader;
+        use parquet::file::reader::SerializedFileReader;
+
+        let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        // ~100 MiB of distinct 1 MiB strings (distinct so dictionary stays small and the data
+        // pages carry the bulk), well above the 64 MiB soft limit.
+        let values: Vec<String> = (0..100)
+            .map(|i| format!("{i:07}").repeat(1 << 17))
+            .collect();
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(values.clone())]);
+        let raw_size = block
+            .clone()
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap()
+            .get_array_memory_size();
+        assert!(raw_size > MAX_BATCH_MEMORY_SIZE, "test setup too small");
+
+        // Disable dictionary so the values land in data pages, exercising the split path.
+        let mut writer = BlockParquetWriter::new(
+            arrow_schema,
+            Arc::new(crate::build_parquet_writer_properties(
+                databend_storages_common_table_meta::table::TableCompression::None,
+                false,
+                None::<&databend_storages_common_table_meta::meta::StatisticsOfColumns>,
+                None,
+                0,
+                &schema,
+                None,
+                None,
+            )),
+        );
+        writer.write_block(block).unwrap();
+        let serialized = writer.finish().unwrap();
+
+        let bytes = bytes::Bytes::from(serialized.payload.concat());
+        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
+        let mut page_reader = reader
+            .get_row_group(0)
+            .unwrap()
+            .get_column_page_reader(0)
+            .unwrap();
+        let mut pages = 0;
+        let mut total_values = 0;
+        while let Some(page) = page_reader.get_next_page().unwrap() {
+            pages += 1;
+            total_values += page.num_values() as usize;
+        }
+        assert!(
+            pages > 1,
+            "expected multiple pages from splitting, got {pages}"
+        );
+        assert_eq!(total_values, 100);
+
+        let (blocks, _) = read_back(bytes.to_vec());
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_eq!(got.num_rows(), 100);
+        assert_eq!(got.columns()[0].to_column(), StringType::from_data(values));
+    }
+
+    // Finishing without writing any block (or after only empty blocks) must still emit a valid
+    // single-row-group, 0-row file readable by the arrow reader — the unified `finish` path
+    // builds the column writers on demand rather than falling back to a separate writer.
+    #[test]
+    fn test_finish_without_data_emits_valid_empty_file() {
+        let schema = sample_schema();
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        assert!(writer.is_empty());
+        // An explicitly empty block must not change the outcome.
+        writer.write_block(DataBlock::empty()).unwrap();
+        assert!(writer.is_empty());
+
+        let serialized = writer.finish().unwrap();
+        assert_eq!(serialized.metadata.num_row_groups(), 1);
+        assert_eq!(serialized.metadata.file_metadata().num_rows(), 0);
+
+        let (blocks, num_rg) = read_back(serialized.payload.concat());
+        assert_eq!(num_rg, 1);
+        let total_rows: usize = blocks.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 0);
+    }
+
+    // A single row above the soft split limit but under the ~2GB hard limit must be written
+    // directly (a single row cannot be split across pages) and round-trip intact.
+    #[test]
+    fn test_single_large_row_under_hard_limit_succeeds() {
+        let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        // One value larger than the 64 MiB soft limit, far below the ~2GB hard limit.
+        let big = "x".repeat((MAX_BATCH_MEMORY_SIZE * 3) / 2);
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![big.clone()])]);
+
+        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        writer.write_block(block).unwrap();
+        let serialized = writer.finish().unwrap();
+        assert_eq!(serialized.metadata.num_row_groups(), 1);
+
+        let (blocks, _) = read_back(serialized.payload.concat());
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_eq!(got.num_rows(), 1);
+        assert_eq!(
+            got.columns()[0].to_column(),
+            StringType::from_data(vec![big])
+        );
     }
 }
