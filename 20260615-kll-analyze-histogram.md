@@ -12,12 +12,14 @@ a global sort/window step, and distinct aggregation for every histogram column.
 The implementation is expensive enough that `enable_analyze_histogram` is
 disabled by default.
 
-This RFC proposes replacing the SQL/window based histogram path with a
-storage-native, streaming histogram builder based on KLL sketches. The builder
-uses KLL to estimate equi-depth bucket boundaries with bounded rank error, then
-computes bucket statistics through a streaming aggregation pass. The result
-keeps the existing `Histogram` metadata format and optimizer-facing semantics,
-while avoiding the global sort and reducing memory pressure.
+This RFC proposes adding a selectable histogram generation algorithm for
+`ANALYZE TABLE`. The existing SQL/window implementation remains available, and
+a new storage-native KLL algorithm can be selected through settings, table
+options, or new `ANALYZE TABLE` syntax. The KLL builder estimates equi-depth
+bucket boundaries with bounded rank error, then computes bucket statistics
+through a streaming aggregation pass. The result keeps the existing `Histogram`
+metadata format and optimizer-facing semantics, while avoiding the global sort
+and reducing memory pressure when the KLL algorithm is selected.
 
 ## Motivation
 
@@ -63,7 +65,11 @@ boundaries without materializing and sorting all values.
 
 ## Goals
 
-- Generate ANALYZE histograms without a global sort/window query per column.
+- Add a selectable histogram generation algorithm for `ANALYZE TABLE`.
+- Allow users to choose between the current SQL/window algorithm and a new KLL
+  algorithm.
+- Generate KLL-based ANALYZE histograms without a global sort/window query per
+  column.
 - Keep histogram generation streaming and bounded-memory.
 - Keep the existing `Histogram` and `HistogramBucket` metadata representation.
 - Preserve the optimizer-facing bucket fields:
@@ -110,10 +116,20 @@ Internally, histogram bounds are stored through `Datum` variants:
 
 ## Proposed Design
 
-Replace the interpreter-built histogram SQL path with an analyze-native
-histogram builder.
+Introduce an analyze histogram algorithm choice.
 
-The new builder has two phases.
+The first two algorithms are:
+
+- `window`: the current implementation based on
+  `NTILE(DEFAULT_HISTOGRAM_BUCKETS) OVER (ORDER BY col)` and `GROUP BY
+  quantile`;
+- `kll`: a new analyze-native streaming implementation based on KLL sketches.
+
+The default algorithm can remain `window` for compatibility while the KLL
+path is experimental. Users can opt into `kll` through settings, table options,
+or new `ANALYZE TABLE` syntax.
+
+The KLL builder has two phases.
 
 ### Phase 1: Build KLL Sketches
 
@@ -226,12 +242,13 @@ row-distribution summary.
 
 ### Analyze Pipeline
 
-The current `AnalyzeTableInterpreter` should stop creating histogram SQL
-pipelines when the KLL path is enabled.
+`AnalyzeTableInterpreter` should choose the histogram builder from the selected
+algorithm.
 
-Instead, `FuseTable::do_analyze` can receive a histogram collection mode, or
-the histogram builder can be integrated into the existing analyze source/sink
-flow.
+For `window`, Databend can keep the current query-pipeline based behavior.
+For `kll`, `FuseTable::do_analyze` can receive a histogram collection mode, or
+the KLL histogram builder can be integrated into the existing analyze
+source/sink flow.
 
 Potential placement:
 
@@ -258,27 +275,39 @@ to compute `num_values` and per-bucket NDV under the final boundaries, persisted
 KLL sketches can avoid the first pass used only to discover approximate
 equi-depth boundaries.
 
-### Settings
+### Algorithm Selection
 
-The implementation can reuse:
+The implementation can reuse these existing feature gates:
 
 - `enable_analyze_histogram`
 - `enable_table_snapshot_stats`
 
-An additional experimental setting may be useful during rollout:
+In addition, Databend should expose a way to choose the histogram generation
+algorithm. Possible configuration surfaces:
+
+- Session or global setting:
 
 ```text
-enable_analyze_kll_histogram
+analyze_histogram_algorithm = 'window' | 'kll'
 ```
 
-When disabled, Databend can keep the current SQL/window path as a fallback.
-When enabled, Databend uses the KLL-based path.
+- Table option, so a table can keep a stable analyze policy.
+
+- New `ANALYZE TABLE` syntax, for one-off control:
+
+```sql
+ANALYZE TABLE db.table WITH HISTOGRAM ALGORITHM = 'kll';
+```
+
+The exact syntax can be decided during implementation, but the API should make
+the algorithm choice explicit. The current SQL/window path should remain a
+valid algorithm rather than an implicit secondary path.
 
 ### Error Parameter Configuration
 
-KLL exposes a tunable accuracy/memory tradeoff. The first implementation should
-provide a conservative default, but users and tests should be able to override
-the error target explicitly.
+KLL exposes a tunable accuracy/memory tradeoff. When the selected algorithm is
+`kll`, the implementation should provide a conservative default, but users and
+tests should be able to override the error target explicitly.
 
 Possible configuration surfaces:
 
@@ -294,12 +323,12 @@ Possible configuration surfaces:
 - New `ANALYZE TABLE` syntax, for one-off control:
 
   ```sql
-  ANALYZE TABLE db.table WITH HISTOGRAM ERROR_RATE = 0.01;
+  ANALYZE TABLE db.table WITH HISTOGRAM ALGORITHM = 'kll', ERROR_RATE = 0.01;
   ```
 
 The exact syntax can be decided during implementation. The important API
-property is that the error parameter is explicit, validated, and recorded in
-the analyze path rather than hidden as an implementation constant.
+property is that KLL-specific parameters are explicit, validated, and recorded
+in the analyze path rather than hidden as implementation constants.
 
 ## Type Support
 
@@ -333,10 +362,10 @@ The RFC intentionally keeps the stored histogram format unchanged. The KLL
 error parameters should be controlled by implementation constants or settings,
 and documented as rank-error based.
 
-If the user specifies an error parameter through settings, table options, or
-new `ANALYZE TABLE` syntax, Databend should validate that value before building
-the analyze pipeline. Invalid values should fail fast rather than silently
-falling back to a default.
+If the user selects the KLL algorithm and specifies an error parameter through
+settings, table options, or new `ANALYZE TABLE` syntax, Databend should validate
+that value before building the analyze pipeline. Invalid values should fail fast
+rather than silently falling back to a default.
 
 ## Rollout Plan
 
@@ -344,8 +373,9 @@ falling back to a default.
    The state must support update, merge, serialization, and quantile boundary
    extraction.
 
-2. Add analyze pipeline support behind an experimental setting.
-   Keep the existing SQL/window histogram path as fallback.
+2. Add analyze pipeline support for an explicit histogram algorithm option.
+   Keep `window` as a supported algorithm and add `kll` as an experimental
+   algorithm.
 
 3. Generate KLL boundaries in phase 1 and fill bucket stats in phase 2.
    Store the result in `TableSnapshotStatistics` using the existing histogram
@@ -354,11 +384,9 @@ falling back to a default.
 4. Add tests comparing KLL histograms against exact `NTILE` histograms with
    tolerance on bucket row counts and boundary ranks.
 
-5. Switch `enable_analyze_histogram` to prefer the KLL path after correctness
-   and performance validation.
-
-6. Remove the SQL/window histogram path in a later cleanup if the KLL path is
-   stable.
+5. Evaluate whether the default algorithm should remain `window` or move to
+   `kll` after correctness and performance validation. This should be a separate
+   compatibility decision.
 
 ## Testing Strategy
 
@@ -416,13 +444,15 @@ boundaries.
   buckets?
 - Which configuration surface should be supported first: setting, table option,
   new `ANALYZE TABLE` syntax, or a combination of them?
+- What should the default histogram algorithm be during and after the
+  experimental period?
 - Should all-equal input produce one bucket or many equal-boundary buckets?
 - Should string histograms be supported in the first version or deferred?
 - Should KLL sketches be persisted at block or segment level in future metadata?
 - If KLL sketches are persisted, when should Databend reuse them and when
   should it rebuild them from raw data?
-- Should the old SQL/window path remain as a debug fallback after KLL becomes
-  stable?
+- Should table-level algorithm options override session settings, or should
+  one-off `ANALYZE TABLE` syntax always have highest priority?
 
 ## Alternatives
 
