@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
-
+use std::time::Duration;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
@@ -68,7 +68,7 @@ use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
-
+use tokio::time::sleep;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -647,6 +647,9 @@ impl Binder {
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
+            // sleep 0.5 seconds to make racing window larger
+            let random_sleep_ms = rand::random::<u64>() % 500;
+            sleep(Duration::from_millis(random_sleep_ms)).await;
             // Resolve table with ctx
             // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
             // we will invoke here twice for t1, so in the past, we use catalog every time to get the

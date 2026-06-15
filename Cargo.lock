@@ -4830,6 +4830,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "proptest",
  "prqlc",
+ "rand 0.8.5",
  "recursive",
  "regex",
  "roaring 0.10.12",

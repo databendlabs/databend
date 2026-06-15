@@ -79,6 +79,7 @@ toml = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
+rand = {workspace = true}
 
 [dev-dependencies]
 databend-common-grpc = { workspace = true }
