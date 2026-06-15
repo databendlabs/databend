@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod collect_statistics;
 mod cluster_key_join_order;
+mod collect_statistics;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
