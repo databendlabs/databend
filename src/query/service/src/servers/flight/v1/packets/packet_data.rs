@@ -31,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_storage::CopyStatus;
-use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 use log::error;
 
@@ -73,7 +72,6 @@ pub enum DataPacket {
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MutationStatus(MutationStatus),
-    MultiTableInsertStatus(MultiTableInsertStatus),
     DataCacheMetrics(DataCacheMetricValues),
     PartStatistics(HashMap<u32, PartStatistics>),
     QueryPerf(String),
@@ -90,7 +88,6 @@ impl DataPacket {
             DataPacket::ErrorCode(_) => 0,
             DataPacket::CopyStatus(_) => 0,
             DataPacket::MutationStatus(_) => 0,
-            DataPacket::MultiTableInsertStatus(_) => 0,
             DataPacket::SerializeProgress(_) => 0,
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
@@ -177,12 +174,6 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
-            DataPacket::MultiTableInsertStatus(status) => FlightData {
-                app_metadata: vec![0x0c].into(),
-                data_body: serde_json::to_vec(&status)?.into(),
-                data_header: Default::default(),
-                flight_descriptor: None,
-            },
         })
     }
 }
@@ -257,11 +248,6 @@ impl TryFrom<FlightData> for DataPacket {
             0x0b => {
                 let counters = serde_json::from_slice::<NodePerfCounters>(&flight_data.data_body)?;
                 Ok(DataPacket::QueryPerfCounters(counters))
-            }
-            0x0c => {
-                let status =
-                    serde_json::from_slice::<MultiTableInsertStatus>(&flight_data.data_body)?;
-                Ok(DataPacket::MultiTableInsertStatus(status))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

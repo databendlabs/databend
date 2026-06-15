@@ -128,10 +128,6 @@ impl StatisticsSender {
                         warn!("MutationStatus send has error, cause: {:?}.", error);
                     }
 
-                    if let Err(error) = Self::send_multi_table_insert_status(&ctx, &tx).await {
-                        warn!("MultiTableInsertStatus send has error, cause: {:?}.", error);
-                    }
-
                     if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
                         warn!("Statistics send has error, cause: {:?}.", error);
                     }
@@ -223,23 +219,6 @@ impl StatisticsSender {
         };
         let data_packet = DataPacket::MutationStatus(mutation_status);
         flight_sender.send(data_packet).await?;
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn send_multi_table_insert_status(
-        ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSender,
-    ) -> Result<()> {
-        let status = {
-            let stats = ctx.mutation_state().multi_table_insert_status();
-            let status = stats.lock().unwrap();
-            status.clone()
-        };
-        if !status.insert_rows.is_empty() {
-            let data_packet = DataPacket::MultiTableInsertStatus(status);
-            flight_sender.send(data_packet).await?;
-        }
         Ok(())
     }
 
