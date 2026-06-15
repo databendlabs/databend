@@ -20,6 +20,7 @@ use databend_common_sql::binder::StageResolver;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use databend_common_sql::plans::AlterDatabasePlan;
+use databend_common_storage::EndpointPolicyScope;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -164,13 +165,16 @@ impl Interpreter for AlterDatabaseInterpreter {
                 ));
             }
 
-            let operator =
-                databend_common_storage::init_operator(&storage_params).map_err(|e| {
-                    databend_common_exception::ErrorCode::BadArguments(format!(
-                        "Failed to access storage location '{}': {}",
-                        path, e
-                    ))
-                })?;
+            let operator = databend_common_storage::init_operator_with_policy_scope(
+                &storage_params,
+                EndpointPolicyScope::External,
+            )
+            .map_err(|e| {
+                databend_common_exception::ErrorCode::BadArguments(format!(
+                    "Failed to access storage location '{}': {}",
+                    path, e
+                ))
+            })?;
 
             databend_common_sql::binder::verify_external_location_privileges(operator)
                 .await

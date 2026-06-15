@@ -52,6 +52,10 @@ impl Rule for RuleEliminateSort {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let input = s_expr.child(0)?;
 
+        if sort.limit.is_some() {
+            return Ok(());
+        }
+
         let rel_expr = RelExpr::with_s_expr(input);
         let prop = rel_expr.derive_relational_prop()?;
 

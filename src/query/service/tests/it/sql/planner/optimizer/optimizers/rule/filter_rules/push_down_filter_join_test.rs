@@ -24,6 +24,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
+use databend_common_sql::planner::plans::FunctionCall;
 use databend_common_sql::planner::plans::JoinEquiCondition;
 use databend_common_sql::planner::plans::JoinType;
 use databend_common_sql::planner::plans::RelOperator;
@@ -209,6 +210,21 @@ fn normalize_string(s: &str) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn is_null(expr: ScalarExpr) -> ScalarExpr {
+    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "is_not_null".to_string(),
+        params: vec![],
+        arguments: vec![expr],
+    });
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "not".to_string(),
+        params: vec![],
+        arguments: vec![is_not_null],
+    })
 }
 
 /// Run a single join filter test case
@@ -594,6 +610,67 @@ fn test_push_down_filter_left_join() -> anyhow::Result<()> {
     for test_case in test_cases {
         run_join_filter_test(&test_case, &metadata)?;
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_single_join_is_null_filter_not_pushed_down() -> anyhow::Result<()> {
+    let metadata = MetadataRef::default();
+    let mut builder = ExprBuilder::new();
+
+    let t1_id = builder.column(
+        "t1.id",
+        0,
+        "id",
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        "t1",
+        0,
+    );
+    let t2_id = builder.column(
+        "t2.id",
+        1,
+        "id",
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        "t2",
+        1,
+    );
+    let join_condition = JoinEquiCondition::new(t1_id.clone(), t2_id.clone(), false);
+
+    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([Symbol::new(0)]));
+    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([Symbol::new(1)]));
+    let left_single = builder.join(
+        left_scan,
+        right_scan,
+        vec![join_condition.clone()],
+        JoinType::LeftSingle,
+    );
+    let left_single_filter = builder.filter(left_single, vec![is_null(t2_id.clone())]);
+
+    let rule = RulePushDownFilterJoin::new(metadata.clone());
+    let mut result = TransformResult::default();
+    rule.apply(&left_single_filter, &mut result)?;
+    assert!(
+        result.results().is_empty(),
+        "IS NULL on the null-supplying side of LeftSingle must stay above the join"
+    );
+
+    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([Symbol::new(0)]));
+    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([Symbol::new(1)]));
+    let right_single = builder.join(
+        left_scan,
+        right_scan,
+        vec![join_condition],
+        JoinType::RightSingle,
+    );
+    let right_single_filter = builder.filter(right_single, vec![is_null(t1_id)]);
+
+    let mut result = TransformResult::default();
+    rule.apply(&right_single_filter, &mut result)?;
+    assert!(
+        result.results().is_empty(),
+        "IS NULL on the null-supplying side of RightSingle must stay above the join"
+    );
 
     Ok(())
 }

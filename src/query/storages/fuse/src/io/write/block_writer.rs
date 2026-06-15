@@ -242,7 +242,7 @@ impl BlockBuilder {
             &self.write_settings.col_stats_truncate_lens,
         )?;
 
-        let block_size = data_block.estimate_block_size() as u64;
+        let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
         let (col_metas, buffer) = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,

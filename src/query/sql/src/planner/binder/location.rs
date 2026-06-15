@@ -43,6 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
+use databend_common_storage::check_storage_params_endpoints;
 use log::LevelFilter;
 use log::info;
 use opendal::Scheme;
@@ -67,8 +68,9 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
             anyhow!("endpoint_url is required for storage azblob"),
         )
     })?;
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Azblob(StorageAzblobConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         container: l.name.to_string(),
         account_name: l
             .connection
@@ -93,6 +95,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
 
     // we split those field out to make borrow checker happy.
     let region = l.connection.get("region").cloned().unwrap_or_default();
@@ -181,7 +184,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         });
 
     let sp = StorageParams::S3(StorageS3Config {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         region,
         bucket: l.name.to_string(),
         access_key_id,
@@ -212,8 +215,9 @@ fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Gcs(StorageGcsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         bucket: l.name.clone(),
         root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
@@ -233,8 +237,9 @@ fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
+    let endpoint = secure_omission(endpoint);
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
-        endpoint_url: secure_omission(endpoint),
+        endpoint_url: endpoint,
         root: "/ipfs".to_string() + root.as_str(),
         network_config: None,
     });
@@ -616,6 +621,9 @@ async fn parse_uri_location_resolved(
             };
 
             // HTTP is special that we don't support dir, always return / instead.
+            check_storage_params_endpoints(&StorageParams::Http(cfg.clone()))
+                .await
+                .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
@@ -635,6 +643,20 @@ async fn parse_uri_location_resolved(
             ));
         }
     };
+
+    // Validate every endpoint URL exposed by the resolved StorageParams
+    // (including secondary URLs such as OSS presign_endpoint_url) against the
+    // egress policy. Centralising the check here keeps each per-scheme parser
+    // free of policy knowledge and ensures new fields cannot silently bypass
+    // it.
+    //
+    // Run before sp.auto_detect(): the S3 auto-detect branch contacts the
+    // configured endpoint to discover the bucket region, so the policy must
+    // gate that call as well. auto_detect only mutates `region`, not the
+    // endpoint URL, so a single pre-check is sufficient.
+    check_storage_params_endpoints(&sp)
+        .await
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     let sp = sp.auto_detect().await.map_err(|err| {
         Error::new(
