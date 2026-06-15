@@ -22,6 +22,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
+use databend_common_sql::plans::spatial_join_gate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -142,10 +143,33 @@ impl PhysicalPlanBuilder {
             .union(&others_required)
             .cloned()
             .collect();
-        let left_required = left_required.union(&others_required).cloned().collect();
-        let right_required = right_required.union(&others_required).cloned().collect();
+        let left_required: ColumnSet = left_required.union(&others_required).cloned().collect();
+        let right_required: ColumnSet = right_required.union(&others_required).cloned().collect();
 
-        // 2. Build physical plan.
+        // 2. Try Build physical spatial join plan.
+        if self.ctx.get_settings().get_enable_spatial_join()? {
+            let left_prop = s_expr.left_child().derive_relational_prop()?;
+            let right_prop = s_expr.right_child().derive_relational_prop()?;
+            if let Ok(candidate) =
+                spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
+            {
+                if let Some(plan) = self
+                    .try_build_spatial_index_join(
+                        join,
+                        candidate,
+                        s_expr,
+                        required.clone(),
+                        left_required.clone(),
+                        right_required.clone(),
+                    )
+                    .await?
+                {
+                    return Ok(plan);
+                }
+            }
+        }
+
+        // 3. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
             if !join.equi_conditions.is_empty() {
