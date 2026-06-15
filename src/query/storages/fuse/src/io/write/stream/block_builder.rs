@@ -126,9 +126,9 @@ impl ArrowParquetWriter {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::write called before initialization");
         };
-        // The streaming writer buffers the block's columns and only encodes them at
-        // `finish`, replaying column-by-column through the low-level streaming path.
-        writer.inner.write_block(block);
+        // The streaming writer encodes and compresses the block's columns immediately into
+        // per-leaf column writers, so buffered memory is the compressed pages, not raw blocks.
+        writer.inner.write_block(block)?;
         Ok(())
     }
 
@@ -144,12 +144,12 @@ impl ArrowParquetWriter {
     }
 
     fn compressed_size(&self) -> usize {
-        // Writer style 1 defers all encoding to `finish`, so no live compressed-size
-        // estimate is available while buffering. `need_flush` therefore relies on row
-        // count and uncompressed block size only.
-        // TODO: approximate via an empirical compression ratio applied to block_size if
-        // block sizing regresses for large inserts.
-        0
+        // Encoding happens eagerly in `write`, so the buffered compressed-page size is a live
+        // estimate that `need_flush` can use directly.
+        match self {
+            Initialized(writer) => writer.inner.compressed_size(),
+            ArrowParquetWriter::Uninitialized(_) => 0,
+        }
     }
 }
 

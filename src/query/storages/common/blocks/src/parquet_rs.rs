@@ -107,7 +107,7 @@ pub fn blocks_to_parquet_with_stats(
     // The low-level streaming writer flushes pages by `data_page_*` limits as they fill,
     // so the previous `write_batch_with_page_limit` splitting is no longer needed.
     let mut writer = BlockParquetWriter::new(arrow_schema, props);
-    writer.write_blocks(blocks);
+    writer.write_blocks(blocks)?;
     writer.finish()
 }
 
