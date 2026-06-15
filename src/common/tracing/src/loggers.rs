@@ -184,7 +184,15 @@ pub struct KvWriter<'a>(pub &'a mut Vec<u8>);
 
 impl<'kvs> VisitSource<'kvs> for KvWriter<'_> {
     fn visit_pair(&mut self, key: Key<'kvs>, value: Value<'kvs>) -> Result<(), log::kv::Error> {
-        write!(self.0, " {key}={value}")?;
+        match serde_json::to_string(&value) {
+            Ok(json_value) => {
+                write!(self.0, " {key}={json_value}")?;
+            }
+            Err(_) => {
+                // fallback to debug format
+                write!(self.0, " {key}={value}")?;
+            }
+        }
         Ok(())
     }
 }
