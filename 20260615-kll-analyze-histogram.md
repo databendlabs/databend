@@ -173,7 +173,7 @@ For each bucket, maintain:
 - row count;
 - minimum observed value;
 - maximum observed value;
-- HLL for per-bucket NDV.
+- per-bucket distinct-value statistics.
 
 At the end, emit the existing histogram bucket representation:
 
@@ -182,20 +182,27 @@ HistogramBucket::try_from_bounds(
     lower_bound,
     upper_bound,
     count as f64,
-    bucket_hll.count() as f64,
+    bucket_ndv as f64,
 )
 ```
 
-Then store:
+The `accuracy` flag must reflect the semantics of `num_distinct`. Today,
+`TypedHistogram::ndv()` treats accurate histograms as exact by summing bucket
+`num_distinct` values and returning `NdvEstimate::exact`. Therefore, if
+per-bucket NDV is produced by HLL, Databend must not publish those approximate
+values as `accuracy = true`.
 
-```rust
-Histogram::try_from_buckets(true, buckets, None)
-```
+The implementation should choose one of these policies:
 
-The `accuracy` flag remains `true` when bucket NDV comes from actual observed
-per-bucket HLLs. The bucket boundaries are approximate quantile boundaries, but
-the bucket counts and bucket NDVs are computed from the second pass over actual
-rows.
+- compute exact per-bucket distinct counts and keep `accuracy = true`; or
+- use per-bucket HLL and store the histogram as non-exact, for example
+  `accuracy = false`; or
+- extend the histogram accuracy semantics so bucket NDV can distinguish exact
+  counts from approximate HLL estimates.
+
+The bucket boundaries are approximate quantile boundaries. Bucket row counts
+are computed from the second pass over actual rows, while bucket NDV exactness
+depends on the policy above.
 
 ## Why Two Passes
 
@@ -355,8 +362,9 @@ For histogram generation, that means:
 - bucket boundaries are approximate quantile boundaries;
 - bucket row counts may deviate from exact equi-depth targets;
 - the second pass computes exact observed counts under the chosen boundaries;
-- per-bucket NDV is approximate if HLL is used, matching Databend's existing
-  NDV model.
+- per-bucket NDV must be marked according to how it is computed. Exact distinct
+  counts may keep exact histogram NDV semantics, while HLL-derived bucket NDV
+  must not be published as exact.
 
 The RFC intentionally keeps the stored histogram format unchanged. The KLL
 error parameters should be controlled by implementation constants or settings,
@@ -446,6 +454,8 @@ boundaries.
   new `ANALYZE TABLE` syntax, or a combination of them?
 - What should the default histogram algorithm be during and after the
   experimental period?
+- Should KLL bucket NDV use exact distinct counting, HLL with non-exact
+  histogram semantics, or an extended accuracy model?
 - Should all-equal input produce one bucket or many equal-boundary buckets?
 - Should string histograms be supported in the first version or deferred?
 - Should KLL sketches be persisted at block or segment level in future metadata?
