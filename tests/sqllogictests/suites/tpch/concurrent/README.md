@@ -10,7 +10,7 @@ The generated `.test` files are written to `generated/` and intentionally ignore
 by git. By default the workload creates 64 worker files to match CI
 `parallel=64`; each worker file runs 4 sequential rounds. This keeps the number
 of HTTP sessions bounded while making every worker stay busy for several
-minutes:
+minutes. Each worker sets `flight_client_timeout = 10` before running SQL:
 
 - 256 TPC-H Q21 executor-heavy cases.
 - 256 TPC-H Q9 planner-only `EXPLAIN` cases.
