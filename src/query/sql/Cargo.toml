@@ -64,6 +64,7 @@ num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 prqlc = { workspace = true }
+rand = { workspace = true }
 recursive = { workspace = true }
 regex = { workspace = true }
 roaring = { workspace = true }
@@ -79,7 +80,6 @@ toml = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
-rand = {workspace = true}
 
 [dev-dependencies]
 databend-common-grpc = { workspace = true }
