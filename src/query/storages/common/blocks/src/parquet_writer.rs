@@ -20,10 +20,16 @@
 //! instead of buffering whole column chunks in memory like `ArrowWriter` does.
 //!
 //! Two writers are provided:
-//! - [`BulkBlockParquetWriter`] (column-oriented): writes one full column at a time,
-//!   peak memory ≈ one in-progress page. This is the core.
-//! - [`BlockParquetWriter`] (row-oriented, high-level): buffers incoming `DataBlock`s,
-//!   then at `finish` replays them column-by-column through a [`BulkBlockParquetWriter`].
+//! - [`BulkBlockParquetWriter`] (leaf-oriented, low-level): opens its single row group on
+//!   construction; drive it leaf by leaf via `next_leaf()` → `write()`/`close()`, then
+//!   `finish()`. Each `write` encodes an `ArrowLeafColumn` straight into the open leaf's page
+//!   writer, flushing pages to the sink as they fill — no per-column chunk buffer. Only one
+//!   leaf is open at a time (parquet requires sequential leaves; the borrow checker enforces
+//!   it). Leaf expansion is the caller's job, mirroring the read side's per-leaf
+//!   `RowGroupReader`. This is the core.
+//! - [`BlockParquetWriter`] (row-oriented, high-level): buffers incoming `DataBlock`s, then at
+//!   `finish` leaf-expands and writes them one field at a time through a
+//!   [`BulkBlockParquetWriter`], so only one field's arrow arrays are resident at a time.
 //!
 //! Both are restricted to a single row group. The underlying sink is a
 //! [`ChunkedWriteBuffer`] (4 MiB chunks) rather than a single growing `Vec<u8>`, to avoid
@@ -38,6 +44,7 @@ use std::io;
 use std::sync::Arc;
 
 use arrow_array::ArrayRef;
+use arrow_array::new_empty_array;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Schema;
 use bytes::Bytes;
@@ -50,11 +57,13 @@ use parquet::arrow::arrow_writer::ByteArrayEncoder;
 use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::write_byte_array_column;
 use parquet::arrow::arrow_writer::write_leaf_column;
+use parquet::column::writer::ColumnWriter;
 use parquet::column::writer::GenericColumnWriter;
 use parquet::column::writer::get_column_writer;
 use parquet::errors::ParquetError;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::properties::WriterPropertiesPtr;
+use parquet::file::writer::OnCloseColumnChunk;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
 
@@ -73,7 +82,7 @@ const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 struct ChunkedWriteBuffer {
     chunk_size: usize,
     chunks: Vec<Vec<u8>>,
-    len: usize,
+    total_bytes: usize,
 }
 
 impl ChunkedWriteBuffer {
@@ -81,7 +90,7 @@ impl ChunkedWriteBuffer {
         Self {
             chunk_size,
             chunks: Vec::new(),
-            len: 0,
+            total_bytes: 0,
         }
     }
 
@@ -94,25 +103,24 @@ impl ChunkedWriteBuffer {
 }
 
 impl io::Write for ChunkedWriteBuffer {
-    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
-        let total = buf.len();
-        while !buf.is_empty() {
-            let need_new_chunk = self
-                .chunks
-                .last()
-                .is_none_or(|c| c.len() >= self.chunk_size);
-            if need_new_chunk {
-                let cap = self.chunk_size.max(buf.len());
-                self.chunks.push(Vec::with_capacity(cap));
+    fn write(&mut self, mut remaining: &[u8]) -> io::Result<usize> {
+        let bytes_written = remaining.len();
+
+        while !remaining.is_empty() {
+            if self.total_bytes.is_multiple_of(self.chunk_size) {
+                self.chunks.push(Vec::with_capacity(self.chunk_size));
             }
-            let chunk = self.chunks.last_mut().unwrap();
-            let room = chunk.capacity() - chunk.len();
-            let take = room.min(buf.len());
-            chunk.extend_from_slice(&buf[..take]);
-            buf = &buf[take..];
+
+            let current_chunk = self.chunks.last_mut().unwrap();
+            let current_remaining = current_chunk.capacity() - current_chunk.len();
+
+            let written = current_remaining.min(remaining.len());
+            current_chunk.extend_from_slice(&remaining[..written]);
+            remaining = &remaining[written..];
+            self.total_bytes += written;
         }
-        self.len += total;
-        Ok(total)
+
+        Ok(bytes_written)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -155,18 +163,13 @@ enum LeafEncoderKind {
 
 /// Classify the leaf columns of an arrow schema in parquet leaf order, replicating
 /// arrow-rs `ArrowColumnWriterFactory::get_arrow_column_writer` so we preserve the
-/// `ByteArrayEncoder` optimization (including dictionaries of byte types). Also returns
-/// the number of parquet leaves each top-level field expands to (`field_leaf_counts`),
-/// so a per-field column writer can pick the right slice of `leaf_kinds`.
-fn classify_schema(schema: &Schema) -> (Vec<LeafEncoderKind>, Vec<usize>) {
+/// `ByteArrayEncoder` optimization (including dictionaries of byte types).
+fn classify_schema(schema: &Schema) -> Vec<LeafEncoderKind> {
     let mut kinds = Vec::new();
-    let mut field_leaf_counts = Vec::with_capacity(schema.fields().len());
     for field in schema.fields() {
-        let before = kinds.len();
         classify_data_type(field.data_type(), &mut kinds);
-        field_leaf_counts.push(kinds.len() - before);
     }
-    (kinds, field_leaf_counts)
+    kinds
 }
 
 fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>) {
@@ -209,27 +212,34 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
     }
 }
 
-/// Low-level column-oriented single-row-group Parquet writer (writer style 2).
+/// Low-level **leaf-oriented** single-row-group Parquet writer (writer style 2).
 ///
-/// This writer *is* the (single) row group — there is no separate row-group level. Request
-/// one [`BulkColumnParquetWriter`] per top-level field in schema order via
-/// [`Self::next_column`], feed it one block's column at a time with
-/// [`BulkColumnParquetWriter::write_column`] (loop over blocks), then
-/// [`BulkColumnParquetWriter::close`] it before requesting the next column. Finally call
-/// [`Self::finish`] for the bytes + metadata.
+/// This writer *is* the (single) row group — it opens one implicitly on construction; there is
+/// no separate row-group level to manage. It owns the parquet schema + per-leaf encoder
+/// classification and the page-streaming encode, and is positional over parquet *leaf* columns
+/// (the physical columns: a nested top-level field expands to several leaves), mirroring the
+/// read side's `RowGroupReader::get_column_*`.
 ///
-/// `write_column` buffers the cheap `ArrayRef` handles; the actual encoding runs at
-/// `finish`, streaming one parquet leaf at a time with pages flushed to the sink as they
-/// fill (no simultaneous encoded column-chunk buffering, unlike `ArrowWriter`). This is the
-/// core primitive the future vertical-merge path drives directly.
+/// Drive it leaf by leaf: [`Self::next_leaf`] yields the next leaf (in parquet leaf order), feed
+/// it its `ArrowLeafColumn`s via [`LeafColumnWriter::write`], then [`LeafColumnWriter::close`] it
+/// before the next; finally [`Self::finish`] for the bytes + metadata. Each `write` encodes
+/// straight into the open leaf's page writer, flushing pages to the sink as they fill — no
+/// per-column chunk buffer (unlike `ArrowWriter`). Only one leaf may be open at a time; the
+/// borrow checker enforces it (the leaf borrows `&mut self`). Leaf expansion (`compute_leaves`)
+/// is the caller's job, so the caller fully controls how/where each leaf's arrays come from —
+/// this is the primitive the vertical-merge path drives directly, leaf-for-leaf against the
+/// reader.
+///
+/// SAFETY invariant: `row_group` borrows `*file_writer`. `file_writer` is boxed so its address
+/// is stable across moves of this struct, and is declared after `row_group` so it is dropped
+/// last (Rust drops fields top-to-bottom). While `row_group` is `Some`, nothing else may touch
+/// `*file_writer`; [`Self::finish`] takes and closes `row_group` before reclaiming the file
+/// writer.
 pub struct BulkBlockParquetWriter {
-    file_writer: SerializedFileWriter<ChunkedWriteBuffer>,
-    arrow_schema: Arc<Schema>,
     leaf_kinds: Vec<LeafEncoderKind>,
-    field_leaf_counts: Vec<usize>,
-    /// Buffered fragments per top-level field (one entry per `write_column` call).
-    columns: Vec<Vec<ArrayRef>>,
-    next_field: usize,
+    next_leaf: usize,
+    row_group: Option<SerializedRowGroupWriter<'static, ChunkedWriteBuffer>>,
+    file_writer: Box<SerializedFileWriter<ChunkedWriteBuffer>>,
 }
 
 impl BulkBlockParquetWriter {
@@ -238,69 +248,87 @@ impl BulkBlockParquetWriter {
             .with_coerce_types(props.coerce_types())
             .convert(&arrow_schema)?;
         let root = parquet_schema.root_schema_ptr();
-        let file_writer =
-            SerializedFileWriter::new(ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE), root, props)?;
-        let (leaf_kinds, field_leaf_counts) = classify_schema(&arrow_schema);
+        let mut file_writer = Box::new(SerializedFileWriter::new(
+            ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE),
+            root,
+            props,
+        )?);
+        let leaf_kinds = classify_schema(&arrow_schema);
         debug_assert_eq!(leaf_kinds.len(), parquet_schema.num_columns());
-        let columns = vec![Vec::new(); arrow_schema.fields().len()];
+
+        // Open the single row group up front and store it as a self-reference into the boxed
+        // file writer. SAFETY: the `&mut` is taken through a raw pointer so its borrow is not
+        // tracked against `file_writer` (letting us move the box into the struct below). The
+        // borrow is really bounded by `*file_writer`, which is heap-stable and outlives
+        // `row_group` (drop order); `row_group` is the sole accessor until `finish` closes it.
+        let fw_ptr: *mut SerializedFileWriter<ChunkedWriteBuffer> = &mut *file_writer;
+        let row_group = unsafe { (*fw_ptr).next_row_group() }?;
+
         Ok(Self {
-            file_writer,
-            arrow_schema,
             leaf_kinds,
-            field_leaf_counts,
-            columns,
-            next_field: 0,
+            next_leaf: 0,
+            row_group: Some(row_group),
+            file_writer,
         })
     }
 
-    /// Number of top-level fields the writer expects, one column writer each.
-    pub fn num_fields(&self) -> usize {
-        self.arrow_schema.fields().len()
+    /// Number of parquet leaf columns this writer expects, one [`LeafColumnWriter`] each.
+    pub fn num_leaves(&self) -> usize {
+        self.leaf_kinds.len()
     }
 
-    /// Open a column writer for the next top-level field (in schema order). Feed it one
-    /// block's column at a time via [`BulkColumnParquetWriter::write_column`], then close it
-    /// before requesting the next column.
-    pub fn next_column(&mut self) -> Result<BulkColumnParquetWriter<'_>> {
-        let idx = self.next_field;
-        if idx >= self.arrow_schema.fields().len() {
-            return Err(ErrorCode::Internal(
-                "next_column called more times than the schema has fields",
-            ));
-        }
-        self.next_field += 1;
-        Ok(BulkColumnParquetWriter {
-            fragments: &mut self.columns[idx],
-        })
-    }
-
-    /// Encode the buffered columns into the single row group, then write the footer and
-    /// return the serialized bytes together with the metadata. Errors if fewer columns were
-    /// requested via [`Self::next_column`] than the schema declares.
-    pub fn finish(mut self) -> Result<SerializedParquet> {
-        let num_fields = self.arrow_schema.fields().len();
-        if self.next_field != num_fields {
+    /// Open the next leaf column, or `None` once all declared leaves have been written. The
+    /// returned writer borrows `&mut self`, so it must be closed/dropped before calling again —
+    /// which is exactly the parquet "one open leaf at a time" rule, enforced at compile time.
+    ///
+    /// Errors if called more than [`Self::num_leaves`] times — the caller drives a known number
+    /// of leaves, so overrunning is a programming error rather than a normal end-of-iteration.
+    pub fn next_leaf(&mut self) -> Result<LeafColumnWriter<'_>> {
+        if self.next_leaf >= self.leaf_kinds.len() {
             return Err(ErrorCode::Internal(format!(
-                "writer finished after {} columns, but schema declares {}",
-                self.next_field, num_fields
+                "next_leaf called {} times but the schema declares only {} leaf columns",
+                self.next_leaf + 1,
+                self.leaf_kinds.len()
             )));
         }
-        {
-            let mut row_group = self.file_writer.next_row_group()?;
-            let mut leaf_idx = 0usize;
-            for (field_idx, field) in self.arrow_schema.fields().iter().enumerate() {
-                let leaves_per_fragment = self.columns[field_idx]
-                    .iter()
-                    .map(|array| compute_leaves(field, array))
-                    .collect::<std::result::Result<Vec<_>, ParquetError>>()?;
-                for j in 0..self.field_leaf_counts[field_idx] {
-                    let kind = self.leaf_kinds[leaf_idx];
-                    let frags: Vec<&ArrowLeafColumn> =
-                        leaves_per_fragment.iter().map(|v| &v[j]).collect();
-                    write_one_leaf(&mut row_group, kind, &frags)?;
-                    leaf_idx += 1;
-                }
-            }
+
+        let kind = self.leaf_kinds[self.next_leaf];
+        let row_group = self
+            .row_group
+            .as_mut()
+            .expect("row group stays open until finish");
+        let writer = row_group
+            .next_column_with_factory(move |descr, props, page_writer, on_close| {
+                Ok(match kind {
+                    LeafEncoderKind::ByteArray => LeafColumnWriter::ByteArray {
+                        writer: GenericColumnWriter::<ByteArrayEncoder>::new(
+                            descr,
+                            props,
+                            page_writer,
+                        ),
+                        on_close,
+                    },
+                    LeafEncoderKind::Column => LeafColumnWriter::Column {
+                        writer: get_column_writer(descr, props, page_writer),
+                        on_close,
+                    },
+                })
+            })?
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "parquet row group exhausted its leaf columns ahead of the schema",
+                )
+            })?;
+
+        self.next_leaf += 1;
+        Ok(writer)
+    }
+
+    /// Close the row group, write the footer, and return the serialized bytes plus metadata.
+    pub fn finish(mut self) -> Result<SerializedParquet> {
+        // Close the row group first: this ends its borrow of `*file_writer` (and flushes the
+        // row group metadata into it), making the file writer safe to access again.
+        if let Some(row_group) = self.row_group.take() {
             row_group.close()?;
         }
         let metadata = self.file_writer.finish()?;
@@ -313,62 +341,44 @@ impl BulkBlockParquetWriter {
     }
 }
 
-/// Per-column writer for one top-level field, handed out by
-/// [`BulkBlockParquetWriter::next_column`]. Call [`Self::write_column`] once per source
-/// block (looping to assemble the full column from multiple blocks without concatenating
-/// first), then [`Self::close`] before requesting the next column. Buffers the cheap
-/// `ArrayRef` handles; encoding is deferred to [`BulkBlockParquetWriter::finish`].
-pub struct BulkColumnParquetWriter<'a> {
-    fragments: &'a mut Vec<ArrayRef>,
+/// A single open parquet leaf column. [`Self::write`] encodes an `ArrowLeafColumn` directly
+/// into the leaf's page writer (pages flushed to the sink as they fill, no chunk buffer);
+/// [`Self::close`] finalizes the column chunk. Picks the specialized [`ByteArrayEncoder`] or
+/// the generic column encoder per the schema's leaf classification.
+pub enum LeafColumnWriter<'a> {
+    ByteArray {
+        writer: GenericColumnWriter<'a, ByteArrayEncoder>,
+        on_close: OnCloseColumnChunk<'a>,
+    },
+    Column {
+        writer: ColumnWriter<'a>,
+        on_close: OnCloseColumnChunk<'a>,
+    },
 }
 
-impl BulkColumnParquetWriter<'_> {
-    /// Buffer one block's column for this field. `array` is this field's column from a
-    /// single block; call repeatedly (once per block) to assemble the full column.
-    pub fn write_column(&mut self, array: ArrayRef) -> Result<()> {
-        self.fragments.push(array);
+impl LeafColumnWriter<'_> {
+    /// Encode one `ArrowLeafColumn` fragment into this leaf. Call repeatedly to stream multiple
+    /// fragments (e.g. one per source block) into the same column.
+    pub fn write(&mut self, leaf: &ArrowLeafColumn) -> Result<()> {
+        match self {
+            LeafColumnWriter::ByteArray { writer, .. } => {
+                write_byte_array_column(writer, leaf)?;
+            }
+            LeafColumnWriter::Column { writer, .. } => {
+                write_leaf_column(writer, leaf)?;
+            }
+        }
         Ok(())
     }
 
-    /// Finish this column. The buffered fragments are encoded later at
-    /// [`BulkBlockParquetWriter::finish`], so this is just a clarity marker for the
-    /// per-column scope.
+    /// Close this leaf, flushing its column chunk into the row group.
     pub fn close(self) -> Result<()> {
+        match self {
+            LeafColumnWriter::ByteArray { writer, on_close } => on_close(writer.close()?)?,
+            LeafColumnWriter::Column { writer, on_close } => on_close(writer.close()?)?,
+        }
         Ok(())
     }
-}
-
-/// Open the next parquet leaf column, stream all `fragments` into it, then close it.
-/// Pages are flushed to the file sink as they fill (no column-chunk buffering).
-fn write_one_leaf(
-    row_group: &mut SerializedRowGroupWriter<'_, ChunkedWriteBuffer>,
-    kind: LeafEncoderKind,
-    fragments: &[&ArrowLeafColumn],
-) -> Result<()> {
-    let written =
-        row_group.next_column_with_factory(|descr, props, page_writer, on_close| match kind {
-            LeafEncoderKind::ByteArray => {
-                let mut writer =
-                    GenericColumnWriter::<ByteArrayEncoder>::new(descr, props, page_writer);
-                for frag in fragments {
-                    write_byte_array_column(&mut writer, frag)?;
-                }
-                on_close(writer.close()?)
-            }
-            LeafEncoderKind::Column => {
-                let mut writer = get_column_writer(descr, props, page_writer);
-                for frag in fragments {
-                    write_leaf_column(&mut writer, frag)?;
-                }
-                on_close(writer.close()?)
-            }
-        })?;
-    if written.is_none() {
-        return Err(ErrorCode::Internal(
-            "parquet writer produced more leaf columns than the schema declares",
-        ));
-    }
-    Ok(())
 }
 
 /// High-level row-oriented buffered writer (writer style 1): buffers incoming
@@ -406,19 +416,38 @@ impl BlockParquetWriter {
         self.blocks.iter().all(|b| b.is_empty())
     }
 
-    /// Encode all buffered blocks into a single row group and return the bytes plus
-    /// metadata. Each top-level field is replayed as one fragment per buffered block.
+    /// Encode all buffered blocks into a single row group and return the bytes plus metadata.
+    /// Drives the leaf-level writer field by field: for each top-level field it leaf-expands
+    /// that field's column from every block, then writes the field's leaves one at a time
+    /// (each leaf fed all fragments), dropping the field's arrays before moving on — so only
+    /// one field's arrow arrays are resident at a time.
     pub fn finish(self) -> Result<SerializedParquet> {
-        let mut writer =
-            BulkBlockParquetWriter::new(self.arrow_schema.clone(), self.props.clone())?;
-        let num_fields = writer.num_fields();
-        let blocks = self.blocks;
-        for field_idx in 0..num_fields {
-            let mut column = writer.next_column()?;
-            for block in &blocks {
-                column.write_column(ArrayRef::from(&block.get_by_offset(field_idx).to_column()))?;
+        let BlockParquetWriter {
+            arrow_schema,
+            props,
+            blocks,
+        } = self;
+        let mut writer = BulkBlockParquetWriter::new(arrow_schema.clone(), props)?;
+        for (field_idx, field) in arrow_schema.fields().iter().enumerate() {
+            let leaves_per_fragment = if blocks.is_empty() {
+                vec![compute_leaves(field, &new_empty_array(field.data_type()))?]
+            } else {
+                blocks
+                    .iter()
+                    .map(|block| {
+                        let array = ArrayRef::from(&block.get_by_offset(field_idx).to_column());
+                        compute_leaves(field, &array)
+                    })
+                    .collect::<std::result::Result<Vec<_>, ParquetError>>()?
+            };
+            let num_leaves = leaves_per_fragment[0].len();
+            for leaf_idx in 0..num_leaves {
+                let mut leaf = writer.next_leaf()?;
+                for fragment in &leaves_per_fragment {
+                    leaf.write(&fragment[leaf_idx])?;
+                }
+                leaf.close()?;
             }
-            column.close()?;
         }
         writer.finish()
     }
@@ -539,23 +568,30 @@ mod tests {
         }
     }
 
-    /// Drive the low-level `BulkBlockParquetWriter` API: one column writer per field, each
-    /// fed its column from every block (looping `write_column`) then closed.
+    /// Drive the low-level leaf API directly: for each top-level field, leaf-expand its column
+    /// from every block, then write each leaf (fed all fragments) and close it.
     fn bulk_write_blocks(
         arrow_schema: Arc<Schema>,
         props: WriterPropertiesPtr,
         blocks: &[DataBlock],
     ) -> (Vec<u8>, ParquetMetaData) {
-        let mut writer = BulkBlockParquetWriter::new(arrow_schema, props).unwrap();
-        let num_fields = writer.num_fields();
-        for field_idx in 0..num_fields {
-            let mut column = writer.next_column().unwrap();
-            for b in blocks {
-                column
-                    .write_column(ArrayRef::from(&b.get_by_offset(field_idx).to_column()))
-                    .unwrap();
+        let mut writer = BulkBlockParquetWriter::new(arrow_schema.clone(), props).unwrap();
+        for (field_idx, field) in arrow_schema.fields().iter().enumerate() {
+            let leaves_per_fragment: Vec<_> = blocks
+                .iter()
+                .map(|block| {
+                    let array = ArrayRef::from(&block.get_by_offset(field_idx).to_column());
+                    compute_leaves(field, &array).unwrap()
+                })
+                .collect();
+            let num_leaves = leaves_per_fragment[0].len();
+            for leaf_idx in 0..num_leaves {
+                let mut leaf = writer.next_leaf().unwrap();
+                for fragment in &leaves_per_fragment {
+                    leaf.write(&fragment[leaf_idx]).unwrap();
+                }
+                leaf.close().unwrap();
             }
-            column.close().unwrap();
         }
         let SerializedParquet { payload, metadata } = writer.finish().unwrap();
         (payload.concat(), metadata)
@@ -759,7 +795,7 @@ mod tests {
         buf.write_all(b"ab").unwrap(); // partial first chunk
         buf.write_all(b"cde").unwrap(); // spills into a second chunk
         buf.write_all(b"fghijklm").unwrap(); // larger than chunk_size in one write
-        assert_eq!(buf.len, 13);
+        assert_eq!(buf.total_bytes, 13);
         assert!(
             buf.chunks.len() > 1,
             "expected data to span multiple chunks"
