@@ -63,6 +63,7 @@ jobs:
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
           - { dirs: "standalone", runner: "2c" }
+          - { dirs: "concurrent", runner: "2c", parallel: "64" }
         handler:
           - "hybrid"
           - "http"
@@ -263,6 +264,7 @@ jobs:
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
           - { dirs: "cluster", runner: "2c" }
+          - { dirs: "concurrent", runner: 2c", parallel: "64" }
         handler:
           - "hybrid"
           - "http"

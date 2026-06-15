@@ -13,11 +13,22 @@ TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
+generate_dynamic_suites() {
+	for run_dir in "$@"; do
+		if [ "$run_dir" = "concurrent" ]; then
+			python3 tests/sqllogictests/scripts/generate_concurrent_tpch_workload.py
+			return
+		fi
+	done
+}
+
 RUN_DIR=""
 if [ $# -gt 0 ]; then
 	RUN_DIR="--run_dir $*"
 fi
 echo "Run suites using argument: $RUN_DIR"
+
+generate_dynamic_suites "$@"
 
 echo "Starting databend-sqllogic tests"
 if [ -z "$RUN_DIR" ]; then
