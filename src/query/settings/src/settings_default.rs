@@ -283,7 +283,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("flight_client_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(60),
+                    value: UserSettingValue::UInt64(5),
                     desc: "Sets the maximum time in seconds that a flight client request can be processed.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
