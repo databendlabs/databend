@@ -246,6 +246,10 @@ impl TableContextQueryState for QueryContext {
         self.shared.get_error()
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.shared.get_nodes_memory_usage()
+    }
+
     fn push_warning(&self, warn: String) {
         self.shared.push_warning(warn)
     }

@@ -79,6 +79,7 @@ pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use fuse_type::segment_format_from_location;
+pub use fuse_type::unsupported_storage_format_error;
 pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 pub use retry::commit_with_backoff;

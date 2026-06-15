@@ -960,10 +960,15 @@ impl DataBlock {
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.
     /// This function is used to estimate the memory footprint of a `DataBlock` when writing it to storage.
-    pub fn estimate_block_size(&self) -> usize {
+    /// `num_columns` is the number of leading columns to include in the estimate.
+    /// Temporary columns appended for sorting/statistics, such as extra cluster key columns,
+    /// should not be included when they are not written.
+    pub fn estimate_block_size(&self, num_columns: usize) -> usize {
+        debug_assert!(num_columns <= self.entries.len());
         let num_rows = self.num_rows();
         self.columns()
             .iter()
+            .take(num_columns)
             .map(|entry| match entry {
                 BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,

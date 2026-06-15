@@ -90,8 +90,9 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -690,7 +691,7 @@ impl Binder {
                     .await?;
 
                 // create a temporary op to check if params is correct
-                let op = init_operator(&sp)?;
+                let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
                 check_operator(&op, &sp).await?;
 
                 // Verify essential privileges.
@@ -880,13 +881,7 @@ impl Binder {
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
                 let default_storage_format =
                     match config.query.common.default_storage_format.as_str() {
-                        "" | "auto" => {
-                            if is_blocking_fs {
-                                "native"
-                            } else {
-                                "parquet"
-                            }
-                        }
+                        "" | "auto" | "native" => "parquet",
                         _ => config.query.common.default_storage_format.as_str(),
                     };
                 options.insert(
@@ -1017,7 +1012,7 @@ impl Binder {
         .await?;
 
         // create a temporary op to check if params is correct
-        let op = init_operator(&sp)?;
+        let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
         check_operator(&op, &sp).await?;
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {

@@ -1288,10 +1288,6 @@ impl Settings {
         self.try_get_string("force_aggregate_shuffle_mode")
     }
 
-    pub fn get_enable_experiment_hash_index(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experiment_hash_index")? != 0)
-    }
-
     pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {
         self.try_get_u64("system_tables_count_db_concurrency")
     }

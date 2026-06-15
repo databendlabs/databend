@@ -68,7 +68,6 @@ pub fn row_fetch_processor(
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection.clone(), true)?;
 
     match &fuse_table.storage_format {
-        FuseStorageFormat::Native => unreachable!(),
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             let block_threshold = BlockThreshold {
@@ -95,6 +94,7 @@ pub fn row_fetch_processor(
                 ))
             }))
         }
+        FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
     }
 }
 

@@ -102,7 +102,6 @@ impl AggregateRowScatter {
                     params.group_data_types.clone(),
                     params.aggregate_functions.clone(),
                     params.num_states(),
-                    params.enable_experiment_hash_index,
                     Arc::new(Bump::new()),
                 )?;
                 Ok(payload
@@ -279,7 +278,6 @@ impl AggregateRowScatter {
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
             params.num_states(),
-            params.enable_experiment_hash_index,
             Arc::new(Bump::new()),
         )?;
         Ok(self.scatter_payload(bucket, payload, max_partition_count))

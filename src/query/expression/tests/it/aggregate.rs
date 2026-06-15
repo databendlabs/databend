@@ -566,7 +566,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
                 fixture.aggrs(),
                 1,
                 0,
-                false,
                 Arc::new(Bump::new()),
                 true,
             )
@@ -583,7 +582,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             fixture.aggrs(),
             1,
             0,
-            false,
             Arc::new(Bump::new()),
         )
         .unwrap();
@@ -602,7 +600,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             vec![Int64Type::data_type()],
             fixture.aggrs(),
             1,
-            false,
             Arc::new(Bump::new()),
         )
         .unwrap();
@@ -622,7 +619,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             vec![Int64Type::data_type()],
             fixture.aggrs(),
             1,
-            false,
             &mut PayloadFlushState::default(),
         )
         .unwrap();
@@ -700,7 +696,6 @@ fn test_bucket_spilled_payload_deserialize_restores_serialized_payload() {
                 fixture.aggrs(),
                 1,
                 0,
-                false,
                 Arc::new(Bump::new()),
                 true,
             )

@@ -40,6 +40,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
+        self.check_format_supported()?;
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             self.build_truncate_pipeline(ctx, pipeline, mode, prev_snapshot)?;
         }

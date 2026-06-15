@@ -139,6 +139,13 @@ status: error
 code: 1005
 message: Window definition w not found
 
+=== named_window_rejects_duplicate_name ===
+description: A WINDOW clause must reject duplicate names instead of silently keeping the later definition.
+sql: SELECT rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname), W AS (ORDER BY salary)
+status: error
+code: 1065
+message: Duplicate window name: w
+
 === inherited_named_window_rejects_partition_override ===
 description: Referencing a named window must not add a new PARTITION BY clause.
 sql: SELECT rank() OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary), w2 AS (w1 PARTITION BY depname)

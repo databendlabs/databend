@@ -20,7 +20,6 @@ databend-common-io = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
-databend-common-native = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }

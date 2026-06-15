@@ -76,9 +76,11 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::Files;
@@ -114,7 +116,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
-use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -126,7 +127,6 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -198,11 +198,22 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
-                        // Special handling for history tables.
-                        // Since history tables storage params are fully generated from config,
-                        // we can safely allow credential chain.
-                        let sp = allow_system_history_credential_chain(&table_info, sp);
-                        let operator = init_operator(&sp)?;
+                        // Special handling for history tables. Since history
+                        // table storage params are fully generated from server
+                        // config, we both allow the credential chain and treat
+                        // the operator as trusted (skipping the request-time
+                        // endpoint egress policy).
+                        let is_system_history = is_system_history_table(&table_info);
+                        let sp = if is_system_history {
+                            allow_credential_chain_for_s3(sp)
+                        } else {
+                            sp
+                        };
+                        let operator = if is_system_history {
+                            init_operator(&sp)?
+                        } else {
+                            init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?
+                        };
 
                         let table_meta_options = &table_info.meta.options;
                         let table_type = if Self::is_table_attached(table_meta_options) {
@@ -292,7 +303,7 @@ impl FuseTable {
             approx_distinct_cols,
             operator,
             data_metrics,
-            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            storage_format: FuseStorageFormat::from_table_option(storage_format.as_str()),
             segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
@@ -326,16 +337,11 @@ impl FuseTable {
         }
     }
 
-    pub fn is_native(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
-    }
-
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, DEFAULT_ROW_PER_PAGE);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
@@ -357,7 +363,6 @@ impl FuseTable {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             bloom_index_type: self.bloom_index_type,
-            max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
@@ -374,15 +379,6 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
-    }
-
-    /// Get max page size.
-    /// For native storage format.
-    pub fn get_max_page_size(&self) -> Option<usize> {
-        match self.storage_format {
-            FuseStorageFormat::Parquet => None,
-            FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
-        }
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
@@ -672,6 +668,28 @@ impl FuseTable {
         self.storage_format
     }
 
+    /// Reject any data-touching operation on a table whose storage format is no
+    /// longer supported (e.g. the removed `native` format). Such tables can
+    /// still be listed and dropped, but cannot be read from, written to, or
+    /// compacted. The error carries the fully-qualified table name and the
+    /// original storage format string for diagnostics.
+    pub fn check_format_supported(&self) -> Result<()> {
+        if matches!(self.storage_format, FuseStorageFormat::Unsupported) {
+            let format = self
+                .table_info
+                .options()
+                .get(OPT_KEY_STORAGE_FORMAT)
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "table {} uses storage_format '{}' which is no longer supported. \
+                 The table can be dropped, but cannot be queried, written to, or compacted.",
+                self.table_info.desc, format
+            )));
+        }
+        Ok(())
+    }
+
     pub fn get_storage_prefix(&self) -> &str {
         self.meta_location_generator.prefix()
     }
@@ -894,7 +912,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        !matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_column_projection(&self) -> bool {
@@ -947,6 +965,7 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
@@ -959,6 +978,7 @@ impl Table for FuseTable {
         dry_run: bool,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_format_supported()?;
         self.do_read_partitions_with_reusable_pruned_metas(
             ctx,
             push_downs,
@@ -976,6 +996,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
@@ -985,6 +1006,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
@@ -1339,6 +1361,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: Option<usize>,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_compact_segments(ctx, limit).await
     }
 
@@ -1348,6 +1371,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
         self.do_compact_blocks(ctx, limits).await
     }
 
@@ -1357,6 +1381,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_revert_to(ctx, point).await
     }
 
@@ -1453,21 +1478,90 @@ pub enum RetentionPolicy {
     ByNumOfSnapshotsToKeep(usize),
 }
 
-fn allow_system_history_credential_chain(
-    table_info: &TableInfo,
-    storage_params: StorageParams,
-) -> StorageParams {
+/// Returns true if `table_info` belongs to the `system_history` database.
+///
+/// `system_history` storage params are fully generated from server config, so
+/// callers can treat them as trusted (e.g. allow the AWS credential chain and
+/// skip the user-SQL endpoint egress policy).
+fn is_system_history_table(table_info: &TableInfo) -> bool {
+    table_info
+        .database_name()
+        .is_ok_and(|db_name| db_name.eq_ignore_ascii_case("system_history"))
+}
+
+/// Force-enable the AWS credential chain on S3 storage params when it has not
+/// been set explicitly.
+///
+/// The `allow_credential_chain` flag is not persisted through meta proto
+/// conversion, so for storage params that originate from server config (such
+/// as `system_history` tables) we have to re-apply the default at load time;
+/// otherwise EC2/IRSA-only deployments would lose access to the history bucket
+/// after a round-trip through meta.
+fn allow_credential_chain_for_s3(storage_params: StorageParams) -> StorageParams {
     let mut sp = storage_params;
-    let Ok(db_name) = table_info.database_name() else {
-        return sp;
-    };
-    if !db_name.eq_ignore_ascii_case("system_history") {
-        return sp;
-    }
-    if let StorageParams::S3(cfg) = &mut sp {
-        if cfg.allow_credential_chain.is_none() {
-            cfg.allow_credential_chain = Some(true);
-        }
+    if let StorageParams::S3(cfg) = &mut sp
+        && cfg.allow_credential_chain.is_none()
+    {
+        cfg.allow_credential_chain = Some(true);
     }
     sp
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::DatabaseType;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::allow_credential_chain_for_s3;
+    use super::is_system_history_table;
+
+    fn table_info_with_db(db_name: &str) -> TableInfo {
+        // database_name() requires a FUSE engine.
+        let mut meta = TableMeta {
+            storage_params: Some(StorageParams::Memory),
+            ..Default::default()
+        };
+        meta.engine = "FUSE".to_string();
+        TableInfo {
+            ident: TableIdent::new(0, 0),
+            desc: format!("'{}'.'{}'", db_name, "t"),
+            name: "t".to_string(),
+            meta,
+            db_type: DatabaseType::NormalDB,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_matches_case_insensitively() {
+        for db in &["system_history", "SYSTEM_HISTORY", "System_History"] {
+            let info = table_info_with_db(db);
+            assert!(
+                is_system_history_table(&info),
+                "'{db}' should be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_rejects_other_dbs() {
+        // These database names must NOT be treated as system_history.
+        for db in &["user_db", "system_history_backup", "SYSTEM", "default"] {
+            let info = table_info_with_db(db);
+            assert!(
+                !is_system_history_table(&info),
+                "db '{db}' must not be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_allow_credential_chain_for_s3_is_noop_for_non_s3() {
+        let sp = StorageParams::Memory;
+        let result = allow_credential_chain_for_s3(sp.clone());
+        assert_eq!(result, sp);
+    }
 }

@@ -72,6 +72,29 @@ Limit
                 └── estimated rows: 10.00
 
 query T
+explain select number from numbers(10) order by number asc limit 3
+----
+Limit
+├── output columns: [numbers.number (#0)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [numbers.number (#0)]
+    ├── sort keys: [number ASC NULLS LAST]
+    ├── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── scan id: 0
+        ├── output columns: [number (#0)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: 3]
+        └── estimated rows: 10.00
+
+query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3
 ----
 Limit

@@ -41,7 +41,7 @@ select * from test where url like '%google%' order by event_time limit 10;
 
 
 statement ok
-create table test_k storage_format = 'native' as select * from test;
+create table test_k storage_format = 'parquet' as select * from test;
 
 
 query I?T

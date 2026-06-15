@@ -35,7 +35,9 @@ use opendal::Operator;
 use regex::Regex;
 
 use crate::DataOperator;
+use crate::EndpointPolicyScope;
 use crate::init_operator;
+use crate::init_operator_with_policy_scope;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {
@@ -100,7 +102,10 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             v => v,
         };
 
-        Ok(init_operator(&storage)?)
+        Ok(init_operator_with_policy_scope(
+            &storage,
+            EndpointPolicyScope::External,
+        )?)
     } else {
         let stage_prefix = stage_info.stage_prefix();
         let param = DataOperator::instance()

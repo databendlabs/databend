@@ -264,7 +264,7 @@ fn escape_python_double_quoted(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-fn extract_script_metadata_deps(script: &str) -> Vec<String> {
+fn extract_script_metadata_deps(script: &str) -> Result<Vec<String>> {
     let mut ss = String::new();
     let mut meta_start = false;
     for line in script.lines() {
@@ -280,19 +280,24 @@ fn extract_script_metadata_deps(script: &str) -> Vec<String> {
         }
     }
 
-    let parsed = ss.parse::<toml::Value>().unwrap();
+    let parsed = ss.parse::<toml::Value>().map_err(|err| {
+        ErrorCode::SemanticError(format!(
+            "Failed to parse UDF script metadata as TOML: {err}"
+        ))
+    })?;
 
     if parsed.get("dependencies").is_none() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
-    if let Some(deps) = parsed["dependencies"].as_array() {
+    let deps = if let Some(deps) = parsed["dependencies"].as_array() {
         deps.iter()
             .filter_map(|value| value.as_str().map(|item| item.to_string()))
             .collect()
     } else {
         Vec::new()
-    }
+    };
+    Ok(deps)
 }
 
 fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
@@ -607,7 +612,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
             ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
         })?;
         let import_assets = self.build_udf_cloud_imports(&imports)?;
-        let mut merged_packages = extract_script_metadata_deps(&resolved_code);
+        let mut merged_packages = extract_script_metadata_deps(&resolved_code)?;
         merged_packages.extend_from_slice(&packages);
         let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
         let result_type = udf_type_string(&return_type);
@@ -1218,5 +1223,27 @@ where A: UdfAdapter
             parameters,
             return_type: udf_definition.return_type,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_script_metadata_deps_returns_error_for_malformed_toml() {
+        let err = extract_script_metadata_deps(
+            r#"# /// script
+# dependencies = [
+# ///
+"#,
+        )
+        .expect_err("malformed UDF script metadata should return an error");
+
+        assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
+        assert!(
+            err.message()
+                .contains("Failed to parse UDF script metadata as TOML")
+        );
     }
 }
