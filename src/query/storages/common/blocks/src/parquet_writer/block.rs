@@ -30,13 +30,16 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use parquet::arrow::ARROW_SCHEMA_META_KEY;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
 use parquet::arrow::arrow_writer::compute_leaves;
 #[allow(deprecated)]
 use parquet::arrow::arrow_writer::get_column_writers;
+use parquet::arrow::encode_arrow_schema;
 use parquet::file::metadata::ColumnChunkMetaData;
 use parquet::file::metadata::FileMetaData;
+use parquet::file::metadata::KeyValue;
 use parquet::file::metadata::ParquetMetaDataBuilder;
 use parquet::file::metadata::ParquetMetaDataWriter;
 use parquet::file::metadata::RowGroupMetaData;
@@ -205,12 +208,12 @@ impl BlockParquetWriter {
         // stitches into an empty-schema file — no separate low-level fallback.
         self.ensure_state()?;
         let BlockParquetWriter {
+            arrow_schema,
             props,
             state,
             num_rows,
-            ..
         } = self;
-        assemble_parquet(props, state.unwrap(), num_rows)
+        assemble_parquet(&arrow_schema, props, state.unwrap(), num_rows)
     }
 }
 
@@ -218,6 +221,7 @@ impl BlockParquetWriter {
 /// bytes into the output with no copy and remapping page offsets — mirroring the fork's
 /// `SerializedRowGroupWriter::append_column` offset logic, but writing owned `Bytes` directly.
 fn assemble_parquet(
+    arrow_schema: &Schema,
     props: WriterPropertiesPtr,
     state: ColumnWriterState,
     num_rows: usize,
@@ -292,11 +296,29 @@ fn assemble_parquet(
         .set_ordinal(0)
         .build()?;
 
+    // Replicate `ArrowWriter`: embed the IPC-encoded Arrow schema under `ARROW:schema` so
+    // readers can reconstruct Databend extension-backed types (Variant, Bitmap, Geometry,
+    // TimestampTz, ...) instead of inferring them as plain LargeBinary/Decimal. We assemble the
+    // footer by hand, so this metadata must be added explicitly here. Any existing
+    // `ARROW:schema` entry from the writer props is replaced to keep a single authoritative copy.
+    let mut key_value_metadata: Vec<KeyValue> = props
+        .key_value_metadata()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|kv| kv.key != ARROW_SCHEMA_META_KEY)
+        .collect();
+
+    key_value_metadata.push(KeyValue {
+        key: ARROW_SCHEMA_META_KEY.to_string(),
+        value: Some(encode_arrow_schema(arrow_schema)),
+    });
+
     let file_metadata = FileMetaData::new(
         props.writer_version().as_num(),
         num_rows as i64,
         Some(props.created_by().to_string()),
-        props.key_value_metadata().cloned(),
+        Some(key_value_metadata),
         schema_descr.clone(),
         None,
     );
@@ -544,5 +566,183 @@ mod tests {
             got.columns()[0].to_column(),
             StringType::from_data(vec![big])
         );
+    }
+
+    #[test]
+    fn test_arrow_schema_metadata_preserves_extension_types() {
+        use databend_common_expression::types::BitmapType;
+        use databend_common_expression::types::GeometryType;
+        use databend_common_expression::types::VariantType;
+
+        let schema = TableSchema::new(vec![
+            TableField::new("v", TableDataType::Variant),
+            TableField::new("bm", TableDataType::Bitmap),
+            TableField::new("geo", TableDataType::Geometry),
+            TableField::new(
+                "v_null",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+        ]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        // Opaque payloads: round-trip fidelity here is about types + bytes, not JSONB/WKB
+        // validity, so raw bytes suffice.
+        let block = DataBlock::new_from_columns(vec![
+            VariantType::from_data(vec![b"\x20\x00".to_vec(), b"\x40\x01".to_vec()]),
+            BitmapType::from_data(vec![b"\x01\x02".to_vec(), b"\x03".to_vec()]),
+            GeometryType::from_data(vec![b"\x00\x00\x00".to_vec(), b"\xff".to_vec()]),
+            VariantType::from_opt_data(vec![Some(b"\x10".to_vec()), None]),
+        ]);
+
+        let mut writer = BlockParquetWriter::new(arrow_schema.clone(), props(&schema));
+        writer.write_block(block.clone()).unwrap();
+        let serialized = writer.finish().unwrap();
+
+        // The footer must carry the encoded Arrow schema under ARROW:schema, matching exactly
+        // what the arrow writer would have embedded for this schema.
+        let kvs = serialized
+            .metadata
+            .file_metadata()
+            .key_value_metadata()
+            .expect("file metadata must include key/value metadata");
+        let arrow_meta = kvs
+            .iter()
+            .find(|kv| kv.key == ARROW_SCHEMA_META_KEY)
+            .expect("ARROW:schema must be embedded in the footer");
+        assert_eq!(
+            arrow_meta.value.as_deref(),
+            Some(encode_arrow_schema(&arrow_schema).as_str()),
+            "embedded Arrow schema must match the writer's schema"
+        );
+
+        // The reader reconstructs the schema purely from the parquet file (mirroring the
+        // result-cache reader). The extension types must survive the round-trip.
+        let recovered_schema: TableSchema = {
+            let bytes = bytes::Bytes::from(serialized.payload.concat());
+            let reader =
+                parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(bytes)
+                    .unwrap();
+            reader.schema().as_ref().try_into().unwrap()
+        };
+        assert_eq!(
+            recovered_schema.fields()[0].data_type(),
+            &TableDataType::Variant
+        );
+        assert_eq!(
+            recovered_schema.fields()[1].data_type(),
+            &TableDataType::Bitmap
+        );
+        assert_eq!(
+            recovered_schema.fields()[2].data_type(),
+            &TableDataType::Geometry
+        );
+        assert_eq!(
+            recovered_schema.fields()[3].data_type(),
+            &TableDataType::Nullable(Box::new(TableDataType::Variant))
+        );
+
+        let (blocks, num_rg) = read_back(serialized.payload.concat());
+        assert_eq!(num_rg, 1);
+        let got = DataBlock::concat(&blocks).unwrap();
+        // Compare through arrow arrays: the extension types are binary-backed and may differ in
+        // internal column representation after round-trip even when semantically identical, so
+        // RecordBatch equality (well-defined per arrow array) is the right comparison here.
+        let expected_batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let got_batch = got
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        assert_eq!(expected_batch, got_batch);
+    }
+
+    #[test]
+    fn test_compatible_with_arrow_writer_for_extension_types() {
+        use databend_common_expression::types::BitmapType;
+        use databend_common_expression::types::GeometryType;
+        use databend_common_expression::types::VariantType;
+        use parquet::arrow::ArrowWriter;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        let schema = TableSchema::new(vec![
+            TableField::new("v", TableDataType::Variant),
+            TableField::new("bm", TableDataType::Bitmap),
+            TableField::new("geo", TableDataType::Geometry),
+            TableField::new("i", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new(
+                "v_null",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+        ]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let block = DataBlock::new_from_columns(vec![
+            VariantType::from_data(vec![b"\x20\x00".to_vec(), b"\x40\x01".to_vec()]),
+            BitmapType::from_data(vec![b"\x01\x02".to_vec(), b"\x03".to_vec()]),
+            GeometryType::from_data(vec![b"\x00\x00".to_vec(), b"\xff".to_vec()]),
+            databend_common_expression::types::Int64Type::from_data(vec![1i64, 2]),
+            VariantType::from_opt_data(vec![Some(b"\x10".to_vec()), None]),
+        ]);
+        let batch = block
+            .clone()
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+
+        // Old path: ArrowWriter with the same writer properties.
+        let writer_props = props(&schema);
+        let mut old_bytes = Vec::new();
+        let mut arrow_writer = ArrowWriter::try_new(
+            &mut old_bytes,
+            arrow_schema.clone(),
+            Some((*writer_props).clone()),
+        )
+        .unwrap();
+        arrow_writer.write(&batch).unwrap();
+        arrow_writer.close().unwrap();
+
+        // New path: BlockParquetWriter.
+        let mut writer = BlockParquetWriter::new(arrow_schema.clone(), writer_props);
+        writer.write_block(block).unwrap();
+        let new_bytes = writer.finish().unwrap().payload.concat();
+
+        // Both files must embed the identical `ARROW:schema` value.
+        let arrow_meta = |bytes: &[u8]| -> String {
+            let reader =
+                ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::copy_from_slice(bytes))
+                    .unwrap();
+            reader
+                .metadata()
+                .file_metadata()
+                .key_value_metadata()
+                .unwrap()
+                .iter()
+                .find(|kv| kv.key == ARROW_SCHEMA_META_KEY)
+                .unwrap()
+                .value
+                .clone()
+                .unwrap()
+        };
+        assert_eq!(arrow_meta(&old_bytes), arrow_meta(&new_bytes));
+
+        // The reader-visible Arrow schema (including per-field extension metadata) must match.
+        let read_schema = |bytes: &[u8]| {
+            ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::copy_from_slice(bytes))
+                .unwrap()
+                .schema()
+                .clone()
+        };
+        assert_eq!(read_schema(&old_bytes), read_schema(&new_bytes));
+
+        // And the decoded data must be identical.
+        let (old_blocks, _) = read_back(old_bytes);
+        let (new_blocks, _) = read_back(new_bytes);
+        let old = DataBlock::concat(&old_blocks)
+            .unwrap()
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let new = DataBlock::concat(&new_blocks)
+            .unwrap()
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        assert_eq!(old, new);
     }
 }
