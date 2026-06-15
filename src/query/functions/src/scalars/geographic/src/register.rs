@@ -24,6 +24,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::ewkb_to_geo;
 use geo::Geometry;
 use geozero::ToGeo;
@@ -418,8 +419,8 @@ pub(crate) fn check_incompatible_srid(
     len: usize,
     ctx: &mut EvalContext,
 ) -> bool {
-    let l_srid = l_srid.unwrap_or_default();
-    let r_srid = r_srid.unwrap_or_default();
+    let l_srid = l_srid.unwrap_or(UNKNOWN_SRID);
+    let r_srid = r_srid.unwrap_or(UNKNOWN_SRID);
     if !l_srid.eq(&r_srid) {
         ctx.set_error(len, format!("Incompatible SRID: {} and {}", l_srid, r_srid));
         false

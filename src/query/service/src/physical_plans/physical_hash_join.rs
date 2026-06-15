@@ -553,17 +553,18 @@ impl HashJoin {
 }
 
 impl PhysicalPlanBuilder {
-    /// Builds the physical plans for both sides of the join
+    /// Builds the physical plans for both sides of the join, preserving
+    /// left-child then right-child order.
     pub async fn build_join_sides(
         &mut self,
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
-        let probe_side = self.build(s_expr.left_child(), left_required).await?;
-        let build_side = self.build(s_expr.right_child(), right_required).await?;
+        let left_side = self.build(s_expr.left_child(), left_required).await?;
+        let right_side = self.build(s_expr.right_child(), right_required).await?;
 
-        Ok((probe_side, build_side))
+        Ok((left_side, right_side))
     }
 
     /// Prepare column projections with retained columns
