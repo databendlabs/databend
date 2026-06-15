@@ -153,12 +153,6 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
-            DataPacket::MultiTableInsertStatus(status) => FlightData {
-                app_metadata: vec![0x0c].into(),
-                data_body: serde_json::to_vec(&status)?.into(),
-                data_header: Default::default(),
-                flight_descriptor: None,
-            },
             DataPacket::DataCacheMetrics(metrics) => FlightData {
                 app_metadata: vec![0x08].into(),
                 data_body: serde_json::to_vec(&metrics)?.into(),
@@ -180,6 +174,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::QueryPerfCounters(counters) => FlightData {
                 app_metadata: vec![0x0b].into(),
                 data_body: serde_json::to_vec(&counters)?.into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
+            DataPacket::MultiTableInsertStatus(status) => FlightData {
+                app_metadata: vec![0x0c].into(),
+                data_body: serde_json::to_vec(&status)?.into(),
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
@@ -239,11 +239,6 @@ impl TryFrom<FlightData> for DataPacket {
                 let status = serde_json::from_slice::<MutationStatus>(&flight_data.data_body)?;
                 Ok(DataPacket::MutationStatus(status))
             }
-            0x0c => {
-                let status =
-                    serde_json::from_slice::<MultiTableInsertStatus>(&flight_data.data_body)?;
-                Ok(DataPacket::MultiTableInsertStatus(status))
-            }
             0x08 => {
                 let status =
                     serde_json::from_slice::<DataCacheMetricValues>(&flight_data.data_body)?;
@@ -262,6 +257,11 @@ impl TryFrom<FlightData> for DataPacket {
             0x0b => {
                 let counters = serde_json::from_slice::<NodePerfCounters>(&flight_data.data_body)?;
                 Ok(DataPacket::QueryPerfCounters(counters))
+            }
+            0x0c => {
+                let status =
+                    serde_json::from_slice::<MultiTableInsertStatus>(&flight_data.data_body)?;
+                Ok(DataPacket::MultiTableInsertStatus(status))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
