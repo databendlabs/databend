@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
+
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
@@ -42,6 +43,7 @@ use itertools::Itertools;
 use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::sleep;
+
 use crate::NameResolutionContext;
 use crate::Planner;
 use crate::TableEntry;
@@ -335,7 +337,7 @@ impl TableRefVisitor {
 
             databend_common_base::runtime::block_on(async move {
                 // sleep 0.5 seconds to make racing window larger
-                let random_sleep_ms = rand::random::<u64>() % 500;
+                let random_sleep_ms = rand::random::<u64>() % 1000;
                 sleep(Duration::from_millis(random_sleep_ms)).await;
                 if let Ok(table) = self
                     .ctx
