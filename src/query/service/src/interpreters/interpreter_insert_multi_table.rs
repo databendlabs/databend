@@ -32,6 +32,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::Else;
 use databend_common_sql::plans::FunctionCall;
@@ -186,10 +187,18 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        let distributed_insert =
-            branches.support_distributed_insert() && Exchange::from_physical_plan(&root).is_some();
-        let input = if distributed_insert {
-            let exchange = Exchange::from_physical_plan(&root).unwrap();
+        let top_exchange = Exchange::from_physical_plan(&root);
+        if let Some(exchange) = top_exchange
+            && exchange.kind != FragmentKind::Merge
+        {
+            return Err(ErrorCode::Internal(format!(
+                "unexpected top-level exchange kind for multi-table insert: {:?}",
+                exchange.kind
+            )));
+        }
+
+        let distributed_insert = branches.support_distributed_insert() && top_exchange.is_some();
+        let input = if let Some(exchange) = top_exchange.filter(|_| distributed_insert) {
             let input = exchange.input.clone();
             let remote_write_plan = Self::build_write_plan(
                 input,
