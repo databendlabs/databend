@@ -10,11 +10,7 @@ EXPORT DATABASE '/tmp/tpch_1/' (FORMAT CSV, DELIMITER '|');
 
 mv /tmp/tpch_1/ "$(pwd)/data/"
 
-if [[ $2 == native ]]; then
-  echo "native"
-  sh ./load_data.sh "storage_format = 'native' compression = 'lz4'"
-else
-  echo "fuse"
-  sh ./load_data.sh ""
-fi
+# `parquet` is the only supported storage format; an empty option string lets
+# the table fall back to it.
+sh ./load_data.sh ""
 

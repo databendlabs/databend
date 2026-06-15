@@ -37,7 +37,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
@@ -67,14 +67,13 @@ jobs:
           - "hybrid"
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           parallel: ${{ matrix.tests.parallel }}
-          storage-format: all
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -89,7 +88,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
       - uses: ./.github/actions/setup_minio
@@ -105,7 +104,6 @@ jobs:
           dirs: udf_server
           handlers: http,hybrid
           parallel: 1
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -120,7 +118,7 @@ jobs:
       - 4c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
       - name: Start Cloud Control Server
@@ -134,7 +132,6 @@ jobs:
         with:
           dirs: task
           handlers: http,hybrid
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -156,22 +153,18 @@ jobs:
         handler:
           - "hybrid"
           - "http"
-        format:
-          - "native"
-          - "parquet"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
 
   standalone_minio_with_bendsave:
     runs-on:
@@ -181,7 +174,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -209,7 +202,7 @@ jobs:
         handler:
           - "ttc-rust"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_test
         with:
           artifacts: sqllogictests,meta,query
@@ -235,8 +228,8 @@ jobs:
       - 4c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
@@ -274,7 +267,7 @@ jobs:
           - "hybrid"
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -314,7 +307,7 @@ jobs:
           - "small"
           - "large"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_stage
         timeout-minutes: 15
         with:
@@ -344,13 +337,12 @@ jobs:
         handler:
           - "http"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: all
           enable_table_meta_cache: false
       - name: Upload failure
         if: failure()
@@ -365,14 +357,8 @@ jobs:
       - Linux
       - 2c
       - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        format:
-          - "parquet"
-          - "native"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -382,9 +368,8 @@ jobs:
         with:
           dirs: ee
           handlers: http,hybrid
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-ee-sqllogic-standalone-ee-${{ matrix.format }}
+          name: test-ee-sqllogic-standalone-ee

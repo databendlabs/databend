@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #[cfg(feature = "storage-stage")]
+pub use databend_common_storages_stage::ArrowIpcMode;
+#[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::BytesBatch;
 #[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::BytesReader;
@@ -28,5 +30,9 @@ pub use databend_common_storages_stage::StageSinkTable;
 pub use databend_common_storages_stage::StageTable;
 #[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::build_streaming_load_pipeline;
+#[cfg(feature = "storage-stage")]
+pub use databend_common_storages_stage::infer_arrow_schema;
+#[cfg(feature = "storage-stage")]
+pub use databend_common_storages_stage::infer_arrow_schema_from_file;
 #[cfg(feature = "storage-stage")]
 pub use databend_common_storages_stage::parse_tsv_records_for_infer_schema;

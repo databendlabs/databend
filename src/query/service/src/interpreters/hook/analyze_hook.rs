@@ -25,6 +25,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use log::info;
 
+use crate::interpreters::hook::resolve_current_table_name_by_id;
+use crate::interpreters::hook::table_id_matches_target;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
@@ -37,6 +39,7 @@ pub struct AnalyzeDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub table_id: Option<u64>,
 }
 
 /// Hook analyze action with a on-finished callback.
@@ -48,26 +51,40 @@ pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("Pipeline execution completed successfully, starting analyze job");
-            if !ctx.get_enable_auto_analyze() {
-                return Ok(());
-            }
-
-            match GlobalIORuntime::instance().block_on(do_analyze(ctx, desc)) {
-                Ok(_) => {
-                    info!("Analyze job completed successfully");
-                }
-                Err(e) => {
-                    info!("Analyze job failed: {:?}", e);
-                }
-            }
+            let _ = GlobalIORuntime::instance().block_on(execute_analyze_hook(ctx, desc));
         }
         Ok(())
     });
 }
 
+pub(crate) fn analyze_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
+    ctx.get_enable_auto_analyze()
+}
+
+pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+    info!("Table hook starting analyze job");
+    if !analyze_after_write_enabled(&ctx) {
+        return Ok(());
+    }
+
+    match do_analyze(ctx, desc).await {
+        Ok(_) => {
+            info!("Analyze job completed successfully");
+        }
+        Err(e) => {
+            info!("Analyze job failed: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
 /// hook the analyze action with a on-finished callback.
-async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+    let Some(desc) = resolve_analyze_desc(&ctx, desc).await? else {
+        return Ok(());
+    };
+
     // evict the table from cache
     ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
     ctx.clear_table_meta_timestamps_cache();
@@ -75,6 +92,16 @@ async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
+    if !table_id_matches_target(
+        "analyze",
+        desc.table_id,
+        table.get_id(),
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+    ) {
+        return Ok(());
+    }
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = Pipeline::create();
     let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
@@ -95,4 +122,26 @@ async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     ctx.set_executor(complete_executor.get_inner())?;
     complete_executor.execute().await?;
     Ok(())
+}
+
+async fn resolve_analyze_desc(
+    ctx: &Arc<QueryContext>,
+    mut desc: AnalyzeDesc,
+) -> Result<Option<AnalyzeDesc>> {
+    let Some((database, table)) = resolve_current_table_name_by_id(
+        ctx,
+        "analyze",
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+        desc.table_id,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    desc.database = database;
+    desc.table = table;
+    Ok(Some(desc))
 }

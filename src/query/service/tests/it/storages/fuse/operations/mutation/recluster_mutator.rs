@@ -570,12 +570,12 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
 
-    // 200 small blocks with four workers should be selected and split by the
-    // parallel budget, instead of collapsing into one or two oversized tasks.
+    // 300 small blocks with four workers should be selected and split by the
+    // parallel budget while keeping each task above the minimum fill ratio.
     let segment_locations = gen_recluster_segments(
         &data_accessor,
         &location_generator,
-        20,
+        30,
         10,
         1000,
         10,
@@ -598,9 +598,104 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     )
     .await?;
 
-    assert_eq!(block_num, 200);
+    assert_eq!(block_num, 300);
     assert_eq!(parts.tasks.len(), 4);
-    assert_eq!(task_part_counts(&parts), vec![50, 50, 50, 50]);
+    assert_eq!(task_part_counts(&parts), vec![75, 75, 75, 75]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_when_minimal_task_exceeds_memory() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(150)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 10)], vec![(2, 9)], vec![(3, 8)]],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_singleton_over_memory_boundary() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(100)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    // The selected order is [40, 40, 90, 20]. The first two blocks form a
+    // valid task, then 90 + 20 crosses the memory boundary. Since the pending
+    // 90-byte singleton cannot form a normal recluster task, it is dropped and
+    // no over-budget tail task is emitted.
+    let mut segment_locations = Vec::new();
+    for (range, block_size) in [((1, 10), 40), ((2, 9), 40), ((3, 8), 90), ((4, 7), 20)] {
+        segment_locations.extend(
+            gen_recluster_segments_by_ranges(
+                &data_accessor,
+                &location_generator,
+                &[vec![range]],
+                1000,
+                block_size,
+                100,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
+    assert_eq!(parts.tasks[0].total_bytes, 80);
 
     Ok(())
 }
@@ -651,41 +746,46 @@ async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Res
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_recluster_defers_small_level0_tail() -> anyhow::Result<()> {
+async fn test_final_recluster_groups_mature_levels_in_two_level_bands() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-
     let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
+        &[(0, 1), (1, 1), (2, 1)],
         thresholds,
         1,
         ReclusterMode::Final,
     )
     .await?;
 
-    assert_eq!(block_num, 4);
+    assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
     assert_eq!(parts.tasks[0].level, 1);
-    assert_eq!(task_part_counts(&parts), vec![4]);
+    assert_eq!(task_part_counts(&parts), vec![2]);
 
     let (block_num, parts) = target_select_segments_by_level_with_mode(
-        &[(0, 3), (1, 4)],
+        &[(3, 2), (4, 1)],
         thresholds,
-        2,
+        1,
         ReclusterMode::Final,
     )
     .await?;
 
-    assert_eq!(block_num, 7);
-    assert_eq!(parts.tasks.len(), 2);
-    assert_eq!(
-        parts
-            .tasks
-            .iter()
-            .map(|task| task.level)
-            .collect::<Vec<_>>(),
-        vec![1, 0]
-    );
-    assert_eq!(task_part_counts(&parts), vec![4, 3]);
+    assert_eq!(block_num, 3);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level, 3);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+
+    // The mature bands are fixed and non-overlapping. A 2-3 overlap crosses
+    // the 1-2 / 3-4 boundary by design, so it is not one rewrite task.
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(2, 1), (3, 1)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
 
     Ok(())
 }
@@ -695,6 +795,19 @@ async fn test_final_recluster_skips_high_level_two_block_batch() -> anyhow::Resu
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     let (block_num, parts) =
         target_select_segments_by_level_with_mode(&[(2, 2)], thresholds, 1, ReclusterMode::Final)
+            .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_max_level_blocks() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level_with_mode(&[(32, 3)], thresholds, 1, ReclusterMode::Final)
             .await?;
 
     assert_eq!(block_num, 0);

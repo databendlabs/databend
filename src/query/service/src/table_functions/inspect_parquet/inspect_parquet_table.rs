@@ -43,7 +43,9 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_sql::binder::StagePathAccess;
 use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_metadata_async;
@@ -212,7 +214,7 @@ impl AsyncSource for InspectParquetSource {
                 .storage
                 .allow_insecure,
         )?
-        .resolve_stage_location(&uri)
+        .resolve_stage_location(&uri, StagePathAccess::Read)
         .await?;
         let enable_experimental_rbac_check = self
             .ctx
@@ -243,6 +245,12 @@ impl AsyncSource for InspectParquetSource {
             files: None,
             pattern: None,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &file_info.path,
+            file_info.files.as_deref(),
+            false,
+        )?;
 
         let first_file = file_info.first_file(&operator).await?;
         let Some(first_file) = first_file else {

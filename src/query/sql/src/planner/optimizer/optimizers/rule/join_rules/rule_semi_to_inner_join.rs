@@ -126,7 +126,10 @@ fn find_group_by_keys(
     group_by_keys: &mut HashMap<Symbol, Box<DataType>>,
 ) -> Result<()> {
     match child.plan() {
-        RelOperator::EvalScalar(_) | RelOperator::Filter(_) | RelOperator::Window(_) => {
+        RelOperator::EvalScalar(_)
+        | RelOperator::Filter(_)
+        | RelOperator::Window(_)
+        | RelOperator::WindowGroup(_) => {
             find_group_by_keys(child.child(0)?, group_by_keys)?;
         }
         RelOperator::Aggregate(agg) => {

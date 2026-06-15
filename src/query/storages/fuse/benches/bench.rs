@@ -39,7 +39,6 @@ mod dummy {
     use databend_common_expression::DataSchema;
     use databend_common_expression::TableSchema;
     use databend_common_expression::TableSchemaRef;
-    use databend_common_native::read::NativeColumnsReader;
     use databend_common_storages_fuse::FuseStorageFormat;
     use databend_common_storages_fuse::index::BloomIndexType;
     use databend_common_storages_fuse::io::WriteSettings;
@@ -98,48 +97,12 @@ mod dummy {
             });
     }
 
-    #[divan::bench(args = [TableCompression::LZ4, TableCompression::Zstd])]
-    fn native_deser(bencher: divan::Bencher, compression: TableCompression) {
-        // write the block into temp memory buffers
-        // prepare the metas
-        // use deserialize_chunk to read back into block
-        bencher
-            .with_inputs(|| prepare_format_file(FuseStorageFormat::Native, compression))
-            .input_counter(|(a, _)| {
-                // Changes based on input.
-                BytesCount::usize(a.len())
-            })
-            .bench_refs(|(a, schema)| {
-                let mut seek_a = std::io::Cursor::new(a.clone());
-                let metas = databend_common_native::read::reader::read_meta(&mut seek_a).unwrap();
-
-                let reader = NativeColumnsReader::new().unwrap();
-                let mut columns = Vec::with_capacity(schema.fields().len());
-
-                for (meta, f) in metas.iter().zip(schema.fields().iter()) {
-                    let bs =
-                        a.slice(meta.offset as usize..(meta.offset + meta.total_len()) as usize);
-                    let col = reader
-                        .batch_read_column(vec![bs.as_ref()], f.data_type.clone(), vec![
-                            meta.pages.clone(),
-                        ])
-                        .unwrap();
-
-                    columns.push(col);
-                }
-                let datablock = DataBlock::new_from_columns(columns);
-                assert_eq!(datablock.num_rows(), NUM_ROWS);
-                divan::black_box(datablock);
-            });
-    }
-
     fn prepare_format_file(
         storage_format: FuseStorageFormat,
         compression: TableCompression,
     ) -> (Bytes, TableSchemaRef) {
         let (datablock, schema) = read_parquet_file();
         // write the block into temp memory buffers
-        let max_page_size = 8192;
         let block_per_seg = 1000;
 
         let enable_parquet_dictionary = false;
@@ -147,7 +110,6 @@ mod dummy {
             storage_format,
             table_compression: compression,
             bloom_index_type: BloomIndexType::default(),
-            max_page_size,
             block_per_seg,
             enable_parquet_dictionary,
             data_page_rows: None,

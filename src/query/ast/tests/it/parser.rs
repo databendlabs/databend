@@ -659,6 +659,22 @@ SELECT * from s;"#,
         "#,
         r#"
             COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow
+                FILE_FORMAT = (
+                    type = ARROW
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow_stream
+                FILE_FORMAT = (
+                    type = ARROW_STREAM
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
                     AWS_KEY_ID = 'access_key'
@@ -1422,6 +1438,9 @@ fn test_query() {
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
         r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => true)"#,
+        r#"select * from t at (timestamp => '2024-01-01'::TIMESTAMP, NO_CHECK => true)"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => false)"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,

@@ -266,7 +266,6 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_meta_client::kvapi;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::tenant::Tenant;
@@ -284,10 +283,6 @@ mod tests {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
             type ValueType = FooValue;
-        }
-
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo>;
         }
 
         let tenant = Tenant::new_literal("test");
@@ -316,10 +311,6 @@ mod tests {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
             type ValueType = FooValue;
-        }
-
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo, u64>;
         }
 
         let tenant = Tenant::new_literal("test");

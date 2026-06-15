@@ -124,10 +124,6 @@ impl kvapi::Key for IdGenerator {
 #[derive(Debug)]
 pub struct IdGeneratorValue;
 
-impl kvapi::Value for IdGeneratorValue {
-    type KeyType = IdGenerator;
-}
-
 #[cfg(test)]
 mod t {
 

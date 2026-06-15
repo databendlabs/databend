@@ -21,7 +21,6 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -45,7 +44,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
-use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -58,9 +56,7 @@ use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
-use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -246,6 +242,7 @@ impl IPhysicalPlan for Recluster {
                     &mut builder.main_pipeline,
                     compact_thresholds,
                     max_threads,
+                    cluster_stats_gen.extra_key_num,
                 )?;
 
                 builder.main_pipeline.add_transform(
@@ -334,17 +331,6 @@ impl IPhysicalPlan for HilbertPartition {
         )?;
 
         let settings = builder.settings.clone();
-        let temp_dir_manager = TempDirManager::instance();
-
-        let disk_bytes_limit = GlobalConfig::instance()
-            .spill
-            .window_partition_spill_bytes_limit();
-
-        let enable_dio = settings.get_enable_dio()?;
-        let disk_spill = temp_dir_manager
-            .get_disk_spill_dir(disk_bytes_limit, &builder.ctx.get_id())
-            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-            .transpose()?;
 
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
         let processor_id = AtomicUsize::new(0);
@@ -366,7 +352,6 @@ impl IPhysicalPlan for HilbertPartition {
                     num_processors,
                     self.num_partitions,
                     window_spill_settings.clone(),
-                    disk_spill.clone(),
                     CompactStrategy::new(self.rows_per_block, max_bytes_per_block),
                 )?,
             )))

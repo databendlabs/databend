@@ -16,9 +16,13 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::ScheduleOptions as AstScheduleOptions;
 use databend_common_ast::ast::TaskSql;
 use databend_common_exception::Result;
 use databend_common_management::TaskMgr;
+use databend_common_meta_app::principal::ScheduleOptions;
+use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
 use databend_common_meta_app::principal::WarehouseOptions;
@@ -88,6 +92,109 @@ fn test_make_task_sql_preserves_script_sql() {
             "INSERT INTO t VALUES(2)".to_string()
         ])
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_alter_task_set_preserves_unset_options() -> anyhow::Result<()> {
+    let (_kv, task_mgr) = new_task_api().await?;
+    let mut task = test_task("task_1", "select 1");
+    task.schedule_options = Some(ScheduleOptions {
+        interval: Some(60),
+        cron: None,
+        time_zone: None,
+        schedule_type: ScheduleType::IntervalType,
+        milliseconds_interval: None,
+    });
+    task.comment = Some("original comment".to_string());
+    task.suspend_task_after_num_failures = Some(3);
+    task.error_integration = Some("original_error_integration".to_string());
+    task.session_params
+        .insert("max_threads".to_string(), "2".to_string());
+
+    task_mgr.create_task(task, &CreateOption::Create).await??;
+
+    task_mgr
+        .alter_task("task_1", &AlterTaskOptions::Set {
+            warehouse: Some("new_warehouse".to_string()),
+            schedule: None,
+            suspend_task_after_num_failures: None,
+            comments: None,
+            session_parameters: None,
+            error_integration: None,
+        })
+        .await??;
+
+    let task = task_mgr.describe_task("task_1").await??.unwrap();
+    assert_eq!(
+        task.warehouse_options,
+        Some(WarehouseOptions {
+            warehouse: Some("new_warehouse".to_string()),
+            using_warehouse_size: None,
+        })
+    );
+    assert_eq!(
+        task.schedule_options,
+        Some(ScheduleOptions {
+            interval: Some(60),
+            cron: None,
+            time_zone: None,
+            schedule_type: ScheduleType::IntervalType,
+            milliseconds_interval: None,
+        })
+    );
+    assert_eq!(task.comment, Some("original comment".to_string()));
+    assert_eq!(task.suspend_task_after_num_failures, Some(3));
+    assert_eq!(
+        task.error_integration,
+        Some("original_error_integration".to_string())
+    );
+    assert_eq!(
+        task.session_params.get("max_threads").map(String::as_str),
+        Some("2")
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_alter_task_set_schedule_preserves_warehouse() -> anyhow::Result<()> {
+    let (_kv, task_mgr) = new_task_api().await?;
+
+    task_mgr
+        .create_task(test_task("task_1", "select 1"), &CreateOption::Create)
+        .await??;
+
+    task_mgr
+        .alter_task("task_1", &AlterTaskOptions::Set {
+            warehouse: None,
+            schedule: Some(AstScheduleOptions::IntervalSecs(30, 0)),
+            suspend_task_after_num_failures: None,
+            comments: None,
+            session_parameters: None,
+            error_integration: None,
+        })
+        .await??;
+
+    let task = task_mgr.describe_task("task_1").await??.unwrap();
+    assert_eq!(
+        task.warehouse_options,
+        Some(WarehouseOptions {
+            warehouse: Some("default".to_string()),
+            using_warehouse_size: None,
+        })
+    );
+    assert_eq!(
+        task.schedule_options,
+        Some(ScheduleOptions {
+            interval: Some(30),
+            cron: None,
+            time_zone: None,
+            schedule_type: ScheduleType::IntervalType,
+            milliseconds_interval: None,
+        })
+    );
+
+    Ok(())
 }
 
 fn test_task(name: &str, query_text: &str) -> Task {

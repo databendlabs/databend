@@ -18,9 +18,9 @@ jobs:
   title:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check PR title if not sematic
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         id: check
         with:
           script: |
@@ -66,9 +66,9 @@ jobs:
   cla:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check CLA if not signed
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         id: check
         with:
           script: |
@@ -109,9 +109,9 @@ jobs:
   description:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check PR description checkbox
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         id: check
         with:
           script: |

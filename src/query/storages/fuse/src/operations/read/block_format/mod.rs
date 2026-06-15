@@ -13,10 +13,7 @@
 // limitations under the License.
 
 mod fuse_block_format;
-mod native;
 mod parquet;
 
-pub use fuse_block_format::FuseBlockFormat;
 pub use fuse_block_format::ReadBlockMeta;
-pub use native::FuseNativeBlockFormat;
 pub use parquet::FuseParquetBlockFormat;

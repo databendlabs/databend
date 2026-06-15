@@ -56,16 +56,16 @@ jobs:
     env:
       RUNNER_PROVIDER: aws
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Download artifact
@@ -95,11 +95,11 @@ jobs:
   load:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
@@ -148,11 +148,11 @@ jobs:
       fail-fast: true
       max-parallel: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
@@ -188,9 +188,9 @@ jobs:
     if: inputs.source == 'pr'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
           pattern: benchmark-*
@@ -251,9 +251,9 @@ jobs:
           - "tpch1000"
           - "internal"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
           pattern: benchmark-${{ matrix.dataset }}-*

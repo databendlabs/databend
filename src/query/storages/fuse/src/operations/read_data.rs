@@ -98,12 +98,6 @@ impl FuseTable {
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|x| x.top_k(plan.schema().as_ref()));
-
         let index_reader = Arc::new(
             plan.push_downs
                 .as_ref()
@@ -201,7 +195,6 @@ impl FuseTable {
             block_reader,
             max_threads,
             plan,
-            topk,
             max_io_requests,
             index_reader,
             virtual_reader,

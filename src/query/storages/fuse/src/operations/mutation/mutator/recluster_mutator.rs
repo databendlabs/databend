@@ -71,6 +71,10 @@ use crate::statistics::reducers::merge_statistics_mut;
 /// For two-block layouts, repeated reclustering beyond this level
 /// rarely improves data locality and may cause task churn.
 const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
+/// Maximum recluster level allowed for candidate selection.
+/// Blocks that reach this level have already been rewritten many times, so
+/// keep them out of future recluster tasks to avoid unbounded level growth.
+const MAX_RECLUSTER_LEVEL: i32 = 32;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 struct LevelReclusterTasks {
@@ -82,14 +86,14 @@ struct LevelReclusterTasks {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReclusterGroup {
     Level(i32),
-    FinalMature,
+    Mixed(i32),
 }
 
 impl ReclusterGroup {
     fn output_level(self, task_indices: &[usize], blocks: &[ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::FinalMature => {
+            ReclusterGroup::Mixed(_) => {
                 let mut level_counts = BTreeMap::new();
                 for &idx in task_indices {
                     *level_counts.entry(blocks[idx].stats.level).or_insert(0) += 1;
@@ -109,7 +113,7 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::FinalMature => write!(f, "mixed"),
+            ReclusterGroup::Mixed(band) => write!(f, "mixed-{}", band),
         }
     }
 }
@@ -175,7 +179,7 @@ impl ReclusterMutator {
         let depth_threshold = Self::recluster_depth_threshold(table, snapshot.summary.block_count);
 
         let settings = ctx.get_settings();
-        let memory_threshold = settings.get_recluster_block_size()? as usize;
+        let memory_threshold = Self::recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
@@ -285,11 +289,26 @@ impl ReclusterMutator {
             if block.stats.level < 0 {
                 continue;
             }
+            if block.stats.level >= MAX_RECLUSTER_LEVEL {
+                debug!(
+                    "recluster: skip block segment_idx={} block_idx={} level={} skip_reason=max_recluster_level",
+                    block.index.segment_idx, block.index.block_idx, block.stats.level,
+                );
+                continue;
+            }
 
             let group = match mode {
                 ReclusterMode::Normal => ReclusterGroup::Level(block.stats.level),
                 ReclusterMode::Final if block.stats.level == 0 => ReclusterGroup::Level(0),
-                ReclusterMode::Final => ReclusterGroup::FinalMature,
+                ReclusterMode::Final => {
+                    // FINAL intentionally uses fixed, non-overlapping level bands.
+                    // Level 0 is isolated; mature levels are grouped as 1-2, 3-4, ...
+                    // Cross-band overlaps such as 2-3 are deliberately not
+                    // candidates for the same rewrite task, keeping each task
+                    // bounded to a narrow mature-level range.
+                    let band = (block.stats.level - 1) / 2;
+                    ReclusterGroup::Mixed(band)
+                }
             };
             blocks_map.entry(group).or_default().push(idx);
         }
@@ -487,6 +506,27 @@ impl ReclusterMutator {
         }
     }
 
+    fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
+        let settings = ctx.get_settings();
+        let recluster_block_size = settings.get_recluster_block_size()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
+        if max_memory_usage == 0 {
+            return Ok(recluster_block_size);
+        }
+        let memory_usage = ctx.get_nodes_memory_usage();
+        let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
+        // No memory budget left: fail with a clear reason.
+        if memory_budget == 0 {
+            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                "Not enough memory for recluster: max_memory_usage = {}, used = {}.",
+                max_memory_usage, memory_usage
+            )));
+        }
+        // Whether a task actually fits is checked in target_select using real block
+        // sizes, so small-block tables are not rejected here under low memory.
+        Ok(recluster_block_size.min(memory_budget))
+    }
+
     fn build_recluster_tasks_for_indices(
         &self,
         group: ReclusterGroup,
@@ -526,12 +566,13 @@ impl ReclusterMutator {
 
         let max_blocks_num_per_node =
             self.max_blocks_num_per_node(total_bytes as usize, block_count);
-        let min_blocks_per_task = (max_blocks_num_per_node / 2).max(2);
+        let min_blocks_per_task = (max_blocks_num_per_node * 3 / 4).max(2);
 
         // If total rows and bytes are too small, compact the blocks into one.
         if self
             .block_thresholds
             .check_for_compact(total_rows as usize, total_bytes as usize)
+            && total_bytes as usize <= self.memory_threshold
         {
             debug!(
                 "recluster: level selection detail level={} block_count={} rows={} bytes={} selected_count={} task_count=1 compact_small_blocks=true",
@@ -619,9 +660,8 @@ impl ReclusterMutator {
             // satisfy the minimum task size for the tasks left to create.
             let has_enough_remaining_blocks =
                 remaining_blocks >= remaining_tasks * min_blocks_per_task;
-            let should_split_for_memory = task_bytes.saturating_add(block_size)
-                > self.memory_threshold
-                && selected_blocks.len() > 1;
+            let should_split_for_memory =
+                task_bytes.saturating_add(block_size) > self.memory_threshold;
             // Memory split is the hard safety guard. Parallel split is a load
             // balancing target and is allowed only while preserving task size.
             let should_split_for_parallelism = tasks.len() + 1 < target_tasks
@@ -631,24 +671,29 @@ impl ReclusterMutator {
 
             if should_split_for_memory || should_split_for_parallelism {
                 let selected_task_indices = std::mem::take(&mut task_indices);
-                let output_level = group.output_level(&selected_task_indices, blocks);
-
-                tasks.push((
-                    self.generate_task(
-                        &selected_blocks,
-                        column_nodes,
-                        task_rows,
-                        task_bytes,
-                        task_compressed,
-                        output_level,
-                    ),
-                    selected_task_indices,
-                ));
+                let selected_block_metas = std::mem::take(&mut selected_blocks);
+                // Keep the selected block order stable. If the memory boundary
+                // is reached while only one block is pending, that singleton
+                // cannot form a normal recluster task, so drop it and let the
+                // current block start the next accumulator.
+                if selected_block_metas.len() >= 2 {
+                    let output_level = group.output_level(&selected_task_indices, blocks);
+                    tasks.push((
+                        self.generate_task(
+                            &selected_block_metas,
+                            column_nodes,
+                            task_rows,
+                            task_bytes,
+                            task_compressed,
+                            output_level,
+                        ),
+                        selected_task_indices,
+                    ));
+                }
 
                 task_rows = 0;
                 task_bytes = 0;
                 task_compressed = 0;
-                selected_blocks.clear();
 
                 // Break if maximum task limit is reached
                 if tasks.len() >= target_tasks {
@@ -773,7 +818,7 @@ impl ReclusterMutator {
         // still-active segments forward so a long overlap range is not split
         // into unrelated candidates, while the bound prevents one hot range
         // from growing into an oversized window.
-        let anchor_len = max_len.saturating_sub(1).min((max_len / 4).max(1));
+        let anchor_len = max_len.saturating_sub(1).min((max_len / 5).max(1));
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         let mut total_blocks = 0;
@@ -832,14 +877,6 @@ impl ReclusterMutator {
                 let end = &values[idx as usize].1;
                 let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);
 
-                // The active set is captured before applying the point update,
-                // matching fetch_max_depth's inclusive start-point semantics.
-                let active_indices = unfinished_intervals
-                    .keys()
-                    .chain(start.iter())
-                    .copied()
-                    .collect::<IndexSet<_>>();
-
                 if point_depth <= 1 {
                     Self::flush_segment_window(
                         &mut current_window,
@@ -852,6 +889,13 @@ impl ReclusterMutator {
                 } else {
                     current_window_max_depth = current_window_max_depth.max(point_depth);
 
+                    // The active set is captured before applying the point update,
+                    // matching fetch_max_depth's inclusive start-point semantics.
+                    let active_indices = unfinished_intervals
+                        .keys()
+                        .chain(start.iter())
+                        .copied()
+                        .collect::<IndexSet<_>>();
                     for active_idx in active_indices.iter().copied() {
                         if !seen_in_hot_range.insert(active_idx) {
                             continue;
@@ -1184,8 +1228,16 @@ impl ReclusterMutator {
             (10000.0 * sum_depth as f64 / interval_depths.len() as f64).round() / 10000.0;
         let max_point_overlap_count = point_overlaps[max_point].len();
 
-        // Find the highest-depth point and expand to neighboring hot points.
-        if max_depth as f64 > depth_threshold {
+        // Decide whether to expand from the highest-depth point to neighboring
+        // hot points. Normal and FINAL intentionally share the same gate:
+        // average depth follows the configured threshold, while max depth uses
+        // a higher threshold to avoid repeatedly rewriting moderate isolated
+        // hotspots. Cap that max-depth threshold at MAX_RECLUSTER_DEPTH so a
+        // high configured threshold does not make hotspot detection unreachable.
+        let max_depth_threshold = (2.0 * depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
+        let should_expand =
+            average_depth > depth_threshold || max_depth as f64 > max_depth_threshold;
+        if should_expand {
             point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);
             });

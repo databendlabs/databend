@@ -39,6 +39,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::StageLocationParam;
+use databend_common_sql::binder::StagePathAccess;
 use databend_common_sql::binder::StageResolver;
 
 use crate::pipelines::builders::UdtfFunctionDesc;
@@ -91,7 +92,7 @@ impl UDTFTable {
                         .allow_insecure,
                 )?;
                 let (stage_info, relative_path) = databend_common_base::runtime::block_on(
-                    stage_resolver.resolve_stage_location(location),
+                    stage_resolver.resolve_stage_location(location, StagePathAccess::Read),
                 )?;
 
                 if !matches!(stage_info.stage_type, StageType::External) {

@@ -15,6 +15,7 @@
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowLocksStmt;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -187,7 +188,7 @@ impl Binder {
 
         if *in_account {
             let user = self.ctx.get_current_user()?.name;
-            select_builder.with_filter(format!("user = '{user}'"));
+            select_builder.with_filter(format!("user = {}", QuotedString(user, '\'')));
         }
         if let Some(ShowLimit::Where { selection }) = limit {
             select_builder.with_filter(format!("({selection})"));
@@ -211,10 +212,11 @@ pub(crate) fn get_show_options(
         match &show_option.show_limit {
             Some(ShowLimit::Like { pattern }) => {
                 // convert like pattern to lowercase to uses case-insensitive pattern matching
+                let pattern = QuotedString(pattern.to_lowercase(), '\'');
                 if let Some(col) = &col {
-                    show_limit = format!("WHERE LOWER({}) LIKE '{}'", col, pattern.to_lowercase());
+                    show_limit = format!("WHERE LOWER({}) LIKE {}", col, pattern);
                 } else {
-                    show_limit = format!("WHERE LOWER(name) LIKE '{}'", pattern.to_lowercase());
+                    show_limit = format!("WHERE LOWER(name) LIKE {}", pattern);
                 }
             }
             Some(ShowLimit::Where { selection }) => {

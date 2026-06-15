@@ -30,6 +30,17 @@ t1
 t2
 t3
 
+statement ok
+CREATE TABLE showtable.`a'b_table`(c1 int) ENGINE = Null
+
+query T
+SHOW TABLES LIKE 'a''b%'
+----
+a'b_table
+
+statement ok
+DROP TABLE showtable.`a'b_table`
+
 query T
 SHOW TABLES LIKE 't2'
 ----

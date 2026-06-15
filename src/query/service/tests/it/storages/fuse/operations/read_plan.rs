@@ -63,7 +63,6 @@ fn test_to_partitions() -> anyhow::Result<()> {
         let mut n = ColumnNode::new(
             Field::new("".to_string(), ArrowType::Int64, false),
             false,
-            vec![],
             vec![field_index],
             None,
         );

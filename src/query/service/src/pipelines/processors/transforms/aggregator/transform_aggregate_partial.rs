@@ -36,8 +36,8 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
@@ -193,8 +193,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
 
         if self.settings.check_spill() {
             if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-                let group_types = v.payload.group_types.clone();
-                let aggrs = v.payload.aggrs.clone();
                 v.config.update_current_max_radix_bits();
                 let config = v
                     .config
@@ -214,8 +212,8 @@ impl AccumulatingTransform for TransformPartialAggregate {
 
                 let arena = Arc::new(Bump::new());
                 self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                    group_types,
-                    aggrs,
+                    self.params.group_data_types.clone(),
+                    self.params.aggregate_functions.clone(),
                     config,
                     arena,
                 ));
@@ -238,7 +236,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
             },
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
-                let mut blocks = Vec::with_capacity(partition_count);
 
                 log::info!(
                     "[TRANSFORM-AGGREGATOR] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
@@ -259,19 +256,17 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     convert_byte_size(self.processed_bytes as f64),
                 );
 
-                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    if payload.len() != 0 {
-                        blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::create_agg_payload(
-                                bucket as isize,
-                                payload,
-                                partition_count,
-                            ),
-                        ));
-                    }
-                }
-
-                blocks
+                hashtable
+                    .payload
+                    .into_non_empty_bucket_payloads()
+                    .map(|(bucket, payload)| {
+                        DataBlock::empty_with_meta(AggregateMeta::create_agg_payload(
+                            bucket as isize,
+                            payload,
+                            partition_count,
+                        ))
+                    })
+                    .collect()
             }
         })
     }

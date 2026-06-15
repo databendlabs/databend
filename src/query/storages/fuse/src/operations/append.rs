@@ -242,7 +242,7 @@ impl FuseTable {
             self.cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
-            self.get_max_page_size(),
+            None,
             level,
             block_thresholds,
             operators,

@@ -16,7 +16,7 @@ jobs:
   debian:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -30,7 +30,7 @@ jobs:
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
       - name: Build and publish databend build image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           pull: true
           push: true
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: debian
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -59,7 +59,7 @@ jobs:
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
       - name: Build and publish databend build image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           pull: true
           push: true

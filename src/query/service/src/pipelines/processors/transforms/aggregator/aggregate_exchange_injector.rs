@@ -25,12 +25,12 @@ use databend_common_storage::DataOperator;
 
 use crate::physical_plans::AggregateShuffleMode;
 use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::servers::flight::v1::exchange::DataExchange;
@@ -43,10 +43,6 @@ use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting {}
 
-pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
-    Ok(max_partition_count as isize * 1000 + bucket)
-}
-
 impl ExchangeSorting for AggregateExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
@@ -56,20 +52,20 @@ impl ExchangeSorting for AggregateExchangeSorting {
                     "Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
                     serde_json::to_string(block_meta_info)
                 ))),
-                Some(meta_info) => match meta_info {
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::Serialized(v) => {
-                        compute_block_number(v.bucket, v.max_partition_count)
+                Some(meta_info) => Ok(match meta_info {
+                    AggregateMeta::Serialized(payload) => {
+                        payload.max_partition_count as isize * 1000 + payload.bucket
                     }
-                    AggregateMeta::AggregatePayload(v) => {
-                        compute_block_number(v.bucket, v.max_partition_count)
-                    }
+                    AggregateMeta::AggregatePayload(payload) => payload.exchange_block_number(),
                     AggregateMeta::AggregateSpilling(_)
                     | AggregateMeta::Spilled(_)
                     | AggregateMeta::BucketSpilled(_)
                     | AggregateMeta::NewBucketSpilled(_)
-                    | AggregateMeta::NewSpilled(_) => Ok(-1),
-                },
+                    | AggregateMeta::NewSpilled(_) => -1,
+                    AggregateMeta::Partitioned { .. } => {
+                        unreachable!("Partitioned AggregateMeta should not be exchange sorted")
+                    }
+                }),
             },
         }
     }

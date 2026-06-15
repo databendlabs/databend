@@ -36,9 +36,6 @@ impl CatalogIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::schema::CatalogIdToNameIdent;
     use crate::schema::catalog_name_ident::CatalogNameIdentRaw;
     use crate::tenant_key::resource::TenantResource;
 
@@ -49,10 +46,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "CatalogIdToNameIdent";
         const HAS_TENANT: bool = false;
         type ValueType = CatalogNameIdentRaw;
-    }
-
-    impl kvapi::Value for CatalogNameIdentRaw {
-        type KeyType = CatalogIdToNameIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

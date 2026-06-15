@@ -479,3 +479,52 @@ fn test_endpoint_none_when_missing() {
     });
     assert_eq!(ftp.endpoint(), None);
 }
+
+#[test]
+fn test_normalize_s3_endpoint() {
+    use crate::storage_params::normalize_s3_endpoint;
+
+    assert_eq!(
+        normalize_s3_endpoint("https://s3.amazonaws.com/"),
+        "https://s3.amazonaws.com"
+    );
+    assert_eq!(
+        normalize_s3_endpoint("https://s3.amazonaws.com"),
+        "https://s3.amazonaws.com"
+    );
+    assert_eq!(
+        normalize_s3_endpoint("s3.amazonaws.com"),
+        "https://s3.amazonaws.com"
+    );
+    assert_eq!(
+        normalize_s3_endpoint("http://minio:9000/"),
+        "http://minio:9000"
+    );
+}
+
+#[test]
+fn test_region_cache_hit_and_expiry() {
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use crate::storage_params::REGION_CACHE;
+    use crate::storage_params::get_cached_region;
+    use crate::storage_params::insert_cached_region;
+
+    let key = (
+        "https://s3.amazonaws.com".to_string(),
+        "test-bucket-cache-hit".to_string(),
+    );
+
+    // Insert a fresh entry.
+    insert_cached_region(key.clone(), "us-west-2".to_string());
+    assert_eq!(get_cached_region(&key), Some("us-west-2".to_string()));
+
+    // Insert an expired entry directly to simulate TTL expiry.
+    {
+        let mut cache = REGION_CACHE.write();
+        let expired = Instant::now() - Duration::from_secs(7200);
+        cache.insert(key.clone(), ("us-west-2".to_string(), expired));
+    }
+    assert_eq!(get_cached_region(&key), None);
+}

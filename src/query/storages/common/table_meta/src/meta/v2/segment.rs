@@ -27,7 +27,6 @@ use databend_common_expression::VariantDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
-use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -255,16 +254,9 @@ impl BlockMeta {
 
     /// Get the page size of the block.
     ///
-    /// - If the format is parquet, its page size is its row count.
-    /// - If the format is native, its page size is the row count of each page.
-    ///
-    /// The row count of the last page may be smaller than the page size
+    /// For the parquet format, the page size is its row count.
     pub fn page_size(&self) -> u64 {
-        if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
-            meta.pages.first().unwrap().num_values
-        } else {
-            self.row_count
-        }
+        self.row_count
     }
 }
 
@@ -333,53 +325,30 @@ impl SegmentInfo {
 )]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
-    Native(NativeColumnMeta),
 }
 
 impl ColumnMeta {
     pub fn total_rows(&self) -> usize {
         match self {
             ColumnMeta::Parquet(v) => v.num_values as usize,
-            ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
         }
     }
 
     pub fn offset_length(&self) -> (u64, u64) {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
-            ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
         }
     }
 
-    pub fn read_rows(&self, range: Option<&Range<usize>>) -> u64 {
+    pub fn read_rows(&self, _range: Option<&Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.num_values,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.num_values)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.num_values).sum(),
-            },
         }
     }
 
-    pub fn read_bytes(&self, range: &Option<Range<usize>>) -> u64 {
+    pub fn read_bytes(&self, _range: &Option<Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.len,
-            ColumnMeta::Native(v) => match range {
-                Some(range) => v
-                    .pages
-                    .iter()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .map(|page| page.length)
-                    .sum(),
-                None => v.pages.iter().map(|page| page.length).sum(),
-            },
         }
     }
 }

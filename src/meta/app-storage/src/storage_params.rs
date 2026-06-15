@@ -12,18 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::LazyLock;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::warn;
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::timeout;
 
 const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
+const REGION_CACHE_TTL: Duration = Duration::from_secs(3600);
+const REGION_CACHE_MAX_ENTRIES: usize = 1024;
+
+type RegionCache = LazyLock<RwLock<HashMap<(String, String), (String, Instant)>>>;
+
+/// Cache for S3 region detection results.
+///
+/// Key: (endpoint, bucket) — a bucket name alone is not unique because the same
+/// name can exist on different S3-compatible endpoints (AWS, MinIO, OSS, etc.).
+///
+/// Uses `RwLock<HashMap>` rather than a concurrent map because writes are rare
+/// (only on first access to a new bucket or after TTL expiry) while reads are
+/// frequent. Under this workload the uncontended read-lock path is effectively
+/// free, and write-side contention is negligible.
+pub(crate) static REGION_CACHE: RegionCache = LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -206,29 +226,33 @@ impl StorageParams {
     pub async fn auto_detect(self) -> Result<Self> {
         let sp = match self {
             StorageParams::S3(mut s3) if s3.region.is_empty() => {
-                // Remove the possible trailing `/` in endpoint.
-                let endpoint = s3.endpoint_url.trim_end_matches('/');
+                let endpoint = normalize_s3_endpoint(&s3.endpoint_url);
+                let cache_key = (endpoint.clone(), s3.bucket.clone());
 
-                // Make sure the endpoint contains the scheme.
-                let endpoint = if endpoint.starts_with("http") {
-                    endpoint.to_string()
+                if let Some(cached) = get_cached_region(&cache_key) {
+                    s3.region = cached;
                 } else {
-                    // Prefix https if endpoint doesn't start with scheme.
-                    format!("https://{}", endpoint)
-                };
+                    s3.region = match timeout(
+                        Duration::from_secs(DEFAULT_DETECT_REGION_TIMEOUT_SEC),
+                        opendal::services::S3::detect_region(&endpoint, &s3.bucket),
+                    )
+                    .await
+                    {
+                        Ok(v) => v.unwrap_or_default(),
+                        Err(_) => {
+                            warn!(
+                                "detect region timeout ({}s) for endpoint={}, bucket={}, \
+                                 will rely on downstream fallback",
+                                DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, s3.bucket
+                            );
+                            String::new()
+                        }
+                    };
 
-                s3.region = timeout(
-                    Duration::from_secs(DEFAULT_DETECT_REGION_TIMEOUT_SEC),
-                    opendal::services::S3::detect_region(&endpoint, &s3.bucket),
-                )
-                .await
-                .map_err(|e| {
-                    ErrorCode::StorageOther(format!(
-                        "detect region timeout: {}s, endpoint: {}, elapsed: {}",
-                        DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, e
-                    ))
-                })?
-                .unwrap_or_default();
+                    if !s3.region.is_empty() {
+                        insert_cached_region(cache_key, s3.region.clone());
+                    }
+                }
 
                 StorageParams::S3(s3)
             }
@@ -535,6 +559,38 @@ fn ensure_path_prefix(path: &str) -> String {
         path.to_string()
     } else {
         format!("/{}", path)
+    }
+}
+
+pub(crate) fn normalize_s3_endpoint(endpoint_url: &str) -> String {
+    let endpoint = endpoint_url.trim_end_matches('/');
+    if endpoint.starts_with("http") {
+        endpoint.to_string()
+    } else {
+        format!("https://{}", endpoint)
+    }
+}
+
+pub(crate) fn get_cached_region(key: &(String, String)) -> Option<String> {
+    let cache = REGION_CACHE.read();
+    if let Some((region, ts)) = cache.get(key)
+        && ts.elapsed() < REGION_CACHE_TTL
+    {
+        return Some(region.clone());
+    }
+    None
+}
+
+pub(crate) fn insert_cached_region(key: (String, String), region: String) {
+    let mut cache = REGION_CACHE.write();
+    // Evict expired entries when hitting the capacity limit to prevent
+    // unbounded growth (e.g. from crafted bucket names).
+    if cache.len() >= REGION_CACHE_MAX_ENTRIES {
+        cache.retain(|_, (_, ts)| ts.elapsed() < REGION_CACHE_TTL);
+    }
+    // If still at capacity after eviction, skip caching this entry.
+    if cache.len() < REGION_CACHE_MAX_ENTRIES {
+        cache.insert(key, (region, Instant::now()));
     }
 }
 
@@ -1025,13 +1081,14 @@ impl Debug for StorageHuggingfaceConfig {
 ///
 /// Copied from `common-base` so that we don't need to depend on it.
 #[inline]
-pub fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+pub fn mask_string(s: &str, _unmask_len: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 

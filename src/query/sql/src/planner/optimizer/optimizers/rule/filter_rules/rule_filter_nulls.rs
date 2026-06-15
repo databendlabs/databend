@@ -116,6 +116,10 @@ impl Rule for RuleFilterNulls {
         let mut left_null_predicates = vec![];
         let mut right_null_predicates = vec![];
         for join_key in join.equi_conditions.iter() {
+            if join_key.is_null_equal {
+                continue;
+            }
+
             let left_key = &join_key.left;
             let right_key = &join_key.right;
             if single_plan(&left_child) {

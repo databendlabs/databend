@@ -22,7 +22,6 @@ use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
@@ -46,7 +45,6 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_mil
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
-use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -57,7 +55,6 @@ use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
-use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -110,45 +107,7 @@ pub fn serialize_block_with_column_stats(
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
-        FuseStorageFormat::Native => {
-            let leaf_column_ids = schema.to_leaf_column_ids();
-
-            let mut default_compress_ratio = Some(2.10f64);
-            if matches!(write_settings.table_compression, TableCompression::Zstd) {
-                default_compress_ratio = Some(3.72f64);
-            }
-
-            let mut writer = NativeWriter::new(
-                buf,
-                schema.as_ref().clone(),
-                databend_common_native::write::WriteOptions {
-                    default_compression: write_settings.table_compression.into(),
-                    max_page_size: Some(write_settings.max_page_size),
-                    default_compress_ratio,
-                    forbidden_compressions: vec![],
-                },
-            )?;
-
-            let block = block.consume_convert_to_full();
-            let batch: Vec<Column> = block
-                .take_columns()
-                .into_iter()
-                .map(|x| x.into_column().unwrap())
-                .collect();
-
-            writer.start()?;
-            writer.write(&batch)?;
-            writer.finish()?;
-
-            let mut metas = HashMap::with_capacity(writer.metas.len());
-            for (idx, meta) in writer.metas.iter().enumerate() {
-                // use column id as key instead of index
-                let column_id = leaf_column_ids.get(idx).unwrap();
-                metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
-            }
-
-            Ok(metas)
-        }
+        FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
     }
 }
 
@@ -281,7 +240,7 @@ impl BlockBuilder {
         )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let block_size = data_block.estimate_block_size() as u64;
+        let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
         let col_metas = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,

@@ -59,6 +59,8 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -88,8 +90,9 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -206,10 +209,13 @@ impl Binder {
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from(&format!(
                 "{}.system.tables_with_history",
-                catalog_name.to_lowercase()
+                QuotedIdent(catalog_name.to_lowercase(), '`')
             ))
         } else {
-            SelectBuilder::from(&format!("{}.system.tables", catalog_name.to_lowercase()))
+            SelectBuilder::from(&format!(
+                "{}.system.tables",
+                QuotedIdent(catalog_name.to_lowercase(), '`')
+            ))
         };
 
         if *full {
@@ -232,7 +238,10 @@ impl Binder {
                 .with_column("data_compressed_size")
                 .with_column("index_size");
         } else {
-            select_builder.with_column(format!("name AS `Tables_in_{database}`"));
+            select_builder.with_column(format!(
+                "name AS {}",
+                QuotedIdent(format!("Tables_in_{database}"), '`')
+            ));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };
@@ -243,14 +252,14 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -345,7 +354,10 @@ impl Binder {
             }
         };
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let mut select_builder = SelectBuilder::from(&format!("{catalog_name}.system.statistics"));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.statistics",
+            QuotedIdent(&catalog_name, '`')
+        ));
 
         let database = match database {
             None => self.ctx.get_current_database(),
@@ -357,14 +369,14 @@ impl Binder {
                 database
             }
         };
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         if let ShowStatsTarget::Table(table) = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
             catalog
                 .get_table(&self.ctx.get_tenant(), database.as_str(), &table_name)
                 .await?;
-            select_builder.with_filter(format!("table = '{table_name}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table_name, '\'')));
         }
 
         select_builder
@@ -418,18 +430,26 @@ impl Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM {}.system.tables WHERE database = '{}' ORDER BY Name",
-                select_cols, default_catalog, database
+                "SELECT {} FROM {}.system.tables WHERE database = {} ORDER BY Name",
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\'')
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
-            WHERE Name LIKE '{}' ORDER BY Name",
-                select_cols, default_catalog, database, pattern
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
+            WHERE Name LIKE {} ORDER BY Name",
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\''),
+                QuotedString(pattern, '\'')
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
             WHERE ({}) ORDER BY Name",
-                select_cols, default_catalog, database, selection
+                select_cols,
+                QuotedIdent(&default_catalog, '`'),
+                QuotedString(&database, '\''),
+                selection
             ),
         };
 
@@ -449,8 +469,10 @@ impl Binder {
         let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder =
-            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.tables_with_history",
+            QuotedIdent(&default_catalog, '`')
+        ));
 
         select_builder
             .with_column("name AS Tables")
@@ -472,13 +494,13 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -669,7 +691,7 @@ impl Binder {
                     .await?;
 
                 // create a temporary op to check if params is correct
-                let op = init_operator(&sp)?;
+                let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
                 check_operator(&op, &sp).await?;
 
                 // Verify essential privileges.
@@ -859,13 +881,7 @@ impl Binder {
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
                 let default_storage_format =
                     match config.query.common.default_storage_format.as_str() {
-                        "" | "auto" => {
-                            if is_blocking_fs {
-                                "native"
-                            } else {
-                                "parquet"
-                            }
-                        }
+                        "" | "auto" | "native" => "parquet",
                         _ => config.query.common.default_storage_format.as_str(),
                     };
                 options.insert(
@@ -996,7 +1012,7 @@ impl Binder {
         .await?;
 
         // create a temporary op to check if params is correct
-        let op = init_operator(&sp)?;
+        let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
         check_operator(&op, &sp).await?;
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
