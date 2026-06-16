@@ -340,16 +340,20 @@ impl TableContextStage for QueryContext {
     }
 }
 
-#[async_trait::async_trait]
-impl TableContextTableManagement for QueryContext {
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
-    fn get_table_meta_timestamps(
+impl QueryContext {
+    pub(crate) fn get_table_meta_timestamps_without_txn_record(
         &self,
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.get_table_meta_timestamps_impl(table, previous_snapshot, false)
+    }
+
+    fn get_table_meta_timestamps_impl(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        record_txn_begin_timestamp: bool,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
 
@@ -401,7 +405,7 @@ impl TableContextTableManagement for QueryContext {
             Some(validation_context),
         );
 
-        {
+        if record_txn_begin_timestamp {
             let txn_mgr_ref = self.txn_mgr();
             let mut txn_mgr = txn_mgr_ref.lock();
 
@@ -430,6 +434,21 @@ impl TableContextTableManagement for QueryContext {
         }
 
         Ok(table_meta_timestamps)
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for QueryContext {
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.get_table_meta_timestamps_impl(table, previous_snapshot, true)
     }
 
     #[async_backtrace::framed]

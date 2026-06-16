@@ -104,7 +104,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let physical_plan = self.build_physical_plan().await?;
+        let physical_plan = self.build_physical_plan(false).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         // Execute hook.
@@ -143,16 +143,16 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(&self, dry_run: bool) -> Result<PhysicalPlan> {
         let (mut root, _) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches
-            .build_serializable_target_tables(self.ctx.clone())
+            .build_serializable_target_tables(self.ctx.clone(), dry_run)
             .await?;
         let deduplicated_serializable_tables = branches
-            .build_deduplicated_serializable_target_tables(self.ctx.clone())
+            .build_deduplicated_serializable_target_tables(self.ctx.clone(), dry_run)
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
         let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
@@ -547,6 +547,7 @@ impl InsertIntoBranches {
     async fn build_serializable_target_tables(
         &self,
         ctx: Arc<QueryContext>,
+        dry_run: bool,
     ) -> Result<Vec<SerializableTable>> {
         let mut serializable_tables = vec![];
         for table in &self.tables {
@@ -554,7 +555,11 @@ impl InsertIntoBranches {
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let snapshot = fuse_table.read_table_snapshot().await?;
-            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?;
+            let table_meta_timestamps = if dry_run {
+                ctx.get_table_meta_timestamps_without_txn_record(table.as_ref(), snapshot)?
+            } else {
+                ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?
+            };
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
@@ -567,6 +572,7 @@ impl InsertIntoBranches {
     async fn build_deduplicated_serializable_target_tables(
         &self,
         ctx: Arc<QueryContext>,
+        dry_run: bool,
     ) -> Result<Vec<SerializableTable>> {
         let mut serializable_tables = vec![];
         let mut last_table_id = None;
@@ -580,7 +586,11 @@ impl InsertIntoBranches {
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let snapshot = fuse_table.read_table_snapshot().await?;
-            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?;
+            let table_meta_timestamps = if dry_run {
+                ctx.get_table_meta_timestamps_without_txn_record(table.as_ref(), snapshot)?
+            } else {
+                ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?
+            };
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),

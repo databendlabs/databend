@@ -144,7 +144,7 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *plan.clone(),
                     )?
-                    .build_physical_plan()
+                    .build_physical_plan(true)
                     .await?;
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
@@ -285,7 +285,7 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *plan.clone(),
                     )?
-                    .build_physical_plan()
+                    .build_physical_plan(true)
                     .await?;
                     self.explain_physical_fragments(physical_plan, plan.meta_data.clone())
                         .await?
