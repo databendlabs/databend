@@ -751,6 +751,27 @@ impl Settings {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
+    pub fn get_analyze_histogram_algorithm(&self) -> Result<String> {
+        Ok(self
+            .try_get_string("analyze_histogram_algorithm")?
+            .to_lowercase())
+    }
+
+    pub fn get_analyze_histogram_kll_relative_error(&self) -> Result<f64> {
+        let value = self.try_get_string("analyze_histogram_kll_relative_error")?;
+        let relative_error = value.parse::<f64>().map_err(|_| {
+            ErrorCode::WrongValueForVariable(format!(
+                "Invalid analyze_histogram_kll_relative_error value: {value}"
+            ))
+        })?;
+        if relative_error <= 0.0 || !relative_error.is_finite() {
+            return Err(ErrorCode::WrongValueForVariable(format!(
+                "analyze_histogram_kll_relative_error must be finite and greater than zero, got {relative_error}"
+            )));
+        }
+        Ok(relative_error)
+    }
+
     pub fn get_enable_auto_analyze(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_analyze")? != 0)
     }
