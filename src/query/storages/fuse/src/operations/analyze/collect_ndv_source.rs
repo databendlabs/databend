@@ -157,8 +157,11 @@ impl AnalyzeCollectNDVSource {
         histogram_info: AnalyzeCollectHistogramInfo,
     ) -> Result<ProcessorPtr> {
         let table_schema = table.schema();
-        let (projection, ndv_columns_map, kll_columns_map) =
-            build_analyze_column_projection(table, table_schema.clone(), histogram_info)?;
+        let AnalyzeColumnProjection {
+            projection,
+            ndv_columns_map,
+            kll_columns_map,
+        } = build_analyze_column_projection(table, table_schema.clone(), histogram_info)?;
         let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
         let dal = table.get_operator();
         let settings = ReadSettings::from_ctx(&ctx)?;
@@ -188,15 +191,17 @@ impl AnalyzeCollectNDVSource {
     }
 }
 
+struct AnalyzeColumnProjection {
+    projection: Projection,
+    ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+    kll_columns_map: BTreeMap<FieldIndex, TableField>,
+}
+
 fn build_analyze_column_projection(
     table: &FuseTable,
     table_schema: TableSchemaRef,
     histogram_info: AnalyzeCollectHistogramInfo,
-) -> Result<(
-    Projection,
-    BTreeMap<FieldIndex, TableField>,
-    BTreeMap<FieldIndex, TableField>,
-)> {
+) -> Result<AnalyzeColumnProjection> {
     let ndv_columns_map = table
         .approx_distinct_cols
         .distinct_column_fields(table_schema.clone(), RangeIndex::supported_table_type)?;
@@ -234,11 +239,11 @@ fn build_analyze_column_projection(
         }
     }
 
-    Ok((
-        Projection::Columns(field_indices),
+    Ok(AnalyzeColumnProjection {
+        projection: Projection::Columns(field_indices),
         ndv_columns_map,
         kll_columns_map,
-    ))
+    })
 }
 
 #[async_trait::async_trait]
