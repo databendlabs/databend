@@ -499,15 +499,10 @@ impl ReclusterMutator {
                 && target_segment_count < selected_segment_count
             {
                 // Repack-only candidate removes segments without rewrite tasks.
-                // Score it as a dense block group so sorting keeps it ahead of
-                // normal rewrite candidates from the same scan range.
                 selected_window_positions.fill(true);
                 candidate_window.tasks.push(ReclusterTaskCandidate {
                     score: CandidateScore {
-                        // Repack-only candidates do not rewrite blocks, but use
-                        // one task worth of bytes so early-accept can keep the
-                        // previous dense-group priority semantics.
-                        selected_total_bytes: self.memory_threshold,
+                        selected_total_bytes: 0,
                         max_depth: total_block_count,
                         average_depth: total_block_count as f64,
                     },
