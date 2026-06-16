@@ -422,4 +422,63 @@ mod tests {
         assert_eq!(got.num_rows(), n as usize);
         assert_blocks_eq(&block, &got);
     }
+
+    // The low-level writer must embed `ARROW:schema` (like `ArrowWriter`), so a reader that
+    // reconstructs types purely from the file's own schema recovers Databend extension-backed
+    // types (Variant, Bitmap, Geometry) instead of seeing plain LargeBinary.
+    #[test]
+    fn test_bulk_embeds_arrow_schema_for_extension_types() {
+        use databend_common_expression::FromData;
+        use databend_common_expression::TableDataType;
+        use databend_common_expression::TableField;
+        use databend_common_expression::TableSchema;
+        use databend_common_expression::types::BitmapType;
+        use databend_common_expression::types::GeometryType;
+        use databend_common_expression::types::VariantType;
+        use parquet::arrow::ARROW_SCHEMA_META_KEY;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        let schema = TableSchema::new(vec![
+            TableField::new("v", TableDataType::Variant),
+            TableField::new("bm", TableDataType::Bitmap),
+            TableField::new("geo", TableDataType::Geometry),
+            TableField::new(
+                "v_null",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+        ]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        let block = DataBlock::new_from_columns(vec![
+            VariantType::from_data(vec![b"\x20\x00".to_vec(), b"\x40\x01".to_vec()]),
+            BitmapType::from_data(vec![b"\x01\x02".to_vec(), b"\x03".to_vec()]),
+            GeometryType::from_data(vec![b"\x00\x00".to_vec(), b"\xff".to_vec()]),
+            VariantType::from_opt_data(vec![Some(b"\x10".to_vec()), None]),
+        ]);
+
+        let (bytes, _) = bulk_write_blocks(arrow_schema, props(&schema), &[block]);
+
+        // The footer must carry `ARROW:schema`, and a reader rebuilding its schema purely from
+        // the file must recover the exact extension types.
+        let builder =
+            ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::from(bytes.clone())).unwrap();
+        assert!(
+            builder
+                .metadata()
+                .file_metadata()
+                .key_value_metadata()
+                .unwrap()
+                .iter()
+                .any(|kv| kv.key == ARROW_SCHEMA_META_KEY),
+            "BulkBlockParquetWriter must embed ARROW:schema"
+        );
+        let recovered: TableSchema = builder.schema().as_ref().try_into().unwrap();
+        assert_eq!(recovered.fields()[0].data_type(), &TableDataType::Variant);
+        assert_eq!(recovered.fields()[1].data_type(), &TableDataType::Bitmap);
+        assert_eq!(recovered.fields()[2].data_type(), &TableDataType::Geometry);
+        assert_eq!(
+            recovered.fields()[3].data_type(),
+            &TableDataType::Nullable(Box::new(TableDataType::Variant))
+        );
+    }
 }

@@ -30,6 +30,7 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::add_encoded_arrow_schema_to_metadata;
 use parquet::arrow::arrow_writer::ArrowLeafColumn;
 use parquet::arrow::arrow_writer::ByteArrayEncoder;
 use parquet::arrow::arrow_writer::write_byte_array_column;
@@ -201,10 +202,18 @@ impl BulkBlockParquetWriter {
             .with_coerce_types(props.coerce_types())
             .convert(&arrow_schema)?;
         let root = parquet_schema.root_schema_ptr();
+
+        // Embed the IPC-encoded Arrow schema under `ARROW:schema`, mirroring `ArrowWriter::try_new`.
+        // `SerializedFileWriter` does not inject it, so without this Databend extension-backed
+        // types (Variant, Bitmap, Geometry, ...) — stored as plain `LargeBinary`/`Decimal128` —
+        // would be unrecoverable for any reader that reconstructs types from the file's own schema.
+        let mut props = (*props).clone();
+        add_encoded_arrow_schema_to_metadata(&arrow_schema, &mut props);
+
         let mut file_writer = Box::new(SerializedFileWriter::new(
             ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE),
             root,
-            props,
+            Arc::new(props),
         )?);
         let leaf_kinds = classify_schema(&arrow_schema);
         debug_assert_eq!(leaf_kinds.len(), parquet_schema.num_columns());
