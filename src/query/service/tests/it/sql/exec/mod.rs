@@ -265,5 +265,6 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
 
 mod correlated_subquery_regression;
 mod get_table_bind_test;
+mod multi_table_insert;
 mod range_join;
 mod window;
