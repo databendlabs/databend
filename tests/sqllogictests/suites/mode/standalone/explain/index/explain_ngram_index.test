@@ -131,8 +131,8 @@ INSERT INTO t3 VALUES
 query III
 select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_ngram_index_db', 't3');
 ----
-209 894 NULL
-240 894 NULL
+209 833 NULL
+240 833 NULL
 
 statement ok
 CREATE NGRAM INDEX idx1 ON t3(content1, content2) gram_size = 5 bloom_size = 1048576
@@ -143,8 +143,8 @@ REFRESH NGRAM INDEX idx1 ON t3
 query III
 select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_ngram_index_db', 't3');
 ----
-209 2098570 2097234
-240 2098570 2097234
+209 2098447 2097234
+240 2098447 2097234
 
 query ITT
 SELECT * FROM t3 WHERE content1 like '%speak%'
