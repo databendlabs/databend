@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_sql_test_support::StatisticsTraceInput;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -25,6 +29,8 @@ use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
 use crate::framework::LiteTableContext;
+use crate::framework::golden::open_golden_file;
+use crate::framework::golden::write_case_title;
 
 struct LiteRunner(Arc<LiteTableContext>);
 
@@ -165,6 +171,99 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
+    Ok(())
+}
+
+struct StatisticsTraceGoldenCase {
+    name: &'static str,
+    description: &'static str,
+    trace_file: &'static str,
+    sql: &'static str,
+}
+
+async fn write_statistics_trace_case(
+    file: &mut impl Write,
+    case: &StatisticsTraceGoldenCase,
+) -> Result<()> {
+    let trace_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(case.trace_file);
+    let trace_input = std::fs::read_to_string(&trace_path).map_err(|err| {
+        ErrorCode::Internal(format!(
+            "failed to read statistics trace fixture {}: {err}",
+            trace_path.display()
+        ))
+    })?;
+    let trace = StatisticsTraceInput::from_json_str(&trace_input)?;
+    let ctx = LiteTableContext::create().await?;
+    ctx.configure_for_optimizer_case(true)?;
+    ctx.register_statistics_trace(&trace)?;
+
+    let raw_plan = ctx.bind_sql(case.sql).await?;
+    let optimized_plan = ctx.optimize_plan(raw_plan).await?;
+    let optimized = optimized_plan.format_indent(databend_common_sql::FormatOptions::default())?;
+
+    write_case_title(file, case.name, case.description)?;
+    writeln!(file, "trace: {}", case.trace_file)?;
+    writeln!(file, "sql:")?;
+    writeln!(file, "{}", case.sql.trim())?;
+    writeln!(file, "optimized_plan:")?;
+    writeln!(file, "{optimized}")?;
+    writeln!(file)?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lite_replay_statistics_trace_golden() -> Result<()> {
+    let mut file = open_golden_file("planner", "statistics_trace.txt")?;
+    let cases = [
+        StatisticsTraceGoldenCase {
+            name: "tpch_returned_orders",
+            description: "Rebuild a mock catalog from StatisticsTrace JSON for a CTE, aggregation, filtered three-way join, sort, and limit.",
+            trace_file: "tests/it/planner/statistics_trace/tpch_returned_orders.json",
+            sql: r#"
+WITH filtered_orders AS (
+    SELECT o_orderkey, o_custkey
+    FROM orders
+    WHERE o_orderdate >= CAST('1993-10-01' AS date)
+      AND o_orderdate < CAST('1994-01-01' AS date)
+),
+returned AS (
+    SELECT l_orderkey, SUM(l_quantity) AS return_qty
+    FROM lineitem
+    WHERE l_returnflag = 'R'
+    GROUP BY l_orderkey
+)
+SELECT c.c_nationkey, COUNT(*) AS order_count, SUM(r.return_qty) AS total_qty
+FROM customer AS c
+     INNER JOIN filtered_orders AS o ON c.c_custkey = o.o_custkey
+     INNER JOIN returned AS r ON r.l_orderkey = o.o_orderkey
+WHERE c.c_name LIKE 'Customer%'
+GROUP BY c.c_nationkey
+HAVING COUNT(*) > 0
+ORDER BY c.c_nationkey
+LIMIT 5
+"#,
+        },
+        StatisticsTraceGoldenCase {
+            name: "customer_self_join",
+            description: "Use two trace table indexes that map to the same table name to replay a self join without table DDL.",
+            trace_file: "tests/it/planner/statistics_trace/customer_self_join.json",
+            sql: r#"
+SELECT c1.c_nationkey, COUNT(*) AS pair_count
+FROM customer AS c1
+     INNER JOIN customer AS c2
+         ON c1.c_nationkey = c2.c_nationkey
+        AND c1.c_custkey < c2.c_custkey
+WHERE c2.c_name LIKE 'Customer%'
+GROUP BY c1.c_nationkey
+HAVING COUNT(*) > 1
+"#,
+        },
+    ];
+
+    for case in &cases {
+        write_statistics_trace_case(&mut file, case).await?;
+    }
+
     Ok(())
 }
 

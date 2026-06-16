@@ -95,6 +95,7 @@ use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
+use databend_common_sql_test_support::StatisticsTraceInput;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -945,6 +946,24 @@ impl LiteTableContext {
             options,
         )?;
         self.default_catalog.insert_table(database, table);
+        Ok(())
+    }
+
+    pub fn register_statistics_trace(self: &Arc<Self>, trace: &StatisticsTraceInput) -> Result<()> {
+        for table in trace.table_specs()? {
+            if table.catalog != self.current_catalog {
+                return unsupported("lite sql harness statistics trace from non-default catalog");
+            }
+            self.register_table_with_stats(
+                &table.database,
+                &table.table,
+                table.fields,
+                table.table_stats,
+                table.column_stats,
+                table.histograms,
+                BTreeMap::new(),
+            )?;
+        }
         Ok(())
     }
 

@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::NumberScalar;
 use databend_common_statistics::Histogram;
@@ -217,9 +218,14 @@ struct ScanStatisticsMapping {
 }
 
 #[derive(Default)]
-struct ColumnStatisticsMap(
-    BTreeMap<(usize, String), (Option<BasicColumnStatistics>, Option<LegacyHistogram>)>,
-);
+struct ColumnStatisticsMap(BTreeMap<(usize, String), ColumnStatisticsEntry>);
+
+struct ColumnStatisticsEntry {
+    column_position: Option<usize>,
+    data_type: TableDataType,
+    statistics: Option<BasicColumnStatistics>,
+    histogram: Option<LegacyHistogram>,
+}
 
 impl serde::Serialize for ColumnStatisticsMap {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -227,20 +233,24 @@ impl serde::Serialize for ColumnStatisticsMap {
         use serde::ser::SerializeSeq;
 
         #[derive(serde::Serialize)]
-        struct HistogramStatisticsMapEntry<'a> {
+        struct ColumnStatisticsMapEntry<'a> {
             table_index: usize,
             column_name: &'a str,
+            column_position: Option<usize>,
+            data_type: &'a TableDataType,
             statistics: &'a Option<BasicColumnStatistics>,
             histogram: &'a Option<LegacyHistogram>,
         }
 
         let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
-        for ((table_index, column_name), (statistics, histogram)) in &self.0 {
-            seq.serialize_element(&HistogramStatisticsMapEntry {
+        for ((table_index, column_name), entry) in &self.0 {
+            seq.serialize_element(&ColumnStatisticsMapEntry {
                 table_index: *table_index,
                 column_name,
-                statistics,
-                histogram,
+                column_position: entry.column_position,
+                data_type: &entry.data_type,
+                statistics: &entry.statistics,
+                histogram: &entry.histogram,
             })?;
         }
         seq.end()
@@ -271,6 +281,8 @@ impl StatisticsTrace {
             let ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 column_name,
+                column_position,
+                data_type,
                 virtual_expr: None,
                 ..
             }) = column
@@ -280,19 +292,21 @@ impl StatisticsTrace {
 
             let column_stat = column_stats.get(column_index).and_then(Option::as_ref);
             let histogram = histograms.get(column_index).and_then(Option::as_ref);
-            if column_stat.is_none() && histogram.is_none() {
-                continue;
-            }
-            let (existing_stat, existing_histogram) = self
+            let entry = self
                 .column_stats
                 .0
                 .entry((scan.table_index, column_name.clone()))
-                .or_default();
-            if existing_stat.is_none() {
-                *existing_stat = column_stat.cloned();
+                .or_insert_with(|| ColumnStatisticsEntry {
+                    column_position: *column_position,
+                    data_type: data_type.clone(),
+                    statistics: None,
+                    histogram: None,
+                });
+            if entry.statistics.is_none() {
+                entry.statistics = column_stat.cloned();
             }
-            if existing_histogram.is_none() {
-                *existing_histogram = histogram.map(LegacyHistogram::from);
+            if entry.histogram.is_none() {
+                entry.histogram = histogram.map(LegacyHistogram::from);
             }
         }
 

@@ -47,6 +47,10 @@ use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod statistics_trace;
+
+pub use statistics_trace::*;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct TestSpec {
     name: String,
@@ -555,7 +559,7 @@ impl StatsApplier<'_> {
     }
 }
 
-fn histogram_from_stats(stats: &HistogramStats) -> Result<Histogram> {
+pub(crate) fn histogram_from_stats(stats: &HistogramStats) -> Result<Histogram> {
     let buckets = stats
         .buckets
         .iter()
