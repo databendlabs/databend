@@ -53,7 +53,6 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use indexmap::IndexSet;
 use log::debug;
-use log::warn;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -198,8 +197,6 @@ struct DepthSelection {
     selected_idx: IndexSet<usize>,
     average_depth: f64,
     max_depth: usize,
-    max_point_overlap_count: usize,
-    passed_depth_gate: bool,
 }
 
 struct HotspotSelection<'a> {
@@ -207,40 +204,35 @@ struct HotspotSelection<'a> {
     order: &'a [u32],
     open_pos: &'a [usize],
     close_pos: &'a [usize],
-    has_interval_depth: &'a [bool],
     interval_depths: &'a [usize],
     overlap_counts: &'a [usize],
     unset_pos: usize,
 }
 
 impl HotspotSelection<'_> {
-    fn select(
-        &self,
-        unfinished_sorted: &[usize],
-        depth_threshold: f64,
-        max_point: usize,
-        max_len: usize,
-    ) -> IndexSet<usize> {
+    fn alive_at(&self, idx: usize, point: usize) -> bool {
+        let open = self.open_pos[idx];
+        if open == self.unset_pos {
+            return false;
+        }
+        open <= point && point <= self.close_pos[idx]
+    }
+
+    fn select(&self, depth_threshold: f64, max_point: usize, max_len: usize) -> IndexSet<usize> {
         let block_count = self.open_pos.len();
         let num_points = self.order.len();
-
         // `heavy_count[i]` counts open intervals at point `i` whose final depth
-        // is not exactly 1 (unfinished intervals count as heavy). It lets the
-        // expansion replace the old per-point `.all(depth == 1)` scan with an
-        // O(1) check. Built with a signed difference array.
+        // is not exactly 1. It lets the expansion replace the old per-point
+        // `.all(depth == 1)` scan with an O(1) check. Built with a signed
+        // difference array.
         let mut heavy_count = vec![0isize; num_points + 1];
         for idx in 0..block_count {
             if self.open_pos[idx] == self.unset_pos {
                 continue;
             }
-            let heavy = !self.has_interval_depth[idx] || self.interval_depths[idx] != 1;
-            if heavy {
+            if self.interval_depths[idx] != 1 {
                 let open = self.open_pos[idx];
-                let close = if self.close_pos[idx] == self.unset_pos {
-                    num_points - 1
-                } else {
-                    self.close_pos[idx]
-                };
+                let close = self.close_pos[idx];
                 heavy_count[open] += 1;
                 heavy_count[close + 1] -= 1;
             }
@@ -264,16 +256,8 @@ impl HotspotSelection<'_> {
                 *count += 1;
             }
         };
-        for &idx in unfinished_sorted {
-            mark(idx, &mut selected_bits, &mut selected_count);
-        }
         for idx in 0..block_count {
-            let open = self.open_pos[idx];
-            if open == self.unset_pos {
-                continue;
-            }
-            let close = self.close_pos[idx];
-            if open <= max_point && (close == self.unset_pos || max_point <= close) {
+            if self.alive_at(idx, max_point) {
                 mark(idx, &mut selected_bits, &mut selected_count);
             }
         }
@@ -334,9 +318,8 @@ impl HotspotSelection<'_> {
         // Replay: rebuild selected_idx in the original snapshot order.
         // Order semantics:
         //   1. Left snapshots: emit_snapshot(selected_left), then starts up to max_point-1
-        //   2. Unfinished intervals
-        //   3. max_point snapshot
-        //   4. Right expansion: starts from max_point+1 to selected_right
+        //   2. max_point snapshot
+        //   3. Right expansion: starts from max_point+1 to selected_right
         let mut emitted = vec![false; block_count];
         let mut selected_idx = IndexSet::with_capacity(selected_count.min(max_len));
 
@@ -349,11 +332,7 @@ impl HotspotSelection<'_> {
         let emit_snapshot =
             |point: usize, bits: &[bool], emitted: &mut [bool], out: &mut IndexSet<usize>| {
                 for idx in 0..block_count {
-                    if self.open_pos[idx] == self.unset_pos {
-                        continue;
-                    }
-                    let close = self.close_pos[idx];
-                    if self.open_pos[idx] <= point && (close == self.unset_pos || point <= close) {
+                    if self.alive_at(idx, point) {
                         emit(idx, bits, emitted, out);
                     }
                 }
@@ -372,10 +351,6 @@ impl HotspotSelection<'_> {
                     emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
                 }
             }
-        }
-
-        for &idx in unfinished_sorted {
-            emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
         }
 
         emit_snapshot(max_point, &selected_bits, &mut emitted, &mut selected_idx);
@@ -462,6 +437,19 @@ impl ReclusterBlock {
                 .expect("Original implies matched cluster_stats"),
             ReclusterBlockStats::Normalized(stats) => stats,
         }
+    }
+
+    fn into_indexed_meta(self) -> (BlockIndex, Arc<BlockMeta>) {
+        let ReclusterBlock { index, meta, stats } = self;
+        let block_meta = match stats {
+            ReclusterBlockStats::Original => meta,
+            ReclusterBlockStats::Normalized(stats) => {
+                let mut block_meta = Arc::unwrap_or_clone(meta);
+                block_meta.cluster_stats = Some(stats);
+                Arc::new(block_meta)
+            }
+        };
+        (index, block_meta)
     }
 }
 
@@ -701,15 +689,7 @@ impl ReclusterMutator {
                 continue;
             }
             for block in blocks_by_segment[window_pos].drain(..) {
-                let ReclusterBlock { index, meta, stats } = block;
-                let block_meta = match stats {
-                    ReclusterBlockStats::Original => meta,
-                    ReclusterBlockStats::Normalized(stats) => {
-                        let mut block_meta = Arc::unwrap_or_clone(meta);
-                        block_meta.cluster_stats = Some(stats);
-                        Arc::new(block_meta)
-                    }
-                };
+                let (index, block_meta) = block.into_indexed_meta();
                 selected_segment_blocks[window_pos].push((index.block_idx, block_meta));
             }
         }
@@ -977,8 +957,6 @@ impl ReclusterMutator {
             selected_idx: selected_local_idx,
             average_depth,
             max_depth,
-            max_point_overlap_count,
-            passed_depth_gate,
         } = Self::fetch_max_depth(
             points_map,
             &self.cluster_key_types,
@@ -1007,14 +985,13 @@ impl ReclusterMutator {
         }
         selected_idx.truncate(keep_blocks);
         let selected_block_count = selected_idx.len();
-        if selected_block_count < 2 || !passed_depth_gate {
+        if selected_block_count < 2 {
             debug!(
-                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} max_point_overlap_count={} selected_count={} elapsed={:?} skip_reason=below_hotspot_depth_gate",
+                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count={} elapsed={:?} skip_reason=below_hotspot_depth_gate",
                 group,
                 block_count,
                 average_depth,
                 max_depth,
-                max_point_overlap_count,
                 selected_block_count,
                 probe_group_start.elapsed(),
             );
@@ -1097,13 +1074,12 @@ impl ReclusterMutator {
         }
 
         debug!(
-            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} max_point_overlap_count={} selected_count={} task_count={} elapsed={:?}",
+            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} selected_count={} task_count={} elapsed={:?}",
             group,
             block_count,
             average_depth,
             self.depth_threshold,
             max_depth,
-            max_point_overlap_count,
             selected_block_count,
             candidates.len(),
             probe_group_start.elapsed(),
@@ -1494,14 +1470,11 @@ impl ReclusterMutator {
                 }
             }
         }
-        // `live` now marks intervals whose end point never closed them.
-        let mut unfinished_sorted = Vec::new();
 
         // PASS 2: interval depth is the max folded point depth over the interval's
         // lifetime [open_pos, close_pos], answered by a range-max segment tree
         // instead of re-maxing every open interval at every point.
         let mut interval_depths = vec![0usize; block_count];
-        let mut has_interval_depth = vec![false; block_count];
         let mut sum_depth = 0usize;
         let mut closed = 0usize;
         let seg = RangeMaxTree::build(&point_depths);
@@ -1509,15 +1482,19 @@ impl ReclusterMutator {
             if open_pos[idx] == unset_pos {
                 continue;
             }
-            if live[idx] {
-                unfinished_sorted.push(idx);
-                continue;
-            }
             let open = open_pos[idx];
             let close = close_pos[idx];
+            // Malformed stats can leave an interval unclosed or reversed; skip
+            // this group instead of feeding an invalid range into the selector.
+            if close == unset_pos || close < open {
+                return Ok(DepthSelection {
+                    selected_idx: IndexSet::new(),
+                    average_depth: f64::NAN,
+                    max_depth,
+                });
+            }
             let depth = seg.range_max(open, close);
             interval_depths[idx] = depth;
-            has_interval_depth[idx] = true;
             sum_depth += depth;
             closed += 1;
         }
@@ -1526,33 +1503,12 @@ impl ReclusterMutator {
         } else {
             (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0
         };
-        let max_point_overlap_count = overlap_counts.get(max_point).copied().unwrap_or(0);
 
-        if !unfinished_sorted.is_empty() {
-            warn!(
-                "recluster: unfinished intervals remain after calculating block overlaps count={} max_selected={}",
-                unfinished_sorted.len(),
-                max_len,
-            );
-            // Keep unfinished intervals selected first; they indicate malformed
-            // or stale range boundaries but are still valid recluster candidates.
-            // Emit them in ascending index order to match sweep snapshot order.
-            unfinished_sorted.sort_unstable();
-        }
-
-        let passed_depth_gate = Self::passes_depth_gate(depth_threshold, average_depth, max_depth);
-        if !passed_depth_gate {
-            let mut selected_idx = IndexSet::with_capacity(max_len);
-            for &idx in &unfinished_sorted {
-                selected_idx.insert(idx);
-            }
-            selected_idx.truncate(max_len);
+        if !Self::passes_depth_gate(depth_threshold, average_depth, max_depth) {
             return Ok(DepthSelection {
-                selected_idx,
+                selected_idx: IndexSet::new(),
                 average_depth,
                 max_depth,
-                max_point_overlap_count,
-                passed_depth_gate,
             });
         }
 
@@ -1561,18 +1517,15 @@ impl ReclusterMutator {
             order: &order,
             open_pos: &open_pos,
             close_pos: &close_pos,
-            has_interval_depth: &has_interval_depth,
             interval_depths: &interval_depths,
             overlap_counts: &overlap_counts,
             unset_pos,
         };
-        let selected_idx = selector.select(&unfinished_sorted, depth_threshold, max_point, max_len);
+        let selected_idx = selector.select(depth_threshold, max_point, max_len);
         Ok(DepthSelection {
             selected_idx,
             average_depth,
             max_depth,
-            max_point_overlap_count,
-            passed_depth_gate,
         })
     }
 
