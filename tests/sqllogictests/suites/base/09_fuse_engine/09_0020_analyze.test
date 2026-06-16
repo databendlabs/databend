@@ -186,10 +186,31 @@ where column_name = 'a' and distinct_count = 1000 and histogram != '';
 1
 
 statement ok
+create or replace table t_kll_timestamp_tz as
+select to_timestamp_tz(concat('2024-01-01 00:00:0', to_string(number), ' +00:00')) as ts
+from numbers(10);
+
+statement ok
+analyze table t_kll_timestamp_tz with histogram algorithm = 'kll', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_timestamp_tz')
+where column_name = 'ts'
+    and distinct_count = 10
+    and histogram != ''
+    and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+statement ok
 drop table t_kll_dups;
 
 statement ok
 drop table t_kll_compact;
+
+statement ok
+drop table t_kll_timestamp_tz;
 
 statement ok
 set enable_analyze_histogram=0;

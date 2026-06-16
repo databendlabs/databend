@@ -48,6 +48,7 @@ macro_rules! scalar_to_datum {
                 Some(Datum::Int(v as i64))
             }
             $scalar::Number(NumberScalar::Int64(v)) | $scalar::Timestamp(v) => Some(Datum::Int(v)),
+            $scalar::TimestampTz(v) => Some(Datum::Int(v.timestamp())),
             $scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
             $scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
             $scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
@@ -358,4 +359,25 @@ fn datum_to_decimal<T: Decimal>(value: &Datum, size: DecimalSize) -> Result<T, S
 
 fn type_mismatch(expected: &str, actual: &Datum) -> String {
     format!("Cannot convert {actual:?} to {}", expected)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::types::timestamp_tz;
+
+    use super::*;
+
+    #[test]
+    fn timestamp_tz_to_datum_uses_timestamp_micros() {
+        let value = timestamp_tz::new(1_234_567, 8 * 3600);
+
+        assert_eq!(
+            Scalar::TimestampTz(value).to_datum(),
+            Some(Datum::Int(1_234_567))
+        );
+        assert_eq!(
+            ScalarRef::TimestampTz(value).to_datum(),
+            Some(Datum::Int(1_234_567))
+        );
+    }
 }

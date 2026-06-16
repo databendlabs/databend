@@ -84,6 +84,7 @@ impl KllSketchBuilder {
 
     pub fn build(self) -> Result<KllSketch> {
         let Self {
+            level_capacity,
             len,
             levels,
             min_value,
@@ -104,6 +105,7 @@ impl KllSketchBuilder {
         items.sort_by(compare_items);
 
         Ok(KllSketch {
+            level_capacity,
             len,
             items,
             min_value,
@@ -187,6 +189,31 @@ impl KllSketchBuilder {
         Ok(())
     }
 
+    fn insert_weighted(&mut self, item: KllWeightedItem) -> Result<()> {
+        if item.weight == 0 || !item.weight.is_power_of_two() {
+            return Err(ErrorCode::BadArguments(format!(
+                "KLL weighted item weight must be a power of two, got {}",
+                item.weight
+            )));
+        }
+
+        self.update_bounds(&item.value)?;
+        let level_idx = item.weight.trailing_zeros() as usize;
+        if self.levels.len() <= level_idx {
+            self.levels
+                .resize_with(level_idx + 1, || Vec::with_capacity(self.level_capacity));
+        }
+        self.len = self
+            .len
+            .checked_add(item.weight)
+            .ok_or_else(|| ErrorCode::BadArguments("KLL sketch length overflow during merge"))?;
+        self.levels[level_idx].push(KllSketchItem {
+            value: item.value,
+            ordinal: item.ordinal,
+        });
+        self.compact_if_needed(level_idx)
+    }
+
     fn capacity_for_relative_error(relative_error: f64) -> Result<usize> {
         let capacity = (2.0 / relative_error).ceil();
         if !capacity.is_finite() || capacity > usize::MAX as f64 {
@@ -201,6 +228,7 @@ impl KllSketchBuilder {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KllSketch {
+    level_capacity: usize,
     len: usize,
     items: Vec<KllWeightedItem>,
     min_value: Option<Datum>,
@@ -216,6 +244,11 @@ impl KllSketch {
         self.len == 0
     }
 
+    #[cfg(test)]
+    fn retained_len(&self) -> usize {
+        self.items.len()
+    }
+
     pub fn merge(&mut self, other: KllSketch) -> Result<()> {
         if other.is_empty() {
             return Ok(());
@@ -224,28 +257,27 @@ impl KllSketch {
             *self = other;
             return Ok(());
         }
-        if let (Some(self_min), Some(other_min)) = (&self.min_value, &other.min_value) {
-            compare_values(self_min, other_min)?;
+        if self.level_capacity != other.level_capacity {
+            return Err(ErrorCode::BadArguments(format!(
+                "Cannot merge KLL sketches with different level capacities: {} and {}",
+                self.level_capacity, other.level_capacity
+            )));
         }
 
-        if let Some(other_min) = other.min_value {
-            if self.min_value.as_ref().is_some_and(|min_value| {
-                compare_values(&other_min, min_value).is_ok_and(Ordering::is_lt)
-            }) {
-                self.min_value = Some(other_min);
-            }
-        }
-        if let Some(other_max) = other.max_value {
-            if self.max_value.as_ref().is_some_and(|max_value| {
-                compare_values(&other_max, max_value).is_ok_and(Ordering::is_gt)
-            }) {
-                self.max_value = Some(other_max);
-            }
-        }
+        let min_value = merge_bound(&self.min_value, &other.min_value, Ordering::Less)?;
+        let max_value = merge_bound(&self.max_value, &other.max_value, Ordering::Greater)?;
 
-        self.len += other.len;
-        self.items.extend(other.items);
-        self.items.sort_by(compare_items);
+        let mut builder = KllSketchBuilder::new(self.level_capacity)?;
+        for item in std::mem::take(&mut self.items)
+            .into_iter()
+            .chain(other.items)
+        {
+            builder.insert_weighted(item)?;
+        }
+        let mut rebuilt = builder.build()?;
+        rebuilt.min_value = min_value;
+        rebuilt.max_value = max_value;
+        *self = rebuilt;
         Ok(())
     }
 
@@ -295,6 +327,7 @@ impl KllSketch {
     pub fn values_at_ranks<I>(self, ranks: I) -> impl Iterator<Item = Option<Datum>>
     where I: IntoIterator<Item = usize> {
         let Self {
+            level_capacity: _,
             len,
             items,
             min_value,
@@ -448,6 +481,26 @@ fn compare_values(left: &Datum, right: &Datum) -> Result<Ordering> {
     left.compare(right)
 }
 
+fn merge_bound(
+    left: &Option<Datum>,
+    right: &Option<Datum>,
+    preferred_ordering: Ordering,
+) -> Result<Option<Datum>> {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            let ordering = compare_values(left, right)?;
+            let keep_left = match preferred_ordering {
+                Ordering::Less => !ordering.is_gt(),
+                Ordering::Equal => ordering.is_eq(),
+                Ordering::Greater => !ordering.is_lt(),
+            };
+            Ok(Some(if keep_left { left } else { right }.clone()))
+        }
+        (Some(value), None) | (None, Some(value)) => Ok(Some(value.clone())),
+        (None, None) => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::KllSketchBuilder;
@@ -508,6 +561,63 @@ mod tests {
             panic!("unexpected p50: {:?}", values[1]);
         };
         assert!((4_300..=5_700).contains(&p50), "p50={p50}");
+    }
+
+    #[test]
+    fn kll_sketch_merge_rebuilds_bounded_items() {
+        let mut merged = KllSketchBuilder::new(32).unwrap().build().unwrap();
+        let mut naive_retained_len = 0;
+
+        for chunk in 0..200 {
+            let mut builder = KllSketchBuilder::new(32).unwrap();
+            for row in 0..1_000 {
+                let value = ((row * 200 + chunk) % 200_000) as i64;
+                builder.insert(Datum::Int(value)).unwrap();
+            }
+
+            let sketch = builder.build().unwrap();
+            naive_retained_len += sketch.retained_len();
+            merged.merge(sketch).unwrap();
+        }
+
+        assert_eq!(merged.len(), 200_000);
+        assert!(
+            merged.retained_len() < 32 * 32,
+            "retained_len={}",
+            merged.retained_len()
+        );
+        assert!(
+            merged.retained_len() * 8 < naive_retained_len,
+            "retained_len={}, naive_retained_len={}",
+            merged.retained_len(),
+            naive_retained_len
+        );
+
+        let values = merged
+            .values_at_ranks([0, 49_999, 99_999, 149_999, 199_999])
+            .collect::<Vec<_>>();
+        assert_eq!(values[0], Some(Datum::Int(0)));
+        assert_eq!(values[4], Some(Datum::Int(199_999)));
+
+        for (idx, (value, expected)) in values[1..4]
+            .iter()
+            .zip([50_000, 100_000, 150_000])
+            .enumerate()
+        {
+            let Some(Datum::Int(value)) = value else {
+                panic!(
+                    "unexpected rank value at index {}: {:?}",
+                    idx + 1,
+                    values[idx + 1]
+                );
+            };
+            let lower = expected - 25_000;
+            let upper = expected + 25_000;
+            assert!(
+                (lower..=upper).contains(value),
+                "expected rank around {expected}, got {value}"
+            );
+        }
     }
 
     #[test]
