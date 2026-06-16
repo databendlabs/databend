@@ -134,6 +134,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
+        let insert_rows = self.appended_statistics.row_count;
 
         let conflict_resolve_context = match self.write_segment_ctx.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
@@ -177,6 +178,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
+            insert_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),

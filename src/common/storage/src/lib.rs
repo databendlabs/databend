@@ -92,7 +92,6 @@ mod copy;
 mod merge;
 mod meta_hll;
 mod metrics_layer;
-mod multi_table_insert;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
@@ -101,4 +100,3 @@ pub use copy::FileStatus;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
 pub use meta_hll::MetaHLL12;
-pub use multi_table_insert::MultiTableInsertStatus;
