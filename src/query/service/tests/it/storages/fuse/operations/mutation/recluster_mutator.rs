@@ -40,6 +40,7 @@ use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::operations::SelectedReclusterSegment;
+use databend_common_storages_fuse::pruning::SegmentLocation;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::interpreters::CreateTableInterpreter;
@@ -51,6 +52,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
@@ -69,6 +71,23 @@ fn test_cluster_key_expr() -> Expr<usize> {
         id: 0,
         display_name: "c0".to_string(),
     })
+}
+
+async fn segment_pruning(
+    ctx: &Arc<dyn TableContext>,
+    schema: TableSchemaRef,
+    data_accessor: opendal::Operator,
+    segment_locations: Vec<SegmentLocation>,
+) -> anyhow::Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    let (pruning_ctx, segment_pruner, max_concurrency) =
+        FuseTable::create_recluster_segment_pruner(ctx, schema, data_accessor, &None)?;
+    Ok(FuseTable::segment_pruning(
+        pruning_ctx,
+        segment_pruner,
+        max_concurrency,
+        segment_locations,
+    )
+    .await?)
 }
 
 fn make_recluster_block(
@@ -291,11 +310,10 @@ async fn materialize_segment_locations_with_mode(
 ) -> anyhow::Result<(usize, u64, ReclusterParts)> {
     let schema = TableSchemaRef::new(TableSchema::empty());
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
-        &None,
         segment_locations,
     )
     .await?;
@@ -627,11 +645,10 @@ async fn test_recluster_mutator_select_segments_covers_candidates() -> anyhow::R
     let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
-        &None,
         segment_locations,
     )
     .await?;
@@ -696,11 +713,10 @@ async fn test_recluster_mutator_select_segments_covers_candidates() -> anyhow::R
     )
     .await?;
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
-        &None,
         segment_locations,
     )
     .await?;
@@ -743,11 +759,10 @@ async fn test_recluster_mutator_select_segments_covers_candidates() -> anyhow::R
     )
     .await?;
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
-        &None,
         segment_locations,
     )
     .await?;
@@ -800,11 +815,10 @@ async fn test_recluster_mutator_accumulates_tasks_across_windows() -> anyhow::Re
     let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
-        &None,
         segment_locations,
     )
     .await?;
@@ -1180,11 +1194,10 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
 
         let ctx: Arc<dyn TableContext> = ctx.clone();
         let segment_locations = create_segment_location_vector(locations.clone(), None);
-        let compact_segments = FuseTable::segment_pruning(
+        let compact_segments = segment_pruning(
             &ctx,
             schema.clone(),
             data_accessor.clone(),
-            &None,
             segment_locations,
         )
         .await?;

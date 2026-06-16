@@ -120,6 +120,8 @@ impl FuseTable {
             .collect::<HashMap<_, _>>();
         let number_segments = snapshot.segments.len();
         let mut recluster_blocks_count = 0;
+        let mut recluster_segment_pruner = None;
+        let mut decode_resources = None;
 
         let parts = loop {
             // Step 1: validate carried windows against the fresh snapshot.
@@ -180,11 +182,27 @@ impl FuseTable {
 
             if !scan_locations.is_empty() {
                 let probe_segments = scan_locations.len();
+                if recluster_segment_pruner.is_none() {
+                    recluster_segment_pruner = Some(Self::create_recluster_segment_pruner(
+                        &ctx,
+                        self.schema_with_stream(),
+                        self.get_operator(),
+                        &push_downs,
+                    )?);
+                }
+                let (pruning_ctx, segment_pruner, max_concurrency) = {
+                    let (pruning_ctx, segment_pruner, max_concurrency) =
+                        recluster_segment_pruner.as_ref().unwrap();
+                    (
+                        pruning_ctx.clone(),
+                        segment_pruner.clone(),
+                        *max_concurrency,
+                    )
+                };
                 let compact_segments = Self::segment_pruning(
-                    &ctx,
-                    self.schema_with_stream(),
-                    self.get_operator(),
-                    &push_downs,
+                    pruning_ctx,
+                    segment_pruner,
+                    max_concurrency,
                     scan_locations,
                 )
                 .await?;
@@ -221,11 +239,19 @@ impl FuseTable {
                     let mut probe_windows = 0usize;
                     let mut probe_tasks = 0usize;
                     let probe_parallelism = (max_threads / 4).clamp(1, 8);
-                    let decode_runtime = Arc::new(Runtime::with_worker_threads(
-                        max_threads,
-                        Some("recluster-block-meta-worker".to_owned()),
-                    )?);
-                    let decode_semaphore = Arc::new(Semaphore::new(max_threads * 2));
+                    if decode_resources.is_none() {
+                        decode_resources = Some((
+                            Arc::new(Runtime::with_worker_threads(
+                                max_threads,
+                                Some("recluster-block-meta-worker".to_owned()),
+                            )?),
+                            Arc::new(Semaphore::new(max_threads * 2)),
+                        ));
+                    }
+                    let (decode_runtime, decode_semaphore) = {
+                        let (decode_runtime, decode_semaphore) = decode_resources.as_ref().unwrap();
+                        (decode_runtime.clone(), decode_semaphore.clone())
+                    };
                     let mut segment_windows = segment_windows.into_iter().enumerate();
                     while early_accept_count < mutator.max_tasks {
                         let remaining_task_budget =
@@ -399,6 +425,41 @@ impl FuseTable {
         Ok(Some((parts, snapshot)))
     }
 
+    pub fn create_recluster_segment_pruner(
+        ctx: &Arc<dyn TableContext>,
+        schema: TableSchemaRef,
+        dal: Operator,
+        push_down: &Option<PushDownInfo>,
+    ) -> Result<(Arc<PruningContext>, Arc<SegmentPruner>, usize)> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_concurrency = std::cmp::max(max_threads, 10);
+        if max_concurrency > max_threads {
+            warn!(
+                "recluster: max_threads setting too low {}, increased to {}",
+                max_threads, max_concurrency
+            );
+        }
+
+        // During re-cluster, we do not rebuild missing bloom index.
+        let pruning_ctx = PruningContext::try_create(
+            ctx,
+            dal,
+            schema.clone(),
+            push_down,
+            None,
+            vec![],
+            BloomIndexColumns::None,
+            vec![],
+            HashSet::new(),
+            max_concurrency,
+            None,
+        )?;
+        let segment_pruner =
+            SegmentPruner::create(pruning_ctx.clone(), schema, Default::default())?;
+
+        Ok((pruning_ctx, segment_pruner, max_concurrency))
+    }
+
     fn take_valid_carry(
         carry: &mut ReclusterFinalCarry,
         live_segments: &HashMap<&Location, usize>,
@@ -422,40 +483,15 @@ impl FuseTable {
     }
 
     pub async fn segment_pruning(
-        ctx: &Arc<dyn TableContext>,
-        schema: TableSchemaRef,
-        dal: Operator,
-        push_down: &Option<PushDownInfo>,
+        pruning_ctx: Arc<PruningContext>,
+        segment_pruner: Arc<SegmentPruner>,
+        max_concurrency: usize,
         mut segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_concurrency = std::cmp::max(max_threads, 10);
-        if max_concurrency > max_threads {
-            warn!(
-                "recluster: max_threads setting too low {}, increased to {}",
-                max_threads, max_concurrency
-            );
+        if segment_locs.is_empty() {
+            return Ok(Vec::new());
         }
 
-        // during re-cluster, we do not rebuild missing bloom index
-        let bloom_index_builder = None;
-        // Only use push_down here.
-        let pruning_ctx = PruningContext::try_create(
-            ctx,
-            dal,
-            schema.clone(),
-            push_down,
-            None,
-            vec![],
-            BloomIndexColumns::None,
-            vec![],
-            HashSet::new(),
-            max_concurrency,
-            bloom_index_builder,
-        )?;
-
-        let segment_pruner =
-            SegmentPruner::create(pruning_ctx.clone(), schema, Default::default())?;
         let mut remain = segment_locs.len() % max_concurrency;
         let batch_size = segment_locs.len() / max_concurrency;
         let mut works = Vec::with_capacity(max_concurrency);

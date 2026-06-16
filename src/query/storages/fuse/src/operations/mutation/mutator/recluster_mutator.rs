@@ -14,7 +14,6 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -90,17 +89,25 @@ impl ReclusterGroup {
     fn output_level(self, task_indices: &[usize], blocks: &[&ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::Mixed(_) => {
-                let mut level_counts = BTreeMap::new();
+            ReclusterGroup::Mixed(band) => {
+                // Each Mixed band contains exactly two levels.
+                let lo = band * 2 + 1;
+                let hi = band * 2 + 2;
+                let mut hi_count = 0u32;
+                let mut total = 0u32;
                 for &idx in task_indices {
-                    *level_counts.entry(blocks[idx].stats().level).or_insert(0) += 1;
+                    let level = blocks[idx].stats().level;
+                    debug_assert!(
+                        level == lo || level == hi,
+                        "unexpected level {level} in Mixed band {band}"
+                    );
+                    total += 1;
+                    if level == hi {
+                        hi_count += 1;
+                    }
                 }
-
-                level_counts
-                    .into_iter()
-                    .max_by_key(|(level, count)| (*count, cmp::Reverse(*level)))
-                    .map(|(level, _)| level)
-                    .unwrap_or(0)
+                // Same count picks the smaller level (matches original semantics).
+                if hi_count > total - hi_count { hi } else { lo }
             }
         }
     }
@@ -193,6 +200,196 @@ struct DepthSelection {
     max_depth: usize,
     max_point_overlap_count: usize,
     passed_depth_gate: bool,
+}
+
+struct HotspotSelection<'a> {
+    values: &'a [(Vec<usize>, Vec<usize>)],
+    order: &'a [u32],
+    open_pos: &'a [usize],
+    close_pos: &'a [usize],
+    has_interval_depth: &'a [bool],
+    interval_depths: &'a [usize],
+    overlap_counts: &'a [usize],
+    unset_pos: usize,
+}
+
+impl HotspotSelection<'_> {
+    fn select(
+        &self,
+        unfinished_sorted: &[usize],
+        depth_threshold: f64,
+        max_point: usize,
+        max_len: usize,
+    ) -> IndexSet<usize> {
+        let block_count = self.open_pos.len();
+        let num_points = self.order.len();
+
+        // `heavy_count[i]` counts open intervals at point `i` whose final depth
+        // is not exactly 1 (unfinished intervals count as heavy). It lets the
+        // expansion replace the old per-point `.all(depth == 1)` scan with an
+        // O(1) check. Built with a signed difference array.
+        let mut heavy_count = vec![0isize; num_points + 1];
+        for idx in 0..block_count {
+            if self.open_pos[idx] == self.unset_pos {
+                continue;
+            }
+            let heavy = !self.has_interval_depth[idx] || self.interval_depths[idx] != 1;
+            if heavy {
+                let open = self.open_pos[idx];
+                let close = if self.close_pos[idx] == self.unset_pos {
+                    num_points - 1
+                } else {
+                    self.close_pos[idx]
+                };
+                heavy_count[open] += 1;
+                heavy_count[close + 1] -= 1;
+            }
+        }
+        let mut running = 0isize;
+        for (i, count) in heavy_count.iter_mut().enumerate().take(num_points) {
+            running += *count;
+            debug_assert!(running >= 0, "heavy_count underflow at point {i}");
+            *count = running;
+        }
+
+        // Expansion from `max_point` using bitset marking. Instead of
+        // rebuilding an IndexSet each step (O(max_len²)), we mark selected
+        // blocks incrementally and replay the original snapshot order once.
+        // Mark the max_point snapshot (all intervals alive at max_point).
+        let mut selected_bits = vec![false; block_count];
+        let mut selected_count = 0usize;
+        let mark = |idx: usize, bits: &mut [bool], count: &mut usize| {
+            if !bits[idx] {
+                bits[idx] = true;
+                *count += 1;
+            }
+        };
+        for &idx in unfinished_sorted {
+            mark(idx, &mut selected_bits, &mut selected_count);
+        }
+        for idx in 0..block_count {
+            let open = self.open_pos[idx];
+            if open == self.unset_pos {
+                continue;
+            }
+            let close = self.close_pos[idx];
+            if open <= max_point && (close == self.unset_pos || max_point <= close) {
+                mark(idx, &mut selected_bits, &mut selected_count);
+            }
+        }
+
+        // Scan cursors (control loop termination) vs selected boundaries
+        // (track the actual expansion extent for replay).
+        let mut left = max_point;
+        let mut right = max_point;
+        let mut selected_left = max_point;
+        let mut selected_right = max_point;
+
+        while selected_count < max_len {
+            let left_depth = if left > 0 {
+                if heavy_count[left - 1] == 0 {
+                    // All overlapping intervals have depth 1: disable this side.
+                    left = 0;
+                    0.0
+                } else {
+                    self.overlap_counts[left - 1] as f64
+                }
+            } else {
+                0.0
+            };
+            let right_depth = if right < num_points - 1 {
+                if heavy_count[right + 1] == 0 {
+                    right = num_points - 1;
+                    0.0
+                } else {
+                    self.overlap_counts[right + 1] as f64
+                }
+            } else {
+                0.0
+            };
+
+            if left_depth.max(right_depth) <= depth_threshold {
+                break;
+            }
+
+            if left_depth >= right_depth {
+                left -= 1;
+                selected_left = left;
+                // Left expansion: newly covered blocks are those ending at this point.
+                let cur = self.order[left] as usize;
+                for &idx in &self.values[cur].1 {
+                    mark(idx, &mut selected_bits, &mut selected_count);
+                }
+            } else {
+                right += 1;
+                selected_right = right;
+                // Right expansion: newly covered blocks are those starting at this point.
+                let cur = self.order[right] as usize;
+                for &idx in &self.values[cur].0 {
+                    mark(idx, &mut selected_bits, &mut selected_count);
+                }
+            }
+        }
+
+        // Replay: rebuild selected_idx in the original snapshot order.
+        // Order semantics:
+        //   1. Left snapshots: emit_snapshot(selected_left), then starts up to max_point-1
+        //   2. Unfinished intervals
+        //   3. max_point snapshot
+        //   4. Right expansion: starts from max_point+1 to selected_right
+        let mut emitted = vec![false; block_count];
+        let mut selected_idx = IndexSet::with_capacity(selected_count.min(max_len));
+
+        let emit = |idx: usize, bits: &[bool], emitted: &mut [bool], out: &mut IndexSet<usize>| {
+            if bits[idx] && !emitted[idx] {
+                emitted[idx] = true;
+                out.insert(idx);
+            }
+        };
+        let emit_snapshot =
+            |point: usize, bits: &[bool], emitted: &mut [bool], out: &mut IndexSet<usize>| {
+                for idx in 0..block_count {
+                    if self.open_pos[idx] == self.unset_pos {
+                        continue;
+                    }
+                    let close = self.close_pos[idx];
+                    if self.open_pos[idx] <= point && (close == self.unset_pos || point <= close) {
+                        emit(idx, bits, emitted, out);
+                    }
+                }
+            };
+
+        if selected_left < max_point {
+            emit_snapshot(
+                selected_left,
+                &selected_bits,
+                &mut emitted,
+                &mut selected_idx,
+            );
+            for point in (selected_left + 1)..max_point {
+                let cur = self.order[point] as usize;
+                for &idx in &self.values[cur].0 {
+                    emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
+                }
+            }
+        }
+
+        for &idx in unfinished_sorted {
+            emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
+        }
+
+        emit_snapshot(max_point, &selected_bits, &mut emitted, &mut selected_idx);
+
+        for point in (max_point + 1)..=selected_right {
+            let cur = self.order[point] as usize;
+            for &idx in &self.values[cur].0 {
+                emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
+            }
+        }
+
+        selected_idx.truncate(max_len);
+        selected_idx
+    }
 }
 
 /// Iterative segment tree answering range-max queries over a fixed sequence.
@@ -421,24 +618,23 @@ impl ReclusterMutator {
             for block in segment_blocks {
                 let idx = blocks.len();
                 blocks.push(block);
-                if block.stats().level < 0 {
+                let stats = block.stats();
+                if stats.level < 0 {
                     continue;
                 }
-                if block.stats().level >= MAX_RECLUSTER_LEVEL {
+                if stats.level >= MAX_RECLUSTER_LEVEL {
                     debug!(
                         "recluster: skip block segment_idx={} block_idx={} level={} skip_reason=max_recluster_level",
-                        block.index.segment_idx,
-                        block.index.block_idx,
-                        block.stats().level,
+                        block.index.segment_idx, block.index.block_idx, stats.level,
                     );
                     continue;
                 }
 
                 // FINAL isolates level 0 and groups mature levels into fixed two-level bands.
                 let group = match mode {
-                    ReclusterMode::Normal => ReclusterGroup::Level(block.stats().level),
-                    ReclusterMode::Final if block.stats().level == 0 => ReclusterGroup::Level(0),
-                    ReclusterMode::Final => ReclusterGroup::Mixed((block.stats().level - 1) / 2),
+                    ReclusterMode::Normal => ReclusterGroup::Level(stats.level),
+                    ReclusterMode::Final if stats.level == 0 => ReclusterGroup::Level(0),
+                    ReclusterMode::Final => ReclusterGroup::Mixed((stats.level - 1) / 2),
                 };
                 blocks_map.entry(group).or_default().push(idx);
             }
@@ -1332,7 +1528,6 @@ impl ReclusterMutator {
         };
         let max_point_overlap_count = overlap_counts.get(max_point).copied().unwrap_or(0);
 
-        let mut selected_idx = IndexSet::with_capacity(max_len);
         if !unfinished_sorted.is_empty() {
             warn!(
                 "recluster: unfinished intervals remain after calculating block overlaps count={} max_selected={}",
@@ -1343,13 +1538,14 @@ impl ReclusterMutator {
             // or stale range boundaries but are still valid recluster candidates.
             // Emit them in ascending index order to match sweep snapshot order.
             unfinished_sorted.sort_unstable();
-            for idx in unfinished_sorted {
-                selected_idx.insert(idx);
-            }
         }
 
         let passed_depth_gate = Self::passes_depth_gate(depth_threshold, average_depth, max_depth);
         if !passed_depth_gate {
+            let mut selected_idx = IndexSet::with_capacity(max_len);
+            for &idx in &unfinished_sorted {
+                selected_idx.insert(idx);
+            }
             selected_idx.truncate(max_len);
             return Ok(DepthSelection {
                 selected_idx,
@@ -1360,114 +1556,17 @@ impl ReclusterMutator {
             });
         }
 
-        // PASS 3: `heavy_count[i]` counts open intervals at point `i` whose final
-        // depth is not exactly 1 (unfinished intervals count as heavy). It lets
-        // the expansion replace the old per-point `.all(depth == 1)` scan with an
-        // O(1) check. Built with a signed difference array.
-        let mut diff = vec![0isize; num_points + 1];
-        for idx in 0..block_count {
-            if open_pos[idx] == unset_pos {
-                continue;
-            }
-            let heavy = !has_interval_depth[idx] || interval_depths[idx] != 1;
-            if heavy {
-                let open = open_pos[idx];
-                let close = if close_pos[idx] == unset_pos {
-                    num_points - 1
-                } else {
-                    close_pos[idx]
-                };
-                diff[open] += 1;
-                diff[close + 1] -= 1;
-            }
-        }
-        let mut heavy_count = vec![0isize; num_points];
-        let mut running = 0isize;
-        for i in 0..num_points {
-            running += diff[i];
-            debug_assert!(running >= 0, "heavy_count underflow at point {i}");
-            heavy_count[i] = running;
-        }
-
-        // Expansion from `max_point`, maintaining the current snapshot incrementally
-        // rather than from a stored per-point copy. A snapshot at point `i` is the
-        // open-interval set after inserting starts(i) and before removing ends(i),
-        // ordered ascending (BTreeSet) to match sweep snapshot order.
-        let mut left_set = BTreeSet::new();
-        for idx in 0..block_count {
-            let open = open_pos[idx];
-            if open == unset_pos {
-                continue;
-            }
-            let close = close_pos[idx];
-            if open <= max_point && (close == unset_pos || max_point <= close) {
-                left_set.insert(idx);
-            }
-        }
-        let mut right_set = left_set.clone();
-        for &idx in &left_set {
-            selected_idx.insert(idx);
-        }
-
-        let mut left = max_point;
-        let mut right = max_point;
-        while selected_idx.len() < max_len {
-            let left_depth = if left > 0 {
-                if heavy_count[left - 1] == 0 {
-                    // All overlapping intervals have depth 1: this side is done.
-                    left = 0;
-                    0.0
-                } else {
-                    overlap_counts[left - 1] as f64
-                }
-            } else {
-                0.0
-            };
-            let right_depth = if right < num_points - 1 {
-                if heavy_count[right + 1] == 0 {
-                    right = num_points - 1;
-                    0.0
-                } else {
-                    overlap_counts[right + 1] as f64
-                }
-            } else {
-                0.0
-            };
-
-            if left_depth.max(right_depth) <= depth_threshold {
-                break;
-            }
-
-            if left_depth >= right_depth {
-                left -= 1;
-                let next = order[left + 1] as usize;
-                for &s in &values[next].0 {
-                    left_set.remove(&s);
-                }
-                let cur = order[left] as usize;
-                for &e in &values[cur].1 {
-                    left_set.insert(e);
-                }
-                // Left expansion prepends the (ascending) snapshot ahead of the
-                // already-selected indices, preserving first-seen order.
-                let mut merged_idx = IndexSet::from_iter(left_set.iter().copied());
-                merged_idx.extend(selected_idx);
-                selected_idx = merged_idx;
-            } else {
-                right += 1;
-                let prev = order[right - 1] as usize;
-                for &e in &values[prev].1 {
-                    right_set.remove(&e);
-                }
-                let cur = order[right] as usize;
-                for &s in &values[cur].0 {
-                    right_set.insert(s);
-                }
-                selected_idx.extend(right_set.iter().copied());
-            }
-        }
-
-        selected_idx.truncate(max_len);
+        let selector = HotspotSelection {
+            values: &values,
+            order: &order,
+            open_pos: &open_pos,
+            close_pos: &close_pos,
+            has_interval_depth: &has_interval_depth,
+            interval_depths: &interval_depths,
+            overlap_counts: &overlap_counts,
+            unset_pos,
+        };
+        let selected_idx = selector.select(&unfinished_sorted, depth_threshold, max_point, max_len);
         Ok(DepthSelection {
             selected_idx,
             average_depth,
