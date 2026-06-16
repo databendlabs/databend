@@ -335,17 +335,27 @@ impl FuseTable {
                         }
                     }
                 }
-                sorted_tasks.sort_by(|left, right| {
-                    right
-                        .2
-                        .cmp_desc(&left.2)
-                        .then_with(|| left.0.cmp(&right.0))
-                        .then_with(|| left.1.cmp(&right.1))
-                });
+                sorted_tasks.sort_by(|left, right| right.2.cmp_desc(&left.2));
 
                 let mut selected_task_indices = vec![Vec::new(); pending_windows.len()];
-                for (window_idx, task_idx, _) in sorted_tasks.into_iter().take(mutator.max_tasks) {
+                let mut selected_count = 0;
+                let mut selected_repack_only = false;
+                for (window_idx, task_idx, _) in sorted_tasks {
+                    if selected_count >= mutator.max_tasks {
+                        break;
+                    }
+                    let task = &pending_windows[window_idx].tasks[task_idx];
+                    // Repack-only candidates rewrite no blocks, but each one
+                    // consumes a whole window. Keep one per round so max_tasks
+                    // does not repack multiple disjoint windows at once.
+                    if task.is_repack_only() {
+                        if selected_repack_only {
+                            continue;
+                        }
+                        selected_repack_only = true;
+                    }
                     selected_task_indices[window_idx].push(task_idx);
+                    selected_count += 1;
                 }
 
                 let mut selected = Vec::new();

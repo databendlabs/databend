@@ -157,6 +157,10 @@ impl ReclusterTaskCandidate {
             .map(|(_, block_indices)| block_indices.len())
             .sum()
     }
+
+    pub(crate) fn is_repack_only(&self) -> bool {
+        self.selected_blocks.is_empty()
+    }
 }
 
 impl fmt::Display for ReclusterTaskCandidate {
