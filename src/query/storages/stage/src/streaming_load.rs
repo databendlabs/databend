@@ -89,7 +89,6 @@ pub fn build_streaming_load_pipeline(
         None,
         block_compact_thresholds,
         vec![],
-        "".to_string(),
         OnErrorMode::AbortNum(1),
     )?);
     match file_format_params {
