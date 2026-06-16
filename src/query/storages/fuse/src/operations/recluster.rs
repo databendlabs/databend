@@ -221,6 +221,11 @@ impl FuseTable {
                     let mut probe_windows = 0usize;
                     let mut probe_tasks = 0usize;
                     let probe_parallelism = (max_threads / 4).clamp(1, 8);
+                    let decode_runtime = Arc::new(Runtime::with_worker_threads(
+                        max_threads,
+                        Some("recluster-block-meta-worker".to_owned()),
+                    )?);
+                    let decode_semaphore = Arc::new(Semaphore::new(max_threads * 2));
                     let mut segment_windows = segment_windows.into_iter().enumerate();
                     while early_accept_count < mutator.max_tasks {
                         let remaining_task_budget =
@@ -238,11 +243,6 @@ impl FuseTable {
                         }
 
                         let batch_parallelism = probe_parallelism.min(batch.len());
-                        let decode_runtime = Arc::new(Runtime::with_worker_threads(
-                            max_threads,
-                            Some("recluster-block-meta-worker".to_owned()),
-                        )?);
-                        let decode_semaphore = Arc::new(Semaphore::new(max_threads * 2));
                         let futures = batch.into_iter().map(|(_, selected_segs)| {
                             let mutator = mutator.clone();
                             let decode_runtime = decode_runtime.clone();
