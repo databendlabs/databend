@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
@@ -645,6 +646,11 @@ impl IPhysicalPlan for ChunkAppendData {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkAppendDataFormatter::create(self))
     }
@@ -846,14 +852,72 @@ impl IPhysicalPlan for ChunkMerge {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ChunkSerializeCommitMeta {
+    pub meta: PhysicalPlanMeta,
+    pub input: PhysicalPlan,
+    pub targets: Vec<SerializableTable>,
+}
+
+#[typetag::serde]
+impl IPhysicalPlan for ChunkSerializeCommitMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        assert_eq!(children.len(), 1);
+        let input = children.pop().unwrap();
+        PhysicalPlan::new(ChunkSerializeCommitMeta {
+            meta: self.meta.clone(),
+            input,
+            targets: self.targets.clone(),
+        })
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+        add_commit_meta_transforms(builder, &self.targets)?;
+        builder.main_pipeline.try_resize(1)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ChunkCommitInsert {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub overwrite: bool,
     pub deduplicated_label: Option<String>,
+    pub input_commit_meta: bool,
     pub targets: Vec<SerializableTable>,
 }
+
+type MultiTableCommitTargets = (
+    HashMap<u64, Arc<dyn Table>>,
+    HashMap<u64, TableMetaTimestamps>,
+);
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkCommitInsert {
@@ -885,6 +949,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
             update_stream_meta: self.update_stream_meta.clone(),
             overwrite: self.overwrite,
             deduplicated_label: self.deduplicated_label.clone(),
+            input_commit_meta: self.input_commit_meta,
             targets: self.targets.clone(),
         })
     }
@@ -892,42 +957,11 @@ impl IPhysicalPlan for ChunkCommitInsert {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let mut table_meta_timestampss = HashMap::new();
-
-        let mut serialize_segment_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(self.targets.len());
-        let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(self.targets.len());
-        let mut tables = HashMap::new();
-
-        for target in &self.targets {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&target.target_table_info, None)?;
-            let block_thresholds = table.get_block_thresholds();
-            serialize_segment_builders.push(Box::new(
-                builder.serialize_segment_transform_builder(
-                    table.clone(),
-                    block_thresholds,
-                    target.table_meta_timestamps,
-                )?,
-            ));
-            mutation_aggregator_builders.push(Box::new(
-                builder.mutation_aggregator_transform_builder(
-                    table.clone(),
-                    target.table_meta_timestamps,
-                )?,
-            ));
-            table_meta_timestampss.insert(table.get_id(), target.table_meta_timestamps);
-            tables.insert(table.get_id(), table);
-        }
-
-        builder
-            .main_pipeline
-            .add_transforms_by_chunk(serialize_segment_builders)?;
-        builder
-            .main_pipeline
-            .add_transforms_by_chunk(mutation_aggregator_builders)?;
+        let (tables, table_meta_timestampss) = if self.input_commit_meta {
+            build_target_tables(builder, &self.targets)?
+        } else {
+            add_commit_meta_transforms(builder, &self.targets)?
+        };
         builder.main_pipeline.try_resize(1)?;
 
         let catalog = CatalogManager::instance().build_catalog(
@@ -950,4 +984,59 @@ impl IPhysicalPlan for ChunkCommitInsert {
             )))
         })
     }
+}
+
+fn build_target_tables(
+    builder: &PipelineBuilder,
+    targets: &[SerializableTable],
+) -> Result<MultiTableCommitTargets> {
+    let mut tables = HashMap::new();
+    let mut table_meta_timestampss = HashMap::new();
+
+    for target in targets {
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&target.target_table_info, None)?;
+        table_meta_timestampss.insert(table.get_id(), target.table_meta_timestamps);
+        tables.insert(table.get_id(), table);
+    }
+
+    Ok((tables, table_meta_timestampss))
+}
+
+fn add_commit_meta_transforms(
+    builder: &mut PipelineBuilder,
+    targets: &[SerializableTable],
+) -> Result<MultiTableCommitTargets> {
+    let (tables, table_meta_timestampss) = build_target_tables(builder, targets)?;
+
+    let mut serialize_segment_builders: Vec<DynTransformBuilder> =
+        Vec::with_capacity(targets.len());
+    let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
+        Vec::with_capacity(targets.len());
+
+    for target in targets {
+        let table = tables
+            .get(&target.target_table_info.ident.table_id)
+            .unwrap()
+            .clone();
+        let block_thresholds = table.get_block_thresholds();
+        serialize_segment_builders.push(Box::new(builder.serialize_segment_transform_builder(
+            table.clone(),
+            block_thresholds,
+            target.table_meta_timestamps,
+        )?));
+        mutation_aggregator_builders.push(Box::new(
+            builder.mutation_aggregator_transform_builder(table, target.table_meta_timestamps)?,
+        ));
+    }
+
+    builder
+        .main_pipeline
+        .add_transforms_by_chunk(serialize_segment_builders)?;
+    builder
+        .main_pipeline
+        .add_transforms_by_chunk(mutation_aggregator_builders)?;
+
+    Ok((tables, table_meta_timestampss))
 }
