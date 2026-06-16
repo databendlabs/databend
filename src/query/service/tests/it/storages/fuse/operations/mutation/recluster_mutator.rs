@@ -875,7 +875,7 @@ async fn test_recluster_mutator_accumulates_tasks_across_windows() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Result<()> {
+async fn test_recluster_mutator_splits_hotspot_by_memory_threshold() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(1000)?;
@@ -885,8 +885,9 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
 
-    // 300 small blocks with four workers should be selected and split by the
-    // parallel budget while keeping each task above the minimum fill ratio.
+    // 300 small blocks are 3000 bytes total. With a 1000-byte task memory
+    // threshold they should be packed into three full hotspot tasks, even when
+    // four workers are available.
     let segment_locations = gen_recluster_segments(
         &data_accessor,
         &location_generator,
@@ -914,8 +915,8 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     .await?;
 
     assert_eq!(block_num, 300);
-    assert_eq!(parts.tasks.len(), 4);
-    assert_eq!(task_part_counts(&parts), vec![75, 75, 75, 75]);
+    assert_eq!(parts.tasks.len(), 3);
+    assert_eq!(task_part_counts(&parts), vec![100, 100, 100]);
 
     Ok(())
 }
@@ -1013,6 +1014,218 @@ async fn test_recluster_mutator_skips_singleton_over_memory_boundary() -> anyhow
     assert_eq!(parts.tasks.len(), 1);
     assert_eq!(task_part_counts(&parts), vec![2]);
     assert_eq!(parts.tasks[0].total_bytes, 80);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_keeps_full_hotspot_task() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(100)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 100, 1000);
+
+    let mut segment_locations = Vec::new();
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &[vec![(1, 39)], vec![(2, 39)]],
+            1000,
+            15,
+            15,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+    let hotspot_ranges = vec![vec![(40, 60)]; 4];
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &hotspot_ranges,
+            1000,
+            20,
+            20,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &[vec![(61, 90)], vec![(61, 89)]],
+            1000,
+            15,
+            15,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 4);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![4]);
+    assert_eq!(parts.tasks[0].total_bytes, 80);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_keeps_hotspot_plateau_together() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(100)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 100, 1000);
+
+    // Points 20, 30, and 40 all have the same max depth. The last block enters
+    // the plateau after the first max point, so selecting only max_point would
+    // leave it out once the first max-point task is already 80% full.
+    let mut segment_locations = Vec::new();
+    for (range, block_size) in [
+        ((10, 20), 30),
+        ((10, 40), 30),
+        ((20, 40), 20),
+        ((30, 50), 10),
+    ] {
+        segment_locations.extend(
+            gen_recluster_segments_by_ranges(
+                &data_accessor,
+                &location_generator,
+                &[vec![range]],
+                1000,
+                block_size,
+                block_size,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 4);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![4]);
+    assert_eq!(parts.tasks[0].total_bytes, 90);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(100)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 100, 1000);
+
+    let mut segment_locations = Vec::new();
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &[vec![(1, 39)], vec![(2, 39)]],
+            1000,
+            15,
+            15,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+    let hotspot_ranges = vec![vec![(40, 60)]; 11];
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &hotspot_ranges,
+            1000,
+            20,
+            20,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+    segment_locations.extend(
+        gen_recluster_segments_by_ranges(
+            &data_accessor,
+            &location_generator,
+            &[vec![(61, 90)], vec![(61, 89)]],
+            1000,
+            15,
+            15,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?,
+    );
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        3,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 15);
+    assert_eq!(parts.tasks.len(), 3);
+    assert_eq!(task_part_counts(&parts), vec![5, 5, 5]);
+    assert_eq!(
+        parts
+            .tasks
+            .iter()
+            .map(|task| task.total_bytes)
+            .collect::<Vec<_>>(),
+        vec![100, 100, 80]
+    );
 
     Ok(())
 }

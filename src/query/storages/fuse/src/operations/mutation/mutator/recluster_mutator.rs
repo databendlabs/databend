@@ -123,14 +123,14 @@ impl fmt::Display for ReclusterGroup {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CandidateScore {
-    pub selected_block_count: usize,
+    pub selected_total_bytes: usize,
     pub max_depth: usize,
     pub average_depth: f64,
 }
 
 impl CandidateScore {
     pub fn cmp_desc(&self, other: &Self) -> cmp::Ordering {
-        // Score order: max depth, average depth, then selected block count.
+        // Score order: max depth, average depth, then bytes.
         self.max_depth
             .cmp(&other.max_depth)
             .then_with(|| {
@@ -138,18 +138,25 @@ impl CandidateScore {
                     .partial_cmp(&other.average_depth)
                     .unwrap_or(cmp::Ordering::Equal)
             })
-            .then_with(|| self.selected_block_count.cmp(&other.selected_block_count))
+            .then_with(|| self.selected_total_bytes.cmp(&other.selected_total_bytes))
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct ReclusterTaskCandidate {
     pub(crate) score: CandidateScore,
-    selected_total_bytes: usize,
-    min_blocks_per_task: usize,
     // Empty means a rebuild-only repack candidate.
     selected_blocks: Vec<(usize, Vec<usize>)>,
     output_level: i32,
+}
+
+impl ReclusterTaskCandidate {
+    fn selected_block_count(&self) -> usize {
+        self.selected_blocks
+            .iter()
+            .map(|(_, block_indices)| block_indices.len())
+            .sum()
+    }
 }
 
 impl fmt::Display for ReclusterTaskCandidate {
@@ -160,8 +167,8 @@ impl fmt::Display for ReclusterTaskCandidate {
             self.output_level,
             self.score.max_depth,
             self.score.average_depth,
-            self.score.selected_block_count,
-            self.selected_total_bytes,
+            self.selected_block_count(),
+            self.score.selected_total_bytes,
         )
     }
 }
@@ -191,180 +198,6 @@ pub struct ReclusterFinalCarry {
     pub(crate) scan_cursor: usize,
     // Cached candidates must match this cluster key.
     pub(crate) cluster_key_id: u32,
-}
-
-struct DepthSelection {
-    selected_idx: IndexSet<usize>,
-    average_depth: f64,
-    max_depth: usize,
-}
-
-struct HotspotSelection<'a> {
-    values: &'a [(Vec<usize>, Vec<usize>)],
-    order: &'a [u32],
-    open_pos: &'a [usize],
-    close_pos: &'a [usize],
-    interval_depths: &'a [usize],
-    overlap_counts: &'a [usize],
-    unset_pos: usize,
-}
-
-impl HotspotSelection<'_> {
-    fn alive_at(&self, idx: usize, point: usize) -> bool {
-        let open = self.open_pos[idx];
-        if open == self.unset_pos {
-            return false;
-        }
-        open <= point && point <= self.close_pos[idx]
-    }
-
-    fn select(&self, depth_threshold: f64, max_point: usize, max_len: usize) -> IndexSet<usize> {
-        let block_count = self.open_pos.len();
-        let num_points = self.order.len();
-        // `heavy_count[i]` counts open intervals at point `i` whose final depth
-        // is not exactly 1. It lets the expansion replace the old per-point
-        // `.all(depth == 1)` scan with an O(1) check. Built with a signed
-        // difference array.
-        let mut heavy_count = vec![0isize; num_points + 1];
-        for idx in 0..block_count {
-            if self.open_pos[idx] == self.unset_pos {
-                continue;
-            }
-            if self.interval_depths[idx] != 1 {
-                let open = self.open_pos[idx];
-                let close = self.close_pos[idx];
-                heavy_count[open] += 1;
-                heavy_count[close + 1] -= 1;
-            }
-        }
-        let mut running = 0isize;
-        for (i, count) in heavy_count.iter_mut().enumerate().take(num_points) {
-            running += *count;
-            debug_assert!(running >= 0, "heavy_count underflow at point {i}");
-            *count = running;
-        }
-
-        // Expansion from `max_point` using bitset marking. Instead of
-        // rebuilding an IndexSet each step (O(max_len²)), we mark selected
-        // blocks incrementally and replay the original snapshot order once.
-        // Mark the max_point snapshot (all intervals alive at max_point).
-        let mut selected_bits = vec![false; block_count];
-        let mut selected_count = 0usize;
-        let mark = |idx: usize, bits: &mut [bool], count: &mut usize| {
-            if !bits[idx] {
-                bits[idx] = true;
-                *count += 1;
-            }
-        };
-        for idx in 0..block_count {
-            if self.alive_at(idx, max_point) {
-                mark(idx, &mut selected_bits, &mut selected_count);
-            }
-        }
-
-        // Scan cursors (control loop termination) vs selected boundaries
-        // (track the actual expansion extent for replay).
-        let mut left = max_point;
-        let mut right = max_point;
-        let mut selected_left = max_point;
-        let mut selected_right = max_point;
-
-        while selected_count < max_len {
-            let left_depth = if left > 0 {
-                if heavy_count[left - 1] == 0 {
-                    // All overlapping intervals have depth 1: disable this side.
-                    left = 0;
-                    0.0
-                } else {
-                    self.overlap_counts[left - 1] as f64
-                }
-            } else {
-                0.0
-            };
-            let right_depth = if right < num_points - 1 {
-                if heavy_count[right + 1] == 0 {
-                    right = num_points - 1;
-                    0.0
-                } else {
-                    self.overlap_counts[right + 1] as f64
-                }
-            } else {
-                0.0
-            };
-
-            if left_depth.max(right_depth) <= depth_threshold {
-                break;
-            }
-
-            if left_depth >= right_depth {
-                left -= 1;
-                selected_left = left;
-                // Left expansion: newly covered blocks are those ending at this point.
-                let cur = self.order[left] as usize;
-                for &idx in &self.values[cur].1 {
-                    mark(idx, &mut selected_bits, &mut selected_count);
-                }
-            } else {
-                right += 1;
-                selected_right = right;
-                // Right expansion: newly covered blocks are those starting at this point.
-                let cur = self.order[right] as usize;
-                for &idx in &self.values[cur].0 {
-                    mark(idx, &mut selected_bits, &mut selected_count);
-                }
-            }
-        }
-
-        // Replay: rebuild selected_idx in the original snapshot order.
-        // Order semantics:
-        //   1. Left snapshots: emit_snapshot(selected_left), then starts up to max_point-1
-        //   2. max_point snapshot
-        //   3. Right expansion: starts from max_point+1 to selected_right
-        let mut emitted = vec![false; block_count];
-        let mut selected_idx = IndexSet::with_capacity(selected_count.min(max_len));
-
-        let emit = |idx: usize, bits: &[bool], emitted: &mut [bool], out: &mut IndexSet<usize>| {
-            if bits[idx] && !emitted[idx] {
-                emitted[idx] = true;
-                out.insert(idx);
-            }
-        };
-        let emit_snapshot =
-            |point: usize, bits: &[bool], emitted: &mut [bool], out: &mut IndexSet<usize>| {
-                for idx in 0..block_count {
-                    if self.alive_at(idx, point) {
-                        emit(idx, bits, emitted, out);
-                    }
-                }
-            };
-
-        if selected_left < max_point {
-            emit_snapshot(
-                selected_left,
-                &selected_bits,
-                &mut emitted,
-                &mut selected_idx,
-            );
-            for point in (selected_left + 1)..max_point {
-                let cur = self.order[point] as usize;
-                for &idx in &self.values[cur].0 {
-                    emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
-                }
-            }
-        }
-
-        emit_snapshot(max_point, &selected_bits, &mut emitted, &mut selected_idx);
-
-        for point in (max_point + 1)..=selected_right {
-            let cur = self.order[point] as usize;
-            for &idx in &self.values[cur].0 {
-                emit(idx, &selected_bits, &mut emitted, &mut selected_idx);
-            }
-        }
-
-        selected_idx.truncate(max_len);
-        selected_idx
-    }
 }
 
 /// Iterative segment tree answering range-max queries over a fixed sequence.
@@ -667,12 +500,13 @@ impl ReclusterMutator {
                 selected_window_positions.fill(true);
                 candidate_window.tasks.push(ReclusterTaskCandidate {
                     score: CandidateScore {
-                        selected_block_count: total_block_count,
+                        // Repack-only candidates do not rewrite blocks, but use
+                        // one task worth of bytes so early-accept can keep the
+                        // previous dense-group priority semantics.
+                        selected_total_bytes: self.memory_threshold,
                         max_depth: total_block_count,
                         average_depth: total_block_count as f64,
                     },
-                    selected_total_bytes: 0,
-                    min_blocks_per_task: 2,
                     selected_blocks: Vec::new(),
                     output_level: 0,
                 });
@@ -750,7 +584,7 @@ impl ReclusterMutator {
                     continue;
                 }
 
-                let mut block_metas = Vec::with_capacity(candidate.score.selected_block_count);
+                let mut block_metas = Vec::with_capacity(candidate.selected_block_count());
                 let mut total_rows = 0usize;
                 let mut total_bytes = 0usize;
                 let mut total_compressed = 0usize;
@@ -892,7 +726,7 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
-        let probe_group_start = Instant::now();
+        let group_start = Instant::now();
         let block_count = indices.len();
         if block_count < 2 {
             return Ok(Vec::new());
@@ -915,9 +749,9 @@ impl ReclusterMutator {
 
         for (local_idx, &i) in indices.iter().enumerate() {
             // Use a group-local block index (0..block_count) as the point key so
-            // the dense lookup vectors in `fetch_max_depth` are sized by the group
-            // block count, not the window-global block index range. `indices` maps
-            // each local index back to its `blocks` index.
+            // dense lookup vectors are sized by the group block count, not the
+            // window-global block index range. `indices` maps each local index
+            // back to its `blocks` index.
             let block = &blocks[i];
             let stats = block.stats();
             let point = points_map.entry(stats.min().as_slice()).or_default();
@@ -928,175 +762,34 @@ impl ReclusterMutator {
             total_bytes += block.meta.block_size;
         }
 
-        let max_blocks_num_per_node =
-            self.max_blocks_num_per_node(total_bytes as usize, block_count);
-        let min_blocks_per_task = (max_blocks_num_per_node * 3 / 4).max(2);
-
-        if self
+        let candidates = if self
             .block_thresholds
             .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.memory_threshold
         {
             // Small compactable groups are treated as one dense overlap.
             let score = CandidateScore {
-                selected_block_count: block_count,
+                selected_total_bytes: total_bytes as usize,
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            return Ok(vec![ReclusterTaskCandidate {
+            vec![ReclusterTaskCandidate {
                 score,
-                selected_total_bytes: total_bytes as usize,
-                min_blocks_per_task,
                 selected_blocks: Self::selected_blocks_by_segment(&indices, blocks),
                 output_level: group.output_level(&indices, blocks),
-            }]);
-        }
-
-        let max_blocks_num = max_blocks_num_per_node * task_budget;
-        let DepthSelection {
-            selected_idx: selected_local_idx,
-            average_depth,
-            max_depth,
-        } = Self::fetch_max_depth(
-            points_map,
-            &self.cluster_key_types,
-            self.depth_threshold,
-            max_blocks_num,
-            block_count,
-        )?;
-        // Translate group-local indices back to `blocks` indices (preserving the
-        // selection order) so the budget/limit and task-splitting steps below can
-        // index `blocks` directly.
-        let mut selected_idx = selected_local_idx
-            .into_iter()
-            .map(|local_idx| indices[local_idx])
-            .collect::<IndexSet<usize>>();
-        let mut selected_total_bytes = 0usize;
-        let mut keep_blocks = 0;
-        let max_total_bytes = self.memory_threshold.saturating_mul(task_budget);
-        for idx in selected_idx.iter().copied() {
-            let block_size = blocks[idx].meta.block_size as usize;
-            if keep_blocks >= 2 && selected_total_bytes.saturating_add(block_size) > max_total_bytes
-            {
-                break;
-            }
-            selected_total_bytes = selected_total_bytes.saturating_add(block_size);
-            keep_blocks += 1;
-        }
-        selected_idx.truncate(keep_blocks);
-        let selected_block_count = selected_idx.len();
-        if selected_block_count < 2 {
-            debug!(
-                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count={} elapsed={:?} skip_reason=below_hotspot_depth_gate",
-                group,
-                block_count,
-                average_depth,
-                max_depth,
-                selected_block_count,
-                probe_group_start.elapsed(),
-            );
-            return Ok(Vec::new());
-        }
-
-        let target_tasks_by_blocks = selected_block_count / min_blocks_per_task;
-        let target_tasks_by_memory = selected_total_bytes.div_ceil(self.memory_threshold);
-        let max_tasks_by_blocks = selected_block_count / 2;
-        let target_tasks = target_tasks_by_blocks
-            .max(target_tasks_by_memory)
-            .max(1)
-            .min(task_budget)
-            .min(max_tasks_by_blocks);
-        let target_task_bytes = selected_total_bytes.div_ceil(target_tasks);
-        let target_task_blocks = selected_block_count.div_ceil(target_tasks);
-
-        let mut candidates = Vec::new();
-        let mut task_bytes = 0usize;
-        let mut task_indices = Vec::new();
-        for (processed_blocks, idx) in selected_idx.into_iter().enumerate() {
-            let block = &blocks[idx];
-            let block_size = block.meta.block_size as usize;
-            let remaining_tasks = target_tasks.saturating_sub(candidates.len() + 1);
-            let remaining_blocks = selected_block_count.saturating_sub(processed_blocks);
-            let has_enough_remaining_blocks =
-                remaining_blocks >= remaining_tasks * min_blocks_per_task;
-            let should_split_for_memory =
-                task_bytes.saturating_add(block_size) > self.memory_threshold;
-            let should_split_for_parallelism = candidates.len() + 1 < target_tasks
-                && task_indices.len() >= min_blocks_per_task
-                && has_enough_remaining_blocks
-                && (task_bytes >= target_task_bytes || task_indices.len() >= target_task_blocks);
-
-            if should_split_for_memory || should_split_for_parallelism {
-                if task_indices.len() >= 2 {
-                    let score = CandidateScore {
-                        selected_block_count: task_indices.len(),
-                        max_depth,
-                        average_depth,
-                    };
-                    let output_level = group.output_level(&task_indices, blocks);
-                    candidates.push(ReclusterTaskCandidate {
-                        score,
-                        selected_total_bytes: task_bytes,
-                        min_blocks_per_task,
-                        selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                        output_level,
-                    });
-                }
-                task_bytes = 0;
-                task_indices.clear();
-                if candidates.len() >= target_tasks {
-                    break;
-                }
-            }
-
-            task_bytes += block_size;
-            task_indices.push(idx);
-        }
-
-        if task_indices.len() > 1 {
-            let score = CandidateScore {
-                selected_block_count: task_indices.len(),
-                max_depth,
-                average_depth,
-            };
-            let output_level = group.output_level(&task_indices, blocks);
-            candidates.push(ReclusterTaskCandidate {
-                score,
-                selected_total_bytes: task_bytes,
-                min_blocks_per_task,
-                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                output_level,
-            });
-        }
-
-        if candidates.is_empty() {
-            return Ok(Vec::new());
-        }
-
+            }]
+        } else {
+            self.fetch_max_depth_candidates(group, points_map, &indices, blocks, task_budget)?
+        };
         debug!(
-            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} selected_count={} task_count={} elapsed={:?}",
+            "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
             group,
             block_count,
-            average_depth,
-            self.depth_threshold,
-            max_depth,
-            selected_block_count,
             candidates.len(),
-            probe_group_start.elapsed(),
+            group_start.elapsed(),
         );
 
         Ok(candidates)
-    }
-
-    fn max_blocks_num_per_node(&self, total_bytes: usize, block_count: usize) -> usize {
-        let avg_block_bytes = (total_bytes / block_count).max(1);
-        // Clamp the observed average to normal block thresholds so tiny fragments
-        // do not inflate the candidate count and unusually large blocks do not
-        // make the distributed selection overly conservative.
-        let target_block_bytes = avg_block_bytes
-            .max(self.block_thresholds.min_bytes_per_block)
-            .min(self.block_thresholds.max_bytes_per_block);
-        (self.memory_threshold / target_block_bytes).max(2)
     }
 
     fn selected_blocks_by_segment(
@@ -1130,8 +823,9 @@ impl ReclusterMutator {
     pub(crate) fn passes_early_accept(&self, candidate: &ReclusterTaskCandidate) -> bool {
         let mature_gate = (2.0 * self.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
         let early_accept_depth = (mature_gate + 1.0).max(self.depth_threshold * 4.0);
+        let min_task_bytes = self.memory_threshold.saturating_mul(3) / 4;
         candidate.score.max_depth as f64 >= early_accept_depth
-            && candidate.score.selected_block_count >= candidate.min_blocks_per_task
+            && candidate.score.selected_total_bytes >= min_task_bytes
     }
 
     /// Cut the candidate segments into segment-disjoint windows of at most
@@ -1421,23 +1115,23 @@ impl ReclusterMutator {
             .collect())
     }
 
-    fn fetch_max_depth(
+    fn fetch_max_depth_candidates(
+        &self,
+        group: ReclusterGroup,
         points_map: HashMap<&[Scalar], (Vec<usize>, Vec<usize>)>,
-        cluster_key_types: &[DataType],
-        depth_threshold: f64,
-        max_len: usize,
-        block_count: usize,
-    ) -> Result<DepthSelection> {
+        indices: &[usize],
+        blocks: &[&ReclusterBlock],
+        task_budget: usize,
+    ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(!points_map.is_empty());
+        let block_count = indices.len();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
-        let order = compare_scalars(&keys, cluster_key_types)?;
+        let order = compare_scalars(&keys, &self.cluster_key_types)?;
 
-        // PASS 1: sweep the sorted points once. `live_count` is the deduplicated
-        // open-interval count before inserting starts; `overlap_counts[i]` is the
-        // snapshot size after inserting starts and before removing ends.
+        // PASS 1: sweep sorted points and record folded point depths plus each
+        // block's open/close positions.
         let num_points = order.len();
         let mut point_depths = vec![0usize; num_points];
-        let mut overlap_counts = vec![0usize; num_points];
         let unset_pos = usize::MAX;
         let mut open_pos = vec![unset_pos; block_count];
         let mut close_pos = vec![unset_pos; block_count];
@@ -1461,7 +1155,6 @@ impl ReclusterMutator {
                 }
                 open_pos[s] = i;
             }
-            overlap_counts[i] = live_count;
             for &e in ends {
                 if live[e] {
                     live[e] = false;
@@ -1471,10 +1164,7 @@ impl ReclusterMutator {
             }
         }
 
-        // PASS 2: interval depth is the max folded point depth over the interval's
-        // lifetime [open_pos, close_pos], answered by a range-max segment tree
-        // instead of re-maxing every open interval at every point.
-        let mut interval_depths = vec![0usize; block_count];
+        // PASS 2: gate by each interval's max folded point depth.
         let mut sum_depth = 0usize;
         let mut closed = 0usize;
         let seg = RangeMaxTree::build(&point_depths);
@@ -1485,17 +1175,18 @@ impl ReclusterMutator {
             let open = open_pos[idx];
             let close = close_pos[idx];
             // Malformed stats can leave an interval unclosed or reversed; skip
-            // this group instead of feeding an invalid range into the selector.
+            // this group instead of feeding an invalid range into task building.
             if close == unset_pos || close < open {
-                return Ok(DepthSelection {
-                    selected_idx: IndexSet::new(),
-                    average_depth: f64::NAN,
+                debug!(
+                    "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=invalid_depth_range",
+                    group,
+                    block_count,
+                    f64::NAN,
                     max_depth,
-                });
+                );
+                return Ok(Vec::new());
             }
-            let depth = seg.range_max(open, close);
-            interval_depths[idx] = depth;
-            sum_depth += depth;
+            sum_depth += seg.range_max(open, close);
             closed += 1;
         }
         let average_depth = if closed == 0 {
@@ -1504,29 +1195,151 @@ impl ReclusterMutator {
             (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0
         };
 
-        if !Self::passes_depth_gate(depth_threshold, average_depth, max_depth) {
-            return Ok(DepthSelection {
-                selected_idx: IndexSet::new(),
-                average_depth,
-                max_depth,
-            });
+        if !Self::passes_depth_gate(self.depth_threshold, average_depth, max_depth) {
+            debug!(
+                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=below_hotspot_depth_gate",
+                group, block_count, average_depth, max_depth,
+            );
+            return Ok(Vec::new());
         }
 
-        let selector = HotspotSelection {
-            values: &values,
-            order: &order,
-            open_pos: &open_pos,
-            close_pos: &close_pos,
-            interval_depths: &interval_depths,
-            overlap_counts: &overlap_counts,
-            unset_pos,
+        let mut hotspot_left = max_point;
+        while hotspot_left > 0 && point_depths[hotspot_left - 1] == max_depth {
+            hotspot_left -= 1;
+        }
+        let mut hotspot_right = max_point;
+        while hotspot_right + 1 < num_points && point_depths[hotspot_right + 1] == max_depth {
+            hotspot_right += 1;
+        }
+        // Treat adjacent max-depth points as one hotspot plateau, so blocks
+        // covering the same peak area stay ahead of side expansion.
+        let push_task = |candidates: &mut Vec<ReclusterTaskCandidate>,
+                         local_indices: Vec<usize>,
+                         task_bytes: usize| {
+            let task_indices = local_indices
+                .into_iter()
+                .map(|local_idx| indices[local_idx])
+                .collect::<Vec<_>>();
+            let score = CandidateScore {
+                selected_total_bytes: task_bytes,
+                max_depth,
+                average_depth,
+            };
+            let output_level = group.output_level(&task_indices, blocks);
+            candidates.push(ReclusterTaskCandidate {
+                score,
+                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
+                output_level,
+            });
         };
-        let selected_idx = selector.select(depth_threshold, max_point, max_len);
-        Ok(DepthSelection {
-            selected_idx,
+
+        let mut candidates = Vec::new();
+        let min_task_bytes = self.memory_threshold.saturating_mul(3) / 4;
+
+        // Pack hotspot-overlapping blocks first. Tasks split only on memory, so
+        // a deep hotspot is not scattered by parallelism balancing.
+        let mut task_bytes = 0usize;
+        let mut task_indices = Vec::new();
+        for local_idx in 0..block_count {
+            if candidates.len() >= task_budget {
+                break;
+            }
+            if open_pos[local_idx] > hotspot_right || close_pos[local_idx] < hotspot_left {
+                continue;
+            }
+            let idx = indices[local_idx];
+            let block_size = blocks[idx].meta.block_size as usize;
+            let should_split_for_memory = !task_indices.is_empty()
+                && task_bytes.saturating_add(block_size) > self.memory_threshold;
+
+            if should_split_for_memory {
+                if task_indices.len() >= 2 {
+                    push_task(
+                        &mut candidates,
+                        std::mem::take(&mut task_indices),
+                        task_bytes,
+                    );
+                    if candidates.len() >= task_budget {
+                        break;
+                    }
+                } else {
+                    task_indices.clear();
+                }
+                task_bytes = 0;
+            }
+
+            task_bytes = task_bytes.saturating_add(block_size);
+            task_indices.push(local_idx);
+        }
+
+        if candidates.len() < task_budget
+            && !task_indices.is_empty()
+            && (task_bytes < min_task_bytes || task_indices.len() < 2)
+        {
+            // Fill only the last hotspot tail from the deeper adjacent side.
+            // Skip blocks that already overlap the hotspot plateau.
+            let mut left = hotspot_left;
+            let mut right = hotspot_right;
+            'fill_remaining: while task_bytes < min_task_bytes || task_indices.len() < 2 {
+                let left_depth = if left > 0 {
+                    point_depths[left - 1] as f64
+                } else {
+                    0.0
+                };
+                let right_depth = if right + 1 < num_points {
+                    point_depths[right + 1] as f64
+                } else {
+                    0.0
+                };
+                if left_depth.max(right_depth) <= self.depth_threshold {
+                    break;
+                }
+
+                let (cur, use_ends) = if left_depth >= right_depth {
+                    left -= 1;
+                    (order[left] as usize, true)
+                } else {
+                    right += 1;
+                    (order[right] as usize, false)
+                };
+                let group_indices = if use_ends {
+                    &values[cur].1
+                } else {
+                    &values[cur].0
+                };
+                for &local_idx in group_indices {
+                    if open_pos[local_idx] <= hotspot_right && close_pos[local_idx] >= hotspot_left
+                    {
+                        continue;
+                    }
+                    let idx = indices[local_idx];
+                    let block_size = blocks[idx].meta.block_size as usize;
+                    if !task_indices.is_empty()
+                        && task_bytes.saturating_add(block_size) > self.memory_threshold
+                    {
+                        break 'fill_remaining;
+                    }
+                    task_bytes = task_bytes.saturating_add(block_size);
+                    task_indices.push(local_idx);
+                }
+            }
+        }
+
+        if candidates.len() < task_budget && task_indices.len() >= 2 {
+            push_task(&mut candidates, task_indices, task_bytes);
+        }
+
+        debug!(
+            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} task_count={}",
+            group,
+            block_count,
             average_depth,
+            self.depth_threshold,
             max_depth,
-        })
+            candidates.len(),
+        );
+
+        Ok(candidates)
     }
 
     fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) -> usize {
