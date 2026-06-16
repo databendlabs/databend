@@ -81,8 +81,11 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         (_, Tuple(_)) | (Tuple(_), _) => false,
 
         (Array(box from_ty), Array(box to_ty)) => load_can_auto_cast_to(from_ty, to_ty),
+        (Array(box from_ty), Vector(_)) => {
+            matches!(from_ty.remove_nullable(), Number(_) | Decimal(_))
+        }
         (EmptyArray, Array(_)) => true,
-        (_, Array(_)) | (Array(_), _) => false,
+        (_, Array(_)) => false,
 
         // ==== handle primary types at last, so the _ below only need to consider themselves.
         //
