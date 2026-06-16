@@ -349,6 +349,7 @@ mod tests {
     use super::*;
     use crate::parquet_writer::test_util::assert_blocks_eq;
     use crate::parquet_writer::test_util::props;
+    use crate::parquet_writer::test_util::props_with_data_page_rows;
     use crate::parquet_writer::test_util::read_back;
     use crate::parquet_writer::test_util::sample_block;
     use crate::parquet_writer::test_util::sample_schema;
@@ -744,5 +745,69 @@ mod tests {
             .to_record_batch_with_arrow_schema(&arrow_schema)
             .unwrap();
         assert_eq!(old, new);
+    }
+
+    // Zero-copy footer assembly deliberately omits the per-column OffsetIndex (the old
+    // ArrowWriter wrote one even with stats disabled). A multi-page column chunk must still be
+    // fully readable by a standard parquet reader, which falls back to walking page headers
+    // sequentially when no OffsetIndex is present. This locks in that the omission is safe.
+    #[test]
+    fn test_multi_page_chunk_without_offset_index_reads_back() {
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+        use parquet::file::reader::FileReader;
+        use parquet::file::reader::SerializedFileReader;
+
+        let schema = TableSchema::new(vec![
+            TableField::new("i", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("s", TableDataType::String),
+        ]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        // 5000 rows, capped at 100 rows/page. The arrow column writer only checks page
+        // boundaries at `write_batch_size` (1024) granularity, so the row count must exceed that
+        // several times over to reliably span multiple pages.
+        let n = 5000i64;
+        let block = DataBlock::new_from_columns(vec![
+            databend_common_expression::types::Int64Type::from_data((0..n).collect::<Vec<_>>()),
+            StringType::from_data((0..n).map(|i| format!("row-{i}")).collect::<Vec<_>>()),
+        ]);
+
+        let mut writer = BlockParquetWriter::new(
+            arrow_schema.clone(),
+            props_with_data_page_rows(&schema, 100),
+        );
+        writer.write_block(block.clone()).unwrap();
+        let serialized = writer.finish().unwrap();
+        let bytes = bytes::Bytes::from(serialized.payload.concat());
+
+        // The file must carry NO offset index (documents the zero-copy tradeoff).
+        let builder = ParquetRecordBatchReaderBuilder::try_new(bytes.clone()).unwrap();
+        assert!(
+            builder.metadata().offset_index().is_none(),
+            "BlockParquetWriter is expected to omit the OffsetIndex"
+        );
+
+        // Each column chunk must actually span multiple pages, so the sequential page-header
+        // walk on the read side is genuinely exercised.
+        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
+        let rg = reader.get_row_group(0).unwrap();
+        for col in 0..2 {
+            let mut pages = 0;
+            let mut page_reader = rg.get_column_page_reader(col).unwrap();
+            while page_reader.get_next_page().unwrap().is_some() {
+                pages += 1;
+            }
+            assert!(
+                pages > 2,
+                "column {col} should span several pages, got {pages}"
+            );
+        }
+
+        // A standard reader (no offset index) reconstructs every row correctly.
+        let (blocks, num_rg) = read_back(bytes.to_vec());
+        assert_eq!(num_rg, 1);
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_eq!(got.num_rows(), n as usize);
+        assert_blocks_eq(&block, &got);
     }
 }

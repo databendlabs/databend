@@ -226,6 +226,25 @@ pub(crate) mod test_util {
         ))
     }
 
+    /// Like [`props`] but caps each data page at `data_page_rows` rows, so a column chunk with
+    /// more rows than that is split across multiple pages. Used to verify that a standard
+    /// parquet reader can walk a multi-page column chunk written without an OffsetIndex.
+    pub fn props_with_data_page_rows(
+        schema: &TableSchema,
+        data_page_rows: usize,
+    ) -> WriterPropertiesPtr {
+        Arc::new(build_parquet_writer_properties(
+            TableCompression::Zstd,
+            true,
+            None::<&databend_storages_common_table_meta::meta::StatisticsOfColumns>,
+            None,
+            0,
+            schema,
+            Some(data_page_rows),
+            None,
+        ))
+    }
+
     pub fn read_back(bytes: Vec<u8>) -> (Vec<DataBlock>, usize) {
         let reader = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(bytes))
             .unwrap()
@@ -297,6 +316,7 @@ mod tests {
     use super::test_util::assert_blocks_eq;
     use super::test_util::bulk_write_blocks;
     use super::test_util::props;
+    use super::test_util::props_with_data_page_rows;
     use super::test_util::read_back;
     use super::test_util::sample_block;
     use super::test_util::sample_schema;
@@ -338,5 +358,68 @@ mod tests {
         let got = DataBlock::concat(&read_blocks).unwrap();
         let expected = DataBlock::concat(&[sample_block(), sample_block()]).unwrap();
         assert_blocks_eq(&expected, &got);
+    }
+
+    // The low-level leaf writer goes through `SerializedFileWriter`, which (unlike the
+    // hand-assembled high-level `BlockParquetWriter`) DOES emit an OffsetIndex. Either way a
+    // column chunk split across many pages must read back correctly through a standard parquet
+    // reader. This covers the low-level path's multi-page behavior.
+    #[test]
+    fn test_bulk_multi_page_chunk_reads_back() {
+        use databend_common_expression::FromData;
+        use databend_common_expression::TableDataType;
+        use databend_common_expression::TableField;
+        use databend_common_expression::TableSchema;
+        use databend_common_expression::types::Int64Type;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::StringType;
+        use parquet::file::reader::FileReader;
+        use parquet::file::reader::SerializedFileReader;
+
+        let schema = TableSchema::new(vec![
+            TableField::new("i", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("s", TableDataType::String),
+        ]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        // 5000 rows, capped at 100 rows/page. Must exceed the column writer's 1024
+        // `write_batch_size` several times over to reliably span multiple pages.
+        let n = 5000i64;
+        let block = DataBlock::new_from_columns(vec![
+            Int64Type::from_data((0..n).collect::<Vec<_>>()),
+            StringType::from_data((0..n).map(|i| format!("row-{i}")).collect::<Vec<_>>()),
+        ]);
+
+        let blocks = [block.clone()];
+        let (bytes, meta) = bulk_write_blocks(
+            arrow_schema,
+            props_with_data_page_rows(&schema, 100),
+            &blocks,
+        );
+        assert_eq!(meta.num_row_groups(), 1);
+        assert!(
+            meta.offset_index().is_some(),
+            "BulkBlockParquetWriter goes through SerializedFileWriter and keeps the OffsetIndex"
+        );
+
+        let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.clone())).unwrap();
+        let rg = reader.get_row_group(0).unwrap();
+        for col in 0..2 {
+            let mut pages = 0;
+            let mut page_reader = rg.get_column_page_reader(col).unwrap();
+            while page_reader.get_next_page().unwrap().is_some() {
+                pages += 1;
+            }
+            assert!(
+                pages > 2,
+                "column {col} should span several pages, got {pages}"
+            );
+        }
+
+        let (read_blocks, num_rg) = read_back(bytes);
+        assert_eq!(num_rg, 1);
+        let got = DataBlock::concat(&read_blocks).unwrap();
+        assert_eq!(got.num_rows(), n as usize);
+        assert_blocks_eq(&block, &got);
     }
 }
