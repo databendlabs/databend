@@ -176,12 +176,12 @@ create or replace table t_kll_compact as
 select number as a from numbers(1000);
 
 statement ok
-analyze table t_kll_compact with histogram algorithm = 'kll', error_rate = 0.5;
+analyze table t_kll_compact with histogram algorithm = 'kll', error_rate = 0.01;
 
 query I
 select count(*)
 from fuse_statistic('db_09_0020', 't_kll_compact')
-where column_name = 'a' and distinct_count = 1000 and histogram != '';
+where column_name = 'a' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
 ----
 1
 

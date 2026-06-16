@@ -34,8 +34,8 @@ struct KllWeightedItem {
     weight: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct KllSketchBuilder {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KllSketch {
     level_capacity: usize,
     len: usize,
     levels: Vec<Vec<KllSketchItem>>,
@@ -44,7 +44,7 @@ pub struct KllSketchBuilder {
     compact_next_odd: bool,
 }
 
-impl KllSketchBuilder {
+impl KllSketch {
     pub fn new(level_capacity: usize) -> Result<Self> {
         if level_capacity < 2 {
             return Err(ErrorCode::BadArguments(format!(
@@ -72,6 +72,14 @@ impl KllSketchBuilder {
         Self::new(Self::capacity_for_relative_error(relative_error)?)
     }
 
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     pub fn insert(&mut self, value: Datum) -> Result<()> {
         self.update_bounds(&value)?;
         self.levels[0].push(KllSketchItem {
@@ -82,42 +90,6 @@ impl KllSketchBuilder {
         self.compact_if_needed(0)
     }
 
-    pub fn build(self) -> Result<KllSketch> {
-        let Self {
-            level_capacity,
-            len,
-            levels,
-            min_value,
-            max_value,
-            ..
-        } = self;
-        let retained_len = levels.iter().map(Vec::len).sum();
-        let mut items = Vec::with_capacity(retained_len);
-
-        for (level_idx, level) in levels.into_iter().enumerate() {
-            let weight = 1usize << level_idx;
-            items.extend(level.into_iter().map(|item| KllWeightedItem {
-                value: item.value,
-                ordinal: item.ordinal,
-                weight,
-            }));
-        }
-        items.sort_by(compare_items);
-
-        Ok(KllSketch {
-            level_capacity,
-            len,
-            items,
-            min_value,
-            max_value,
-        })
-    }
-
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.len
-    }
-
     #[cfg(test)]
     fn levels_len(&self) -> usize {
         self.levels.len()
@@ -126,127 +98,6 @@ impl KllSketchBuilder {
     #[cfg(test)]
     fn retained_len(&self) -> usize {
         self.levels.iter().map(Vec::len).sum()
-    }
-
-    fn update_bounds(&mut self, value: &Datum) -> Result<()> {
-        match &self.min_value {
-            Some(min_value) => {
-                if compare_values(value, min_value)?.is_lt() {
-                    self.min_value = Some(value.clone());
-                }
-            }
-            None => {
-                self.min_value = Some(value.clone());
-            }
-        }
-
-        match &self.max_value {
-            Some(max_value) => {
-                if compare_values(value, max_value)?.is_gt() {
-                    self.max_value = Some(value.clone());
-                }
-            }
-            None => {
-                self.max_value = Some(value.clone());
-            }
-        }
-        Ok(())
-    }
-
-    fn compact_if_needed(&mut self, level_idx: usize) -> Result<()> {
-        if self.levels[level_idx].len() <= self.level_capacity {
-            return Ok(());
-        }
-
-        self.compact(level_idx)?;
-        self.compact_if_needed(level_idx + 1)
-    }
-
-    fn compact(&mut self, level_idx: usize) -> Result<()> {
-        let level = &mut self.levels[level_idx];
-        level.sort_by(|left, right| compare_values(&left.value, &right.value).unwrap());
-
-        let keep_odd = self.compact_next_odd;
-        self.compact_next_odd = !self.compact_next_odd;
-
-        let mut promoted = Vec::with_capacity(level.len().div_ceil(2));
-        let mut retained = Vec::new();
-        if level.len() % 2 == 1 {
-            retained.push(level.pop().expect("odd KLL level must have a tail item"));
-        }
-
-        for (idx, item) in level.drain(..).enumerate() {
-            if idx % 2 == usize::from(keep_odd) {
-                promoted.push(item);
-            }
-        }
-        *level = retained;
-
-        if self.levels.len() == level_idx + 1 {
-            self.levels.push(Vec::with_capacity(self.level_capacity));
-        }
-        self.levels[level_idx + 1].extend(promoted);
-        Ok(())
-    }
-
-    fn insert_weighted(&mut self, item: KllWeightedItem) -> Result<()> {
-        if item.weight == 0 || !item.weight.is_power_of_two() {
-            return Err(ErrorCode::BadArguments(format!(
-                "KLL weighted item weight must be a power of two, got {}",
-                item.weight
-            )));
-        }
-
-        self.update_bounds(&item.value)?;
-        let level_idx = item.weight.trailing_zeros() as usize;
-        if self.levels.len() <= level_idx {
-            self.levels
-                .resize_with(level_idx + 1, || Vec::with_capacity(self.level_capacity));
-        }
-        self.len = self
-            .len
-            .checked_add(item.weight)
-            .ok_or_else(|| ErrorCode::BadArguments("KLL sketch length overflow during merge"))?;
-        self.levels[level_idx].push(KllSketchItem {
-            value: item.value,
-            ordinal: item.ordinal,
-        });
-        self.compact_if_needed(level_idx)
-    }
-
-    fn capacity_for_relative_error(relative_error: f64) -> Result<usize> {
-        let capacity = (2.0 / relative_error).ceil();
-        if !capacity.is_finite() || capacity > usize::MAX as f64 {
-            return Err(ErrorCode::BadArguments(format!(
-                "KLL sketch relative error is too small: {relative_error}"
-            )));
-        }
-
-        Ok(capacity as usize)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KllSketch {
-    level_capacity: usize,
-    len: usize,
-    items: Vec<KllWeightedItem>,
-    min_value: Option<Datum>,
-    max_value: Option<Datum>,
-}
-
-impl KllSketch {
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    #[cfg(test)]
-    fn retained_len(&self) -> usize {
-        self.items.len()
     }
 
     pub fn merge(&mut self, other: KllSketch) -> Result<()> {
@@ -267,17 +118,26 @@ impl KllSketch {
         let min_value = merge_bound(&self.min_value, &other.min_value, Ordering::Less)?;
         let max_value = merge_bound(&self.max_value, &other.max_value, Ordering::Greater)?;
 
-        let mut builder = KllSketchBuilder::new(self.level_capacity)?;
-        for item in std::mem::take(&mut self.items)
-            .into_iter()
-            .chain(other.items)
-        {
-            builder.insert_weighted(item)?;
+        self.len = self
+            .len
+            .checked_add(other.len)
+            .ok_or_else(|| ErrorCode::BadArguments("KLL sketch length overflow during merge"))?;
+        if self.levels.len() < other.levels.len() {
+            self.levels.resize_with(other.levels.len(), || {
+                Vec::with_capacity(self.level_capacity)
+            });
         }
-        let mut rebuilt = builder.build()?;
-        rebuilt.min_value = min_value;
-        rebuilt.max_value = max_value;
-        *self = rebuilt;
+        for (level_idx, level) in other.levels.into_iter().enumerate() {
+            self.levels[level_idx].extend(level);
+        }
+        self.min_value = min_value;
+        self.max_value = max_value;
+
+        let mut level_idx = 0;
+        while level_idx < self.levels.len() {
+            self.compact_if_needed(level_idx)?;
+            level_idx += 1;
+        }
         Ok(())
     }
 
@@ -329,10 +189,12 @@ impl KllSketch {
         let Self {
             level_capacity: _,
             len,
-            items,
+            levels,
             min_value,
             max_value,
+            compact_next_odd: _,
         } = self;
+        let items = collect_weighted_items(levels);
 
         KllValuesAtRanks {
             len,
@@ -344,6 +206,78 @@ impl KllSketch {
             min_value,
             max_value,
         }
+    }
+
+    fn compact_if_needed(&mut self, level_idx: usize) -> Result<()> {
+        if self.levels[level_idx].len() <= self.level_capacity {
+            return Ok(());
+        }
+
+        self.compact(level_idx)?;
+        self.compact_if_needed(level_idx + 1)
+    }
+
+    fn compact(&mut self, level_idx: usize) -> Result<()> {
+        let level = &mut self.levels[level_idx];
+        level.sort_by(|left, right| compare_values(&left.value, &right.value).unwrap());
+
+        let keep_odd = self.compact_next_odd;
+        self.compact_next_odd = !self.compact_next_odd;
+
+        let mut promoted = Vec::with_capacity(level.len().div_ceil(2));
+        let mut retained = Vec::new();
+        if level.len() % 2 == 1 {
+            retained.push(level.pop().expect("odd KLL level must have a tail item"));
+        }
+
+        for (idx, item) in level.drain(..).enumerate() {
+            if idx % 2 == usize::from(keep_odd) {
+                promoted.push(item);
+            }
+        }
+        *level = retained;
+
+        if self.levels.len() == level_idx + 1 {
+            self.levels.push(Vec::with_capacity(self.level_capacity));
+        }
+        self.levels[level_idx + 1].extend(promoted);
+        Ok(())
+    }
+
+    fn update_bounds(&mut self, value: &Datum) -> Result<()> {
+        match &self.min_value {
+            Some(min_value) => {
+                if compare_values(value, min_value)?.is_lt() {
+                    self.min_value = Some(value.clone());
+                }
+            }
+            None => {
+                self.min_value = Some(value.clone());
+            }
+        }
+
+        match &self.max_value {
+            Some(max_value) => {
+                if compare_values(value, max_value)?.is_gt() {
+                    self.max_value = Some(value.clone());
+                }
+            }
+            None => {
+                self.max_value = Some(value.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn capacity_for_relative_error(relative_error: f64) -> Result<usize> {
+        let capacity = (2.0 / relative_error).ceil();
+        if !capacity.is_finite() || capacity > usize::MAX as f64 {
+            return Err(ErrorCode::BadArguments(format!(
+                "KLL sketch relative error is too small: {relative_error}"
+            )));
+        }
+
+        Ok(capacity as usize)
     }
 }
 
@@ -477,6 +411,22 @@ fn compare_items(left: &KllWeightedItem, right: &KllWeightedItem) -> Ordering {
         .then(left.ordinal.cmp(&right.ordinal))
 }
 
+fn collect_weighted_items(levels: Vec<Vec<KllSketchItem>>) -> Vec<KllWeightedItem> {
+    let retained_len = levels.iter().map(Vec::len).sum();
+    let mut items = Vec::with_capacity(retained_len);
+
+    for (level_idx, level) in levels.into_iter().enumerate() {
+        let weight = 1usize << level_idx;
+        items.extend(level.into_iter().map(|item| KllWeightedItem {
+            value: item.value,
+            ordinal: item.ordinal,
+            weight,
+        }));
+    }
+    items.sort_by(compare_items);
+    items
+}
+
 fn compare_values(left: &Datum, right: &Datum) -> Result<Ordering> {
     left.compare(right)
 }
@@ -503,29 +453,29 @@ fn merge_bound(
 
 #[cfg(test)]
 mod tests {
-    use super::KllSketchBuilder;
+    use super::KllSketch;
     use crate::Datum;
 
-    fn build_builder(level_capacity: usize, len: i64) -> KllSketchBuilder {
-        let mut builder = KllSketchBuilder::new(level_capacity).unwrap();
+    fn build_sketch(level_capacity: usize, len: i64) -> KllSketch {
+        let mut sketch = KllSketch::new(level_capacity).unwrap();
         for value in 0..len {
-            builder.insert(Datum::Int(value)).unwrap();
+            sketch.insert(Datum::Int(value)).unwrap();
         }
-        builder
+        sketch
     }
 
     #[test]
     fn kll_sketch_keeps_bounded_retained_items() {
-        let builder = build_builder(32, 10_000);
+        let sketch = build_sketch(32, 10_000);
 
-        assert_eq!(builder.len(), 10_000);
-        assert!(builder.levels_len() > 1);
-        assert!(builder.retained_len() < 32 * 16);
+        assert_eq!(sketch.len(), 10_000);
+        assert!(sketch.levels_len() > 1);
+        assert!(sketch.retained_len() < 32 * 16);
     }
 
     #[test]
     fn kll_sketch_estimates_quantiles() {
-        let sketch = build_builder(256, 10_000).build().unwrap();
+        let sketch = build_sketch(256, 10_000);
         let values = sketch
             .values_at_ranks([0, 4_999, 8_999, 9_999])
             .collect::<Vec<_>>();
@@ -546,12 +496,12 @@ mod tests {
 
     #[test]
     fn kll_sketch_merges_partial_sketches() {
-        let mut left = build_builder(128, 5_000).build().unwrap();
-        let mut right_builder = KllSketchBuilder::new(128).unwrap();
+        let mut left = build_sketch(128, 5_000);
+        let mut right = KllSketch::new(128).unwrap();
         for value in 5_000..10_000 {
-            right_builder.insert(Datum::Int(value)).unwrap();
+            right.insert(Datum::Int(value)).unwrap();
         }
-        left.merge(right_builder.build().unwrap()).unwrap();
+        left.merge(right).unwrap();
 
         let values = left.values_at_ranks([0, 4_999, 9_999]).collect::<Vec<_>>();
         assert_eq!(values[0], Some(Datum::Int(0)));
@@ -564,18 +514,17 @@ mod tests {
     }
 
     #[test]
-    fn kll_sketch_merge_rebuilds_bounded_items() {
-        let mut merged = KllSketchBuilder::new(32).unwrap().build().unwrap();
+    fn kll_sketch_level_merge_keeps_bounded_items() {
+        let mut merged = KllSketch::new(32).unwrap();
         let mut naive_retained_len = 0;
 
         for chunk in 0..200 {
-            let mut builder = KllSketchBuilder::new(32).unwrap();
+            let mut sketch = KllSketch::new(32).unwrap();
             for row in 0..1_000 {
                 let value = ((row * 200 + chunk) % 200_000) as i64;
-                builder.insert(Datum::Int(value)).unwrap();
+                sketch.insert(Datum::Int(value)).unwrap();
             }
 
-            let sketch = builder.build().unwrap();
             naive_retained_len += sketch.retained_len();
             merged.merge(sketch).unwrap();
         }
@@ -622,7 +571,7 @@ mod tests {
 
     #[test]
     fn kll_sketch_builds_equal_depth_histogram_buckets() {
-        let sketch = build_builder(256, 1_000).build().unwrap();
+        let sketch = build_sketch(256, 1_000);
         let buckets = sketch.into_equal_depth_buckets(10).unwrap();
 
         assert_eq!(buckets.len(), 10);
@@ -639,7 +588,7 @@ mod tests {
 
     #[test]
     fn kll_sketch_streams_equal_depth_bounds() {
-        let sketch = build_builder(32, 10_000).build().unwrap();
+        let sketch = build_sketch(32, 10_000);
         let bounds = sketch
             .into_equal_depth_bounds(10)
             .unwrap()
@@ -664,7 +613,7 @@ mod tests {
 
     #[test]
     fn kll_sketch_streams_no_bounds_for_empty_sketch() {
-        let sketch = KllSketchBuilder::new(32).unwrap().build().unwrap();
+        let sketch = KllSketch::new(32).unwrap();
         let bounds = sketch
             .into_equal_depth_bounds(10)
             .unwrap()

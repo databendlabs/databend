@@ -35,7 +35,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_statistics::KllSketch;
-use databend_common_statistics::KllSketchBuilder;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_cache::CacheAccessor;
@@ -533,23 +532,23 @@ fn build_kll_histograms(
         return Ok(HashMap::new());
     };
 
-    let mut builders = kll_columns_map
+    let mut sketches = kll_columns_map
         .iter()
         .map(|(offset, field)| {
             Ok((
                 *offset,
                 field.column_id(),
-                KllSketchBuilder::with_relative_error(relative_error)?,
+                KllSketch::with_relative_error(relative_error)?,
             ))
         })
         .collect::<Result<Vec<_>>>()?;
 
-    for (offset, _, builder) in builders.iter_mut() {
+    for (offset, _, sketch) in sketches.iter_mut() {
         match block.get_by_offset(*offset) {
             BlockEntry::Const(scalar, _, num_rows) => {
                 if let Some(datum) = scalar.clone().to_datum() {
                     for _ in 0..*num_rows {
-                        builder.insert(datum.clone())?;
+                        sketch.insert(datum.clone())?;
                     }
                 }
             }
@@ -561,15 +560,14 @@ fn build_kll_histograms(
                     else {
                         continue;
                     };
-                    builder.insert(datum)?;
+                    sketch.insert(datum)?;
                 }
             }
         }
     }
 
-    let mut histograms = HashMap::with_capacity(builders.len());
-    for (_, column_id, builder) in builders {
-        let sketch = builder.build()?;
+    let mut histograms = HashMap::with_capacity(sketches.len());
+    for (_, column_id, sketch) in sketches {
         if !sketch.is_empty() {
             histograms.insert(column_id, sketch);
         }
