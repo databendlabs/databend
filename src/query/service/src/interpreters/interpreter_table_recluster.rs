@@ -170,6 +170,9 @@ impl Interpreter for ReclusterTableInterpreter {
                                 | ErrorCode::UNRESOLVABLE_CONFLICT
                         )
                     {
+                        // Keep FINAL carry across retryable conflicts. FINAL is
+                        // a bounded fixed scan and does not restart from table
+                        // head to chase concurrent snapshot drift.
                         warn!(
                             "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
                             times + 1,
