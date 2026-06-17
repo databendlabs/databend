@@ -1043,6 +1043,10 @@ impl Settings {
         self.try_get_u64("max_spill_io_requests")
     }
 
+    pub fn get_max_parquet_spill_row_groups_per_file(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_parquet_spill_row_groups_per_file")? as usize)
+    }
+
     // Get grouping_sets_channel_size.
     pub fn get_grouping_sets_channel_size(&self) -> Result<u64> {
         self.try_get_u64("grouping_sets_channel_size")

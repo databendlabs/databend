@@ -80,12 +80,14 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         let writer_pool_bytes = settings
             .get_spill_writer_memory_pool_size_mb()?
             .saturating_mul(1024 * 1024);
+        let max_row_groups_per_file = settings.get_max_parquet_spill_row_groups_per_file()?;
 
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let buffer = WindowPartitionBuffer::new(
             ctx.clone(),
             prefix,
             writer_pool_bytes,
+            max_row_groups_per_file,
             partitions.len(),
             sort_block_size,
             memory_settings,

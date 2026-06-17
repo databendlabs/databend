@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -47,8 +46,6 @@ use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 
 const MATERIALIZED_CTE_SPILL_UNIT_SIZE: usize = 8 * 1024 * 1024;
-/// Maximum number of row groups per file.
-const MAX_ROW_GROUPS_PER_FILE: usize = 2 << 15;
 
 #[derive(Clone)]
 pub enum MaterializedCtePayload {
@@ -106,6 +103,7 @@ pub struct MaterializedCteSink {
     senders: Vec<Sender<MaterializedCtePayload>>,
     prefix: String,
     writer_pool_bytes: usize,
+    max_row_groups_per_file: usize,
     memory_settings: MemorySettings,
     input_data: Option<DataBlock>,
     pending_payloads: VecDeque<MaterializedCtePayload>,
@@ -126,12 +124,14 @@ impl MaterializedCteSink {
         let writer_pool_bytes = settings
             .get_spill_writer_memory_pool_size_mb()?
             .saturating_mul(1024 * 1024);
+        let max_row_groups_per_file = settings.get_max_parquet_spill_row_groups_per_file()?;
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx,
             input,
             senders,
             prefix,
             writer_pool_bytes,
+            max_row_groups_per_file,
             memory_settings,
             input_data: None,
             pending_payloads: VecDeque::new(),
@@ -154,36 +154,37 @@ impl MaterializedCteSink {
         let data_operator = DataOperator::instance();
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let path = format!("{}/{}", self.prefix, GlobalUniq::unique());
-        let mut writer = buffer_pool.writer(operator, path.clone(), self.writer_pool_bytes)?;
+        let mut writer = buffer_pool.writer(
+            operator,
+            self.prefix.clone(),
+            self.writer_pool_bytes,
+            self.max_row_groups_per_file,
+        )?;
 
         let schema = Arc::new(data_blocks[0].infer_schema());
-        let mut row_group_ranges = Vec::with_capacity(data_blocks.len());
-        let mut next_row_group = 0;
+        let mut payloads = Vec::with_capacity(data_blocks.len());
         for block in data_blocks {
             writer.write(block)?;
-            let row_group_count = writer.flush_row_groups()?;
-            row_group_ranges.push(next_row_group..row_group_count);
-            next_row_group = row_group_count;
+            for row_groups in writer.flush_row_groups()? {
+                payloads.push(MaterializedCtePayload::Spilled(
+                    MaterializedCteSpilledPayload {
+                        path: row_groups.path,
+                        row_groups: Arc::new(row_groups.row_groups),
+                        schema: schema.clone(),
+                    },
+                ));
+            }
         }
-        let (bytes_written, row_groups) = writer.close()?;
-        if bytes_written > 0 {
-            self.ctx.add_spill_file(
-                Location::Remote(path.clone()),
-                Layout::Parquet,
-                bytes_written,
-            );
+        for file in writer.close()? {
+            if file.bytes_written > 0 {
+                self.ctx.add_spill_file(
+                    Location::Remote(file.path),
+                    Layout::Parquet,
+                    file.bytes_written,
+                );
+            }
         }
-        Ok(row_group_ranges
-            .into_iter()
-            .map(|range| {
-                MaterializedCtePayload::Spilled(MaterializedCteSpilledPayload {
-                    path: path.clone(),
-                    row_groups: Arc::new(row_groups[range].to_vec()),
-                    schema: schema.clone(),
-                })
-            })
-            .collect())
+        Ok(payloads)
     }
 
     fn consume_block(&mut self, data_block: DataBlock) -> Result<()> {
@@ -192,9 +193,7 @@ impl MaterializedCteSink {
             self.spilling_bytes += data_block.memory_size();
             self.spilling_blocks.push(data_block);
 
-            if self.spilling_bytes >= self.spill_unit_size()
-                || self.spilling_blocks.len() >= MAX_ROW_GROUPS_PER_FILE
-            {
+            if self.spilling_bytes >= self.spill_unit_size() {
                 self.flush_spilling_blocks()?;
             }
         } else {
