@@ -28,59 +28,59 @@ grant update, delete on c_r2.t2 to role role3;
 "
 
 echo "=== review init role3 grants ==="
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== drop table c_r2.t2 ==="
-echo "drop table c_r2.t2;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table c_r2.t2;" | bendsql_connect_root
 echo "=== drop c_r2.t2 once ==="
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== create same name table c_r2.t2 ==="
-echo "create table c_r2.t2(id int);" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
-echo "drop table c_r2.t2;" | $BENDSQL_CLIENT_CONNECT
+echo "create table c_r2.t2(id int);" | bendsql_connect_root
+echo "grant select on c_r2.t2 to role role3;" | bendsql_connect_root
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
+echo "drop table c_r2.t2;" | bendsql_connect_root
 echo "=== drop c_r2.t2 twice ==="
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
-echo "create table c_r2.t2(id int);" | $BENDSQL_CLIENT_CONNECT
-echo "grant update, delete on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
+echo "create table c_r2.t2(id int);" | bendsql_connect_root
+echo "grant update, delete on c_r2.t2 to role role3;" | bendsql_connect_root
 
 echo "=== test database drop ==="
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
-echo "drop database c_r;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database c_r2;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
+echo "drop database c_r;" | bendsql_connect_root
+echo "drop database c_r2;" | bendsql_connect_root
 
 echo "=== drop database c_r , c_r2 ==="
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== undrop database c_r2 ==="
-echo "undrop database c_r2" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "undrop database c_r2" | bendsql_connect_root
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== undrop database c_r, contain table c_r.t's ownership ==="
-echo "undrop database c_r" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "undrop database c_r" | bendsql_connect_root
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== drop database c_r, c_r2, re-create c_r, c_r2 ==="
-echo "drop database c_r" | $BENDSQL_CLIENT_CONNECT
-echo "drop database c_r2" | $BENDSQL_CLIENT_CONNECT
-echo "create database c_r" | $BENDSQL_CLIENT_CONNECT
-echo "create database c_r2" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "drop database c_r" | bendsql_connect_root
+echo "drop database c_r2" | bendsql_connect_root
+echo "create database c_r" | bendsql_connect_root
+echo "create database c_r2" | bendsql_connect_root
+echo "show grants for role role3;" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 
 echo "=== show grants test ==="
-echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2" | $BENDSQL_CLIENT_CONNECT
-echo "create user u1 identified by '123' with DEFAULT_ROLE='role1'" | $BENDSQL_CLIENT_CONNECT
-echo "create role role1" | $BENDSQL_CLIENT_CONNECT
-echo "create role role2" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant insert on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role1 to u1" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role2 to u1" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists u1" | bendsql_connect_root
+echo "drop role if exists role1" | bendsql_connect_root
+echo "drop role if exists role2" | bendsql_connect_root
+echo "create user u1 identified by '123' with DEFAULT_ROLE='role1'" | bendsql_connect_root
+echo "create role role1" | bendsql_connect_root
+echo "create role role2" | bendsql_connect_root
+echo "grant select on *.* to role role1;" | bendsql_connect_root
+echo "grant insert on *.* to role role1;" | bendsql_connect_root
+echo "grant role role1 to u1" | bendsql_connect_root
+echo "grant role role2 to u1" | bendsql_connect_root
 
-export USER_U1_CONNECT="bendsql_query_http_user_connect u1 123 -A"
+export USER_U1_CONNECT="bendsql_connect_user u1 123 -A"
 
 echo "show grants for role role1" | $USER_U1_CONNECT
 echo "show grants for role role2" | $USER_U1_CONNECT
@@ -93,7 +93,7 @@ echo "Need Err:"
 echo "show grants for user root" | $USER_U1_CONNECT
 echo "show grants for role account_admin" | $USER_U1_CONNECT
 
-echo "grant grant on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant grant on *.* to role role1;" | bendsql_connect_root
 echo "show grants for role role3;" | $USER_U1_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "show grants for user 'role3@test';" | $USER_U1_CONNECT
 

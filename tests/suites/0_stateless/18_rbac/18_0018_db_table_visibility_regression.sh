@@ -5,11 +5,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 API_BASE="http://${QUERY_MYSQL_HANDLER_HOST}:${QUERY_HTTP_HANDLER_PORT}/v1/catalog"
 
-export USER_DROPPED_DB_CONNECT="bendsql_query_http_user_connect u_dropped_db_0018 123 -A --quote-style=never"
+export USER_DROPPED_DB_CONNECT="bendsql_connect_user u_dropped_db_0018 123 -A --quote-style=never"
 
 # Prepare data for table ownership, database ownership, role grants, direct user
 # grants, inherited roles, and ownership cleanup after a role is dropped.
-$BENDSQL_CLIENT_OUTPUT_NULL <<SQL
+bendsql_connect_root_null <<SQL
 drop user if exists u_table_0018;
 drop user if exists u_db_0018;
 drop user if exists u_grant_0018;
@@ -247,7 +247,7 @@ echo "select name from system.tables where database = 'db_dropped_db_0018' order
 echo "-- system.tables exact table"
 echo "select name from system.tables where database = 'db_dropped_db_0018' and name = 'dropped_case_0018'" | $USER_DROPPED_DB_CONNECT
 
-echo "drop role role_dropped_db_owner_0018;" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "drop role role_dropped_db_owner_0018;" | bendsql_connect_root_null
 
 echo "=== dropped db owner after role drop ==="
 echo "-- catalog databases"
@@ -276,7 +276,7 @@ echo "select count() from system.databases where name = 'db_dropped_db_0018'" | 
 echo "-- system.tables count"
 echo "select count() from system.tables where database = 'db_dropped_db_0018'" | $USER_DROPPED_DB_CONNECT
 
-$BENDSQL_CLIENT_OUTPUT_NULL <<SQL
+bendsql_connect_root_null <<SQL
 drop user if exists u_table_0018;
 drop user if exists u_db_0018;
 drop user if exists u_grant_0018;

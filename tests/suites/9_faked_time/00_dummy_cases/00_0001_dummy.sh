@@ -10,8 +10,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 #############################################################
 
 # format of `faked` is "2024-05-22 03:00:35.977589"
-c=$(echo "select c from test_faketime.t" | $BENDSQL_CLIENT_CONNECT)
-now=$(echo "select now()" | $BENDSQL_CLIENT_CONNECT)
+c=$(echo "select c from test_faketime.t" | bendsql_connect_root)
+now=$(echo "select now()" | bendsql_connect_root)
 
 # manually "time diff"
 faked=$(date -d "$c" +%s)

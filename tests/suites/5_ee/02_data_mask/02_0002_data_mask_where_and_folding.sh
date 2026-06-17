@@ -29,8 +29,8 @@ stmt "ALTER TABLE default.mask_test MODIFY COLUMN data SET MASKING POLICY mask_v
 stmt "GRANT SELECT ON default.mask_test TO ROLE mask_admin"
 stmt "GRANT SELECT ON default.mask_test TO ROLE mask_reader"
 
-ADMIN_CONNECT="bendsql_query_http_user_connect mask_admin_user 123 --quote-style=never"
-READER_CONNECT="bendsql_query_http_user_connect mask_reader_user 123 --quote-style=never"
+ADMIN_CONNECT="bendsql_connect_user mask_admin_user 123 --quote-style=never"
+READER_CONNECT="bendsql_connect_user mask_reader_user 123 --quote-style=never"
 
 comment "=== Constant folding verification ==="
 

@@ -8,7 +8,7 @@ ROOT=$(realpath "$CURDIR"/../../../data/delta/partitioned/)
 stmt "drop table if exists test_delta;"
 
 echo ">>>> create table test_delta engine = delta location = 'fs://\${ROOT}/';"
-echo "create table test_delta engine = delta location = 'fs://${ROOT}/';" | $BENDSQL_CLIENT_CONNECT
+echo "create table test_delta engine = delta location = 'fs://${ROOT}/';" | bendsql_connect_root
 # stmt "create table test_delta engine = delta location = 'fs://${ROOT}/';"
 query "select * from test_delta order by c5;"
 # p* is partition column, c* is normal column
