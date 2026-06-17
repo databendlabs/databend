@@ -62,8 +62,8 @@ class ScanStats:
     read_bytes: int
 
     @property
-    def cost(self) -> tuple[int, int, int]:
-        return (self.partitions_scanned, self.read_rows, self.read_bytes)
+    def cost(self) -> tuple[int, int]:
+        return (self.partitions_scanned, self.read_rows)
 
 
 @dataclass
@@ -719,14 +719,13 @@ def format_bytes(value: int) -> str:
 
 
 def format_cost(stats: ScanStats) -> str:
-    return f"{stats.partitions_scanned}/{stats.read_rows}/{stats.read_bytes}"
+    return f"{stats.partitions_scanned}/{stats.read_rows}"
 
 
 def format_cost_delta(stats: ScanStats, best: ScanStats) -> str:
     return (
         f"{stats.partitions_scanned - best.partitions_scanned:+d}/"
-        f"{stats.read_rows - best.read_rows:+d}/"
-        f"{stats.read_bytes - best.read_bytes:+d}"
+        f"{stats.read_rows - best.read_rows:+d}"
     )
 
 
@@ -773,7 +772,7 @@ def print_case_report(
     print(
         f"{'route':<18} {'pick':<18} {'rank':>4} {'query_ms(p50)':>13} "
         f"{'partitions':>14} {'read_rows':>12} {'read_size':>12} "
-        f"{'cost(parts/rows/bytes)':<24} {'delta_best'}"
+        f"{'route_cost(parts/rows)':<24} {'delta_best(parts/rows)'}"
     )
     print("-" * 143)
     for name in ["proxy", "trace", "chat", "user", "trace_chat", "trace_chat_user"]:
@@ -801,7 +800,7 @@ def print_summary(results: list[RouteResult]) -> None:
     print("\nsummary:")
     print(
         "case,best_by_stats,tied_best,actual_route,count,"
-        "best_cost,proxy_cost,selected_cost,selected_delta,"
+        "best_route_cost,proxy_route_cost,selected_route_cost,selected_delta,"
         "best_ms,proxy_ms,selected_ms,route_rank,top1_match,acceptable_route,passed"
     )
     for result in results:

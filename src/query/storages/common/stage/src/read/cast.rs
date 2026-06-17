@@ -14,6 +14,7 @@
 
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VectorDataType;
 
 /// limits automatic type casting when loading data with a specified schema, applicable to formats like Parquet, ORC, Iceberg, and Delta.
 ///
@@ -81,6 +82,9 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         (_, Tuple(_)) | (Tuple(_), _) => false,
 
         (Array(box from_ty), Array(box to_ty)) => load_can_auto_cast_to(from_ty, to_ty),
+        (Array(box from_ty), Vector(VectorDataType::Float32(_))) => {
+            matches!(from_ty.remove_nullable(), Number(_) | Decimal(_))
+        }
         (EmptyArray, Array(_)) => true,
         (_, Array(_)) | (Array(_), _) => false,
 
