@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.bench_common.bendsql import BendSQL, QueryResult, csv_records
 
+DEFAULT_LOCAL_DSN = "databend://root:@127.0.0.1:38000?sslmode=disable"
 
 HISTOGRAM_RE = re.compile(
     r'\[bucket id: (?P<id>\d+), min: "(?P<min>.*?)", max: "(?P<max>.*?)", '
@@ -71,6 +73,7 @@ class Probe:
 class AnalyzeResult:
     algorithm: str
     elapsed_sec: float
+    query_pids: list[int]
     rss_baseline_kb: int | None
     rss_peak_kb: int | None
     rss_delta_kb: int | None
@@ -116,6 +119,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--sample-interval-sec", type=float, default=0.05)
     parser.add_argument(
+        "--run-mode",
+        choices=("sequential", "isolated-query"),
+        default="sequential",
+        help=(
+            "sequential reuses the current query process; isolated-query starts a fresh "
+            "databend-query process for setup and for each measured ANALYZE run."
+        ),
+    )
+    parser.add_argument(
+        "--query-bin",
+        default="target/debug/databend-query",
+        help="databend-query binary used by --run-mode=isolated-query.",
+    )
+    parser.add_argument(
+        "--query-config",
+        default="_data/local/databend-query.toml",
+        help="databend-query config used by --run-mode=isolated-query.",
+    )
+    parser.add_argument(
+        "--query-ready-timeout-sec",
+        type=float,
+        default=60.0,
+        help="Timeout while waiting for a managed databend-query process to accept SQL.",
+    )
+    parser.add_argument(
+        "--query-shutdown-timeout-sec",
+        type=float,
+        default=10.0,
+        help="Grace period before killing a managed databend-query process.",
+    )
+    parser.add_argument(
+        "--query-log-dir",
+        default="target/bench-results",
+        help="Directory for managed databend-query stdout/stderr logs.",
+    )
+    parser.add_argument(
         "--query-pid",
         action="append",
         type=int,
@@ -143,6 +182,8 @@ def fq_table(database: str, table: str) -> str:
 
 
 def build_client(args: argparse.Namespace) -> BendSQL:
+    if args.run_mode == "isolated-query" and not args.dsn:
+        args.dsn = DEFAULT_LOCAL_DSN
     return BendSQL(args.bendsql, args.dsn, args.dry_run)
 
 
@@ -242,6 +283,109 @@ def total_rss_kb(pids: list[int]) -> int | None:
     if not values:
         return None
     return sum(values)
+
+
+def safe_label(label: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", label).strip("_")
+
+
+def tail_file(path: Path, max_bytes: int = 8192) -> str:
+    try:
+        with path.open("rb") as file:
+            file.seek(0, os.SEEK_END)
+            size = file.tell()
+            file.seek(max(0, size - max_bytes))
+            return file.read().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def start_query_process(args: argparse.Namespace, label: str) -> tuple[subprocess.Popen[Any], Path]:
+    if args.dry_run:
+        raise RuntimeError("managed query process is not available in dry-run mode")
+
+    log_dir = Path(args.query_log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"analyze_histogram_{safe_label(label)}_{int(time.time() * 1000)}.log"
+    cmd = [args.query_bin, "-c", args.query_config]
+    printable = " ".join(shlex.quote(part) for part in cmd)
+    print(f"\n[start query {label}] {printable} > {log_path}", flush=True)
+
+    env = os.environ.copy()
+    env.setdefault("RUST_BACKTRACE", "1")
+    with log_path.open("ab") as log_file:
+        process = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)
+    return process, log_path
+
+
+def wait_for_query(
+    client: BendSQL,
+    args: argparse.Namespace,
+    process: subprocess.Popen[Any],
+    log_path: Path,
+    label: str,
+) -> None:
+    deadline = time.monotonic() + args.query_ready_timeout_sec
+    cmd = build_bendsql_cmd(client, "SELECT 1")
+    last_error = ""
+
+    while time.monotonic() < deadline:
+        exit_code = process.poll()
+        if exit_code is not None:
+            log_tail = tail_file(log_path)
+            raise RuntimeError(
+                f"databend-query exited while starting {label}, exit={exit_code}\n{log_tail}"
+            )
+
+        try:
+            probe = subprocess.run(cmd, text=True, capture_output=True, timeout=5)
+        except subprocess.SubprocessError as err:
+            last_error = str(err)
+        else:
+            if probe.returncode == 0:
+                print(f"[query ready {label}] pid={process.pid}", flush=True)
+                return
+            last_error = (probe.stderr or probe.stdout).strip()
+        time.sleep(0.5)
+
+    log_tail = tail_file(log_path)
+    raise RuntimeError(
+        f"timed out waiting for databend-query {label}: {last_error}\n{log_tail}"
+    )
+
+
+def stop_query_process(
+    process: subprocess.Popen[Any],
+    args: argparse.Namespace,
+    label: str,
+) -> None:
+    if process.poll() is not None:
+        return
+
+    print(f"[stop query {label}] pid={process.pid}", flush=True)
+    process.terminate()
+    try:
+        process.wait(timeout=args.query_shutdown_timeout_sec)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def with_managed_query(
+    client: BendSQL,
+    args: argparse.Namespace,
+    label: str,
+    callback: Callable[[list[int]], Any],
+) -> Any:
+    if args.dry_run:
+        return callback([])
+
+    process, log_path = start_query_process(args, label)
+    try:
+        wait_for_query(client, args, process, log_path, label)
+        return callback([process.pid])
+    finally:
+        stop_query_process(process, args, label)
 
 
 class RssMonitor:
@@ -345,6 +489,7 @@ def run_analyze(
     return AnalyzeResult(
         algorithm=algorithm,
         elapsed_sec=result.elapsed_sec,
+        query_pids=pids,
         rss_baseline_kb=baseline_kb,
         rss_peak_kb=peak_kb,
         rss_delta_kb=delta_kb,
@@ -596,34 +741,66 @@ def main() -> None:
         if algorithm not in {"window", "kll_fast", "kll_full"}:
             raise ValueError(f"unsupported algorithm: {algorithm}")
 
-    client = build_client(args)
-    pids = args.query_pid or discover_query_pids(args.query_process_substring)
-    if pids:
-        print(f"Sampling databend-query RSS from pids: {pids}", flush=True)
-    else:
-        print(
-            "No databend-query PID discovered; RSS fields will be null. "
-            "Pass --query-pid to enable memory sampling.",
-            file=sys.stderr,
-            flush=True,
-        )
-
-    prepare_table(client, args)
     probes = build_probes(args.domain)
-    counts = exact_counts(client, args, probes)
+    client = build_client(args)
 
     analyze_results: list[AnalyzeResult] = []
     accuracy_results: list[AccuracyResult] = []
     histogram_summaries: dict[str, Any] = {}
+    sampled_pids: list[int] = []
 
-    for iteration in range(1, args.repeat + 1):
-        for algorithm in algorithms:
-            analyze_result = run_analyze(client, args, algorithm, iteration, pids)
-            analyze_results.append(analyze_result)
-            histograms = load_histograms(client, args)
-            key = f"{algorithm}_iter_{iteration}"
-            histogram_summaries[key] = summarize_histograms(histograms)
-            accuracy_results.extend(evaluate_accuracy(algorithm, histograms, probes, counts))
+    if args.run_mode == "sequential":
+        sampled_pids = args.query_pid or discover_query_pids(args.query_process_substring)
+        if sampled_pids:
+            print(f"Sampling databend-query RSS from pids: {sampled_pids}", flush=True)
+        else:
+            print(
+                "No databend-query PID discovered; RSS fields will be null. "
+                "Pass --query-pid to enable memory sampling.",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        prepare_table(client, args)
+        counts = exact_counts(client, args, probes)
+
+        for iteration in range(1, args.repeat + 1):
+            for algorithm in algorithms:
+                analyze_result = run_analyze(client, args, algorithm, iteration, sampled_pids)
+                analyze_results.append(analyze_result)
+                histograms = load_histograms(client, args)
+                key = f"{algorithm}_iter_{iteration}"
+                histogram_summaries[key] = summarize_histograms(histograms)
+                accuracy_results.extend(evaluate_accuracy(algorithm, histograms, probes, counts))
+    else:
+        if args.query_pid:
+            print(
+                "--query-pid is ignored in --run-mode=isolated-query; managed query "
+                "processes are sampled by their own PIDs.",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        def setup(_: list[int]) -> dict[str, float]:
+            prepare_table(client, args)
+            return exact_counts(client, args, probes)
+
+        counts = with_managed_query(client, args, "setup", setup)
+
+        for iteration in range(1, args.repeat + 1):
+            for algorithm in algorithms:
+
+                def run_once(pids: list[int]) -> None:
+                    analyze_result = run_analyze(client, args, algorithm, iteration, pids)
+                    analyze_results.append(analyze_result)
+                    histograms = load_histograms(client, args)
+                    key = f"{algorithm}_iter_{iteration}"
+                    histogram_summaries[key] = summarize_histograms(histograms)
+                    accuracy_results.extend(
+                        evaluate_accuracy(algorithm, histograms, probes, counts)
+                    )
+
+                with_managed_query(client, args, f"{algorithm}_iter_{iteration}", run_once)
 
     result = {
         "config": {
@@ -637,7 +814,10 @@ def main() -> None:
             "kll_error_rate": args.kll_error_rate,
             "algorithms": algorithms,
             "repeat": args.repeat,
-            "query_pids": pids,
+            "run_mode": args.run_mode,
+            "query_bin": args.query_bin if args.run_mode == "isolated-query" else None,
+            "query_config": args.query_config if args.run_mode == "isolated-query" else None,
+            "query_pids": sampled_pids,
         },
         "analyze_results": [asdict(result) for result in analyze_results],
         "histogram_summaries": histogram_summaries,
@@ -657,7 +837,18 @@ def main() -> None:
         print(f"Wrote {args.output}", flush=True)
 
     if not args.keep:
-        run_sql(client, f"DROP DATABASE IF EXISTS {quote_ident(args.database)}", "drop database")
+        if args.run_mode == "sequential":
+            run_sql(client, f"DROP DATABASE IF EXISTS {quote_ident(args.database)}", "drop database")
+        else:
+
+            def cleanup(_: list[int]) -> None:
+                run_sql(
+                    client,
+                    f"DROP DATABASE IF EXISTS {quote_ident(args.database)}",
+                    "drop database",
+                )
+
+            with_managed_query(client, args, "cleanup", cleanup)
 
 
 if __name__ == "__main__":
