@@ -34,8 +34,8 @@ use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextSettings;
@@ -174,7 +174,7 @@ impl AggregatePayloadWriters {
         Ok(())
     }
 
-    pub fn finalize(&mut self) -> Result<Vec<NewSpilledPayload>> {
+    pub fn finalize(&mut self) -> Result<Vec<SpilledPayload>> {
         let writers = mem::replace(&mut self.writers, Self::empty_writers(self.partition_count));
 
         if writers.iter().all(|writer| writer.is_none()) {
@@ -216,7 +216,7 @@ impl AggregatePayloadWriters {
 
             for row_group in row_groups {
                 self.write_stats.add_rows(row_group.num_rows() as usize);
-                spilled_payloads.push(NewSpilledPayload {
+                spilled_payloads.push(SpilledPayload {
                     bucket: partition_id as isize,
                     location: path.clone(),
                     row_group,
@@ -330,7 +330,7 @@ impl PartitionStream for SharedPartitionStream {
     }
 }
 
-pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
+pub struct AggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
     partition_stream: P,
@@ -338,7 +338,7 @@ pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     payload_writers: AggregatePayloadWriters,
 }
 
-impl<P: PartitionStream> NewAggregateSpiller<P> {
+impl<P: PartitionStream> AggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         partition_count: usize,
@@ -372,29 +372,29 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         Ok(())
     }
 
-    pub fn spill_finish(&mut self) -> Result<Vec<NewSpilledPayload>> {
+    pub fn spill_finish(&mut self) -> Result<Vec<SpilledPayload>> {
         let pending_blocks = self.partition_stream.finish();
         self.payload_writers.write_ready_blocks(pending_blocks)?;
 
         let payloads = self.payload_writers.finalize()?;
         debug!(
-            "[NewAggregateSpiller] spill finish with {} payloads",
+            "[AggregateSpiller] spill finish with {} payloads",
             payloads.len()
         );
         Ok(payloads)
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
+    pub fn restore(&self, payload: SpilledPayload) -> Result<SerializedPayload> {
         restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
-pub struct NewAggregateSpillReader {
+pub struct AggregateSpillReader {
     read_setting: ReadSettings,
     data_schema: DataSchemaRef,
 }
 
-impl NewAggregateSpillReader {
+impl AggregateSpillReader {
     pub fn try_create(ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<Self> {
         let table_ctx: Arc<dyn TableContext> = ctx;
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
@@ -404,17 +404,17 @@ impl NewAggregateSpillReader {
         })
     }
 
-    pub fn restore(&self, payload: NewSpilledPayload) -> Result<SerializedPayload> {
+    pub fn restore(&self, payload: SpilledPayload) -> Result<SerializedPayload> {
         restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
 fn restore_payload(
     read_setting: ReadSettings,
-    payload: NewSpilledPayload,
+    payload: SpilledPayload,
     data_schema: &DataSchemaRef,
 ) -> Result<SerializedPayload> {
-    let NewSpilledPayload {
+    let SpilledPayload {
         bucket,
         location,
         row_group,
@@ -486,9 +486,9 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
 
-    use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
-    use crate::pipelines::processors::transforms::aggregator::new_aggregate::LocalPartitionStream;
-    use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
+    use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
+    use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
+    use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -498,7 +498,7 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
-        let mut spiller = NewAggregateSpiller::try_create(
+        let mut spiller = AggregateSpiller::try_create(
             ctx.clone(),
             partition_count,
             Arc::new(DataSchema::empty()),
@@ -531,7 +531,7 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = LocalPartitionStream::new(1024, 1024 * 1024, partition_count);
-        let mut spiller = NewAggregateSpiller::try_create(
+        let mut spiller = AggregateSpiller::try_create(
             ctx.clone(),
             partition_count,
             Arc::new(DataSchema::empty()),

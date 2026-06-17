@@ -1039,10 +1039,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_backpressure_spiller")? != 0)
     }
 
-    pub fn get_max_spill_io_requests(&self) -> Result<u64> {
-        self.try_get_u64("max_spill_io_requests")
-    }
-
     // Get grouping_sets_channel_size.
     pub fn get_grouping_sets_channel_size(&self) -> Result<u64> {
         self.try_get_u64("grouping_sets_channel_size")
@@ -1226,10 +1222,6 @@ impl Settings {
         self.try_set_u64("enable_auto_materialize_cte", val)
     }
 
-    pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
-        self.try_get_u64("max_aggregate_restore_worker")
-    }
-
     pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
@@ -1262,10 +1254,6 @@ impl Settings {
                 s3_storage_class_setting, e
             ))
         })
-    }
-
-    pub fn get_enable_experiment_aggregate(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experiment_aggregate")? != 0)
     }
 
     pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {

@@ -95,11 +95,7 @@ impl Default for HashTableConfig {
 }
 
 impl HashTableConfig {
-    pub fn new_experiment_partial(
-        radix_bits: u64,
-        node_nums: usize,
-        active_threads: usize,
-    ) -> Self {
+    pub fn partial_aggregate(radix_bits: u64, node_nums: usize, active_threads: usize) -> Self {
         let capacity = if node_nums != 1 {
             131072 * (2 << node_nums)
         } else {
@@ -110,7 +106,7 @@ impl HashTableConfig {
             (cache_per_active_thread / size_per_entry).next_power_of_two()
         };
 
-        // not support payload growth when `enable_experiment_aggregate` = 1
+        // Partial aggregate does not support payload growth after the target radix is fixed.
         HashTableConfig {
             current_max_radix_bits: Arc::new(AtomicU64::new(radix_bits)),
             initial_radix_bits: radix_bits,

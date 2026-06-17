@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -28,7 +27,6 @@ use crate::DataBlock;
 use crate::ProjectedBlock;
 use crate::aggregate::AggregateFunction;
 use crate::types::DataType;
-use crate::utils::arrow::deserialize_column;
 
 pub struct SerializedPayload {
     pub bucket: isize,
@@ -139,34 +137,6 @@ impl SerializedPayload {
                 max_partition_count,
             })
             .collect())
-    }
-}
-
-#[derive(Debug)]
-pub struct BucketSpilledPayload {
-    pub bucket: isize,
-    pub location: String,
-    pub data_range: Range<u64>,
-    pub columns_layout: Vec<u64>,
-    pub max_partition_count: usize,
-}
-
-impl BucketSpilledPayload {
-    pub fn deserialize(self, data: Vec<u8>) -> Result<SerializedPayload> {
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(self.columns_layout.len());
-
-        for column_layout in self.columns_layout {
-            let end = begin + column_layout as usize;
-            columns.push(deserialize_column(&data[begin..end])?);
-            begin = end;
-        }
-
-        Ok(SerializedPayload {
-            bucket: self.bucket,
-            data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: self.max_partition_count,
-        })
     }
 }
 
