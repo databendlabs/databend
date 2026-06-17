@@ -181,7 +181,7 @@ impl FuseTable {
             let mut scan_had_compact_segments = false;
 
             if !scan_locations.is_empty() {
-                let probe_segments = scan_locations.len();
+                let scan_segments = scan_locations.len();
                 if recluster_segment_pruner.is_none() {
                     recluster_segment_pruner = Some(Self::create_recluster_segment_pruner(
                         &ctx,
@@ -199,7 +199,7 @@ impl FuseTable {
                         *max_concurrency,
                     )
                 };
-                let compact_segments = Self::segment_pruning(
+                let probe_segments = Self::segment_pruning(
                     pruning_ctx,
                     segment_pruner,
                     max_concurrency,
@@ -208,30 +208,30 @@ impl FuseTable {
                 .await?;
 
                 let status = format!(
-                    "[FUSE-RECLUSTER] Scanned segment range: scan_start={} scan_end={} probe_segments={} compact_segments={} segment_progress={}/{}, elapsed={:?}",
+                    "[FUSE-RECLUSTER] Scanned segment range: scan_start={} scan_end={} scan_segments={} probe_segments={} segment_progress={}/{}, elapsed={:?}",
                     scan_start,
                     scan_end,
-                    probe_segments,
-                    compact_segments.len(),
+                    scan_segments,
+                    probe_segments.len(),
                     scan_end,
                     number_segments,
                     start.elapsed()
                 );
                 ctx.set_status_info(&status);
 
-                if compact_segments.is_empty() {
+                if probe_segments.is_empty() {
                     debug!(
                         "recluster: build candidates skipped scan_start={} scan_end={} skip_reason=empty_compact_segments",
                         scan_start, scan_end,
                     );
                 } else {
                     scan_had_compact_segments = true;
-                    let segment_windows =
-                        mutator.select_segments(&compact_segments, max_seg_num)?;
+                    let segment_windows = mutator.select_segments(&probe_segments, max_seg_num)?;
+                    let windows_num = segment_windows.len();
                     debug!(
-                        "recluster: selected segment windows compact_segments={} window_count={} max_segments={}",
-                        compact_segments.len(),
-                        segment_windows.len(),
+                        "recluster: selected segment windows probe_segments={} window_count={} max_segments={}",
+                        probe_segments.len(),
+                        windows_num,
                         max_seg_num,
                     );
 
@@ -308,14 +308,11 @@ impl FuseTable {
                         }
                     }
                     info!(
-                        "recluster: probed candidate windows scan_start={} scan_end={} probe_segments={} probe_windows={} probe_tasks={} pending_windows={} early_accept={} elapsed={:?}",
-                        scan_start,
-                        scan_end,
-                        probe_segments,
+                        "recluster: probed candidate windows candidate_windows={} probe_windows={} probe_tasks={} pending_windows={} elapsed={:?}",
+                        windows_num,
                         probe_windows,
                         probe_tasks,
                         pending_windows.len(),
-                        early_accept_count,
                         probe_start.elapsed(),
                     );
                 }
@@ -426,8 +423,11 @@ impl FuseTable {
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
         let elapsed_time = start.elapsed();
         ctx.set_status_info(&format!(
-            "[FUSE-RECLUSTER] Built recluster tasks: segments={} blocks={} elapsed={:?}",
-            recluster_seg_num, recluster_blocks_count, elapsed_time,
+            "[FUSE-RECLUSTER] Built recluster tasks: tasks={} segments={} blocks={} elapsed={:?}",
+            parts.tasks.len(),
+            recluster_seg_num,
+            recluster_blocks_count,
+            elapsed_time,
         ));
         metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);
         metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num);
