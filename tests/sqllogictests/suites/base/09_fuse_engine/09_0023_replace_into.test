@@ -436,7 +436,7 @@ select a, b FROM test order by a
 query TTT
 select * exclude(timestamp) FROM clustering_information('db_09_0023','test')
 ----
-(a + 1, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":3},"constant_block_count":2,"total_block_count":3}
+(a + 1, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":3},"constant_block_count":2,"p95_depth":1,"p99_depth":1,"total_block_count":3}
 
 statement ok
 DROP TABLE test
