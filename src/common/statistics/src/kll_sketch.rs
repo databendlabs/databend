@@ -141,19 +141,21 @@ impl KllSketch {
         Ok(())
     }
 
-    pub fn into_equal_depth_buckets(self, num_buckets: usize) -> Result<Vec<HistogramBucket>> {
+    pub fn into_equal_depth_buckets(
+        self,
+        num_buckets: usize,
+        column_ndv: Option<f64>,
+    ) -> Result<Vec<HistogramBucket>> {
+        let total_values = self.len as f64;
         self.into_equal_depth_bounds(num_buckets)?
             .map(|bounds| {
                 let bounds = bounds?;
-                // A one-pass KLL sketch cannot know the exact per-bucket NDV after
-                // boundaries are chosen. Use the bucket row count as a conservative
-                // possible-distinct upper bound; callers must mark the histogram
-                // inaccurate unless they run a second pass for exact bucket facts.
+                let num_distinct = estimate_bucket_ndv(bounds.num_values, total_values, column_ndv);
                 HistogramBucket::try_from_bounds(
                     bounds.lower,
                     bounds.upper,
                     bounds.num_values as f64,
-                    bounds.num_values as f64,
+                    num_distinct,
                 )
                 .map_err(ErrorCode::Internal)
             })
@@ -451,6 +453,18 @@ fn merge_bound(
     }
 }
 
+fn estimate_bucket_ndv(num_values: usize, total_values: f64, column_ndv: Option<f64>) -> f64 {
+    let bucket_values = num_values as f64;
+    let Some(column_ndv) = column_ndv.filter(|ndv| ndv.is_finite() && *ndv > 0.0) else {
+        return bucket_values;
+    };
+    if total_values <= 0.0 {
+        return 0.0;
+    }
+
+    (column_ndv * bucket_values / total_values).clamp(1.0, bucket_values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::KllSketch;
@@ -572,7 +586,7 @@ mod tests {
     #[test]
     fn kll_sketch_builds_equal_depth_histogram_buckets() {
         let sketch = build_sketch(256, 1_000);
-        let buckets = sketch.into_equal_depth_buckets(10).unwrap();
+        let buckets = sketch.into_equal_depth_buckets(10, Some(1_000.0)).unwrap();
 
         assert_eq!(buckets.len(), 10);
         assert_eq!(buckets[0].lower_bound(), Datum::Int(0));
@@ -584,6 +598,7 @@ mod tests {
                 .sum::<f64>(),
             1_000.0
         );
+        assert_eq!(buckets[0].num_distinct(), 100.0);
     }
 
     #[test]

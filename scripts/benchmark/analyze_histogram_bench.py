@@ -3,8 +3,9 @@
 Local benchmark for ANALYZE TABLE histogram algorithms.
 
 The script creates a synthetic FUSE table, runs ANALYZE TABLE WITH HISTOGRAM
-with the window and KLL algorithms, samples databend-query RSS while ANALYZE is
-running, and compares histogram-based cardinality estimates with exact counts.
+with the window, KLL fast, and KLL full algorithms, samples databend-query RSS
+while ANALYZE is running, and compares histogram-based cardinality estimates
+with exact counts.
 
 It is intended for local experiments and is not part of the CI test suite.
 """
@@ -79,6 +80,8 @@ class AnalyzeResult:
 class AccuracyResult:
     algorithm: str
     column: str
+    distribution: str
+    predicate_kind: str
     predicate: str
     exact_count: float
     estimated_count: float
@@ -88,7 +91,7 @@ class AccuracyResult:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Compare window and KLL ANALYZE histogram cost and accuracy."
+        description="Compare ANALYZE histogram algorithm cost and accuracy."
     )
     parser.add_argument("--dsn", default=os.getenv("BENDSQL_DSN"), help="bendsql DSN")
     parser.add_argument("--bendsql", default=os.getenv("BENDSQL", "bendsql"))
@@ -107,8 +110,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kll-error-rate", type=float, default=0.01)
     parser.add_argument(
         "--algorithms",
-        default="window,kll",
-        help="Comma-separated analyze algorithms to run: window,kll.",
+        default="window,kll_fast,kll_full",
+        help="Comma-separated analyze algorithms to run: window,kll_fast,kll_full.",
     )
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--sample-interval-sec", type=float, default=0.05)
@@ -319,7 +322,7 @@ def run_measured_sql(
 
 def analyze_sql(args: argparse.Namespace, algorithm: str) -> str:
     options = f"ALGORITHM = '{algorithm}'"
-    if algorithm == "kll":
+    if algorithm in {"kll_fast", "kll_full"}:
         options += f", ERROR_RATE = {args.kll_error_rate}"
     return session_sql(args, f"ANALYZE TABLE {fq_table(args.database, args.table)} WITH HISTOGRAM {options}")
 
@@ -411,6 +414,14 @@ def build_probes(domain: int) -> list[Probe]:
     ]
 
 
+def probe_distribution(probe: Probe) -> str:
+    if probe.column == "uniform_key":
+        return "uniform"
+    if probe.column == "skew_key":
+        return "skew"
+    return probe.column
+
+
 def exact_counts(client: BendSQL, args: argparse.Namespace, probes: list[Probe]) -> dict[str, float]:
     counts: dict[str, float] = {}
     table = fq_table(args.database, args.table)
@@ -470,6 +481,8 @@ def evaluate_accuracy(
             AccuracyResult(
                 algorithm=algorithm,
                 column=probe.column,
+                distribution=probe_distribution(probe),
+                predicate_kind=probe.kind,
                 predicate=probe.label,
                 exact_count=exact,
                 estimated_count=estimate,
@@ -494,6 +507,21 @@ def summarize_histograms(histograms: dict[str, dict[str, Any]]) -> dict[str, Any
     return summary
 
 
+def summarize_accuracy_values(values: list[AccuracyResult]) -> dict[str, Any]:
+    relatives = sorted(
+        result.relative_error for result in values if result.relative_error is not None
+    )
+    absolutes = sorted(result.absolute_error for result in values)
+    return {
+        "probe_count": len(values),
+        "relative_probe_count": len(relatives),
+        "max_absolute_error": max(absolutes) if absolutes else None,
+        "mean_absolute_error": sum(absolutes) / len(absolutes) if absolutes else None,
+        "max_relative_error": max(relatives) if relatives else None,
+        "mean_relative_error": sum(relatives) / len(relatives) if relatives else None,
+    }
+
+
 def summarize_accuracy(results: list[AccuracyResult]) -> dict[str, Any]:
     by_algorithm: dict[str, list[AccuracyResult]] = {}
     for result in results:
@@ -501,17 +529,59 @@ def summarize_accuracy(results: list[AccuracyResult]) -> dict[str, Any]:
 
     summary: dict[str, Any] = {}
     for algorithm, values in by_algorithm.items():
-        relatives = sorted(
-            result.relative_error for result in values if result.relative_error is not None
-        )
-        absolutes = sorted(result.absolute_error for result in values)
-        summary[algorithm] = {
-            "max_absolute_error": max(absolutes) if absolutes else None,
-            "mean_absolute_error": sum(absolutes) / len(absolutes) if absolutes else None,
-            "max_relative_error": max(relatives) if relatives else None,
-            "mean_relative_error": sum(relatives) / len(relatives) if relatives else None,
-        }
+        summary[algorithm] = summarize_accuracy_values(values)
     return summary
+
+
+def summarize_accuracy_by_distribution(results: list[AccuracyResult]) -> dict[str, Any]:
+    by_group: dict[str, dict[str, list[AccuracyResult]]] = {}
+    for result in results:
+        by_group.setdefault(result.algorithm, {}).setdefault(result.distribution, []).append(result)
+
+    return {
+        algorithm: {
+            distribution: summarize_accuracy_values(values)
+            for distribution, values in sorted(distributions.items())
+        }
+        for algorithm, distributions in sorted(by_group.items())
+    }
+
+
+def summarize_accuracy_by_kind(results: list[AccuracyResult]) -> dict[str, Any]:
+    by_group: dict[str, dict[str, list[AccuracyResult]]] = {}
+    for result in results:
+        by_group.setdefault(result.algorithm, {}).setdefault(result.predicate_kind, []).append(
+            result
+        )
+
+    return {
+        algorithm: {
+            predicate_kind: summarize_accuracy_values(values)
+            for predicate_kind, values in sorted(kinds.items())
+        }
+        for algorithm, kinds in sorted(by_group.items())
+    }
+
+
+def summarize_accuracy_by_distribution_and_kind(
+    results: list[AccuracyResult],
+) -> dict[str, Any]:
+    by_group: dict[str, dict[str, dict[str, list[AccuracyResult]]]] = {}
+    for result in results:
+        by_group.setdefault(result.algorithm, {}).setdefault(result.distribution, {}).setdefault(
+            result.predicate_kind, []
+        ).append(result)
+
+    return {
+        algorithm: {
+            distribution: {
+                predicate_kind: summarize_accuracy_values(values)
+                for predicate_kind, values in sorted(kinds.items())
+            }
+            for distribution, kinds in sorted(distributions.items())
+        }
+        for algorithm, distributions in sorted(by_group.items())
+    }
 
 
 def main() -> None:
@@ -523,7 +593,7 @@ def main() -> None:
 
     algorithms = [item.strip() for item in args.algorithms.split(",") if item.strip()]
     for algorithm in algorithms:
-        if algorithm not in {"window", "kll"}:
+        if algorithm not in {"window", "kll_fast", "kll_full"}:
             raise ValueError(f"unsupported algorithm: {algorithm}")
 
     client = build_client(args)
@@ -573,6 +643,11 @@ def main() -> None:
         "histogram_summaries": histogram_summaries,
         "accuracy_results": [asdict(result) for result in accuracy_results],
         "accuracy_summary": summarize_accuracy(accuracy_results),
+        "accuracy_summary_by_distribution": summarize_accuracy_by_distribution(accuracy_results),
+        "accuracy_summary_by_kind": summarize_accuracy_by_kind(accuracy_results),
+        "accuracy_summary_by_distribution_and_kind": summarize_accuracy_by_distribution_and_kind(
+            accuracy_results
+        ),
     }
 
     print(json.dumps(result, indent=2, sort_keys=True), flush=True)

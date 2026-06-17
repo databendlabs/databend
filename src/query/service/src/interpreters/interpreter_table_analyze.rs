@@ -53,7 +53,8 @@ pub struct AnalyzeTableInterpreter {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AnalyzeHistogramAlgorithm {
     Window,
-    Kll,
+    KllFast,
+    KllFull,
 }
 
 impl AnalyzeHistogramAlgorithm {
@@ -71,7 +72,8 @@ impl AnalyzeHistogramAlgorithm {
         };
         match algorithm.as_str() {
             "window" => Ok(Self::Window),
-            "kll" => Ok(Self::Kll),
+            "kll_fast" => Ok(Self::KllFast),
+            "kll_full" => Ok(Self::KllFull),
             algorithm => Err(ErrorCode::InvalidConfig(format!(
                 "unsupported analyze histogram algorithm: {algorithm}"
             ))),
@@ -245,8 +247,17 @@ impl Interpreter for AnalyzeTableInterpreter {
                     }
                     histogram_info = AnalyzeHistogramInfo::Window(histogram_info_receivers);
                 }
-                AnalyzeHistogramAlgorithm::Kll => {
-                    histogram_info = AnalyzeHistogramInfo::Kll {
+                AnalyzeHistogramAlgorithm::KllFast => {
+                    histogram_info = AnalyzeHistogramInfo::KllFast {
+                        relative_error: analyze_histogram_kll_relative_error(
+                            &self.ctx.get_settings(),
+                            plan.histogram_kll_relative_error,
+                            table_options,
+                        )?,
+                    };
+                }
+                AnalyzeHistogramAlgorithm::KllFull => {
+                    histogram_info = AnalyzeHistogramInfo::KllFull {
                         relative_error: analyze_histogram_kll_relative_error(
                             &self.ctx.get_settings(),
                             plan.histogram_kll_relative_error,

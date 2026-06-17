@@ -74,7 +74,7 @@ fn test_rewrite_statement_display_escapes_string_literals() {
 
 #[test]
 fn test_analyze_table_histogram_options() {
-    let sql = "ANALYZE TABLE t NOSCAN WITH HISTOGRAM ALGORITHM = 'kll', ERROR_RATE = 0.01";
+    let sql = "ANALYZE TABLE t NOSCAN WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01";
     let tokens = tokenize_sql(sql).unwrap();
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
 
@@ -85,7 +85,7 @@ fn test_analyze_table_histogram_options() {
                 .histogram_options
                 .as_ref()
                 .expect("histogram options should be parsed");
-            assert_eq!(options.algorithm.as_deref(), Some("kll"));
+            assert_eq!(options.algorithm.as_deref(), Some("kll_full"));
             assert_eq!(options.error_rate, Some(0.01));
         }
         _ => panic!("expected ANALYZE TABLE statement"),

@@ -76,15 +76,19 @@ const ANALYZE_COMMIT_MAX_RETRY_ELAPSED: Duration = Duration::from_secs(15 * 60);
 pub enum AnalyzeHistogramInfo {
     None,
     Window(HashMap<u32, Receiver<DataBlock>>),
-    Kll { relative_error: f64 },
+    KllFast { relative_error: f64 },
+    KllFull { relative_error: f64 },
 }
 
 impl AnalyzeHistogramInfo {
     fn collect_info(&self) -> AnalyzeCollectHistogramInfo {
         match self {
-            AnalyzeHistogramInfo::Kll { relative_error } => AnalyzeCollectHistogramInfo::Kll {
-                relative_error: *relative_error,
-            },
+            AnalyzeHistogramInfo::KllFast { relative_error }
+            | AnalyzeHistogramInfo::KllFull { relative_error } => {
+                AnalyzeCollectHistogramInfo::Kll {
+                    relative_error: *relative_error,
+                }
+            }
             AnalyzeHistogramInfo::None | AnalyzeHistogramInfo::Window(_) => {
                 AnalyzeCollectHistogramInfo::None
             }
@@ -96,7 +100,8 @@ impl AnalyzeHistogramInfo {
 enum SinkAnalyzeHistogramInfo {
     None,
     Window(HashMap<u32, Receiver<DataBlock>>),
-    Kll,
+    KllFast,
+    KllFull,
 }
 
 impl From<AnalyzeHistogramInfo> for SinkAnalyzeHistogramInfo {
@@ -104,7 +109,8 @@ impl From<AnalyzeHistogramInfo> for SinkAnalyzeHistogramInfo {
         match value {
             AnalyzeHistogramInfo::None => SinkAnalyzeHistogramInfo::None,
             AnalyzeHistogramInfo::Window(receivers) => SinkAnalyzeHistogramInfo::Window(receivers),
-            AnalyzeHistogramInfo::Kll { .. } => SinkAnalyzeHistogramInfo::Kll,
+            AnalyzeHistogramInfo::KllFast { .. } => SinkAnalyzeHistogramInfo::KllFast,
+            AnalyzeHistogramInfo::KllFull { .. } => SinkAnalyzeHistogramInfo::KllFull,
         }
     }
 }
@@ -271,7 +277,19 @@ impl SinkAnalyzeState {
         Ok(())
     }
 
-    async fn collect_kll_histograms(&mut self) -> Result<()> {
+    fn collect_kll_fast_histograms(&mut self) -> Result<()> {
+        for (column_id, sketch) in std::mem::take(&mut self.kll_histograms) {
+            let column_ndv = self.ndv_states.get(&column_id).map(|hll| hll.count() as f64);
+            let buckets =
+                sketch.into_equal_depth_buckets(DEFAULT_HISTOGRAM_BUCKETS, column_ndv)?;
+            if !buckets.is_empty() {
+                self.histograms.insert(column_id, buckets);
+            }
+        }
+        Ok(())
+    }
+
+    async fn collect_kll_full_histograms(&mut self) -> Result<()> {
         let Some(mut kll_histograms) = self.create_kll_histogram_collectors()? else {
             return Ok(());
         };
@@ -639,8 +657,12 @@ impl Processor for SinkAnalyzeState {
                         }
                         finished_count == receivers.len()
                     }
-                    SinkAnalyzeHistogramInfo::Kll => {
-                        self.collect_kll_histograms().await?;
+                    SinkAnalyzeHistogramInfo::KllFast => {
+                        self.collect_kll_fast_histograms()?;
+                        true
+                    }
+                    SinkAnalyzeHistogramInfo::KllFull => {
+                        self.collect_kll_full_histograms().await?;
                         true
                     }
                     SinkAnalyzeHistogramInfo::None => true,

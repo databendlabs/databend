@@ -7269,9 +7269,9 @@ AnalyzeTable(
 
 
 ---------- Input ----------
-analyze table test_db.test with histogram algorithm = 'kll', error_rate = 0.01;
+analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;
 ---------- Output ---------
-ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll', ERROR_RATE = 0.01
+ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01
 ---------- AST ------------
 AnalyzeTable(
     AnalyzeTableStmt {
@@ -7298,7 +7298,7 @@ AnalyzeTable(
         histogram_options: Some(
             AnalyzeHistogramOptions {
                 algorithm: Some(
-                    "kll",
+                    "kll_full",
                 ),
                 error_rate: Some(
                     0.01,

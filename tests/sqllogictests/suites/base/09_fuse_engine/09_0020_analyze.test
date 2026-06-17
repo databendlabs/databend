@@ -134,7 +134,7 @@ statement ok
 set enable_analyze_histogram=1;
 
 statement ok
-analyze table t1 with histogram algorithm = 'kll', error_rate = 0.01;
+analyze table t1 with histogram algorithm = 'kll_full', error_rate = 0.01;
 
 query TIIIT
 select * from fuse_statistic('db_09_0020', 't1');
@@ -146,7 +146,7 @@ create or replace table t_kll_dups as
 select number % 10 as a, concat('v', to_string(number % 5)) as b from numbers(100);
 
 statement ok
-analyze table t_kll_dups with histogram algorithm = 'kll', error_rate = 0.01;
+analyze table t_kll_dups with histogram algorithm = 'kll_fast', error_rate = 0.01;
 
 query TI
 select column_name, distinct_count
@@ -160,14 +160,53 @@ b 5
 query I
 select count(*)
 from fuse_statistic('db_09_0020', 't_kll_dups')
-where column_name = 'a' and regexp_instr(histogram, 'count: 10.0') > 0;
+where column_name = 'a' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
 ----
 1
 
 query I
 select count(*)
 from fuse_statistic('db_09_0020', 't_kll_dups')
-where column_name = 'b' and regexp_instr(histogram, 'count: 20.0') > 0;
+where column_name = 'b' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'a'
+    and histogram like '%count: 1.0%'
+    and histogram not like '%count: 10.0%';
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'b'
+    and histogram like '%count: 1.0%'
+    and histogram not like '%count: 20.0%';
+----
+1
+
+statement ok
+analyze table t_kll_dups with histogram algorithm = 'kll_full', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'a'
+    and histogram like '%count: 10.0%'
+    and histogram not like '%count: 1.0%';
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'b'
+    and histogram like '%count: 20.0%'
+    and histogram not like '%count: 1.0%';
 ----
 1
 
@@ -176,7 +215,7 @@ create or replace table t_kll_compact as
 select number as a from numbers(1000);
 
 statement ok
-analyze table t_kll_compact with histogram algorithm = 'kll', error_rate = 0.01;
+analyze table t_kll_compact with histogram algorithm = 'kll_fast', error_rate = 0.01;
 
 query I
 select count(*)
@@ -191,7 +230,7 @@ select to_timestamp_tz(concat('2024-01-01 00:00:0', to_string(number), ' +00:00'
 from numbers(10);
 
 statement ok
-analyze table t_kll_timestamp_tz with histogram algorithm = 'kll', error_rate = 0.01;
+analyze table t_kll_timestamp_tz with histogram algorithm = 'kll_fast', error_rate = 0.01;
 
 query I
 select count(*)
@@ -209,7 +248,7 @@ select number % 10 as a from numbers(100);
 
 statement ok
 alter table t_kll_policy set options(
-    analyze_histogram_algorithm = 'kll',
+    analyze_histogram_algorithm = 'kll_full',
     analyze_histogram_kll_relative_error = '0.01'
 );
 

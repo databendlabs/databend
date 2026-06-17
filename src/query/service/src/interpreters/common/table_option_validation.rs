@@ -302,10 +302,10 @@ pub fn is_valid_analyze_histogram_algorithm(
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM) {
         match value.to_lowercase().as_str() {
-            "window" | "kll" => {}
+            "window" | "kll_fast" | "kll_full" => {}
             _ => {
                 return Err(ErrorCode::TableOptionInvalid(format!(
-                    "{OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM} must be either 'window' or 'kll', got: {value}"
+                    "{OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM} must be one of 'window', 'kll_fast', or 'kll_full', got: {value}"
                 )));
             }
         }

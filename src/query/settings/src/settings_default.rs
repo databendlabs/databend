@@ -927,10 +927,14 @@ impl DefaultSettings {
                 }),
                 ("analyze_histogram_algorithm", DefaultSettingValue {
                     value: UserSettingValue::String("window".to_string()),
-                    desc: "Sets the histogram algorithm used by ANALYZE TABLE, either window or kll.",
+                    desc: "Sets the histogram algorithm used by ANALYZE TABLE: window, kll_fast, or kll_full.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec!["window".into(), "kll".into()])),
+                    range: Some(SettingRange::String(vec![
+                        "window".into(),
+                        "kll_fast".into(),
+                        "kll_full".into(),
+                    ])),
                 }),
                 ("analyze_histogram_kll_relative_error", DefaultSettingValue {
                     value: UserSettingValue::String("0.01".to_string()),
