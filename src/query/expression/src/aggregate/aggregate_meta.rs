@@ -21,7 +21,6 @@ use super::AggregateHashTable;
 use super::HashTableConfig;
 use super::PartitionedPayload;
 use super::Payload;
-use super::PayloadFlushState;
 use super::ProbeState;
 use crate::DataBlock;
 use crate::ProjectedBlock;
@@ -108,36 +107,6 @@ impl SerializedPayload {
             self.convert_to_aggregate_table(group_types, aggrs, num_states, 0, arena, false)?;
         Ok(hashtable.payload.into_single_payload())
     }
-
-    pub fn repartition_to_payloads(
-        self,
-        max_partition_count: usize,
-        group_types: Vec<DataType>,
-        aggrs: Vec<Arc<dyn AggregateFunction>>,
-        num_states: usize,
-        flush_state: &mut PayloadFlushState,
-    ) -> Result<Vec<AggregatePayload>> {
-        Ok(self
-            .convert_to_aggregate_table(
-                group_types,
-                aggrs,
-                num_states,
-                0,
-                Arc::new(Bump::new()),
-                false,
-            )?
-            .payload
-            .repartition(max_partition_count, flush_state)
-            .payloads
-            .into_iter()
-            .enumerate()
-            .map(|(bucket, payload)| AggregatePayload {
-                bucket: bucket as isize,
-                payload,
-                max_partition_count,
-            })
-            .collect())
-    }
 }
 
 pub struct AggregatePayload {
@@ -150,29 +119,5 @@ pub struct AggregatePayload {
 impl AggregatePayload {
     pub fn exchange_block_number(&self) -> isize {
         self.max_partition_count as isize * 1000 + self.bucket
-    }
-
-    pub fn repartition_to_payloads(
-        self,
-        max_partition_count: usize,
-        group_types: Vec<DataType>,
-        aggrs: Vec<Arc<dyn AggregateFunction>>,
-        flush_state: &mut PayloadFlushState,
-    ) -> Vec<Self> {
-        let mut partitioned_payload =
-            PartitionedPayload::new(group_types, aggrs, max_partition_count as u64, vec![
-                self.payload.arena.clone(),
-            ]);
-
-        partitioned_payload.combine_single(self.payload, flush_state);
-
-        partitioned_payload
-            .into_bucket_payloads()
-            .map(|(bucket, payload)| AggregatePayload {
-                bucket: bucket as isize,
-                payload,
-                max_partition_count,
-            })
-            .collect()
     }
 }

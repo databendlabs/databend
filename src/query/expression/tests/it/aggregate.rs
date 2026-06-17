@@ -31,7 +31,6 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -607,36 +606,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             .combine_payload(&single_payload, &mut PayloadFlushState::default())
             .unwrap();
         fixture.assert_result(&mut merged_single);
-
-        let payloads = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block,
-            max_partition_count: 1,
-        }
-        .repartition_to_payloads(
-            4,
-            vec![Int64Type::data_type()],
-            fixture.aggrs(),
-            1,
-            &mut PayloadFlushState::default(),
-        )
-        .unwrap();
-        assert_eq!(payloads.len(), 4);
-        assert_eq!(
-            payloads
-                .iter()
-                .map(AggregatePayload::exchange_block_number)
-                .collect::<Vec<_>>(),
-            vec![4000, 4001, 4002, 4003]
-        );
-        let mut merged_payloads = fixture.empty_table(HashTableConfig::default());
-        let mut flush_state = PayloadFlushState::default();
-        for payload in &payloads {
-            merged_payloads
-                .combine_payload(&payload.payload, &mut flush_state)
-                .unwrap();
-        }
-        fixture.assert_result(&mut merged_payloads);
 
         assert!(fixture.live_bytes() > 0);
     }
