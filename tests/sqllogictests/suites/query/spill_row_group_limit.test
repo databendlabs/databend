@@ -10,7 +10,7 @@ INNER JOIN (SELECT number AS k FROM numbers(4)) AS r ON l.k = r.k
 1000
 
 query I
-settings (enable_experiment_aggregate = 1, force_aggregate_data_spill = 1, max_threads = 1, max_block_size = 1, max_block_bytes = 1048576, max_parquet_spill_row_groups_per_file = 2)
+settings (force_aggregate_data_spill = 1, max_threads = 1, max_block_size = 1, max_block_bytes = 1048576, max_parquet_spill_row_groups_per_file = 2)
 SELECT COUNT()
 FROM (
     SELECT concat(number::string, repeat('x', 1024)) AS k, COUNT()
