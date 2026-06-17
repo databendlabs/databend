@@ -29,7 +29,6 @@ use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseco
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
@@ -40,7 +39,6 @@ use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::operations::ReclusterCandidateWindow;
 use crate::operations::ReclusterFinalCarry;
 use crate::operations::ReclusterMutator;
 use crate::pruning::PruningContext;
@@ -126,7 +124,22 @@ impl FuseTable {
         let parts = loop {
             // Step 1: validate carried windows against the fresh snapshot.
             let carry_in = carry.pending.len();
-            let valid_carry = Self::take_valid_carry(carry, &live_segments);
+            let valid_carry = std::mem::take(&mut carry.pending)
+                .into_iter()
+                .filter(|window| {
+                    let valid = window
+                        .segments
+                        .iter()
+                        .all(|(location, _)| live_segments.contains_key(location));
+                    if !valid {
+                        debug!(
+                            "recluster: carried window invalidated locations={} skip_reason=carried_location_missing",
+                            window.segments.len(),
+                        );
+                    }
+                    valid
+                })
+                .collect::<Vec<_>>();
 
             let scan_start = carry.scan_cursor.min(number_segments);
             let scan_end = scan_start.saturating_add(chunk_size).min(number_segments);
@@ -384,9 +397,11 @@ impl FuseTable {
             recluster_blocks_count += block_count;
 
             if !parts.is_empty() {
-                // Keep probed windows as coverage for this fixed scan range.
-                // Windows without tasks are still useful: they prevent FINAL from
-                // re-reading the same stable range after each successful task.
+                // Keep unselected windows as coverage for this fixed FINAL scan range.
+                // A successful task consumes only the selected window. We intentionally do
+                // not invalidate unrelated probed windows for overlaps with newly written
+                // segments; doing so would turn FINAL into an expensive fixed-point rescan
+                // over its own intermediate output.
                 carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
                 break parts;
@@ -459,28 +474,6 @@ impl FuseTable {
             SegmentPruner::create(pruning_ctx.clone(), schema, Default::default())?;
 
         Ok((pruning_ctx, segment_pruner, max_concurrency))
-    }
-
-    fn take_valid_carry(
-        carry: &mut ReclusterFinalCarry,
-        live_segments: &HashMap<&Location, usize>,
-    ) -> Vec<ReclusterCandidateWindow> {
-        std::mem::take(&mut carry.pending)
-            .into_iter()
-            .filter(|window| {
-                let valid = window
-                    .segments
-                    .iter()
-                    .all(|(location, _)| live_segments.contains_key(location));
-                if !valid {
-                    debug!(
-                        "recluster: carried window invalidated locations={} skip_reason=carried_location_missing",
-                        window.segments.len(),
-                    );
-                }
-                valid
-            })
-            .collect()
     }
 
     pub async fn segment_pruning(
