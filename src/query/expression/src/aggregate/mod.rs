@@ -128,46 +128,4 @@ impl HashTableConfig {
         self.partition_start_bit = partition_start_bit;
         self
     }
-
-    pub fn with_partial(mut self, partial_agg: bool, active_threads: usize) -> Self {
-        self.partial_agg = partial_agg;
-
-        // init max_partial_capacity
-        let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
-        let cache_per_active_thread =
-            L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
-        let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
-        let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
-        self.max_partial_capacity = capacity;
-
-        self
-    }
-
-    pub fn cluster_with_partial(mut self, partial_agg: bool, node_nums: usize) -> Self {
-        self.partial_agg = partial_agg;
-        self.repartition_radix_bits_incr = 4;
-        self.max_partial_capacity = 131072 * (2 << node_nums);
-
-        self
-    }
-
-    pub fn update_current_max_radix_bits(&self) {
-        loop {
-            let current_max_radix_bits = self.current_max_radix_bits.load(Ordering::SeqCst);
-            if current_max_radix_bits < self.max_radix_bits
-                && self
-                    .current_max_radix_bits
-                    .compare_exchange(
-                        current_max_radix_bits,
-                        self.max_radix_bits,
-                        Ordering::SeqCst,
-                        Ordering::SeqCst,
-                    )
-                    .is_err()
-            {
-                continue;
-            }
-            break;
-        }
-    }
 }
