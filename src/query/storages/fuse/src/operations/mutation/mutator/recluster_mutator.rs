@@ -470,7 +470,8 @@ impl ReclusterMutator {
             tasks: Vec::new(),
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
-
+        let mut deferred_group_candidates = None;
+        let large_task_bytes_threshold = self.large_task_bytes_threshold();
         for (group, indices) in blocks_map {
             if candidate_window.tasks.len() >= task_budget {
                 break;
@@ -482,11 +483,47 @@ impl ReclusterMutator {
                 &blocks,
                 remaining_task_budget,
             )?;
+            if candidates.is_empty() {
+                continue;
+            }
+
+            if candidate_window.tasks.is_empty() && deferred_group_candidates.is_none() {
+                // When the first constructible group is too small, defer it once so
+                // later groups get a chance to consume this window's budget first.
+                let selected_total_bytes = candidates
+                    .iter()
+                    .map(|candidate| candidate.score.selected_total_bytes)
+                    .sum::<usize>();
+                if selected_total_bytes < large_task_bytes_threshold {
+                    debug!(
+                        "recluster: defer low-level group={} selected_bytes={} task_count={} skip_reason=deferred_low_level_batch",
+                        group,
+                        selected_total_bytes,
+                        candidates.len(),
+                    );
+                    deferred_group_candidates = Some(candidates);
+                    continue;
+                }
+            }
+
             for candidate in candidates.into_iter().take(remaining_task_budget) {
                 for (window_pos, _) in &candidate.selected_blocks {
                     selected_window_positions[*window_pos] = true;
                 }
                 candidate_window.tasks.push(candidate);
+            }
+        }
+
+        if candidate_window.tasks.len() < task_budget {
+            if let Some(candidates) = deferred_group_candidates {
+                let remaining_task_budget = task_budget - candidate_window.tasks.len();
+                for candidate in candidates.into_iter().take(remaining_task_budget) {
+                    debug!("recluster: backfill deferred candidate {}", candidate);
+                    for (window_pos, _) in &candidate.selected_blocks {
+                        selected_window_positions[*window_pos] = true;
+                    }
+                    candidate_window.tasks.push(candidate);
+                }
             }
         }
 
@@ -816,9 +853,13 @@ impl ReclusterMutator {
     pub(crate) fn passes_early_accept(&self, candidate: &ReclusterTaskCandidate) -> bool {
         let mature_gate = (2.0 * self.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
         let early_accept_depth = (mature_gate + 1.0).max(self.depth_threshold * 4.0);
-        let min_task_bytes = self.memory_threshold.saturating_mul(3) / 4;
+        let min_task_bytes = self.large_task_bytes_threshold();
         candidate.score.max_depth as f64 >= early_accept_depth
             && candidate.score.selected_total_bytes >= min_task_bytes
+    }
+
+    fn large_task_bytes_threshold(&self) -> usize {
+        self.memory_threshold.saturating_mul(3) / 4
     }
 
     /// Cut the candidate segments into segment-disjoint windows of at most
@@ -1226,7 +1267,6 @@ impl ReclusterMutator {
         };
 
         let mut candidates = Vec::new();
-        let min_task_bytes = self.memory_threshold.saturating_mul(3) / 4;
 
         // Pack hotspot-overlapping blocks first. Tasks split only on memory, so
         // a deep hotspot is not scattered by parallelism balancing.
@@ -1266,13 +1306,13 @@ impl ReclusterMutator {
 
         if candidates.len() < task_budget
             && !task_indices.is_empty()
-            && (task_bytes < min_task_bytes || task_indices.len() < 2)
+            && (task_bytes < self.memory_threshold || task_indices.len() < 2)
         {
             // Fill only the last hotspot tail from the deeper adjacent side.
             // Skip blocks that already overlap the hotspot plateau.
             let mut left = hotspot_left;
             let mut right = hotspot_right;
-            'fill_remaining: while task_bytes < min_task_bytes || task_indices.len() < 2 {
+            'fill_remaining: while task_bytes < self.memory_threshold || task_indices.len() < 2 {
                 let left_depth = if left > 0 {
                     point_depths[left - 1] as f64
                 } else {

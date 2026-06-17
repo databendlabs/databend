@@ -1084,10 +1084,10 @@ async fn test_recluster_mutator_keeps_full_hotspot_task() -> anyhow::Result<()> 
     )
     .await?;
 
-    assert_eq!(block_num, 4);
+    assert_eq!(block_num, 5);
     assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(task_part_counts(&parts), vec![4]);
-    assert_eq!(parts.tasks[0].total_bytes, 80);
+    assert_eq!(task_part_counts(&parts), vec![5]);
+    assert_eq!(parts.tasks[0].total_bytes, 95);
 
     Ok(())
 }
@@ -1231,18 +1231,33 @@ async fn test_recluster_mutator_fills_hotspot_tail_from_sides() -> anyhow::Resul
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_limits_window_probe_by_task_budget() -> anyhow::Result<()> {
+async fn test_recluster_mutator_defers_after_empty_group() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(0, 3), (1, 3), (2, 10)],
+        &[(0, 1), (1, 3), (2, 10)],
         thresholds,
         1,
         ReclusterMode::Normal,
     )
     .await?;
 
-    // A single window probes groups in level order and stops when the task
-    // budget is filled; later high-score groups are left for a later round.
+    // Empty groups must not consume the single defer slot. The first real small
+    // group is deferred, so a later larger group can use the only task slot.
+    assert_eq!(block_num, 10);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level, 2);
+    assert_eq!(task_part_counts(&parts), vec![10]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_keeps_only_low_level_small_task() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        materialize_segments_by_level_with_mode(&[(0, 3)], thresholds, 1, ReclusterMode::Normal)
+            .await?;
+
     assert_eq!(block_num, 3);
     assert_eq!(parts.tasks.len(), 1);
     assert_eq!(parts.tasks[0].level, 0);
