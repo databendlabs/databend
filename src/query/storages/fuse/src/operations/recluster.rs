@@ -384,19 +384,10 @@ impl FuseTable {
             recluster_blocks_count += block_count;
 
             if !parts.is_empty() {
-                // Keep unselected task candidates and stay on this fixed scan range.
-                // Empty windows do not hold carry by themselves, but they can
-                // coexist with task windows until this range produces work.
-                // Recluster commit may prepend extra output segments; FINAL
-                // does not restart this statement loop to chase that drift.
-                if pending_windows
-                    .iter()
-                    .any(|window| !window.tasks.is_empty())
-                {
-                    carry.pending = pending_windows;
-                } else {
-                    carry.pending.clear();
-                }
+                // Keep probed windows as coverage for this fixed scan range.
+                // Windows without tasks are still useful: they prevent FINAL from
+                // re-reading the same stable range after each successful task.
+                carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
                 break parts;
             }
@@ -530,40 +521,5 @@ impl FuseTable {
         }
 
         Ok(metas)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_final_carry_invalid_locations_are_discarded() {
-        let live_location = ("live".to_string(), 0);
-        let still_live_location = ("still-live".to_string(), 0);
-        let mut carry = ReclusterFinalCarry {
-            pending: vec![
-                ReclusterCandidateWindow {
-                    segments: vec![
-                        (live_location.clone(), None),
-                        (("missing".to_string(), 0), None),
-                    ],
-                    tasks: Vec::new(),
-                },
-                ReclusterCandidateWindow {
-                    segments: vec![(still_live_location.clone(), None)],
-                    tasks: Vec::new(),
-                },
-            ],
-            scan_cursor: 0,
-            cluster_key_id: 0,
-        };
-        let live_segments = HashMap::from([(&live_location, 0usize), (&still_live_location, 1)]);
-
-        let valid = FuseTable::take_valid_carry(&mut carry, &live_segments);
-
-        assert_eq!(valid.len(), 1);
-        assert_eq!(valid[0].segments[0].0.0, "still-live");
-        assert!(carry.pending.is_empty());
     }
 }

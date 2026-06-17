@@ -644,15 +644,16 @@ impl ReclusterMutator {
             );
         }
 
-        let mut hll_segment_indexes = IndexSet::new();
+        let mut hll_requests = Vec::new();
         let mut remained_blocks = Vec::new();
         for (&segment_idx, segment_info) in &removed_segment_infos {
+            let mut hll_block_indices = Vec::new();
             for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
                 if selected_block_keys.contains(&(segment_idx, block_idx)) {
                     continue;
                 }
                 // HLL is needed only when a removed segment leaves remained blocks.
-                hll_segment_indexes.insert(segment_idx);
+                hll_block_indices.push(block_idx);
                 remained_blocks.push((
                     BlockIndex {
                         segment_idx,
@@ -661,29 +662,22 @@ impl ReclusterMutator {
                     block_meta.clone(),
                 ));
             }
+            if let Some(stats_meta) = segment_info.summary.additional_stats_meta.as_ref() {
+                if !hll_block_indices.is_empty() {
+                    hll_requests.push((
+                        segment_idx,
+                        stats_meta.location.clone(),
+                        hll_block_indices,
+                    ));
+                }
+            }
         }
 
-        let hlls = self
-            .gather_hlls(
-                removed_segment_infos
-                    .iter()
-                    .filter_map(|(segment_idx, segment_info)| {
-                        if !hll_segment_indexes.contains(segment_idx) {
-                            return None;
-                        }
-                        segment_info
-                            .summary
-                            .additional_stats_meta
-                            .as_ref()
-                            .map(|v| (*segment_idx, v.location.clone()))
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .await?;
+        let mut hlls = self.gather_hlls(hll_requests).await?;
         let remained_blocks = remained_blocks
             .into_iter()
             .map(|(block_index, block_meta)| {
-                let hll = hlls.get(&block_index).and_then(|hll| hll.clone());
+                let hll = hlls.remove(&block_index);
                 (block_meta, hll)
             })
             .collect();
@@ -1064,13 +1058,13 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     async fn gather_hlls(
         &self,
-        hlls: Vec<(usize, Location)>,
-    ) -> Result<HashMap<BlockIndex, Option<RawBlockHLL>>> {
+        hlls: Vec<(usize, Location, Vec<usize>)>,
+    ) -> Result<HashMap<BlockIndex, RawBlockHLL>> {
         if hlls.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let tasks = hlls.into_iter().map(|(segment_idx, (loc, ver))| {
+        let tasks = hlls.into_iter().map(|(segment_idx, (loc, ver), blocks)| {
             let dal = self.operator.clone();
             async move {
                 let reader = MetaReaders::segment_stats_reader(dal);
@@ -1081,16 +1075,15 @@ impl ReclusterMutator {
                     put_cache: true,
                 };
                 let stats = reader.read(&load_params).await?;
-                Ok(stats
-                    .block_hlls
-                    .iter()
-                    .enumerate()
-                    .map(|(block_idx, hll)| {
+                Ok(blocks
+                    .into_iter()
+                    .filter_map(|block_idx| {
+                        let hll = stats.block_hlls.get(block_idx)?;
                         let block_index = BlockIndex {
                             segment_idx,
                             block_idx,
                         };
-                        (block_index, Some(hll.clone()))
+                        Some((block_index, hll.clone()))
                     })
                     .collect::<Vec<_>>())
             }
