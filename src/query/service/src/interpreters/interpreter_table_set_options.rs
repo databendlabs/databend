@@ -53,6 +53,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -110,6 +112,8 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
         is_valid_data_page_rows(&self.plan.set_options)?;
         is_valid_data_page_bytes(&self.plan.set_options)?;
+        is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
+        is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";

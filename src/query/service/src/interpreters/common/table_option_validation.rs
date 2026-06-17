@@ -46,6 +46,8 @@ use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -107,6 +109,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r
 });
 
@@ -162,6 +166,8 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r
 });
 
@@ -287,6 +293,40 @@ pub fn is_valid_approx_distinct_columns(
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
         ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_histogram_algorithm(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM) {
+        match value.to_lowercase().as_str() {
+            "window" | "kll" => {}
+            _ => {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM} must be either 'window' or 'kll', got: {value}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_histogram_kll_relative_error(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR) {
+        let relative_error = value.parse::<f64>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be a floating-point number, got: {value}"
+            ))
+        })?;
+        if relative_error <= 0.0 || !relative_error.is_finite() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be finite and greater than zero, got: {relative_error}"
+            )));
+        }
     }
     Ok(())
 }

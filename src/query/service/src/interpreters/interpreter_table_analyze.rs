@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,6 +33,8 @@ use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -54,10 +57,17 @@ enum AnalyzeHistogramAlgorithm {
 }
 
 impl AnalyzeHistogramAlgorithm {
-    fn from_settings(settings: &Settings, override_algorithm: Option<&str>) -> Result<Self> {
+    fn from_policy(
+        settings: &Settings,
+        override_algorithm: Option<&str>,
+        table_options: &BTreeMap<String, String>,
+    ) -> Result<Self> {
         let algorithm = match override_algorithm {
             Some(algorithm) => algorithm.to_lowercase(),
-            None => settings.get_analyze_histogram_algorithm()?,
+            None => match table_options.get(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM) {
+                Some(algorithm) => algorithm.to_lowercase(),
+                None => settings.get_analyze_histogram_algorithm()?,
+            },
         };
         match algorithm.as_str() {
             "window" => Ok(Self::Window),
@@ -72,10 +82,18 @@ impl AnalyzeHistogramAlgorithm {
 fn analyze_histogram_kll_relative_error(
     settings: &Settings,
     override_relative_error: Option<f64>,
+    table_options: &BTreeMap<String, String>,
 ) -> Result<f64> {
     let relative_error = match override_relative_error {
         Some(relative_error) => relative_error,
-        None => settings.get_analyze_histogram_kll_relative_error()?,
+        None => match table_options.get(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR) {
+            Some(relative_error) => relative_error.parse::<f64>().map_err(|_| {
+                ErrorCode::WrongValueForVariable(format!(
+                    "Invalid analyze histogram KLL error rate value: {relative_error}"
+                ))
+            })?,
+            None => settings.get_analyze_histogram_kll_relative_error()?,
+        },
     };
     if relative_error <= 0.0 || !relative_error.is_finite() {
         return Err(ErrorCode::WrongValueForVariable(format!(
@@ -153,12 +171,14 @@ impl Interpreter for AnalyzeTableInterpreter {
         };
 
         let mut build_res = PipelineBuildResult::create();
+        let table_options = table.get_table_info().options();
         // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
         // It's possible to OOM if the table is too large and spilling isn't enabled.
         // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
-        let histogram_algorithm = AnalyzeHistogramAlgorithm::from_settings(
+        let histogram_algorithm = AnalyzeHistogramAlgorithm::from_policy(
             &self.ctx.get_settings(),
             plan.histogram_algorithm.as_deref(),
+            table_options,
         )?;
         let mut histogram_info = AnalyzeHistogramInfo::None;
         let quote = self
@@ -230,6 +250,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                         relative_error: analyze_histogram_kll_relative_error(
                             &self.ctx.get_settings(),
                             plan.histogram_kll_relative_error,
+                            table_options,
                         )?,
                     };
                 }
