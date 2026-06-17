@@ -18,6 +18,7 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
+use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -34,6 +35,26 @@ use goldenfile::Mint;
 
 use super::eval_aggr_for_test;
 use super::run_agg_ast;
+
+struct StateDropGuard {
+    func: AggregateFunctionRef,
+    loc: Box<[databend_common_expression::AggrStateLoc]>,
+    addrs: Vec<StateAddr>,
+}
+
+impl Drop for StateDropGuard {
+    fn drop(&mut self) {
+        drop_guard(|| {
+            if self.func.need_manual_drop_state() {
+                for addr in &self.addrs {
+                    unsafe {
+                        self.func.drop_state(AggrState::new(*addr, &self.loc));
+                    }
+                }
+            }
+        });
+    }
+}
 
 fn simulate_accumulate_matches_rows(
     name: &str,
@@ -56,16 +77,11 @@ fn simulate_accumulate_matches_rows(
     let rows_state = AggrState::new(rows_addr, &loc);
     func.init_state(batch_state);
     func.init_state(rows_state);
-
-    let drop_states = || {
-        if func.need_manual_drop_state() {
-            unsafe {
-                func.drop_state(AggrState::new(batch_addr, &loc));
-                func.drop_state(AggrState::new(rows_addr, &loc));
-            }
-        }
+    let _drop_guard = StateDropGuard {
+        func: func.clone(),
+        loc: loc.clone(),
+        addrs: vec![batch_addr, rows_addr],
     };
-    drop_guard(drop_states);
 
     func.accumulate(batch_state, entries.into(), None, rows)?;
     for row in 0..rows {
@@ -103,9 +119,15 @@ fn test_quantile_tdigest_edge_cases() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_tdigest.txt").unwrap();
 
+    test_tdigest_empty_input(file);
+    test_tdigest_singleton_input(file);
     test_tdigest_min_max_endpoints(file);
+    test_tdigest_weighted_interior_interpolation(file);
+    test_tdigest_singleton_boundaries(file);
+    test_tdigest_weighted_merged_centroid(file);
     test_tdigest_weighted_zero_weight(file);
     test_tdigest_weighted_tail_boundary(file);
+    test_tdigest_merge_empty_right(file);
     test_tdigest_weighted_nan_input(file);
     test_tdigest_weighted_zero_weight_nan(file);
     test_tdigest_weighted_merge_nan_only_right(file);
@@ -114,6 +136,28 @@ fn test_quantile_tdigest_edge_cases() {
     test_tdigest_merge_with_uncompressed_left(file);
     test_tdigest_group_by_nan_input(file);
     test_tdigest_weighted_group_by_nan_input(file);
+}
+
+fn test_tdigest_empty_input(file: &mut impl Write) {
+    let columns = [("v", Int64Type::from_data(Vec::<i64>::new()).into())];
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.5)(v)",
+        &columns,
+        simulate_accumulate_matches_rows,
+        vec![],
+    );
+}
+
+fn test_tdigest_singleton_input(file: &mut impl Write) {
+    let columns = [("v", Int64Type::from_data(vec![42_i64]).into())];
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.5)(v)",
+        &columns,
+        simulate_accumulate_matches_rows,
+        vec![],
+    );
 }
 
 fn test_tdigest_min_max_endpoints(file: &mut impl Write) {
@@ -131,6 +175,48 @@ fn test_tdigest_min_max_endpoints(file: &mut impl Write) {
         file,
         "quantile_tdigest(0, 1)(v)",
         &negative_values,
+        simulate_accumulate_matches_rows,
+        vec![],
+    );
+}
+
+fn test_tdigest_weighted_interior_interpolation(file: &mut impl Write) {
+    let columns = [
+        ("v", Int64Type::from_data(vec![0_i64, 10]).into()),
+        ("w", UInt64Type::from_data(vec![2_u64, 2]).into()),
+    ];
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.5)(v, w)",
+        &columns,
+        simulate_accumulate_matches_rows,
+        vec![],
+    );
+}
+
+fn test_tdigest_singleton_boundaries(file: &mut impl Write) {
+    let columns = [("v", Int64Type::from_data(vec![0_i64, 10, 20, 30]).into())];
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.4, 0.6)(v)",
+        &columns,
+        simulate_accumulate_matches_rows,
+        vec![],
+    );
+}
+
+fn test_tdigest_weighted_merged_centroid(file: &mut impl Write) {
+    let columns = [
+        (
+            "v",
+            Float64Type::from_data(vec![0.0_f64, 50.0, 50.1, 100.0]).into(),
+        ),
+        ("w", UInt64Type::from_data(vec![499_u64, 1, 1, 499]).into()),
+    ];
+    run_agg_ast(
+        file,
+        "quantile_tdigest_weighted(0.5)(v, w)",
+        &columns,
         simulate_accumulate_matches_rows,
         vec![],
     );
@@ -160,6 +246,17 @@ fn test_tdigest_weighted_tail_boundary(file: &mut impl Write) {
         "quantile_tdigest_weighted(0.75)(v, w)",
         &columns,
         simulate_accumulate_matches_rows,
+        vec![],
+    );
+}
+
+fn test_tdigest_merge_empty_right(file: &mut impl Write) {
+    let columns = [("v", Int64Type::from_data(vec![1_i64, 2, 3]).into())];
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.5)(v)",
+        &columns,
+        simulate_merge_empty_right,
         vec![],
     );
 }
@@ -306,22 +403,16 @@ fn simulate_accumulate_keys_matches_rows(
     for state in [keys_left, keys_right, rows_left, rows_right] {
         func.init_state(state);
     }
-
-    let drop_states = || {
-        if func.need_manual_drop_state() {
-            for addr in [
-                keys_left_addr,
-                keys_right_addr,
-                rows_left_addr,
-                rows_right_addr,
-            ] {
-                unsafe {
-                    func.drop_state(AggrState::new(addr, &loc));
-                }
-            }
-        }
+    let _drop_guard = StateDropGuard {
+        func: func.clone(),
+        loc: loc.clone(),
+        addrs: vec![
+            keys_left_addr,
+            keys_right_addr,
+            rows_left_addr,
+            rows_right_addr,
+        ],
     };
-    drop_guard(drop_states);
 
     let places = (0..rows)
         .map(|i| {
@@ -364,6 +455,16 @@ fn simulate_merge_last_row_into_left(
     simulate_merge_split(name, params, entries, rows, sort_descs, rows - 1)
 }
 
+fn simulate_merge_empty_right(
+    name: &str,
+    params: Vec<databend_common_expression::Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    simulate_merge_split(name, params, entries, rows, sort_descs, rows)
+}
+
 fn simulate_merge_into_uncompressed_left(
     name: &str,
     params: Vec<databend_common_expression::Scalar>,
@@ -397,16 +498,11 @@ fn simulate_merge_split(
     let right = AggrState::new(right_addr, &loc);
     func.init_state(left);
     func.init_state(right);
-
-    let drop_states = || {
-        if func.need_manual_drop_state() {
-            unsafe {
-                func.drop_state(AggrState::new(left_addr, &loc));
-                func.drop_state(AggrState::new(right_addr, &loc));
-            }
-        }
+    let _drop_guard = StateDropGuard {
+        func: func.clone(),
+        loc: loc.clone(),
+        addrs: vec![left_addr, right_addr],
     };
-    drop_guard(drop_states);
 
     for row in 0..right_start {
         func.accumulate_row(left, entries.into(), row)?;
