@@ -279,9 +279,11 @@ impl SinkAnalyzeState {
 
     fn collect_kll_fast_histograms(&mut self) -> Result<()> {
         for (column_id, sketch) in std::mem::take(&mut self.kll_histograms) {
-            let column_ndv = self.ndv_states.get(&column_id).map(|hll| hll.count() as f64);
-            let buckets =
-                sketch.into_equal_depth_buckets(DEFAULT_HISTOGRAM_BUCKETS, column_ndv)?;
+            let column_ndv = self
+                .ndv_states
+                .get(&column_id)
+                .map(|hll| hll.count() as f64);
+            let buckets = sketch.into_equal_depth_buckets(DEFAULT_HISTOGRAM_BUCKETS, column_ndv)?;
             if !buckets.is_empty() {
                 self.histograms.insert(column_id, buckets);
             }
