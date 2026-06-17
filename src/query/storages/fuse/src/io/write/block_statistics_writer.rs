@@ -22,6 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 
 use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnNDVEstimatorOps;
@@ -65,8 +66,10 @@ impl BlockStatsBuilder {
         for (index, column_builder) in self.builders.iter_mut().enumerate() {
             let entry = block.get_by_offset(column_builder.index);
             match entry {
-                BlockEntry::Const(s, ..) => {
-                    column_builder.builder.update_scalar(&s.as_ref());
+                BlockEntry::Const(s, _, num_rows) => {
+                    column_builder
+                        .builder
+                        .update_scalar(&s.as_ref(), *num_rows as u64);
                 }
                 BlockEntry::Column(col) => {
                     if col.check_large_string() {
@@ -94,17 +97,27 @@ impl BlockStatsBuilder {
     }
 
     pub fn finalize(self) -> Result<Option<BlockHLL>> {
+        self.finalize_with_top_n()
+            .map(|stats| stats.map(|(hll, _)| hll))
+    }
+
+    pub fn finalize_with_top_n(self) -> Result<Option<(BlockHLL, BlockTopN)>> {
         if self.builders.is_empty() {
             return Ok(None);
         }
 
         let mut column_hlls = HashMap::with_capacity(self.builders.len());
+        let mut column_top_n = HashMap::with_capacity(self.builders.len());
         for column_builder in self.builders {
             let column_id = column_builder.field.column_id();
+            let top_n = column_builder.builder.top_n();
             let hll = column_builder.builder.hll();
             column_hlls.insert(column_id, hll);
+            if !top_n.values.is_empty() {
+                column_top_n.insert(column_id, top_n);
+            }
         }
 
-        Ok(Some(column_hlls))
+        Ok(Some((column_hlls, column_top_n)))
     }
 }

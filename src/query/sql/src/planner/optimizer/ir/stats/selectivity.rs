@@ -39,6 +39,7 @@ use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::TopNSet;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -60,6 +61,7 @@ const FULL_WILDCARD_SEL: f64 = 2.0;
 pub struct SelectivityEstimator {
     cardinality: StatCardinality,
     column_stats: ColumnStatSet,
+    top_n: TopNSet,
     overrides: ColumnStatSet,
 }
 
@@ -68,8 +70,14 @@ impl SelectivityEstimator {
         Self {
             cardinality,
             column_stats: input_stat,
+            top_n: TopNSet::new(),
             overrides: ColumnStatSet::new(),
         }
+    }
+
+    pub fn with_top_n(mut self, top_n: TopNSet) -> Self {
+        self.top_n = top_n;
+        self
     }
 
     fn merged_column_stats(&self) -> ColumnStatSet {
@@ -152,6 +160,7 @@ impl SelectivityEstimator {
             selectivity: Selectivity::Unknown,
             constraint_context: ConstraintContext::And,
             column_stats: &self.column_stats,
+            top_n: &self.top_n,
             constraints: ValueConstraintState::default(),
         };
         visitor.visit_expr(&expr)?;
@@ -395,6 +404,7 @@ struct SelectivityVisitor<'a> {
     selectivity: Selectivity,
     constraint_context: ConstraintContext,
     column_stats: &'a ColumnStatSet,
+    top_n: &'a TopNSet,
     constraints: ValueConstraintState,
 }
 
@@ -656,8 +666,13 @@ impl SelectivityVisitor<'_> {
                     self.constraints.add(
                         self.column_stats,
                         column_index,
-                        ValueConstraint::from_comparison(op, const_datum),
+                        ValueConstraint::from_comparison(op, const_datum.clone()),
                     )?;
+                    if let Some(selectivity) =
+                        self.derive_top_n_equality_selectivity(column_index, op, &constant.scalar)?
+                    {
+                        return Ok(selectivity);
+                    }
                     if distorted_range {
                         return Ok(Selectivity::LowerBound);
                     }
@@ -670,6 +685,10 @@ impl SelectivityVisitor<'_> {
                 }
                 return if distorted_range {
                     Ok(Selectivity::LowerBound)
+                } else if let Some(selectivity) =
+                    self.derive_top_n_equality_selectivity(column_index, op, &constant.scalar)?
+                {
+                    Ok(selectivity)
                 } else {
                     self.derive_function_selectivity(func)
                 };
@@ -678,6 +697,34 @@ impl SelectivityVisitor<'_> {
         }
 
         self.derive_function_selectivity(func)
+    }
+
+    fn derive_top_n_equality_selectivity(
+        &self,
+        column_index: Symbol,
+        op: ComparisonOp,
+        scalar: &Scalar,
+    ) -> Result<Option<Selectivity>> {
+        if !matches!(op, ComparisonOp::Equal | ComparisonOp::NotEqual) {
+            return Ok(None);
+        }
+        let Some(top_n) = self.top_n.get(&column_index) else {
+            return Ok(None);
+        };
+        let Some(count) = top_n.get(scalar) else {
+            return Ok(None);
+        };
+        let cardinality = self.cardinality.value();
+        if cardinality == 0.0 {
+            return Ok(Some(Selectivity::N(0.0)));
+        }
+        let count = (count as f64).min(cardinality);
+        let matched = if matches!(op, ComparisonOp::NotEqual) {
+            cardinality - count
+        } else {
+            count
+        };
+        Selectivity::checked_estimate(matched / cardinality).map(Some)
     }
 
     fn derive_function_selectivity(&self, func: &ExprCall) -> Result<Selectivity> {
@@ -802,6 +849,7 @@ impl SelectivityVisitor<'_> {
             selectivity: Selectivity::Unknown,
             constraint_context,
             column_stats: self.column_stats,
+            top_n: self.top_n,
             constraints: self.constraints.clone(),
         }
     }

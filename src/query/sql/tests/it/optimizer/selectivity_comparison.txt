@@ -242,3 +242,35 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
 
+=== topn_equality_cache ===
+description: Equality predicates should use exact TopN frequencies when the constant is cached.
+expr          : id = 42
+cardinality   : 1000
+estimated     : 37
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(42), max: UInt(42), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 42
+cardinality   : 1000
+estimated     : 963
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 963.0, null_count: 0, histogram: None }
+
+expr          : id = 7
+cardinality   : 1000
+estimated     : 1
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+

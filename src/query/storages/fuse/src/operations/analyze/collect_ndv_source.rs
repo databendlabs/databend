@@ -48,6 +48,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -55,6 +56,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -62,11 +64,11 @@ use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockReader;
+use crate::io::BlockStatsBuilder;
 use crate::io::CachedMetaWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::build_column_hlls;
 use crate::io::read::meta::SegmentStatsReader;
 use crate::operations::acquire_task_permit;
 use crate::operations::analyze::AnalyzeNDVMeta;
@@ -78,6 +80,7 @@ struct SegmentWithHLL {
     raw_block_hlls: Vec<RawBlockHLL>,
 
     new_block_hlls: Vec<Option<BlockHLL>>,
+    new_block_top_n: Vec<BlockTopN>,
     block_indexes: Vec<usize>,
 }
 
@@ -113,6 +116,7 @@ pub struct AnalyzeCollectNDVSource {
     output: Arc<OutputPort>,
     io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
+    top_n: Option<BlockTopN>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
     row_count: u64,
     unstats_rows: u64,
@@ -172,6 +176,7 @@ impl AnalyzeCollectNDVSource {
             output,
             io_request_semaphore,
             column_hlls: HashMap::new(),
+            top_n: Some(HashMap::new()),
             kll_histograms: HashMap::new(),
             row_count: 0,
             segment_with_hll: None,
@@ -288,6 +293,7 @@ impl Processor for AnalyzeCollectNDVSource {
                         self.row_count,
                         self.unstats_rows,
                         std::mem::take(&mut self.column_hlls),
+                        std::mem::take(&mut self.top_n),
                         std::mem::take(&mut self.kll_histograms),
                     ))));
                 self.state = State::Finish;
@@ -314,9 +320,13 @@ impl Processor for AnalyzeCollectNDVSource {
             } => {
                 let mut indexes = vec![];
                 let mut merged_hlls: HashMap<ColumnId, MetaHLL> = HashMap::new();
+                let collect_kll = !self.kll_columns_map.is_empty();
                 for (idx, data) in block_hlls.iter().enumerate() {
                     let block_hll = decode_column_hll(data)?;
                     if let Some(column_hlls) = &block_hll {
+                        if !collect_kll {
+                            self.top_n = None;
+                        }
                         for (column_id, column_hll) in column_hlls.iter() {
                             merged_hlls
                                 .entry(*column_id)
@@ -328,7 +338,6 @@ impl Processor for AnalyzeCollectNDVSource {
                     }
                 }
 
-                let collect_kll = !self.kll_columns_map.is_empty();
                 if !indexes.is_empty() && self.no_scan && !collect_kll {
                     self.unstats_rows += segment_info.summary.row_count;
                     self.state = State::ReadData(None);
@@ -359,6 +368,7 @@ impl Processor for AnalyzeCollectNDVSource {
                         origin_summary: segment_info.summary.clone(),
                         raw_block_hlls: block_hlls,
                         new_block_hlls: new_hlls,
+                        new_block_top_n: Vec::with_capacity(block_indexes.len()),
                         block_indexes,
                     });
                     self.state = State::BuildHLL;
@@ -367,8 +377,13 @@ impl Processor for AnalyzeCollectNDVSource {
             State::MergeHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
+                let new_top_n = std::mem::take(&mut segment_with_hll.new_block_top_n);
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for (new, idx) in new_hlls.into_iter().zip(new_indexes.into_iter()) {
+                for ((new, top_n), idx) in new_hlls
+                    .into_iter()
+                    .zip(new_top_n.into_iter())
+                    .zip(new_indexes.into_iter())
+                {
                     if let Some(column_hlls) = new {
                         for (column_id, column_hll) in column_hlls.iter() {
                             self.column_hlls
@@ -377,6 +392,9 @@ impl Processor for AnalyzeCollectNDVSource {
                                 .or_insert_with(|| column_hll.clone());
                         }
                         segment_with_hll.raw_block_hlls[idx] = encode_column_hll(&column_hlls)?;
+                    }
+                    if let Some(block_top_n) = &mut self.top_n {
+                        merge_column_top_n_mut(block_top_n, top_n);
                     }
                 }
                 self.state = State::WriteMeta;
@@ -447,7 +465,9 @@ impl Processor for AnalyzeCollectNDVSource {
                         let block = block_reader
                             .read_by_meta(&settings, &block_meta, &storage_format)
                             .await?;
-                        let column_hlls = build_column_hlls(&block, &ndv_columns_map)?;
+                        let mut builder = BlockStatsBuilder::new(&ndv_columns_map);
+                        builder.add_block(&block)?;
+                        let column_hlls = builder.finalize_with_top_n()?;
                         let kll_histograms = build_kll_histograms(
                             &block,
                             &kll_columns_map,
@@ -467,8 +487,18 @@ impl Processor for AnalyzeCollectNDVSource {
                 })?;
                 let block_stats = joint.into_iter().collect::<Result<Vec<_>>>()?;
                 let mut new_hlls = Vec::with_capacity(block_stats.len());
+                let mut new_top_n = Vec::with_capacity(block_stats.len());
                 for (column_hlls, kll_histograms) in block_stats {
-                    new_hlls.push(column_hlls);
+                    match column_hlls {
+                        Some((hll, top_n)) => {
+                            new_hlls.push(Some(hll));
+                            new_top_n.push(top_n);
+                        }
+                        None => {
+                            new_hlls.push(None);
+                            new_top_n.push(HashMap::new());
+                        }
+                    }
                     for (column_id, sketch) in kll_histograms {
                         if let Some(existing) = self.kll_histograms.get_mut(&column_id) {
                             existing.merge(sketch)?;
@@ -482,6 +512,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     self.state = State::ReadData(None);
                 } else {
                     segment_with_hll.new_block_hlls = new_hlls;
+                    segment_with_hll.new_block_top_n = new_top_n;
                     self.state = State::MergeHLL;
                 }
             }

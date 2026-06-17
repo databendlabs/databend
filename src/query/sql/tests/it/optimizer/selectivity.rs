@@ -37,6 +37,7 @@ use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
+use databend_common_sql::optimizer::ir::TopNSet;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::CastExpr;
 use databend_common_sql::plans::ComparisonOp;
@@ -48,6 +49,8 @@ use databend_common_statistics::F64;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
+use databend_storages_common_table_meta::meta::ColumnTopN;
+use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
@@ -81,7 +84,7 @@ fn run_case_with_predicates(
             raw_expr_to_scalar(&raw_expr, columns)
         })
         .collect::<Vec<_>>();
-    run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality)
+    run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality, None)
 }
 
 fn run_scalar_case_with_predicates(
@@ -90,11 +93,16 @@ fn run_scalar_case_with_predicates(
     predicates: &[ScalarExpr],
     column_stats: ColumnStatSet,
     cardinality: StatCardinality,
+    top_n: Option<TopNSet>,
 ) -> Result<()> {
     writeln!(file, "expr          : {}", expr_texts.join(", "))?;
 
     let in_stats = column_stats_to_string(&column_stats);
+    let in_top_n = top_n.as_ref().map(top_n_to_string);
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
+    if let Some(top_n) = top_n {
+        estimator = estimator.with_top_n(top_n);
+    }
     let estimated_rows = estimator.apply(predicates)?;
     let out_stats = estimator.into_column_stats();
 
@@ -105,6 +113,9 @@ fn run_scalar_case_with_predicates(
     )?;
     writeln!(file, "estimated     : {estimated_rows}")?;
     writeln!(file, "in stats      :\n{in_stats}")?;
+    if let Some(in_top_n) = in_top_n {
+        writeln!(file, "in topn       :\n{in_top_n}")?;
+    }
     writeln!(
         file,
         "out stats     :\n{}",
@@ -128,6 +139,23 @@ fn column_stats_to_string(column_stats: &ColumnStatSet) -> String {
 
     keys.iter()
         .map(|i| format!("{i} {:?}", column_stats[i]))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn top_n_to_string(top_n: &TopNSet) -> String {
+    let mut keys = top_n.keys().copied().collect::<Vec<_>>();
+    keys.sort();
+
+    keys.iter()
+        .flat_map(|i| {
+            top_n[i].values.iter().map(move |entry| {
+                format!(
+                    "{i} {:?} => {} (error {})",
+                    entry.scalar, entry.count, entry.error
+                )
+            })
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -243,6 +271,39 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         )?;
     }
 
+    write_case_title(
+        &mut file,
+        "topn_equality_cache",
+        "Equality predicates should use exact TopN frequencies when the constant is cached.",
+    )?;
+    let top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(999),
+        ndv: NdvEstimate::exact(1000.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(42)),
+            count: 37,
+            error: 0,
+        }],
+    })]);
+    let top_n_columns = &[("id", UInt64Type::data_type())];
+    for expr in ["id = 42", "id != 42", "id = 7"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            top_n_stats.clone(),
+            StatCardinality::estimate(1000.0),
+            Some(top_n.clone()),
+        )?;
+    }
+
     Ok(())
 }
 
@@ -346,6 +407,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         &[typed_number_predicate],
         number_stats.clone(),
         StatCardinality::estimate(100.0),
+        None,
     )?;
     let decimal_size = DecimalSize::new(10, 2).unwrap();
     let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
@@ -605,6 +667,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         std::slice::from_ref(&float_gte_15),
         float_histogram_stats.clone(),
         StatCardinality::estimate(200.0),
+        None,
     )?;
     run_scalar_case_with_predicates(
         &mut file,
@@ -612,6 +675,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[float_gte_15, float_lte_19],
         float_histogram_stats,
         StatCardinality::estimate(200.0),
+        None,
     )?;
 
     write_case_title(

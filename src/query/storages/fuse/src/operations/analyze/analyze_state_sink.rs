@@ -50,6 +50,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -58,6 +59,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use tokio::sync::Semaphore;
 
 use crate::FuseLazyPartInfo;
@@ -197,6 +199,7 @@ struct SinkAnalyzeState {
     row_count: u64,
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
+    top_n: Option<BlockTopN>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
     step: AnalyzeStep,
@@ -224,6 +227,7 @@ impl SinkAnalyzeState {
             row_count: 0,
             unstats_rows: 0,
             ndv_states: Default::default(),
+            top_n: Some(Default::default()),
             histograms: Default::default(),
             kll_histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
@@ -396,6 +400,9 @@ impl SinkAnalyzeState {
         let snapshot = snapshot.unwrap();
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         self.ndv_states.retain(|k, _| column_ids.contains(k));
+        if let Some(top_n) = &mut self.top_n {
+            top_n.retain(|k, _| column_ids.contains(k));
+        }
 
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
@@ -431,6 +438,7 @@ impl SinkAnalyzeState {
                 .collect::<Result<_>>()?;
             let stats = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
+                self.top_n.clone().unwrap_or_default(),
                 histograms,
                 self.snapshot_id,
                 self.row_count,
@@ -630,6 +638,15 @@ impl Processor for SinkAnalyzeState {
                                     .entry(*column_id)
                                     .and_modify(|hll| hll.merge(column_hll))
                                     .or_insert_with(|| column_hll.clone());
+                            }
+                            match (&mut self.top_n, meta.top_n) {
+                                (Some(top_n), Some(meta_top_n)) => {
+                                    merge_column_top_n_mut(top_n, meta_top_n);
+                                }
+                                (_, None) => {
+                                    self.top_n = None;
+                                }
+                                (None, Some(_)) => {}
                             }
                             self.row_count += meta.row_count;
                         }

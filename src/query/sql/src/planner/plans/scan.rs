@@ -29,6 +29,7 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::ScalarItem;
@@ -46,6 +47,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
+use crate::optimizer::ir::TopNSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -91,6 +93,7 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
+    pub top_n: HashMap<Symbol, ColumnTopN>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,6 +142,14 @@ impl Scan {
             .map(|(col, hist)| (*col, hist.clone()))
             .collect();
 
+        let top_n = self
+            .statistics
+            .top_n
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, top_n)| (*col, top_n.clone()))
+            .collect();
+
         Scan {
             table_index: self.table_index,
             columns,
@@ -150,6 +161,7 @@ impl Scan {
                 table_stats: self.statistics.table_stats,
                 column_stats,
                 histograms,
+                top_n,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -379,6 +391,7 @@ impl Operator for Scan {
                 });
             }
         }
+        let mut output_top_n: TopNSet = self.statistics.top_n.clone();
 
         let precise_cardinality = self
             .statistics
@@ -392,7 +405,8 @@ impl Operator for Scan {
                 let mut sb = SelectivityEstimator::new(
                     column_stats,
                     StatCardinality::exact(precise_cardinality),
-                );
+                )
+                .with_top_n(std::mem::take(&mut output_top_n));
                 let cardinality = sb.apply(&prewhere.predicates)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -418,7 +432,9 @@ impl Operator for Scan {
                     let input_cardinality = precise_cardinality
                         .map(StatCardinality::exact)
                         .unwrap_or_else(|| StatCardinality::estimate(cardinality));
-                    SelectivityEstimator::new(column_stats, input_cardinality).apply(preds)?
+                    SelectivityEstimator::new(column_stats, input_cardinality)
+                        .with_top_n(output_top_n)
+                        .apply(preds)?
                 }
                 _ => cardinality,
             };
@@ -427,6 +443,7 @@ impl Operator for Scan {
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
+                    top_n: Default::default(),
                 },
             }));
         }
@@ -436,6 +453,7 @@ impl Operator for Scan {
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
+                top_n: output_top_n,
             },
         }))
     }
