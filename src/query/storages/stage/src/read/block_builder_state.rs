@@ -38,7 +38,6 @@ pub struct BlockBuilderState {
     pub num_rows: usize,
     pub file_status: FileStatus,
     pub file_path: String,
-    pub file_full_path: String,
 }
 
 impl BlockBuilderState {
@@ -75,7 +74,6 @@ impl BlockBuilderState {
             num_rows: 0,
             file_status: Default::default(),
             file_path: "".to_string(),
-            file_full_path: "".to_string(),
         }
     }
 
@@ -128,7 +126,7 @@ impl BlockBuilderState {
             match c.column_type {
                 InternalColumnType::FileName => {
                     self.internal_column_builders[i]
-                        .push_repeat(&ScalarRef::String(&self.file_full_path), n);
+                        .push_repeat(&ScalarRef::String(&self.file_path), n);
                 }
                 InternalColumnType::FileRowNumber => {}
                 _ => {
