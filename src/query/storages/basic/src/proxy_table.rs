@@ -1071,10 +1071,21 @@ fn statistics_route_score(
     table: &dyn Table,
     predicate_columns: &PredicateColumns,
 ) -> StatisticsRouteScore {
-    let cluster_key_columns = cluster_key_columns(table);
+    statistics_route_score_for_columns(&cluster_key_columns(table), predicate_columns)
+}
+
+fn statistics_route_score_for_columns<S: AsRef<str>>(
+    cluster_key_columns: &[S],
+    predicate_columns: &PredicateColumns,
+) -> StatisticsRouteScore {
+    let prefix = cluster_prefix_score_for_columns(cluster_key_columns, predicate_columns);
     StatisticsRouteScore {
-        prefix: cluster_prefix_score_for_columns(&cluster_key_columns, predicate_columns),
-        cluster_key_len: cluster_key_columns.len(),
+        prefix,
+        cluster_key_len: if prefix.matched_prefix > 0 {
+            cluster_key_columns.len()
+        } else {
+            0
+        },
     }
 }
 
@@ -1247,6 +1258,29 @@ mod tests {
             trace_chat,
             &cost,
             trace_chat_user
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_ignores_cluster_len_without_prefix_match() {
+        let mut columns = PredicateColumns::default();
+        columns.equality.insert("span_id".to_string());
+        let trace = statistics_route_score_for_columns(&["trace_id"], &columns);
+        let trace_chat_user =
+            statistics_route_score_for_columns(&["trace_id", "chat_id", "user_id"], &columns);
+
+        assert_eq!(trace.prefix, PrefixRouteScore::default());
+        assert_eq!(trace_chat_user.prefix, PrefixRouteScore::default());
+        assert_eq!(trace.cluster_key_len, 0);
+        assert_eq!(trace_chat_user.cluster_key_len, 0);
+        assert_eq!(trace, trace_chat_user);
+
+        let cost = PartStatistics::new_exact(100, 10, 2, 10);
+        assert!(!is_better_statistics_route(
+            &cost,
+            trace_chat_user,
+            &cost,
+            trace
         ));
     }
 
