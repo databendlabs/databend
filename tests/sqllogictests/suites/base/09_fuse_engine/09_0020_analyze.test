@@ -152,6 +152,9 @@ where column_name = 'a'
 statement error
 analyze table t_kll_explicit_off noscan with histogram algorithm = 'kll_fast', error_rate = 0.01;
 
+statement error
+analyze table t_kll_explicit_off noscan with histogram;
+
 statement ok
 set enable_table_snapshot_stats = 1;
 

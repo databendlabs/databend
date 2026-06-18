@@ -200,14 +200,9 @@ impl Interpreter for AnalyzeTableInterpreter {
             || has_table_histogram_policy(table_options)
             || self.ctx.get_settings().get_enable_analyze_histogram()?;
         if collect_histogram {
-            if self.plan.no_scan
-                && matches!(
-                    histogram_algorithm,
-                    AnalyzeHistogramAlgorithm::KllFast | AnalyzeHistogramAlgorithm::KllFull
-                )
-            {
+            if self.plan.no_scan {
                 return Err(ErrorCode::BadArguments(
-                    "ANALYZE TABLE NOSCAN cannot be used with KLL histogram algorithms because KLL histogram collection must scan table blocks",
+                    "ANALYZE TABLE NOSCAN cannot be used with histogram collection because histogram collection must scan table data",
                 ));
             }
             match histogram_algorithm {
