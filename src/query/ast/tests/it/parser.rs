@@ -238,6 +238,7 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"undrop table test_db.test;"#,
         r#"analyze table test_db.test noscan;"#,
+        r#"analyze table test_db.test with histogram;"#,
         r#"analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;"#,
         r#"exists table test_db.test;"#,
         r#"create role role1 comment='test';"#,

@@ -1354,14 +1354,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     };
     let analyze_histogram_options = map(
         rule! {
-            WITH ~ #analyze_histogram_keyword ~ #comma_separated_list1(analyze_histogram_option)
+            WITH ~ #analyze_histogram_keyword ~ #comma_separated_list1(analyze_histogram_option)?
         },
         |(_, _, options)| {
             let mut histogram_options = AnalyzeHistogramOptions {
                 algorithm: None,
                 error_rate: None,
             };
-            for option in options {
+            for option in options.unwrap_or_default() {
                 match option {
                     AnalyzeHistogramOption::Algorithm(algorithm) => {
                         histogram_options.algorithm = Some(algorithm);
