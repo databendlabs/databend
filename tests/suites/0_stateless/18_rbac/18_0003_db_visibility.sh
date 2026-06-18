@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_NAME="owner"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql_query_http_user_connect owner password -A"
+export TEST_USER_CONNECT="bendsql_connect_user owner password -A"
 
 
 run_root_sql "
@@ -31,13 +31,13 @@ create user u3 identified by '123' with DEFAULT_ROLE='role2';
 "
 
 echo "=== test u1 with role1 ==="
-echo "grant role role1 to u1;" | $BENDSQL_CLIENT_CONNECT
-export TEST_U1_CONNECT="bendsql_query_http_user_connect u1 123 -A"
+echo "grant role role1 to u1;" | bendsql_connect_root
+export TEST_U1_CONNECT="bendsql_connect_user u1 123 -A"
 echo "show databases" | $TEST_U1_CONNECT
 echo "create database db1;" | $TEST_U1_CONNECT
-echo "grant delete on db1.* to u1" | $BENDSQL_CLIENT_CONNECT
+echo "grant delete on db1.* to u1" | bendsql_connect_root
 echo "drop database db1;" | $TEST_U1_CONNECT
-echo "select count(name)>0, count(dropped_on is not null)>0 from system.databases_with_history where name='db1'" | $BENDSQL_CLIENT_CONNECT
+echo "select count(name)>0, count(dropped_on is not null)>0 from system.databases_with_history where name='db1'" | bendsql_connect_root
 echo "select name, dropped_on is not null from system.databases_with_history where name='db1'" | $TEST_U1_CONNECT
 echo "select name from system.databases_with_history where name!='db1'" | $TEST_U1_CONNECT
 echo "create database db1;" | $TEST_U1_CONNECT
@@ -48,8 +48,8 @@ echo "select * from db_root.t1;" | $TEST_U1_CONNECT
 echo "show databases" | $TEST_U1_CONNECT
 
 echo "=== test u2 with role1 ==="
-echo "grant role role1 to u2;" | $BENDSQL_CLIENT_CONNECT
-export TEST_U2_CONNECT="bendsql_query_http_user_connect u2 123 -A"
+echo "grant role role1 to u2;" | bendsql_connect_root
+export TEST_U2_CONNECT="bendsql_connect_user u2 123 -A"
 echo "show databases" | $TEST_U2_CONNECT
 echo "create database db2" | $TEST_U2_CONNECT
 echo "create table db2.t2(id int);" | $TEST_U2_CONNECT
@@ -60,8 +60,8 @@ echo "select * from db1.t1;" | $TEST_U2_CONNECT
 echo "select * from db2.t2;" | $TEST_U1_CONNECT
 
 echo "=== test u3 with role2 ==="
-echo "grant role role2 to u3;" | $BENDSQL_CLIENT_CONNECT
-export TEST_U3_CONNECT="bendsql_query_http_user_connect u3 123 -A"
+echo "grant role role2 to u3;" | bendsql_connect_root
+export TEST_U3_CONNECT="bendsql_connect_user u3 123 -A"
 
 echo "show databases" | $TEST_U3_CONNECT
 echo "create database db_u3" | $TEST_U3_CONNECT
@@ -74,7 +74,7 @@ echo "select * from db_root.t1" | $TEST_U3_CONNECT
 echo "select * from db_u3.t3" | $TEST_U3_CONNECT
 
 echo "=== test u3 with role2 and role1 secondary roles all ==="
-echo "grant role role1 to u3" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to u3" | bendsql_connect_root
 echo "SET SECONDARY ROLES ALL; show databases" | $TEST_U3_CONNECT
 echo "SET SECONDARY ROLES ALL; select * from db1.t1" | $TEST_U3_CONNECT
 echo "SET SECONDARY ROLES ALL; select * from db2.t2" | $TEST_U3_CONNECT
@@ -89,11 +89,11 @@ echo "set role role1; SET SECONDARY ROLES NONE; select * from db_root.t1" | $TES
 echo "set role role1; SET SECONDARY ROLES NONE; select * from db_u3.t3" | $TEST_U3_CONNECT
 
 echo "=== test root user ==="
-echo "show databases" | $BENDSQL_CLIENT_CONNECT
-echo "select * from db1.t1" | $BENDSQL_CLIENT_CONNECT
-echo "select * from db2.t2" | $BENDSQL_CLIENT_CONNECT
-echo "select * from db_u3.t3" | $BENDSQL_CLIENT_CONNECT
-echo "select * from db_root.t1" | $BENDSQL_CLIENT_CONNECT
+echo "show databases" | bendsql_connect_root
+echo "select * from db1.t1" | bendsql_connect_root
+echo "select * from db2.t2" | bendsql_connect_root
+echo "select * from db_u3.t3" | bendsql_connect_root
+echo "select * from db_root.t1" | bendsql_connect_root
 
 echo "=== test system.tables ==="
 run_root_sql "
@@ -111,7 +111,7 @@ create table a.b(id int);
 create role b;
 grant ownership on a.b to role b;
 "
-export TEST_A_CONNECT="bendsql_query_http_user_connect a 123 -A"
+export TEST_A_CONNECT="bendsql_connect_user a 123 -A"
 echo "select name, owner from system.tables where database = 'a'and name = 'b'" | $TEST_A_CONNECT
 run_root_sql "
 drop user if exists a;

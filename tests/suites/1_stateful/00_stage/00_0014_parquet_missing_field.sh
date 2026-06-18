@@ -9,11 +9,11 @@ stmt "DROP TABLE IF EXISTS ontime"
 stmt "DROP STAGE IF EXISTS data"
 
 comment "create table ontime ..."
-cat $TESTS_DATA_DIR/ddl/ontime.sql |  $BENDSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/ontime.sql |  bendsql_connect_root
 stmt "ALTER TABLE ontime ADD COLUMN new_col int NOT NULL DEFAULT 3;"
 
 comment "create stage data..."
-echo "create stage data url='fs://$TESTS_DATA_DIR/';" |  $BENDSQL_CLIENT_CONNECT
+echo "create stage data url='fs://$TESTS_DATA_DIR/';" |  bendsql_connect_root
 
 query "copy into ontime from @data/ontime_200.parquet FILE_FORMAT = (type = parquet  missing_field_as = field_default);"
 query " select tail_number, new_col from ontime where dayofmonth=1 order by new_col"
