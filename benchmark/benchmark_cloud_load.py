@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Databend Cloud benchmark runner backed by bendsql."""
+"""Databend Cloud load benchmark runner backed by bendsql."""
 
 import json
 import logging
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -100,7 +99,7 @@ class BendSQLRunner:
 
 def load_config() -> BenchmarkConfig:
     benchmark_id = os.environ.get("BENCHMARK_ID", str(int(time.time())))
-    dataset = os.environ.get("BENCHMARK_DATASET", "hits")
+    dataset = os.environ.get("BENCHMARK_DATASET", "load")
     size = os.environ.get("BENCHMARK_SIZE", "Small")
     raw_cache_size = os.environ.get("BENCHMARK_CACHE_SIZE", "")
     cache_size = raw_cache_size.strip() or "0"
@@ -111,6 +110,9 @@ def load_config() -> BenchmarkConfig:
     source_id = os.environ.get("BENCHMARK_SOURCE_ID", "")
     sha = os.environ.get("BENCHMARK_SHA", "")
 
+    if dataset != "load":
+        logger.error("benchmark_cloud_load.py only supports BENCHMARK_DATASET=load")
+        sys.exit(1)
     if not version:
         logger.error("Please set BENCHMARK_VERSION to run the benchmark.")
         sys.exit(1)
@@ -189,11 +191,6 @@ def quote_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
-def resolve_sql_dataset(dataset: str) -> str:
-    trimmed = re.sub(r"\d+$", "", dataset)
-    return trimmed if trimmed else dataset
-
-
 def wait_for_warehouse(runner: BendSQLRunner, warehouse: str, retries: int = 20, delay: int = 10) -> None:
     logger.info("Waiting for warehouse %s to be ready...", warehouse)
     for attempt in range(retries + 1):
@@ -265,16 +262,13 @@ def main() -> None:
     config = load_config()
     ensure_dependencies()
     logger.info("#######################################################")
-    logger.info("Running benchmark for Databend Cloud with %s storage...", "S3")
+    logger.info("Running load benchmark for Databend Cloud with %s storage...", "S3")
 
     script_dir = Path(__file__).resolve().parent
-    sql_dataset = resolve_sql_dataset(config.dataset)
-    dataset_dir = script_dir / sql_dataset
+    dataset_dir = script_dir / "load"
     if not dataset_dir.exists():
         logger.error("Dataset directory %s does not exist", dataset_dir)
         sys.exit(1)
-    if sql_dataset != config.dataset:
-        logger.info("Dataset %s uses SQL directory %s", config.dataset, sql_dataset)
 
     if config.size not in SIZE_MAPPING:
         logger.error("Unsupported benchmark size: %s", config.size)
@@ -336,10 +330,8 @@ def main() -> None:
     wait_for_warehouse(runner, config.warehouse)
 
     runner.set_dsn(build_dsn(config, warehouse=config.warehouse))
-
-    if config.dataset == "load":
-        logger.info("Creating database %s for load dataset...", config.database)
-        runner.run(["--database", "default"], sql=f"CREATE DATABASE {config.database};")
+    logger.info("Creating database %s for load dataset...", config.database)
+    runner.run(["--database", "default"], sql=f"CREATE DATABASE {config.database};")
 
     runner.set_dsn(build_dsn(config, database=config.database, warehouse=config.warehouse))
 
@@ -385,9 +377,8 @@ def main() -> None:
     cleanup_runner.set_dsn(build_dsn(config, warehouse="default", login_disable=True))
 
     try:
-        if config.dataset == "load":
-            logger.info("Dropping database %s...", config.database)
-            cleanup_runner.run(sql=f"DROP DATABASE IF EXISTS {config.database};")
+        logger.info("Dropping database %s...", config.database)
+        cleanup_runner.run(sql=f"DROP DATABASE IF EXISTS {config.database};")
         logger.info("Dropping warehouse %s...", config.warehouse)
         cleanup_runner.run(sql=f"DROP WAREHOUSE IF EXISTS '{warehouse_literal}';")
     finally:
