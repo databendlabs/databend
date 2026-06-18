@@ -154,7 +154,7 @@ impl PhysicalPlanBuilder {
                 spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
             {
                 if let Some(plan) = self
-                    .try_build_spatial_index_join(
+                    .try_build_spatial_join(
                         join,
                         candidate,
                         s_expr,

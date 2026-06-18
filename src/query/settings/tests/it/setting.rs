@@ -115,18 +115,6 @@ async fn test_set_settings() {
                 settings.get_spatial_join_max_build_rows().unwrap(),
                 1_000_000
             );
-            assert_eq!(
-                settings.get_spatial_join_max_build_bytes().unwrap(),
-                256 * 1024 * 1024
-            );
-            assert_eq!(
-                settings.get_spatial_join_max_indexed_build_bytes().unwrap(),
-                128 * 1024 * 1024
-            );
-            assert_eq!(
-                settings.get_spatial_join_index_overhead_factor().unwrap(),
-                4
-            );
             settings
                 .set_setting("enable_spatial_join".to_string(), "1".to_string())
                 .unwrap();
@@ -135,13 +123,6 @@ async fn test_set_settings() {
             let result = settings.set_setting("enable_spatial_join".to_string(), "2".to_string());
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
-            assert_eq!(expect, format!("{}", result.unwrap_err()));
-
-            let result = settings.set_setting(
-                "spatial_join_index_overhead_factor".to_string(),
-                "0".to_string(),
-            );
-            let expect = "WrongValueForVariable. Code: 2803, Text = Value 0 is not within the range [1, 18446744073709551615].";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
         }
 

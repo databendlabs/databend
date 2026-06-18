@@ -76,7 +76,7 @@ async fn prepare_spatial_join_tables(fixture: &TestFixture, db: &str) -> Result<
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_spatial_index_join_matches_main_path_and_explain() -> anyhow::Result<()> {
+async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -106,8 +106,8 @@ async fn test_spatial_index_join_matches_main_path_and_explain() -> anyhow::Resu
 
     let explain = run_query_pretty(ctx.clone(), &format!("EXPLAIN {join_sql}")).await?;
     assert!(
-        explain.contains("SpatialIndexJoin"),
-        "expected EXPLAIN to contain SpatialIndexJoin, got:\n{explain}"
+        explain.contains("SpatialJoin"),
+        "expected EXPLAIN to contain SpatialJoin, got:\n{explain}"
     );
 
     let cluster_ctx = fixture
@@ -126,23 +126,23 @@ async fn test_spatial_index_join_matches_main_path_and_explain() -> anyhow::Resu
         .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
     let cluster_explain = run_query_pretty(cluster_ctx, &format!("EXPLAIN {join_sql}")).await?;
     assert!(
-        !cluster_explain.contains("SpatialIndexJoin"),
-        "expected cluster plan to skip SpatialIndexJoin, got:\n{cluster_explain}"
+        !cluster_explain.contains("SpatialJoin"),
+        "expected cluster plan to skip SpatialJoin, got:\n{cluster_explain}"
     );
 
     ctx.get_settings()
         .set_setting("spatial_join_max_build_rows".to_string(), "0".to_string())?;
     let fallback_explain = run_query_pretty(ctx, &format!("EXPLAIN {join_sql}")).await?;
     assert!(
-        !fallback_explain.contains("SpatialIndexJoin"),
-        "expected max_build_rows=0 to skip SpatialIndexJoin, got:\n{fallback_explain}"
+        !fallback_explain.contains("SpatialJoin"),
+        "expected max_build_rows=0 to skip SpatialJoin, got:\n{fallback_explain}"
     );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_spatial_index_join_preserves_build_side_cache_join() -> anyhow::Result<()> {
+async fn test_spatial_join_preserves_build_side_cache_join() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -165,7 +165,7 @@ async fn test_spatial_index_join_preserves_build_side_cache_join() -> anyhow::Re
 
     let explain = run_query_pretty(ctx.clone(), &format!("EXPLAIN {cache_join_sql}")).await?;
     assert!(
-        !explain.contains("SpatialIndexJoin"),
+        !explain.contains("SpatialJoin"),
         "build-side cache join must stay on the hash path, got:\n{explain}"
     );
 
@@ -175,7 +175,7 @@ async fn test_spatial_index_join_preserves_build_side_cache_join() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_spatial_index_join_falls_back_with_residual_predicate() -> anyhow::Result<()> {
+async fn test_spatial_join_falls_back_with_residual_predicate() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -205,7 +205,7 @@ async fn test_spatial_index_join_falls_back_with_residual_predicate() -> anyhow:
 
     let explain = run_query_pretty(ctx, &format!("EXPLAIN {residual_join_sql}")).await?;
     assert!(
-        !explain.contains("SpatialIndexJoin"),
+        !explain.contains("SpatialJoin"),
         "residual-predicate join must fall back to the main path, got:\n{explain}"
     );
 

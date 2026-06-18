@@ -33,19 +33,19 @@ use databend_common_sql::plans::Join;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::TableScan;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::SpatialJoinFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
-use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::SpatialBuildSide;
-use crate::pipelines::processors::transforms::SpatialIndexJoinState;
-use crate::pipelines::processors::transforms::TransformSpatialIndexJoinBuild;
-use crate::pipelines::processors::transforms::TransformSpatialIndexJoinProbe;
+use crate::pipelines::processors::transforms::SpatialJoinState;
+use crate::pipelines::processors::transforms::TransformSpatialJoinBuild;
+use crate::pipelines::processors::transforms::TransformSpatialJoinProbe;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PhysicalSpatialIndexJoin {
+pub struct PhysicalSpatialJoin {
     pub meta: PhysicalPlanMeta,
     pub probe: PhysicalPlan,
     pub build: PhysicalPlan,
@@ -58,7 +58,7 @@ pub struct PhysicalSpatialIndexJoin {
 }
 
 #[typetag::serde]
-impl IPhysicalPlan for PhysicalSpatialIndexJoin {
+impl IPhysicalPlan for PhysicalSpatialJoin {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -97,11 +97,15 @@ impl IPhysicalPlan for PhysicalSpatialIndexJoin {
         ))
     }
 
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(SpatialJoinFormatter::create(self))
+    }
+
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 2);
         let build = children.pop().unwrap();
         let probe = children.pop().unwrap();
-        PhysicalPlan::new(PhysicalSpatialIndexJoin {
+        PhysicalPlan::new(PhysicalSpatialJoin {
             meta: self.meta.clone(),
             probe,
             build,
@@ -116,7 +120,7 @@ impl IPhysicalPlan for PhysicalSpatialIndexJoin {
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let max_block_size = builder.settings.get_max_block_size()? as usize;
-        let state = SpatialIndexJoinState::create(
+        let state = SpatialJoinState::create(
             builder.func_ctx.clone(),
             self.build_geometry.clone(),
             self.probe_geometry.clone(),
@@ -129,17 +133,19 @@ impl IPhysicalPlan for PhysicalSpatialIndexJoin {
         self.build_side_pipeline(state.clone(), builder)?;
         self.probe.build_pipeline(builder)?;
         builder.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformSpatialIndexJoinProbe::create(input, output, state.clone()),
-            ))
+            Ok(ProcessorPtr::create(TransformSpatialJoinProbe::create(
+                input,
+                output,
+                state.clone(),
+            )))
         })
     }
 }
 
-impl PhysicalSpatialIndexJoin {
+impl PhysicalSpatialJoin {
     fn build_side_pipeline(
         &self,
-        state: std::sync::Arc<SpatialIndexJoinState>,
+        state: std::sync::Arc<SpatialJoinState>,
         builder: &mut PipelineBuilder,
     ) -> Result<()> {
         let build_builder = builder.create_sub_pipeline_builder();
@@ -149,7 +155,7 @@ impl PhysicalSpatialIndexJoin {
         build_res.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,
-                TransformSpatialIndexJoinBuild::create(state.clone()),
+                TransformSpatialJoinBuild::create(state.clone()),
             )))
         })?;
 
@@ -162,11 +168,11 @@ impl PhysicalSpatialIndexJoin {
 }
 
 impl PhysicalPlanBuilder {
-    /// Whether the join's *shape* is one the spatial index path supports. This
+    /// Whether the join's *shape* is one the spatial join path supports. This
     /// only inspects the join/candidate structure; row/byte-size admission is
-    /// handled separately in `try_build_spatial_index_join`.
+    /// handled separately in `try_build_spatial_join`.
     fn is_spatial_join_eligible(&self, join: &Join, candidate: &SpatialJoinCandidate) -> bool {
-        // The spatial index join is node-local, takes no equi key, and cannot
+        // The spatial join is node-local, takes no equi key, and cannot
         // serve the single-to-inner rewrite.
         if !self.ctx.get_cluster().is_empty()
             || join.single_to_inner.is_some()
@@ -187,7 +193,7 @@ impl PhysicalPlanBuilder {
         true
     }
 
-    pub async fn try_build_spatial_index_join(
+    pub async fn try_build_spatial_join(
         &mut self,
         join: &Join,
         candidate: SpatialJoinCandidate,
@@ -217,22 +223,9 @@ impl PhysicalPlanBuilder {
             return Ok(None);
         }
 
-        // Byte admission needs the column-pruned `read_bytes`, which only exists
-        // after the scans are built. We build first and reject afterwards (the
-        // caller then falls back and rebuilds the same sub-plans, which is safe):
-        // the only pre-build estimate is the whole-table `data_size`, which would
-        // wrongly reject build sides that read just the geometry column.
         let (left_input, right_input) = self
             .build_join_sides(s_expr, left_required, right_required)
             .await?;
-
-        let build_bytes = match build_side {
-            SpatialBuildSide::Left => collect_scan_bytes(&left_input),
-            SpatialBuildSide::Right => collect_scan_bytes(&right_input),
-        };
-        if !self.spatial_build_bytes_allowed(build_bytes)? {
-            return Ok(None);
-        }
 
         let left_schema = left_input.output_schema()?;
         let right_schema = right_input.output_schema()?;
@@ -266,8 +259,8 @@ impl PhysicalPlanBuilder {
             SpatialBuildSide::Right => (right_input, left_input, right_geometry, left_geometry),
         };
 
-        Ok(Some(PhysicalPlan::new(PhysicalSpatialIndexJoin {
-            meta: PhysicalPlanMeta::new("SpatialIndexJoin"),
+        Ok(Some(PhysicalPlan::new(PhysicalSpatialJoin {
+            meta: PhysicalPlanMeta::new("SpatialJoin"),
             probe,
             build,
             build_side,
@@ -277,19 +270,6 @@ impl PhysicalPlanBuilder {
             output_projection,
             output_schema,
         })))
-    }
-
-    fn spatial_build_bytes_allowed(&self, build_bytes: Option<u64>) -> Result<bool> {
-        let Some(bytes) = build_bytes else {
-            return Ok(true);
-        };
-
-        let settings = self.ctx.get_settings();
-        let max_build_bytes = settings.get_spatial_join_max_build_bytes()?;
-        let max_indexed_build_bytes = settings.get_spatial_join_max_indexed_build_bytes()?;
-        let overhead = settings.get_spatial_join_index_overhead_factor()?;
-
-        Ok(bytes <= max_build_bytes && bytes.saturating_mul(overhead) <= max_indexed_build_bytes)
     }
 }
 
@@ -345,23 +325,4 @@ fn spatial_output_projection_and_schema(
         }
     }
     Ok((projection, DataSchemaRefExt::create(fields)))
-}
-
-/// Sums `read_bytes` across all `TableScan`s in `plan`, or `None` if it has none.
-fn collect_scan_bytes(plan: &PhysicalPlan) -> Option<u64> {
-    let mut bytes = 0;
-    let mut found = false;
-    collect_scan_bytes_inner(plan, &mut found, &mut bytes);
-    found.then_some(bytes)
-}
-
-fn collect_scan_bytes_inner(plan: &PhysicalPlan, found: &mut bool, bytes: &mut u64) {
-    if let Some(scan) = TableScan::from_physical_plan(plan) {
-        *found = true;
-        *bytes = bytes.saturating_add(scan.source.statistics.read_bytes as u64);
-    }
-
-    for child in plan.children() {
-        collect_scan_bytes_inner(child, found, bytes);
-    }
 }

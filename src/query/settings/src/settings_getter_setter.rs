@@ -462,18 +462,6 @@ impl Settings {
         self.try_get_u64("spatial_join_max_build_rows")
     }
 
-    pub fn get_spatial_join_max_build_bytes(&self) -> Result<u64> {
-        self.try_get_u64("spatial_join_max_build_bytes")
-    }
-
-    pub fn get_spatial_join_max_indexed_build_bytes(&self) -> Result<u64> {
-        self.try_get_u64("spatial_join_max_indexed_build_bytes")
-    }
-
-    pub fn get_spatial_join_index_overhead_factor(&self) -> Result<u64> {
-        self.try_get_u64("spatial_join_index_overhead_factor")
-    }
-
     pub fn get_join_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
         self.try_get_u64("join_runtime_filter_selectivity_threshold")
     }
