@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
@@ -119,7 +118,7 @@ impl FuseTable {
         let number_segments = snapshot.segments.len();
         let mut recluster_blocks_count = 0;
         let mut recluster_segment_pruner = None;
-        let mut decode_resources = None;
+        let mut decode_semaphore = None;
 
         let parts = loop {
             // Step 1: validate carried windows against the fresh snapshot.
@@ -252,19 +251,10 @@ impl FuseTable {
                     let mut probe_windows = 0usize;
                     let mut probe_tasks = 0usize;
                     let probe_parallelism = (max_threads / 4).clamp(1, 8);
-                    if decode_resources.is_none() {
-                        decode_resources = Some((
-                            Arc::new(Runtime::with_worker_threads(
-                                max_threads,
-                                Some("recluster-block-meta-worker".to_owned()),
-                            )?),
-                            Arc::new(Semaphore::new(max_threads * 2)),
-                        ));
-                    }
-                    let (decode_runtime, decode_semaphore) = {
-                        let (decode_runtime, decode_semaphore) = decode_resources.as_ref().unwrap();
-                        (decode_runtime.clone(), decode_semaphore.clone())
-                    };
+                    let decode_runtime = carry.decode_runtime(max_threads)?;
+                    let decode_semaphore = decode_semaphore
+                        .get_or_insert_with(|| Arc::new(Semaphore::new(max_threads * 2)))
+                        .clone();
                     let mut segment_windows = segment_windows.into_iter().enumerate();
                     while early_accept_count < mutator.max_tasks {
                         let remaining_task_budget =

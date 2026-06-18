@@ -590,6 +590,50 @@ async fn test_recluster_mutator_repacks_window_without_rewrite_tasks() -> anyhow
     )
     .await?;
 
+    let schema = TableSchemaRef::new(TableSchema::empty());
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations.clone(), None),
+    )
+    .await?;
+    let mutator = ReclusterMutator::new(
+        ctx.clone(),
+        data_accessor.clone(),
+        schema,
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+    );
+    let selected_segs = mutator
+        .select_segments(&compact_segments, 8)?
+        .into_iter()
+        .next()
+        .expect("repack-only window should be selected");
+    let decode_runtime = Arc::new(Runtime::with_worker_threads(
+        2,
+        Some("recluster-block-meta-test-worker".to_owned()),
+    )?);
+    let decode_semaphore = Arc::new(Semaphore::new(4));
+    let window = mutator
+        .probe_candidate_window(
+            selected_segs,
+            ReclusterMode::Normal,
+            1,
+            decode_runtime,
+            decode_semaphore,
+        )
+        .await?;
+    assert_eq!(window.task_count(), 1);
+    let score = window.task_score(0);
+    assert_eq!(score.selected_total_bytes, 0);
+    assert_eq!(score.max_depth, 0);
+    assert_eq!(score.average_depth, 0.0);
+
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let (_, block_num, parts) = materialize_segment_locations_with_mode(
         ctx,

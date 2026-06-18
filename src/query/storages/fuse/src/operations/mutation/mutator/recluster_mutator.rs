@@ -202,6 +202,21 @@ pub struct ReclusterFinalCarry {
     pub(crate) scan_cursor: usize,
     // Cached candidates must match this cluster key.
     pub(crate) cluster_key_id: u32,
+    // Reuse block-meta decode workers across rounds of one FINAL statement.
+    pub(crate) decode_runtime: Option<Arc<Runtime>>,
+}
+
+impl ReclusterFinalCarry {
+    pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
+        if self.decode_runtime.is_none() {
+            self.decode_runtime = Some(Arc::new(Runtime::with_worker_threads(
+                workers,
+                Some("recluster-block-meta-worker".to_owned()),
+            )?));
+        }
+
+        Ok(self.decode_runtime.as_ref().unwrap().clone())
+    }
 }
 
 /// Iterative segment tree answering range-max queries over a fixed sequence.
@@ -540,8 +555,8 @@ impl ReclusterMutator {
                 candidate_window.tasks.push(ReclusterTaskCandidate {
                     score: CandidateScore {
                         selected_total_bytes: 0,
-                        max_depth: total_block_count,
-                        average_depth: total_block_count as f64,
+                        max_depth: 0,
+                        average_depth: 0.0,
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
@@ -1222,11 +1237,8 @@ impl ReclusterMutator {
             sum_depth += seg.range_max(open, close);
             closed += 1;
         }
-        let average_depth = if closed == 0 {
-            f64::NAN
-        } else {
-            (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0
-        };
+        debug_assert!(closed > 0);
+        let average_depth = (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0;
 
         if !Self::passes_depth_gate(self.depth_threshold, average_depth, max_depth) {
             debug!(
