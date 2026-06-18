@@ -81,6 +81,11 @@ impl AnalyzeHistogramAlgorithm {
     }
 }
 
+fn has_table_histogram_policy(table_options: &BTreeMap<String, String>) -> bool {
+    table_options.contains_key(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM)
+        || table_options.contains_key(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR)
+}
+
 fn analyze_histogram_kll_relative_error(
     settings: &Settings,
     override_relative_error: Option<f64>,
@@ -176,7 +181,10 @@ impl Interpreter for AnalyzeTableInterpreter {
         let table_options = table.get_table_info().options();
         // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
         // It's possible to OOM if the table is too large and spilling isn't enabled.
-        // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
+        //
+        // `enable_analyze_histogram` controls the default behavior. An explicit
+        // statement-level `WITH HISTOGRAM` clause or a table-level histogram policy
+        // opts in for this analyze job regardless of the default setting.
         let histogram_algorithm = AnalyzeHistogramAlgorithm::from_policy(
             &self.ctx.get_settings(),
             plan.histogram_algorithm.as_deref(),
@@ -188,9 +196,20 @@ impl Interpreter for AnalyzeTableInterpreter {
             .get_settings()
             .get_sql_dialect()?
             .default_ident_quote();
-        if self.ctx.get_settings().get_enable_analyze_histogram()?
-            && self.ctx.get_settings().get_enable_table_snapshot_stats()?
-        {
+        let collect_histogram = plan.histogram_requested
+            || has_table_histogram_policy(table_options)
+            || self.ctx.get_settings().get_enable_analyze_histogram()?;
+        if collect_histogram {
+            if self.plan.no_scan
+                && matches!(
+                    histogram_algorithm,
+                    AnalyzeHistogramAlgorithm::KllFast | AnalyzeHistogramAlgorithm::KllFull
+                )
+            {
+                return Err(ErrorCode::BadArguments(
+                    "ANALYZE TABLE NOSCAN cannot be used with KLL histogram algorithms because KLL histogram collection must scan table blocks",
+                ));
+            }
             match histogram_algorithm {
                 AnalyzeHistogramAlgorithm::Window => {
                     let mut histogram_info_receivers = HashMap::new();

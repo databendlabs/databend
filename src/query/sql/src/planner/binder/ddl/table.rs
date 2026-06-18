@@ -1779,6 +1779,7 @@ impl Binder {
             database,
             table,
             no_scan: *no_scan,
+            histogram_requested: histogram_options.is_some(),
             histogram_algorithm: histogram_options
                 .as_ref()
                 .and_then(|options| options.algorithm.clone()),

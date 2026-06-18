@@ -119,6 +119,10 @@ impl SinkAnalyzeHistogramInfo {
     fn accuracy(&self) -> bool {
         matches!(self, SinkAnalyzeHistogramInfo::Window(_))
     }
+
+    fn collect_statistics(&self) -> bool {
+        !matches!(self, SinkAnalyzeHistogramInfo::None)
+    }
 }
 
 impl FuseTable {
@@ -407,7 +411,9 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
-        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()? {
+        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()?
+            || self.histogram_info.collect_statistics()
+        {
             let histograms = self
                 .histograms
                 .iter()
