@@ -4,62 +4,37 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR/../../../shell_env.sh"
 
-# Use a synchronous stderr filter for this script so expected bendsql errors are
-# emitted before the next numbered step is printed.
-bendsql_client_sync() {
-	local stderr_file status
-
-	stderr_file=$(mktemp) || return 1
-	bendsql "$@" 2>"$stderr_file"
-	status=$?
-	sed -E 's/ \[v[0-9][^]]*\]$//' "$stderr_file" >&2
-	rm -f "$stderr_file"
-	return "$status"
-}
-
-bendsql_query_http_user_connect_sync() {
-	local user="$1"
-	local password="$2"
-	shift 2
-
-	bendsql_client_sync \
-		--host "${QUERY_MYSQL_HANDLER_HOST}" \
-		--port "${QUERY_HTTP_HANDLER_PORT}" \
-		--user "${user}" \
-		--password "${password}" \
-		"$@"
-}
 
 # Define connection strings for each user
 echo "=== Setting up user connection strings ==="
-export USER_ADMIN_USER_CONNECT="bendsql_query_http_user_connect_sync admin_user 123 -A"
-export USER_DEV_USER_CONNECT="bendsql_query_http_user_connect_sync dev_user 123 -A"
-export USER_TEST_USER_CONNECT="bendsql_query_http_user_connect_sync test_user 123 -A"
+export USER_ADMIN_USER_CONNECT="bendsql_connect_user admin_user 123 -A"
+export USER_DEV_USER_CONNECT="bendsql_connect_user dev_user 123 -A"
+export USER_TEST_USER_CONNECT="bendsql_connect_user test_user 123 -A"
 
 # Create roles
 echo "=== Creating roles ==="
-echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS dev_role;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS test_role;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE ROLE admin_role;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE ROLE test_role;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS admin_role;" | bendsql_connect_root
+echo "DROP ROLE IF EXISTS dev_role;" | bendsql_connect_root
+echo "DROP ROLE IF EXISTS test_role;" | bendsql_connect_root
+echo "CREATE ROLE admin_role;" | bendsql_connect_root
+echo "CREATE ROLE dev_role;" | bendsql_connect_root
+echo "CREATE ROLE test_role;" | bendsql_connect_root
 
 # Create users
 echo "=== Creating users ==="
-echo "CREATE OR REPLACE USER admin_user IDENTIFIED BY '123' with default_role='admin_role';" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE OR REPLACE USER dev_user IDENTIFIED BY '123' with default_role='dev_role';" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE OR REPLACE USER test_user IDENTIFIED BY '123' with default_role='test_role';" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE OR REPLACE USER admin_user IDENTIFIED BY '123' with default_role='admin_role';" | bendsql_connect_root
+echo "CREATE OR REPLACE USER dev_user IDENTIFIED BY '123' with default_role='dev_role';" | bendsql_connect_root
+echo "CREATE OR REPLACE USER test_user IDENTIFIED BY '123' with default_role='test_role';" | bendsql_connect_root
 
 # Grant roles to users
 echo "=== Granting roles to users ==="
-echo "GRANT role admin_role TO USER admin_user;" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT role dev_role TO USER dev_user;" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT role test_role TO USER test_user;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT role admin_role TO USER admin_user;" | bendsql_connect_root
+echo "GRANT role dev_role TO USER dev_user;" | bendsql_connect_root
+echo "GRANT role test_role TO USER test_user;" | bendsql_connect_root
 
 # Test global CREATE PROCEDURE permission
 echo "=== Testing global CREATE PROCEDURE permission ==="
-echo "GRANT CREATE PROCEDURE ON *.* TO ROLE admin_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT CREATE PROCEDURE ON *.* TO ROLE admin_role;" | bendsql_connect_root
 
 # admin_user creates procedures
 echo "=== admin_user: Creating procedures ==="
@@ -96,7 +71,7 @@ END;
 # Test ACCESS PROCEDURE permission
 echo "=== Testing ACCESS PROCEDURE permission ==="
 echo "5. Granting dev_role access to add_numbers..."
-echo "GRANT ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) TO ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) TO ROLE dev_role;" | bendsql_connect_root
 
 echo "6. dev_user calls add_numbers (should succeed)..."
 echo "CALL procedure add_numbers(3::int32, 4::int32);" | $USER_DEV_USER_CONNECT
@@ -105,7 +80,7 @@ echo "7. test_user calls add_numbers (should fail)..."
 echo "CALL procedure add_numbers(3::int32, 4::int32);" | $USER_TEST_USER_CONNECT
 
 echo "8. Granting test_role access to get_current_time..."
-echo "GRANT ACCESS PROCEDURE ON PROCEDURE get_current_time() TO ROLE test_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT ACCESS PROCEDURE ON PROCEDURE get_current_time() TO ROLE test_role;" | bendsql_connect_root
 
 echo "9. test_user calls get_current_time (should succeed)..."
 echo "CALL procedure get_current_time();" | $USER_TEST_USER_CONNECT | echo $?
@@ -117,10 +92,10 @@ echo "CREATE PROCEDURE multiply_numbers(a INT, b INT) RETURNS INT NOT NULL LANGU
 BEGIN
     RETURN a * b;
 END;
-\$\$;" | $BENDSQL_CLIENT_CONNECT
+\$\$;" | bendsql_connect_root
 
 echo "11. Transferring ownership of multiply_numbers to dev_role..."
-echo "GRANT OWNERSHIP ON PROCEDURE multiply_numbers(INT, INT) TO ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT OWNERSHIP ON PROCEDURE multiply_numbers(INT, INT) TO ROLE dev_role;" | bendsql_connect_root
 
 echo "12. dev_user describes multiply_numbers (should succeed)..."
 echo "DESC PROCEDURE multiply_numbers(INT32, INT32);" | $USER_DEV_USER_CONNECT
@@ -131,7 +106,7 @@ echo "DESC PROCEDURE multiply_numbers(INT32, INT32);" | $USER_TEST_USER_CONNECT
 # Test ownership chaining
 echo "=== Testing ownership chaining ==="
 echo "14. Transferring ownership of multiply_numbers to test_role..."
-echo "GRANT OWNERSHIP ON PROCEDURE multiply_numbers(INT, INT) TO ROLE test_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT OWNERSHIP ON PROCEDURE multiply_numbers(INT, INT) TO ROLE test_role;" | bendsql_connect_root
 
 echo "15. dev_user describes multiply_numbers (should fail)..."
 echo "DESC PROCEDURE multiply_numbers(INT32, INT32);" | $USER_DEV_USER_CONNECT
@@ -148,16 +123,16 @@ echo "CALL procedure multiply_numbers(1::int32, 2::int32);" | $USER_TEST_USER_CO
 # Test permission inheritance
 echo "=== Testing permission inheritance ==="
 echo "19. Creating test_with_access role..."
-echo "CREATE ROLE test_with_access;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE ROLE test_with_access;" | bendsql_connect_root
 
 echo "20. Granting test_with_access access to add_numbers..."
-echo "GRANT ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) TO ROLE test_with_access;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) TO ROLE test_with_access;" | bendsql_connect_root
 
 echo "21. test_user calls add_numbers (should fail, not yet granted role)..."
 echo "CALL procedure add_numbers(5::int32, 6::int32);" | $USER_TEST_USER_CONNECT
 
 echo "22. Granting test_with_access to test_user..."
-echo "GRANT role test_with_access TO USER test_user;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT role test_with_access TO USER test_user;" | bendsql_connect_root
 
 echo "23. test_user calls add_numbers (should succeed)..."
 echo "CALL procedure add_numbers(5::int32, 6::int32);" | $USER_TEST_USER_CONNECT
@@ -165,7 +140,7 @@ echo "CALL procedure add_numbers(5::int32, 6::int32);" | $USER_TEST_USER_CONNECT
 # Test permission revocation
 echo "=== Testing permission revocation ==="
 echo "24. Revoking test_with_access's access to add_numbers..."
-echo "REVOKE ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) FROM ROLE test_with_access;" | $BENDSQL_CLIENT_CONNECT
+echo "REVOKE ACCESS PROCEDURE ON PROCEDURE add_numbers(int, int) FROM ROLE test_with_access;" | bendsql_connect_root
 
 echo "25. test_user calls add_numbers (should fail)..."
 echo "CALL procedure add_numbers(5::int32, 6::int32);" | $USER_TEST_USER_CONNECT
@@ -180,10 +155,10 @@ echo "CREATE PROCEDURE greet() RETURNS STRING NOT NULL LANGUAGE SQL AS \$\$
 BEGIN
     RETURN 'Hello, Databend!';
 END;
-\$\$;" | $BENDSQL_CLIENT_CONNECT
+\$\$;" | bendsql_connect_root
 
 echo "28. Granting dev_role access to greet..."
-echo "GRANT ACCESS PROCEDURE ON PROCEDURE greet() TO ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT ACCESS PROCEDURE ON PROCEDURE greet() TO ROLE dev_role;" | bendsql_connect_root
 
 echo "29. dev_user calls greet (should succeed)..."
 echo "CALL procedure greet();" | $USER_DEV_USER_CONNECT
@@ -193,11 +168,11 @@ echo "CALL procedure greet();" | $USER_TEST_USER_CONNECT
 
 # Test system.procedures visibility
 echo "=== Testing system.procedures visibility ==="
-echo "SET GLOBAL enable_experimental_rbac_check = 1;" | $BENDSQL_CLIENT_CONNECT
+echo "SET GLOBAL enable_experimental_rbac_check = 1;" | bendsql_connect_root
 
 echo "31. admin_user queries system.procedures (should see add_numbers, get_current_time via ownership)..."
 echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_ADMIN_USER_CONNECT
-echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $BENDSQL_CLIENT_CONNECT
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | bendsql_connect_root
 
 echo "32. dev_user queries system.procedures (should see add_numbers and greet via grant)..."
 echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_DEV_USER_CONNECT
@@ -205,26 +180,26 @@ echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_curr
 echo "33. test_user queries system.procedures (should see get_current_time via grant, multiply_numbers via ownership)..."
 echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_TEST_USER_CONNECT
 
-echo "SET GLOBAL enable_experimental_rbac_check = 0;" | $BENDSQL_CLIENT_CONNECT
+echo "SET GLOBAL enable_experimental_rbac_check = 0;" | bendsql_connect_root
 
 # Cleanup
 echo "=== Cleaning up test environment ==="
 echo "34. Dropping users..."
-echo "DROP USER IF EXISTS admin_user;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP USER IF EXISTS dev_user;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP USER IF EXISTS test_user;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP USER IF EXISTS admin_user;" | bendsql_connect_root
+echo "DROP USER IF EXISTS dev_user;" | bendsql_connect_root
+echo "DROP USER IF EXISTS test_user;" | bendsql_connect_root
 
 echo "35. Dropping roles..."
-echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS dev_role;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS test_role;" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS test_with_access;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS admin_role;" | bendsql_connect_root
+echo "DROP ROLE IF EXISTS dev_role;" | bendsql_connect_root
+echo "DROP ROLE IF EXISTS test_role;" | bendsql_connect_root
+echo "DROP ROLE IF EXISTS test_with_access;" | bendsql_connect_root
 
 echo "36. Dropping procedures..."
-echo "DROP PROCEDURE IF EXISTS add_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT
-echo "DROP PROCEDURE IF EXISTS get_current_time();" | $BENDSQL_CLIENT_CONNECT
-echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT
-echo "DROP PROCEDURE IF EXISTS greet();" | $BENDSQL_CLIENT_CONNECT
+echo "DROP PROCEDURE IF EXISTS add_numbers(int, int);" | bendsql_connect_root
+echo "DROP PROCEDURE IF EXISTS get_current_time();" | bendsql_connect_root
+echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | bendsql_connect_root
+echo "DROP PROCEDURE IF EXISTS greet();" | bendsql_connect_root
 
-echo "unset global enable_experimental_procedure;" | $BENDSQL_CLIENT_CONNECT
+echo "unset global enable_experimental_procedure;" | bendsql_connect_root
 echo "=== Test script completed ==="

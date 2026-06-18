@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "=== test UDF priv"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql_query_http_user_connect test-user password -A"
+export TEST_USER_CONNECT="bendsql_connect_user test-user password -A"
 
 run_root_sql "
 drop user if exists 'test-user';
@@ -26,8 +26,8 @@ SYSTEM FLUSH PRIVILEGES;
 
 # error test need privielge f1
 echo "=== Only Has Privilege on f2 ==="
-echo "grant usage on udf f2 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
+echo "grant usage on udf f2 to 'test-user';" |  bendsql_connect_root
+echo "SYSTEM FLUSH PRIVILEGES" | bendsql_connect_root
 echo "select f2(f1(1));" | $TEST_USER_CONNECT
 # bug need error
 echo "select add(1, f2(f1(1)));" | $TEST_USER_CONNECT
@@ -60,9 +60,9 @@ echo "delete from t;" | $TEST_USER_CONNECT
 
 # error test need privielge f1
 echo "=== Only Has Privilege on f1 ==="
-echo "grant usage on udf f1 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "revoke usage on udf f2 from 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
+echo "grant usage on udf f1 to 'test-user';" |  bendsql_connect_root
+echo "revoke usage on udf f2 from 'test-user';" |  bendsql_connect_root
+echo "SYSTEM FLUSH PRIVILEGES" | bendsql_connect_root
 echo "select f2(f1(1))" | $TEST_USER_CONNECT
 echo "select add(1, f1(1))" | $TEST_USER_CONNECT
 echo "select max(f2(f1(1)));" | $TEST_USER_CONNECT
@@ -91,8 +91,8 @@ echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $T
 echo "delete from t;" | $TEST_USER_CONNECT
 
 echo "=== Has Privilege on f1, f2 ==="
-echo "grant usage on udf f1 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "grant all on udf f2 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
+echo "grant usage on udf f1 to 'test-user';" |  bendsql_connect_root
+echo "grant all on udf f2 to 'test-user';" |  bendsql_connect_root
 echo "select f2(f1(1))" | $TEST_USER_CONNECT
 echo "select add(1, f1(1))" | $TEST_USER_CONNECT
 echo "select max(f2(f1(1)));" | $TEST_USER_CONNECT

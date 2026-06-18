@@ -14,7 +14,7 @@ stmt "insert into test_vacuum_table_only_orphans.a values (1),(2)"
 stmt "insert into test_vacuum_table_only_orphans.a values (2),(3)"
 stmt "insert into test_vacuum_table_only_orphans.a values (3),(4)"
 
-SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_table_only_orphans','a') limit 1" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_table_only_orphans','a') limit 1" | bendsql_connect_root)
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
 echo "before purge"
