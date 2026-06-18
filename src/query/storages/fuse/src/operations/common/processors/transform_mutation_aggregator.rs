@@ -70,6 +70,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::VirtualColumnAccumulator;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
@@ -925,12 +926,12 @@ fn fill_missing_segment_cluster_stats(
         return;
     }
 
+    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(cluster_key_exprs, schema);
     let (min, max) = get_min_max_stats(
-        cluster_key_exprs,
+        &prepared_cluster_key_exprs,
         &summary.col_stats,
         None,
         Some(cluster_key_id),
-        schema,
     );
     summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0, None));
 }

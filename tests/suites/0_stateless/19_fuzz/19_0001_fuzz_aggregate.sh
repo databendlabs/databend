@@ -10,7 +10,7 @@ rows=50000
 echo """
 create or replace table agg_fuzz(a int, b string, c bool, d variant, e int, f Decimal(15, 2), g Decimal(39,2));
 create or replace table agg_fuzz_r like agg_fuzz Engine = Random max_string_len = 3 max_array_len = 2;
-""" | $BENDSQL_CLIENT_OUTPUT_NULL
+""" | bendsql_connect_root_null
 
 
 echo """
@@ -19,7 +19,7 @@ insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
 insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
 insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
 insert into agg_fuzz select * from agg_fuzz_r limit ${rows};
-""" | $BENDSQL_CLIENT_OUTPUT_NULL
+""" | bendsql_connect_root_null
 
 for m in `seq 1 6 19`; do
 	echo """create or replace table agg_fuzz_result1 as select a, sum(e) e, sum(f) f, sum(g) g from (
@@ -29,7 +29,7 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 ) group by all
 ) group by all
 ) group by all;
-""" | $BENDSQL_CLIENT_OUTPUT_NULL
+""" | bendsql_connect_root_null
 
 	echo """create or replace table agg_fuzz_result2 as select a, sum(e) e, sum(f) f, sum(g) g from (
 	select a, d, sum(e) e, sum(f) f, sum(g) g from (
@@ -38,7 +38,7 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 ) group by all
 ) group by all
 ) group by all;
-""" | $BENDSQL_CLIENT_OUTPUT_NULL
+""" | bendsql_connect_root_null
 
 	echo """
 	select count() + 1 from (
@@ -50,7 +50,7 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 		EXCEPT
 		SELECT * FROM agg_fuzz_result1
 	);
-	""" | $BENDSQL_CLIENT_CONNECT
+	""" | bendsql_connect_root
 
 	echo """
 	select count() + 1 from (
@@ -62,5 +62,5 @@ select a % ${m} a, b, c, d, sum(e) e, sum(f) f, sum(g) g  from agg_fuzz where b 
 		EXCEPT
 		SELECT * FROM agg_fuzz_result1)
 	);
-	""" | $BENDSQL_CLIENT_CONNECT
+	""" | bendsql_connect_root
 done

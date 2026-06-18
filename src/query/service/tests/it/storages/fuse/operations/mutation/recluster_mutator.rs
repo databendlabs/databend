@@ -23,8 +23,6 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -285,7 +283,7 @@ async fn target_select_segment_locations_with_mode(
     max_segments: usize,
     mode: ReclusterMode,
 ) -> anyhow::Result<(usize, u64, ReclusterParts)> {
-    let schema = TableSchemaRef::new(TableSchema::empty());
+    let schema = TestFixture::default_table_schema();
     let segment_locations = create_segment_location_vector(segment_locations, None);
     let compact_segments = FuseTable::segment_pruning(
         &ctx,
@@ -457,7 +455,7 @@ async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Re
     )
     .await?;
 
-    let schema = TableSchemaRef::new(TableSchema::empty());
+    let schema = TestFixture::default_table_schema();
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
     let compact_segments = FuseTable::segment_pruning(
