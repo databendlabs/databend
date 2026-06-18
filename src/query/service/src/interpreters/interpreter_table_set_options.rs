@@ -53,8 +53,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_columns;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -114,6 +117,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_data_page_bytes(&self.plan.set_options)?;
         is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
         is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
+        is_valid_analyze_top_n_size(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
@@ -198,6 +202,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
         is_valid_bloom_index_type(&self.plan.set_options)?;
         is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
+        is_valid_analyze_top_n_columns(&self.plan.set_options, table.schema())?;
 
         if let Some(new_snapshot_location) =
             set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
@@ -346,12 +351,16 @@ async fn analyze_table(
         return Ok(table);
     };
 
+    let mut effective_options = fuse_table.get_table_info().options().clone();
+    effective_options.extend(options.clone());
+    let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
     let mut pipeline = Pipeline::create();
     fuse_table.do_analyze(
         ctx.clone(),
         table_snapshot,
         &mut pipeline,
         AnalyzeHistogramInfo::None,
+        top_n_size,
         false,
         true,
     )?;

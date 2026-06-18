@@ -135,6 +135,7 @@ impl FuseTable {
         snapshot: Arc<TableSnapshot>,
         pipeline: &mut Pipeline,
         histogram_info: AnalyzeHistogramInfo,
+        top_n_size: Option<usize>,
         no_scan: bool,
         retry_commit: bool,
     ) -> Result<()> {
@@ -159,6 +160,7 @@ impl FuseTable {
                     io_request_semaphore.clone(),
                     no_scan,
                     collect_histogram_info,
+                    top_n_size,
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
@@ -172,6 +174,7 @@ impl FuseTable {
                 snapshot_id,
                 input,
                 sink_histogram_info.clone(),
+                top_n_size,
                 retry_commit,
             )
         })?;
@@ -202,6 +205,7 @@ struct SinkAnalyzeState {
     top_n: Option<BlockTopN>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
+    top_n_size: Option<usize>,
     step: AnalyzeStep,
     retry_commit: bool,
 }
@@ -214,6 +218,7 @@ impl SinkAnalyzeState {
         snapshot_id: SnapshotId,
         input_port: Arc<InputPort>,
         histogram_info: SinkAnalyzeHistogramInfo,
+        top_n_size: Option<usize>,
         retry_commit: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
@@ -227,9 +232,10 @@ impl SinkAnalyzeState {
             row_count: 0,
             unstats_rows: 0,
             ndv_states: Default::default(),
-            top_n: Some(Default::default()),
+            top_n: top_n_size.map(|_| Default::default()),
             histograms: Default::default(),
             kll_histograms: Default::default(),
+            top_n_size,
             step: AnalyzeStep::CollectNDV,
             retry_commit,
         })))
@@ -639,14 +645,16 @@ impl Processor for SinkAnalyzeState {
                                     .and_modify(|hll| hll.merge(column_hll))
                                     .or_insert_with(|| column_hll.clone());
                             }
-                            match (&mut self.top_n, meta.top_n) {
-                                (Some(top_n), Some(meta_top_n)) => {
-                                    merge_column_top_n_mut(top_n, meta_top_n);
+                            if let Some(top_n_size) = self.top_n_size {
+                                match (&mut self.top_n, meta.top_n) {
+                                    (Some(top_n), Some(meta_top_n)) => {
+                                        merge_column_top_n_mut(top_n, meta_top_n, top_n_size);
+                                    }
+                                    (_, None) => {
+                                        self.top_n = None;
+                                    }
+                                    (None, Some(_)) => {}
                                 }
-                                (_, None) => {
-                                    self.top_n = None;
-                                }
-                                (None, Some(_)) => {}
                             }
                             self.row_count += meta.row_count;
                         }

@@ -38,6 +38,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RE
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
@@ -286,6 +287,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             snapshot,
             &mut build_res.main_pipeline,
             histogram_info,
+            analyze_top_n_size_from_options(table_options)?,
             self.plan.no_scan,
             true,
         )?;

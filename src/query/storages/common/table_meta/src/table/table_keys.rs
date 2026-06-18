@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::LazyLock;
 
+use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
@@ -38,6 +40,8 @@ pub const OPT_KEY_ENABLE_SCHEMA_EVOLUTION: &str = "enable_schema_evolution";
 pub const OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM: &str = "analyze_histogram_algorithm";
 pub const OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR: &str =
     "analyze_histogram_kll_relative_error";
+pub const OPT_KEY_ANALYZE_TOP_N_COLUMNS: &str = "analyze_top_n_columns";
+pub const OPT_KEY_ANALYZE_TOP_N_SIZE: &str = "analyze_top_n_size";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
@@ -100,6 +104,20 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
+pub fn analyze_top_n_size_from_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<Option<usize>> {
+    let Some(value) = options.get(OPT_KEY_ANALYZE_TOP_N_SIZE) else {
+        return Ok(None);
+    };
+    let top_n_size = value.parse::<usize>().map_err(|_| {
+        ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_TOP_N_SIZE} must be a non-negative integer, got: {value}"
+        ))
+    })?;
+    Ok((top_n_size > 0).then_some(top_n_size))
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy, FrozenAPI)]
 pub enum ClusterType {
     Linear = 0,
@@ -126,5 +144,28 @@ impl std::str::FromStr for ClusterType {
                 s
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_analyze_top_n_size_from_options() {
+        let mut options = BTreeMap::new();
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), None);
+
+        options.insert(OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(), "0".to_string());
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), None);
+
+        options.insert(OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(), "2".to_string());
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), Some(2));
+
+        options.insert(
+            OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(analyze_top_n_size_from_options(&options).is_err());
     }
 }

@@ -20,6 +20,7 @@ use std::io::Cursor;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::MetaHLL;
@@ -43,18 +44,19 @@ pub type StatisticsOfSpatialColumns = HashMap<ColumnId, SpatialStatistics>;
 pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type BlockTopN = HashMap<ColumnId, ColumnTopN>;
 pub type RawBlockHLL = Vec<u8>;
-pub const DEFAULT_TOP_N_SIZE: usize = 100;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, FrozenAPI)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, FrozenAPI)]
 pub struct ColumnTopN {
     pub values: Vec<ColumnTopNEntry>,
+    #[serde(skip)]
+    #[doc(hidden)]
+    pub min_index: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
 pub struct ColumnTopNEntry {
     pub scalar: Scalar,
-    /// Space-Saving estimated frequency. The true frequency is in
-    /// `[count - error, count]`.
+    /// Cached frequency for this scalar.
     pub count: u64,
     pub error: u64,
 }
@@ -67,13 +69,20 @@ impl PartialOrd for ColumnTopNEntry {
 
 impl Ord for ColumnTopNEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .count
-            .cmp(&self.count)
+        self.scalar
+            .cmp(&other.scalar)
+            .then_with(|| other.count.cmp(&self.count))
             .then_with(|| self.error.cmp(&other.error))
-            .then_with(|| self.scalar.cmp(&other.scalar))
     }
 }
+
+impl PartialEq for ColumnTopN {
+    fn eq(&self, other: &Self) -> bool {
+        self.values == other.values
+    }
+}
+
+impl Eq for ColumnTopN {}
 
 impl ColumnTopN {
     pub fn get(&self, scalar: &Scalar) -> Option<u64> {
@@ -81,99 +90,180 @@ impl ColumnTopN {
     }
 
     pub fn get_entry(&self, scalar: &Scalar) -> Option<&ColumnTopNEntry> {
-        self.values.iter().find(|entry| &entry.scalar == scalar)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ColumnTopNBuilder {
-    capacity: usize,
-    values: Vec<ColumnTopNEntry>,
-}
-
-impl Default for ColumnTopNBuilder {
-    fn default() -> Self {
-        Self::new(DEFAULT_TOP_N_SIZE)
-    }
-}
-
-impl ColumnTopNBuilder {
-    pub fn new(capacity: usize) -> Self {
-        let capacity = capacity.max(1);
-        Self {
-            capacity,
-            values: Vec::with_capacity(capacity),
-        }
+        self.find(&scalar.as_ref())
+            .ok()
+            .and_then(|index| self.values.get(index))
     }
 
-    pub fn add(&mut self, scalar: Scalar, count: u64) {
-        self.add_with_error(scalar, count, 0);
+    pub fn add_with_size(&mut self, top_n_size: usize, scalar: ScalarRef<'_>, count: u64) {
+        self.add_ref_with_options(top_n_size, scalar, count, 0);
     }
 
-    pub fn merge(&mut self, other: ColumnTopN) {
+    pub fn merge_with_size(&mut self, other: ColumnTopN, top_n_size: usize) {
         for entry in other.values {
-            self.add_with_error(entry.scalar, entry.count, entry.error);
+            if self.should_insert(&entry.scalar.as_ref(), entry.count, entry.error) {
+                self.insert_new_with_options(top_n_size, entry);
+            }
         }
     }
 
-    pub fn finish(self) -> ColumnTopN {
-        ColumnTopN {
-            values: self.values,
-        }
+    pub fn finish_with_size(mut self, top_n_size: usize) -> Self {
+        self.prune_to_capacity(top_n_size);
+        self
     }
 
-    fn add_with_error(&mut self, scalar: Scalar, count: u64, error: u64) {
-        if count == 0 {
-            return;
-        }
-        if let Some(index) = self.values.iter().position(|entry| entry.scalar == scalar) {
-            let mut entry = self.values.remove(index);
-            entry.count = entry.count.saturating_add(count);
-            entry.error = entry.error.saturating_add(error);
-            self.insert_entry(entry);
-            return;
-        }
-
-        if self.values.len() < self.capacity {
-            self.insert_entry(ColumnTopNEntry {
-                scalar,
+    fn add_ref_with_options(
+        &mut self,
+        capacity: usize,
+        scalar: ScalarRef<'_>,
+        count: u64,
+        error: u64,
+    ) {
+        if self.should_insert(&scalar, count, error) {
+            self.insert_new_with_options(capacity, ColumnTopNEntry {
+                scalar: scalar.to_owned(),
                 count,
                 error,
             });
+        }
+    }
+
+    fn find(&self, scalar: &ScalarRef<'_>) -> std::result::Result<usize, usize> {
+        self.values
+            .binary_search_by(|entry| entry.scalar.as_ref().cmp(scalar))
+    }
+
+    fn should_insert(&mut self, scalar: &ScalarRef<'_>, count: u64, error: u64) -> bool {
+        if count == 0 || matches!(scalar, ScalarRef::Null) {
+            return false;
+        }
+        if let Ok(index) = self.find(scalar) {
+            self.update_existing(index, count, error);
+            return false;
+        }
+        true
+    }
+
+    fn update_existing(&mut self, index: usize, count: u64, error: u64) {
+        let was_min = self.min_index == Some(index);
+        let entry = &mut self.values[index];
+        entry.count = entry.count.saturating_add(count);
+        entry.error = entry.error.saturating_add(error);
+        if was_min {
+            self.min_index = None;
+        }
+    }
+
+    fn insert_new_with_options(&mut self, capacity: usize, entry: ColumnTopNEntry) {
+        let index = self
+            .find(&entry.scalar.as_ref())
+            .unwrap_or_else(|index| index);
+        self.values.insert(index, entry);
+        self.on_insert(index);
+        if self.values.len() > capacity {
+            self.prune_to_capacity(capacity);
+        }
+    }
+
+    fn prune_to_capacity(&mut self, capacity: usize) {
+        if self.values.len() <= capacity {
             return;
         }
 
-        let Some(min_entry) = self.values.pop() else {
-            return;
-        };
-        let min_count = min_entry.count;
-        self.insert_entry(ColumnTopNEntry {
-            scalar,
-            count: min_count.saturating_add(count),
-            error: min_count.saturating_add(error),
-        });
+        while self.values.len() > capacity {
+            if self.prune_min().is_none() {
+                break;
+            }
+        }
     }
 
-    fn insert_entry(&mut self, entry: ColumnTopNEntry) {
-        let index = self
-            .values
-            .binary_search_by(|existing| existing.cmp(&entry))
-            .unwrap_or_else(|index| index);
-        self.values.insert(index, entry);
+    fn prune_min(&mut self) -> Option<()> {
+        let (min_index, next_min_index) = match self.min_index.take() {
+            Some(index) if index < self.values.len() => (index, None),
+            _ => self.find_min_and_next_index()?,
+        };
+        self.values.remove(min_index);
+        self.min_index =
+            next_min_index.map(|index| if index > min_index { index - 1 } else { index });
+        Some(())
+    }
+
+    fn on_insert(&mut self, index: usize) {
+        if let Some(min_index) = &mut self.min_index {
+            if *min_index >= index {
+                *min_index += 1;
+            }
+        }
+        match self.min_index {
+            None => self.min_index = Some(index),
+            Some(min_index) => {
+                let count = self.values[index].count;
+                let min_count = self.values[min_index].count;
+                if count < min_count || (count == min_count && index > min_index) {
+                    self.min_index = Some(index);
+                }
+            }
+        }
+    }
+
+    fn find_min_and_next_index(&self) -> Option<(usize, Option<usize>)> {
+        let first = self.values.first()?;
+        let mut min_index = 0;
+        let mut min_count = first.count;
+        let mut previous_min_index = None;
+        let mut second_min: Option<(usize, u64)> = None;
+
+        for (index, entry) in self.values.iter().enumerate().skip(1) {
+            let count = entry.count;
+            if count < min_count {
+                second_min = Some((min_index, min_count));
+                min_index = index;
+                min_count = count;
+                previous_min_index = None;
+            } else if count == min_count {
+                previous_min_index = Some(min_index);
+                min_index = index;
+            } else {
+                match second_min {
+                    None => second_min = Some((index, count)),
+                    Some((second_index, second_count))
+                        if count < second_count
+                            || (count == second_count && index > second_index) =>
+                    {
+                        second_min = Some((index, count));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Some((
+            min_index,
+            previous_min_index.or(second_min.map(|(index, _)| index)),
+        ))
+    }
+
+    #[cfg(test)]
+    fn add_ref_for_test(&mut self, capacity: usize, scalar: ScalarRef<'_>, count: u64, error: u64) {
+        self.add_ref_with_options(capacity, scalar, count, error);
+    }
+
+    #[cfg(test)]
+    fn add_entry_for_test(&mut self, capacity: usize, entry: ColumnTopNEntry) {
+        if self.should_insert(&entry.scalar.as_ref(), entry.count, entry.error) {
+            self.insert_new_with_options(capacity, entry);
+        }
     }
 }
 
-pub fn merge_column_top_n_mut(lhs: &mut BlockTopN, rhs: BlockTopN) {
+pub fn merge_column_top_n_mut(lhs: &mut BlockTopN, rhs: BlockTopN, top_n_size: usize) {
     for (column_id, column_top_n) in rhs {
         match lhs.entry(column_id) {
             Entry::Occupied(mut entry) => {
-                let mut builder = ColumnTopNBuilder::default();
-                builder.merge(std::mem::take(entry.get_mut()));
-                builder.merge(column_top_n);
-                *entry.get_mut() = builder.finish();
+                entry.get_mut().merge_with_size(column_top_n, top_n_size);
             }
             Entry::Vacant(entry) => {
-                entry.insert(column_top_n);
+                entry.insert(column_top_n.finish_with_size(top_n_size));
             }
         }
     }
@@ -190,19 +280,53 @@ mod tests {
     }
 
     #[test]
-    fn test_column_top_n_builder_uses_space_saving_capacity() {
-        let mut builder = ColumnTopNBuilder::new(2);
-        builder.add(uint_scalar(1), 5);
-        builder.add(uint_scalar(2), 3);
-        builder.add(uint_scalar(3), 1);
+    fn column_top_n_prunes_to_capacity() {
+        let mut top_n = ColumnTopN::default();
+        top_n.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 5,
+            error: 0,
+        });
+        top_n.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 3,
+            error: 0,
+        });
+        top_n.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(3),
+            count: 1,
+            error: 0,
+        });
+        assert_eq!(top_n.values.len(), 2);
 
-        let top_n = builder.finish();
+        top_n.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(4),
+            count: 1,
+            error: 0,
+        });
         assert_eq!(top_n.values.len(), 2);
         assert_eq!(top_n.get(&uint_scalar(1)), Some(5));
+        assert_eq!(top_n.get(&uint_scalar(2)), Some(3));
+    }
 
-        let entry = top_n.get_entry(&uint_scalar(3)).unwrap();
-        assert_eq!(entry.count, 4);
-        assert_eq!(entry.error, 3);
+    #[test]
+    fn column_top_n_adds_scalar_refs() {
+        let mut top_n = ColumnTopN::default();
+        top_n.add_ref_for_test(2, ScalarRef::String("b"), 1, 0);
+        top_n.add_ref_for_test(2, ScalarRef::String("a"), 1, 0);
+        top_n.add_ref_for_test(2, ScalarRef::String("a"), 4, 0);
+        top_n.add_ref_for_test(2, ScalarRef::String("c"), 1, 0);
+
+        assert_eq!(top_n.values.len(), 2);
+        assert!(
+            top_n
+                .values
+                .windows(2)
+                .all(|pair| pair[0].scalar < pair[1].scalar)
+        );
+        assert_eq!(top_n.get(&Scalar::String("a".to_string())), Some(5));
+        assert_eq!(top_n.get(&Scalar::String("a".to_string())), Some(5));
+        assert_eq!(top_n.get(&Scalar::String("b".to_string())), Some(1));
     }
 }
 

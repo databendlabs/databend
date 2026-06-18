@@ -289,6 +289,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             count: 37,
             error: 0,
         }],
+        min_index: None,
     })]);
     let top_n_columns = &[("id", UInt64Type::data_type())];
     for expr in ["id = 42", "id != 42", "id = 7"] {
