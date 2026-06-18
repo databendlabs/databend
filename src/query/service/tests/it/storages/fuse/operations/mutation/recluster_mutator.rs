@@ -25,6 +25,8 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::parse_to_filters;
@@ -588,7 +590,7 @@ async fn test_recluster_mutator_repacks_window_without_rewrite_tasks() -> anyhow
     )
     .await?;
 
-    let schema = TableSchemaRef::new(TableSchema::empty());
+    let schema = TestFixture::default_table_schema();
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let compact_segments = segment_pruning(
         &ctx,

@@ -94,7 +94,8 @@ impl FuseTable {
                 "recluster: reset carry reason=cluster_key_changed old_cluster_key_id={} new_cluster_key_id={}",
                 carry.cluster_key_id, mutator.cluster_key_id,
             );
-            *carry = ReclusterFinalCarry::default();
+            carry.scan_cursor = 0;
+            carry.pending.clear();
         }
         carry.cluster_key_id = mutator.cluster_key_id;
 
