@@ -4,15 +4,15 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql_query_http_user_connect testuser1 password -A"
+export TEST_USER_CONNECT="bendsql_connect_user testuser1 password -A"
 
 echo '-- reset users'
-echo "DROP USER IF EXISTS 'testuser1'" | $BENDSQL_CLIENT_CONNECT
+echo "DROP USER IF EXISTS 'testuser1'" | bendsql_connect_root
 
 echo '-- prepare user and tables for tests'
-echo "CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE IF NOT EXISTS t20_0016_table1(c int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT SELECT ON default.t20_0016_table1 TO testuser1" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD'" | bendsql_connect_root
+echo "CREATE TABLE IF NOT EXISTS t20_0016_table1(c int not null)" | bendsql_connect_root
+echo "GRANT SELECT ON default.t20_0016_table1 TO testuser1" | bendsql_connect_root
 
 echo '-- ensure the statements not break with PUBLIC role'
 echo "SHOW TABLES;" | $TEST_USER_CONNECT > /dev/null
