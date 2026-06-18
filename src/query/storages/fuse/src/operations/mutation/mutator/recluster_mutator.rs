@@ -65,7 +65,10 @@ use crate::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::operations::ReclusterMode;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
+use crate::statistics::PreparedClusterKeyExpr;
+use crate::statistics::RangeMaxTree;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 
 /// Maximum recluster depth allowed when only two blocks remain.
@@ -219,47 +222,6 @@ impl ReclusterFinalCarry {
     }
 }
 
-/// Iterative segment tree answering range-max queries over a fixed sequence.
-/// `build` is O(n), `range_max` is O(log n) over an inclusive `[l, r]` range.
-struct RangeMaxTree {
-    size: usize,
-    tree: Vec<usize>,
-}
-
-impl RangeMaxTree {
-    fn build(values: &[usize]) -> Self {
-        let size = values.len();
-        debug_assert!(size > 0, "RangeMaxTree requires a non-empty input");
-        let mut tree = vec![0usize; size * 2];
-        tree[size..(size * 2)].copy_from_slice(values);
-        for i in (1..size).rev() {
-            tree[i] = tree[2 * i].max(tree[2 * i + 1]);
-        }
-        Self { size, tree }
-    }
-
-    /// Max over the inclusive range `[l, r]`. Caller must ensure `l <= r < size`.
-    fn range_max(&self, l: usize, r: usize) -> usize {
-        debug_assert!(l <= r && r < self.size, "range [{l}, {r}] out of bounds");
-        let mut lo = l + self.size;
-        let mut hi = r + self.size + 1;
-        let mut acc = 0usize;
-        while lo < hi {
-            if lo & 1 == 1 {
-                acc = acc.max(self.tree[lo]);
-                lo += 1;
-            }
-            if hi & 1 == 1 {
-                hi -= 1;
-                acc = acc.max(self.tree[hi]);
-            }
-            lo >>= 1;
-            hi >>= 1;
-        }
-        acc
-    }
-}
-
 /// Cluster statistics for a candidate block.
 ///
 /// `Original` means the block already carries cluster statistics matching the
@@ -321,7 +283,7 @@ pub struct ReclusterMutator {
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
     pub(crate) memory_threshold: usize,
-    pub(crate) cluster_key_exprs: Vec<Expr<usize>>,
+    pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) cluster_key_types: Vec<DataType>,
 }
 
@@ -369,6 +331,8 @@ impl ReclusterMutator {
             .iter()
             .map(|v| v.data_type().clone())
             .collect::<Vec<_>>();
+        let prepared_cluster_key_exprs =
+            prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
 
         Ok(Self {
             ctx,
@@ -379,7 +343,7 @@ impl ReclusterMutator {
             cluster_key_id,
             max_tasks,
             memory_threshold,
-            cluster_key_exprs,
+            prepared_cluster_key_exprs,
             cluster_key_types,
         })
     }
@@ -409,6 +373,8 @@ impl ReclusterMutator {
             .get_recluster_block_size()
             .expect("get recluster_block_size setting for recluster mutator")
             as usize;
+        let prepared_cluster_key_exprs =
+            prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         Self {
             ctx,
             operator,
@@ -418,7 +384,7 @@ impl ReclusterMutator {
             cluster_key_id,
             max_tasks,
             memory_threshold,
-            cluster_key_exprs,
+            prepared_cluster_key_exprs,
             cluster_key_types,
         }
     }
@@ -1017,11 +983,10 @@ impl ReclusterMutator {
         }
 
         let (min_stats, max_stats) = get_min_max_stats(
-            &self.cluster_key_exprs,
+            &self.prepared_cluster_key_exprs,
             col_stats,
             cluster_stats,
             Some(self.cluster_key_id),
-            self.schema.as_ref(),
         );
 
         ClusterStatistics::new(self.cluster_key_id, min_stats, max_stats, 0, None)

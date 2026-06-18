@@ -1048,12 +1048,8 @@ fn simple_cluster_key_column(expr: &ast::Expr) -> Option<String> {
     }
 }
 
-fn statistics_cost(statistics: &PartStatistics) -> (usize, usize, usize) {
-    (
-        statistics.partitions_scanned,
-        statistics.read_rows,
-        statistics.read_bytes,
-    )
+fn statistics_cost(statistics: &PartStatistics) -> (usize, usize) {
+    (statistics.partitions_scanned, statistics.read_rows)
 }
 
 fn database_from_desc(desc: &str) -> Option<String> {
@@ -1128,6 +1124,14 @@ mod tests {
             String::new(),
             id.to_string(),
         ))
+    }
+
+    #[test]
+    fn test_statistics_cost_ignores_read_bytes() {
+        let small_file = PartStatistics::new_exact(100, 10, 2, 10);
+        let large_file = PartStatistics::new_exact(100, 1000, 2, 10);
+
+        assert_eq!(statistics_cost(&small_file), statistics_cost(&large_file));
     }
 
     #[test]

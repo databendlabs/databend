@@ -4,13 +4,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_bendsql() {
-  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+  cat <<SQL | bendsql_connect_root
 $1
 SQL
 }
 
 run_bendsql_null() {
-  cat <<SQL | $BENDSQL_CLIENT_OUTPUT_NULL
+  cat <<SQL | bendsql_connect_root_null
 $1
 SQL
 }
@@ -64,7 +64,7 @@ function run_test() {
   local expected="$2"
   local test_name="$3"
 
-  result=$(echo "$query" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}')
+  result=$(echo "$query" | bendsql_connect_root | awk '{print $1}')
 
   if [ "$result" != "$expected" ]; then
     echo "FAIL: $test_name (Expected $expected, got $result)"
@@ -170,7 +170,7 @@ for ((i=1; i<=$iterations; i++)); do
 
   run_test """
     SELECT COUNT(*) FROM join_fuzz1 LEFT JOIN empty_table as join_fuzz2  ON $condition;
-  """ "$(echo "SELECT COUNT(*) FROM join_fuzz1;" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}')" "LEFT JOIN with empty table preserves left table"
+  """ "$(echo "SELECT COUNT(*) FROM join_fuzz1;" | bendsql_connect_root | awk '{print $1}')" "LEFT JOIN with empty table preserves left table"
 
   # Test type compatibility
   run_test """
@@ -188,4 +188,4 @@ done
 # DROP TABLE if exists join_fuzz2;
 # DROP TABLE if exists join_fuzz_r;
 # DROP TABLE if exists empty_table;
-# """ | $BENDSQL_CLIENT_CONNECT
+# """ | bendsql_connect_root

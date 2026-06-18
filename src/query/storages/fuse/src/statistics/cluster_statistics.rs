@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -218,6 +218,47 @@ pub struct BlockOverlapDepth {
     pub depth: usize,
 }
 
+/// Iterative segment tree answering range-max queries over a fixed sequence.
+/// `build` is O(n), `range_max` is O(log n) over an inclusive `[l, r]` range.
+pub(crate) struct RangeMaxTree {
+    size: usize,
+    tree: Vec<usize>,
+}
+
+impl RangeMaxTree {
+    pub(crate) fn build(values: &[usize]) -> Self {
+        let size = values.len();
+        debug_assert!(size > 0, "RangeMaxTree requires a non-empty input");
+        let mut tree = vec![0usize; size * 2];
+        tree[size..(size * 2)].copy_from_slice(values);
+        for i in (1..size).rev() {
+            tree[i] = tree[i * 2].max(tree[i * 2 + 1]);
+        }
+        Self { size, tree }
+    }
+
+    /// Max over the inclusive range `[l, r]`. Caller must ensure `l <= r < size`.
+    pub(crate) fn range_max(&self, l: usize, r: usize) -> usize {
+        debug_assert!(l <= r && r < self.size, "range [{l}, {r}] out of bounds");
+        let mut lo = l + self.size;
+        let mut hi = r + self.size + 1;
+        let mut acc = 0usize;
+        while lo < hi {
+            if lo & 1 == 1 {
+                acc = acc.max(self.tree[lo]);
+                lo += 1;
+            }
+            if hi & 1 == 1 {
+                hi -= 1;
+                acc = acc.max(self.tree[hi]);
+            }
+            lo >>= 1;
+            hi >>= 1;
+        }
+        acc
+    }
+}
+
 pub fn calculate_block_overlap_depths(
     ranges: &[(Vec<Scalar>, Vec<Scalar>)],
     cluster_key_types: &[DataType],
@@ -238,43 +279,105 @@ pub fn calculate_block_overlap_depths(
             .or_insert((vec![], vec![index]));
     }
 
-    let mut stats = vec![BlockOverlapDepth::default(); ranges.len()];
-    let mut unfinished_parts: HashMap<usize, BlockOverlapDepth> = HashMap::new();
     let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
     let indices = compare_scalars(&keys, cluster_key_types)?;
-    for idx in indices.into_iter() {
+    let point_count = indices.len();
+    let unset_pos = usize::MAX;
+    let mut point_depths = vec![0usize; point_count];
+    let mut start_prefix_sums = vec![0usize; point_count];
+    let mut open_pos = vec![unset_pos; ranges.len()];
+    let mut close_pos = vec![unset_pos; ranges.len()];
+    let mut live = vec![false; ranges.len()];
+    let mut live_count = 0usize;
+    let mut start_count = 0usize;
+
+    for (pos, idx) in indices.into_iter().enumerate() {
         let start = &values[idx as usize].0;
         let end = &values[idx as usize].1;
-        let point_depth = unfinished_parts.len() + start.len();
-
-        unfinished_parts.values_mut().for_each(|stat| {
-            stat.overlap += start.len();
-            stat.depth = cmp::max(stat.depth, point_depth);
-        });
+        let point_depth = live_count + start.len();
+        point_depths[pos] = point_depth;
+        start_count += start.len();
+        start_prefix_sums[pos] = start_count;
 
         start.iter().for_each(|idx| {
-            unfinished_parts.insert(*idx, BlockOverlapDepth {
-                overlap: point_depth - 1,
-                depth: point_depth,
-            });
+            if !live[*idx] {
+                live[*idx] = true;
+                live_count += 1;
+            }
+            open_pos[*idx] = pos;
         });
 
         end.iter().for_each(|idx| {
-            if let Some(stat) = unfinished_parts.remove(idx) {
-                stats[*idx] = stat;
+            if live[*idx] {
+                live[*idx] = false;
+                live_count -= 1;
             }
+            close_pos[*idx] = pos;
         });
+    }
+
+    let range_max_tree = RangeMaxTree::build(&point_depths);
+    let mut stats = vec![BlockOverlapDepth::default(); ranges.len()];
+    for idx in 0..ranges.len() {
+        let open = open_pos[idx];
+        let close = close_pos[idx];
+        if open == unset_pos || close == unset_pos || close < open {
+            continue;
+        }
+
+        // Count starts after this block opens and through its close point, matching
+        // the old sweep order where closing blocks were removed after start updates.
+        let next_overlap = start_prefix_sums[close] - start_prefix_sums[open];
+        stats[idx] = BlockOverlapDepth {
+            overlap: point_depths[open].saturating_sub(1) + next_overlap,
+            depth: range_max_tree.range_max(open, close),
+        };
     }
 
     Ok(stats)
 }
 
-pub fn get_min_max_stats(
+#[derive(Clone)]
+pub(crate) struct PreparedClusterKeyExpr {
+    expr: Expr<usize>,
+    data_type: DataType,
+    column_refs: Vec<(usize, DataType, Vec<ColumnId>)>,
+}
+
+pub(crate) fn prepare_cluster_key_exprs(
     exprs: &[Expr<usize>],
+    schema: &TableSchema,
+) -> Vec<PreparedClusterKeyExpr> {
+    exprs
+        .iter()
+        .map(|expr| {
+            let data_type = expr.data_type().clone();
+            let column_refs = if matches!(data_type.remove_nullable(), DataType::Binary) {
+                Vec::new()
+            } else {
+                expr.column_refs()
+                    .into_iter()
+                    .map(|(index, ty)| {
+                        let column_ids = schema.field(index).leaf_column_ids();
+                        (index, ty, column_ids)
+                    })
+                    .collect()
+            };
+
+            PreparedClusterKeyExpr {
+                expr: expr.clone(),
+                data_type,
+                column_refs,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn get_min_max_stats(
+    prepared_exprs: &[PreparedClusterKeyExpr],
     col_stats: &StatisticsOfColumns,
     cluster_stats: Option<&ClusterStatistics>,
     default_key_id: Option<u32>,
-    schema: &TableSchema,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
     if let Some(default_key_id) = default_key_id {
         if let Some(v) = cluster_stats {
@@ -286,37 +389,40 @@ pub fn get_min_max_stats(
     }
 
     let func_ctx = FunctionContext::default();
-    let mut mins = Vec::with_capacity(exprs.len());
-    let mut maxs = Vec::with_capacity(exprs.len());
-    for expr in exprs {
+    let mut mins = Vec::with_capacity(prepared_exprs.len());
+    let mut maxs = Vec::with_capacity(prepared_exprs.len());
+    for prepared_expr in prepared_exprs {
         // Since the hilbert index does not calc domain, set min max directly.
-        if expr.data_type().remove_nullable() == DataType::Binary {
+        if prepared_expr.data_type.remove_nullable() == DataType::Binary {
             mins.push(Scalar::Binary(vec![]));
             maxs.push(Scalar::Binary(vec![0xFF; 40]));
             continue;
         }
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(index, ty)| {
-                let column_ids = schema.field(index).leaf_column_ids();
+        let input_domains = prepared_expr
+            .column_refs
+            .iter()
+            .map(|(index, ty, column_ids)| {
                 let stats = column_ids
                     .iter()
                     .filter_map(|column_id| col_stats.get(column_id))
                     .collect();
-                let domain = statistics_to_domain(stats, &ty);
-                (index, domain)
+                let domain = statistics_to_domain(stats, ty);
+                (*index, domain)
             })
             .collect();
 
-        let (_, domain_opt) =
-            ConstantFolder::fold_with_domain(expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
-        let domain = domain_opt.unwrap_or_else(|| Domain::full(expr.data_type()));
+        let (_, domain_opt) = ConstantFolder::fold_with_domain(
+            &prepared_expr.expr,
+            &input_domains,
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+        let domain = domain_opt.unwrap_or_else(|| Domain::full(&prepared_expr.data_type));
         let (mut min, mut max) = domain.to_minmax();
         if min.as_ref().cmp(&max.as_ref()) == Ordering::Greater {
             warn!("invalid cluster key expression range, fallback to full domain");
-            (min, max) = Domain::full(expr.data_type()).to_minmax();
+            (min, max) = Domain::full(&prepared_expr.data_type).to_minmax();
         }
         mins.push(min);
         maxs.push(max);
@@ -370,12 +476,32 @@ mod tests {
     }
 
     #[test]
+    fn test_calculate_block_overlap_depths_keeps_boundary_touch_semantics() -> Result<()> {
+        let ranges = vec![
+            (vec![int32_scalar(1)], vec![int32_scalar(2)]),
+            (vec![int32_scalar(2)], vec![int32_scalar(3)]),
+            (vec![int32_scalar(4)], vec![int32_scalar(5)]),
+        ];
+        let cluster_key_types = vec![DataType::Number(NumberDataType::Int32)];
+
+        let stats = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+
+        let actual = stats
+            .iter()
+            .map(|stat| (stat.overlap, stat.depth))
+            .collect::<Vec<_>>();
+        assert_eq!(actual, vec![(1, 2), (1, 2), (0, 1)]);
+        Ok(())
+    }
+
+    #[test]
     fn test_get_min_max_stats_expands_multi_column_range() {
         let schema = int32_schema(&["a", "b"]);
         let exprs = vec![int32_column_expr(0, "a"), int32_column_expr(1, "b")];
+        let prepared_exprs = prepare_cluster_key_exprs(&exprs, &schema);
         let col_stats = int32_col_stats(&[(0, 1, 3), (1, 2, 5)]);
 
-        let (min, max) = get_min_max_stats(&exprs, &col_stats, None, Some(0), &schema);
+        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, None, Some(0));
 
         assert_eq!(min, vec![int32_scalar(1), int32_scalar(2)]);
         assert_eq!(max, vec![int32_scalar(3), int32_scalar(5)]);
@@ -385,9 +511,10 @@ mod tests {
     fn test_get_min_max_stats_falls_back_on_invalid_expression_range() {
         let schema = int32_schema(&["a"]);
         let exprs = vec![int32_column_expr(0, "a")];
+        let prepared_exprs = prepare_cluster_key_exprs(&exprs, &schema);
         let col_stats = int32_col_stats(&[(0, 10, 1)]);
 
-        let (min, max) = get_min_max_stats(&exprs, &col_stats, None, Some(0), &schema);
+        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, None, Some(0));
 
         assert_eq!(min, vec![int32_scalar(i32::MIN)]);
         assert_eq!(max, vec![int32_scalar(i32::MAX)]);

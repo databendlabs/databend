@@ -48,6 +48,7 @@ use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
 use crate::table_functions::parse_db_tb_opt_args;
@@ -223,6 +224,18 @@ impl<'a> ClusteringInformationImpl<'a> {
         let snapshot = snapshot.unwrap();
 
         let schema = self.table.schema();
+        let cluster_key_types = exprs
+            .iter()
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&exprs, schema.as_ref());
 
         let mut ranges = Vec::with_capacity(snapshot.summary.block_count as usize);
         let mut constant_block_count = 0;
@@ -237,14 +250,14 @@ impl<'a> ClusteringInformationImpl<'a> {
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments: Vec<Result<SegmentInfo>> = segments_io.read_segments(chunk, true).await?;
 
-            for segment in segments.into_iter().flatten() {
+            for segment in segments {
+                let segment = segment?;
                 for block in segment.blocks {
                     let (min, max) = get_min_max_stats(
-                        &exprs,
+                        &prepared_cluster_key_exprs,
                         &block.col_stats,
                         block.cluster_stats.as_ref(),
                         default_cluster_key_id,
-                        schema.as_ref(),
                     );
                     assert_eq!(min.len(), max.len());
                     if min == max {
@@ -256,25 +269,30 @@ impl<'a> ClusteringInformationImpl<'a> {
         }
         drop(snapshot);
 
-        let cluster_key_types = exprs
-            .into_iter()
-            .map(|v| {
-                let data_type = v.data_type();
-                if matches!(*data_type, DataType::String) {
-                    data_type.wrap_nullable()
-                } else {
-                    data_type.clone()
-                }
-            })
-            .collect::<Vec<_>>();
         let stats = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        if stats.is_empty() {
+            return Ok(ClusteringInformationResponse {
+                cluster_key,
+                cluster_type,
+                timestamp,
+                info: serde_json::to_value(LinerClusterStatistics {
+                    total_block_count,
+                    ..Default::default()
+                })?,
+            });
+        }
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
         let length = stats.len();
-        let mp = stats.into_iter().fold(BTreeMap::new(), |mut acc, stat| {
+        let mut depth_counts = BTreeMap::new();
+        let bucket_counts = stats.into_iter().fold(BTreeMap::new(), |mut acc, stat| {
             sum_overlap += stat.overlap;
             sum_depth += stat.depth;
+            depth_counts
+                .entry(stat.depth)
+                .and_modify(|v| *v += 1)
+                .or_insert(1);
 
             let bucket = get_buckets(stat.depth);
             acc.entry(bucket).and_modify(|v| *v += 1).or_insert(1);
@@ -285,17 +303,22 @@ impl<'a> ClusteringInformationImpl<'a> {
         let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
 
         let block_depth_histogram =
-            mp.into_iter()
+            bucket_counts
+                .into_iter()
                 .fold(BTreeMap::new(), |mut acc, (bucket, count)| {
                     acc.insert(format!("{:05}", bucket), count);
                     acc
                 });
+        let p95_depth = percentile_depth(&depth_counts, length, 95);
+        let p99_depth = percentile_depth(&depth_counts, length, 99);
 
         let info = LinerClusterStatistics {
             total_block_count,
             constant_block_count,
             average_overlaps,
             average_depth,
+            p95_depth,
+            p99_depth,
             block_depth_histogram,
         };
         Ok(ClusteringInformationResponse {
@@ -418,6 +441,8 @@ struct LinerClusterStatistics {
     constant_block_count: u64,
     average_overlaps: f64,
     average_depth: f64,
+    p95_depth: usize,
+    p99_depth: usize,
     block_depth_histogram: BTreeMap<String, u64>,
 }
 
@@ -449,4 +474,40 @@ fn get_buckets(val: usize) -> u32 {
     val |= val >> 8;
     val |= val >> 16;
     val + 1
+}
+
+fn percentile_depth(
+    depth_counts: &BTreeMap<usize, u64>,
+    total_count: usize,
+    percentile: u64,
+) -> usize {
+    if total_count == 0 {
+        return 0;
+    }
+
+    let rank = ((total_count as u64) * percentile).div_ceil(100);
+    let mut seen = 0;
+    for (depth, count) in depth_counts {
+        seen += count;
+        if seen >= rank {
+            return *depth;
+        }
+    }
+
+    0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_percentile_depth_uses_nearest_rank() {
+        let depth_counts = BTreeMap::from([(1, 3), (2, 2), (3, 1), (20, 1)]);
+
+        assert_eq!(percentile_depth(&depth_counts, 7, 50), 2);
+        assert_eq!(percentile_depth(&depth_counts, 7, 95), 20);
+        assert_eq!(percentile_depth(&depth_counts, 7, 99), 20);
+        assert_eq!(percentile_depth(&BTreeMap::new(), 0, 99), 0);
+    }
 }
