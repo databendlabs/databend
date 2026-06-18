@@ -64,7 +64,9 @@ use crate::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::operations::ReclusterMode;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
+use crate::statistics::PreparedClusterKeyExpr;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 
 /// Maximum recluster depth allowed when only two blocks remain.
@@ -162,7 +164,7 @@ pub struct ReclusterMutator {
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
     pub(crate) memory_threshold: usize,
-    pub(crate) cluster_key_exprs: Vec<Expr<usize>>,
+    pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) cluster_key_types: Vec<DataType>,
 }
 
@@ -199,6 +201,8 @@ impl ReclusterMutator {
             .iter()
             .map(|v| v.data_type().clone())
             .collect::<Vec<_>>();
+        let prepared_cluster_key_exprs =
+            prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
 
         Ok(Self {
             ctx,
@@ -209,7 +213,7 @@ impl ReclusterMutator {
             cluster_key_id,
             max_tasks,
             memory_threshold,
-            cluster_key_exprs,
+            prepared_cluster_key_exprs,
             cluster_key_types,
         })
     }
@@ -234,6 +238,8 @@ impl ReclusterMutator {
             .iter()
             .map(|expr| expr.data_type().clone())
             .collect();
+        let prepared_cluster_key_exprs =
+            prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         let memory_threshold = ctx
             .get_settings()
             .get_recluster_block_size()
@@ -248,7 +254,7 @@ impl ReclusterMutator {
             cluster_key_id,
             max_tasks,
             memory_threshold,
-            cluster_key_exprs,
+            prepared_cluster_key_exprs,
             cluster_key_types,
         }
     }
@@ -870,7 +876,7 @@ impl ReclusterMutator {
             // flush, only bounded anchors remain eligible for the next window.
             let mut seen_in_hot_range = IndexSet::new();
             let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
-            let sorted_indices = compare_scalars(keys, &self.cluster_key_types)?;
+            let sorted_indices = compare_scalars(&keys, &self.cluster_key_types)?;
 
             for idx in sorted_indices {
                 let start = &values[idx as usize].0;
@@ -1046,11 +1052,10 @@ impl ReclusterMutator {
         }
 
         let (min_stats, max_stats) = get_min_max_stats(
-            &self.cluster_key_exprs,
+            &self.prepared_cluster_key_exprs,
             col_stats,
             cluster_stats,
             Some(self.cluster_key_id),
-            self.schema.as_ref(),
         );
 
         ClusterStatistics::new(self.cluster_key_id, min_stats, max_stats, 0, None)
@@ -1180,7 +1185,7 @@ impl ReclusterMutator {
         let mut point_overlaps: Vec<Vec<usize>> = Vec::with_capacity(points_map.len());
         let mut unfinished_intervals = BTreeMap::new();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
-        let indices = compare_scalars(keys, &self.cluster_key_types)?;
+        let indices = compare_scalars(&keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {
             let start = &values[idx as usize].0;
             let end = &values[idx as usize].1;
