@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -209,13 +210,11 @@ fn build_analyze_column_projection(
         analyze_columns.insert(field_index, (Some(field), None));
     }
     if histogram_info.kll_relative_error().is_some() {
-        for (index, field) in table_schema.fields().iter().enumerate() {
-            if RangeIndex::supported_type(&field.data_type().into()) {
-                analyze_columns
-                    .entry(index)
-                    .and_modify(|(_, kll_field)| *kll_field = Some(field.clone()))
-                    .or_insert_with(|| (None, Some(field.clone())));
-            }
+        for (index, field) in kll_column_fields(&table_schema) {
+            analyze_columns
+                .entry(index)
+                .and_modify(|(_, kll_field)| *kll_field = Some(field.clone()))
+                .or_insert_with(|| (None, Some(field)));
         }
     }
 
@@ -243,6 +242,17 @@ fn build_analyze_column_projection(
         ndv_columns_map,
         kll_columns_map,
     })
+}
+
+fn kll_column_fields(table_schema: &TableSchemaRef) -> BTreeMap<FieldIndex, TableField> {
+    table_schema
+        .fields()
+        .iter()
+        .enumerate()
+        .filter(|(_, field)| !matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))))
+        .filter(|(_, field)| RangeIndex::supported_type(&field.data_type().into()))
+        .map(|(index, field)| (index, field.clone()))
+        .collect()
 }
 
 #[async_trait::async_trait]
@@ -573,4 +583,37 @@ fn build_kll_histograms(
         }
     }
     Ok(histograms)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn kll_column_fields_skip_virtual_computed_columns() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("b", TableDataType::Number(NumberDataType::Int32))
+                .with_computed_expr(Some(ComputedExpr::Virtual("(a + 1)".to_string()))),
+            TableField::new("c", TableDataType::Number(NumberDataType::Int32))
+                .with_computed_expr(Some(ComputedExpr::Stored("(a + 2)".to_string()))),
+        ]));
+
+        let fields = kll_column_fields(&schema);
+
+        assert_eq!(fields.keys().copied().collect::<Vec<_>>(), vec![0, 2]);
+        assert_eq!(
+            fields
+                .values()
+                .map(|field| field.name())
+                .collect::<Vec<_>>(),
+            vec!["a", "c"]
+        );
+    }
 }
