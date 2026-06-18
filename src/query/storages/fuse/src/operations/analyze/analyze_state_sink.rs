@@ -16,6 +16,7 @@ use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -710,9 +711,9 @@ impl KllHistogramCollector {
         self.buckets.is_empty()
     }
 
-    fn add_value(&mut self, value: Datum) -> Result<()> {
+    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
         let bucket_index = self.locate_bucket(&value)?;
-        self.buckets[bucket_index].add_value(value)
+        self.buckets[bucket_index].add_value(value, ndv_value)
     }
 
     fn locate_bucket(&self, value: &Datum) -> Result<usize> {
@@ -754,7 +755,7 @@ impl KllBucketStats {
         }
     }
 
-    fn add_value(&mut self, value: Datum) -> Result<()> {
+    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
         self.observed_lower_bound = match self.observed_lower_bound.take() {
             Some(lower_bound) => {
                 if value.compare(&lower_bound)?.is_lt() {
@@ -776,7 +777,7 @@ impl KllBucketStats {
             None => Some(value.clone()),
         };
         self.count += 1;
-        self.ndv.add_object(&value);
+        self.ndv.add_object(ndv_value);
         Ok(())
     }
 
@@ -810,22 +811,54 @@ fn update_kll_histogram_collectors(
         let collector = &mut collectors[*collector_index];
         match entry {
             BlockEntry::Const(scalar, _, num_rows) => {
-                let Some(value) = scalar.to_datum() else {
+                let Some(value) = scalar.clone().to_datum() else {
                     continue;
                 };
                 for _ in 0..num_rows {
-                    collector.add_value(value.clone())?;
+                    collector.add_value(value.clone(), &scalar)?;
                 }
             }
             BlockEntry::Column(column) => {
                 for value in column.iter() {
-                    let Some(value) = value.to_datum() else {
+                    let Some(datum) = value.clone().to_datum() else {
                         continue;
                     };
-                    collector.add_value(value)?;
+                    collector.add_value(datum, &value)?;
                 }
             }
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    #[test]
+    fn kll_bucket_ndv_hashes_original_decimal_value() {
+        let size = DecimalSize::new(38, 0).unwrap();
+        let left = Scalar::Decimal(DecimalScalar::Decimal128(9_007_199_254_740_992, size));
+        let right = Scalar::Decimal(DecimalScalar::Decimal128(9_007_199_254_740_993, size));
+        let left_datum = left.clone().to_datum().unwrap();
+        let right_datum = right.clone().to_datum().unwrap();
+
+        assert_eq!(left_datum, right_datum);
+
+        let mut bucket = KllBucketStats::new(KllBucketBounds {
+            lower: left_datum.clone(),
+            upper: right_datum.clone(),
+            num_values: 2,
+        });
+        bucket.add_value(left_datum, &left).unwrap();
+        bucket.add_value(right_datum, &right).unwrap();
+        let histogram_bucket = bucket.into_histogram_bucket().unwrap().unwrap();
+
+        assert_eq!(histogram_bucket.num_values(), 2.0);
+        assert_eq!(histogram_bucket.num_distinct(), 2.0);
+    }
 }

@@ -21,6 +21,8 @@ use databend_common_exception::Result;
 use crate::Datum;
 use crate::HistogramBucket;
 
+const MAX_LEVEL_CAPACITY: usize = 1_000_000;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct KllSketchItem {
     value: Datum,
@@ -51,11 +53,16 @@ impl KllSketch {
                 "KLL sketch level capacity must be at least 2, got {level_capacity}"
             )));
         }
+        if level_capacity > MAX_LEVEL_CAPACITY {
+            return Err(ErrorCode::BadArguments(format!(
+                "KLL sketch level capacity must not exceed {MAX_LEVEL_CAPACITY}, got {level_capacity}"
+            )));
+        }
 
         Ok(Self {
             level_capacity,
             len: 0,
-            levels: vec![Vec::with_capacity(level_capacity)],
+            levels: vec![Self::new_level(level_capacity)?],
             min_value: None,
             max_value: None,
             compact_next_odd: false,
@@ -123,9 +130,9 @@ impl KllSketch {
             .checked_add(other.len)
             .ok_or_else(|| ErrorCode::BadArguments("KLL sketch length overflow during merge"))?;
         if self.levels.len() < other.levels.len() {
-            self.levels.resize_with(other.levels.len(), || {
-                Vec::with_capacity(self.level_capacity)
-            });
+            while self.levels.len() < other.levels.len() {
+                self.levels.push(Self::new_level(self.level_capacity)?);
+            }
         }
         for (level_idx, level) in other.levels.into_iter().enumerate() {
             self.levels[level_idx].extend(level);
@@ -240,7 +247,7 @@ impl KllSketch {
         *level = retained;
 
         if self.levels.len() == level_idx + 1 {
-            self.levels.push(Vec::with_capacity(self.level_capacity));
+            self.levels.push(Self::new_level(self.level_capacity)?);
         }
         self.levels[level_idx + 1].extend(promoted);
         Ok(())
@@ -278,8 +285,24 @@ impl KllSketch {
                 "KLL sketch relative error is too small: {relative_error}"
             )));
         }
+        if capacity > MAX_LEVEL_CAPACITY as f64 {
+            let min_relative_error = 2.0 / MAX_LEVEL_CAPACITY as f64;
+            return Err(ErrorCode::BadArguments(format!(
+                "KLL sketch relative error is too small: {relative_error}, minimum supported relative error is {min_relative_error}"
+            )));
+        }
 
         Ok(capacity as usize)
+    }
+
+    fn new_level(level_capacity: usize) -> Result<Vec<KllSketchItem>> {
+        let mut level = Vec::new();
+        level.try_reserve_exact(level_capacity).map_err(|err| {
+            ErrorCode::BadArguments(format!(
+                "Cannot allocate KLL sketch level with capacity {level_capacity}: {err}"
+            ))
+        })?;
+        Ok(level)
     }
 }
 
@@ -468,6 +491,7 @@ fn estimate_bucket_ndv(num_values: usize, total_values: f64, column_ndv: Option<
 #[cfg(test)]
 mod tests {
     use super::KllSketch;
+    use super::MAX_LEVEL_CAPACITY;
     use crate::Datum;
 
     fn build_sketch(level_capacity: usize, len: i64) -> KllSketch {
@@ -485,6 +509,17 @@ mod tests {
         assert_eq!(sketch.len(), 10_000);
         assert!(sketch.levels_len() > 1);
         assert!(sketch.retained_len() < 32 * 16);
+    }
+
+    #[test]
+    fn kll_sketch_rejects_tiny_relative_error_before_allocation() {
+        assert!(KllSketch::with_relative_error(1e-12).is_err());
+
+        let min_relative_error = 2.0 / MAX_LEVEL_CAPACITY as f64;
+        assert_eq!(
+            KllSketch::capacity_for_relative_error(min_relative_error).unwrap(),
+            MAX_LEVEL_CAPACITY
+        );
     }
 
     #[test]
