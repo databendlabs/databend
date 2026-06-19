@@ -1,0 +1,288 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_meta_app::schema::CatalogIdIdent;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::HiveCatalogOption;
+use databend_common_meta_app::tenant::Tenant;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::KVMeta;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnCondition;
+
+use super::mem_kv::MemKV;
+use super::meta_txn::MetaTxn;
+use super::meta_txn_manager::MetaTxnManager;
+use super::op_builder::txn_del;
+use super::op_builder::txn_put_pb_with_ttl;
+use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::encode_pb;
+
+fn tenant() -> Tenant {
+    Tenant::new_literal("test")
+}
+
+fn key(id: u64) -> CatalogIdIdent {
+    CatalogIdIdent::new(tenant(), id)
+}
+
+fn meta() -> CatalogMeta {
+    meta_at("127.0.0.1:10000")
+}
+
+fn meta_at(address: &str) -> CatalogMeta {
+    CatalogMeta {
+        catalog_option: CatalogOption::Hive(HiveCatalogOption {
+            address: address.to_string(),
+            storage_params: None,
+        }),
+        created_on: DateTime::<Utc>::MIN_UTC,
+    }
+}
+
+fn encoded() -> Vec<u8> {
+    encode_pb(&meta()).unwrap()
+}
+
+/// A re-read returns the snapshot cached on the first read, even after the
+/// backend record changes underneath — the second read never reaches the backend.
+#[tokio::test]
+async fn test_read_is_cached() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let k = key(1);
+    mem.seed(&k.to_string_key(), 7, encoded());
+
+    let (txn, _commit) = MetaTxn::new(&mem);
+
+    // First read snapshots the key at seq 7.
+    let first = txn.get_for_update(&k).await?;
+    assert_eq!(first.seq_v().map(|s| s.seq), Some(7));
+    assert_eq!(first.value(), Some(&meta()));
+
+    // Replace the backend record underneath the transaction: a fresh read would
+    // now see seq 9 with a different value.
+    mem.seed(
+        &k.to_string_key(),
+        9,
+        encode_pb(&meta_at("127.0.0.1:29999")).unwrap(),
+    );
+
+    // The transaction serves its cached snapshot, not the new backend record.
+    let second = txn.get_for_update(&k).await?;
+    assert_eq!(second.seq(), 7, "cached snapshot, not backend seq 9");
+    assert_eq!(
+        second.into_value(),
+        Some(meta()),
+        "cached value, not the changed one"
+    );
+
+    assert_eq!(mem.read_count(), 1, "backend read only once");
+    Ok(())
+}
+
+/// Reads of one key collapse to a single `eq_seq` guard however many times, or
+/// however, it is read; a plain `get` of another key arms none.
+#[tokio::test]
+async fn test_for_update_becomes_guard() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (k, other) = (key(1), key(2));
+    mem.seed(&k.to_string_key(), 7, encoded());
+    mem.seed(&other.to_string_key(), 5, encoded());
+
+    let (txn, commit) = MetaTxn::new(&mem);
+
+    // The same key read several times — plain and for update — yields one guard.
+    txn.get(&k).await?;
+    txn.get_for_update(&k).await?;
+    let fu = txn.get_for_update(&k).await?;
+    fu.put(&meta())?;
+
+    // A plain get of another key arms no guard.
+    txn.get(&other).await?;
+
+    assert!(commit.execute().await?);
+
+    let req = mem.last_request();
+    assert_eq!(
+        req.condition,
+        vec![TxnCondition::eq_seq(k.to_string_key(), 7)],
+        "one guard for the for-update key, none for the plain gets",
+    );
+    assert_eq!(req.if_then.len(), 1);
+    Ok(())
+}
+
+/// A plain `get` records no guard; only the staged write reaches the request.
+#[tokio::test]
+async fn test_plain_get_adds_no_guard() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (k1, k2) = (key(1), key(2));
+    mem.seed(&k1.to_string_key(), 7, encoded());
+
+    let (txn, commit) = MetaTxn::new(&mem);
+    txn.get(&k1).await?;
+    txn.put(&k2, &meta())?;
+    commit.execute().await?;
+
+    let req = mem.last_request();
+    assert!(req.condition.is_empty(), "plain get must not add a guard");
+    assert_eq!(req.if_then.len(), 1);
+    Ok(())
+}
+
+/// A plain `get` followed by a for-update read upgrades the key to a guard,
+/// without a second backend read.
+#[tokio::test]
+async fn test_get_then_for_update_upgrades() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let k = key(1);
+    mem.seed(&k.to_string_key(), 7, encoded());
+
+    let (txn, commit) = MetaTxn::new(&mem);
+    txn.get(&k).await?;
+    let fu = txn.get_for_update(&k).await?;
+    fu.put(&meta())?;
+    commit.execute().await?;
+
+    assert_eq!(mem.read_count(), 1, "no second backend read");
+    let req = mem.last_request();
+    assert_eq!(req.condition, vec![TxnCondition::eq_seq(
+        k.to_string_key(),
+        7
+    )]);
+    Ok(())
+}
+
+/// `run` retries when a commit fails, re-reading from the backend each attempt.
+#[tokio::test]
+async fn test_run_retries_on_conflict() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let k = key(1);
+    mem.seed(&k.to_string_key(), 7, encoded());
+    mem.script([false, true]);
+
+    let calls = AtomicUsize::new(0);
+    let calls = &calls;
+    let k = &k;
+    let res: Result<(), KVAppError> = MetaTxnManager::new(&mem, "test")
+        .run(|txn| async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            let fu = txn.get_for_update(k).await?;
+            fu.put(&meta())?;
+            Ok(())
+        })
+        .await;
+
+    assert!(res.is_ok());
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "closure ran twice");
+    assert_eq!(mem.read_count(), 2, "re-read from backend on retry");
+    Ok(())
+}
+
+/// Several `ForUpdate` handles can be held at once: each borrows the
+/// transaction shared-ly, so a batch of keys can be read for update, inspected,
+/// then written. Each for-update read still contributes its own `eq_seq` guard.
+#[tokio::test]
+async fn test_multiple_for_update_held() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (k1, k2) = (key(1), key(2));
+    mem.seed(&k1.to_string_key(), 7, encoded());
+    mem.seed(&k2.to_string_key(), 9, encoded());
+
+    let (txn, commit) = MetaTxn::new(&mem);
+
+    let a = txn.get_for_update(&k1).await?;
+    let b = txn.get_for_update(&k2).await?;
+    assert_eq!(a.seq(), 7);
+    assert_eq!(b.seq(), 9);
+    a.put(&meta())?;
+    b.delete();
+
+    commit.execute().await?;
+
+    let req = mem.last_request();
+    assert_eq!(req.condition.len(), 2);
+    assert!(
+        req.condition
+            .contains(&TxnCondition::eq_seq(k1.to_string_key(), 7))
+    );
+    assert!(
+        req.condition
+            .contains(&TxnCondition::eq_seq(k2.to_string_key(), 9))
+    );
+    assert_eq!(req.if_then.len(), 2);
+    Ok(())
+}
+
+/// The record's `meta` is fetched and decoded with the value, and cached: a
+/// re-read keeps the original meta even after the backend record loses it.
+#[tokio::test]
+async fn test_meta_is_cached() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let k = key(1);
+
+    // Seed a record carrying meta (expire_at + proposed_at_ms).
+    let seeded_meta = KVMeta::new(Some(1_700_000_000), Some(1_700_000_000_000));
+    mem.seed_seqv(
+        &k.to_string_key(),
+        SeqV::new_with_meta(7, Some(seeded_meta.clone()), encoded()),
+    );
+
+    let (txn, _commit) = MetaTxn::new(&mem);
+
+    // First read decodes the value and carries the meta.
+    let first = txn.get_for_update(&k).await?;
+    assert_eq!(
+        first.seq_v().and_then(|s| s.meta.as_ref()),
+        Some(&seeded_meta)
+    );
+
+    // Replace the backend record with one that has no meta; the cached snapshot
+    // still carries the original meta.
+    mem.seed_seqv(&k.to_string_key(), SeqV::new(9, encoded()));
+    let second = txn.get_for_update(&k).await?;
+    assert_eq!(
+        second.seq_v().and_then(|s| s.meta.as_ref()),
+        Some(&seeded_meta),
+        "meta served from cache, not the backend",
+    );
+    assert_eq!(second.seq(), 7);
+    assert_eq!(mem.read_count(), 1);
+    Ok(())
+}
+
+/// `put` and `delete` each stage the matching operation, keyed by its target.
+#[tokio::test]
+async fn test_writes_generate_operations() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (k1, k2) = (key(1), key(2));
+
+    let (txn, commit) = MetaTxn::new(&mem);
+    txn.put(&k1, &meta())?;
+    txn.delete(&k2);
+    commit.execute().await?;
+
+    let req = mem.last_request();
+    assert_eq!(req.if_then, vec![
+        txn_put_pb_with_ttl(&k1, &meta(), None)?,
+        txn_del(&k2),
+    ]);
+    Ok(())
+}

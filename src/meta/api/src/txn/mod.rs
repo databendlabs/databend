@@ -15,5 +15,13 @@
 pub mod backoff;
 pub mod condition;
 pub mod core;
+pub mod for_update;
+#[cfg(test)]
+mod mem_kv;
+pub mod meta_txn;
+pub mod meta_txn_manager;
+#[cfg(test)]
+mod meta_txn_test;
 pub mod op_builder;
+pub mod read_entry;
 pub mod reply;
