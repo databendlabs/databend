@@ -15,7 +15,6 @@
 // Logs from this module will show up as "[ANALYZE-HOOK] ...".
 databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -23,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use log::info;
 
 use crate::interpreters::hook::resolve_current_table_name_by_id;
@@ -111,7 +111,7 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
         ctx.clone(),
         table_snapshot,
         &mut pipeline,
-        HashMap::new(),
+        AnalyzeHistogramInfo::None,
         true,
         false,
     )?;

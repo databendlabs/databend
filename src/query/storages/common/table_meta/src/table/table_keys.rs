@@ -35,6 +35,9 @@ pub const OPT_KEY_APPROX_DISTINCT_COLUMNS: &str = "approx_distinct_columns";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
 pub const OPT_KEY_ENABLE_SCHEMA_EVOLUTION: &str = "enable_schema_evolution";
+pub const OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM: &str = "analyze_histogram_algorithm";
+pub const OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR: &str =
+    "analyze_histogram_kll_relative_error";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";

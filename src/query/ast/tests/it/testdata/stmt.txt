@@ -7263,6 +7263,85 @@ AnalyzeTable(
             ident_type: None,
         },
         no_scan: true,
+        histogram_options: None,
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: None,
+                error_rate: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: Some(
+                    "kll_full",
+                ),
+                error_rate: Some(
+                    0.01,
+                ),
+            },
+        ),
     },
 )
 
