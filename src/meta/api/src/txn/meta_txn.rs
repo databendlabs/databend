@@ -20,7 +20,7 @@ use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::types::MetaError;
+use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 use databend_meta_client::types::TxnOp;
@@ -33,6 +33,7 @@ use super::op_builder::txn_del;
 use super::op_builder::txn_put_pb_with_ttl;
 use super::read_entry::ReadEntry;
 use crate::kv_pb_api::decode_seqv;
+use crate::kv_pb_api::errors::PbDecodeError;
 
 /// The reads and writes staged by one transaction attempt.
 ///
@@ -75,9 +76,7 @@ pub(crate) struct MetaTxnCommit<'a, KV: ?Sized> {
     state: Arc<Mutex<TxnState>>,
 }
 
-impl<'a, KV> MetaTxn<'a, KV>
-where KV: KVApi<Error = MetaError> + ?Sized
-{
+impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
     pub(crate) fn new(kv: &'a KV) -> (Self, MetaTxnCommit<'a, KV>) {
         let state = Arc::new(Mutex::new(TxnState::default()));
         (
@@ -89,8 +88,24 @@ where KV: KVApi<Error = MetaError> + ?Sized
         )
     }
 
+    /// Stage a delete. Replaces any operation previously staged for `key`.
+    pub fn delete<K>(&self, key: &K)
+    where K: kvapi::Key {
+        self.state
+            .lock()
+            .unwrap()
+            .operations
+            .insert(key.to_string_key(), txn_del(key));
+    }
+}
+
+impl<'a, KV> MetaTxn<'a, KV>
+where
+    KV: KVApi + ?Sized,
+    KV::Error: From<PbDecodeError>,
+{
     /// Read a key without arming a guard.
-    pub async fn get<K>(&self, key: &K) -> Result<Option<SeqV<K::ValueType>>, MetaError>
+    pub async fn get<K>(&self, key: &K) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
@@ -105,38 +120,13 @@ where KV: KVApi<Error = MetaError> + ?Sized
     ///
     /// The returned [`ForUpdate`] borrows the transaction and writes back to the
     /// same key via [`put`](ForUpdate::put) / [`delete`](ForUpdate::delete).
-    pub async fn get_for_update<K>(&self, key: &K) -> Result<ForUpdate<'_, 'a, KV, K>, MetaError>
+    pub async fn get_for_update<K>(&self, key: &K) -> Result<ForUpdate<'_, 'a, KV, K>, KV::Error>
     where
         K: kvapi::Key + Clone,
         K::ValueType: FromToProto,
     {
         let got = self.read(key, true).await?;
         Ok(ForUpdate::new(self, key.clone(), got))
-    }
-
-    /// Stage a put. Replaces any operation previously staged for `key`.
-    pub fn put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), MetaError>
-    where
-        K: kvapi::Key,
-        K::ValueType: FromToProto + 'static,
-    {
-        let op = txn_put_pb_with_ttl(key, value, None)?;
-        self.state
-            .lock()
-            .unwrap()
-            .operations
-            .insert(key.to_string_key(), op);
-        Ok(())
-    }
-
-    /// Stage a delete. Replaces any operation previously staged for `key`.
-    pub fn delete<K>(&self, key: &K)
-    where K: kvapi::Key {
-        self.state
-            .lock()
-            .unwrap()
-            .operations
-            .insert(key.to_string_key(), txn_del(key));
     }
 
     /// Read a key through the snapshot cache, recording it in the read set.
@@ -148,7 +138,7 @@ where KV: KVApi<Error = MetaError> + ?Sized
         &self,
         key: &K,
         for_update: bool,
-    ) -> Result<Option<SeqV<K::ValueType>>, MetaError>
+    ) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
@@ -179,12 +169,33 @@ where KV: KVApi<Error = MetaError> + ?Sized
             }
         };
 
-        decode_raw::<K::ValueType>(raw, &key_str)
+        decode_raw::<K::ValueType, KV::Error>(raw, &key_str)
+    }
+}
+
+impl<KV> MetaTxn<'_, KV>
+where
+    KV: KVApi + ?Sized,
+    KV::Error: From<InvalidArgument>,
+{
+    /// Stage a put. Replaces any operation previously staged for `key`.
+    pub fn put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), KV::Error>
+    where
+        K: kvapi::Key,
+        K::ValueType: FromToProto + 'static,
+    {
+        let op = txn_put_pb_with_ttl(key, value, None)?;
+        self.state
+            .lock()
+            .unwrap()
+            .operations
+            .insert(key.to_string_key(), op);
+        Ok(())
     }
 }
 
 impl<KV> MetaTxnCommit<'_, KV>
-where KV: KVApi<Error = MetaError> + ?Sized
+where KV: KVApi + ?Sized
 {
     /// Whether no write has been staged: an empty transaction has nothing to
     /// commit.
@@ -194,7 +205,7 @@ where KV: KVApi<Error = MetaError> + ?Sized
 
     /// Consume the transaction committer, sending its staged reads and writes as
     /// one commit and reporting whether its guards held.
-    pub(crate) async fn execute(self) -> Result<bool, MetaError> {
+    pub(crate) async fn execute(self) -> Result<bool, KV::Error> {
         let (reads, operations) = {
             let mut state = self.state.lock().unwrap();
             (
@@ -226,9 +237,12 @@ fn build_request(
 /// Decode a raw record (seq, meta, encoded value) into its typed value,
 /// preserving seq and meta. The read set stores the raw form so it stays
 /// type-independent; the concrete value is produced here, per read.
-fn decode_raw<T>(raw: Option<SeqV<Vec<u8>>>, key: &str) -> Result<Option<SeqV<T>>, MetaError>
-where T: FromToProto {
+fn decode_raw<T, E>(raw: Option<SeqV<Vec<u8>>>, key: &str) -> Result<Option<SeqV<T>>, E>
+where
+    T: FromToProto,
+    E: From<PbDecodeError>,
+{
     raw.map(|s| decode_seqv::<T>(s, || format!("decode value of {key}")))
         .transpose()
-        .map_err(MetaError::from)
+        .map_err(E::from)
 }

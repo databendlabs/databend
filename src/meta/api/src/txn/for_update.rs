@@ -18,7 +18,7 @@ use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
-use databend_meta_client::types::MetaError;
+use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 
 use super::meta_txn::MetaTxn;
@@ -43,9 +43,8 @@ pub struct ForUpdate<'t, 'a, KV: ?Sized, K: kvapi::Key> {
 
 impl<'t, 'a, KV, K> ForUpdate<'t, 'a, KV, K>
 where
-    KV: KVApi<Error = MetaError> + ?Sized,
+    KV: ?Sized,
     K: kvapi::Key,
-    K::ValueType: FromToProto,
 {
     pub(crate) fn new(txn: &'t MetaTxn<'a, KV>, key: K, seq_v: Option<SeqV<K::ValueType>>) -> Self {
         Self { txn, key, seq_v }
@@ -102,14 +101,21 @@ where
         self.seq_v.map(|s| s.data)
     }
 
-    /// Stage a put to the read key.
-    pub fn put(self, value: &K::ValueType) -> Result<(), MetaError>
-    where K::ValueType: 'static {
-        self.txn.put(&self.key, value)
-    }
-
     /// Stage a delete of the read key.
     pub fn delete(self) {
         self.txn.delete(&self.key);
+    }
+}
+
+impl<'t, 'a, KV, K> ForUpdate<'t, 'a, KV, K>
+where
+    KV: KVApi + ?Sized,
+    KV::Error: From<InvalidArgument>,
+    K: kvapi::Key,
+    K::ValueType: FromToProto + 'static,
+{
+    /// Stage a put to the read key.
+    pub fn put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+        self.txn.put(&self.key, value)
     }
 }

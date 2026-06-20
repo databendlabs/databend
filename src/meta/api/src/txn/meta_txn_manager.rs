@@ -17,7 +17,6 @@ use std::future::Future;
 
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_meta_client::kvapi::KVApi;
-use databend_meta_client::types::MetaError;
 
 use super::meta_txn::MetaTxn;
 use crate::txn_backoff::txn_backoff;
@@ -35,7 +34,7 @@ pub struct MetaTxnManager<'a, KV: ?Sized> {
 }
 
 impl<'a, KV> MetaTxnManager<'a, KV>
-where KV: KVApi<Error = MetaError> + ?Sized
+where KV: KVApi + ?Sized
 {
     pub fn new(kv: &'a KV, ctx: impl Display) -> Self {
         Self {
@@ -80,7 +79,7 @@ where KV: KVApi<Error = MetaError> + ?Sized
     where
         F: FnMut(MetaTxn<'a, KV>) -> Fut,
         Fut: Future<Output = Result<T, E>>,
-        E: From<MetaError> + From<TxnRetryMaxTimes>,
+        E: From<KV::Error> + From<TxnRetryMaxTimes>,
     {
         let mut trials = txn_backoff(self.retries, self.ctx.clone());
         loop {
