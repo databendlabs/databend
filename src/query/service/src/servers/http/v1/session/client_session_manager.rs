@@ -467,26 +467,6 @@ impl ClientSessionManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use databend_common_meta_app::tenant::Tenant;
-
-    use super::ClientSessionManager;
-
-    #[test]
-    fn test_state_key_is_tenant_scoped() {
-        let tenant_a = Tenant::new_literal("tenant_a");
-        let tenant_b = Tenant::new_literal("tenant_b");
-        let user_name = "analyst";
-        let session_id = "018f2b74-0000-7000-8000-000000000001";
-
-        assert_ne!(
-            ClientSessionManager::state_key(&tenant_a, session_id, user_name),
-            ClientSessionManager::state_key(&tenant_b, session_id, user_name)
-        );
-    }
-}
-
 pub async fn drop_all_temp_tables_with_logging(
     user_name_session_id: &str,
     mgr: TempTblMgrRef,
@@ -509,5 +489,25 @@ pub async fn drop_all_temp_tables_with_logging(
                 user_name_session_id, duration, e
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::ClientSessionManager;
+
+    #[test]
+    fn test_state_key_is_tenant_scoped() {
+        let tenant_a = Tenant::new_literal("tenant_a");
+        let tenant_b = Tenant::new_literal("tenant_b");
+        let user_name = "analyst";
+        let session_id = "018f2b74-0000-7000-8000-000000000001";
+
+        assert_ne!(
+            ClientSessionManager::state_key(&tenant_a, session_id, user_name),
+            ClientSessionManager::state_key(&tenant_b, session_id, user_name)
+        );
     }
 }

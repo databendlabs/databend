@@ -492,6 +492,15 @@ pub(crate) fn temporary_table_session_prefix(
     format!("{}/{user_name}/{session_id}", tenant.tenant_name())
 }
 
+impl Drop for Session {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            debug!("Drop session {}", self.id.clone());
+            SessionManager::instance().destroy_session(&self.id.clone());
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_meta_app::tenant::Tenant;
@@ -513,14 +522,5 @@ mod tests {
             "tenant_a/analyst/018f2b74-0000-7000-8000-000000000001",
             temporary_table_session_prefix(&tenant_a, user_name, session_id)
         );
-    }
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        drop_guard(move || {
-            debug!("Drop session {}", self.id.clone());
-            SessionManager::instance().destroy_session(&self.id.clone());
-        })
     }
 }
