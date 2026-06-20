@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;

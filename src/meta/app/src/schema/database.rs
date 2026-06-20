@@ -25,6 +25,9 @@ use databend_meta_client::types::SeqV;
 
 use super::CreateOption;
 use crate::KeyWithTenant;
+use crate::MetaServiceKeyErrorBuilder;
+use crate::app_error::DatabaseAlreadyExists;
+use crate::app_error::UnknownDatabaseId;
 use crate::schema::database_id::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
@@ -53,6 +56,19 @@ impl Display for DatabaseIdToName {
 impl DatabaseIdToName {
     pub fn new(db_id: u64) -> Self {
         DatabaseIdToName { db_id }
+    }
+}
+
+impl MetaServiceKeyErrorBuilder for DatabaseIdToName {
+    type UnknownError = UnknownDatabaseId;
+    type ExistError = DatabaseAlreadyExists;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownDatabaseId::new(self.db_id, ctx.to_string())
+    }
+
+    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
+        DatabaseAlreadyExists::new(self.db_id.to_string(), ctx.to_string())
     }
 }
 
@@ -367,9 +383,22 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DatabaseIdToName;
+    use crate::MetaServiceKeyErrorBuilder;
 
     #[test]
     fn test_database_id_to_name_key_format() {
         assert_round_trip(DatabaseIdToName::new(3), "__fd_database_id_to_name/3");
+    }
+
+    #[test]
+    fn test_database_id_to_name_error_builder() {
+        assert_eq!(
+            DatabaseIdToName::new(3).unknown_error("ctx").to_string(),
+            "UnknownDatabaseId: `3` while `ctx`"
+        );
+        assert_eq!(
+            DatabaseIdToName::new(3).exist_error("ctx").to_string(),
+            "DatabaseAlreadyExists: `3` while `ctx`"
+        );
     }
 }
