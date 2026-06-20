@@ -21,6 +21,7 @@ use databend_common_meta_api::name_id_value_api::CreateIdValueResult;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;

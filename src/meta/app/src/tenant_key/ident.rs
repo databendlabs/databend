@@ -15,11 +15,11 @@
 use std::any::type_name;
 use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
 use crate::KeyWithTenant;
+use crate::MetaServiceKeyErrorBuilder;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::tenant_key::errors::ExistError;
@@ -167,15 +167,20 @@ impl<R, N> TIdent<R, N> {
     where N: fmt::Display {
         format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
     }
+}
 
-    pub fn unknown_error(&self, ctx: impl Display) -> UnknownError<R, N>
-    where N: Clone {
-        UnknownError::new(self.name.clone(), ctx)
+impl<R, N> MetaServiceKeyErrorBuilder for TIdent<R, N>
+where N: Clone
+{
+    type UnknownError = UnknownError<R, N>;
+    type ExistError = ExistError<R, N>;
+
+    fn unknown_error(&self, ctx: impl fmt::Display) -> Self::UnknownError {
+        UnknownError::new(self.name().clone(), ctx)
     }
 
-    pub fn exist_error(&self, ctx: impl Display) -> ExistError<R, N>
-    where N: Clone {
-        ExistError::new(self.name.clone(), ctx)
+    fn exist_error(&self, ctx: impl fmt::Display) -> Self::ExistError {
+        ExistError::new(self.name().clone(), ctx)
     }
 }
 

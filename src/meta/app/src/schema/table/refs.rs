@@ -22,6 +22,9 @@ use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 
 use super::TableLvtCheck;
+use crate::MetaServiceKeyErrorBuilder;
+use crate::app_error::ReferenceAlreadyExists;
+use crate::app_error::UnknownReference;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {
@@ -55,6 +58,19 @@ impl TableIdTagName {
 impl Display for TableIdTagName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.table_id, self.tag_name)
+    }
+}
+
+impl MetaServiceKeyErrorBuilder for TableIdTagName {
+    type UnknownError = UnknownReference;
+    type ExistError = ReferenceAlreadyExists;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownReference::new(format!("{}: {}", ctx, self))
+    }
+
+    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
+        ReferenceAlreadyExists::new(format!("{}: {}", ctx, self))
     }
 }
 
@@ -107,9 +123,24 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TableIdTagName;
+    use crate::MetaServiceKeyErrorBuilder;
 
     #[test]
     fn test_table_id_tag_name_key_format() {
         assert_round_trip(TableIdTagName::new(9, "tag/a"), "__fd_table_tag/9/tag%2fa");
+    }
+
+    #[test]
+    fn test_table_id_tag_name_error_builder() {
+        let ident = TableIdTagName::new(9, "tag");
+
+        assert_eq!(
+            ident.unknown_error("ctx").to_string(),
+            "UnknownReference: `ctx: 9.'tag'`"
+        );
+        assert_eq!(
+            ident.exist_error("ctx").to_string(),
+            "ReferenceAlreadyExists: ctx: 9.'tag'"
+        );
     }
 }

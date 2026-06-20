@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 
+use crate::MetaServiceKeyErrorBuilder;
 use crate::schema::tag::TagId;
 use crate::schema::tag::TaggableObject;
 use crate::schema::tag::id_ident::Resource as TagIdResource;

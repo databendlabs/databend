@@ -40,6 +40,9 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
+use crate::MetaServiceKeyErrorBuilder;
+use crate::app_error::TableAlreadyExists;
+use crate::app_error::UnknownTableId;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
@@ -1129,6 +1132,19 @@ impl Display for TableIdToName {
     }
 }
 
+impl MetaServiceKeyErrorBuilder for TableIdToName {
+    type UnknownError = UnknownTableId;
+    type ExistError = TableAlreadyExists;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownTableId::new(self.table_id, ctx.to_string())
+    }
+
+    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
+        TableAlreadyExists::new(self.table_id.to_string(), ctx.to_string())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
     pub table_id: u64,
@@ -1255,6 +1271,7 @@ mod tests {
     use databend_meta_client::kvapi::StructKey;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
+    use crate::MetaServiceKeyErrorBuilder;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
@@ -1262,6 +1279,20 @@ mod tests {
     #[test]
     fn test_table_id_to_name_key_format() {
         assert_round_trip(TableIdToName { table_id: 9 }, "__fd_table_id_to_name/9");
+    }
+
+    #[test]
+    fn test_table_id_to_name_error_builder() {
+        let ident = TableIdToName { table_id: 9 };
+
+        assert_eq!(
+            ident.unknown_error("ctx").to_string(),
+            "UnknownTableId: `9` while `ctx`"
+        );
+        assert_eq!(
+            ident.exist_error("ctx").to_string(),
+            "TableAlreadyExists: 9 while ctx"
+        );
     }
 
     #[test]
