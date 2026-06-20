@@ -123,6 +123,7 @@ pub enum FileParseError {
         column_index: usize,
         column_name: String,
         column_type: String,
+        #[serde(default)]
         advice: String,
     },
     #[error(
