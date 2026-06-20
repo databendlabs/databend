@@ -20,6 +20,8 @@ use chrono::Utc;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi::StructKey;
@@ -284,5 +286,52 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
         txn_put_pb_with_ttl(&k1, &meta(), None)?,
         txn_del(&k2),
     ]);
+    Ok(())
+}
+
+/// `some_or_unknown` yields the value when the key is present, and the key's own
+/// unknown error (unconverted) when it is absent. `DatabaseId` keys are used
+/// for their stable, concrete error `Display`.
+#[tokio::test]
+async fn test_some_or_unknown() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (present, absent) = (DatabaseId::new(7), DatabaseId::new(8));
+    mem.seed(
+        &present.to_string_key(),
+        3,
+        encode_pb(&DatabaseMeta::default()).unwrap(),
+    );
+
+    let (txn, _commit) = MetaTxn::new(&mem);
+
+    let fu = txn.get_for_update(&present).await?;
+    assert!(fu.some_or_unknown("ctx").is_ok());
+
+    let fu = txn.get_for_update(&absent).await?;
+    let err = fu.some_or_unknown("ctx").unwrap_err();
+    assert_eq!(err.to_string(), "UnknownDatabaseId: `8` while `ctx`");
+    Ok(())
+}
+
+/// `none_or_exist` passes when the key is absent, and yields the key's own
+/// already-exists error (unconverted) when it is present.
+#[tokio::test]
+async fn test_none_or_exist() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let (absent, present) = (DatabaseId::new(7), DatabaseId::new(8));
+    mem.seed(
+        &present.to_string_key(),
+        3,
+        encode_pb(&DatabaseMeta::default()).unwrap(),
+    );
+
+    let (txn, _commit) = MetaTxn::new(&mem);
+
+    let fu = txn.get_for_update(&absent).await?;
+    assert!(fu.none_or_exist("ctx").is_ok());
+
+    let fu = txn.get_for_update(&present).await?;
+    let err = fu.none_or_exist("ctx").unwrap_err();
+    assert_eq!(err.to_string(), "DatabaseAlreadyExists: `8` while `ctx`");
     Ok(())
 }

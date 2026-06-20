@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
+use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
@@ -62,6 +65,36 @@ where
     /// The value read, `None` if the key was absent.
     pub fn value(&self) -> Option<&K::ValueType> {
         self.seq_v.as_ref().map(|s| &s.data)
+    }
+
+    /// The value read, or the key's [`unknown_error`] if the key was absent.
+    ///
+    /// The [`ok_or`](Option::ok_or)-style "must exist" form of
+    /// [`value`](Self::value), for a key a write depends on. `ctx` labels the
+    /// error with the calling context. The error is exactly what the key
+    /// declares, leaving conversion to the caller.
+    ///
+    /// [`unknown_error`]: MetaServiceKeyErrorBuilder::unknown_error
+    pub fn some_or_unknown(&self, ctx: impl Display) -> Result<&K::ValueType, K::UnknownError>
+    where K: MetaServiceKeyErrorBuilder {
+        self.value().ok_or_else(|| self.key.unknown_error(ctx))
+    }
+
+    /// `()` if the key was absent, or the key's [`exist_error`] if it was
+    /// present.
+    ///
+    /// The complement of [`some_or_unknown`](Self::some_or_unknown): the guard for a
+    /// key that must be free before a write creates it. `ctx` labels the error
+    /// with the calling context. The error is exactly what the key declares,
+    /// leaving conversion to the caller.
+    ///
+    /// [`exist_error`]: MetaServiceKeyErrorBuilder::exist_error
+    pub fn none_or_exist(&self, ctx: impl Display) -> Result<(), K::ExistError>
+    where K: MetaServiceKeyErrorBuilder {
+        match self.value() {
+            Some(_) => Err(self.key.exist_error(ctx)),
+            None => Ok(()),
+        }
     }
 
     /// Consume the handle, yielding the value read.

@@ -154,17 +154,13 @@ where
             .run(|txn| async move {
                 // The source must exist; reading it for update arms an `eq_seq` guard.
                 let old = txn.get_for_update(&req.name_ident).await?;
-                let Some(dict_id) = old.value() else {
-                    return Err(AppError::from(req.name_ident.unknown_error(ctx)).into());
-                };
+                let dict_id = old.some_or_unknown(ctx).map_err(AppError::from)?;
 
                 // The target must be free; reading it guards it stays at seq 0 till commit.
                 let new_name_ident =
                     DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
                 let new = txn.get_for_update(&new_name_ident).await?;
-                if new.seq() != 0 {
-                    return Err(AppError::from(new_name_ident.exist_error(ctx)).into());
-                }
+                new.none_or_exist(ctx).map_err(AppError::from)?;
 
                 // Move the id from the old name to the new one.
                 new.put(dict_id)?;
