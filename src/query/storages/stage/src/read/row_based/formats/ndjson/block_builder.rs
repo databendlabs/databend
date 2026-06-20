@@ -110,20 +110,34 @@ impl NdJsonDecoder {
                 match value {
                     None => match self.fmt.params.missing_field_as {
                         NullAs::Error => {
+                            let advice = self.build_column_missing_advice(
+                                field.name(),
+                                &json,
+                                "MISSING_FIELD_AS=ERROR",
+                                None,
+                            );
                             return Err(FileParseError::ColumnMissingError {
                                 column_index,
                                 column_name: field.name().to_owned(),
                                 column_type: field.data_type.to_string(),
+                                advice,
                             });
                         }
                         NullAs::Null => {
                             if field.is_nullable_or_null() {
                                 column.push_default();
                             } else {
+                                let advice = self.build_column_missing_advice(
+                                    field.name(),
+                                    &json,
+                                    "MISSING_FIELD_AS=NULL",
+                                    Some("the column is not nullable"),
+                                );
                                 return Err(FileParseError::ColumnMissingError {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
+                                    advice,
                                 });
                             }
                         }
@@ -191,6 +205,54 @@ impl NdJsonDecoder {
             }
         }
         Ok(())
+    }
+
+    fn build_column_missing_advice(
+        &self,
+        column_name: &str,
+        json: &serde_json::Value,
+        current_setting: &str,
+        extra_reason: Option<&str>,
+    ) -> String {
+        let mut hints = Vec::new();
+
+        // Hint 1: current MISSING_FIELD_AS setting
+        hints.push(format!("current FILE_FORMAT option: {current_setting}"));
+
+        // Hint 2: if there's an extra reason (e.g., column not nullable)
+        if let Some(reason) = extra_reason {
+            hints.push(reason.to_string());
+        }
+
+        // Hint 3: if case_sensitive, try case-insensitive match
+        if self.field_decoder.ident_case_sensitive {
+            if let Some(object) = json.as_object() {
+                let lower_column = column_name.to_lowercase();
+                let matched_key = object.keys().find(|k| k.to_lowercase() == lower_column);
+                if let Some(key) = matched_key {
+                    hints.push(format!(
+                        "found field '{}' with different case; consider using COPY with `MATCH_BY_COLUMN_NAME=CASE_INSENSITIVE`",
+                        key
+                    ));
+                }
+            }
+        }
+
+        // Hint 4: if target table has a single Variant column, suggest select $1
+        let fields = self.load_context.schema.fields();
+        if fields.len() == 1
+            && matches!(
+                fields[0].data_type.remove_nullable(),
+                databend_common_expression::TableDataType::Variant
+            )
+        {
+            hints.push(
+                "the target table has a single VARIANT column; consider using `COPY INTO <table> FROM (SELECT $1 FROM @<stage>)` to load raw JSON"
+                    .to_string(),
+            );
+        }
+
+        hints.join(". ")
     }
 }
 
