@@ -168,26 +168,28 @@ where
 
         let key_tag = TableIdTagName::new(req.table_id, &req.tag_name);
         let ctx = func_name!();
-        let key_tag = &key_tag;
         let req = &req;
         MetaTxnManager::new(self, ctx)
-            .run(|txn| async move {
-                let tag = txn.get_for_update(key_tag).await?;
-                let tag = tag.some_or_unknown_error(ctx).map_err(AppError::from)?;
+            .run(|txn| {
+                let key_tag = key_tag.clone();
+                async move {
+                    let tag = txn.get_for_update(key_tag).await?;
+                    let tag = tag.some_or_unknown(ctx).map_err(AppError::from)?;
 
-                let seq_tag = tag.seq();
-                if req.seq.match_seq(&seq_tag).is_err() {
-                    return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                        format!(
-                            "Tag '{}' seq mismatched: expect {}, current {}",
-                            req.tag_name, req.seq, seq_tag
-                        ),
-                    ))));
+                    let seq_tag = tag.seq();
+                    if req.seq.match_seq(&seq_tag).is_err() {
+                        return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
+                            format!(
+                                "Tag '{}' seq mismatched: expect {}, current {}",
+                                req.tag_name, req.seq, seq_tag
+                            ),
+                        ))));
+                    }
+
+                    tag.stage_delete();
+
+                    Ok(())
                 }
-
-                tag.delete();
-
-                Ok(())
             })
             .await
     }

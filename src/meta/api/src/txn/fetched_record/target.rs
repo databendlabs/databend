@@ -29,8 +29,8 @@ where
     KV: ?Sized,
     K: kvapi::Key,
 {
-    pub(crate) fn delete(self) {
-        self.txn.delete(&self.key);
+    pub(crate) fn stage_delete(self) {
+        self.txn.stage_delete(&self.key);
     }
 }
 
@@ -41,7 +41,7 @@ where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
-    pub(crate) fn put(self, value: &K::ValueType) -> Result<(), KV::Error> {
-        self.txn.put(&self.key, value)
+    pub(crate) fn stage_put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+        self.txn.stage_put(&self.key, value)
     }
 }

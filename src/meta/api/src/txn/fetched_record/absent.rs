@@ -32,7 +32,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     /// Stage a put to the read key.
-    pub fn put(self, value: &K::ValueType) -> Result<(), KV::Error> {
-        self.target.put(value)
+    pub fn stage_put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+        self.target.stage_put(value)
     }
 }

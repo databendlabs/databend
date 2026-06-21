@@ -46,8 +46,7 @@ use read_entry::ReadEntry;
 
 /// The reads and writes staged by one transaction attempt.
 ///
-/// Held behind an [`Arc`] so the user-facing transaction handle and the private
-/// committer share one set.
+/// Held behind an [`Arc`] so cloned transaction handles share one set.
 #[derive(Default)]
 struct TxnState {
     reads: BTreeMap<String, ReadEntry>,
@@ -76,29 +75,25 @@ pub struct MetaTxn<'a, KV: ?Sized> {
     state: Arc<Mutex<TxnState>>,
 }
 
-/// Commit authority for a [`MetaTxn`].
-///
-/// This is intentionally not exposed to transaction-building closures: staging
-/// code can read and write, but only the manager can drain and commit state.
-pub(crate) struct MetaTxnCommit<'a, KV: ?Sized> {
-    kv: &'a KV,
-    state: Arc<Mutex<TxnState>>,
+impl<KV: ?Sized> Clone for MetaTxn<'_, KV> {
+    fn clone(&self) -> Self {
+        Self {
+            kv: self.kv,
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
-    pub(crate) fn new(kv: &'a KV) -> (Self, MetaTxnCommit<'a, KV>) {
-        let state = Arc::new(Mutex::new(TxnState::default()));
-        (
-            Self {
-                kv,
-                state: state.clone(),
-            },
-            MetaTxnCommit { kv, state },
-        )
+    fn new(kv: &'a KV) -> Self {
+        Self {
+            kv,
+            state: Arc::new(Mutex::new(TxnState::default())),
+        }
     }
 
     /// Stage a delete. Replaces any operation previously staged for `key`.
-    pub fn delete<K>(&self, key: &K)
+    pub fn stage_delete<K>(&self, key: &K)
     where K: kvapi::Key {
         self.state
             .lock()
@@ -114,12 +109,12 @@ where
     KV::Error: From<PbDecodeError>,
 {
     /// Read a key without arming a guard.
-    pub async fn get<K>(&self, key: &K) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
+    pub async fn get<K>(&self, key: K) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        self.read(key, false).await
+        self.fetch(key, false).await
     }
 
     /// Read a key and mark it for update, so it becomes an `eq_seq` guard at
@@ -128,18 +123,14 @@ where
     /// Re-reading the same key keeps the version first observed.
     ///
     /// The returned [`FetchedRecord`] borrows the transaction and writes back to
-    /// the same key via [`put`](FetchedRecord::put) /
-    /// [`delete`](FetchedRecord::delete).
-    pub async fn get_for_update<K>(
-        &self,
-        key: &K,
-    ) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
+    /// the same key via [`stage_put`](FetchedRecord::stage_put) /
+    /// [`stage_delete`](FetchedRecord::stage_delete).
+    pub async fn get_for_update<K>(&self, key: K) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
     where
-        K: kvapi::Key + Clone,
+        K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        let got = self.read(key, true).await?;
-        Ok(FetchedRecord::new(self, key.clone(), got))
+        self.fetch(key, true).await
     }
 
     /// Read a key through the snapshot cache, recording it in the read set.
@@ -147,11 +138,11 @@ where
     /// On a cache hit the backend is not touched; the version first observed and
     /// its value are reused. `for_update` is OR-ed in, so a plain read followed
     /// by a for-update read upgrades the key to a guard.
-    async fn read<K>(
+    async fn fetch<K>(
         &self,
-        key: &K,
+        key: K,
         for_update: bool,
-    ) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
+    ) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
@@ -182,7 +173,8 @@ where
             }
         };
 
-        decode_raw::<K::ValueType, KV::Error>(raw, &key_str)
+        let seq_v = decode_raw::<K::ValueType, KV::Error>(raw, &key_str)?;
+        Ok(FetchedRecord::new(self, key, seq_v))
     }
 }
 
@@ -192,7 +184,7 @@ where
     KV::Error: From<InvalidArgument>,
 {
     /// Stage a put. Replaces any operation previously staged for `key`.
-    pub fn put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), KV::Error>
+    pub fn stage_put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto + 'static,
@@ -207,18 +199,18 @@ where
     }
 }
 
-impl<KV> MetaTxnCommit<'_, KV>
+impl<KV> MetaTxn<'_, KV>
 where KV: KVApi + ?Sized
 {
     /// Whether no write has been staged: an empty transaction has nothing to
     /// commit.
-    pub(crate) fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.state.lock().unwrap().operations.is_empty()
     }
 
-    /// Consume the transaction committer, sending its staged reads and writes as
-    /// one commit and reporting whether its guards held.
-    pub(crate) async fn execute(self) -> Result<bool, KV::Error> {
+    /// Send the staged reads and writes as one commit and report whether its
+    /// guards held.
+    async fn execute(&self) -> Result<bool, KV::Error> {
         let (reads, operations) = {
             let mut state = self.state.lock().unwrap();
             (
