@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_app::KeyExistsBuilder;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_meta_app::principal::TenantUserIdent;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;

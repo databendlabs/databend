@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;

@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_app::MetaServiceKeyErrorBuilder;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureNameIdent;

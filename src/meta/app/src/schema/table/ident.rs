@@ -22,7 +22,8 @@ use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
-use crate::MetaServiceKeyErrorBuilder;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::app_error::TableAlreadyExists;
 use crate::app_error::UnknownTable;
 use crate::app_error::UnknownTableId;
@@ -103,16 +104,19 @@ impl Display for TableNameIdent {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for TableNameIdent {
+impl KeyUnknownBuilder for TableNameIdent {
     type UnknownError = UnknownTable;
-    type ExistError = TableAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
-        UnknownTable::new(&self.table_name, format!("{}: {}", ctx, self))
+        UnknownTable::new(&self.table_name, format!("{}; when:({})", self, ctx))
     }
+}
+
+impl KeyExistsBuilder for TableNameIdent {
+    type ExistError = TableAlreadyExists;
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        TableAlreadyExists::new(&self.table_name, format!("{}: {}", ctx, self))
+        TableAlreadyExists::new(&self.table_name, format!("{}; when:({})", self, ctx))
     }
 }
 
@@ -142,16 +146,19 @@ impl Display for DBIdTableName {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for DBIdTableName {
+impl KeyUnknownBuilder for DBIdTableName {
     type UnknownError = UnknownTable;
-    type ExistError = TableAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
-        UnknownTable::new(&self.table_name, format!("{}: {}", ctx, self))
+        UnknownTable::new(&self.table_name, ctx.to_string())
     }
+}
+
+impl KeyExistsBuilder for DBIdTableName {
+    type ExistError = TableAlreadyExists;
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        TableAlreadyExists::new(&self.table_name, format!("{}: {}", ctx, self))
+        TableAlreadyExists::new(&self.table_name, ctx.to_string())
     }
 }
 
@@ -174,16 +181,11 @@ impl Display for TableId {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for TableId {
+impl KeyUnknownBuilder for TableId {
     type UnknownError = UnknownTableId;
-    type ExistError = TableAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
         UnknownTableId::new(self.table_id, ctx.to_string())
-    }
-
-    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        TableAlreadyExists::new(self.table_id.to_string(), ctx.to_string())
     }
 }
 
@@ -203,16 +205,19 @@ impl Display for TableIdHistoryIdent {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for TableIdHistoryIdent {
+impl KeyUnknownBuilder for TableIdHistoryIdent {
     type UnknownError = UnknownTable;
-    type ExistError = TableAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
-        UnknownTable::new(&self.table_name, format!("{}: {}", ctx, self))
+        UnknownTable::new(&self.table_name, ctx.to_string())
     }
+}
+
+impl KeyExistsBuilder for TableIdHistoryIdent {
+    type ExistError = TableAlreadyExists;
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        TableAlreadyExists::new(&self.table_name, format!("{}: {}", ctx, self))
+        TableAlreadyExists::new(&self.table_name, ctx.to_string())
     }
 }
 
@@ -224,7 +229,8 @@ mod tests {
     use super::TableId;
     use super::TableIdHistoryIdent;
     use super::TableNameIdent;
-    use crate::MetaServiceKeyErrorBuilder;
+    use crate::KeyExistsBuilder;
+    use crate::KeyUnknownBuilder;
     use crate::tenant::Tenant;
 
     #[test]
@@ -246,11 +252,11 @@ mod tests {
 
         assert_eq!(
             ident.unknown_error("ctx").to_string(),
-            "UnknownTable: `table` while `ctx: 'tenant'.'db'.'table'`"
+            "UnknownTable: `table` while `'tenant'.'db'.'table'; when:(ctx)`"
         );
         assert_eq!(
             ident.exist_error("ctx").to_string(),
-            "TableAlreadyExists: table while ctx: 'tenant'.'db'.'table'"
+            "TableAlreadyExists: table while 'tenant'.'db'.'table'; when:(ctx)"
         );
     }
 
@@ -260,23 +266,19 @@ mod tests {
 
         assert_eq!(
             ident.unknown_error("ctx").to_string(),
-            "UnknownTable: `table` while `ctx: 7.'table'`"
+            "UnknownTable: `table` while `ctx`"
         );
         assert_eq!(
             ident.exist_error("ctx").to_string(),
-            "TableAlreadyExists: table while ctx: 7.'table'"
+            "TableAlreadyExists: table while ctx"
         );
     }
 
     #[test]
-    fn test_table_id_error_builder() {
+    fn test_table_id_unknown_builder() {
         assert_eq!(
             TableId::new(9).unknown_error("ctx").to_string(),
             "UnknownTableId: `9` while `ctx`"
-        );
-        assert_eq!(
-            TableId::new(9).exist_error("ctx").to_string(),
-            "TableAlreadyExists: 9 while ctx"
         );
     }
 
@@ -289,11 +291,11 @@ mod tests {
 
         assert_eq!(
             ident.unknown_error("ctx").to_string(),
-            "UnknownTable: `table` while `ctx: 7.'table'`"
+            "UnknownTable: `table` while `ctx`"
         );
         assert_eq!(
             ident.exist_error("ctx").to_string(),
-            "TableAlreadyExists: table while ctx: 7.'table'"
+            "TableAlreadyExists: table while ctx"
         );
     }
 }
