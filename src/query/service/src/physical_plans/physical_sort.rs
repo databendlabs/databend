@@ -37,8 +37,11 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::i256;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
@@ -1069,24 +1072,51 @@ fn ordering_minus_safe_for_expr(
             let Ok(column_id) = scan.source.schema().column_id_of(id) else {
                 return false;
             };
-            partitions.iter().all(|part| {
-                let Ok(fuse_part) = FuseBlockPartInfo::from_part(part) else {
-                    return false;
-                };
-                fuse_part
-                    .columns_stat
-                    .as_ref()
-                    .and_then(|stats| stats.get(&column_id))
-                    .is_some_and(|stat| {
-                        !matches!(
-                            stat.min(),
-                            Scalar::Number(NumberScalar::Int64(v)) if *v == i64::MIN
-                        )
-                    })
-            })
+            partitions
+                .iter()
+                .all(|part| partition_column_stats(part, column_id).is_some_and(i64_min_safe))
+        }
+        DataType::Decimal(_) => {
+            let Ok(column_id) = scan.source.schema().column_id_of(id) else {
+                return false;
+            };
+            partitions
+                .iter()
+                .all(|part| partition_column_stats(part, column_id).is_some_and(decimal_min_safe))
         }
         _ => true,
     }
+}
+
+fn partition_column_stats(
+    part: &PartInfoPtr,
+    column_id: u32,
+) -> Option<&databend_storages_common_table_meta::meta::ColumnStatistics> {
+    let fuse_part = FuseBlockPartInfo::from_part(part).ok()?;
+    fuse_part
+        .columns_stat
+        .as_ref()
+        .and_then(|stats| stats.get(&column_id))
+}
+
+fn i64_min_safe(stat: &databend_storages_common_table_meta::meta::ColumnStatistics) -> bool {
+    !matches!(
+        stat.min(),
+        Scalar::Number(NumberScalar::Int64(v)) if *v == i64::MIN
+    )
+}
+
+fn decimal_min_safe(stat: &databend_storages_common_table_meta::meta::ColumnStatistics) -> bool {
+    !matches!(
+        stat.min(),
+        Scalar::Decimal(DecimalScalar::Decimal64(v, _)) if *v == <i64 as Decimal>::DECIMAL_MIN
+    ) && !matches!(
+        stat.min(),
+        Scalar::Decimal(DecimalScalar::Decimal128(v, _)) if *v == <i128 as Decimal>::DECIMAL_MIN
+    ) && !matches!(
+        stat.min(),
+        Scalar::Decimal(DecimalScalar::Decimal256(v, _)) if *v == <i256 as Decimal>::DECIMAL_MIN
+    )
 }
 
 fn cluster_key_matches_order_by(
@@ -1312,9 +1342,7 @@ fn supports_order_reversing_minus(data_type: &DataType) -> bool {
             | NumberDataType::Int32,
         ) => true,
         DataType::Number(NumberDataType::Int64) => true,
-        // Decimal negation has a type-dependent lower-bound overflow case that
-        // is not proven safe here.
-        DataType::Decimal(_) => false,
+        DataType::Decimal(_) => true,
         // UInt64/Float boundary ordering is not proven here.
         DataType::Number(
             NumberDataType::UInt64 | NumberDataType::Float32 | NumberDataType::Float64,

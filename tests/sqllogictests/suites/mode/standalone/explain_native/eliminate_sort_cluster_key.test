@@ -23,6 +23,9 @@ statement ok
 DROP TABLE IF EXISTS test_cluster_sort_elide_decimal ALL
 
 statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_decimal_min ALL
+
+statement ok
 DROP TABLE IF EXISTS test_cluster_sort_elide_string ALL
 
 statement ok
@@ -843,7 +846,7 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 2.00
-└── Sort(Single)
+└── Sort(PresortedMerge)
     ├── output columns: [test_cluster_sort_elide_decimal.a (#0), test_cluster_sort_elide_decimal.b (#1)]
     ├── sort keys: [b DESC NULLS LAST]
     ├── estimated rows: 3.00
@@ -858,6 +861,51 @@ Limit
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [test_cluster_sort_elide_decimal.a (#0) = 1], limit: 2]
         └── estimated rows: 3.00
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_decimal_min ALL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_decimal_min(
+    a int not null,
+    b decimal(38, 0) not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_decimal_min VALUES
+    (1, -99999999999999999999999999999999999999),
+    (1, 10)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_decimal_min RECLUSTER FINAL
+
+query T
+EXPLAIN SELECT a, b
+FROM test_cluster_sort_elide_decimal_min
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_decimal_min.a (#0), test_cluster_sort_elide_decimal_min.b (#1)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_decimal_min.a (#0), test_cluster_sort_elide_decimal_min.b (#1)]
+    ├── sort keys: [b DESC NULLS LAST]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_decimal_min
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_decimal_min.a (#0) = 1], limit: 2]
+        └── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT platform_id, wallet_address, last_active_time
