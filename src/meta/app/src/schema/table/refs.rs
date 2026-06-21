@@ -66,11 +66,14 @@ impl MetaServiceKeyErrorBuilder for TableIdTagName {
     type ExistError = ReferenceAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
-        UnknownReference::new(format!("{}: {}", ctx, self))
+        UnknownReference::new(format!("Unknown tag: '{}'; when:({})", self.tag_name, ctx))
     }
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        ReferenceAlreadyExists::new(format!("{}: {}", ctx, self))
+        ReferenceAlreadyExists::new(format!(
+            "Tag already exists: '{}'; when:({})",
+            self.tag_name, ctx
+        ))
     }
 }
 
@@ -136,11 +139,11 @@ mod tests {
 
         assert_eq!(
             ident.unknown_error("ctx").to_string(),
-            "UnknownReference: `ctx: 9.'tag'`"
+            "UnknownReference: `Unknown tag: 'tag'; when:(ctx)`"
         );
         assert_eq!(
             ident.exist_error("ctx").to_string(),
-            "ReferenceAlreadyExists: ctx: 9.'tag'"
+            "ReferenceAlreadyExists: Tag already exists: 'tag'; when:(ctx)"
         );
     }
 }

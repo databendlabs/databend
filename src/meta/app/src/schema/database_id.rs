@@ -20,10 +20,6 @@ use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
-use crate::MetaServiceKeyErrorBuilder;
-use crate::app_error::DatabaseAlreadyExists;
-use crate::app_error::UnknownDatabaseId;
-
 /// `__fd_database_by_id/<db_id>`
 #[derive(
     Clone, Debug, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Deref, DerefMut, kvapi::StructKey,
@@ -51,19 +47,6 @@ impl Display for DatabaseId {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for DatabaseId {
-    type UnknownError = UnknownDatabaseId;
-    type ExistError = DatabaseAlreadyExists;
-
-    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
-        UnknownDatabaseId::new(self.db_id, ctx.to_string())
-    }
-
-    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
-        DatabaseAlreadyExists::new(self.db_id.to_string(), ctx.to_string())
-    }
-}
-
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
 
@@ -80,22 +63,9 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DatabaseId;
-    use crate::MetaServiceKeyErrorBuilder;
 
     #[test]
     fn test_database_id_key_format() {
         assert_round_trip(DatabaseId::new(3), "__fd_database_by_id/3");
-    }
-
-    #[test]
-    fn test_database_id_error_builder() {
-        assert_eq!(
-            DatabaseId::new(3).unknown_error("ctx").to_string(),
-            "UnknownDatabaseId: `3` while `ctx`"
-        );
-        assert_eq!(
-            DatabaseId::new(3).exist_error("ctx").to_string(),
-            "DatabaseAlreadyExists: `3` while `ctx`"
-        );
     }
 }
