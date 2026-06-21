@@ -42,9 +42,7 @@ where
     CtxFn: FnOnce() -> D + Copy,
 {
     let p = value.to_pb().map_err_to_code(err_code_fn, context_fn)?;
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf).map_err_to_code(err_code_fn, context_fn)?;
-    Ok(buf)
+    Ok(prost::Message::encode_to_vec(&p))
 }
 
 pub fn deserialize_struct<T, ErrFn, CtxFn, D>(

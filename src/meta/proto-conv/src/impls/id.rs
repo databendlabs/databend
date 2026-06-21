@@ -127,8 +127,7 @@ mod tests {
     fn assert_json_u64_round_trip<T>(value: T, id: u64)
     where T: FromToProto + Debug + PartialEq {
         let pb = value.to_pb().unwrap();
-        let mut buf = Vec::new();
-        pb.encode(&mut buf).unwrap();
+        let buf = pb.encode_to_vec();
 
         assert_eq!(buf, id.to_string().as_bytes());
 
