@@ -20,6 +20,7 @@ use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_protos::pb;
