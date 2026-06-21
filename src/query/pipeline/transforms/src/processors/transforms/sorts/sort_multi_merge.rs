@@ -47,6 +47,50 @@ pub fn try_add_multi_sort_merge(
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
 ) -> Result<()> {
+    add_multi_sort_merge(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        false,
+    )
+}
+
+pub fn add_row_by_row_multi_sort_merge(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+) -> Result<()> {
+    add_multi_sort_merge(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_multi_sort_merge(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+    row_by_row: bool,
+) -> Result<()> {
     match pipeline.output_len() {
         0 => panic!("Cannot resize empty pipe."),
         1 => Ok(()),
@@ -65,6 +109,7 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 remove_order_col,
                 enable_loser_tree,
+                row_by_row,
             };
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 ProcessorPtr::create(select_row_type(&mut builder, enable_fixed_rows_sort)?),
@@ -84,6 +129,7 @@ struct MultiSortMergeBuilder {
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
+    row_by_row: bool,
 }
 
 impl RowsTypeVisitor for MultiSortMergeBuilder {
@@ -116,10 +162,15 @@ impl MultiSortMergeBuilder {
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), remove_order_col, sort_row_offset))
             .collect::<Vec<_>>();
-        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
+        let merger = if self.row_by_row {
+            Merger::<A, _>::new_row_by_row(streams, self.block_size, self.limit)
+        } else {
+            Merger::<A, _>::new(streams, self.block_size, self.limit)
+        };
 
         Ok(Box::new(MultiSortMergeProcessor {
             merger,
+            row_by_row: self.row_by_row,
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             output_data: VecDeque::new(),
@@ -167,6 +218,7 @@ pub struct MultiSortMergeProcessor<A>
 where A: SortAlgorithm
 {
     merger: Merger<A, InputBlockStream>,
+    row_by_row: bool,
 
     /// This field is used to drive the processor's state.
     ///
@@ -181,7 +233,11 @@ impl<A> Processor for MultiSortMergeProcessor<A>
 where A: SortAlgorithm + 'static
 {
     fn name(&self) -> String {
-        "MultiSortMerge".to_string()
+        if self.row_by_row {
+            "RowByRowMultiSortMerge".to_string()
+        } else {
+            "MultiSortMerge".to_string()
+        }
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -31,6 +31,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
@@ -246,47 +247,67 @@ impl Processor for DeserializeDataTransform {
                         );
                     }
 
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        data_block.memory_size(),
-                    );
-
-                    let mut data_block =
-                        data_block.resort(&self.src_schema, &self.output_schema)?;
-
-                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_meta_options.query_internal_columns {
-                        bitmap_selection.as_ref().map(|bitmap| {
-                            RoaringTreemap::from_sorted_iter(
-                                (0..bitmap.len())
-                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                    .map(|i| i as u64),
-                            )
-                            .unwrap()
-                        })
-                    } else {
-                        None
-                    };
-
-                    data_block = add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?;
-
-                    self.output_data = Some(data_block);
+                    self.set_output_block(data_block, Some(part), bitmap_selection.as_ref(), None)?;
+                }
+                ParquetDataSource::Decoded {
+                    block,
+                    bitmap_selection,
+                    deserialize_milliseconds,
+                } => {
+                    let part = FuseBlockPartInfo::from_part(&part)?;
+                    metrics_inc_remote_io_deserialize_milliseconds(deserialize_milliseconds);
+                    self.set_output_block(block, Some(part), bitmap_selection.as_ref(), None)?;
                 }
             }
         }
 
+        Ok(())
+    }
+}
+
+impl DeserializeDataTransform {
+    fn set_output_block(
+        &mut self,
+        mut data_block: DataBlock,
+        part: Option<&FuseBlockPartInfo>,
+        bitmap_selection: Option<&Bitmap>,
+        offsets: Option<RoaringTreemap>,
+    ) -> Result<()> {
+        let progress_values = ProgressValues {
+            rows: data_block.num_rows(),
+            bytes: data_block.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, data_block.memory_size());
+
+        data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+        if let Some(part) = part {
+            let offsets = offsets.or_else(|| {
+                if self.block_meta_options.query_internal_columns {
+                    bitmap_selection.map(|bitmap| {
+                        RoaringTreemap::from_sorted_iter(
+                            (0..bitmap.len())
+                                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                .map(|i| i as u64),
+                        )
+                        .unwrap()
+                    })
+                } else {
+                    None
+                }
+            });
+
+            data_block = add_data_block_meta(
+                data_block,
+                part,
+                offsets,
+                self.base_block_ids.clone(),
+                &self.block_meta_options,
+            )?;
+        }
+
+        self.output_data = Some(data_block);
         Ok(())
     }
 }

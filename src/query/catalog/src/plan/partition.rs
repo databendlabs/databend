@@ -103,6 +103,9 @@ pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 pub enum PartitionsShuffleKind {
     // Bind the Partition to executor one by one with order.
     Seq,
+    // Bind partitions in sequence and keep the ordered contract through local scan streams.
+    // Consumers may merge those streams as already-sorted subsequences.
+    PreserveOrder,
     // Bind the Partition to executor by partition.hash()%executor_nums order.
     Mod,
     // Bind the Partition to executor by ConsistentHash(partition.hash()) order.
@@ -124,6 +127,13 @@ pub struct Partitions {
 impl Partitions {
     pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
         Partitions { kind, partitions }
+    }
+
+    fn executor_partition_kind(&self) -> PartitionsShuffleKind {
+        match self.kind {
+            PartitionsShuffleKind::PreserveOrder => PartitionsShuffleKind::PreserveOrder,
+            _ => PartitionsShuffleKind::Seq,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -164,7 +174,7 @@ impl Partitions {
             .collect::<Vec<_>>();
 
         let partitions = match self.kind {
-            PartitionsShuffleKind::Seq => regular_partitions,
+            PartitionsShuffleKind::Seq | PartitionsShuffleKind::PreserveOrder => regular_partitions,
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
                 let mut parts = regular_partitions
@@ -264,7 +274,7 @@ impl Partitions {
 
                 executor_part.insert(
                     executor.id.clone(),
-                    Partitions::create(PartitionsShuffleKind::Seq, parts),
+                    Partitions::create(self.executor_partition_kind(), parts),
                 );
             }
 
@@ -287,7 +297,7 @@ impl Partitions {
 
                 executor_part.insert(
                     executor.id.clone(),
-                    Partitions::create(PartitionsShuffleKind::Seq, parts),
+                    Partitions::create(self.executor_partition_kind(), parts),
                 );
             }
 
@@ -319,7 +329,7 @@ impl Partitions {
 
             executor_part.insert(
                 executor.id.clone(),
-                Partitions::create(PartitionsShuffleKind::Seq, parts),
+                Partitions::create(self.executor_partition_kind(), parts),
             );
         }
 

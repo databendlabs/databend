@@ -51,6 +51,7 @@ pub struct BloomRuntimeFilterRef {
     pub stats: Arc<RuntimeFilterStats>,
 }
 
+#[derive(Clone)]
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
@@ -62,6 +63,13 @@ pub struct ReadState {
     pub output_schema: DataSchema,
     pub prewhere_selectivity_threshold: u64,
     pub use_single_prewhere_reader: bool,
+}
+
+pub struct PrewhereFilterResult {
+    pub preread_block: DataBlock,
+    pub row_selection: Option<RowSelection>,
+    pub bitmap_selection: Option<Bitmap>,
+    pub push_down_row_selection: bool,
 }
 
 impl ReadState {
@@ -190,11 +198,11 @@ impl ReadState {
         Ok(result_bitmap)
     }
 
-    pub fn deserialize_and_filter(
+    pub fn deserialize_prewhere(
         &self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
-    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+    ) -> Result<PrewhereFilterResult> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         let mut preread_block = self
             .pre_reader
@@ -220,24 +228,48 @@ impl ReadState {
         }
 
         if self.use_single_prewhere_reader {
-            return Ok((preread_block, row_selection, bitmap_selection));
+            return Ok(PrewhereFilterResult {
+                preread_block,
+                row_selection,
+                bitmap_selection,
+                push_down_row_selection: false,
+            });
         }
 
-        let remain_columns_chunks =
-            Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
         let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
             should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
         });
 
+        Ok(PrewhereFilterResult {
+            preread_block,
+            row_selection,
+            bitmap_selection,
+            push_down_row_selection,
+        })
+    }
+
+    pub fn deserialize_remaining(
+        &self,
+        mut preread_block: DataBlock,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+        row_selection: Option<&RowSelection>,
+        bitmap_selection: Option<&Bitmap>,
+        push_down_row_selection: bool,
+    ) -> Result<DataBlock> {
+        if self.use_single_prewhere_reader {
+            return Ok(preread_block);
+        }
+
+        let remain_columns_chunks =
+            Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
         let mut remain_block = self.remain_reader.deserialize_part(
             part,
             remain_columns_chunks,
-            push_down_row_selection
-                .then_some(row_selection.as_ref())
-                .flatten(),
+            push_down_row_selection.then_some(row_selection).flatten(),
         )?;
         if !push_down_row_selection {
-            if let Some(bitmap) = bitmap_selection.as_ref() {
+            if let Some(bitmap) = bitmap_selection {
                 remain_block = remain_block.filter_with_bitmap(bitmap)?;
             }
         }
@@ -250,7 +282,29 @@ impl ReadState {
 
         let data_block = preread_block.resort(&merged_schema, &self.output_schema)?;
 
-        Ok((data_block, row_selection, bitmap_selection))
+        Ok(data_block)
+    }
+
+    pub fn deserialize_and_filter(
+        &self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let prewhere_result = self.deserialize_prewhere(columns_chunks.clone(), part)?;
+        let data_block = self.deserialize_remaining(
+            prewhere_result.preread_block,
+            columns_chunks,
+            part,
+            prewhere_result.row_selection.as_ref(),
+            prewhere_result.bitmap_selection.as_ref(),
+            prewhere_result.push_down_row_selection,
+        )?;
+
+        Ok((
+            data_block,
+            prewhere_result.row_selection,
+            prewhere_result.bitmap_selection,
+        ))
     }
 
     fn filter_column_chunks<'a>(

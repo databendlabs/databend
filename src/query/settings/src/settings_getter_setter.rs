@@ -1020,6 +1020,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
     }
 
+    pub fn get_enable_cluster_key_ordered_topk(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cluster_key_ordered_topk")? == 1)
+    }
+
+    pub fn get_max_cluster_key_ordered_topk_overlap(&self) -> Result<u64> {
+        self.try_get_u64("max_cluster_key_ordered_topk_overlap")
+    }
+
     pub fn get_enable_fixed_rows_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
     }

@@ -1,0 +1,1033 @@
+statement ok
+set max_threads = 4
+
+statement ok
+set enable_parallel_multi_merge_sort = 0
+
+statement ok
+set enable_cluster_key_ordered_topk = 1
+
+statement ok
+set max_cluster_key_ordered_topk_overlap = 10
+
+statement ok
+set lazy_read_threshold = 0
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_i64 ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_decimal ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_string ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_prefix ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_column_segment ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_single ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_mixed ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_overlap ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_cross_prefix ALL
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_pruned_multi ALL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide(
+    a int not null,
+    b int not null,
+    c int not null,
+    d int not null,
+    e int not null,
+    f int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, b, -c, d) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide VALUES
+    (1, 2, 90, 4, 0, 8),
+    (1, 2, 80, 3, 3, 8),
+    (1, 2, 80, 4, 3, 8),
+    (1, 2, 80, 5, 3, 8),
+    (1, 2, 70, 4, 3, 7),
+    (1, 2, 60, 4, 0, 8),
+    (1, 2, 50, 4, 3, 8),
+    (1, 2, 40, 4, 3, 8),
+    (1, 2, 30, 5, 3, 8),
+    (1, 3, 95, 4, 3, 8),
+    (2, 2, 99, 4, 3, 8)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_single(
+    a int not null,
+    b int not null,
+    payload int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_single VALUES
+    (1, 10, 1),
+    (1, 30, 2),
+    (1, 20, 3),
+    (2, 5, 4)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_single RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_mixed(
+    a int not null,
+    b int not null,
+    payload int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_mixed VALUES
+    (1, 10, 1),
+    (1, 30, 2),
+    (1, 20, 3),
+    (2, 5, 4),
+    (0, 100, 5),
+    (2, 7, 6),
+    (0, 90, 7)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_mixed RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_overlap(
+    a int not null,
+    b int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_overlap VALUES
+    (1, 10),
+    (1, 1),
+    (1, 9),
+    (1, 2),
+    (1, 8),
+    (1, 3)
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_cross_prefix(
+    a int not null,
+    b int not null,
+    payload int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 3 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_cross_prefix VALUES
+    (0, 100, 0),
+    (1, 90, 1),
+    (1, 70, 2),
+    (2, 99, 3),
+    (1, 80, 4),
+    (1, 60, 5)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_cross_prefix RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_pruned_multi(
+    a int not null,
+    b int not null,
+    c int not null,
+    d int not null,
+    e int not null,
+    f int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, b, -c, d) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_pruned_multi VALUES
+    (0, 1, 200, 1, 3, 8),
+    (0, 1, 100, 1, 3, 8),
+    (1, 2, 100, 1, 3, 8),
+    (1, 2, 90, 1, 3, 7),
+    (1, 2, 80, 1, 4, 8),
+    (1, 2, 70, 1, 3, 8),
+    (1, 2, 60, 1, 3, 8),
+    (1, 2, 50, 2, 3, 8),
+    (1, 2, 40, 2, 3, 7),
+    (1, 2, 30, 2, 3, 8),
+    (1, 2, 20, 3, 3, 8),
+    (2, 2, 200, 1, 3, 8),
+    (2, 2, 100, 1, 3, 8)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_pruned_multi RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_string(
+    platform_id int not null,
+    wallet_address string not null,
+    last_active_time bigint not null,
+    balance int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(platform_id, wallet_address, -last_active_time) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_string VALUES
+    (14, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 300, 1),
+    (14, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 200, 2),
+    (14, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 100, 3),
+    (14, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 400, 4),
+    (15, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 500, 5)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_string RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_prefix(
+    platform_id int not null,
+    wallet_address string not null,
+    last_active_time bigint not null,
+    balance int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(platform_id, substr(wallet_address, 1, 8), -last_active_time) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_prefix VALUES
+    (14, '0xaaaaaa0000000000000000000000000000000000', 400, 1),
+    (14, '0xaaaaaa1111111111111111111111111111111111', 350, 2),
+    (14, '0xaaaaaa0000000000000000000000000000000000', 300, 3),
+    (14, '0xaaaaaa1111111111111111111111111111111111', 250, 4),
+    (14, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 500, 5),
+    (15, '0xaaaaaa0000000000000000000000000000000000', 450, 6)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_prefix RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_column_segment(
+    a int not null,
+    b int not null,
+    c int not null,
+    d int not null,
+    e int not null,
+    f int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, b, -c, d) ROW_PER_BLOCK = 2 BLOCK_PER_SEGMENT = 2 SEGMENT_FORMAT = 'column_oriented' STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_column_segment VALUES
+    (0, 1, 200, 1, 3, 8),
+    (0, 1, 100, 1, 3, 8),
+    (1, 2, 100, 1, 3, 8),
+    (1, 2, 90, 1, 3, 7),
+    (1, 2, 80, 1, 4, 8),
+    (1, 2, 70, 1, 3, 8),
+    (1, 2, 60, 1, 3, 8),
+    (1, 2, 50, 2, 3, 8),
+    (1, 2, 40, 2, 3, 7),
+    (1, 2, 30, 2, 3, 8),
+    (1, 2, 20, 3, 3, 8),
+    (2, 2, 200, 1, 3, 8),
+    (2, 2, 100, 1, 3, 8)
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8 AND d = 4
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+1 2 80 4
+1 2 50 4
+1 2 40 4
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND d = 4
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+1 2 80 4
+1 2 70 4
+1 2 50 4
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 4
+----
+1 2 80 3
+1 2 80 4
+1 2 80 5
+1 2 50 4
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 2 OFFSET 1
+----
+1 2 80 4
+1 2 80 5
+
+query III
+SELECT a, b, payload
+FROM test_cluster_sort_elide_mixed
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 5
+----
+0 100 5
+0 90 7
+1 30 2
+1 20 3
+1 10 1
+
+query III
+SELECT a, b, payload
+FROM test_cluster_sort_elide_single
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+1 30 2
+1 20 3
+
+query II
+SELECT a, b
+FROM test_cluster_sort_elide_overlap
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 4
+----
+1 10
+1 9
+1 8
+1 3
+
+query III
+SELECT a, b, payload
+FROM test_cluster_sort_elide_cross_prefix
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 4
+----
+1 90 1
+1 80 4
+1 70 2
+1 60 5
+
+query III
+settings(lazy_read_threshold = 100) SELECT a, b, payload
+FROM test_cluster_sort_elide_cross_prefix
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 4
+----
+1 90 1
+1 80 4
+1 70 2
+1 60 5
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide_pruned_multi
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 5
+----
+1 2 100 1
+1 2 70 1
+1 2 60 1
+1 2 50 2
+1 2 30 2
+
+statement ok
+set enable_cluster_key_ordered_topk = 0
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 4
+----
+1 2 80 3
+1 2 80 4
+1 2 80 5
+1 2 50 4
+
+query III
+SELECT a, b, payload
+FROM test_cluster_sort_elide_single
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+1 30 2
+1 20 3
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 4
+----
+Limit
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── limit: 4
+├── offset: 0
+├── estimated rows: 4.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 5.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 5
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 4]
+        └── estimated rows: 5.50
+
+statement ok
+set enable_cluster_key_ordered_topk = 1
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8 AND d = 4
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 3.67
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 5
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8 and test_cluster_sort_elide.d (#3) = 4], limit: 3]
+        └── estimated rows: 3.67
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 4
+----
+Limit
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── limit: 4
+├── offset: 0
+├── estimated rows: 4.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 5.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 5
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 4]
+        └── estimated rows: 5.50
+
+query T
+EXPLAIN SELECT a, b, payload
+FROM test_cluster_sort_elide_mixed
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 5
+----
+Limit
+├── output columns: [test_cluster_sort_elide_mixed.a (#0), test_cluster_sort_elide_mixed.b (#1), test_cluster_sort_elide_mixed.payload (#2)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 5.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_mixed.a (#0), test_cluster_sort_elide_mixed.b (#1), test_cluster_sort_elide_mixed.payload (#2)]
+    ├── sort keys: [a ASC NULLS LAST, b DESC NULLS LAST]
+    ├── estimated rows: 7.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_mixed
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), payload (#2)]
+        ├── read rows: 7
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: 5]
+        └── estimated rows: 7.00
+
+query T
+EXPLAIN SELECT a, b, payload
+FROM test_cluster_sort_elide_single
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_single.a (#0), test_cluster_sort_elide_single.b (#1), test_cluster_sort_elide_single.payload (#2)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_single.a (#0), test_cluster_sort_elide_single.b (#1), test_cluster_sort_elide_single.payload (#2)]
+    ├── sort keys: [b DESC NULLS LAST]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_single
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), payload (#2)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_single.a (#0) = 1], limit: 2]
+        └── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT a, b, payload
+FROM test_cluster_sort_elide_cross_prefix
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 4
+----
+Limit
+├── output columns: [test_cluster_sort_elide_cross_prefix.a (#0), test_cluster_sort_elide_cross_prefix.b (#1), test_cluster_sort_elide_cross_prefix.payload (#2)]
+├── limit: 4
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_cross_prefix.a (#0), test_cluster_sort_elide_cross_prefix.b (#1), test_cluster_sort_elide_cross_prefix.payload (#2)]
+    ├── sort keys: [b DESC NULLS LAST]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_cross_prefix
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), payload (#2)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_cross_prefix.a (#0) = 1], limit: 4]
+        └── estimated rows: 2.00
+
+query T
+settings(lazy_read_threshold = 100) EXPLAIN SELECT a, b, payload
+FROM test_cluster_sort_elide_cross_prefix
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 4
+----
+RowFetch
+├── output columns: [test_cluster_sort_elide_cross_prefix.a (#0), test_cluster_sort_elide_cross_prefix.b (#1), test_cluster_sort_elide_cross_prefix._row_id (#3), test_cluster_sort_elide_cross_prefix.payload (#2)]
+├── columns to fetch: [payload]
+├── estimated rows: 2.00
+└── Limit
+    ├── output columns: [test_cluster_sort_elide_cross_prefix.a (#0), test_cluster_sort_elide_cross_prefix.b (#1), test_cluster_sort_elide_cross_prefix._row_id (#3)]
+    ├── limit: 4
+    ├── offset: 0
+    ├── estimated rows: 2.00
+    └── Sort(PresortedMerge)
+        ├── output columns: [test_cluster_sort_elide_cross_prefix.a (#0), test_cluster_sort_elide_cross_prefix.b (#1), test_cluster_sort_elide_cross_prefix._row_id (#3)]
+        ├── sort keys: [b DESC NULLS LAST]
+        ├── estimated rows: 2.00
+        └── TableScan
+            ├── table: default.default.test_cluster_sort_elide_cross_prefix
+            ├── scan id: 0
+            ├── output columns: [a (#0), b (#1), _row_id (#3)]
+            ├── read rows: 6
+            ├── read size: < 1 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+            ├── push downs: [filters: [test_cluster_sort_elide_cross_prefix.a (#0) = 1], limit: 4]
+            └── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT a, b
+FROM test_cluster_sort_elide_overlap
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide_overlap.a (#0), test_cluster_sort_elide_overlap.b (#1)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_overlap.a (#0), test_cluster_sort_elide_overlap.b (#1)]
+    ├── sort keys: [a ASC NULLS LAST, b DESC NULLS LAST]
+    ├── estimated rows: 6.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_overlap
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: 3]
+        └── estimated rows: 6.00
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide_pruned_multi
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 5
+----
+Limit
+├── output columns: [test_cluster_sort_elide_pruned_multi.a (#0), test_cluster_sort_elide_pruned_multi.b (#1), test_cluster_sort_elide_pruned_multi.c (#2), test_cluster_sort_elide_pruned_multi.d (#3)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 4.33
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_pruned_multi.a (#0), test_cluster_sort_elide_pruned_multi.b (#1), test_cluster_sort_elide_pruned_multi.c (#2), test_cluster_sort_elide_pruned_multi.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 4.33
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_pruned_multi
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 6 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_pruned_multi.a (#0) = 1 and test_cluster_sort_elide_pruned_multi.b (#1) = 2 and test_cluster_sort_elide_pruned_multi.e (#4) = 3 and test_cluster_sort_elide_pruned_multi.f (#5) = 8], limit: 5]
+        └── estimated rows: 4.33
+
+statement ok
+set max_cluster_key_ordered_topk_overlap = 0
+
+query II
+SELECT a, b
+FROM test_cluster_sort_elide_overlap
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 4
+----
+1 10
+1 9
+1 8
+1 3
+
+query T
+EXPLAIN SELECT a, b
+FROM test_cluster_sort_elide_overlap
+ORDER BY a ASC NULLS LAST, b DESC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide_overlap.a (#0), test_cluster_sort_elide_overlap.b (#1)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_overlap.a (#0), test_cluster_sort_elide_overlap.b (#1)]
+    ├── sort keys: [a ASC NULLS LAST, b DESC NULLS LAST]
+    ├── estimated rows: 6.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_overlap
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: 3]
+        └── estimated rows: 6.00
+
+statement ok
+set max_cluster_key_ordered_topk_overlap = 10
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 5.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 5
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 3]
+        └── estimated rows: 5.50
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS FIRST, d ASC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+    ├── sort keys: [c DESC NULLS FIRST, d ASC NULLS LAST]
+    ├── estimated rows: 5.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 11
+        ├── read size: < 1 KiB
+        ├── partitions total: 5
+        ├── partitions scanned: 5
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 3]
+        └── estimated rows: 5.50
+
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8 AND d = 4
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+----
+Sort(Single)
+├── output columns: [test_cluster_sort_elide.a (#0), test_cluster_sort_elide.b (#1), test_cluster_sort_elide.c (#2), test_cluster_sort_elide.d (#3)]
+├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+├── estimated rows: 3.67
+└── TableScan
+    ├── table: default.default.test_cluster_sort_elide
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+    ├── read rows: 11
+    ├── read size: < 1 KiB
+    ├── partitions total: 5
+    ├── partitions scanned: 5
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+    ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8 and test_cluster_sort_elide.d (#3) = 4], limit: NONE]
+    └── estimated rows: 3.67
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_i64(
+    a int not null,
+    b bigint not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_i64 VALUES
+    (1, 1),
+    (1, 3),
+    (1, 2)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_i64 RECLUSTER FINAL
+
+query T
+EXPLAIN SELECT a, b
+FROM test_cluster_sort_elide_i64
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_i64.a (#0), test_cluster_sort_elide_i64.b (#1)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_i64.a (#0), test_cluster_sort_elide_i64.b (#1)]
+    ├── sort keys: [b DESC NULLS LAST]
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_i64
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_i64.a (#0) = 1], limit: 2]
+        └── estimated rows: 3.00
+
+statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_i64_min ALL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_i64_min(
+    a int not null,
+    b bigint not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
+
+statement error number overflowed
+INSERT INTO test_cluster_sort_elide_i64_min VALUES
+    (1, CAST('-9223372036854775808' AS BIGINT)),
+    (1, 10)
+
+statement ok
+DROP TABLE test_cluster_sort_elide_i64_min ALL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_decimal(
+    a int not null,
+    b decimal(20, 4) not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_decimal VALUES
+    (1, 1.0000),
+    (1, 3.0000),
+    (1, 2.0000)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_decimal RECLUSTER FINAL
+
+query T
+EXPLAIN SELECT a, b
+FROM test_cluster_sort_elide_decimal
+WHERE a = 1
+ORDER BY b DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_decimal.a (#0), test_cluster_sort_elide_decimal.b (#1)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_decimal.a (#0), test_cluster_sort_elide_decimal.b (#1)]
+    ├── sort keys: [b DESC NULLS LAST]
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_decimal
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_decimal.a (#0) = 1], limit: 2]
+        └── estimated rows: 3.00
+
+query T
+EXPLAIN SELECT platform_id, wallet_address, last_active_time
+FROM test_cluster_sort_elide_string
+WHERE platform_id = 14 AND wallet_address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' AND balance > 0
+ORDER BY last_active_time DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_string.platform_id (#0), test_cluster_sort_elide_string.wallet_address (#1), test_cluster_sort_elide_string.last_active_time (#2)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_string.platform_id (#0), test_cluster_sort_elide_string.wallet_address (#1), test_cluster_sort_elide_string.last_active_time (#2)]
+    ├── sort keys: [last_active_time DESC NULLS LAST]
+    ├── estimated rows: 2.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_string
+        ├── scan id: 0
+        ├── output columns: [platform_id (#0), wallet_address (#1), last_active_time (#2)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_string.platform_id (#0) = 14 and test_cluster_sort_elide_string.balance (#3) > 0 and test_cluster_sort_elide_string.wallet_address (#1) = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], limit: 2]
+        └── estimated rows: 2.50
+
+query T
+EXPLAIN SELECT platform_id, wallet_address, last_active_time
+FROM test_cluster_sort_elide_prefix
+WHERE platform_id = 14 AND wallet_address = '0xaaaaaa0000000000000000000000000000000000'
+ORDER BY last_active_time DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_prefix.platform_id (#0), test_cluster_sort_elide_prefix.wallet_address (#1), test_cluster_sort_elide_prefix.last_active_time (#2)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 2.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_prefix.platform_id (#0), test_cluster_sort_elide_prefix.wallet_address (#1), test_cluster_sort_elide_prefix.last_active_time (#2)]
+    ├── sort keys: [last_active_time DESC NULLS LAST]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_prefix
+        ├── scan id: 0
+        ├── output columns: [platform_id (#0), wallet_address (#1), last_active_time (#2)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_prefix.platform_id (#0) = 14 and test_cluster_sort_elide_prefix.wallet_address (#1) = '0xaaaaaa0000000000000000000000000000000000'], limit: 2]
+        └── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT platform_id, wallet_address, last_active_time
+FROM test_cluster_sort_elide_prefix
+WHERE platform_id = 14 AND substr(wallet_address, 1, 6) = '0xaaaa'
+ORDER BY last_active_time DESC NULLS LAST
+LIMIT 2
+----
+Limit
+├── output columns: [test_cluster_sort_elide_prefix.platform_id (#0), test_cluster_sort_elide_prefix.wallet_address (#1), test_cluster_sort_elide_prefix.last_active_time (#2)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 1.20
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_prefix.platform_id (#0), test_cluster_sort_elide_prefix.wallet_address (#1), test_cluster_sort_elide_prefix.last_active_time (#2)]
+    ├── sort keys: [last_active_time DESC NULLS LAST]
+    ├── estimated rows: 1.20
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_prefix
+        ├── scan id: 0
+        ├── output columns: [platform_id (#0), wallet_address (#1), last_active_time (#2)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_prefix.platform_id (#0) = 14 and substr(test_cluster_sort_elide_prefix.wallet_address (#1), 1, 6) = '0xaaaa'], limit: 2]
+        └── estimated rows: 1.20
+
+query IIII
+SELECT a, b, c, d
+FROM test_cluster_sort_elide_column_segment
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 5
+----
+1 2 100 1
+1 2 70 1
+1 2 60 1
+1 2 50 2
+1 2 30 2
+
+# Column-oriented segments currently keep the conservative Sort(Single) path.
+query T
+EXPLAIN SELECT a, b, c, d
+FROM test_cluster_sort_elide_column_segment
+WHERE a = 1 AND b = 2 AND e = 3 AND f = 8
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 5
+----
+Limit
+├── output columns: [test_cluster_sort_elide_column_segment.a (#0), test_cluster_sort_elide_column_segment.b (#1), test_cluster_sort_elide_column_segment.c (#2), test_cluster_sort_elide_column_segment.d (#3)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 4.33
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_column_segment.a (#0), test_cluster_sort_elide_column_segment.b (#1), test_cluster_sort_elide_column_segment.c (#2), test_cluster_sort_elide_column_segment.d (#3)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 4.33
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_column_segment
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+        ├── read rows: 13
+        ├── read size: 6.71 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── push downs: [filters: [test_cluster_sort_elide_column_segment.a (#0) = 1 and test_cluster_sort_elide_column_segment.b (#1) = 2 and test_cluster_sort_elide_column_segment.e (#4) = 3 and test_cluster_sort_elide_column_segment.f (#5) = 8], limit: 5]
+        └── estimated rows: 4.33
+
+statement ok
+DROP TABLE test_cluster_sort_elide ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_i64 ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_decimal ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_string ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_prefix ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_column_segment ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_single ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_mixed ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_overlap ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_cross_prefix ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_pruned_multi ALL
+
+statement ok
+unset max_threads
+
+statement ok
+unset enable_parallel_multi_merge_sort
+
+statement ok
+unset enable_cluster_key_ordered_topk
+
+statement ok
+unset max_cluster_key_ordered_topk_overlap
+
+statement ok
+unset lazy_read_threshold

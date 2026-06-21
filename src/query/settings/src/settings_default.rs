@@ -1361,6 +1361,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_cluster_key_ordered_topk", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables ORDER BY LIMIT optimization when Fuse cluster keys prove the input order",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_cluster_key_ordered_topk_overlap", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Maximum number of extra simultaneously-overlapping cluster-key block ranges allowed for ordered top-k; 0 disallows overlaps",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_fixed_rows_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable fixed rows sort serialize",

@@ -14,6 +14,8 @@
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
+use databend_common_expression::types::Bitmap;
 
 use crate::io::BlockReadResult;
 use crate::io::VirtualBlockReadResult;
@@ -22,6 +24,11 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 pub enum ParquetDataSource {
     AggIndex((PartInfoPtr, BlockReadResult)),
     Normal((BlockReadResult, Option<VirtualBlockReadResult>)),
+    Decoded {
+        block: DataBlock,
+        bitmap_selection: Option<Bitmap>,
+        deserialize_milliseconds: u64,
+    },
 }
 
 #[typetag::serde(name = "fuse_data_source")]

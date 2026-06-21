@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
@@ -26,9 +28,13 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::filters::TransformLimit;
+use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::add_row_by_row_multi_sort_merge;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
+use databend_common_pipeline_transforms::sorts::core::convert_rows;
 use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
@@ -209,6 +215,52 @@ impl SortPipelineBuilder {
         }
     }
 
+    pub fn build_presorted_merge_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
+        // The scan streams are ordered by cluster-key ranges, but individual
+        // blocks are not guaranteed to be internally sorted by the query's
+        // ORDER BY expression after filters are applied.
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.key_desc.sort_column_desc(),
+            )
+        });
+
+        if pipeline.output_len() == 1 {
+            if self.limit.is_some() {
+                pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(TransformLimit::try_create(
+                        self.limit, 0, input, output,
+                    )?))
+                })?;
+            }
+            return Ok(());
+        }
+
+        if !self.key_desc.uses_source_sort_col() {
+            let schema = self.key_desc.schema();
+            let sort_desc = self.key_desc.sort_column_desc();
+            let enable_fixed_rows = self.enable_fixed_rows;
+            pipeline.try_add_transformer(|| {
+                Ok(TransformAddOrderColumn::new(
+                    schema.clone(),
+                    sort_desc.clone(),
+                    enable_fixed_rows,
+                ))
+            })?;
+        }
+
+        add_row_by_row_multi_sort_merge(
+            pipeline,
+            self.key_desc.clone(),
+            self.block_size,
+            self.limit,
+            true,
+            self.enable_loser_tree,
+            self.enable_fixed_rows,
+        )
+    }
+
     pub fn build_sample(self, pipeline: &mut Pipeline) -> Result<()> {
         let settings = self.ctx.get_settings();
         let max_block_size = settings.get_max_block_size()? as usize;
@@ -306,5 +358,42 @@ impl SortPipelineBuilder {
             vec![output_port],
         )]));
         Ok(())
+    }
+}
+
+struct TransformAddOrderColumn {
+    schema: DataSchemaRef,
+    sort_desc: Arc<[SortColumnDescription]>,
+    enable_fixed_rows: bool,
+}
+
+impl TransformAddOrderColumn {
+    fn new(
+        schema: DataSchemaRef,
+        sort_desc: Arc<[SortColumnDescription]>,
+        enable_fixed_rows: bool,
+    ) -> Self {
+        Self {
+            schema,
+            sort_desc,
+            enable_fixed_rows,
+        }
+    }
+}
+
+impl Transform for TransformAddOrderColumn {
+    const NAME: &'static str = "TransformAddOrderColumn";
+
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
+    fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let order_column: Column = convert_rows(
+            self.schema.clone(),
+            &self.sort_desc,
+            data_block.clone(),
+            self.enable_fixed_rows,
+        )?;
+        data_block.add_column(order_column);
+        Ok(data_block)
     }
 }

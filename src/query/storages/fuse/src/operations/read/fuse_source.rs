@@ -19,6 +19,7 @@ use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -31,6 +32,7 @@ use log::info;
 use super::block_format::FuseParquetBlockFormat;
 use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
+use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -57,13 +59,42 @@ pub fn build_fuse_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
+    let preserve_order = plan.parts.kind == PartitionsShuffleKind::PreserveOrder;
+    if preserve_order {
+        // Keep the planner-proven scan-stream count. Each stream reads its
+        // assigned subsequence in order; downstream PresortedMerge performs the
+        // only inter-stream merge.
+        let preserve_order_streams = plan
+            .parts
+            .partitions
+            .iter()
+            .filter_map(|part| {
+                FuseBlockPartInfo::from_part(part)
+                    .ok()
+                    .and_then(|part| part.preserve_order_stream)
+            })
+            .max()
+            .map_or(1, |stream| stream + 1);
+        max_io_requests = max_io_requests.min(max_threads).min(preserve_order_streams);
+        max_threads = max_threads.min(max_io_requests);
+    }
+
     let waker = pipeline.get_waker();
-    let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+    // DeserializeDataTransform emits the parts in a batch with pop(), so an
+    // ordered scan must fetch one part at a time to preserve per-stream order.
+    let batch_size = match preserve_order {
+        true => 1,
+        false => ctx.get_settings().get_storage_fetch_part_num()? as usize,
+    };
     let stream: Arc<dyn PartitionStream> = match receiver {
         Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
         None => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if preserve_order {
+                partitions.disable_steal();
+            }
 
             Arc::new(StealPartitionStream::new(partitions.clone(), batch_size))
         }
@@ -109,6 +140,9 @@ pub fn build_fuse_source_pipeline(
             table_schema.clone(),
             block_reader.clone(),
             read_block_context.clone(),
+            plan.push_downs
+                .as_ref()
+                .and_then(|push_downs| push_downs.prewhere.clone()),
             input,
             output,
         )
@@ -119,7 +153,9 @@ pub fn build_fuse_source_pipeline(
         max_io_requests
     );
 
-    pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    if !preserve_order {
+        pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    }
 
     info!(
         "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
@@ -176,8 +212,18 @@ pub fn dispatch_partitions(
         return results;
     }
 
+    let preserve_order = plan.parts.kind == PartitionsShuffleKind::PreserveOrder;
     for (i, part) in partitions.iter().enumerate() {
-        results[i % max_streams].push_back(part.clone());
+        let index = if preserve_order {
+            FuseBlockPartInfo::from_part(part)
+                .ok()
+                .and_then(|part| part.preserve_order_stream)
+                .filter(|stream| *stream < max_streams)
+                .unwrap_or(i % max_streams)
+        } else {
+            i % max_streams
+        };
+        results[index].push_back(part.clone());
     }
     results
 }
