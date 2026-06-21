@@ -22,7 +22,8 @@ use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 
 use super::TableLvtCheck;
-use crate::MetaServiceKeyErrorBuilder;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::app_error::ReferenceAlreadyExists;
 use crate::app_error::UnknownReference;
 
@@ -61,13 +62,16 @@ impl Display for TableIdTagName {
     }
 }
 
-impl MetaServiceKeyErrorBuilder for TableIdTagName {
+impl KeyUnknownBuilder for TableIdTagName {
     type UnknownError = UnknownReference;
-    type ExistError = ReferenceAlreadyExists;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
         UnknownReference::new(format!("Unknown tag: '{}'; when:({})", self.tag_name, ctx))
     }
+}
+
+impl KeyExistsBuilder for TableIdTagName {
+    type ExistError = ReferenceAlreadyExists;
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
         ReferenceAlreadyExists::new(format!(
@@ -126,7 +130,8 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TableIdTagName;
-    use crate::MetaServiceKeyErrorBuilder;
+    use crate::KeyExistsBuilder;
+    use crate::KeyUnknownBuilder;
 
     #[test]
     fn test_table_id_tag_name_key_format() {

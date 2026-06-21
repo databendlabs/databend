@@ -40,4 +40,5 @@ mod meta_service_key_error;
 pub mod row_access_policy;
 
 pub use key_with_tenant::KeyWithTenant;
-pub use meta_service_key_error::MetaServiceKeyErrorBuilder;
+pub use meta_service_key_error::KeyExistsBuilder;
+pub use meta_service_key_error::KeyUnknownBuilder;

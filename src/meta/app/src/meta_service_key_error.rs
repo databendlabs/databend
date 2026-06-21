@@ -14,11 +14,14 @@
 
 use std::fmt::Display;
 
-pub trait MetaServiceKeyErrorBuilder {
+pub trait KeyUnknownBuilder {
     type UnknownError;
-    type ExistError;
 
     fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError;
+}
+
+pub trait KeyExistsBuilder {
+    type ExistError;
 
     fn exist_error(&self, ctx: impl Display) -> Self::ExistError;
 }

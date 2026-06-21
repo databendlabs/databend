@@ -18,8 +18,9 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::KeyWithTenant;
-use crate::MetaServiceKeyErrorBuilder;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::tenant_key::errors::ExistError;
@@ -169,15 +170,20 @@ impl<R, N> TIdent<R, N> {
     }
 }
 
-impl<R, N> MetaServiceKeyErrorBuilder for TIdent<R, N>
+impl<R, N> KeyUnknownBuilder for TIdent<R, N>
 where N: Clone
 {
     type UnknownError = UnknownError<R, N>;
-    type ExistError = ExistError<R, N>;
 
     fn unknown_error(&self, ctx: impl fmt::Display) -> Self::UnknownError {
         UnknownError::new(self.name().clone(), ctx)
     }
+}
+
+impl<R, N> KeyExistsBuilder for TIdent<R, N>
+where N: Clone
+{
+    type ExistError = ExistError<R, N>;
 
     fn exist_error(&self, ctx: impl fmt::Display) -> Self::ExistError {
         ExistError::new(self.name().clone(), ctx)

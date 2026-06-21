@@ -19,7 +19,8 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_meta_client::types::MatchSeq;
 
-use crate::MetaServiceKeyErrorBuilder;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;
 use crate::principal::procedure_name_ident;
@@ -1021,7 +1022,7 @@ impl AppError {
     /// Create an `unknown` meta-service key error.
     pub fn unknown<K>(key: &K, ctx: impl Display) -> AppError
     where
-        K: MetaServiceKeyErrorBuilder,
+        K: KeyUnknownBuilder,
         AppError: From<K::UnknownError>,
     {
         AppError::from(key.unknown_error(ctx))
@@ -1030,7 +1031,7 @@ impl AppError {
     /// Create an `exist` meta-service key error.
     pub fn exists<K>(key: &K, ctx: impl Display) -> AppError
     where
-        K: MetaServiceKeyErrorBuilder,
+        K: KeyExistsBuilder,
         AppError: From<K::ExistError>,
     {
         AppError::from(key.exist_error(ctx))
