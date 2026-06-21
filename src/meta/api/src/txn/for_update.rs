@@ -22,6 +22,9 @@ use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 
 use super::meta_txn::MetaTxn;
+use crate::txn::absent_for_update::AbsentForUpdate;
+use crate::txn::for_update_target::ForUpdateTarget;
+use crate::txn::present_for_update::PresentForUpdate;
 
 /// A key read for update.
 ///
@@ -36,8 +39,7 @@ use super::meta_txn::MetaTxn;
 /// batch of keys for update, inspect them, then stage the writes — without
 /// passing the transaction around.
 pub struct ForUpdate<'t, 'a, KV: ?Sized, K: kvapi::Key> {
-    txn: &'t MetaTxn<'a, KV>,
-    key: K,
+    target: ForUpdateTarget<'t, 'a, KV, K>,
     seq_v: Option<SeqV<K::ValueType>>,
 }
 
@@ -47,7 +49,10 @@ where
     K: kvapi::Key,
 {
     pub(crate) fn new(txn: &'t MetaTxn<'a, KV>, key: K, seq_v: Option<SeqV<K::ValueType>>) -> Self {
-        Self { txn, key, seq_v }
+        Self {
+            target: ForUpdateTarget { txn, key },
+            seq_v,
+        }
     }
 
     /// The version read, `0` if the key was absent.
@@ -66,44 +71,57 @@ where
         self.seq_v.as_ref().map(|s| &s.data)
     }
 
-    /// The value read, or the key's [`unknown_error`] if the key was absent.
+    /// Assert the value exists, or return the key's [`unknown_error`].
     ///
-    /// The [`ok_or`](Option::ok_or)-style "must exist" form of
-    /// [`value`](Self::value), for a key a write depends on. `ctx` labels the
-    /// error with the calling context. The error is exactly what the key
-    /// declares, leaving conversion to the caller.
+    /// This consumes the optional handle and returns a present-only handle, so
+    /// follow-up code can use the seq/value without re-checking the option.
     ///
     /// [`unknown_error`]: MetaServiceKeyErrorBuilder::unknown_error
-    pub fn some_or_unknown(&self, ctx: impl Display) -> Result<&K::ValueType, K::UnknownError>
-    where K: MetaServiceKeyErrorBuilder {
-        self.value().ok_or_else(|| self.key.unknown_error(ctx))
+    pub fn some_or_unknown_error(
+        self,
+        ctx: impl Display,
+    ) -> Result<PresentForUpdate<'t, 'a, KV, K>, K::UnknownError>
+    where
+        K: MetaServiceKeyErrorBuilder,
+    {
+        let Self { target, seq_v } = self;
+
+        match seq_v {
+            Some(seq_v) => Ok(PresentForUpdate { target, seq_v }),
+            None => Err(target.key.unknown_error(ctx)),
+        }
     }
 
-    /// `()` if the key was absent, or the key's [`exist_error`] if it was
-    /// present.
+    /// Assert the value does not exist, or return the key's [`exist_error`].
     ///
-    /// The complement of [`some_or_unknown`](Self::some_or_unknown): the guard for a
-    /// key that must be free before a write creates it. `ctx` labels the error
-    /// with the calling context. The error is exactly what the key declares,
-    /// leaving conversion to the caller.
+    /// This consumes the optional handle and returns an absent-only handle, so
+    /// follow-up code can create the value without re-checking the option.
     ///
     /// [`exist_error`]: MetaServiceKeyErrorBuilder::exist_error
-    pub fn none_or_exist(&self, ctx: impl Display) -> Result<(), K::ExistError>
-    where K: MetaServiceKeyErrorBuilder {
-        match self.value() {
-            Some(_) => Err(self.key.exist_error(ctx)),
-            None => Ok(()),
+    pub fn none_or_exist_error(
+        self,
+        ctx: impl Display,
+    ) -> Result<AbsentForUpdate<'t, 'a, KV, K>, K::ExistError>
+    where
+        K: MetaServiceKeyErrorBuilder,
+    {
+        let Self { target, seq_v } = self;
+
+        match seq_v {
+            Some(_) => Err(target.key.exist_error(ctx)),
+            None => Ok(AbsentForUpdate { target }),
         }
     }
 
     /// Consume the handle, yielding the value read.
     pub fn into_value(self) -> Option<K::ValueType> {
-        self.seq_v.map(|s| s.data)
+        let Self { target, seq_v } = self;
+        seq_v.map(|seq_v| PresentForUpdate { target, seq_v }.into_value())
     }
 
     /// Stage a delete of the read key.
     pub fn delete(self) {
-        self.txn.delete(&self.key);
+        self.target.delete();
     }
 }
 
@@ -116,6 +134,6 @@ where
 {
     /// Stage a put to the read key.
     pub fn put(self, value: &K::ValueType) -> Result<(), KV::Error> {
-        self.txn.put(&self.key, value)
+        self.target.put(value)
     }
 }

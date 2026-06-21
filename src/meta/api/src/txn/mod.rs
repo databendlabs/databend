@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod absent_for_update;
 pub mod backoff;
 pub mod condition;
 pub mod core;
 pub mod for_update;
+mod for_update_target;
 #[cfg(test)]
 mod mem_kv;
 pub mod meta_txn;
@@ -23,5 +25,6 @@ pub mod meta_txn_manager;
 #[cfg(test)]
 mod meta_txn_test;
 pub mod op_builder;
+pub(crate) mod present_for_update;
 pub mod read_entry;
 pub mod reply;

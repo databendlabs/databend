@@ -289,9 +289,9 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `some_or_unknown` yields the value when the key is present, and the key's own
-/// unknown error (unconverted) when it is absent. `DatabaseId` keys are used
-/// for their stable, concrete error `Display`.
+/// `some_or_unknown` yields a present-only handle when the key exists, and the
+/// key's own unknown error (unconverted) when it is absent. `DatabaseId` keys
+/// are used for their stable, concrete error `Display`.
 #[tokio::test]
 async fn test_some_or_unknown() -> anyhow::Result<()> {
     let mem = MemKV::new();
@@ -305,16 +305,21 @@ async fn test_some_or_unknown() -> anyhow::Result<()> {
     let (txn, _commit) = MetaTxn::new(&mem);
 
     let fu = txn.get_for_update(&present).await?;
-    assert!(fu.some_or_unknown("ctx").is_ok());
+    let present = fu.some_or_unknown_error("ctx").unwrap();
+    assert_eq!(present.seq(), 3);
+    assert_eq!(present.seq_v().seq, 3);
 
     let fu = txn.get_for_update(&absent).await?;
-    let err = fu.some_or_unknown("ctx").unwrap_err();
+    let err = match fu.some_or_unknown_error("ctx") {
+        Ok(_) => panic!("expected unknown key"),
+        Err(err) => err,
+    };
     assert_eq!(err.to_string(), "UnknownDatabaseId: `8` while `ctx`");
     Ok(())
 }
 
-/// `none_or_exist` passes when the key is absent, and yields the key's own
-/// already-exists error (unconverted) when it is present.
+/// `none_or_exist` yields an absent-only handle when the key is absent, and the
+/// key's own already-exists error (unconverted) when it is present.
 #[tokio::test]
 async fn test_none_or_exist() -> anyhow::Result<()> {
     let mem = MemKV::new();
@@ -328,10 +333,14 @@ async fn test_none_or_exist() -> anyhow::Result<()> {
     let (txn, _commit) = MetaTxn::new(&mem);
 
     let fu = txn.get_for_update(&absent).await?;
-    assert!(fu.none_or_exist("ctx").is_ok());
+    let absent = fu.none_or_exist_error("ctx").unwrap();
+    absent.put(&DatabaseMeta::default())?;
 
     let fu = txn.get_for_update(&present).await?;
-    let err = fu.none_or_exist("ctx").unwrap_err();
+    let err = match fu.none_or_exist_error("ctx") {
+        Ok(_) => panic!("expected existing key"),
+        Err(err) => err,
+    };
     assert_eq!(err.to_string(), "DatabaseAlreadyExists: `8` while `ctx`");
     Ok(())
 }
