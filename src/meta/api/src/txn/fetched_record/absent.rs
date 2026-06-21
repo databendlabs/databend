@@ -3,14 +3,14 @@ use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::kvapi;
 use databend_meta_client::types::InvalidArgument;
 
-use crate::txn::for_update_target::ForUpdateTarget;
+use super::target::FetchedRecordTarget;
 
-/// A key read for update and asserted to be absent.
-pub struct AbsentForUpdate<'t, 'a, KV: ?Sized, K: kvapi::Key> {
-    pub(crate) target: ForUpdateTarget<'t, 'a, KV, K>,
+/// A fetched record asserted to be absent.
+pub struct AbsentRecord<'t, 'a, KV: ?Sized, K: kvapi::Key> {
+    pub(crate) target: FetchedRecordTarget<'t, 'a, KV, K>,
 }
 
-impl<'t, 'a, KV, K> AbsentForUpdate<'t, 'a, KV, K>
+impl<'t, 'a, KV, K> AbsentRecord<'t, 'a, KV, K>
 where
     KV: KVApi + ?Sized,
     KV::Error: From<InvalidArgument>,

@@ -14,7 +14,7 @@
 
 use databend_meta_client::types::SeqV;
 
-/// One key retrieved while building a [`MetaTxn`](super::meta_txn::MetaTxn).
+/// One key retrieved while building a [`MetaTxn`](super::MetaTxn).
 ///
 /// It holds the raw [`SeqV`] as read from the backend, so the read set is
 /// type-independent: the seq drives the `eq_seq` guard at commit, the meta is

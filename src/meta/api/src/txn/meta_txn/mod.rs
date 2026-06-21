@@ -28,12 +28,21 @@ use databend_meta_client::types::TxnRequest;
 use seq_marked::SeqValue;
 
 use super::core::send_txn;
-use super::for_update::ForUpdate;
+use super::fetched_record::FetchedRecord;
 use super::op_builder::txn_del;
 use super::op_builder::txn_put_pb_with_ttl;
-use super::read_entry::ReadEntry;
 use crate::kv_pb_api::decode_seqv;
 use crate::kv_pb_api::errors::PbDecodeError;
+
+mod manager;
+#[cfg(test)]
+mod mem_kv;
+mod read_entry;
+#[cfg(test)]
+mod tests;
+
+pub use manager::MetaTxnManager;
+use read_entry::ReadEntry;
 
 /// The reads and writes staged by one transaction attempt.
 ///
@@ -57,7 +66,7 @@ struct TxnState {
 /// update, so a read that a write depends on can never be left unguarded.
 ///
 /// The read and write sets sit behind an `Arc<Mutex<…>>`, so reads and writes
-/// take `&self`. A [`ForUpdate`] handle can borrow the transaction and write
+/// take `&self`. A [`FetchedRecord`] handle can borrow the transaction and write
 /// straight back to it, and several handles can be held at once without passing
 /// the transaction around.
 ///
@@ -118,15 +127,19 @@ where
     /// Reading is what installs the guard, so it cannot be forgotten.
     /// Re-reading the same key keeps the version first observed.
     ///
-    /// The returned [`ForUpdate`] borrows the transaction and writes back to the
-    /// same key via [`put`](ForUpdate::put) / [`delete`](ForUpdate::delete).
-    pub async fn get_for_update<K>(&self, key: &K) -> Result<ForUpdate<'_, 'a, KV, K>, KV::Error>
+    /// The returned [`FetchedRecord`] borrows the transaction and writes back to
+    /// the same key via [`put`](FetchedRecord::put) /
+    /// [`delete`](FetchedRecord::delete).
+    pub async fn get_for_update<K>(
+        &self,
+        key: &K,
+    ) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
     where
         K: kvapi::Key + Clone,
         K::ValueType: FromToProto,
     {
         let got = self.read(key, true).await?;
-        Ok(ForUpdate::new(self, key.clone(), got))
+        Ok(FetchedRecord::new(self, key.clone(), got))
     }
 
     /// Read a key through the snapshot cache, recording it in the read set.

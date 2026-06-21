@@ -20,22 +20,24 @@ use chrono::Utc;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::HiveCatalogOption;
+use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::KVMeta;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 
+use super::MetaTxn;
+use super::MetaTxnManager;
 use super::mem_kv::MemKV;
-use super::meta_txn::MetaTxn;
-use super::meta_txn_manager::MetaTxnManager;
-use super::op_builder::txn_del;
-use super::op_builder::txn_put_pb_with_ttl;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::encode_pb;
+use crate::txn::op_builder::txn_del;
+use crate::txn::op_builder::txn_put_pb_with_ttl;
 
 fn tenant() -> Tenant {
     Tenant::new_literal("test")
@@ -198,7 +200,7 @@ async fn test_run_retries_on_conflict() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Several `ForUpdate` handles can be held at once: each borrows the
+/// Several `FetchedRecord` handles can be held at once: each borrows the
 /// transaction shared-ly, so a batch of keys can be read for update, inspected,
 /// then written. Each for-update read still contributes its own `eq_seq` guard.
 #[tokio::test]
@@ -323,24 +325,27 @@ async fn test_some_or_unknown() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_none_or_exist() -> anyhow::Result<()> {
     let mem = MemKV::new();
-    let (absent, present) = (DatabaseId::new(7), DatabaseId::new(8));
+    let (absent, present) = (
+        DBIdTableName::new(7, "absent"),
+        DBIdTableName::new(7, "present"),
+    );
     mem.seed(
         &present.to_string_key(),
         3,
-        encode_pb(&DatabaseMeta::default()).unwrap(),
+        encode_pb(&TableId::new(8)).unwrap(),
     );
 
     let (txn, _commit) = MetaTxn::new(&mem);
 
     let fu = txn.get_for_update(&absent).await?;
     let absent = fu.none_or_exist_error("ctx").unwrap();
-    absent.put(&DatabaseMeta::default())?;
+    absent.put(&TableId::new(7))?;
 
     let fu = txn.get_for_update(&present).await?;
     let err = match fu.none_or_exist_error("ctx") {
         Ok(_) => panic!("expected existing key"),
         Err(err) => err,
     };
-    assert_eq!(err.to_string(), "DatabaseAlreadyExists: `8` while `ctx`");
+    assert_eq!(err.to_string(), "TableAlreadyExists: present while ctx");
     Ok(())
 }

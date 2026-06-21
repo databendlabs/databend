@@ -18,7 +18,7 @@ use std::future::Future;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_meta_client::kvapi::KVApi;
 
-use super::meta_txn::MetaTxn;
+use super::MetaTxn;
 use crate::txn_backoff::txn_backoff;
 
 /// The retry driver for [`MetaTxn`].

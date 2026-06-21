@@ -5,12 +5,12 @@ use databend_meta_client::types::InvalidArgument;
 
 use crate::MetaTxn;
 
-pub(crate) struct ForUpdateTarget<'t, 'a, KV: ?Sized, K: kvapi::Key> {
+pub(crate) struct FetchedRecordTarget<'t, 'a, KV: ?Sized, K: kvapi::Key> {
     pub(crate) txn: &'t MetaTxn<'a, KV>,
     pub(crate) key: K,
 }
 
-impl<'t, 'a, KV, K> ForUpdateTarget<'t, 'a, KV, K>
+impl<'t, 'a, KV, K> FetchedRecordTarget<'t, 'a, KV, K>
 where
     KV: ?Sized,
     K: kvapi::Key,
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<'t, 'a, KV, K> ForUpdateTarget<'t, 'a, KV, K>
+impl<'t, 'a, KV, K> FetchedRecordTarget<'t, 'a, KV, K>
 where
     KV: KVApi + ?Sized,
     KV::Error: From<InvalidArgument>,

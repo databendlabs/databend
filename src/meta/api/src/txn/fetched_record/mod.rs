@@ -14,7 +14,8 @@
 
 use std::fmt::Display;
 
-use databend_common_meta_app::MetaServiceKeyErrorBuilder;
+use databend_common_meta_app::KeyExistsBuilder;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
@@ -22,35 +23,41 @@ use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 
 use super::meta_txn::MetaTxn;
-use crate::txn::absent_for_update::AbsentForUpdate;
-use crate::txn::for_update_target::ForUpdateTarget;
-use crate::txn::present_for_update::PresentForUpdate;
 
-/// A key read for update.
+mod absent;
+mod present;
+mod target;
+
+pub use absent::AbsentRecord;
+pub use present::PresentRecord;
+use target::FetchedRecordTarget;
+
+/// A record fetched by a transaction get operation.
 ///
-/// It borrows the transaction and holds the value and key read. The `eq_seq`
-/// guard was installed in the transaction's read set when the key was read.
-/// Writing through it ([`put`](Self::put) / [`delete`](Self::delete)) goes back
-/// to that transaction and reuses that key, so a write cannot target a different
-/// key than the one guarded, and replaces any operation previously staged for it.
+/// It borrows the transaction and holds the key and value read. If it came from
+/// [`MetaTxn::get_for_update`], the `eq_seq` guard was installed in the
+/// transaction's read set when the key was read. Writing through it
+/// ([`put`](Self::put) / [`delete`](Self::delete)) goes back to that
+/// transaction and reuses that key, so a write cannot target a different key
+/// than the one guarded, and replaces any operation previously staged for it.
 ///
 /// The handle borrows the transaction shared-ly (the transaction keeps its read
 /// and write sets behind a lock), so several handles may be held at once: read a
-/// batch of keys for update, inspect them, then stage the writes — without
+/// batch of keys for update, inspect them, then stage the writes - without
 /// passing the transaction around.
-pub struct ForUpdate<'t, 'a, KV: ?Sized, K: kvapi::Key> {
-    target: ForUpdateTarget<'t, 'a, KV, K>,
+pub struct FetchedRecord<'t, 'a, KV: ?Sized, K: kvapi::Key> {
+    target: FetchedRecordTarget<'t, 'a, KV, K>,
     seq_v: Option<SeqV<K::ValueType>>,
 }
 
-impl<'t, 'a, KV, K> ForUpdate<'t, 'a, KV, K>
+impl<'t, 'a, KV, K> FetchedRecord<'t, 'a, KV, K>
 where
     KV: ?Sized,
     K: kvapi::Key,
 {
     pub(crate) fn new(txn: &'t MetaTxn<'a, KV>, key: K, seq_v: Option<SeqV<K::ValueType>>) -> Self {
         Self {
-            target: ForUpdateTarget { txn, key },
+            target: FetchedRecordTarget { txn, key },
             seq_v,
         }
     }
@@ -76,18 +83,18 @@ where
     /// This consumes the optional handle and returns a present-only handle, so
     /// follow-up code can use the seq/value without re-checking the option.
     ///
-    /// [`unknown_error`]: MetaServiceKeyErrorBuilder::unknown_error
+    /// [`unknown_error`]: KeyUnknownBuilder::unknown_error
     pub fn some_or_unknown_error(
         self,
         ctx: impl Display,
-    ) -> Result<PresentForUpdate<'t, 'a, KV, K>, K::UnknownError>
+    ) -> Result<PresentRecord<'t, 'a, KV, K>, K::UnknownError>
     where
-        K: MetaServiceKeyErrorBuilder,
+        K: KeyUnknownBuilder,
     {
         let Self { target, seq_v } = self;
 
         match seq_v {
-            Some(seq_v) => Ok(PresentForUpdate { target, seq_v }),
+            Some(seq_v) => Ok(PresentRecord { target, seq_v }),
             None => Err(target.key.unknown_error(ctx)),
         }
     }
@@ -97,26 +104,26 @@ where
     /// This consumes the optional handle and returns an absent-only handle, so
     /// follow-up code can create the value without re-checking the option.
     ///
-    /// [`exist_error`]: MetaServiceKeyErrorBuilder::exist_error
+    /// [`exist_error`]: KeyExistsBuilder::exist_error
     pub fn none_or_exist_error(
         self,
         ctx: impl Display,
-    ) -> Result<AbsentForUpdate<'t, 'a, KV, K>, K::ExistError>
+    ) -> Result<AbsentRecord<'t, 'a, KV, K>, K::ExistError>
     where
-        K: MetaServiceKeyErrorBuilder,
+        K: KeyExistsBuilder,
     {
         let Self { target, seq_v } = self;
 
         match seq_v {
             Some(_) => Err(target.key.exist_error(ctx)),
-            None => Ok(AbsentForUpdate { target }),
+            None => Ok(AbsentRecord { target }),
         }
     }
 
     /// Consume the handle, yielding the value read.
     pub fn into_value(self) -> Option<K::ValueType> {
         let Self { target, seq_v } = self;
-        seq_v.map(|seq_v| PresentForUpdate { target, seq_v }.into_value())
+        seq_v.map(|seq_v| PresentRecord { target, seq_v }.into_value())
     }
 
     /// Stage a delete of the read key.
@@ -125,7 +132,7 @@ where
     }
 }
 
-impl<'t, 'a, KV, K> ForUpdate<'t, 'a, KV, K>
+impl<'t, 'a, KV, K> FetchedRecord<'t, 'a, KV, K>
 where
     KV: KVApi + ?Sized,
     KV::Error: From<InvalidArgument>,
