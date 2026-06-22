@@ -275,6 +275,10 @@ impl ReclusterTableInterpreter {
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
                     hook_vacuum_temp_files(&ctx)?;
+                    // RECLUSTER FINAL runs internal pipelines under one query id.
+                    // Do not let later rounds reuse consumed spill progress and
+                    // repeatedly probe the same stale spill meta file.
+                    ctx.clear_cluster_spill_progress();
                     hook_disk_temp_dir(&ctx)?;
                     match &info.res {
                         Ok(_) => {
