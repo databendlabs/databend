@@ -57,7 +57,6 @@ pub enum StorageParams {
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
     Memory,
-    Moka(StorageMokaConfig),
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
@@ -84,7 +83,6 @@ impl StorageParams {
             StorageParams::Http(_) => "http",
             StorageParams::Ipfs(_) => "ipfs",
             StorageParams::Memory => "memory",
-            StorageParams::Moka(_) => "moka",
             StorageParams::Obs(_) => "obs",
             StorageParams::Oss(_) => "oss",
             StorageParams::S3(_) => "s3",
@@ -164,7 +162,6 @@ impl StorageParams {
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
-            StorageParams::Moka(_) => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -185,7 +182,6 @@ impl StorageParams {
             StorageParams::Http(_) => {}
             StorageParams::Ipfs(v) => v.root = f(&v.root),
             StorageParams::Memory => {}
-            StorageParams::Moka(_) => {}
             StorageParams::Obs(v) => v.root = f(&v.root),
             StorageParams::Oss(v) => v.root = f(&v.root),
             StorageParams::S3(v) => v.root = f(&v.root),
@@ -296,7 +292,7 @@ impl StorageParams {
     /// OSS, OBS, COS, Azblob), file-like backends (FS, WebHDFS, HDFS), as well as HuggingFace
     /// and IPFS locations. HTTP locations render the expanded glob patterns (if any), so the
     /// output can differ from the original shorthand. Backends that don't carry enough context
-    /// (Memory, Moka, None) return `None`.
+    /// (Memory, None) return `None`.
     pub fn url(&self) -> Option<String> {
         match self {
             StorageParams::Azblob(cfg) => bucket_style_url("azblob", &cfg.container, &cfg.root),
@@ -343,7 +339,6 @@ impl StorageParams {
                 Some(format!("ipfs://ipfs{}", normalized_dir_path(suffix, true)))
             }
             StorageParams::Memory => None,
-            StorageParams::Moka(_) => None,
             StorageParams::Obs(cfg) => bucket_style_url("obs", &cfg.bucket, &cfg.root),
             StorageParams::Oss(cfg) => bucket_style_url("oss", &cfg.bucket, &cfg.root),
             StorageParams::S3(cfg) => bucket_style_url("s3", &cfg.bucket, &cfg.root),
@@ -426,8 +421,7 @@ impl StorageParams {
             | StorageParams::Hdfs(_)
             | StorageParams::Http(_)
             | StorageParams::Ipfs(_)
-            | StorageParams::Memory
-            | StorageParams::Moka(_) => false,
+            | StorageParams::Memory => false,
         }
     }
 
@@ -449,7 +443,6 @@ impl Display for StorageParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
@@ -956,27 +949,6 @@ impl Debug for StorageOssConfig {
                 &mask_string(&self.server_side_encryption_key_id, 3),
             )
             .finish()
-    }
-}
-
-/// config for Moka Object Storage Service
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct StorageMokaConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for StorageMokaConfig {
-    fn default() -> Self {
-        Self {
-            // Use 1G as default.
-            max_capacity: 1024 * 1024 * 1024,
-            // Use 1 hour as default time to live
-            time_to_live: 3600,
-            // Use 10 minutes as default time to idle.
-            time_to_idle: 600,
-        }
     }
 }
 
