@@ -117,7 +117,7 @@ async fn test_for_update_becomes_guard() -> anyhow::Result<()> {
     txn.get(k.clone()).await?;
     txn.get_for_update(k.clone()).await?;
     let fu = txn.get_for_update(k.clone()).await?;
-    fu.stage_put(&meta())?;
+    fu.stage_put(&meta());
 
     // A plain get of another key arms no guard.
     txn.get(other.clone()).await?;
@@ -144,7 +144,7 @@ async fn test_plain_get_adds_no_guard() -> anyhow::Result<()> {
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
     txn.get(k1.clone()).await?;
-    txn.stage_put(&k2, &meta())?;
+    txn.stage_put(&k2, &meta());
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -165,7 +165,7 @@ async fn test_get_then_for_update_upgrades() -> anyhow::Result<()> {
     let commit = txn.clone();
     txn.get(k.clone()).await?;
     let fu = txn.get_for_update(k.clone()).await?;
-    fu.stage_put(&meta())?;
+    fu.stage_put(&meta());
     commit.execute().await?;
 
     assert_eq!(mem.read_count(), 1, "no second backend read");
@@ -193,7 +193,7 @@ async fn test_run_retries_on_conflict() -> anyhow::Result<()> {
             async move {
                 calls.fetch_add(1, Ordering::SeqCst);
                 let fu = txn.get_for_update(k).await?;
-                fu.stage_put(&meta())?;
+                fu.stage_put(&meta());
                 Ok(())
             }
         })
@@ -222,7 +222,7 @@ async fn test_multiple_for_update_held() -> anyhow::Result<()> {
     let b = txn.get_for_update(k2.clone()).await?;
     assert_eq!(a.seq(), 7);
     assert_eq!(b.seq(), 9);
-    a.stage_put(&meta())?;
+    a.stage_put(&meta());
     b.stage_delete();
 
     commit.execute().await?;
@@ -287,7 +287,7 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
 
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
-    txn.stage_put(&k1, &meta())?;
+    txn.stage_put(&k1, &meta());
     txn.stage_delete(&k2);
     commit.execute().await?;
 
@@ -343,7 +343,7 @@ async fn test_none_or_exist() -> anyhow::Result<()> {
 
     let fu = txn.get_for_update(absent.clone()).await?;
     let absent = fu.none_or_exists("ctx").unwrap();
-    absent.stage_put(&TableId::new(7))?;
+    absent.stage_put(&TableId::new(7));
 
     let fu = txn.get_for_update(present.clone()).await?;
     let err = match fu.none_or_exists("ctx") {

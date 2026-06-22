@@ -164,7 +164,7 @@ where
                 let new = new.none_or_exists(ctx).map_err(AppError::from)?;
 
                 // Move the id from the old name to the new one.
-                new.stage_put(dict_id)?;
+                new.stage_put(dict_id);
                 old.stage_delete();
 
                 Ok(())

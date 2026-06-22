@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::kvapi;
-use databend_meta_client::types::InvalidArgument;
 
 use crate::MetaTxn;
 
@@ -36,12 +34,11 @@ where
 
 impl<'t, 'a, KV, K> FetchedRecordTarget<'t, 'a, KV, K>
 where
-    KV: KVApi + ?Sized,
-    KV::Error: From<InvalidArgument>,
+    KV: ?Sized,
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
-    pub(crate) fn stage_put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+    pub(crate) fn stage_put(self, value: &K::ValueType) {
         self.txn.stage_put(&self.key, value)
     }
 }
