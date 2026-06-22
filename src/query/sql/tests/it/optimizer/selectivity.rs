@@ -333,6 +333,39 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
+        "topn_equality_cache_fallback",
+        "Approximate TopN hits should fall back when the lower bound does not exceed the NDV estimate.",
+    )?;
+    let fallback_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(999),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let fallback_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(42)),
+            count: 500,
+            error: 450,
+        }],
+        min_index: None,
+    })]);
+    for expr in ["id = 42", "id != 42"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            fallback_top_n_stats.clone(),
+            StatCardinality::estimate(1000.0),
+            Some(fallback_top_n.clone()),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
         "topn_nullable_not_equal",
         "TopN inequality estimates should exclude null rows from SQL not-equal matches.",
     )?;
