@@ -296,11 +296,6 @@ fn test_memory_url_none() {
 }
 
 #[test]
-fn test_none_url_none() {
-    assert_eq!(StorageParams::None.url(), None);
-}
-
-#[test]
 fn test_moka_url_none() {
     assert_eq!(
         StorageParams::Moka(StorageMokaConfig::default()).url(),
@@ -387,7 +382,6 @@ fn test_has_credentials_matrix() {
             false,
             "moka",
         ),
-        (StorageParams::None, false, "none"),
     ];
 
     for (params, expected, label) in cases {

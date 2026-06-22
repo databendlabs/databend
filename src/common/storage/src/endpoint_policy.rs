@@ -305,8 +305,7 @@ fn storage_params_endpoints(sp: &StorageParams) -> Vec<&str> {
         | StorageParams::Hdfs(_)
         | StorageParams::Memory
         | StorageParams::Moka(_)
-        | StorageParams::Huggingface(_)
-        | StorageParams::None => Vec::new(),
+        | StorageParams::Huggingface(_) => Vec::new(),
     }
 }
 
@@ -1022,7 +1021,6 @@ mod tests {
         for sp in [
             StorageParams::Fs(StorageFsConfig::default()),
             StorageParams::Memory,
-            StorageParams::None,
         ] {
             assert!(storage_params_endpoints(&sp).is_empty());
         }

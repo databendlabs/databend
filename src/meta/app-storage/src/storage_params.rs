@@ -64,11 +64,6 @@ pub enum StorageParams {
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
     Huggingface(StorageHuggingfaceConfig),
-
-    /// None means this storage type is none.
-    ///
-    /// This type is mostly for cache which mean bypass the cache logic.
-    None,
 }
 
 impl Default for StorageParams {
@@ -96,7 +91,6 @@ impl StorageParams {
             StorageParams::Webhdfs(_) => "webhdfs",
             StorageParams::Cos(_) => "cos",
             StorageParams::Huggingface(_) => "huggingface",
-            StorageParams::None => "none",
         }
     }
 
@@ -178,7 +172,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Huggingface(_) => true,
-            StorageParams::None => false,
         }
     }
 
@@ -200,7 +193,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
             StorageParams::Huggingface(v) => v.root = f(&v.root),
-            StorageParams::None => {}
         };
 
         self
@@ -377,7 +369,6 @@ impl StorageParams {
                     normalized_dir_path(&cfg.root, true)
                 ))
             }
-            StorageParams::None => None,
         }
     }
 
@@ -436,8 +427,7 @@ impl StorageParams {
             | StorageParams::Http(_)
             | StorageParams::Ipfs(_)
             | StorageParams::Memory
-            | StorageParams::Moka(_)
-            | StorageParams::None => false,
+            | StorageParams::Moka(_) => false,
         }
     }
 
@@ -460,7 +450,6 @@ impl Display for StorageParams {
         match self {
             StorageParams::Memory => write!(f, "memory"),
             StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
-            StorageParams::None => write!(f, "none"),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
