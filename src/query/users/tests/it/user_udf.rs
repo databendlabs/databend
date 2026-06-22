@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType as DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;

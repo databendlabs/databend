@@ -26,7 +26,6 @@ use databend_common_expression as ce;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -313,8 +312,8 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
         ]),
         language: "python".to_string(),
         arg_names: vec![],
-        arg_types: vec![DataType::String],
-        return_type: DataType::Boolean,
+        arg_types: vec![TableDataType::String],
+        return_type: TableDataType::Boolean,
         immutable: None,
     }
 }

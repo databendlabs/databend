@@ -36,10 +36,11 @@ use target::FetchedRecordTarget;
 ///
 /// It borrows the transaction and holds the key and value read. If it came from
 /// [`MetaTxn::get_for_update`], the `eq_seq` guard was installed in the
-/// transaction's read set when the key was read. Writing through it
-/// ([`put`](Self::put) / [`delete`](Self::delete)) goes back to that
-/// transaction and reuses that key, so a write cannot target a different key
-/// than the one guarded, and replaces any operation previously staged for it.
+/// transaction's read set when the key was read. Staging a write through it
+/// ([`stage_put`](Self::stage_put) / [`stage_delete`](Self::stage_delete)) goes
+/// back to that transaction and reuses that key, so a write cannot target a
+/// different key than the one guarded, and replaces any operation previously
+/// staged for it.
 ///
 /// The handle borrows the transaction shared-ly (the transaction keeps its read
 /// and write sets behind a lock), so several handles may be held at once: read a
@@ -84,7 +85,7 @@ where
     /// follow-up code can use the seq/value without re-checking the option.
     ///
     /// [`unknown_error`]: KeyUnknownBuilder::unknown_error
-    pub fn some_or_unknown_error(
+    pub fn some_or_unknown(
         self,
         ctx: impl Display,
     ) -> Result<PresentRecord<'t, 'a, KV, K>, K::UnknownError>
@@ -105,7 +106,7 @@ where
     /// follow-up code can create the value without re-checking the option.
     ///
     /// [`exist_error`]: KeyExistsBuilder::exist_error
-    pub fn none_or_exist_error(
+    pub fn none_or_exists(
         self,
         ctx: impl Display,
     ) -> Result<AbsentRecord<'t, 'a, KV, K>, K::ExistError>
@@ -127,8 +128,8 @@ where
     }
 
     /// Stage a delete of the read key.
-    pub fn delete(self) {
-        self.target.delete();
+    pub fn stage_delete(self) {
+        self.target.stage_delete();
     }
 }
 
@@ -140,7 +141,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     /// Stage a put to the read key.
-    pub fn put(self, value: &K::ValueType) -> Result<(), KV::Error> {
-        self.target.put(value)
+    pub fn stage_put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+        self.target.stage_put(value)
     }
 }

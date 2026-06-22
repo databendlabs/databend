@@ -68,9 +68,9 @@ where KV: KVApi + ?Sized
     /// ```ignore
     /// MetaTxnManager::new(kv, ctx)
     ///     .run(|txn| async move {
-    ///         let cur = txn.get_for_update(&key).await?;
+    ///         let cur = txn.get_for_update(key.clone()).await?;
     ///         // ... inspect `cur`, then stage writes ...
-    ///         txn.put(&key, &value)?;
+    ///         txn.stage_put(&key, &value)?;
     ///         Ok(())
     ///     })
     ///     .await
@@ -85,9 +85,10 @@ where KV: KVApi + ?Sized
         loop {
             trials.next().unwrap()?.await;
 
-            // The closure gets only the staging handle. The manager keeps the
-            // commit handle so user code cannot drain state or bypass retries.
-            let (txn, commit) = MetaTxn::new(self.kv);
+            // The closure gets a cloned handle. The manager keeps one so user
+            // code cannot drain state or bypass retries.
+            let txn = MetaTxn::new(self.kv);
+            let commit = txn.clone();
             let out = build(txn).await?;
 
             // A closure that stages no write produced its result purely from the

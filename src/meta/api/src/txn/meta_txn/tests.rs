@@ -73,10 +73,10 @@ async fn test_read_is_cached() -> anyhow::Result<()> {
     let k = key(1);
     mem.seed(&k.to_string_key(), 7, encoded());
 
-    let (txn, _commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
 
     // First read snapshots the key at seq 7.
-    let first = txn.get_for_update(&k).await?;
+    let first = txn.get_for_update(k.clone()).await?;
     assert_eq!(first.seq_v().map(|s| s.seq), Some(7));
     assert_eq!(first.value(), Some(&meta()));
 
@@ -89,7 +89,7 @@ async fn test_read_is_cached() -> anyhow::Result<()> {
     );
 
     // The transaction serves its cached snapshot, not the new backend record.
-    let second = txn.get_for_update(&k).await?;
+    let second = txn.get_for_update(k.clone()).await?;
     assert_eq!(second.seq(), 7, "cached snapshot, not backend seq 9");
     assert_eq!(
         second.into_value(),
@@ -110,16 +110,17 @@ async fn test_for_update_becomes_guard() -> anyhow::Result<()> {
     mem.seed(&k.to_string_key(), 7, encoded());
     mem.seed(&other.to_string_key(), 5, encoded());
 
-    let (txn, commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
+    let commit = txn.clone();
 
     // The same key read several times — plain and for update — yields one guard.
-    txn.get(&k).await?;
-    txn.get_for_update(&k).await?;
-    let fu = txn.get_for_update(&k).await?;
-    fu.put(&meta())?;
+    txn.get(k.clone()).await?;
+    txn.get_for_update(k.clone()).await?;
+    let fu = txn.get_for_update(k.clone()).await?;
+    fu.stage_put(&meta())?;
 
     // A plain get of another key arms no guard.
-    txn.get(&other).await?;
+    txn.get(other.clone()).await?;
 
     assert!(commit.execute().await?);
 
@@ -140,9 +141,10 @@ async fn test_plain_get_adds_no_guard() -> anyhow::Result<()> {
     let (k1, k2) = (key(1), key(2));
     mem.seed(&k1.to_string_key(), 7, encoded());
 
-    let (txn, commit) = MetaTxn::new(&mem);
-    txn.get(&k1).await?;
-    txn.put(&k2, &meta())?;
+    let txn = MetaTxn::new(&mem);
+    let commit = txn.clone();
+    txn.get(k1.clone()).await?;
+    txn.stage_put(&k2, &meta())?;
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -159,10 +161,11 @@ async fn test_get_then_for_update_upgrades() -> anyhow::Result<()> {
     let k = key(1);
     mem.seed(&k.to_string_key(), 7, encoded());
 
-    let (txn, commit) = MetaTxn::new(&mem);
-    txn.get(&k).await?;
-    let fu = txn.get_for_update(&k).await?;
-    fu.put(&meta())?;
+    let txn = MetaTxn::new(&mem);
+    let commit = txn.clone();
+    txn.get(k.clone()).await?;
+    let fu = txn.get_for_update(k.clone()).await?;
+    fu.stage_put(&meta())?;
     commit.execute().await?;
 
     assert_eq!(mem.read_count(), 1, "no second backend read");
@@ -184,13 +187,15 @@ async fn test_run_retries_on_conflict() -> anyhow::Result<()> {
 
     let calls = AtomicUsize::new(0);
     let calls = &calls;
-    let k = &k;
     let res: Result<(), KVAppError> = MetaTxnManager::new(&mem, "test")
-        .run(|txn| async move {
-            calls.fetch_add(1, Ordering::SeqCst);
-            let fu = txn.get_for_update(k).await?;
-            fu.put(&meta())?;
-            Ok(())
+        .run(|txn| {
+            let k = k.clone();
+            async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                let fu = txn.get_for_update(k).await?;
+                fu.stage_put(&meta())?;
+                Ok(())
+            }
         })
         .await;
 
@@ -210,14 +215,15 @@ async fn test_multiple_for_update_held() -> anyhow::Result<()> {
     mem.seed(&k1.to_string_key(), 7, encoded());
     mem.seed(&k2.to_string_key(), 9, encoded());
 
-    let (txn, commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
+    let commit = txn.clone();
 
-    let a = txn.get_for_update(&k1).await?;
-    let b = txn.get_for_update(&k2).await?;
+    let a = txn.get_for_update(k1.clone()).await?;
+    let b = txn.get_for_update(k2.clone()).await?;
     assert_eq!(a.seq(), 7);
     assert_eq!(b.seq(), 9);
-    a.put(&meta())?;
-    b.delete();
+    a.stage_put(&meta())?;
+    b.stage_delete();
 
     commit.execute().await?;
 
@@ -249,10 +255,10 @@ async fn test_meta_is_cached() -> anyhow::Result<()> {
         SeqV::new_with_meta(7, Some(seeded_meta.clone()), encoded()),
     );
 
-    let (txn, _commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
 
     // First read decodes the value and carries the meta.
-    let first = txn.get_for_update(&k).await?;
+    let first = txn.get_for_update(k.clone()).await?;
     assert_eq!(
         first.seq_v().and_then(|s| s.meta.as_ref()),
         Some(&seeded_meta)
@@ -261,7 +267,7 @@ async fn test_meta_is_cached() -> anyhow::Result<()> {
     // Replace the backend record with one that has no meta; the cached snapshot
     // still carries the original meta.
     mem.seed_seqv(&k.to_string_key(), SeqV::new(9, encoded()));
-    let second = txn.get_for_update(&k).await?;
+    let second = txn.get_for_update(k.clone()).await?;
     assert_eq!(
         second.seq_v().and_then(|s| s.meta.as_ref()),
         Some(&seeded_meta),
@@ -272,15 +278,17 @@ async fn test_meta_is_cached() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `put` and `delete` each stage the matching operation, keyed by its target.
+/// `stage_put` and `stage_delete` each stage the matching operation, keyed by
+/// its target.
 #[tokio::test]
 async fn test_writes_generate_operations() -> anyhow::Result<()> {
     let mem = MemKV::new();
     let (k1, k2) = (key(1), key(2));
 
-    let (txn, commit) = MetaTxn::new(&mem);
-    txn.put(&k1, &meta())?;
-    txn.delete(&k2);
+    let txn = MetaTxn::new(&mem);
+    let commit = txn.clone();
+    txn.stage_put(&k1, &meta())?;
+    txn.stage_delete(&k2);
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -304,15 +312,15 @@ async fn test_some_or_unknown() -> anyhow::Result<()> {
         encode_pb(&DatabaseMeta::default()).unwrap(),
     );
 
-    let (txn, _commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
 
-    let fu = txn.get_for_update(&present).await?;
-    let present = fu.some_or_unknown_error("ctx").unwrap();
+    let fu = txn.get_for_update(present).await?;
+    let present = fu.some_or_unknown("ctx").unwrap();
     assert_eq!(present.seq(), 3);
     assert_eq!(present.seq_v().seq, 3);
 
-    let fu = txn.get_for_update(&absent).await?;
-    let err = match fu.some_or_unknown_error("ctx") {
+    let fu = txn.get_for_update(absent).await?;
+    let err = match fu.some_or_unknown("ctx") {
         Ok(_) => panic!("expected unknown key"),
         Err(err) => err,
     };
@@ -335,14 +343,14 @@ async fn test_none_or_exist() -> anyhow::Result<()> {
         encode_pb(&TableId::new(8)).unwrap(),
     );
 
-    let (txn, _commit) = MetaTxn::new(&mem);
+    let txn = MetaTxn::new(&mem);
 
-    let fu = txn.get_for_update(&absent).await?;
-    let absent = fu.none_or_exist_error("ctx").unwrap();
-    absent.put(&TableId::new(7))?;
+    let fu = txn.get_for_update(absent.clone()).await?;
+    let absent = fu.none_or_exists("ctx").unwrap();
+    absent.stage_put(&TableId::new(7))?;
 
-    let fu = txn.get_for_update(&present).await?;
-    let err = match fu.none_or_exist_error("ctx") {
+    let fu = txn.get_for_update(present.clone()).await?;
+    let err = match fu.none_or_exists("ctx") {
         Ok(_) => panic!("expected existing key"),
         Err(err) => err,
     };
