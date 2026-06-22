@@ -1164,6 +1164,7 @@ impl Table for FuseTable {
                 .unwrap_or_default();
             let top_n = table_statistics
                 .as_ref()
+                .filter(|v| v.row_count == snapshot.summary.row_count)
                 .map(|v| v.top_n.clone())
                 .unwrap_or_default();
             let stats_row_count = additional_stats_meta

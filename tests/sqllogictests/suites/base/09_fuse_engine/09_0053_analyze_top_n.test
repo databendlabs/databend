@@ -77,4 +77,23 @@ EXPLAIN SELECT * FROM t_topn_without_snapshot_stats WHERE a = 1
 table: default.db_09_0053.t_topn_without_snapshot_stats<slt:ignore>estimated rows: 90.00
 
 statement ok
+CREATE TABLE t_topn_after_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_after_append
+SELECT if(number < 50, 1, 2)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_after_append
+
+statement ok
+INSERT INTO t_topn_after_append
+SELECT 1::int FROM numbers(900)
+
+query T
+EXPLAIN SELECT * FROM t_topn_after_append WHERE a = 1
+----
+table: default.db_09_0053.t_topn_after_append<slt:ignore>estimated rows: 500.00
+
+statement ok
 DROP DATABASE db_09_0053
