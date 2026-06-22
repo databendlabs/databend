@@ -74,6 +74,7 @@ impl CollectStatisticsOptimizer {
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
                 let mut top_n = HashMap::new();
+                let collect_top_n = scan.change_type.is_none();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -89,8 +90,9 @@ impl CollectStatisticsOptimizer {
                             let histogram =
                                 column_statistics_provider.histogram(*column_id as ColumnId);
                             histograms.insert(*column_index, histogram);
-                            if let Some(column_top_n) =
-                                column_statistics_provider.top_n(*column_id as ColumnId)
+                            if collect_top_n
+                                && let Some(column_top_n) =
+                                    column_statistics_provider.top_n(*column_id as ColumnId)
                             {
                                 top_n.insert(*column_index, column_top_n);
                             }
