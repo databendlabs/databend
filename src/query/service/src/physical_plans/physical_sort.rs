@@ -1084,7 +1084,7 @@ fn string_prefix_cluster_key_matches_expr(
 
     expr_matches_filter_arg(&args[0], filter_expr)
         && is_number_constant(&args[1], 1)
-        && is_number_constant(&args[2], 8)
+        && positive_number_constant(&args[2])
 }
 
 fn is_number_constant(expr: &RemoteExpr<String>, expected: i128) -> bool {
@@ -1094,6 +1094,17 @@ fn is_number_constant(expr: &RemoteExpr<String>, expected: i128) -> bool {
             ..
         } => number.integer_to_i128().is_some_and(|v| v == expected),
         RemoteExpr::Cast { is_try, expr, .. } if !*is_try => is_number_constant(expr, expected),
+        _ => false,
+    }
+}
+
+fn positive_number_constant(expr: &RemoteExpr<String>) -> bool {
+    match expr {
+        RemoteExpr::Constant {
+            scalar: Scalar::Number(number),
+            ..
+        } => number.integer_to_i128().is_some_and(|v| v > 0),
+        RemoteExpr::Cast { is_try, expr, .. } if !*is_try => positive_number_constant(expr),
         _ => false,
     }
 }
@@ -1370,6 +1381,14 @@ mod tests {
         function("contains", vec![array, expr], DataType::Boolean)
     }
 
+    fn substr(expr: RemoteExpr<String>, start: i32, len: i32) -> RemoteExpr<String> {
+        function(
+            "substr",
+            vec![expr, int_constant(start), int_constant(len)],
+            DataType::String,
+        )
+    }
+
     fn array(args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
         function(
             "array",
@@ -1493,6 +1512,26 @@ mod tests {
                 int_column("b")
             )
         ));
+    }
+
+    #[test]
+    fn test_filter_fixed_prefix_expr_matches_any_positive_substr_len() {
+        let address = column("wallet_address", DataType::String);
+        let filter = eq(address.clone(), RemoteExpr::Constant {
+            span: None,
+            scalar: Scalar::String("0x1234567890abcdef".to_string()),
+            data_type: DataType::String,
+        });
+
+        assert!(expr_fixed_by_filter_expr(
+            &substr(address.clone(), 1, 8),
+            &filter
+        ));
+        assert!(expr_fixed_by_filter_expr(
+            &substr(address.clone(), 1, 16),
+            &filter
+        ));
+        assert!(!expr_fixed_by_filter_expr(&substr(address, 1, 0), &filter));
     }
 
     #[test]
