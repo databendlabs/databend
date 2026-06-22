@@ -14,8 +14,6 @@
 
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
 use databend_common_protos::pb::UdtfArg;
@@ -60,12 +58,12 @@ impl FromToProto for mt::UDFServer {
 
         let mut arg_types = Vec::with_capacity(p.arg_types.len());
         for arg_type in p.arg_types {
-            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            let arg_type = TableDataType::from_pb(arg_type)?;
             arg_types.push(arg_type);
         }
-        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
-            || Incompatible::new("UdfServer.return_type can not be None".to_string()),
-        )?)?);
+        let return_type = TableDataType::from_pb(p.return_type.ok_or_else(|| {
+            Incompatible::new("UdfServer.return_type can not be None".to_string())
+        })?)?;
 
         Ok(mt::UDFServer {
             address: p.address,
@@ -82,24 +80,10 @@ impl FromToProto for mt::UDFServer {
     fn to_pb(&self) -> Result<pb::UdfServer, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(arg_type);
         }
-        let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| {
-                Incompatible::new(format!(
-                    "Convert DataType to TableDataType failed: {}",
-                    e.message()
-                ))
-            })?
-            .to_pb()?;
+        let return_type = self.return_type.to_pb()?;
 
         Ok(pb::UdfServer {
             ver: VER,
@@ -126,12 +110,12 @@ impl FromToProto for mt::UDFScript {
 
         let mut arg_types = Vec::with_capacity(p.arg_types.len());
         for arg_type in p.arg_types {
-            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            let arg_type = TableDataType::from_pb(arg_type)?;
             arg_types.push(arg_type);
         }
-        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
-            || Incompatible::new("UDFScript.return_type can not be None".to_string()),
-        )?)?);
+        let return_type = TableDataType::from_pb(p.return_type.ok_or_else(|| {
+            Incompatible::new("UDFScript.return_type can not be None".to_string())
+        })?)?;
 
         Ok(mt::UDFScript {
             code: p.code,
@@ -149,24 +133,10 @@ impl FromToProto for mt::UDFScript {
     fn to_pb(&self) -> Result<pb::UdfScript, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(arg_type);
         }
-        let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| {
-                Incompatible::new(format!(
-                    "Convert DataType to TableDataType failed: {}",
-                    e.message()
-                ))
-            })?
-            .to_pb()?;
+        let return_type = self.return_type.to_pb()?;
 
         Ok(pb::UdfScript {
             ver: VER,
@@ -195,19 +165,18 @@ impl FromToProto for mt::UDAFScript {
         let arg_types = p
             .arg_types
             .into_iter()
-            .map(|arg_type| Ok((&TableDataType::from_pb(arg_type)?).into()))
+            .map(TableDataType::from_pb)
             .collect::<Result<Vec<_>, _>>()?;
 
         let state_fields = p
             .state_fields
             .into_iter()
-            .map(|field| TableField::from_pb(field).map(|field| (&field).into()))
+            .map(TableField::from_pb)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let return_type = (&TableDataType::from_pb(p.return_type.ok_or_else(|| {
+        let return_type = TableDataType::from_pb(p.return_type.ok_or_else(|| {
             Incompatible::new("UDAFScript.return_type can not be None".to_string())
-        })?)?)
-            .into();
+        })?)?;
 
         Ok(mt::UDAFScript {
             code: p.code,
@@ -224,42 +193,17 @@ impl FromToProto for mt::UDAFScript {
     fn to_pb(&self) -> Result<pb::UdafScript, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(arg_type);
         }
 
         let state_fields = self
             .state_fields
             .iter()
-            .map(|field| {
-                TableField::new(
-                    field.name(),
-                    infer_schema_type(field.data_type()).map_err(|e| {
-                        Incompatible::new(format!(
-                            "Convert DataType to TableDataType failed: {}",
-                            e.message()
-                        ))
-                    })?,
-                )
-                .to_pb()
-            })
+            .map(TableField::to_pb)
             .collect::<Result<_, _>>()?;
 
-        let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| {
-                Incompatible::new(format!(
-                    "Convert DataType to TableDataType failed: {}",
-                    e.message()
-                ))
-            })?
-            .to_pb()?;
+        let return_type = self.return_type.to_pb()?;
 
         Ok(pb::UdafScript {
             ver: VER,
@@ -294,7 +238,7 @@ impl FromToProto for mt::UDTF {
             })?;
             let ty = TableDataType::from_pb(ty_pb)?;
 
-            arg_types.push((arg_ty.name, (&ty).into()));
+            arg_types.push((arg_ty.name, ty));
         }
 
         let mut return_types = Vec::new();
@@ -304,7 +248,7 @@ impl FromToProto for mt::UDTF {
             })?;
             let ty = TableDataType::from_pb(ty_pb)?;
 
-            return_types.push((return_ty.name, (&ty).into()));
+            return_types.push((return_ty.name, ty));
         }
 
         Ok(Self {
@@ -317,14 +261,7 @@ impl FromToProto for mt::UDTF {
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for (arg_name, arg_type) in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(UdtfArg {
                 name: arg_name.clone(),
                 ty: Some(arg_type),
@@ -333,14 +270,7 @@ impl FromToProto for mt::UDTF {
 
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for (return_name, return_type) in self.return_types.iter() {
-            let return_type = infer_schema_type(return_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let return_type = return_type.to_pb()?;
             return_types.push(UdtfArg {
                 name: return_name.clone(),
                 ty: Some(return_type),
@@ -370,7 +300,7 @@ impl FromToProto for mt::UDTFServer {
 
         let mut arg_types = Vec::with_capacity(p.arg_types.len());
         for arg_type in p.arg_types {
-            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            let arg_type = TableDataType::from_pb(arg_type)?;
             arg_types.push(arg_type);
         }
         let mut return_types = Vec::new();
@@ -380,7 +310,7 @@ impl FromToProto for mt::UDTFServer {
             })?;
             let ty = TableDataType::from_pb(ty_pb)?;
 
-            return_types.push((return_ty.name, (&ty).into()));
+            return_types.push((return_ty.name, ty));
         }
 
         Ok(mt::UDTFServer {
@@ -398,26 +328,12 @@ impl FromToProto for mt::UDTFServer {
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(arg_type);
         }
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for (return_name, return_type) in self.return_types.iter() {
-            let return_type = infer_schema_type(return_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let return_type = return_type.to_pb()?;
             return_types.push(UdtfArg {
                 name: return_name.clone(),
                 ty: Some(return_type),
@@ -457,7 +373,7 @@ impl FromToProto for mt::ScalarUDF {
             })?;
             let ty = TableDataType::from_pb(ty_pb)?;
 
-            arg_types.push((arg_ty.name, (&ty).into()));
+            arg_types.push((arg_ty.name, ty));
         }
 
         let return_type_pb = p.return_type.ok_or_else(|| {
@@ -467,7 +383,7 @@ impl FromToProto for mt::ScalarUDF {
 
         Ok(Self {
             arg_types,
-            return_type: (&return_type).into(),
+            return_type,
             definition: p.definition,
         })
     }
@@ -475,28 +391,14 @@ impl FromToProto for mt::ScalarUDF {
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for (arg_name, arg_type) in self.arg_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
+            let arg_type = arg_type.to_pb()?;
             arg_types.push(UdtfArg {
                 name: arg_name.clone(),
                 ty: Some(arg_type),
             });
         }
 
-        let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| {
-                Incompatible::new(format!(
-                    "Convert DataType to TableDataType failed: {}",
-                    e.message()
-                ))
-            })?
-            .to_pb()?;
+        let return_type = self.return_type.to_pb()?;
 
         Ok(pb::ScalarUdf {
             ver: VER,

@@ -3,8 +3,8 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-SEGMENTS=$(echo "select file_location from fuse_segment('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
-BLOCKS=$(echo "select block_location from fuse_block('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
+SEGMENTS=$(echo "select file_location from fuse_segment('default','test_vacuum2');" | bendsql_connect_root)
+BLOCKS=$(echo "select block_location from fuse_block('default','test_vacuum2');" | bendsql_connect_root)
 
 stmt "insert into test_vacuum2 values(2);"
 
@@ -18,7 +18,7 @@ done
 
 stmt "set data_retention_time_in_days = 2;truncate table test_vacuum2;"
 
-SNAPSHOTS=$(echo "select snapshot_location from fuse_snapshot('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
+SNAPSHOTS=$(echo "select snapshot_location from fuse_snapshot('default','test_vacuum2');" | bendsql_connect_root)
 IFS=$'\n' read -d '' -r -a snapshots <<< "$SNAPSHOTS"
 to_be_vacuumed=("${snapshots[@]}" "${segments[@]}" "${blocks[@]}" "${blooms[@]}")
 
@@ -29,7 +29,7 @@ stmt "insert into test_vacuum2 values(3);"
 # should have 4 snapshots
 query "select count(*) from fuse_snapshot('default','test_vacuum2')"
 
-RESULTS=$(echo "set data_retention_time_in_days = 0;select * from fuse_vacuum2('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
+RESULTS=$(echo "set data_retention_time_in_days = 0;select * from fuse_vacuum2('default','test_vacuum2');" | bendsql_connect_root)
 IFS=$'\n' read -d '' -r -a results <<< "$RESULTS"
 
 # verify the vacuum result

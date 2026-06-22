@@ -1768,6 +1768,7 @@ impl Binder {
             database,
             table,
             no_scan,
+            histogram_options,
         } = stmt;
 
         let (catalog, database, table) =
@@ -1778,6 +1779,13 @@ impl Binder {
             database,
             table,
             no_scan: *no_scan,
+            histogram_requested: histogram_options.is_some(),
+            histogram_algorithm: histogram_options
+                .as_ref()
+                .and_then(|options| options.algorithm.clone()),
+            histogram_kll_relative_error: histogram_options
+                .as_ref()
+                .and_then(|options| options.error_rate),
         })))
     }
 

@@ -222,6 +222,9 @@ pub struct AnalyzeTablePlan {
     pub database: String,
     pub table: String,
     pub no_scan: bool,
+    pub histogram_requested: bool,
+    pub histogram_algorithm: Option<String>,
+    pub histogram_kll_relative_error: Option<f64>,
 }
 
 impl AnalyzeTablePlan {

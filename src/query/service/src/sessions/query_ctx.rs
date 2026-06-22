@@ -126,8 +126,6 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
-#[cfg(feature = "storage-stage")]
-use databend_common_storage::init_stage_operator;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;

@@ -30,7 +30,7 @@ IGNORE_RESULT;
 
 # Warm up the aggregate path to reduce noise from one-time allocations.
 for i in `seq 1 2`; do
-    $BENDSQL_CLIENT_CONNECT --query="$QUERY"
+    bendsql_connect_root --query="$QUERY"
 done
 
 PIDS=($(pgrep databend-query))
@@ -42,7 +42,7 @@ done
 
 for i in `seq 1 3`; do
     echo "executing $i"
-    $BENDSQL_CLIENT_CONNECT --query="$QUERY"
+    bendsql_connect_root --query="$QUERY"
 done
 
 sleep 15

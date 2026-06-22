@@ -393,11 +393,6 @@ impl FileFormatParams {
                     output_header,
                 })
             }
-            _ => {
-                return Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported file format {typ:?}"
-                )));
-            }
         };
         if old {
             Ok(params)

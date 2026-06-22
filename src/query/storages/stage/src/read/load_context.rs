@@ -39,7 +39,6 @@ pub struct LoadContext {
     pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
     pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
     pub pos_projection: Option<Vec<usize>>,
-    pub stage_root: String,
 
     pub is_select: bool,
     pub schema_evolution: bool,
@@ -72,7 +71,6 @@ impl LoadContext {
             pos_projection,
             block_compact_thresholds,
             internal_columns,
-            stage_table_info.stage_root.clone(),
             stage_table_info.copy_into_table_options.on_error.clone(),
         )?;
         load_context.schema_evolution = stage_table_info
@@ -90,7 +88,6 @@ impl LoadContext {
         pos_projection: Option<Vec<usize>>,
         block_compact_thresholds: BlockThresholds,
         internal_columns: Vec<InternalColumn>,
-        stage_root: String,
         on_error_mode: OnErrorMode,
     ) -> Result<Self> {
         let fields = schema
@@ -118,7 +115,6 @@ impl LoadContext {
             default_expr_evaluator,
             default_exprs,
             pos_projection,
-            stage_root,
             is_select,
             schema_evolution: false,
             settings,

@@ -1,8 +1,8 @@
 query TTIT
 select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/csv/it.csv (file_format=>'csv')
 ----
-testbucket/data/csv/it.csv b 0 1
-testbucket/data/csv/it.csv d 1 2
+csv/it.csv b 0 1
+csv/it.csv d 1 2
 
 statement ok
 create or replace table t(file_name string, c2 string,  `row` int, c1 int)
@@ -15,5 +15,5 @@ csv/it.csv 2 0 NULL NULL
 query TTII
 select * from t
 ----
-testbucket/data/csv/it.csv b 1 1
-testbucket/data/csv/it.csv d 2 2
+csv/it.csv b 1 1
+csv/it.csv d 2 2

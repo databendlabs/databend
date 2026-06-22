@@ -482,14 +482,6 @@ impl TableContextTableManagement for QueryContext {
             on_error: on_error_mode.unwrap_or_default(),
             ..Default::default()
         };
-        let operator = init_stage_operator(&stage_info)?;
-        let info = operator.info();
-        let stage_root = format!("{}{}", info.name(), info.root());
-        let stage_root = if stage_root.ends_with('/') {
-            stage_root
-        } else {
-            format!("{}/", stage_root)
-        };
         match &stage_info.file_format_params {
             FileFormatParams::Parquet(fmt) => {
                 if max_column_position > 1 {
@@ -537,7 +529,6 @@ impl TableContextTableManagement for QueryContext {
                         is_select: true,
                         default_exprs: None,
                         copy_into_table_options: copy_options.clone(),
-                        stage_root,
                         is_variant: true,
                         parquet_metas: None,
                     };
@@ -560,7 +551,6 @@ impl TableContextTableManagement for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    stage_root,
                     is_variant,
                     is_select: true,
                     copy_into_table_options: copy_options.clone(),
@@ -580,7 +570,6 @@ impl TableContextTableManagement for QueryContext {
                     files_to_copy,
                     is_select: true,
                     is_variant: true,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
@@ -604,7 +593,6 @@ impl TableContextTableManagement for QueryContext {
                     files_to_copy,
                     is_select: true,
                     is_variant: false,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
@@ -663,7 +651,6 @@ impl TableContextTableManagement for QueryContext {
                     files_info,
                     files_to_copy,
                     is_select: true,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };

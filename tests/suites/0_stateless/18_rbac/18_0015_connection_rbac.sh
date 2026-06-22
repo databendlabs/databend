@@ -4,9 +4,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-export USER_A_CONNECT="bendsql_query_http_user_connect a 123 -A"
-export USER_B_CONNECT="bendsql_query_http_user_connect b 123 -A"
-export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
+export USER_A_CONNECT="bendsql_connect_user a 123 -A"
+export USER_B_CONNECT="bendsql_connect_user b 123 -A"
+export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 echo "=== OLD LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
@@ -70,7 +70,7 @@ grant role role1 to b;
 echo "--- USER b failed to create conn c1 because current role is public, can not create ---"
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_B_CONNECT
 
-echo "alter user b with default_role='role1';" | $BENDSQL_CLIENT_CONNECT
+echo "alter user b with default_role='role1';" | bendsql_connect_root
 
 echo "--- success, c1,c2,c3 owner role is role1 ---";
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_B_CONNECT
@@ -82,22 +82,22 @@ echo "DESC CONNECTION c3;" | $USER_B_CONNECT
 echo "show connections;" | $USER_B_CONNECT
 
 echo "--- transform c2'ownership from role1 to role2 ---"
-echo "grant ownership on connection c2 to role role2;" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on connection c2 to role role2;" | bendsql_connect_root
 echo "--- USER failed to desc conn c2, c2 role is role2 ---"
 echo "DESC CONNECTION c2;" | $USER_B_CONNECT
 echo "show connections;" | $USER_B_CONNECT
 
-echo "create user c identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role2 to c;" | $BENDSQL_CLIENT_CONNECT
+echo "create user c identified by '123';" | bendsql_connect_root
+echo "grant role role2 to c;" | bendsql_connect_root
 echo "--- only return one row c2 ---"
 echo "DESC CONNECTION c2;" | $USER_C_CONNECT
 echo "show connections;" | $USER_C_CONNECT
 echo "--- grant access connection c1 to role3 ---"
-echo "grant access connection on connection c1 to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role3 to c;" | $BENDSQL_CLIENT_CONNECT
+echo "grant access connection on connection c1 to role role3;" | bendsql_connect_root
+echo "grant role role3 to c;" | bendsql_connect_root
 echo "DESC CONNECTION c1;" | $USER_C_CONNECT
 echo "--- grant access connection c3 to role3 ---"
-echo "grant access connection on connection c3 to role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "grant access connection on connection c3 to role role3;" | bendsql_connect_root
 echo "DESC CONNECTION c3;" | $USER_C_CONNECT
 echo "--- return three rows c1,2,3 ---"
 echo "show connections;" | $USER_C_CONNECT
@@ -108,8 +108,8 @@ curl -s -u "b:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_
 echo "show grants on connection c2;" | $USER_B_CONNECT
 
 echo "--- revoke access connection from role3 , thne user c can not drop/use connection c1,3 ---"
-echo "revoke access connection on connection c1 from role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "revoke access connection on connection c3 from role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "revoke access connection on connection c1 from role role3;" | bendsql_connect_root
+echo "revoke access connection on connection c3 from role role3;" | bendsql_connect_root
 curl -s -u "c:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c1');\"}" | jq -r '.error.message' |grep 'Permission denied: privilege AccessConnection' |wc -l
 curl -s -u "c:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c3')\"}" | jq -r '.error.message' |grep 'Permission denied: privilege AccessConnection' |wc -l
 echo "show grants on connection c1;" | $USER_C_CONNECT

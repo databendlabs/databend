@@ -20,12 +20,12 @@ order by 1, 2;
 SQL
 
 for i in `seq 1 ${times}`;do
-	echo "$FUZZ_QUERY" | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_a.txt
+	echo "$FUZZ_QUERY" | bendsql_connect_root >> /tmp/fuzz_a.txt
 done
 
 
 for i in `seq 1 ${times}`;do
-	echo "$FUZZ_QUERY" | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_b.txt
+	echo "$FUZZ_QUERY" | bendsql_connect_root >> /tmp/fuzz_b.txt
 done
 
 diff /tmp/fuzz_a.txt /tmp/fuzz_b.txt && echo "OK"

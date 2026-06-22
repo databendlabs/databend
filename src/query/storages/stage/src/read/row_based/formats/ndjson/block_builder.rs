@@ -59,14 +59,14 @@ impl NdJsonDecoder {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         null_if: &[&str],
-        file_full_path: &str,
+        file_path: &str,
     ) -> std::result::Result<(), FileParseError> {
         // Use from_slice instead of from_reader: from_reader wraps the slice
         // in an IoRead adapter that reads byte-by-byte and disables serde_json's
         // slice fast path. Benchmarks on ~890 MiB of real NDJSON show a 2.5x
         // speedup from this change alone.
         let json: serde_json::Value =
-            serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_full_path))?;
+            serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_path))?;
         // todo: this is temporary
         if self.field_decoder.is_select {
             if let ColumnBuilder::Variant(column) = &mut columns[0] {
@@ -183,7 +183,7 @@ impl NdJsonDecoder {
                         format: "NDJSON".to_string(),
                         message: format!(
                             "schema evolution sample did not include all columns for File '{}'. Extra columns: {}. Please adjust SCHEMA_EVOLUTION sample options such as SAMPLE_FILES, SAMPLE_RECORDS_PER_FILE, or SAMPLE_TOTAL_RECORDS",
-                            file_full_path,
+                            file_path,
                             extra_columns.join(", "),
                         ),
                     });
@@ -289,7 +289,7 @@ impl RowDecoder for NdJsonDecoder {
 // - add info for size and next byte
 //
 // Use test in case of changes of serde_json.
-fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> FileParseError {
+fn map_json_error(err: serde_json::Error, data: &[u8], file_path: &str) -> FileParseError {
     let pos = if err.column() > 0 {
         err.column() - 1
     } else {
@@ -302,7 +302,7 @@ fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> 
         message = message[..p].to_string()
     }
 
-    message = format!("{message}, position {pos} of size {len} for File '{file_full_path}'");
+    message = format!("{message}, position {pos} of size {len} for File '{file_path}'");
     if err.column() < len {
         message = format!("{message}, next byte is '{}'", data[pos] as char)
     }
