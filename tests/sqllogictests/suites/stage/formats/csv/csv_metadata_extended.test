@@ -1,0 +1,32 @@
+## Test metadata$file_path (alias for metadata$filename)
+query TTIT
+select metadata$file_path, $2, metadata$file_row_number, $1 from @data_s3/csv/it.csv (file_format=>'csv')
+----
+csv/it.csv b 0 1
+csv/it.csv d 1 2
+
+## Test metadata$file_basename
+query TT
+select metadata$file_basename, $1 from @data_s3/csv/it.csv (file_format=>'csv')
+----
+it.csv 1
+it.csv 2
+
+## Test metadata$file_content_key is accessible (nullable)
+query TT
+select typeof(metadata$file_content_key), $1 from @data_s3/csv/it.csv (file_format=>'csv') limit 1
+----
+VARCHAR NULL 1
+
+## Test metadata$file_last_modified is accessible (nullable)
+query TT
+select typeof(metadata$file_last_modified), $1 from @data_s3/csv/it.csv (file_format=>'csv') limit 1
+----
+TIMESTAMP NULL 1
+
+## Test all metadata columns together
+query TTTIT
+select metadata$file_path, metadata$file_basename, $1, metadata$file_row_number, $2 from @data_s3/csv/it.csv (file_format=>'csv')
+----
+csv/it.csv it.csv 1 0 b
+csv/it.csv it.csv 2 1 d
