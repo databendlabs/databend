@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_base::uniq_id::GlobalUniq;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -30,9 +29,6 @@ use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
-
-/// Maximum number of row groups per file before rotating to a new file.
-const MAX_ROW_GROUPS_PER_FILE: usize = 2 << 15;
 
 fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result<Vec<DataBlock>> {
     let mut num_rows = 0;
@@ -57,62 +53,71 @@ fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result
 }
 
 struct PartitionFileWriter {
-    path: String,
     writer: SpillsDataWriter,
     schema: Option<DataSchemaRef>,
 }
 
 impl PartitionFileWriter {
-    fn create(prefix: &str, writer_pool_bytes: usize) -> Result<Self> {
+    fn create(
+        prefix: &str,
+        writer_pool_bytes: usize,
+        max_row_groups_per_file: usize,
+    ) -> Result<Self> {
         let data_operator = DataOperator::instance();
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let writer = buffer_pool.writer(operator, path.clone(), writer_pool_bytes)?;
+        let writer = buffer_pool.writer(
+            operator,
+            prefix.to_string(),
+            writer_pool_bytes,
+            max_row_groups_per_file,
+        )?;
         Ok(Self {
-            path,
             writer,
             schema: None,
         })
     }
 
-    fn write_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+    fn write_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<()> {
         for block in blocks {
             if self.schema.is_none() {
                 self.schema = Some(Arc::new(block.infer_schema()));
             }
             self.writer.write(block)?;
         }
-        self.writer.flush_row_groups()
+        self.writer.flush_row_groups()?;
+        Ok(())
     }
 
-    fn close(self, ctx: &Arc<QueryContext>) -> Result<PartitionFileReader> {
-        let Self {
-            path,
-            writer,
-            schema,
-        } = self;
-        let (bytes_written, row_groups) = writer.close()?;
-        log::debug!(
-            path = path,
-            bytes_written;
-            "partition file closed"
-        );
+    fn close(self, ctx: &Arc<QueryContext>) -> Result<Vec<PartitionFileReader>> {
+        let Self { writer, schema } = self;
+        let schema = schema.unwrap_or_else(|| Arc::new(Default::default()));
+        let mut readers = Vec::new();
 
-        if bytes_written > 0 {
-            SpillAdapter::add_spill_file(
-                ctx,
-                Location::Remote(path.clone()),
-                Layout::Parquet,
-                bytes_written,
+        for file in writer.close()? {
+            log::debug!(
+                path = file.path,
+                bytes_written = file.bytes_written;
+                "partition file closed"
             );
+
+            if file.bytes_written > 0 {
+                SpillAdapter::add_spill_file(
+                    ctx,
+                    Location::Remote(file.path.clone()),
+                    Layout::Parquet,
+                    file.bytes_written,
+                );
+            }
+
+            readers.push(PartitionFileReader {
+                path: file.path,
+                row_groups: file.row_groups,
+                schema: schema.clone(),
+            });
         }
 
-        Ok(PartitionFileReader {
-            path,
-            row_groups,
-            schema: schema.unwrap_or_else(|| Arc::new(Default::default())),
-        })
+        Ok(readers)
     }
 }
 
@@ -196,9 +201,9 @@ impl PartitionSlot {
     #[fastrace::trace(name = "PartitionSlot::spill_blocks")]
     fn spill_blocks(
         &mut self,
-        ctx: &Arc<QueryContext>,
         prefix: &str,
         writer_pool_bytes: usize,
+        max_row_groups_per_file: usize,
         blocks: Vec<DataBlock>,
     ) -> Result<()> {
         let row_group_size: usize = blocks.iter().map(|b| b.memory_size()).sum();
@@ -206,14 +211,13 @@ impl PartitionSlot {
 
         match &mut self.state {
             PartitionSpillState::Empty => {
-                let mut writer = PartitionFileWriter::create(prefix, writer_pool_bytes)?;
-                let row_group_count = writer.write_blocks(blocks)?;
-                if row_group_count >= MAX_ROW_GROUPS_PER_FILE {
-                    let reader = writer.close(ctx)?;
-                    self.readers.push(reader);
-                } else {
-                    self.state = PartitionSpillState::Writing { writer };
-                }
+                let mut writer = PartitionFileWriter::create(
+                    prefix,
+                    writer_pool_bytes,
+                    max_row_groups_per_file,
+                )?;
+                writer.write_blocks(blocks)?;
+                self.state = PartitionSpillState::Writing { writer };
                 Ok(())
             }
             PartitionSpillState::Writing { .. } => {
@@ -223,14 +227,8 @@ impl PartitionSlot {
                     unreachable!()
                 };
 
-                let row_group_count = writer.write_blocks(blocks)?;
-
-                if row_group_count >= MAX_ROW_GROUPS_PER_FILE {
-                    let reader = writer.close(ctx)?;
-                    self.readers.push(reader);
-                } else {
-                    self.state = PartitionSpillState::Writing { writer };
-                }
+                writer.write_blocks(blocks)?;
+                self.state = PartitionSpillState::Writing { writer };
                 Ok(())
             }
             PartitionSpillState::Reading => unreachable!("partition already closed"),
@@ -241,8 +239,7 @@ impl PartitionSlot {
         if let PartitionSpillState::Writing { writer } =
             std::mem::replace(&mut self.state, PartitionSpillState::Reading)
         {
-            let reader = writer.close(ctx)?;
-            self.readers.push(reader);
+            self.readers.extend(writer.close(ctx)?);
         }
         Ok(std::mem::take(&mut self.readers))
     }
@@ -252,6 +249,7 @@ pub(super) struct WindowPartitionBuffer {
     ctx: Arc<QueryContext>,
     prefix: String,
     writer_pool_bytes: usize,
+    max_row_groups_per_file: usize,
     partitions: Vec<PartitionSlot>,
     memory_settings: MemorySettings,
     min_row_group_size: usize,
@@ -265,6 +263,7 @@ impl WindowPartitionBuffer {
         ctx: Arc<QueryContext>,
         prefix: String,
         writer_pool_bytes: usize,
+        max_row_groups_per_file: usize,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
@@ -274,6 +273,7 @@ impl WindowPartitionBuffer {
             ctx,
             prefix,
             writer_pool_bytes,
+            max_row_groups_per_file,
             partitions,
             memory_settings,
             min_row_group_size: 10 * 1024 * 1024,
@@ -312,7 +312,12 @@ impl WindowPartitionBuffer {
                 continue;
             }
             if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
-                partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, blocks)?;
+                partition.spill_blocks(
+                    &self.prefix,
+                    self.writer_pool_bytes,
+                    self.max_row_groups_per_file,
+                    blocks,
+                )?;
                 return Ok(());
             }
 
@@ -330,7 +335,12 @@ impl WindowPartitionBuffer {
             && size >= self.min_row_group_size
         {
             let blocks = partition.take_blocks(None).unwrap();
-            partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, blocks)?;
+            partition.spill_blocks(
+                &self.prefix,
+                self.writer_pool_bytes,
+                self.max_row_groups_per_file,
+                blocks,
+            )?;
         } else {
             self.can_spill = false;
         }

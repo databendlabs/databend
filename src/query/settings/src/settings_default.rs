@@ -246,6 +246,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("max_parquet_spill_row_groups_per_file", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(i16::MAX as u64),
+                    desc: "Sets the maximum number of row groups per Parquet spill file before rotating to a new file.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=i16::MAX as u64)),
+                }),
                 ("grouping_sets_channel_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the channel size for grouping sets to union transformation.",

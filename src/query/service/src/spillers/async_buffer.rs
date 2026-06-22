@@ -27,6 +27,7 @@ use std::time::Instant;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use bytes::BytesMut;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::spawn;
@@ -223,11 +224,17 @@ impl SpillsBufferPool {
     pub fn writer(
         self: &Arc<Self>,
         op: Operator,
-        path: String,
+        prefix: String,
         pool_bytes: usize,
+        max_row_groups_per_file: usize,
     ) -> Result<SpillsDataWriter> {
-        let writer = self.buffer_writer(op, path, pool_bytes)?;
-        Ok(SpillsDataWriter::Uninitialize(Some(writer)))
+        Ok(SpillsDataWriter::create(
+            op,
+            prefix,
+            pool_bytes,
+            self.clone(),
+            max_row_groups_per_file,
+        ))
     }
 
     pub(super) fn buffer_writer(
@@ -394,24 +401,38 @@ pub struct InitializedBlocksStreamWriter {
     writer: ArrowWriter<BufferWriter>,
 }
 
-pub enum SpillsDataWriter {
+pub struct SpilledDataFile {
+    pub path: String,
+    pub bytes_written: usize,
+    pub row_groups: Vec<RowGroupMetaData>,
+}
+
+pub struct SpilledRowGroups {
+    pub path: String,
+    pub row_groups: Vec<RowGroupMetaData>,
+}
+
+enum PhysicalSpillsDataWriter {
     Uninitialize(Option<BufferWriter>),
     Initialized(InitializedBlocksStreamWriter),
 }
 
-impl SpillsDataWriter {
-    pub fn create(writer: BufferWriter) -> Self {
+impl PhysicalSpillsDataWriter {
+    fn create(writer: BufferWriter) -> Self {
         Self::Uninitialize(Some(writer))
     }
 
-    pub fn write(&mut self, block: DataBlock) -> Result<()> {
+    fn write(&mut self, block: DataBlock) -> Result<()> {
         match self {
-            SpillsDataWriter::Uninitialize(writer) => {
+            PhysicalSpillsDataWriter::Uninitialize(writer) => {
                 let data_schema = block.infer_schema();
                 let table_schema = infer_table_schema(&data_schema)?;
 
                 let props = WriterProperties::builder()
                     .set_compression(Compression::LZ4_RAW)
+                    // Spills explicitly flush row groups at operator boundaries; do not let
+                    // ArrowWriter split one spill block into extra row groups by row count.
+                    .set_max_row_group_row_count(Some(usize::MAX))
                     .set_statistics_enabled(EnabledStatistics::None)
                     .set_bloom_filter_enabled(false)
                     .set_dictionary_enabled(false)
@@ -422,39 +443,42 @@ impl SpillsDataWriter {
                 let mut writer = ArrowWriter::try_new(buffer_writer, arrow_schema, Some(props))?;
                 let record_batch = block.to_record_batch(&table_schema)?;
                 writer.write(&record_batch)?;
-                *self = SpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
+                *self = PhysicalSpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
                     writer,
                     table_schema,
                 });
 
                 Ok(())
             }
-            SpillsDataWriter::Initialized(writer) => {
+            PhysicalSpillsDataWriter::Initialized(writer) => {
                 let record_batch = block.to_record_batch(&writer.table_schema)?;
                 Ok(writer.writer.write(&record_batch)?)
             }
         }
     }
 
-    pub fn flush(&mut self) -> Result<()> {
+    fn row_group_count(&self) -> usize {
         match self {
-            SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
-                "Bad state, BlockStreamWriter is uninitialized",
-            )),
-            SpillsDataWriter::Initialized(writer) => {
-                writer.writer.flush()?;
-                Ok(writer.writer.inner_mut().flush()?)
+            PhysicalSpillsDataWriter::Uninitialize(_) => 0,
+            PhysicalSpillsDataWriter::Initialized(writer) => {
+                writer.writer.flushed_row_groups().len()
             }
         }
     }
 
-    /// Flush current buffered data as complete row groups and return the total flushed row group count.
-    pub fn flush_row_groups(&mut self) -> Result<usize> {
+    fn row_groups(&self) -> &[RowGroupMetaData] {
         match self {
-            SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
+            PhysicalSpillsDataWriter::Uninitialize(_) => &[],
+            PhysicalSpillsDataWriter::Initialized(writer) => writer.writer.flushed_row_groups(),
+        }
+    }
+
+    fn flush_row_groups(&mut self) -> Result<usize> {
+        match self {
+            PhysicalSpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
                 "Bad state, BlockStreamWriter is uninitialized",
             )),
-            SpillsDataWriter::Initialized(writer) => {
+            PhysicalSpillsDataWriter::Initialized(writer) => {
                 writer.writer.flush()?;
                 writer.writer.inner_mut().flush()?;
                 Ok(writer.writer.flushed_row_groups().len())
@@ -462,16 +486,16 @@ impl SpillsDataWriter {
         }
     }
 
-    pub fn close(self) -> Result<(usize, Vec<RowGroupMetaData>)> {
+    fn close(self) -> Result<(usize, Vec<RowGroupMetaData>)> {
         match self {
-            SpillsDataWriter::Uninitialize(mut writer) => {
+            PhysicalSpillsDataWriter::Uninitialize(mut writer) => {
                 if let Some(writer) = writer.take() {
                     writer.close()?;
                 }
 
                 Ok((0, vec![]))
             }
-            SpillsDataWriter::Initialized(mut writer) => {
+            PhysicalSpillsDataWriter::Initialized(mut writer) => {
                 writer.writer.flush()?;
                 let row_groups = writer.writer.flushed_row_groups().to_vec();
                 let bytes_written = writer.writer.bytes_written();
@@ -480,6 +504,137 @@ impl SpillsDataWriter {
                 Ok((bytes_written, row_groups))
             }
         }
+    }
+}
+
+struct ActiveSpillsDataWriter {
+    path: String,
+    writer: PhysicalSpillsDataWriter,
+}
+
+pub struct SpillsDataWriter {
+    operator: Operator,
+    prefix: String,
+    pool_bytes: usize,
+    buffer_pool: Arc<SpillsBufferPool>,
+    current: Option<ActiveSpillsDataWriter>,
+    closed_files: Vec<SpilledDataFile>,
+    max_row_groups_per_file: usize,
+}
+
+impl SpillsDataWriter {
+    fn create(
+        operator: Operator,
+        prefix: String,
+        pool_bytes: usize,
+        buffer_pool: Arc<SpillsBufferPool>,
+        max_row_groups_per_file: usize,
+    ) -> Self {
+        Self {
+            operator,
+            prefix,
+            pool_bytes,
+            buffer_pool,
+            current: None,
+            closed_files: Vec::new(),
+            max_row_groups_per_file,
+        }
+    }
+
+    fn create_physical_writer(
+        buffer_pool: &Arc<SpillsBufferPool>,
+        operator: Operator,
+        prefix: &str,
+        pool_bytes: usize,
+    ) -> Result<ActiveSpillsDataWriter> {
+        let path = format!("{}/{}", prefix, GlobalUniq::unique());
+        let writer = buffer_pool.buffer_writer(operator, path.clone(), pool_bytes)?;
+        Ok(ActiveSpillsDataWriter {
+            path,
+            writer: PhysicalSpillsDataWriter::create(writer),
+        })
+    }
+
+    fn ensure_current(&mut self) -> Result<&mut ActiveSpillsDataWriter> {
+        if self.current.is_none() {
+            self.current = Some(Self::create_physical_writer(
+                &self.buffer_pool,
+                self.operator.clone(),
+                &self.prefix,
+                self.pool_bytes,
+            )?);
+        }
+        Ok(self.current.as_mut().unwrap())
+    }
+
+    fn close_current(&mut self) -> Result<()> {
+        let Some(current) = self.current.take() else {
+            return Ok(());
+        };
+
+        let (bytes_written, row_groups) = current.writer.close()?;
+        if bytes_written != 0 || !row_groups.is_empty() {
+            self.closed_files.push(SpilledDataFile {
+                path: current.path,
+                bytes_written,
+                row_groups,
+            });
+        }
+        Ok(())
+    }
+
+    fn rotate_if_full(&mut self) -> Result<()> {
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|current| current.writer.row_group_count() >= self.max_row_groups_per_file)
+        {
+            self.close_current()?;
+        }
+        Ok(())
+    }
+
+    pub fn write(&mut self, block: DataBlock) -> Result<()> {
+        if block.is_empty() {
+            return Ok(());
+        }
+
+        self.rotate_if_full()?;
+        self.ensure_current()?.writer.write(block)
+    }
+
+    pub fn flush(&mut self) -> Result<()> {
+        let _ = self.flush_row_groups()?;
+        Ok(())
+    }
+
+    /// Flush the current in-progress row group and return the row groups produced
+    /// by this flush. The physical file boundary is owned here so every caller is
+    /// protected from Parquet's per-file row group limit.
+    pub fn flush_row_groups(&mut self) -> Result<Vec<SpilledRowGroups>> {
+        let Some(current) = self.current.as_mut() else {
+            return Ok(Vec::new());
+        };
+
+        let before = current.writer.row_group_count();
+        let row_group_count = current.writer.flush_row_groups()?;
+        let row_groups = current.writer.row_groups()[before..row_group_count].to_vec();
+        let path = current.path.clone();
+
+        if row_group_count >= self.max_row_groups_per_file {
+            self.close_current()?;
+        }
+
+        if row_groups.is_empty() {
+            Ok(Vec::new())
+        } else {
+            Ok(vec![SpilledRowGroups { path, row_groups }])
+        }
+    }
+
+    pub fn close(mut self) -> Result<Vec<SpilledDataFile>> {
+        self.close_current()?;
+        Ok(self.closed_files)
     }
 }
 
@@ -769,6 +924,9 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_base::runtime::spawn;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::number::Int32Type;
     use opendal::Operator;
 
     use super::*;
@@ -776,6 +934,10 @@ mod tests {
     fn create_test_operator() -> std::io::Result<Operator> {
         let builder = opendal::services::Fs::default().root("/tmp");
         Ok(Operator::new(builder)?.finish())
+    }
+
+    fn sample_block(value: i32) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![value])])
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -935,6 +1097,33 @@ mod tests {
         buffer_writer.write_all(b"minimum chunk").unwrap();
         let metadata = buffer_writer.close().unwrap();
         assert!(metadata.content_length() > 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spills_data_writer_rotates_by_row_group_count() {
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_operator().unwrap();
+        let mut writer = SpillsDataWriter::create(
+            operator,
+            "row_group_rotate_test".to_string(),
+            CHUNK_SIZE,
+            pool,
+            2,
+        );
+
+        writer.write(sample_block(1)).unwrap();
+        writer.flush().unwrap();
+        writer.write(sample_block(2)).unwrap();
+        writer.flush().unwrap();
+        writer.write(sample_block(3)).unwrap();
+        writer.flush().unwrap();
+
+        let files = writer.close().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].row_groups.len(), 2);
+        assert_eq!(files[1].row_groups.len(), 1);
+        assert!(files.iter().all(|file| file.bytes_written > 0));
+        assert_ne!(files[0].path, files[1].path);
     }
 
     #[tokio::test(flavor = "multi_thread")]
