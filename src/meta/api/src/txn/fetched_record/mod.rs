@@ -30,7 +30,7 @@ pub use absent::AbsentRecord;
 pub use present::PresentRecord;
 use target::FetchedRecordTarget;
 
-/// A record fetched by a transaction get operation.
+/// A record fetched by a transaction for-update read.
 ///
 /// It borrows the transaction and holds the key and value read. If it came from
 /// [`MetaTxn::get_for_update`], the `eq_seq` guard was installed in the

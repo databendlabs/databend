@@ -95,6 +95,7 @@ pub use txn::FetchedRecord;
 pub use txn::MetaTxn;
 pub use txn::MetaTxnManager;
 pub use txn::PresentRecord;
+pub use txn::ReadRecord;
 pub use txn::backoff as txn_backoff;
 pub use txn::backoff::txn_backoff;
 pub use txn::condition as txn_condition_util;
