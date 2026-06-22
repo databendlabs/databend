@@ -198,8 +198,18 @@ impl ColumnTopN {
     }
 
     fn find(&self, scalar: &ScalarRef<'_>) -> std::result::Result<usize, usize> {
-        self.values
+        match self
+            .values
             .binary_search_by(|entry| entry.scalar.as_ref().cmp(scalar))
+        {
+            Ok(index)
+                if self.values[index].scalar.as_ref().partial_cmp(scalar)
+                    == Some(Ordering::Equal) =>
+            {
+                Ok(index)
+            }
+            Ok(index) | Err(index) => Err(index),
+        }
     }
 
     fn update_existing(&mut self, index: usize, count: u64, error: u64) {
@@ -342,6 +352,23 @@ mod tests {
 
     fn uint_scalar(value: u64) -> Scalar {
         Scalar::Number(NumberScalar::UInt64(value))
+    }
+
+    fn int32_scalar(value: i32) -> Scalar {
+        Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    #[test]
+    fn column_top_n_ignores_incomparable_scalar_lookup() {
+        let mut top_n = ColumnTopN::default();
+        top_n.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: int32_scalar(5),
+            count: 10,
+            error: 0,
+        });
+
+        assert_eq!(top_n.get(&int32_scalar(5)), Some(10));
+        assert_eq!(top_n.get(&uint_scalar(5)), None);
     }
 
     #[test]
