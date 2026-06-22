@@ -39,11 +39,11 @@ impl FromToProto for mt::ClientSession {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let p = pb::ClientSession {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
         };
-        Ok(p)
+        p
     }
 }

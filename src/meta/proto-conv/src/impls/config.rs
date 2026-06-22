@@ -95,55 +95,55 @@ impl FromToProto for mt::storage::StorageParams {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::StorageConfig, Incompatible> {
+    fn to_pb(&self) -> pb::StorageConfig {
         match self {
-            mt::storage::StorageParams::S3(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::S3(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Fs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Fs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Gcs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Gcs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Oss(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Oss(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Webhdfs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Webhdfs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Obs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Obs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Cos(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Cos(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Hdfs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Hdfs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Huggingface(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Huggingface(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Azblob(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Azblob(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Ftp(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Ftp(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Http(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Http(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Ipfs(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Ipfs(v.to_pb()?)),
-            }),
-            mt::storage::StorageParams::Memory => Ok(pb::StorageConfig {
+            mt::storage::StorageParams::S3(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::S3(v.to_pb())),
+            },
+            mt::storage::StorageParams::Fs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Fs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Gcs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Gcs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Oss(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Oss(v.to_pb())),
+            },
+            mt::storage::StorageParams::Webhdfs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Webhdfs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Obs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Obs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Cos(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Cos(v.to_pb())),
+            },
+            mt::storage::StorageParams::Hdfs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Hdfs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Huggingface(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Huggingface(v.to_pb())),
+            },
+            mt::storage::StorageParams::Azblob(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Azblob(v.to_pb())),
+            },
+            mt::storage::StorageParams::Ftp(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Ftp(v.to_pb())),
+            },
+            mt::storage::StorageParams::Http(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Http(v.to_pb())),
+            },
+            mt::storage::StorageParams::Ipfs(v) => pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Ipfs(v.to_pb())),
+            },
+            mt::storage::StorageParams::Memory => pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Memory(
                     pb::MemoryStorageConfig {
                         version: VER,
                         min_reader_ver: MIN_READER_VER,
                     },
                 )),
-            }),
+            },
         }
     }
 }
@@ -180,8 +180,8 @@ impl FromToProto for StorageS3Config {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::S3StorageConfig, Incompatible> {
-        Ok(pb::S3StorageConfig {
+    fn to_pb(&self) -> pb::S3StorageConfig {
+        pb::S3StorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             region: self.region.clone(),
@@ -196,8 +196,8 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.role_arn.clone(),
             external_id: self.external_id.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -221,16 +221,16 @@ impl FromToProto for StorageGcsConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::GcsStorageConfig {
+    fn to_pb(&self) -> Self::PB {
+        pb::GcsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             credential: self.credential.clone(),
             endpoint_url: self.endpoint_url.clone(),
             bucket: self.bucket.clone(),
             root: self.root.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -247,12 +247,12 @@ impl FromToProto for StorageFsConfig {
         Ok(StorageFsConfig { root: p.root })
     }
 
-    fn to_pb(&self) -> Result<pb::FsStorageConfig, Incompatible> {
-        Ok(pb::FsStorageConfig {
+    fn to_pb(&self) -> pb::FsStorageConfig {
+        pb::FsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             root: self.root.clone(),
-        })
+        }
     }
 }
 
@@ -281,8 +281,8 @@ impl FromToProto for StorageOssConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::OssStorageConfig, Incompatible> {
-        Ok(pb::OssStorageConfig {
+    fn to_pb(&self) -> pb::OssStorageConfig {
+        pb::OssStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
@@ -293,8 +293,8 @@ impl FromToProto for StorageOssConfig {
             role_arn: self.role_arn.clone(),
             server_side_encryption: self.server_side_encryption.clone(),
             server_side_encryption_key_id: self.server_side_encryption_key_id.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -318,8 +318,8 @@ impl FromToProto for StorageWebhdfsConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::WebhdfsStorageConfig, Incompatible> {
-        Ok(pb::WebhdfsStorageConfig {
+    fn to_pb(&self) -> pb::WebhdfsStorageConfig {
+        pb::WebhdfsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
@@ -328,8 +328,8 @@ impl FromToProto for StorageWebhdfsConfig {
             disable_list_batch: self.disable_list_batch,
 
             user_name: self.user_name.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -354,8 +354,8 @@ impl FromToProto for StorageObsConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::ObsStorageConfig, Incompatible> {
-        Ok(pb::ObsStorageConfig {
+    fn to_pb(&self) -> pb::ObsStorageConfig {
+        pb::ObsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
@@ -363,8 +363,8 @@ impl FromToProto for StorageObsConfig {
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
             secret_access_key: self.secret_access_key.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -389,8 +389,8 @@ impl FromToProto for StorageCosConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::CosStorageConfig, Incompatible> {
-        Ok(pb::CosStorageConfig {
+    fn to_pb(&self) -> pb::CosStorageConfig {
+        pb::CosStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
@@ -398,8 +398,8 @@ impl FromToProto for StorageCosConfig {
             root: self.root.clone(),
             secret_id: self.secret_id.clone(),
             secret_key: self.secret_key.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -420,14 +420,14 @@ impl FromToProto for StorageHdfsConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::HdfsStorageConfig, Incompatible> {
-        Ok(pb::HdfsStorageConfig {
+    fn to_pb(&self) -> pb::HdfsStorageConfig {
+        pb::HdfsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             root: self.root.clone(),
             name_node: self.name_node.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -451,8 +451,8 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::HuggingfaceStorageConfig, Incompatible> {
-        Ok(pb::HuggingfaceStorageConfig {
+    fn to_pb(&self) -> pb::HuggingfaceStorageConfig {
+        pb::HuggingfaceStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             repo_type: self.repo_type.clone(),
@@ -460,8 +460,8 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
             revision: self.revision.clone(),
             token: self.token.clone(),
             root: self.root.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -485,8 +485,8 @@ impl FromToProto for StorageAzblobConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::AzblobStorageConfig, Incompatible> {
-        Ok(pb::AzblobStorageConfig {
+    fn to_pb(&self) -> pb::AzblobStorageConfig {
+        pb::AzblobStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
@@ -494,8 +494,8 @@ impl FromToProto for StorageAzblobConfig {
             account_name: self.account_name.clone(),
             account_key: self.account_key.clone(),
             root: self.root.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -518,16 +518,16 @@ impl FromToProto for StorageFtpConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::FtpStorageConfig, Incompatible> {
-        Ok(pb::FtpStorageConfig {
+    fn to_pb(&self) -> pb::FtpStorageConfig {
+        pb::FtpStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint: self.endpoint.clone(),
             root: self.root.clone(),
             username: self.username.clone(),
             password: self.password.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -548,14 +548,14 @@ impl FromToProto for StorageHttpConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::HttpStorageConfig, Incompatible> {
-        Ok(pb::HttpStorageConfig {
+    fn to_pb(&self) -> pb::HttpStorageConfig {
+        pb::HttpStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
             paths: self.paths.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -576,14 +576,14 @@ impl FromToProto for StorageIpfsConfig {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::IpfsStorageConfig, Incompatible> {
-        Ok(pb::IpfsStorageConfig {
+    fn to_pb(&self) -> pb::IpfsStorageConfig {
+        pb::IpfsStorageConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
             root: self.root.clone(),
-            network_config: self.network_config.to_pb_opt()?,
-        })
+            network_config: self.network_config.to_pb_opt(),
+        }
     }
 }
 
@@ -610,8 +610,8 @@ impl FromToProto for mt::storage::StorageNetworkParams {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::NetworkConfig, Incompatible> {
-        Ok(pb::NetworkConfig {
+    fn to_pb(&self) -> pb::NetworkConfig {
+        pb::NetworkConfig {
             version: VER,
             min_reader_ver: MIN_READER_VER,
             retry_timeout: self.retry_timeout,
@@ -620,6 +620,6 @@ impl FromToProto for mt::storage::StorageNetworkParams {
             connect_timeout: self.connect_timeout,
             pool_max_idle_per_host: self.pool_max_idle_per_host as u64,
             max_concurrent_io_requests: self.max_concurrent_io_requests as u64,
-        })
+        }
     }
 }

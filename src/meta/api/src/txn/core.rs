@@ -60,7 +60,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_put_pb_with_ttl(key, value, None)?);
+    txn.if_then.push(txn_put_pb_with_ttl(key, value, None));
 
     Ok(())
 }

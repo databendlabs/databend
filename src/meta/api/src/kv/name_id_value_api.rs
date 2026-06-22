@@ -161,10 +161,9 @@ where
             txn.condition
                 .push(txn_cond_eq_seq(name_ident, current_id_seq));
 
+            txn.if_then.push(txn_put_pb_with_ttl(name_ident, &id, None)); // (tenant, name) -> id
             txn.if_then
-                .push(txn_put_pb_with_ttl(name_ident, &id, None)?); // (tenant, name) -> id
-            txn.if_then
-                .push(txn_put_pb_with_ttl(&id_ident, value, None)?); // (id) -> value
+                .push(txn_put_pb_with_ttl(&id_ident, value, None)); // (id) -> value
 
             // Add associated
             let kvs = associated_records(id);
@@ -477,7 +476,7 @@ mod tests {
             gc_in_progress: false,
         };
 
-        let v = db_meta(1).to_pb()?.encode_to_vec();
+        let v = db_meta(1).to_pb().encode_to_vec();
 
         let db_id = |i| DatabaseId::new(i).to_string().as_bytes().to_vec();
 

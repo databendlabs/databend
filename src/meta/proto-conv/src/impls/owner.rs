@@ -42,13 +42,13 @@ impl FromToProto for mt::Ownership {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let p = pb::Ownership {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             owner_role_name: self.owner_role_name.clone(),
-            updated_on: self.updated_on.to_pb()?,
+            updated_on: self.updated_on.to_pb(),
         };
-        Ok(p)
+        p
     }
 }

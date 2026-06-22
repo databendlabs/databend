@@ -150,7 +150,7 @@ where
                 build_lvt_condition(self, table_id, &req.lvt_check).await?,
             ];
 
-            let txn = TxnRequest::new(conditions, vec![txn_put_pb(&key_tag, &table_tag)?]);
+            let txn = TxnRequest::new(conditions, vec![txn_put_pb(&key_tag, &table_tag)]);
             let (succ, _responses) = send_txn(self, txn).await?;
             if succ {
                 return Ok(());

@@ -59,7 +59,7 @@ where
     ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
         debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
-        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
+        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident));
 
         let res = match self
             .create_id_value(

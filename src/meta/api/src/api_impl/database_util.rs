@@ -102,7 +102,7 @@ pub(crate) async fn drop_database_meta(
         txn.condition
             .push(txn_cond_seq(&db_id_key, Eq, db_meta.seq));
 
-        txn.if_then.push(txn_put_pb(&db_id_key, &*db_meta)?); // (db_id) -> db_meta
+        txn.if_then.push(txn_put_pb(&db_id_key, &*db_meta)); // (db_id) -> db_meta
     }
 
     // add DbIdListKey if not exists
@@ -122,7 +122,7 @@ pub(crate) async fn drop_database_meta(
         txn.condition
             .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
         // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
-        txn.if_then.push(txn_put_pb(&dbid_idlist, &db_id_list)?);
+        txn.if_then.push(txn_put_pb(&dbid_idlist, &db_id_list));
     };
 
     // Clean up ownership if catalog_name is provided (CREATE OR REPLACE case)

@@ -52,15 +52,15 @@ impl FromToProto for mt::TableCopiedFileInfo {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableCopiedFileInfo, Incompatible> {
+    fn to_pb(&self) -> pb::TableCopiedFileInfo {
         let p = pb::TableCopiedFileInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             etag: self.etag.clone(),
             content_length: self.content_length,
-            last_modified: self.last_modified.to_pb_opt()?,
+            last_modified: self.last_modified.to_pb_opt(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -76,12 +76,12 @@ impl FromToProto for mt::EmptyProto {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::EmptyProto, Incompatible> {
+    fn to_pb(&self) -> pb::EmptyProto {
         let p = pb::EmptyProto {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
         };
-        Ok(p)
+        p
     }
 }
 
@@ -106,7 +106,7 @@ impl FromToProto for mt::TableNameIdent {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableNameIdent, Incompatible> {
+    fn to_pb(&self) -> pb::TableNameIdent {
         let p = pb::TableNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -114,7 +114,7 @@ impl FromToProto for mt::TableNameIdent {
             db_name: self.db_name.clone(),
             table_name: self.table_name.clone(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -133,14 +133,14 @@ impl FromToProto for mt::DBIdTableName {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DbIdTableName, Incompatible> {
+    fn to_pb(&self) -> pb::DbIdTableName {
         let p = pb::DbIdTableName {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             db_id: self.db_id,
             table_name: self.table_name.clone(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -159,7 +159,7 @@ impl FromToProto for mt::TableIdent {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableIdent, Incompatible> {
+    fn to_pb(&self) -> pb::TableIdent {
         let p = pb::TableIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -167,7 +167,7 @@ impl FromToProto for mt::TableIdent {
             seq: self.seq,
         };
 
-        Ok(p)
+        p
     }
 }
 
@@ -251,27 +251,27 @@ impl FromToProto for mt::TableMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableMeta, Incompatible> {
+    fn to_pb(&self) -> pb::TableMeta {
         let indexes = self
             .indexes
             .iter()
-            .map(|(name, index)| Ok((name.clone(), index.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+            .map(|(name, index)| (name.clone(), index.to_pb()))
+            .collect::<BTreeMap<_, _>>();
         let constraints = self
             .constraints
             .iter()
-            .map(|(name, constraint)| Ok((name.clone(), constraint.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+            .map(|(name, constraint)| (name.clone(), constraint.to_pb()))
+            .collect::<BTreeMap<_, _>>();
         let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         // Field 37 stays reserved so normal table-meta writes do not recreate
         // the removed legacy table-ref encoding.
         let p = pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            schema: Some(self.schema.to_pb()?),
+            schema: Some(self.schema.to_pb()),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
-            storage_params: self.storage_params.to_pb_opt()?,
+            storage_params: self.storage_params.to_pb_opt(),
             part_prefix: if self.part_prefix.is_empty() {
                 None
             } else {
@@ -283,26 +283,26 @@ impl FromToProto for mt::TableMeta {
             // cluster_keys is deprecated.
             cluster_keys: vec![],
             cluster_key_seq: Some(self.cluster_key_seq),
-            created_on: self.created_on.to_pb()?,
-            updated_on: self.updated_on.to_pb()?,
-            drop_on: self.drop_on.to_pb_opt()?,
+            created_on: self.created_on.to_pb(),
+            updated_on: self.updated_on.to_pb(),
+            drop_on: self.drop_on.to_pb_opt(),
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             field_stats_truncate_len: self.field_stats_truncate_len.clone(),
-            statistics: Some(self.statistics.to_pb()?),
+            statistics: Some(self.statistics.to_pb()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),
-            row_access_policy_columns_ids: self.row_access_policy_columns_ids.to_pb_opt()?,
+            row_access_policy_columns_ids: self.row_access_policy_columns_ids.to_pb_opt(),
             column_mask_policy_columns_ids: self
                 .column_mask_policy_columns_ids
                 .iter()
-                .map(|(k, v)| Ok((*k, v.to_pb()?)))
-                .collect::<Result<BTreeMap<_, _>, _>>()?,
+                .map(|(k, v)| (*k, v.to_pb()))
+                .collect::<BTreeMap<_, _>>(),
             indexes,
-            virtual_schema: self.virtual_schema.to_pb_opt()?,
+            virtual_schema: self.virtual_schema.to_pb_opt(),
             constraints,
         };
-        Ok(p)
+        p
     }
 }
 
@@ -324,14 +324,14 @@ impl FromToProto for SecurityPolicyColumnMap {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let p = pb::RowAccessPolicyColumnMap {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             policy_id: self.policy_id,
             columns_ids: self.columns_ids.clone(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -354,15 +354,15 @@ impl FromToProto for mt::Constraint {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let constraint = match self {
             mt::Constraint::Check(expr) => pb::constraint::Constraint::Check(expr.clone()),
         };
-        Ok(pb::Constraint {
+        pb::Constraint {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             constraint: Some(constraint),
-        })
+        }
     }
 }
 
@@ -391,7 +391,7 @@ impl FromToProto for mt::TableStatistics {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableStatistics, Incompatible> {
+    fn to_pb(&self) -> pb::TableStatistics {
         let p = pb::TableStatistics {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -407,7 +407,7 @@ impl FromToProto for mt::TableStatistics {
             vector_index_size: self.vector_index_size,
             virtual_column_size: self.virtual_column_size,
         };
-        Ok(p)
+        p
     }
 }
 
@@ -423,13 +423,13 @@ impl FromToProto for mt::TableIdList {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableIdList, Incompatible> {
+    fn to_pb(&self) -> pb::TableIdList {
         let p = pb::TableIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -453,7 +453,7 @@ impl FromToProto for mt::TableIndex {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableIndex, Incompatible> {
+    fn to_pb(&self) -> pb::TableIndex {
         let p = pb::TableIndex {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -464,6 +464,6 @@ impl FromToProto for mt::TableIndex {
             options: self.options.clone(),
             index_type: self.index_type.clone() as i32,
         };
-        Ok(p)
+        p
     }
 }

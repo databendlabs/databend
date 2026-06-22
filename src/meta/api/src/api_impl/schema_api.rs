@@ -289,8 +289,8 @@ pub async fn construct_drop_table_txn_operations(
 
     txn.if_then.extend(vec![
         // update db_meta seq so that no other txn can delete this db
-        txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
-        txn_put_pb(&tbid, &tb_meta)?,                 // (tenant, db_id, tb_id) -> tb_meta
+        txn_put_pb(&DatabaseId { db_id }, &db_meta), // (db_id) -> db_meta
+        txn_put_pb(&tbid, &tb_meta),                 // (tenant, db_id, tb_id) -> tb_meta
     ]);
     if if_delete {
         // still this table id
@@ -321,7 +321,7 @@ pub async fn construct_drop_table_txn_operations(
             txn.condition
                 .push(txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq));
             txn.if_then
-                .push(txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?);
+                .push(txn_put_pb(&dbid_tbname_idlist, &tb_id_list));
         }
     }
 
@@ -606,9 +606,9 @@ pub async fn handle_undrop_table(
                     vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
-                        txn_put_pb(&dbid_tbname, &TableId::new(table_id))?, // (tenant, db_id, tb_name) -> tb_id
-                        txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None), // (db_id) -> db_meta
+                        txn_put_pb(&dbid_tbname, &TableId::new(table_id)), // (tenant, db_id, tb_name) -> tb_id
+                        txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None), // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,
                 ]
@@ -678,7 +678,7 @@ async fn restore_policy_references_on_undrop(
                     // Critical: if policy is dropped before txn execution, this prevents
                     // creating a dangling reference to a non-existent policy.
                     conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                    ops.push(txn_put_pb_with_ttl(&ref_key, &MaskPolicyTableId, None)?);
+                    ops.push(txn_put_pb_with_ttl(&ref_key, &MaskPolicyTableId, None));
                 }
             }
         }
@@ -726,11 +726,7 @@ async fn restore_policy_references_on_undrop(
                 // Critical: if policy is dropped before txn execution, this prevents
                 // creating a dangling reference to a non-existent policy.
                 conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                ops.push(txn_put_pb_with_ttl(
-                    &ref_key,
-                    &RowAccessPolicyTableId,
-                    None,
-                )?);
+                ops.push(txn_put_pb_with_ttl(&ref_key, &RowAccessPolicyTableId, None));
             }
         }
     }
@@ -754,7 +750,7 @@ pub fn mark_index_as_deleted(
 
     Ok((
         marked_deleted_index_id_ident.to_string_key(),
-        serialize_struct(&marked_deleted_index_meta)?,
+        serialize_struct(&marked_deleted_index_meta),
     ))
 }
 
@@ -783,6 +779,6 @@ pub fn mark_table_index_as_deleted(
 
     Ok((
         marked_deleted_table_index_id_ident.to_string_key(),
-        serialize_struct(&marked_deleted_table_index_meta)?,
+        serialize_struct(&marked_deleted_table_index_meta),
     ))
 }

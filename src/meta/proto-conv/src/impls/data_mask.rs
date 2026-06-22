@@ -61,7 +61,7 @@ impl FromToProto for mt::DatamaskMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DatamaskMeta, Incompatible> {
+    fn to_pb(&self) -> pb::DatamaskMeta {
         // Write to args_v2 (new format that preserves order)
         let args_v2: Vec<pb::DataMaskArg> = self
             .args
@@ -80,10 +80,10 @@ impl FromToProto for mt::DatamaskMeta {
             return_type: self.return_type.clone(),
             body: self.body.clone(),
             comment: self.comment.clone(),
-            create_on: self.create_on.to_pb()?,
-            update_on: self.update_on.to_pb_opt()?,
+            create_on: self.create_on.to_pb(),
+            update_on: self.update_on.to_pb_opt(),
         };
-        Ok(p)
+        p
     }
 }
 
@@ -101,12 +101,12 @@ impl FromToProto for mt::MaskpolicyTableIdList {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
+    fn to_pb(&self) -> pb::DbIdList {
         let p = pb::DbIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.iter().copied().collect(),
         };
-        Ok(p)
+        p
     }
 }
