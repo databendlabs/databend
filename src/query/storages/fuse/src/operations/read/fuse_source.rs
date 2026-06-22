@@ -80,8 +80,8 @@ pub fn build_fuse_source_pipeline(
     }
 
     let waker = pipeline.get_waker();
-    // DeserializeDataTransform emits the parts in a batch with pop(), so an
-    // ordered scan must fetch one part at a time to preserve per-stream order.
+    // Keep ordered streams at one block per fetch so LIMIT can stop before a
+    // stream reads blocks beyond the current merge frontier.
     let batch_size = match preserve_order {
         true => 1,
         false => ctx.get_settings().get_storage_fetch_part_num()? as usize,
@@ -170,6 +170,7 @@ pub fn build_fuse_source_pipeline(
                     ctx.clone(),
                     block_reader.clone(),
                     plan,
+                    preserve_order,
                     transform_input,
                     transform_output,
                     index_reader.clone(),

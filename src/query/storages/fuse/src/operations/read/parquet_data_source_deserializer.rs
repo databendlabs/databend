@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -61,8 +62,9 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
-    parts: Vec<PartInfoPtr>,
-    chunks: Vec<ParquetDataSource>,
+    parts: VecDeque<PartInfoPtr>,
+    chunks: VecDeque<ParquetDataSource>,
+    preserve_order: bool,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -81,6 +83,7 @@ impl DeserializeDataTransform {
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
         plan: &DataSourcePlan,
+        preserve_order: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
@@ -121,8 +124,9 @@ impl DeserializeDataTransform {
             output_data: None,
             src_schema,
             output_schema,
-            parts: vec![],
-            chunks: vec![],
+            parts: VecDeque::new(),
+            chunks: VecDeque::new(),
+            preserve_order,
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -173,8 +177,8 @@ impl Processor for DeserializeDataTransform {
                 if let Some(source_meta) =
                     DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
                 {
-                    self.parts = source_meta.meta;
-                    self.chunks = source_meta.data;
+                    self.parts = source_meta.meta.into();
+                    self.chunks = source_meta.data.into();
                     return Ok(Event::Sync);
                 }
             }
@@ -192,8 +196,11 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        let part = self.parts.pop();
-        let chunks = self.chunks.pop();
+        let (part, chunks) = if self.preserve_order {
+            (self.parts.pop_front(), self.chunks.pop_front())
+        } else {
+            (self.parts.pop_back(), self.chunks.pop_back())
+        };
         if let Some((part, read_res)) = part.zip(chunks) {
             match read_res {
                 ParquetDataSource::AggIndex((actual_part, data)) => {

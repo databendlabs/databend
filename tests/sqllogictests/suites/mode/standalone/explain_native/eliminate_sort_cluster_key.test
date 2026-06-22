@@ -50,6 +50,9 @@ statement ok
 DROP TABLE IF EXISTS test_cluster_sort_elide_pruned_multi ALL
 
 statement ok
+DROP TABLE IF EXISTS test_cluster_sort_elide_nullable_prefix ALL
+
+statement ok
 CREATE TABLE test_cluster_sort_elide(
     a int not null,
     b int not null,
@@ -175,6 +178,29 @@ INSERT INTO test_cluster_sort_elide_pruned_multi VALUES
 
 statement ok
 ALTER TABLE test_cluster_sort_elide_pruned_multi RECLUSTER FINAL
+
+statement ok
+CREATE TABLE test_cluster_sort_elide_nullable_prefix(
+    a int not null,
+    b int not null,
+    tag string null,
+    c int not null,
+    d int not null,
+    e int not null
+) ENGINE = FUSE CLUSTER BY LINEAR(a, b, is_null(tag), -c, d, e) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO test_cluster_sort_elide_nullable_prefix VALUES
+    (1, 2, NULL, 90, 4, 3),
+    (1, 2, 'tagged', 95, 4, 3),
+    (1, 2, NULL, 80, 3, 3),
+    (1, 2, NULL, 80, 4, 1),
+    (1, 2, NULL, 70, 5, 3),
+    (1, 3, NULL, 99, 4, 3),
+    (2, 2, NULL, 100, 4, 3)
+
+statement ok
+ALTER TABLE test_cluster_sort_elide_nullable_prefix RECLUSTER FINAL
 
 statement ok
 CREATE TABLE test_cluster_sort_elide_string(
@@ -355,6 +381,17 @@ LIMIT 5
 1 2 50 2
 1 2 30 2
 
+query IITIII
+SELECT a, b, tag, c, d, e
+FROM test_cluster_sort_elide_nullable_prefix
+WHERE a = 1 AND b IN (2) AND tag IS NULL AND e = 3
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+1 2 NULL 90 4 3
+1 2 NULL 80 3 3
+1 2 NULL 70 5 3
+
 statement ok
 set enable_cluster_key_ordered_topk = 0
 
@@ -407,6 +444,34 @@ Limit
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
         ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 4]
         └── estimated rows: 5.50
+
+query T
+EXPLAIN SELECT a, b, tag, c, d, e
+FROM test_cluster_sort_elide_nullable_prefix
+WHERE a = 1 AND b IN (2) AND tag IS NULL AND e = 3
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide_nullable_prefix.a (#0), test_cluster_sort_elide_nullable_prefix.b (#1), test_cluster_sort_elide_nullable_prefix.tag (#2), test_cluster_sort_elide_nullable_prefix.c (#3), test_cluster_sort_elide_nullable_prefix.d (#4), test_cluster_sort_elide_nullable_prefix.e (#5)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [test_cluster_sort_elide_nullable_prefix.a (#0), test_cluster_sort_elide_nullable_prefix.b (#1), test_cluster_sort_elide_nullable_prefix.tag (#2), test_cluster_sort_elide_nullable_prefix.c (#3), test_cluster_sort_elide_nullable_prefix.d (#4), test_cluster_sort_elide_nullable_prefix.e (#5)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 3.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_nullable_prefix
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), tag (#2), c (#3), d (#4), e (#5)]
+        ├── read rows: 7
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_nullable_prefix.a (#0) = 1 and test_cluster_sort_elide_nullable_prefix.b (#1) = 2 and test_cluster_sort_elide_nullable_prefix.e (#5) = 3 and NOT is_not_null(test_cluster_sort_elide_nullable_prefix.tag (#2))], limit: 3]
+        └── estimated rows: 3.50
 
 statement ok
 set enable_cluster_key_ordered_topk = 1
@@ -636,6 +701,34 @@ Limit
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 6 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
         ├── push downs: [filters: [test_cluster_sort_elide_pruned_multi.a (#0) = 1 and test_cluster_sort_elide_pruned_multi.b (#1) = 2 and test_cluster_sort_elide_pruned_multi.e (#4) = 3 and test_cluster_sort_elide_pruned_multi.f (#5) = 8], limit: 5]
         └── estimated rows: 4.33
+
+query T
+EXPLAIN SELECT a, b, tag, c, d, e
+FROM test_cluster_sort_elide_nullable_prefix
+WHERE a = 1 AND b IN (2) AND tag IS NULL AND e = 3
+ORDER BY c DESC NULLS LAST, d ASC NULLS LAST
+LIMIT 3
+----
+Limit
+├── output columns: [test_cluster_sort_elide_nullable_prefix.a (#0), test_cluster_sort_elide_nullable_prefix.b (#1), test_cluster_sort_elide_nullable_prefix.tag (#2), test_cluster_sort_elide_nullable_prefix.c (#3), test_cluster_sort_elide_nullable_prefix.d (#4), test_cluster_sort_elide_nullable_prefix.e (#5)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(PresortedMerge)
+    ├── output columns: [test_cluster_sort_elide_nullable_prefix.a (#0), test_cluster_sort_elide_nullable_prefix.b (#1), test_cluster_sort_elide_nullable_prefix.tag (#2), test_cluster_sort_elide_nullable_prefix.c (#3), test_cluster_sort_elide_nullable_prefix.d (#4), test_cluster_sort_elide_nullable_prefix.e (#5)]
+    ├── sort keys: [c DESC NULLS LAST, d ASC NULLS LAST]
+    ├── estimated rows: 3.50
+    └── TableScan
+        ├── table: default.default.test_cluster_sort_elide_nullable_prefix
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1), tag (#2), c (#3), d (#4), e (#5)]
+        ├── read rows: 7
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [test_cluster_sort_elide_nullable_prefix.a (#0) = 1 and test_cluster_sort_elide_nullable_prefix.b (#1) = 2 and test_cluster_sort_elide_nullable_prefix.e (#5) = 3 and NOT is_not_null(test_cluster_sort_elide_nullable_prefix.tag (#2))], limit: 3]
+        └── estimated rows: 3.50
 
 statement ok
 set max_cluster_key_ordered_topk_overlap = 0
@@ -1064,6 +1157,9 @@ DROP TABLE test_cluster_sort_elide_cross_prefix ALL
 
 statement ok
 DROP TABLE test_cluster_sort_elide_pruned_multi ALL
+
+statement ok
+DROP TABLE test_cluster_sort_elide_nullable_prefix ALL
 
 statement ok
 unset max_threads

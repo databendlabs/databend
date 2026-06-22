@@ -14,6 +14,7 @@
 
 use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use parquet::arrow::arrow_reader::RowSelector;
 
 /// A wrapper around parquet's `RowSelection` that also tracks the number of selected rows (bits set to 1 in the bitmap).
@@ -37,6 +38,18 @@ impl RowSelection {
             selected_rows,
             bitmap,
         }
+    }
+
+    pub fn from_range(total_rows: usize, start: usize, end: usize) -> Self {
+        let start = start.min(total_rows);
+        let end = end.min(total_rows).max(start);
+
+        let mut bitmap = MutableBitmap::from_len_zeroed(total_rows);
+        for row in start..end {
+            bitmap.set(row, true);
+        }
+        let bitmap: Bitmap = bitmap.into();
+        Self::from(&bitmap)
     }
 }
 
@@ -132,6 +145,26 @@ mod tests {
         // No bits are set to 1
         assert_eq!(row_selection.selected_rows, 0);
         assert_eq!(row_selection.bitmap.len(), bitmap.len());
+        assert_eq!(selectors.len(), 1);
+        assert_eq!(selectors[0].row_count, 5);
+        assert!(selectors[0].skip);
+    }
+
+    #[test]
+    fn test_row_selection_from_range() {
+        let row_selection = RowSelection::from_range(5, 2, 10);
+        let selectors: Vec<_> = row_selection.selection.iter().collect();
+
+        assert_eq!(row_selection.selected_rows, 3);
+        assert_eq!(selectors.len(), 2);
+        assert_eq!(selectors[0].row_count, 2);
+        assert!(selectors[0].skip);
+        assert_eq!(selectors[1].row_count, 3);
+        assert!(!selectors[1].skip);
+
+        let empty_selection = RowSelection::from_range(5, 6, 1);
+        let selectors: Vec<_> = empty_selection.selection.iter().collect();
+        assert_eq!(empty_selection.selected_rows, 0);
         assert_eq!(selectors.len(), 1);
         assert_eq!(selectors[0].row_count, 5);
         assert!(selectors[0].skip);

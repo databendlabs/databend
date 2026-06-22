@@ -62,6 +62,34 @@ impl BlockReader {
         )
     }
 
+    pub fn deserialize_part_with_page_range(
+        &self,
+        part: &FuseBlockPartInfo,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        let page_selection = page_range_selection(part);
+        let selection = merge_row_selection(page_selection.as_ref(), selection);
+        self.deserialize_part(part, column_chunks, selection.as_ref())
+    }
+
+    pub fn page_range_selection(part: &FuseBlockPartInfo) -> Option<RowSelection> {
+        page_range_selection(part)
+    }
+
+    pub fn merge_row_selection(
+        page_selection: Option<&RowSelection>,
+        row_selection: Option<&RowSelection>,
+    ) -> Option<RowSelection> {
+        merge_row_selection(page_selection, row_selection)
+    }
+
+    pub fn page_range_bitmap(
+        part: &FuseBlockPartInfo,
+    ) -> Option<databend_common_expression::types::Bitmap> {
+        page_range_selection(part).map(|selection| selection.bitmap)
+    }
+
     pub fn deserialize_parquet_chunks(
         &self,
         num_rows: usize,
@@ -161,6 +189,36 @@ impl BlockReader {
     }
 }
 
+fn page_range_selection(part: &FuseBlockPartInfo) -> Option<RowSelection> {
+    let page_size = part.page_size();
+    if page_size == 0 || page_size >= part.nums_rows {
+        return None;
+    }
+
+    part.range().map(|range| {
+        RowSelection::from_range(
+            part.nums_rows,
+            range.start.saturating_mul(page_size),
+            range.end.saturating_mul(page_size),
+        )
+    })
+}
+
+fn merge_row_selection(
+    page_selection: Option<&RowSelection>,
+    row_selection: Option<&RowSelection>,
+) -> Option<RowSelection> {
+    match (page_selection, row_selection) {
+        (None, None) => None,
+        (Some(page_selection), None) => Some(page_selection.clone()),
+        (None, Some(row_selection)) => Some(row_selection.clone()),
+        (Some(page_selection), Some(row_selection)) => {
+            let bitmap = &page_selection.bitmap & &row_selection.bitmap;
+            Some(RowSelection::from(&bitmap))
+        }
+    }
+}
+
 fn column_by_name(record_batch: &RecordBatch, names: &[String]) -> ArrayRef {
     let mut array = record_batch.column_by_name(&names[0]).unwrap().clone();
     if names.len() > 1 {
@@ -204,6 +262,59 @@ fn column_name_paths(projection: &Projection, schema: &TableSchema) -> Vec<Vec<S
                 name_paths.push(name_path);
             }
             name_paths
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_storages_common_pruner::BlockMetaIndex;
+
+    use super::*;
+
+    fn part(nums_rows: usize, page_size: usize) -> FuseBlockPartInfo {
+        FuseBlockPartInfo {
+            location: "test.parquet".to_string(),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            spatial_index_location: None,
+            spatial_index_size: 0,
+            create_on: None,
+            nums_rows,
+            columns_meta: HashMap::new(),
+            columns_stat: None,
+            spatial_stats: None,
+            compression: Compression::Lz4,
+            sort_min_max: None,
+            cluster_stats: None,
+            preserve_order_stream: None,
+            block_meta_index: Some(BlockMetaIndex {
+                range: Some(1..2),
+                page_size,
+                ..Default::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn test_page_range_selection_ignores_parquet_full_block_page_size() {
+        let part = part(10, 10);
+
+        assert!(BlockReader::page_range_selection(&part).is_none());
+    }
+
+    #[test]
+    fn test_page_range_selection_uses_native_page_size() {
+        let part = part(10, 3);
+
+        let selection = BlockReader::page_range_selection(&part).unwrap();
+
+        assert_eq!(selection.selected_rows, 3);
+        assert_eq!(selection.bitmap.len(), 10);
+        for row in 0..10 {
+            assert_eq!(selection.bitmap.get_bit(row), (3..6).contains(&row));
         }
     }
 }

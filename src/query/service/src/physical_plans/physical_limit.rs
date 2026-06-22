@@ -153,8 +153,11 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let mut input_plan = self.build(s_expr.child(0)?, required).await?;
-        if let Some(count) = limit.limit {
-            self.try_apply_presorted_merge_for_limit(&mut input_plan, count + limit.offset)
+        if let Some(limit_rows) = limit
+            .limit
+            .and_then(|count| count.checked_add(limit.offset))
+        {
+            self.try_apply_presorted_merge_for_limit(&mut input_plan, limit_rows)
                 .await?;
         }
         if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {

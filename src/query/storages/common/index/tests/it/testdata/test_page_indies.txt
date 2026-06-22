@@ -38,3 +38,50 @@ expr      : eq<Int32, Int32>(CAST<Int16>(CAST<Int8>(CAST<Int32>(a AS Int8) AS In
 keep      : true
 range     : Some(3..5)
 
+text      : a = 2
+pages     : []
+keep      : true
+range     : None
+
+text      : a = 2
+expr      : eq<Int32, Int32>(a, 2_i32)
+cluster   : ["a", "- b"]
+keep      : true
+range     : Some(1..4)
+
+text      : a = 2 and b = -40
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), eq<Int32, Int32>(b, -40_i32))
+cluster   : ["a", "- b"]
+keep      : true
+range     : Some(1..4)
+
+text      : a = 2 and b > 55
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), gt<Int32, Int32>(b, CAST<UInt8>(55_u8 AS Int32)))
+cluster   : ["a", "- b"]
+keep      : true
+range     : Some(0..1)
+
+text      : a = 2 and b >= 35 and b <= 55
+expr      : and<Boolean, Boolean>(and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), gte<Int32, Int32>(b, CAST<UInt8>(35_u8 AS Int32))), lte<Int32, Int32>(b, CAST<UInt8>(55_u8 AS Int32)))
+cluster   : ["a", "- b"]
+keep      : true
+range     : Some(0..2)
+
+text      : a = 2 and b < 5
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), lt<Int32, Int32>(b, CAST<UInt8>(5_u8 AS Int32)))
+cluster   : ["a", "- b"]
+keep      : false
+range     : None
+
+text      : a = 2 and balance > 55::decimal(18,2)
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), gt<Decimal(18, 2), Decimal(18, 2)>(balance, CAST<UInt8>(55_u8 AS Decimal(18, 2))))
+cluster   : ["a", "- balance"]
+keep      : true
+range     : Some(0..1)
+
+text      : a = 2 and balance < 5::decimal(18,2)
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), lt<Decimal(18, 2), Decimal(18, 2)>(balance, CAST<UInt8>(5_u8 AS Decimal(18, 2))))
+cluster   : ["a", "- balance"]
+keep      : false
+range     : None
+

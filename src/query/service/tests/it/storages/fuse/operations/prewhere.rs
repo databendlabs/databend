@@ -52,6 +52,7 @@ use databend_common_storages_fuse::operations::ReadState;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use opendal::Buffer;
@@ -203,6 +204,84 @@ async fn test_runtime_filter_only_split_deserialize() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_page_range_without_prewhere() -> Result<()> {
+    let PrewhereTestSetup {
+        _fixture,
+        ctx,
+        block_reader,
+        column_chunks,
+        part,
+        ..
+    } = prepare_prewhere_data().await?;
+    let _ = _fixture;
+
+    ctx.set_runtime_filter(HashMap::new());
+    let read_state = ReadState::create(ctx, 1002, None, block_reader)?;
+    let part = with_page_range(part, 1..4, 1);
+
+    let (data_block, row_selection, bitmap_selection) =
+        read_state.deserialize_and_filter(column_chunks, &part)?;
+
+    assert_eq!(row_selection.as_ref().unwrap().selected_rows, 3);
+    assert_eq!(bitmap_selection.as_ref().unwrap().len(), 5);
+    assert_eq!(bitmap_selection.as_ref().unwrap().null_count(), 2);
+    assert_i32_column(&data_block, 0, &[2, 3, 4]);
+    assert_i32_column(&data_block, 1, &[20, 30, 40]);
+    assert_i32_column(&data_block, 2, &[200, 300, 400]);
+    assert_i32_column(&data_block, 3, &[2000, 3000, 4000]);
+    assert_i32_column(&data_block, 4, &[7, 7, 7]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_page_range_prewhere_forces_remaining_pushdown() -> Result<()> {
+    let PrewhereTestSetup {
+        _fixture,
+        ctx,
+        prewhere_info,
+        block_reader,
+        column_chunks,
+        part,
+        ..
+    } = prepare_prewhere_data().await?;
+    let _ = _fixture;
+
+    ctx.set_runtime_filter(HashMap::new());
+    ctx.get_settings().set_setting(
+        "prewhere_selectivity_threshold".to_string(),
+        "10".to_string(),
+    )?;
+
+    let read_state = ReadState::create(ctx, 1003, Some(&prewhere_info), block_reader)?;
+    let part = with_page_range(part, 1..4, 1);
+    let pre_columns_chunks = filter_chunks(&column_chunks, &read_state.pre_column_ids);
+    let remain_columns_chunks = filter_chunks(&column_chunks, &read_state.remain_column_ids);
+
+    let prewhere_result = read_state.deserialize_prewhere(pre_columns_chunks, &part)?;
+    assert!(prewhere_result.push_down_row_selection);
+    assert_eq!(
+        prewhere_result
+            .row_selection
+            .as_ref()
+            .unwrap()
+            .selected_rows,
+        1
+    );
+
+    let data_block = read_state.deserialize_remaining(
+        prewhere_result.preread_block,
+        remain_columns_chunks,
+        &part,
+        prewhere_result.row_selection.as_ref(),
+        prewhere_result.bitmap_selection.as_ref(),
+        prewhere_result.push_down_row_selection,
+    )?;
+
+    assert_result_row(&data_block, 3, 30, 300, 3000, 7);
+    Ok(())
+}
+
 async fn run_prewhere_test_with_threshold(
     selectivity_threshold: u64,
     expect_single_reader: bool,
@@ -283,6 +362,20 @@ fn assert_i32_column(data_block: &DataBlock, offset: usize, expected: &[i32]) {
             .copied()
             .collect();
     assert_eq!(values, expected);
+}
+
+fn with_page_range(
+    mut part: FuseBlockPartInfo,
+    range: std::ops::Range<usize>,
+    page_size: usize,
+) -> FuseBlockPartInfo {
+    part.block_meta_index = Some(BlockMetaIndex {
+        range: Some(range),
+        page_size,
+        block_location: part.location.clone(),
+        ..Default::default()
+    });
+    part
 }
 
 fn filter_chunks(

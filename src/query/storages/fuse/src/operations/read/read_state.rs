@@ -220,6 +220,7 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
+        let bitmap_selection = Self::merge_page_range_bitmap(bitmap_selection, part);
 
         let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
 
@@ -237,7 +238,11 @@ impl ReadState {
         }
 
         let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
-            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
+            part.range().is_some()
+                || should_push_down_row_selection(
+                    row_selection,
+                    self.prewhere_selectivity_threshold,
+                )
         });
 
         Ok(PrewhereFilterResult {
@@ -285,11 +290,31 @@ impl ReadState {
         Ok(data_block)
     }
 
+    pub fn deserialize_no_prewhere(
+        &self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let page_selection = BlockReader::page_range_selection(part);
+        let page_bitmap = page_selection
+            .as_ref()
+            .map(|selection| selection.bitmap.clone());
+        let data_block =
+            self.remain_reader
+                .deserialize_part(part, columns_chunks, page_selection.as_ref())?;
+
+        Ok((data_block, page_selection, page_bitmap))
+    }
+
     pub fn deserialize_and_filter(
         &self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        if self.filters.is_none() && self.runtime_filters.is_empty() {
+            return self.deserialize_no_prewhere(columns_chunks, part);
+        }
+
         let prewhere_result = self.deserialize_prewhere(columns_chunks.clone(), part)?;
         let data_block = self.deserialize_remaining(
             prewhere_result.preread_block,
@@ -318,6 +343,20 @@ impl ReadState {
             }
         }
         Ok(filtered_columns_chunks)
+    }
+
+    fn merge_page_range_bitmap(
+        bitmap_selection: Option<Bitmap>,
+        part: &FuseBlockPartInfo,
+    ) -> Option<Bitmap> {
+        let Some(page_bitmap) = BlockReader::page_range_bitmap(part) else {
+            return bitmap_selection;
+        };
+
+        Some(match bitmap_selection {
+            Some(bitmap_selection) => (&bitmap_selection & &page_bitmap).into(),
+            None => page_bitmap,
+        })
     }
 }
 

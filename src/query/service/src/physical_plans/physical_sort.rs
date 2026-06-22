@@ -849,7 +849,7 @@ fn ordered_cluster_partitions(
         }
 
         active_ranges
-            .retain(|active_max| compare_cluster_values(active_max, min) == Ordering::Greater);
+            .retain(|active_max| compare_cluster_values(active_max, min) != Ordering::Less);
         active_ranges.push(max.clone());
         if active_ranges.len() > max_allowed_active_ranges {
             return None;
@@ -869,9 +869,7 @@ fn ordered_cluster_partitions(
             let stream_index = (next_stream + offset) % max_streams;
             stream_ranges[stream_index]
                 .as_ref()
-                .is_none_or(|stream_max| {
-                    compare_cluster_values(stream_max, &min) != Ordering::Greater
-                })
+                .is_none_or(|stream_max| compare_cluster_values(stream_max, &min) == Ordering::Less)
                 .then_some(stream_index)
         })?;
         stream_ranges[stream_index] = Some(max.clone());
@@ -960,11 +958,47 @@ fn expr_fixed_by_filter_expr(expr: &RemoteExpr<String>, filter: &RemoteExpr<Stri
     match id.name().as_ref() {
         "and" | "and_filters" => args.iter().any(|arg| expr_fixed_by_filter_expr(expr, arg)),
         "is_true" if args.len() == 1 => expr_fixed_by_filter_expr(expr, &args[0]),
+        "is_null" if args.len() == 1 => {
+            remote_expr_semantic_eq(expr, filter) || expr_matches_filter_arg(expr, &args[0])
+        }
+        "not" if args.len() == 1 => {
+            remote_expr_semantic_eq(expr, filter)
+                || expr_fixed_by_is_not_null_negation(expr, &args[0])
+        }
+        "contains" if args.len() == 2 => {
+            single_constant_array_expr(&args[0]) && expr_matches_filter_arg(expr, &args[1])
+        }
         "eq" if args.len() == 2 => {
             expr_eq_constant(expr, &args[0], &args[1]) || expr_eq_constant(expr, &args[1], &args[0])
         }
         _ => false,
     }
+}
+
+fn expr_fixed_by_is_not_null_negation(
+    expr: &RemoteExpr<String>,
+    maybe_is_not_null: &RemoteExpr<String>,
+) -> bool {
+    let RemoteExpr::FunctionCall { id, args, .. } = maybe_is_not_null else {
+        return false;
+    };
+    if id.name().as_ref() != "is_not_null" || args.len() != 1 {
+        return false;
+    }
+
+    is_null_cluster_key_matches_expr(expr, &args[0]) || expr_matches_filter_arg(expr, &args[0])
+}
+
+fn is_null_cluster_key_matches_expr(
+    cluster_key: &RemoteExpr<String>,
+    filter_expr: &RemoteExpr<String>,
+) -> bool {
+    let RemoteExpr::FunctionCall { id, args, .. } = cluster_key else {
+        return false;
+    };
+    id.name().as_ref() == "is_null"
+        && args.len() == 1
+        && expr_matches_filter_arg(&args[0], filter_expr)
 }
 
 fn expr_eq_constant(
@@ -979,6 +1013,23 @@ fn expr_is_constant(expr: &RemoteExpr<String>) -> bool {
     match expr {
         RemoteExpr::Constant { .. } => true,
         RemoteExpr::Cast { is_try, expr, .. } if !*is_try => expr_is_constant(expr),
+        _ => false,
+    }
+}
+
+fn single_constant_array_expr(expr: &RemoteExpr<String>) -> bool {
+    match expr {
+        RemoteExpr::Constant {
+            scalar: Scalar::Array(array),
+            ..
+        } => array.len() == 1,
+        RemoteExpr::FunctionCall { id, args, .. } if id.name().as_ref() == "array" => {
+            matches!(args.as_slice(), [arg] if expr_is_constant(arg))
+        }
+        RemoteExpr::FunctionCall { id, args, .. } if id.name().as_ref() == "array_distinct" => {
+            matches!(args.as_slice(), [arg] if single_constant_array_expr(arg))
+        }
+        RemoteExpr::Cast { is_try, expr, .. } if !*is_try => single_constant_array_expr(expr),
         _ => false,
     }
 }
@@ -1247,6 +1298,7 @@ fn remote_expr_semantic_eq(left: &RemoteExpr<String>, right: &RemoteExpr<String>
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_expression::FunctionID;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::Compression;
 
@@ -1254,6 +1306,80 @@ mod tests {
 
     fn scalar(value: i64) -> Scalar {
         Scalar::Number(NumberScalar::Int64(value))
+    }
+
+    fn builtin(name: &str) -> Box<FunctionID> {
+        Box::new(FunctionID::Builtin {
+            name: name.to_string(),
+            id: 0,
+        })
+    }
+
+    fn column(name: &str, data_type: DataType) -> RemoteExpr<String> {
+        RemoteExpr::ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type,
+            display_name: name.to_string(),
+        }
+    }
+
+    fn int_column(name: &str) -> RemoteExpr<String> {
+        column(name, DataType::Number(NumberDataType::Int32))
+    }
+
+    fn int_constant(value: i32) -> RemoteExpr<String> {
+        RemoteExpr::Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(value)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        }
+    }
+
+    fn function(
+        name: &str,
+        args: Vec<RemoteExpr<String>>,
+        return_type: DataType,
+    ) -> RemoteExpr<String> {
+        RemoteExpr::FunctionCall {
+            span: None,
+            id: builtin(name),
+            generics: vec![],
+            args,
+            return_type,
+        }
+    }
+
+    fn eq(left: RemoteExpr<String>, right: RemoteExpr<String>) -> RemoteExpr<String> {
+        function("eq", vec![left, right], DataType::Boolean)
+    }
+
+    fn is_null(expr: RemoteExpr<String>) -> RemoteExpr<String> {
+        function("is_null", vec![expr], DataType::Boolean)
+    }
+
+    fn is_not_null(expr: RemoteExpr<String>) -> RemoteExpr<String> {
+        function("is_not_null", vec![expr], DataType::Boolean)
+    }
+
+    fn not(expr: RemoteExpr<String>) -> RemoteExpr<String> {
+        function("not", vec![expr], DataType::Boolean)
+    }
+
+    fn contains(array: RemoteExpr<String>, expr: RemoteExpr<String>) -> RemoteExpr<String> {
+        function("contains", vec![array, expr], DataType::Boolean)
+    }
+
+    fn array(args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
+        function(
+            "array",
+            args,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::Int32))),
+        )
+    }
+
+    fn and(args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
+        function("and", args, DataType::Boolean)
     }
 
     fn part(location: &str, min: i64, max: i64) -> PartInfoPtr {
@@ -1295,7 +1421,7 @@ mod tests {
 
     #[test]
     fn test_ordered_cluster_partitions_uses_single_stream_for_non_overlap() {
-        let parts = vec![part("b", 10, 19), part("a", 0, 9), part("c", 20, 29)];
+        let parts = vec![part("b", 10, 19), part("a", 0, 8), part("c", 21, 29)];
 
         let ordered = ordered_cluster_partitions(&parts, Some(7), 10, 8).unwrap();
 
@@ -1324,23 +1450,90 @@ mod tests {
     }
 
     #[test]
+    fn test_ordered_cluster_partitions_treats_touching_ranges_as_overlap() {
+        let parts = vec![part("a", 0, 10), part("b", 10, 20), part("c", 21, 30)];
+
+        let ordered = ordered_cluster_partitions(&parts, Some(7), 10, 8).unwrap();
+        let stream_ids = stream_ids(&ordered);
+
+        assert_eq!(stream_ids, vec![0, 1, 0]);
+        assert_eq!(stream_ids.iter().max().copied().unwrap() + 1, 2);
+    }
+
+    #[test]
     fn test_ordered_cluster_partitions_rejects_excess_overlap() {
         let parts = vec![part("a", 0, 10), part("b", 5, 15), part("c", 7, 20)];
 
         assert!(ordered_cluster_partitions(&parts, Some(7), 1, 8).is_none());
     }
+
+    #[test]
+    fn test_filter_fixed_expr_matches_single_value_in_and_is_null_rewrite() {
+        let tag = column("tag", DataType::Nullable(Box::new(DataType::String)));
+        let filter = and(vec![
+            eq(int_column("a"), int_constant(1)),
+            contains(array(vec![int_constant(2)]), int_column("b")),
+            not(is_not_null(tag.clone())),
+            eq(int_column("e"), int_constant(3)),
+        ]);
+
+        assert!(expr_fixed_by_filter_expr(&int_column("a"), &filter));
+        assert!(expr_fixed_by_filter_expr(&int_column("b"), &filter));
+        assert!(expr_fixed_by_filter_expr(&is_null(tag.clone()), &filter));
+        assert!(expr_fixed_by_filter_expr(
+            &not(is_not_null(tag.clone())),
+            &filter
+        ));
+        assert!(expr_fixed_by_filter_expr(&int_column("e"), &filter));
+        assert!(!expr_fixed_by_filter_expr(&int_column("c"), &filter));
+        assert!(!expr_fixed_by_filter_expr(
+            &int_column("b"),
+            &contains(
+                array(vec![int_constant(2), int_constant(3)]),
+                int_column("b")
+            )
+        ));
+    }
+
+    #[test]
+    fn test_supports_order_reversing_minus_for_safe_integer_widths() {
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::UInt8
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::UInt16
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::UInt32
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::Int8
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::Int16
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::Int32
+        )));
+        assert!(supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::Int64
+        )));
+        assert!(!supports_order_reversing_minus(&DataType::Number(
+            NumberDataType::UInt64
+        )));
+    }
 }
 
 fn supports_order_reversing_minus(data_type: &DataType) -> bool {
     match data_type.remove_nullable() {
+        // Unary minus widens these integer types, so their minimum values do
+        // not overflow the cluster-key expression.
         DataType::Number(
-            NumberDataType::UInt8
-            | NumberDataType::UInt16
-            | NumberDataType::UInt32
-            | NumberDataType::Int8
-            | NumberDataType::Int16
-            | NumberDataType::Int32,
+            NumberDataType::UInt8 | NumberDataType::UInt16 | NumberDataType::UInt32,
         ) => true,
+        DataType::Number(NumberDataType::Int8 | NumberDataType::Int16 | NumberDataType::Int32) => {
+            true
+        }
         DataType::Number(NumberDataType::Int64) => true,
         DataType::Decimal(_) => true,
         // UInt64/Float boundary ordering is not proven here.
