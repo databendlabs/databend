@@ -325,6 +325,7 @@ pub async fn commit_refresh_virtual_column(
                     block_idx,
                 },
                 block_meta: Arc::new(extended_block_meta),
+                insert_rows: 0,
             };
             mutation_entries.push(entry);
         }
@@ -552,6 +553,7 @@ async fn prepare_vacuum_virtual_column_mutations(
                         draft_virtual_block_meta: None,
                         column_hlls: column_hlls.map(BlockHLLState::Serialized),
                     }),
+                    insert_rows: 0,
                 });
 
                 continue;

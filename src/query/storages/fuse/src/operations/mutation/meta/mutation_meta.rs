@@ -53,11 +53,20 @@ pub enum ClusterStatsGenType {
 pub struct SerializeBlock {
     pub index: BlockMetaIndex,
     pub stats_type: ClusterStatsGenType,
+    pub insert_rows: u64,
 }
 
 impl SerializeBlock {
-    pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> Self {
-        SerializeBlock { index, stats_type }
+    pub fn create(
+        index: BlockMetaIndex,
+        stats_type: ClusterStatsGenType,
+        insert_rows: u64,
+    ) -> Self {
+        SerializeBlock {
+            index,
+            stats_type,
+            insert_rows,
+        }
     }
 }
 
