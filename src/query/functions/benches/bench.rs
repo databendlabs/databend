@@ -33,8 +33,8 @@ mod dummy {
     use databend_common_expression::Evaluator;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::type_check;
+    use databend_common_expression_test_support as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_sql_test_support as parser;
 
     #[divan::bench(args = [10240, 102400])]
     fn parse(bencher: divan::Bencher, n: usize) {
@@ -325,8 +325,8 @@ mod datetime_fast_path {
     use databend_common_expression::types::string::StringColumnBuilder;
     use databend_common_expression::types::timestamp::microseconds_to_days;
     use databend_common_expression::types::timestamp::timestamp_to_string;
+    use databend_common_expression_test_support as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_sql_test_support as parser;
     use jiff::civil::date;
     use jiff::tz::TimeZone;
     use rand::Rng;

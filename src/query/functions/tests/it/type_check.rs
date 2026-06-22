@@ -20,8 +20,8 @@ use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::*;
+use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql_test_support::parse_raw_expr;
 use goldenfile::Mint;
 use jsonb::OwnedJsonb;
 

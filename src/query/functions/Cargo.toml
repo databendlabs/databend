@@ -62,7 +62,7 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
-databend-common-sql-test-support = { workspace = true }
+databend-common-expression-test-support = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 
