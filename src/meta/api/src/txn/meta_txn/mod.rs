@@ -20,7 +20,6 @@ use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 use databend_meta_client::types::TxnOp;
@@ -101,6 +100,20 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
             .operations
             .insert(key.to_string_key(), txn_del(key));
     }
+
+    /// Stage a put. Replaces any operation previously staged for `key`.
+    pub fn stage_put<K>(&self, key: &K, value: &K::ValueType)
+    where
+        K: kvapi::Key,
+        K::ValueType: FromToProto + 'static,
+    {
+        let op = txn_put_pb_with_ttl(key, value, None);
+        self.state
+            .lock()
+            .unwrap()
+            .operations
+            .insert(key.to_string_key(), op);
+    }
 }
 
 impl<'a, KV> MetaTxn<'a, KV>
@@ -175,27 +188,6 @@ where
 
         let seq_v = decode_raw::<K::ValueType, KV::Error>(raw, &key_str)?;
         Ok(FetchedRecord::new(self, key, seq_v))
-    }
-}
-
-impl<KV> MetaTxn<'_, KV>
-where
-    KV: KVApi + ?Sized,
-    KV::Error: From<InvalidArgument>,
-{
-    /// Stage a put. Replaces any operation previously staged for `key`.
-    pub fn stage_put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), KV::Error>
-    where
-        K: kvapi::Key,
-        K::ValueType: FromToProto + 'static,
-    {
-        let op = txn_put_pb_with_ttl(key, value, None);
-        self.state
-            .lock()
-            .unwrap()
-            .operations
-            .insert(key.to_string_key(), op);
-        Ok(())
     }
 }
 
