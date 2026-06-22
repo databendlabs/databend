@@ -40,6 +40,8 @@ use parquet::file::metadata::ParquetMetaData;
 
 pub use self::block::BlockParquetWriter;
 pub use self::bulk::BulkBlockParquetWriter;
+pub use self::bulk::ChunkedWriteBuffer;
+pub use self::bulk::DEFAULT_CHUNK_SIZE;
 pub use self::bulk::LeafColumnWriter;
 
 /// Result of finishing a [`BulkBlockParquetWriter`] / [`BlockParquetWriter`]: the serialized
@@ -281,7 +283,6 @@ pub(crate) mod test_util {
         use parquet::arrow::arrow_writer::compute_leaves;
 
         use super::BulkBlockParquetWriter;
-        use super::SerializedParquet;
 
         let mut writer = BulkBlockParquetWriter::new(arrow_schema.clone(), props).unwrap();
         for (field_idx, field) in arrow_schema.fields().iter().enumerate() {
@@ -301,8 +302,8 @@ pub(crate) mod test_util {
                 leaf.close().unwrap();
             }
         }
-        let SerializedParquet { payload, metadata } = writer.finish().unwrap();
-        (payload.concat(), metadata)
+        let (metadata, sink) = writer.finish().unwrap();
+        (sink.into_chunks().concat(), metadata)
     }
 }
 
