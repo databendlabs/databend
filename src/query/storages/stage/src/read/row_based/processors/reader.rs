@@ -85,6 +85,16 @@ impl BytesReader {
                 path: state.file.path.clone(),
                 offset,
                 is_eof,
+                content_key: if offset == 0 {
+                    state.file.content_key.clone()
+                } else {
+                    None
+                },
+                last_modified: if offset == 0 {
+                    state.file.last_modified
+                } else {
+                    None
+                },
             });
             if is_eof {
                 self.file_state = None;

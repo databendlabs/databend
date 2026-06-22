@@ -27,6 +27,8 @@ pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<d
             let part = SingleFilePartition {
                 path: task.data_file_path.clone(),
                 size: task.length as usize,
+                content_key: None,
+                last_modified: None,
             };
             Box::new(part)
         }
