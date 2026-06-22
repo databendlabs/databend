@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_sql::FormatOptions;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::Operator;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -25,6 +35,8 @@ use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
 use crate::framework::LiteTableContext;
+use crate::framework::golden::open_golden_file;
+use crate::framework::golden::write_case_title;
 
 struct LiteRunner(Arc<LiteTableContext>);
 
@@ -165,6 +177,214 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
+    Ok(())
+}
+
+struct StatisticsTraceGoldenCase {
+    name: &'static str,
+    description: &'static str,
+    trace_file: &'static str,
+    sql_file: &'static str,
+}
+
+fn read_statistics_trace_fixture(case: &StatisticsTraceGoldenCase, kind: &str) -> Result<String> {
+    let path = Path::new(&TestSuite::optimizer_data_dir())
+        .join("statistics_trace")
+        .join(kind)
+        .join(match kind {
+            "sql" => case.sql_file,
+            "traces" => case.trace_file,
+            _ => unreachable!("unknown statistics trace fixture kind"),
+        });
+    std::fs::read_to_string(&path).map_err(|err| {
+        ErrorCode::Internal(format!(
+            "failed to read statistics trace fixture {}: {err}",
+            path.display()
+        ))
+    })
+}
+
+async fn write_statistics_trace_case(
+    file: &mut impl Write,
+    case: &StatisticsTraceGoldenCase,
+) -> Result<()> {
+    let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
+    let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+
+    write_case_title(file, case.name, case.description)?;
+    writeln!(file, "trace: {}", case.trace_file)?;
+    writeln!(file, "sql_file: {}", case.sql_file)?;
+    writeln!(file, "sql:")?;
+    writeln!(file, "{}", sql.trim())?;
+    writeln!(file, "optimized_plan:")?;
+    writeln!(file, "{optimized}")?;
+    writeln!(file)?;
+    Ok(())
+}
+
+async fn write_statistics_trace_summary_case(
+    file: &mut impl Write,
+    case: &StatisticsTraceGoldenCase,
+) -> Result<()> {
+    let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
+    let summary = format_statistics_trace_summary(&optimized_plan)?;
+
+    write_case_title(file, case.name, case.description)?;
+    writeln!(file, "trace: {}", case.trace_file)?;
+    writeln!(file, "sql_file: {}", case.sql_file)?;
+    writeln!(file, "sql:")?;
+    writeln!(file, "{}", sql.trim())?;
+    writeln!(file, "replay_summary:")?;
+    writeln!(file, "{summary}")?;
+    writeln!(file)?;
+    Ok(())
+}
+
+async fn replay_statistics_trace_case(case: &StatisticsTraceGoldenCase) -> Result<(String, Plan)> {
+    let sql = read_statistics_trace_fixture(case, "sql")?;
+    let trace_input = read_statistics_trace_fixture(case, "traces")?;
+    let input = serde_json::from_str(&trace_input).map_err(|err| {
+        ErrorCode::Internal(format!(
+            "invalid statistics trace fixture {}: {err}",
+            case.trace_file
+        ))
+    })?;
+    let ctx = LiteTableContext::create().await?;
+    ctx.configure_for_optimizer_case(true)?;
+    ctx.register_replay_input(&input).await?;
+
+    let raw_plan = ctx.bind_sql(&sql).await?;
+    let optimized_plan = ctx.optimize_plan(raw_plan).await?;
+    Ok((sql, optimized_plan))
+}
+
+fn format_statistics_trace_summary(plan: &Plan) -> Result<String> {
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = plan
+    else {
+        return Err(ErrorCode::Internal(
+            "statistics trace replay summary expects query plan",
+        ));
+    };
+
+    Ok(statistics_trace_summary_tree(s_expr, metadata)?.format_pretty()?)
+}
+
+fn statistics_trace_summary_tree(s_expr: &SExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
+    match s_expr.plan() {
+        RelOperator::MaterializedCTE(cte) => {
+            let children = s_expr
+                .children()
+                .map(|child| statistics_trace_summary_tree(child, metadata))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(FormatTreeNode::with_children(
+                format!("MaterializedCTE: {} refs={}", cte.cte_name, cte.ref_count),
+                children,
+            ))
+        }
+        RelOperator::MaterializedCTERef(cte_ref) => Ok(FormatTreeNode::new(format!(
+            "MaterializedCTERef: {} output_columns={}",
+            cte_ref.cte_name,
+            cte_ref.output_columns.len()
+        ))),
+        RelOperator::Scan(scan) => {
+            let metadata = metadata.read();
+            let table = metadata.table(scan.table_index);
+            let rows = scan
+                .statistics
+                .table_stats
+                .as_ref()
+                .and_then(|stats| stats.num_rows)
+                .map_or_else(|| "None".to_string(), |rows| rows.to_string());
+            let row_access_policy = if scan.secure_predicates.is_some() {
+                " row_access_policy=true"
+            } else {
+                ""
+            };
+            Ok(FormatTreeNode::new(format!(
+                "Scan: {}.{} (#{}) rows={}{}",
+                table.database(),
+                table.name(),
+                scan.table_index,
+                rows,
+                row_access_policy
+            )))
+        }
+        RelOperator::Join(join) => {
+            let children = s_expr
+                .children()
+                .map(|child| statistics_trace_summary_tree(child, metadata))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(FormatTreeNode::with_children(
+                format!("Join: {}", join.join_type),
+                children,
+            ))
+        }
+        RelOperator::Udf(udf) => {
+            let children = s_expr
+                .children()
+                .map(|child| statistics_trace_summary_tree(child, metadata))
+                .collect::<Result<Vec<_>>>()?;
+            let name = if udf.script_udf { "UdfScript" } else { "Udf" };
+            Ok(FormatTreeNode::with_children(name.to_string(), children))
+        }
+        _ => {
+            let children = s_expr
+                .children()
+                .map(|child| statistics_trace_summary_tree(child, metadata))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(FormatTreeNode::with_children(
+                format!("{:?}", s_expr.plan().rel_op()),
+                children,
+            ))
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lite_replay_statistics_trace_golden() -> Result<()> {
+    let mut file = open_golden_file("planner", "statistics_trace.txt")?;
+    let cases = [
+        StatisticsTraceGoldenCase {
+            name: "empty_self_join",
+            description: "Replay the JSON fixture generated by the service-side CollectStatisticsOptimizer trace test.",
+            trace_file: "empty_self_join.json",
+            sql_file: "empty_self_join.sql",
+        },
+        StatisticsTraceGoldenCase {
+            name: "tpch_returned_orders",
+            description: "Rebuild a mock catalog from StatisticsTrace JSON for a CTE, aggregation, filtered three-way join, sort, and limit.",
+            trace_file: "tpch_returned_orders.json",
+            sql_file: "tpch_returned_orders.sql",
+        },
+        StatisticsTraceGoldenCase {
+            name: "customer_self_join",
+            description: "Use two trace table indexes that map to the same table name to replay a self join without table DDL.",
+            trace_file: "customer_self_join.json",
+            sql_file: "customer_self_join.sql",
+        },
+    ];
+
+    for case in &cases {
+        write_statistics_trace_case(&mut file, case).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lite_replay_statistics_trace_materialized_cte_golden() -> Result<()> {
+    let mut file = open_golden_file("planner", "statistics_trace_materialized_cte.txt")?;
+    let case = StatisticsTraceGoldenCase {
+        name: "view_materialized_cte_join",
+        description: "Replay the service-collected trace with view, UDF, row access policy, non-empty stats, and auto-materialized CTE.",
+        trace_file: "view_materialized_cte_join.json",
+        sql_file: "view_materialized_cte_join.sql",
+    };
+
+    write_statistics_trace_summary_case(&mut file, &case).await?;
+
     Ok(())
 }
 
