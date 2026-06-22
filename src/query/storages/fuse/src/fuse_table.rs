@@ -1165,6 +1165,12 @@ impl Table for FuseTable {
             let top_n = table_statistics
                 .as_ref()
                 .filter(|v| v.row_count == snapshot.summary.row_count)
+                .filter(|v| {
+                    snapshot
+                        .prev_snapshot_id
+                        .as_ref()
+                        .is_some_and(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
+                })
                 .map(|v| v.top_n.clone())
                 .unwrap_or_default();
             let stats_row_count = additional_stats_meta

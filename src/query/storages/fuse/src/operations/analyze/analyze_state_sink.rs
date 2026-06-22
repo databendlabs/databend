@@ -146,6 +146,11 @@ impl FuseTable {
         }
         ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 
+        let (top_n_size, top_n_columns) = if no_scan {
+            (None, None)
+        } else {
+            (top_n_size, top_n_columns)
+        };
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
