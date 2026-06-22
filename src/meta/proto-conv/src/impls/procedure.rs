@@ -18,8 +18,6 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableDataType;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app as mt;
 use databend_common_protos::pb;
 
@@ -64,8 +62,7 @@ impl FromToProto for mt::principal::ProcedureMeta {
 
         let mut return_types = Vec::with_capacity(p.return_types.len());
         for arg_type in p.return_types {
-            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
-            return_types.push(arg_type);
+            return_types.push(TableDataType::from_pb(arg_type)?);
         }
 
         let v = Self {
@@ -83,15 +80,7 @@ impl FromToProto for mt::principal::ProcedureMeta {
     fn to_pb(&self) -> Result<pb::ProcedureMeta, Incompatible> {
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for arg_type in self.return_types.iter() {
-            let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| {
-                    Incompatible::new(format!(
-                        "Convert DataType to TableDataType failed: {}",
-                        e.message()
-                    ))
-                })?
-                .to_pb()?;
-            return_types.push(arg_type);
+            return_types.push(arg_type.to_pb()?);
         }
 
         let p = pb::ProcedureMeta {
