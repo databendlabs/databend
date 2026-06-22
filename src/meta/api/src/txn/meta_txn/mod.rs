@@ -189,7 +189,7 @@ where
         K: kvapi::Key,
         K::ValueType: FromToProto + 'static,
     {
-        let op = txn_put_pb_with_ttl(key, value, None)?;
+        let op = txn_put_pb_with_ttl(key, value, None);
         self.state
             .lock()
             .unwrap()

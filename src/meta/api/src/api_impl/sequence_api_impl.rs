@@ -74,8 +74,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         };
 
         let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta)?,
-            txn_put_pb(&storage_ident, &storage_value)?,
+            txn_put_pb(&req.ident, &meta),
+            txn_put_pb(&storage_ident, &storage_value),
         ]);
 
         let (succ, _response) = send_txn(self, txn).await?;

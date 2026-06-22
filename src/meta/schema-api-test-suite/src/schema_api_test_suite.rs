@@ -4189,7 +4189,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
             let id_key = db_id;
-            let data = serialize_struct(&drop_data)?;
+            let data = serialize_struct(&drop_data);
             upsert_test_data(mt, &id_key, data).await?;
 
             let res = mt
@@ -4237,7 +4237,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
             let id_key = db_id;
-            let data = serialize_struct(&drop_data)?;
+            let data = serialize_struct(&drop_data);
             upsert_test_data(mt, &id_key, data).await?;
 
             if delete {
@@ -4379,7 +4379,7 @@ impl SchemaApiTestSuite {
         };
 
         let id_key = TableId { table_id };
-        let data = serialize_struct(&drop_data)?;
+        let data = serialize_struct(&drop_data);
         upsert_test_data(mt, &id_key, data).await?;
 
         if delete {
@@ -4658,7 +4658,7 @@ impl SchemaApiTestSuite {
             ..Default::default()
         };
         let id_key = db_id;
-        let data = serialize_struct(&drop_data)?;
+        let data = serialize_struct(&drop_data);
         upsert_test_data(mt, &id_key, data).await?;
 
         let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db1_name);
@@ -4793,7 +4793,7 @@ impl SchemaApiTestSuite {
                 drop_on: Some(created_on - Duration::days(1)),
                 ..TableMeta::default()
             };
-            let data = serialize_struct(&create_drop_table_meta)?;
+            let data = serialize_struct(&create_drop_table_meta);
 
             upsert_test_data(mt, &tbid, data).await?;
             // assert not return out of retention time data
@@ -4937,7 +4937,7 @@ impl SchemaApiTestSuite {
                 .await?;
                 let id_key = TableId { table_id };
                 table_meta.drop_on = Some(created_on + Duration::seconds(100));
-                let data = serialize_struct(&table_meta)?;
+                let data = serialize_struct(&table_meta);
                 upsert_test_data(mt, &id_key, data).await?;
 
                 drop_ids_no_boundary.push(DroppedId::new_table(
@@ -4973,7 +4973,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
             let id_key = db2_id;
-            let data = serialize_struct(&drop_db_meta)?;
+            let data = serialize_struct(&drop_db_meta);
             upsert_test_data(mt, &id_key, data).await?;
 
             drop_ids_no_boundary.push(DroppedId::new_table(*db2_id, db2_tb3_id, "tb3".to_string()));
@@ -5032,7 +5032,7 @@ impl SchemaApiTestSuite {
                 .await?;
                 let id_key = TableId { table_id };
                 table_meta.drop_on = Some(created_on + Duration::seconds(100));
-                let data = serialize_struct(&table_meta)?;
+                let data = serialize_struct(&table_meta);
                 upsert_test_data(mt, &id_key, data).await?;
             }
 
@@ -5716,7 +5716,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(
                 mt,
                 &key_table_id_list,
-                serialize_struct(&orphan_table_id_list)?,
+                serialize_struct(&orphan_table_id_list),
             )
             .await?;
 
@@ -5749,7 +5749,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(
                 mt,
                 &key_table_id_list,
-                serialize_struct(&orphan_table_id_list)?,
+                serialize_struct(&orphan_table_id_list),
             )
             .await?;
 

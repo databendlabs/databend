@@ -43,12 +43,12 @@ impl FromToProto for mt::LeastVisibleTime {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let p = pb::LeastVisibleTime {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            time: self.time.to_pb()?,
+            time: self.time.to_pb(),
         };
-        Ok(p)
+        p
     }
 }

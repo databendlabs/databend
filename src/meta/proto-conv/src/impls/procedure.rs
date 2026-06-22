@@ -42,13 +42,13 @@ impl FromToProto for mt::principal::ProcedureIdentity {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::ProcedureIdentity, Incompatible> {
-        Ok(pb::ProcedureIdentity {
+    fn to_pb(&self) -> pb::ProcedureIdentity {
+        pb::ProcedureIdentity {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             args: self.args.clone(),
-        })
+        }
     }
 }
 
@@ -77,10 +77,10 @@ impl FromToProto for mt::principal::ProcedureMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::ProcedureMeta, Incompatible> {
+    fn to_pb(&self) -> pb::ProcedureMeta {
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for arg_type in self.return_types.iter() {
-            return_types.push(arg_type.to_pb()?);
+            return_types.push(arg_type.to_pb());
         }
 
         let p = pb::ProcedureMeta {
@@ -88,12 +88,12 @@ impl FromToProto for mt::principal::ProcedureMeta {
             min_reader_ver: MIN_READER_VER,
             return_types,
             arg_names: self.arg_names.clone(),
-            created_on: self.created_on.to_pb()?,
-            updated_on: self.updated_on.to_pb()?,
+            created_on: self.created_on.to_pb(),
+            updated_on: self.updated_on.to_pb(),
             script: self.script.to_string(),
             comment: self.comment.to_string(),
             language: self.procedure_language.to_string(),
         };
-        Ok(p)
+        p
     }
 }

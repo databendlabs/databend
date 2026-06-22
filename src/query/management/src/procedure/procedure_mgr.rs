@@ -78,7 +78,7 @@ impl ProcedureMgr {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let name_ident = &req.name_ident;
         let meta = &req.meta;
-        let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
+        let name_ident_raw = serialize_struct(name_ident.procedure_name());
         let create_mode = if overriding {
             CreateIdValueMode::CreateOrReplace
         } else {

@@ -46,18 +46,18 @@ impl FromToProto for SequenceMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::SequenceMeta, Incompatible> {
+    fn to_pb(&self) -> pb::SequenceMeta {
         let p = pb::SequenceMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             comment: self.comment.clone(),
-            create_on: self.create_on.to_pb()?,
-            update_on: self.update_on.to_pb()?,
+            create_on: self.create_on.to_pb(),
+            update_on: self.update_on.to_pb(),
             #[allow(deprecated)]
             current: self.current,
             step: self.step,
             storage_version: self.storage_version,
         };
-        Ok(p)
+        p
     }
 }

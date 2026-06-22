@@ -100,7 +100,7 @@ where
             CreateOption::Create | CreateOption::CreateIfNotExists => CreateIdValueMode::CreateOnly,
             CreateOption::CreateOrReplace => CreateIdValueMode::CreateOrReplace,
         };
-        let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident))?;
+        let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident));
 
         let create_res = self
             .create_id_value(
@@ -363,7 +363,7 @@ where
                 //
                 vec![txn_cond_eq_seq(&tbid, tb_meta_seq)],
                 vec![
-                    txn_put_pb_with_ttl(&tbid, &table_meta, None)?, // tb_id -> tb_meta
+                    txn_put_pb_with_ttl(&tbid, &table_meta, None), // tb_id -> tb_meta
                 ],
             );
 
@@ -448,7 +448,7 @@ where
                     txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 vec![
-                    txn_put_pb(&tbid, &table_meta)?, // tb_id -> tb_meta
+                    txn_put_pb(&tbid, &table_meta), // tb_id -> tb_meta
                     TxnOp::put(m_key, m_value),
                 ],
             );
