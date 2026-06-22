@@ -212,7 +212,11 @@ impl BulkBlockParquetWriter<ChunkedWriteBuffer> {
     /// Construct a writer backed by the in-memory [`ChunkedWriteBuffer`]. [`Self::finish`] returns
     /// the buffer, whose bytes the caller reads via [`ChunkedWriteBuffer::into_chunks`].
     pub fn new(arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Result<Self> {
-        Self::create(ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE), arrow_schema, props)
+        Self::create(
+            ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE),
+            arrow_schema,
+            props,
+        )
     }
 }
 
@@ -220,11 +224,7 @@ impl<W: io::Write + Send + Default + 'static> BulkBlockParquetWriter<W> {
     /// Construct a writer that streams the serialized parquet into the caller-provided `sink`.
     /// The footer is written on [`Self::finish`], which returns the metadata plus the sink moved
     /// back out.
-    pub fn create(
-        sink: W,
-        arrow_schema: Arc<Schema>,
-        props: WriterPropertiesPtr,
-    ) -> Result<Self> {
+    pub fn create(sink: W, arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Result<Self> {
         let parquet_schema = ArrowSchemaConverter::new()
             .with_coerce_types(props.coerce_types())
             .convert(&arrow_schema)?;
@@ -237,8 +237,7 @@ impl<W: io::Write + Send + Default + 'static> BulkBlockParquetWriter<W> {
         let mut props = (*props).clone();
         add_encoded_arrow_schema_to_metadata(&arrow_schema, &mut props);
 
-        let mut file_writer =
-            Box::new(SerializedFileWriter::new(sink, root, Arc::new(props))?);
+        let mut file_writer = Box::new(SerializedFileWriter::new(sink, root, Arc::new(props))?);
         let leaf_kinds = classify_schema(&arrow_schema);
         debug_assert_eq!(leaf_kinds.len(), parquet_schema.num_columns());
 
