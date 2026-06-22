@@ -51,6 +51,7 @@ pub use memory::MemStatBuffer;
 pub use memory::OutOfLimit;
 pub use memory::ParentMemStat;
 pub use memory::set_alloc_error_hook;
+pub use memory::take_alloc_error_panic;
 pub use perf::PerfConfig;
 pub use perf::PerfCounters;
 pub use perf::PerfEvent;
