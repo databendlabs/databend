@@ -28,7 +28,7 @@ where
     K: kvapi::Key,
 {
     pub(crate) fn stage_delete(self) {
-        self.txn.stage_delete(&self.key);
+        self.txn.stage_unconditional_delete(&self.key);
     }
 }
 
@@ -39,6 +39,6 @@ where
     K::ValueType: FromToProto + 'static,
 {
     pub(crate) fn stage_put(self, value: &K::ValueType) {
-        self.txn.stage_put(&self.key, value)
+        self.txn.stage_unconditional_put(&self.key, value)
     }
 }

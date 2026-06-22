@@ -70,7 +70,7 @@ where KV: KVApi + ?Sized
     ///     .run(|txn| async move {
     ///         let cur = txn.get_for_update(key.clone()).await?;
     ///         // ... inspect `cur`, then stage writes ...
-    ///         txn.stage_put(&key, &value);
+    ///         cur.stage_put(&value);
     ///         Ok(())
     ///     })
     ///     .await

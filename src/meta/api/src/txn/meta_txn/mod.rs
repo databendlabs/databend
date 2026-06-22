@@ -30,6 +30,7 @@ use super::core::send_txn;
 use super::fetched_record::FetchedRecord;
 use super::op_builder::txn_del;
 use super::op_builder::txn_put_pb_with_ttl;
+use super::read_record::ReadRecord;
 use crate::kv_pb_api::decode_seqv;
 use crate::kv_pb_api::errors::PbDecodeError;
 
@@ -64,9 +65,9 @@ struct TxnState {
 /// update, so a read that a write depends on can never be left unguarded.
 ///
 /// The read and write sets sit behind an `Arc<Mutex<…>>`, so reads and writes
-/// take `&self`. A [`FetchedRecord`] handle can borrow the transaction and write
-/// straight back to it, and several handles can be held at once without passing
-/// the transaction around.
+/// take `&self`. A guarded [`FetchedRecord`] handle can borrow the transaction
+/// and write straight back to it, and several handles can be held at once
+/// without passing the transaction around.
 ///
 /// Usually obtained from [`MetaTxnManager::run`](crate::MetaTxnManager::run).
 pub struct MetaTxn<'a, KV: ?Sized> {
@@ -91,8 +92,8 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
         }
     }
 
-    /// Stage a delete. Replaces any operation previously staged for `key`.
-    pub fn stage_delete<K>(&self, key: &K)
+    /// Stage an unguarded delete. Replaces any operation previously staged for `key`.
+    pub(crate) fn stage_unconditional_delete<K>(&self, key: &K)
     where K: kvapi::Key {
         self.state
             .lock()
@@ -101,8 +102,8 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
             .insert(key.to_string_key(), txn_del(key));
     }
 
-    /// Stage a put. Replaces any operation previously staged for `key`.
-    pub fn stage_put<K>(&self, key: &K, value: &K::ValueType)
+    /// Stage an unguarded put. Replaces any operation previously staged for `key`.
+    pub(crate) fn stage_unconditional_put<K>(&self, key: &K, value: &K::ValueType)
     where
         K: kvapi::Key,
         K::ValueType: FromToProto + 'static,
@@ -122,12 +123,13 @@ where
     KV::Error: From<PbDecodeError>,
 {
     /// Read a key without arming a guard.
-    pub async fn get<K>(&self, key: K) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
+    pub async fn get<K>(&self, key: K) -> Result<ReadRecord<K>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        self.fetch(key, false).await
+        let seq_v = self.fetch(&key, false).await?;
+        Ok(ReadRecord::new(seq_v))
     }
 
     /// Read a key and mark it for update, so it becomes an `eq_seq` guard at
@@ -143,7 +145,8 @@ where
         K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        self.fetch(key, true).await
+        let seq_v = self.fetch(&key, true).await?;
+        Ok(FetchedRecord::new(self, key, seq_v))
     }
 
     /// Read a key through the snapshot cache, recording it in the read set.
@@ -153,9 +156,9 @@ where
     /// by a for-update read upgrades the key to a guard.
     async fn fetch<K>(
         &self,
-        key: K,
+        key: &K,
         for_update: bool,
-    ) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
+    ) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
@@ -186,8 +189,7 @@ where
             }
         };
 
-        let seq_v = decode_raw::<K::ValueType, KV::Error>(raw, &key_str)?;
-        Ok(FetchedRecord::new(self, key, seq_v))
+        decode_raw::<K::ValueType, KV::Error>(raw, &key_str)
     }
 }
 

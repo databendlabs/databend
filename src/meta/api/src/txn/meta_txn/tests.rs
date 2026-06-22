@@ -144,7 +144,7 @@ async fn test_plain_get_adds_no_guard() -> anyhow::Result<()> {
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
     txn.get(k1.clone()).await?;
-    txn.stage_put(&k2, &meta());
+    txn.stage_unconditional_put(&k2, &meta());
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -287,8 +287,8 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
 
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
-    txn.stage_put(&k1, &meta());
-    txn.stage_delete(&k2);
+    txn.stage_unconditional_put(&k1, &meta());
+    txn.stage_unconditional_delete(&k2);
     commit.execute().await?;
 
     let req = mem.last_request();
