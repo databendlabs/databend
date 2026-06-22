@@ -108,9 +108,19 @@ impl BlockStatsBuilder {
                         hll.update_column(col);
                     }
                     if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
-                        for row in 0..col.len() {
+                        let mut row = 0;
+                        while row < col.len() {
                             if let Some(scalar) = col.index(row) {
-                                top_n.add_with_size(*top_n_size, scalar, 1);
+                                let mut count = 1;
+                                while row + count < col.len()
+                                    && col.index(row + count).is_some_and(|next| next == scalar)
+                                {
+                                    count += 1;
+                                }
+                                top_n.add_with_size(*top_n_size, scalar, count as u64);
+                                row += count;
+                            } else {
+                                row += 1;
                             }
                         }
                     }
@@ -173,9 +183,11 @@ impl BlockStatsBuilder {
 mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::number::Int32Type;
 
     use super::*;
@@ -195,6 +207,10 @@ mod tests {
 
     fn int32_block() -> DataBlock {
         DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 1, 2, 3])])
+    }
+
+    fn int32_block_with_delayed_hot_run() -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 2, 2])])
     }
 
     #[test]
@@ -232,6 +248,23 @@ mod tests {
         let (hll, top_n) = builder.finalize_with_top_n()?.unwrap();
         assert!(hll.is_empty());
         assert_eq!(top_n.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_stats_builder_counts_top_n_runs_before_pruning() -> Result<()> {
+        let ndv_columns_map = empty_columns_map();
+        let top_n_columns_map = int32_ndv_columns_map();
+        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 1)));
+        builder.add_block(&int32_block_with_delayed_hot_run())?;
+
+        let (_, top_n) = builder.finalize_with_top_n()?.unwrap();
+        let column_top_n = top_n.values().next().unwrap();
+        assert_eq!(column_top_n.values.len(), 1);
+        let entry = &column_top_n.values[0];
+        assert_eq!(entry.scalar, Scalar::Number(NumberScalar::Int32(2)));
+        assert_eq!(entry.count, 4);
+        assert_eq!(entry.error, 1);
         Ok(())
     }
 }
