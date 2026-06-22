@@ -28,3 +28,5 @@ pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer_api::Optimizer;
 pub use optimizer_context::OptimizerContext;
+pub use statistics::collect_statistics::CollectStatisticsOptimizer;
+pub use statistics::collect_statistics::StatisticsTraceCollector;
