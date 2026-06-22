@@ -427,8 +427,10 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
+        let has_top_n = self.top_n.as_ref().is_some_and(|top_n| !top_n.is_empty());
         let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()?
             || self.histogram_info.collect_statistics()
+            || has_top_n
         {
             let histograms = self
                 .histograms
