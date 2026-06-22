@@ -421,6 +421,9 @@ impl Operator for Scan {
         } else {
             None
         };
+        if self.sample.is_some() {
+            output_top_n.clear();
+        }
 
         // SECURITY: When row access policy is active, apply selectivity from
         // secure predicates first (for reasonable cardinality estimation and
@@ -474,7 +477,14 @@ impl Operator for Scan {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnTopNEntry;
+
     use super::*;
+    use crate::optimizer::ir::RelExpr;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::RelOperator;
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {
@@ -530,5 +540,51 @@ mod tests {
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
         assert!(derived.agg_index.is_none());
+    }
+
+    #[test]
+    fn test_sampled_scan_clears_top_n_stats() -> Result<()> {
+        let column = Symbol::new(1);
+        let top_n = ColumnTopN {
+            values: vec![ColumnTopNEntry {
+                scalar: Scalar::Number(NumberScalar::UInt64(42)),
+                count: 37,
+                error: 0,
+            }],
+            min_index: None,
+        };
+        let statistics = Arc::new(Statistics {
+            table_stats: Some(TableStatistics {
+                num_rows: Some(100),
+                ..Default::default()
+            }),
+            top_n: [(column, top_n)].into_iter().collect(),
+            ..Default::default()
+        });
+        let scan = Scan {
+            columns: [column].into_iter().collect(),
+            statistics,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        let stats = scan.derive_stats(&rel_expr)?;
+        assert!(stats.statistics.top_n.contains_key(&column));
+        assert_eq!(stats.statistics.precise_cardinality, Some(100));
+
+        let sampled_scan = Scan {
+            sample: Some(SampleConfig {
+                row_level: None,
+                block_level: Some(50.0),
+            }),
+            ..scan
+        };
+        let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
+        let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
+        let sampled_stats = sampled_scan.derive_stats(&sampled_rel_expr)?;
+        assert!(sampled_stats.statistics.top_n.is_empty());
+        assert_eq!(sampled_stats.statistics.precise_cardinality, None);
+
+        Ok(())
     }
 }
