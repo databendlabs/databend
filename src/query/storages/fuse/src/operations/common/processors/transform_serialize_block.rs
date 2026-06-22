@@ -399,15 +399,7 @@ impl Processor for TransformSerializeBlock {
                 } else {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
-                        if let Some(tid) = self.table_id {
-                            self.block_builder
-                                .ctx
-                                .mutation_state()
-                                .update_multi_table_insert_status(
-                                    tid,
-                                    extended_block_meta.block_meta.row_count,
-                                );
-                        } else {
+                        if self.table_id.is_none() {
                             self.block_builder.ctx.mutation_state().add_mutation_status(
                                 MutationStatus {
                                     insert_rows: extended_block_meta.block_meta.row_count,

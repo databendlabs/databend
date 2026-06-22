@@ -274,12 +274,7 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                 });
 
                 // appending new data block
-                if let Some(tid) = self.table_id {
-                    self.ctx.mutation_state().update_multi_table_insert_status(
-                        tid,
-                        extended_block_meta.block_meta.row_count,
-                    );
-                } else {
+                if self.table_id.is_none() {
                     self.ctx
                         .mutation_state()
                         .add_mutation_status(MutationStatus {
