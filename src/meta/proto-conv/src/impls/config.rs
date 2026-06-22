@@ -22,7 +22,6 @@ use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageS3Config;
@@ -90,9 +89,6 @@ impl FromToProto for mt::storage::StorageParams {
                 reader_check_msg(s.version, s.min_reader_ver)?;
                 Ok(mt::storage::StorageParams::Memory)
             }
-            Some(pb::storage_config::Storage::Moka(s)) => Ok(mt::storage::StorageParams::Moka(
-                mt::storage::StorageMokaConfig::from_pb(s)?,
-            )),
             Some(pb::storage_config::Storage::None(_)) => Ok(mt::storage::StorageParams::None),
             None => Err(Incompatible::new(
                 "StageStorage.storage cannot be None".to_string(),
@@ -149,12 +145,13 @@ impl FromToProto for mt::storage::StorageParams {
                     },
                 )),
             }),
-            mt::storage::StorageParams::Moka(v) => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::Moka(v.to_pb()?)),
-            }),
             mt::storage::StorageParams::None => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::None(pb::Empty {})),
             }),
+            others => Err(Incompatible::new(format!(
+                "stage type: {} not supported",
+                others
+            ))),
         }
     }
 }
@@ -594,34 +591,6 @@ impl FromToProto for StorageIpfsConfig {
             endpoint_url: self.endpoint_url.clone(),
             root: self.root.clone(),
             network_config: self.network_config.to_pb_opt()?,
-        })
-    }
-}
-
-impl FromToProto for StorageMokaConfig {
-    type PB = pb::MokaStorageConfig;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.version
-    }
-
-    fn from_pb(p: pb::MokaStorageConfig) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.version, p.min_reader_ver)?;
-
-        Ok(StorageMokaConfig {
-            max_capacity: p.max_capacity,
-            time_to_live: p.time_to_live,
-            time_to_idle: p.time_to_idle,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::MokaStorageConfig, Incompatible> {
-        Ok(pb::MokaStorageConfig {
-            version: VER,
-            min_reader_ver: MIN_READER_VER,
-            max_capacity: self.max_capacity,
-            time_to_live: self.time_to_live,
-            time_to_idle: self.time_to_idle,
         })
     }
 }

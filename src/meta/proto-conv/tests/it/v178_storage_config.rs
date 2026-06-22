@@ -16,7 +16,6 @@ use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageFtpConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageParams;
 use fastrace::func_name;
@@ -143,25 +142,6 @@ fn test_decode_v178_storage_config_memory() -> anyhow::Result<()> {
     let storage_config_v178 = vec![114, 7, 160, 6, 178, 1, 168, 6, 24];
 
     let want = || StorageParams::Memory;
-
-    common::test_load_old(func_name!(), storage_config_v178.as_slice(), 0, want())?;
-    common::test_pb_from_to(func_name!(), want())?;
-    Ok(())
-}
-
-#[test]
-fn test_decode_v178_storage_config_moka() -> anyhow::Result<()> {
-    let storage_config_v178 = vec![
-        122, 16, 8, 128, 8, 16, 144, 28, 24, 216, 4, 160, 6, 178, 1, 168, 6, 24,
-    ];
-
-    let want = || {
-        StorageParams::Moka(StorageMokaConfig {
-            max_capacity: 1024,
-            time_to_live: 3600,
-            time_to_idle: 600,
-        })
-    };
 
     common::test_load_old(func_name!(), storage_config_v178.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
