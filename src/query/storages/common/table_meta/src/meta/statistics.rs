@@ -261,7 +261,8 @@ impl ColumnTopN {
             }
         }
         match self.min_index {
-            None => self.min_index = Some(index),
+            None if self.values.len() == 1 => self.min_index = Some(index),
+            None => {}
             Some(min_index) => {
                 let count = self.values[index].count;
                 let min_count = self.values[min_index].count;
@@ -425,6 +426,49 @@ mod tests {
             .expect("new scalar should replace the current minimum");
         assert_eq!(entry.count, 2);
         assert_eq!(entry.error, 1);
+    }
+
+    #[test]
+    fn column_top_n_rescans_min_after_cached_min_updates() {
+        let mut top_n = ColumnTopN::default();
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 1,
+            error: 0,
+        });
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 5,
+            error: 0,
+        });
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 10,
+            error: 0,
+        });
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(3),
+            count: 7,
+            error: 0,
+        });
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(4),
+            count: 8,
+            error: 0,
+        });
+        top_n.add_entry_for_test(4, ColumnTopNEntry {
+            scalar: uint_scalar(5),
+            count: 1,
+            error: 0,
+        });
+
+        assert_eq!(top_n.values.len(), 4);
+        assert_eq!(top_n.get(&uint_scalar(1)), Some(11));
+        assert_eq!(top_n.get(&uint_scalar(2)), None);
+        assert_eq!(top_n.get(&uint_scalar(3)), Some(7));
+        let entry = top_n.get_entry(&uint_scalar(5)).unwrap();
+        assert_eq!(entry.count, 6);
+        assert_eq!(entry.error, 5);
     }
 }
 
