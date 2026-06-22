@@ -131,6 +131,205 @@ statement ok
 analyze table t1;
 
 statement ok
+set enable_table_snapshot_stats = 0;
+
+statement ok
+create or replace table t_kll_explicit_off as select number % 10 as a from numbers(100);
+
+statement ok
+analyze table t_kll_explicit_off with histogram algorithm = 'kll_fast', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_explicit_off')
+where column_name = 'a'
+    and distinct_count = 10
+    and histogram != ''
+    and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+statement error
+analyze table t_kll_explicit_off noscan with histogram algorithm = 'kll_fast', error_rate = 0.01;
+
+statement error
+analyze table t_kll_explicit_off noscan with histogram;
+
+statement ok
+set enable_table_snapshot_stats = 1;
+
+statement ok
+set enable_analyze_histogram=1;
+
+statement ok
+analyze table t1 with histogram algorithm = 'kll_full', error_rate = 0.01;
+
+query TIIIT
+select * from fuse_statistic('db_09_0020', 't1');
+----
+a 10 0 8 [bucket id: 0, min: "0", max: "0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9", max: "9", ndv: 1.0, count: 1.0]
+
+statement ok
+create or replace table t_kll_dups as
+select number % 10 as a, concat('v', to_string(number % 5)) as b from numbers(100);
+
+statement ok
+analyze table t_kll_dups with histogram algorithm = 'kll_fast', error_rate = 0.01;
+
+query TI
+select column_name, distinct_count
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where histogram != ''
+order by column_name;
+----
+a 10
+b 5
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'a' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'b' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'a'
+    and histogram like '%count: 1.0%'
+    and histogram not like '%count: 10.0%';
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'b'
+    and histogram like '%count: 1.0%'
+    and histogram not like '%count: 20.0%';
+----
+1
+
+statement ok
+analyze table t_kll_dups with histogram algorithm = 'kll_full', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'a'
+    and histogram like '%count: 10.0%'
+    and histogram not like '%count: 1.0%';
+----
+1
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_dups')
+where column_name = 'b'
+    and histogram like '%count: 20.0%'
+    and histogram not like '%count: 1.0%';
+----
+1
+
+statement ok
+create or replace table t_kll_compact as
+select number as a from numbers(1000);
+
+statement ok
+analyze table t_kll_compact with histogram algorithm = 'kll_fast', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_compact')
+where column_name = 'a' and histogram != '' and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+statement ok
+create or replace table t_kll_timestamp_tz as
+select to_timestamp_tz(concat('2024-01-01 00:00:0', to_string(number), ' +00:00')) as ts
+from numbers(10);
+
+statement ok
+analyze table t_kll_timestamp_tz with histogram algorithm = 'kll_fast', error_rate = 0.01;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_timestamp_tz')
+where column_name = 'ts'
+    and distinct_count = 10
+    and histogram != ''
+    and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+statement ok
+create or replace table t_kll_policy as
+select number % 10 as a from numbers(100);
+
+statement ok
+alter table t_kll_policy set options(
+    analyze_histogram_algorithm = 'kll_full',
+    analyze_histogram_kll_relative_error = '0.01'
+);
+
+statement ok
+set enable_analyze_histogram=0;
+
+statement ok
+set enable_table_snapshot_stats = 0;
+
+statement ok
+analyze table t_kll_policy;
+
+query I
+select count(*)
+from fuse_statistic('db_09_0020', 't_kll_policy')
+where column_name = 'a'
+    and distinct_count = 10
+    and histogram != ''
+    and regexp_instr(histogram, 'bucket id') > 0;
+----
+1
+
+statement ok
+set enable_analyze_histogram=1;
+
+statement ok
+set enable_table_snapshot_stats = 1;
+
+statement error
+alter table t_kll_policy set options(analyze_histogram_algorithm = 'bad');
+
+statement error
+alter table t_kll_policy set options(analyze_histogram_kll_relative_error = '0');
+
+statement ok
+drop table t_kll_dups;
+
+statement ok
+drop table t_kll_explicit_off;
+
+statement ok
+drop table t_kll_compact;
+
+statement ok
+drop table t_kll_timestamp_tz;
+
+statement ok
+drop table t_kll_policy;
+
+statement ok
+set enable_analyze_histogram=0;
+
+statement ok
 DROP TABLE t
 
 # Test case for string histogram functionality

@@ -917,6 +917,24 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("analyze_histogram_algorithm", DefaultSettingValue {
+                    value: UserSettingValue::String("window".to_string()),
+                    desc: "Sets the histogram algorithm used by ANALYZE TABLE: window, kll_fast, or kll_full.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "window".into(),
+                        "kll_fast".into(),
+                        "kll_full".into(),
+                    ])),
+                }),
+                ("analyze_histogram_kll_relative_error", DefaultSettingValue {
+                    value: UserSettingValue::String("0.01".to_string()),
+                    desc: "Sets the relative error used by the KLL analyze histogram algorithm.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: None,
+                }),
                 ("enable_auto_analyze", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables automatically analyze after write, 0 for disable, 1 for enable",
