@@ -201,6 +201,8 @@ impl Interpreter for AnalyzeTableInterpreter {
         let collect_histogram = plan.histogram_requested
             || has_table_histogram_policy(table_options)
             || self.ctx.get_settings().get_enable_analyze_histogram()?;
+        let top_n_size = analyze_top_n_size_from_options(table_options)?;
+        let top_n_columns = table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned();
         if collect_histogram {
             if self.plan.no_scan {
                 return Err(ErrorCode::BadArguments(
@@ -283,13 +285,23 @@ impl Interpreter for AnalyzeTableInterpreter {
                 }
             }
         }
+        if self.plan.no_scan
+            && top_n_size.is_some()
+            && top_n_columns
+                .as_ref()
+                .is_some_and(|columns| !columns.trim().is_empty())
+        {
+            return Err(ErrorCode::BadArguments(
+                "ANALYZE TABLE NOSCAN cannot be used with top-N collection because top-N collection must scan table data",
+            ));
+        }
         table.do_analyze(
             self.ctx.clone(),
             snapshot,
             &mut build_res.main_pipeline,
             histogram_info,
-            analyze_top_n_size_from_options(table_options)?,
-            table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned(),
+            top_n_size,
+            top_n_columns,
             self.plan.no_scan,
             true,
         )?;

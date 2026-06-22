@@ -33,6 +33,9 @@ ANALYZE TABLE t_topn_off
 statement ok
 ANALYZE TABLE t_topn_on
 
+statement error
+ANALYZE TABLE t_topn_on NOSCAN
+
 query T
 EXPLAIN SELECT * FROM t_topn_off WHERE a = 1
 ----
