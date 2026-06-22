@@ -4864,20 +4864,35 @@ dependencies = [
 name = "databend-common-sql-test-support"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-io",
+ "databend-common-license",
+ "databend-common-meta-app",
+ "databend-common-meta-store",
+ "databend-common-pipeline",
  "databend-common-settings",
  "databend-common-sql",
  "databend-common-statistics",
+ "databend-common-storage",
+ "databend-common-users",
+ "databend-meta-client 260205.12.0",
+ "databend-meta-runtime",
+ "databend-storages-common-session",
+ "databend-storages-common-table-meta",
  "goldenfile",
- "log",
- "match-template",
+ "jwt-simple",
+ "parking_lot 0.12.3",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tokio",
 ]
 
 [[package]]

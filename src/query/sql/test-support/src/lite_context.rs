@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -95,7 +96,6 @@ use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
-use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_storage::DataOperator;
@@ -104,6 +104,8 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
@@ -117,10 +119,15 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use jwt_simple::claims::JWTClaims;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
+
+use crate::ReplayInput;
+use crate::ReplayRowAccessPolicy;
+use crate::ReplayView;
+use crate::configure_optimizer_settings;
 
 const LITE_COMMERCIAL_LICENSE_KEY: &str = "lite-test-commercial";
+const LITE_VIEW_ENGINE: &str = "VIEW";
+const LITE_VIEW_QUERY_KEY: &str = "query";
 
 static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     semantic: Version::new(0, 0, 0),
@@ -136,7 +143,7 @@ thread_local! {
         const { std::cell::OnceCell::new() };
 }
 
-pub(crate) fn init_testing_globals() {
+pub fn init_testing_globals() {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
@@ -234,11 +241,12 @@ impl DummyCatalog {
     fn insert_table(&self, database: &str, table: Arc<dyn Table>) {
         self.tables
             .write()
+            .unwrap()
             .insert((database.to_string(), table.name().to_string()), table);
     }
 
     fn clear_tables(&self) {
-        self.tables.write().clear();
+        self.tables.write().unwrap().clear();
     }
 }
 
@@ -449,6 +457,7 @@ impl Catalog for DummyCatalog {
     ) -> Result<Arc<dyn Table>> {
         self.tables
             .read()
+            .unwrap()
             .get(&(db_name.to_string(), table_name.to_string()))
             .cloned()
             .ok_or_else(|| ErrorCode::UnknownTable(format!("{}.{}", db_name, table_name)))
@@ -750,26 +759,54 @@ impl LiteTableContext {
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
         options: BTreeMap<String, String>,
+        row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
+        let mut column_ids_by_name = schema
+            .fields()
+            .iter()
+            .map(|field| (field.name().to_string(), field.column_id()))
+            .collect::<HashMap<_, _>>();
+        column_ids_by_name.extend(
+            schema
+                .leaf_fields()
+                .into_iter()
+                .map(|field| (field.name().to_string(), field.column_id())),
+        );
         let column_stats = column_stats
             .into_iter()
             .map(|(name, stats)| {
-                let index = schema.index_of(&name)?;
-                let column_id = schema.field(index).column_id();
-                Ok((column_id, stats))
+                column_ids_by_name
+                    .get(&name)
+                    .copied()
+                    .map(|column_id| (column_id, stats))
+                    .ok_or_else(|| {
+                        ErrorCode::BadArguments(format!(
+                            "Unable to get field named \"{}\". Valid fields: {:?}",
+                            name,
+                            column_ids_by_name.keys().collect::<Vec<_>>()
+                        ))
+                    })
             })
             .collect::<Result<HashMap<_, _>>>()?;
         let histograms = histograms
             .into_iter()
             .map(|(name, histogram)| {
-                let index = schema.index_of(&name)?;
-                let column_id = schema.field(index).column_id();
-                Ok((column_id, histogram))
+                column_ids_by_name
+                    .get(&name)
+                    .copied()
+                    .map(|column_id| (column_id, histogram))
+                    .ok_or_else(|| {
+                        ErrorCode::BadArguments(format!(
+                            "Unable to get field named \"{}\". Valid fields: {:?}",
+                            name,
+                            column_ids_by_name.keys().collect::<Vec<_>>()
+                        ))
+                    })
             })
             .collect::<Result<HashMap<_, _>>>()?;
 
-        let warehouse_distribution = *self.warehouse_distribution.read();
+        let warehouse_distribution = *self.warehouse_distribution.read().unwrap();
         let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
 
         Ok(Arc::new(FakeTable {
@@ -780,6 +817,7 @@ impl LiteTableContext {
                 meta: TableMeta {
                     schema,
                     options,
+                    row_access_policy_columns_ids,
                     ..Default::default()
                 },
                 catalog_info: self.default_catalog.info(),
@@ -883,11 +921,11 @@ impl LiteTableContext {
     }
 
     pub fn enable_commercial_license_for_test(&self) {
-        *self.license_key.write() = LITE_COMMERCIAL_LICENSE_KEY.to_string();
+        *self.license_key.write().unwrap() = LITE_COMMERCIAL_LICENSE_KEY.to_string();
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
-        *self.warehouse_distribution.write() = enabled;
+        *self.warehouse_distribution.write().unwrap() = enabled;
     }
 
     pub fn set_cluster_node_num(&self, nodes: u64) {
@@ -918,7 +956,7 @@ impl LiteTableContext {
             })
             .collect();
 
-        *self.cluster.write() = Arc::new(Cluster {
+        *self.cluster.write().unwrap() = Arc::new(Cluster {
             unassign: false,
             local_id,
             nodes: node_infos,
@@ -943,9 +981,137 @@ impl LiteTableContext {
             column_stats,
             histograms,
             options,
+            None,
         )?;
         self.default_catalog.insert_table(database, table);
         Ok(())
+    }
+
+    pub async fn register_replay_input(self: &Arc<Self>, input: &ReplayInput) -> Result<()> {
+        let parts = input.into_parts()?;
+
+        for udf in parts.user_defined_functions {
+            self.register_udf(udf).await?;
+        }
+
+        for view in &parts.views {
+            if view.catalog != self.current_catalog {
+                return unsupported(
+                    "lite sql harness statistics trace view from non-default catalog",
+                );
+            }
+            self.register_replay_view(view)?;
+        }
+
+        for table in parts.tables {
+            if table.catalog != self.current_catalog {
+                return unsupported("lite sql harness statistics trace from non-default catalog");
+            }
+            self.register_replay_table(table).await?;
+        }
+        Ok(())
+    }
+
+    fn register_replay_view(&self, view: &ReplayView) -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
+
+        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        let table = Arc::new(FakeTable {
+            table_info: TableInfo {
+                ident: TableIdent::new(table_id, 0),
+                desc: format!("'{}'.'{}'", view.database, view.view),
+                name: view.view.clone(),
+                meta: TableMeta {
+                    schema: Arc::new(TableSchema::new(vec![])),
+                    engine: LITE_VIEW_ENGINE.to_string(),
+                    options,
+                    ..Default::default()
+                },
+                catalog_info: self.default_catalog.info(),
+                db_type: DatabaseType::NormalDB,
+            },
+            warehouse_distribution: false,
+            table_stats: None,
+            column_stats: HashMap::new(),
+            histograms: HashMap::new(),
+        });
+        self.default_catalog.insert_table(&view.database, table);
+        Ok(())
+    }
+
+    async fn register_replay_table(&self, table: crate::ReplayTableSpec) -> Result<()> {
+        let row_access_policy_columns_ids = match &table.row_access_policy {
+            None => None,
+            Some(policy) => {
+                self.enable_commercial_license_for_test();
+                Some(
+                    self.register_replay_row_access_policy(&table.fields, policy)
+                        .await?,
+                )
+            }
+        };
+
+        let database = table.database;
+        let table_name = table.table;
+        let table = self.build_fake_table(
+            &database,
+            &table_name,
+            table.fields,
+            table.table_stats,
+            table.column_stats,
+            table.histograms,
+            BTreeMap::new(),
+            row_access_policy_columns_ids,
+        )?;
+        self.default_catalog.insert_table(&database, table);
+        Ok(())
+    }
+
+    async fn register_replay_row_access_policy(
+        &self,
+        fields: &[TableField],
+        policy: &ReplayRowAccessPolicy,
+    ) -> Result<SecurityPolicyColumnMap> {
+        let column_ids = policy
+            .columns
+            .iter()
+            .map(|column| {
+                fields
+                    .iter()
+                    .find(|field| field.name() == column)
+                    .map(|field| field.column_id())
+                    .ok_or_else(|| {
+                        ErrorCode::BadArguments(format!(
+                            "Unable to get row access policy column named \"{}\". Valid fields: {:?}",
+                            column,
+                            fields.iter().map(|field| field.name()).collect::<Vec<_>>()
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let cache = SecurityPolicyCacheManager::instance();
+        cache.invalidate(PolicyType::RowAccessPolicy, &self.tenant, policy.policy_id);
+
+        let body = policy.body.clone();
+        let args = policy.args.clone();
+        cache
+            .get_or_load(
+                PolicyType::RowAccessPolicy,
+                &self.tenant,
+                policy.policy_id,
+                || async move { Ok(RawPolicyDef { body, args }) },
+            )
+            .await?;
+
+        Ok(SecurityPolicyColumnMap::new(policy.policy_id, column_ids))
+    }
+
+    pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
+        UserApiProvider::instance()
+            .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
+            .await
     }
 
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
@@ -960,7 +1126,7 @@ impl LiteTableContext {
         match &extras.statement {
             Statement::CreateTable(_) => self.register_table_sql(sql).await,
             Statement::CreateUDF(_) => {
-                let metadata = Arc::new(RwLock::new(Metadata::default()));
+                let metadata = Metadata::default_ref();
                 let name_resolution_ctx =
                     NameResolutionContext::try_from(self.get_settings().as_ref())?;
                 let binder = databend_common_sql::Binder::new(
@@ -1106,7 +1272,7 @@ impl LiteTableContext {
     pub async fn bind_sql(self: &Arc<Self>, sql: &str) -> Result<Plan> {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let metadata = Metadata::default_ref();
         let name_resolution_ctx = NameResolutionContext::try_from(self.get_settings().as_ref())?;
         let binder = databend_common_sql::Binder::new(
             self.clone(),
@@ -1120,7 +1286,7 @@ impl LiteTableContext {
     pub async fn optimize_plan(self: &Arc<Self>, plan: Plan) -> Result<Plan> {
         let metadata = match &plan {
             Plan::Query { metadata, .. } => metadata.clone(),
-            _ => Arc::new(RwLock::new(Metadata::default())),
+            _ => Metadata::default_ref(),
         };
         let settings = self.get_settings();
         let opt_ctx = OptimizerContext::new(self.clone(), metadata)
@@ -1214,7 +1380,7 @@ impl TableContextSettings for LiteTableContext {
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
-        self.license_key.read().clone()
+        self.license_key.read().unwrap().clone()
     }
 }
 
@@ -1281,11 +1447,11 @@ impl TableContextTelemetry for LiteTableContext {
     }
 
     fn get_query_queued_duration(&self) -> Duration {
-        *self.queued_duration.read()
+        *self.queued_duration.read().unwrap()
     }
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
-        *self.queued_duration.write() = queued_duration;
+        *self.queued_duration.write().unwrap() = queued_duration;
     }
 }
 
@@ -1348,11 +1514,11 @@ impl TableContextProgress for LiteTableContext {
 #[async_trait::async_trait]
 impl TableContextCluster for LiteTableContext {
     fn get_cluster(&self) -> Arc<Cluster> {
-        self.cluster.read().clone()
+        self.cluster.read().unwrap().clone()
     }
 
     fn set_cluster(&self, cluster: Arc<Cluster>) {
-        *self.cluster.write() = cluster;
+        *self.cluster.write().unwrap() = cluster;
     }
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
@@ -1404,11 +1570,11 @@ impl TableContextCte for LiteTableContext {
 
 impl TableContextMergeInto for LiteTableContext {
     fn set_merge_into_join(&self, join: MergeIntoJoin) {
-        *self.merge_into_join.write() = join;
+        *self.merge_into_join.write().unwrap() = join;
     }
 
     fn get_merge_into_join(&self) -> MergeIntoJoin {
-        let join = self.merge_into_join.read();
+        let join = self.merge_into_join.read().unwrap();
         MergeIntoJoin {
             merge_into_join_type: join.merge_into_join_type.clone(),
             is_distributed: join.is_distributed,
@@ -1423,24 +1589,24 @@ impl TableContextQueryIdentity for LiteTableContext {
     }
 
     fn attach_query_str(&self, _kind: QueryKind, query: String) {
-        *self.query.write() = query;
+        *self.query.write().unwrap() = query;
     }
 
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
-        *self.query_text_hash.write() = text_hash;
-        *self.query_parameterized_hash.write() = parameterized_hash;
+        *self.query_text_hash.write().unwrap() = text_hash;
+        *self.query_parameterized_hash.write().unwrap() = parameterized_hash;
     }
 
     fn get_query_str(&self) -> String {
-        self.query.read().clone()
+        self.query.read().unwrap().clone()
     }
 
     fn get_query_parameterized_hash(&self) -> String {
-        self.query_parameterized_hash.read().clone()
+        self.query_parameterized_hash.read().unwrap().clone()
     }
 
     fn get_query_text_hash(&self) -> String {
-        self.query_text_hash.read().clone()
+        self.query_text_hash.read().unwrap().clone()
     }
 
     fn get_last_query_id(&self, _index: i32) -> Option<String> {
@@ -1644,8 +1810,8 @@ impl TableContextPerf for LiteTableContext {
 
     fn set_perf_flag(&self, _flag: bool) {}
 
-    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
-        Arc::new(Mutex::new(HashMap::new()))
+    fn get_nodes_perf(&self) -> Arc<parking_lot::Mutex<HashMap<String, String>>> {
+        Arc::new(parking_lot::Mutex::new(HashMap::new()))
     }
 
     fn set_nodes_perf(&self, _node: String, _perf: String) {}
@@ -1695,6 +1861,7 @@ impl TableContextRuntimeFilter for LiteTableContext {
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
         self.runtime_filter_ready
             .write()
+            .unwrap()
             .entry(table_index)
             .or_default()
             .push(ready);
@@ -1703,13 +1870,14 @@ impl TableContextRuntimeFilter for LiteTableContext {
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
         self.runtime_filter_ready
             .read()
+            .unwrap()
             .get(&table_index)
             .cloned()
             .unwrap_or_default()
     }
 
     fn clear_runtime_filter(&self) {
-        self.runtime_filter_ready.write().clear();
+        self.runtime_filter_ready.write().unwrap().clear();
     }
 
     fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
@@ -1755,24 +1923,27 @@ impl TableContextStream for LiteTableContext {
 
 impl TableContextVariables for LiteTableContext {
     fn set_variable(&self, key: String, value: Scalar) {
-        self.variables.write().insert(key, value);
+        self.variables.write().unwrap().insert(key, value);
     }
 
     fn unset_variable(&self, key: &str) {
-        self.variables.write().remove(key);
+        self.variables.write().unwrap().remove(key);
     }
 
     fn get_variable(&self, key: &str) -> Option<Scalar> {
-        self.variables.read().get(key).cloned()
+        self.variables.read().unwrap().get(key).cloned()
     }
 
     fn get_all_variables(&self) -> HashMap<String, Scalar> {
-        self.variables.read().clone()
+        self.variables.read().unwrap().clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_common_sql::FormatOptions;
+
     use super::*;
 
     fn test_fields() -> Vec<TableField> {
@@ -1894,6 +2065,124 @@ $$
 
         let plan = ctx.bind_sql("SELECT weighted_avg(a, b) FROM t").await?;
         assert!(matches!(plan, Plan::Query { .. }));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_register_statistics_trace_supports_udfs() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        let input = ReplayInput {
+            views: vec![],
+            udfs: vec![crate::ReplayUdf {
+                name: "trace_udf".to_string(),
+                arg_types: vec![DataType::Number(NumberDataType::UInt64)],
+                return_type: DataType::Number(NumberDataType::UInt64),
+            }],
+            table_stats: HashMap::from([(0, crate::ReplayTable {
+                statistics: None,
+                fields: test_fields(),
+                row_access_policy: None,
+            })]),
+            column_stats: vec![],
+            scan_mappings: vec![crate::ReplayScan {
+                table_index: 0,
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            }],
+        };
+        ctx.register_replay_input(&input).await?;
+
+        let plan = ctx.bind_sql("SELECT trace_udf(a) FROM t").await?;
+        assert!(matches!(plan, Plan::Query { .. }));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_register_statistics_trace_supports_row_access_policy() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        ctx.configure_for_optimizer_case(true)?;
+        let input = ReplayInput {
+            views: vec![],
+            udfs: vec![],
+            table_stats: HashMap::from([(0, crate::ReplayTable {
+                statistics: None,
+                fields: test_fields(),
+                row_access_policy: Some(crate::ReplayRowAccessPolicy {
+                    policy_id: 1,
+                    columns: vec!["a".to_string()],
+                    args: vec![("a".to_string(), "UInt64".to_string())],
+                    body: "a > 0".to_string(),
+                }),
+            })]),
+            column_stats: vec![],
+            scan_mappings: vec![crate::ReplayScan {
+                table_index: 0,
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            }],
+        };
+        ctx.register_replay_input(&input).await?;
+
+        let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
+        let optimized_plan = ctx.optimize_plan(raw_plan).await?;
+        let formatted = optimized_plan.format_indent(FormatOptions::default())?;
+        assert!(
+            formatted.contains("ROW ACCESS POLICY APPLIED"),
+            "formatted plan:\n{formatted}"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_register_statistics_trace_supports_views_and_materialized_ctes() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        ctx.configure_for_optimizer_case(true)?;
+        let input = ReplayInput {
+            views: vec![crate::ReplayView {
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                view: "v".to_string(),
+                query: "SELECT a FROM default.t".to_string(),
+            }],
+            udfs: vec![],
+            table_stats: HashMap::from([(0, crate::ReplayTable {
+                statistics: None,
+                fields: test_fields(),
+                row_access_policy: None,
+            })]),
+            column_stats: vec![],
+            scan_mappings: vec![crate::ReplayScan {
+                table_index: 0,
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            }],
+        };
+        ctx.register_replay_input(&input).await?;
+
+        let sql = r#"
+            settings (enable_auto_materialize_cte = 1)
+            WITH c AS (SELECT a FROM v)
+            SELECT a FROM c UNION ALL SELECT a FROM c
+        "#;
+        let raw_plan = ctx.bind_sql(sql).await?;
+        let raw_formatted = raw_plan.format_indent(FormatOptions::default())?;
+        assert!(
+            raw_formatted.contains("MaterializedCTE"),
+            "formatted plan:\n{raw_formatted}"
+        );
+
+        let optimized_plan = ctx.optimize_plan(raw_plan).await?;
+        let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+        assert!(
+            optimized.contains("Scan") && optimized.contains("default.t"),
+            "formatted plan:\n{optimized}"
+        );
 
         Ok(())
     }
