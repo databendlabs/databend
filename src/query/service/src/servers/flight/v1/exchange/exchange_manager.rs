@@ -40,6 +40,7 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
+use log::debug;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -327,7 +328,7 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
-                        warn!(
+                        debug!(
                             "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
                             config.query.node_id, target_id, exchange_id, num_threads
                         );
@@ -633,7 +634,7 @@ impl DataExchangeManager {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        warn!(
+        debug!(
             "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
             query_id, channel_id, num_threads
         );
