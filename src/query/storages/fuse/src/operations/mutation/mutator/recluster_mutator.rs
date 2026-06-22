@@ -84,24 +84,40 @@ const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReclusterGroup {
     Level(i32),
+    /// A two-level FINAL bin covering `lo` and `lo + 1`.
     Mixed(i32),
 }
 
 impl ReclusterGroup {
+    /// Assign a block's recluster group for the given mode and stagger `offset`.
+    ///
+    /// FINAL packs mature levels into fixed two-level bins whose boundaries
+    /// depend on `offset`, so two passes together cover every adjacent pair:
+    ///   - offset = 1: {0} {1,2} {3,4} {5,6} ... (covers boundaries 1-2, 3-4, ...)
+    ///   - offset = 0: {0,1} {2,3} {4,5} {6,7} ... (covers boundaries 0-1, 2-3, ...)
+    fn assign(level: i32, mode: ReclusterMode, offset: i32) -> ReclusterGroup {
+        match mode {
+            ReclusterMode::Normal => ReclusterGroup::Level(level),
+            ReclusterMode::Final if level < offset => ReclusterGroup::Level(level),
+            ReclusterMode::Final => {
+                let lo = ((level - offset) / 2) * 2 + offset;
+                ReclusterGroup::Mixed(lo)
+            }
+        }
+    }
+
     fn output_level(self, task_indices: &[usize], blocks: &[&ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::Mixed(band) => {
-                // Each Mixed band contains exactly two levels.
-                let lo = band * 2 + 1;
-                let hi = band * 2 + 2;
+            ReclusterGroup::Mixed(lo) => {
+                let hi = lo + 1;
                 let mut hi_count = 0u32;
                 let mut total = 0u32;
                 for &idx in task_indices {
                     let level = blocks[idx].stats().level;
                     debug_assert!(
                         level == lo || level == hi,
-                        "unexpected level {level} in Mixed band {band}"
+                        "unexpected level {level} in Mixed bin [{lo},{hi}]"
                     );
                     total += 1;
                     if level == hi {
@@ -119,7 +135,7 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::Mixed(band) => write!(f, "mixed-{}", band),
+            ReclusterGroup::Mixed(lo) => write!(f, "{}-{}", lo, lo + 1),
         }
     }
 }
@@ -419,31 +435,8 @@ impl ReclusterMutator {
             .gather_blocks(selected_segments, decode_runtime, decode_semaphore)
             .await?;
         let mut blocks = Vec::with_capacity(total_block_count);
-        let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
         for segment_blocks in &blocks_by_segment {
-            for block in segment_blocks {
-                let idx = blocks.len();
-                blocks.push(block);
-                let stats = block.stats();
-                if stats.level < 0 {
-                    continue;
-                }
-                if stats.level >= MAX_RECLUSTER_LEVEL {
-                    debug!(
-                        "recluster: skip block segment_idx={} block_idx={} level={} skip_reason=max_recluster_level",
-                        block.index.segment_idx, block.index.block_idx, stats.level,
-                    );
-                    continue;
-                }
-
-                // FINAL isolates level 0 and groups mature levels into fixed two-level bands.
-                let group = match mode {
-                    ReclusterMode::Normal => ReclusterGroup::Level(stats.level),
-                    ReclusterMode::Final if stats.level == 0 => ReclusterGroup::Level(0),
-                    ReclusterMode::Final => ReclusterGroup::Mixed((stats.level - 1) / 2),
-                };
-                blocks_map.entry(group).or_default().push(idx);
-            }
+            blocks.extend(segment_blocks.iter());
         }
 
         let mut candidate_window = ReclusterCandidateWindow {
@@ -451,62 +444,26 @@ impl ReclusterMutator {
             tasks: Vec::new(),
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
-        let mut deferred_group_candidates = None;
-        let large_task_bytes_threshold = self.large_task_bytes_threshold();
-        for (group, indices) in blocks_map {
-            if candidate_window.tasks.len() >= task_budget {
-                break;
-            }
-            let remaining_task_budget = task_budget - candidate_window.tasks.len();
-            let candidates = self.build_recluster_task_candidates_for_indices(
-                group,
-                indices,
-                &blocks,
-                remaining_task_budget,
-            )?;
-            if candidates.is_empty() {
-                continue;
-            }
 
-            if candidate_window.tasks.is_empty() && deferred_group_candidates.is_none() {
-                // When the first constructible group is too small, defer it once so
-                // later groups get a chance to consume this window's budget first.
-                let selected_total_bytes = candidates
-                    .iter()
-                    .map(|candidate| candidate.score.selected_total_bytes)
-                    .sum::<usize>();
-                if selected_total_bytes < large_task_bytes_threshold {
-                    debug!(
-                        "recluster: defer low-level group={} selected_bytes={} task_count={} skip_reason=deferred_low_level_batch",
-                        group,
-                        selected_total_bytes,
-                        candidates.len(),
-                    );
-                    deferred_group_candidates = Some(candidates);
-                    continue;
-                }
-            }
-
-            for candidate in candidates.into_iter().take(remaining_task_budget) {
-                for (window_pos, _) in &candidate.selected_blocks {
-                    selected_window_positions[*window_pos] = true;
-                }
-                candidate_window.tasks.push(candidate);
-            }
+        // Pass 1: the primary bins isolate level 0 and group mature levels as
+        // {1,2} {3,4} {5,6} ...; this matches the prior FINAL behavior. NORMAL
+        // mode only uses this pass (each level stays its own group).
+        let mut tasks = self.build_tasks_for_offset(1, &blocks, mode, task_budget)?;
+        // Pass 2: only for FINAL when pass 1 produced nothing. Re-bin the same
+        // blocks with staggered bins {0,1} {2,3} {4,5} ... so the boundaries
+        // pass 1 cannot merge (2-3, 4-5, ...) get a chance. Pass 2 runs only
+        // when pass 1 is empty, so no block is selected by both.
+        if tasks.is_empty() && mode == ReclusterMode::Final {
+            debug!("recluster: primary bins produced no task, retry with staggered bins");
+            tasks = self.build_tasks_for_offset(0, &blocks, mode, task_budget)?;
         }
 
-        if candidate_window.tasks.len() < task_budget {
-            if let Some(candidates) = deferred_group_candidates {
-                let remaining_task_budget = task_budget - candidate_window.tasks.len();
-                for candidate in candidates.into_iter().take(remaining_task_budget) {
-                    debug!("recluster: backfill deferred candidate {}", candidate);
-                    for (window_pos, _) in &candidate.selected_blocks {
-                        selected_window_positions[*window_pos] = true;
-                    }
-                    candidate_window.tasks.push(candidate);
-                }
+        for candidate in &tasks {
+            for (window_pos, _) in &candidate.selected_blocks {
+                selected_window_positions[*window_pos] = true;
             }
         }
+        candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
             let selected_segment_count = window_segment_infos.len();
@@ -564,6 +521,88 @@ impl ReclusterMutator {
         }
 
         Ok(candidate_window)
+    }
+
+    /// Re-bin block indices into staggered groups for the given `offset` and
+    /// build rewrite-task candidates. This reuses the already decoded block
+    /// metas in this window; it only rebuilds in-memory groups and reruns
+    /// candidate selection, without extra pruning or IO.
+    fn build_tasks_for_offset(
+        &self,
+        offset: i32,
+        blocks: &[&ReclusterBlock],
+        mode: ReclusterMode,
+        task_budget: usize,
+    ) -> Result<Vec<ReclusterTaskCandidate>> {
+        debug_assert!(offset == 0 || offset == 1);
+
+        let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
+        for (idx, block) in blocks.iter().enumerate() {
+            let level = block.stats().level;
+            if level < 0 {
+                continue;
+            }
+            if level >= MAX_RECLUSTER_LEVEL {
+                // Terminal-level blocks are excluded from further rewrite tasks.
+                continue;
+            }
+            blocks_map
+                .entry(ReclusterGroup::assign(level, mode, offset))
+                .or_default()
+                .push(idx);
+        }
+
+        let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
+        let mut deferred_group_candidates = None;
+        let large_task_bytes_threshold = self.large_task_bytes_threshold();
+        for (group, indices) in blocks_map {
+            if tasks.len() >= task_budget {
+                break;
+            }
+            let remaining_task_budget = task_budget - tasks.len();
+            let candidates = self.build_recluster_task_candidates_for_indices(
+                group,
+                indices,
+                blocks,
+                remaining_task_budget,
+            )?;
+            if candidates.is_empty() {
+                continue;
+            }
+
+            if tasks.is_empty() && deferred_group_candidates.is_none() {
+                // When the first constructible group is too small, defer it once so
+                // later groups get a chance to consume this window's budget first.
+                let selected_total_bytes = candidates
+                    .iter()
+                    .map(|candidate| candidate.score.selected_total_bytes)
+                    .sum::<usize>();
+                if selected_total_bytes < large_task_bytes_threshold {
+                    debug!(
+                        "recluster: defer low-level group={} selected_bytes={} task_count={} skip_reason=deferred_low_level_batch",
+                        group,
+                        selected_total_bytes,
+                        candidates.len(),
+                    );
+                    deferred_group_candidates = Some(candidates);
+                    continue;
+                }
+            }
+
+            tasks.extend(candidates.into_iter().take(remaining_task_budget));
+        }
+
+        if tasks.len() < task_budget {
+            if let Some(candidates) = deferred_group_candidates {
+                let remaining_task_budget = task_budget - tasks.len();
+                for candidate in candidates.into_iter().take(remaining_task_budget) {
+                    debug!("recluster: backfill deferred candidate {}", candidate);
+                    tasks.push(candidate);
+                }
+            }
+        }
+
+        Ok(tasks)
     }
 
     pub async fn materialize_task_candidates(

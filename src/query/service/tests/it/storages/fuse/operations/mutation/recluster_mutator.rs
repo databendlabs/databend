@@ -1373,8 +1373,9 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
     assert_eq!(parts.tasks[0].level, 3);
     assert_eq!(task_part_counts(&parts), vec![3]);
 
-    // The mature bands are fixed and non-overlapping. A 2-3 overlap crosses
-    // the 1-2 / 3-4 boundary by design, so it is not one rewrite task.
+    // A level 2-3 overlap of only two blocks does not rewrite: two blocks that
+    // are both at or above MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS never form a
+    // rewrite task, regardless of binning, so this is repacked.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
         &[(2, 1), (3, 1)],
         thresholds,
@@ -1398,6 +1399,51 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
     assert!(parts.tasks.is_empty());
     assert_eq!(parts.remained_blocks.len(), 2);
     assert_eq!(parts.removed_segment_indexes.len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_staggered_bins_merge_boundary_levels() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Levels 2 and 3 straddle the pass-1 bin boundary ({1,2} vs {3,4}), so the
+    // first pass cannot merge them. With more than two blocks the staggered
+    // second pass bins them together as {2,3} and rewrites the overlap.
+    let (block_num, parts) = materialize_segments_by_level_with_mode(
+        &[(2, 2), (3, 2)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 4);
+    assert_eq!(parts.tasks.len(), 1);
+    // {2,3} bin: tie between level 2 and 3 picks the lower level.
+    assert_eq!(parts.tasks[0].level, 2);
+    assert_eq!(task_part_counts(&parts), vec![4]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_pass_one_wins_without_running_pass_two() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Levels 1 and 2 already share the pass-1 bin {1,2}, so pass 1 rewrites them
+    // and the staggered pass never runs (no block is selected twice).
+    let (block_num, parts) = materialize_segments_by_level_with_mode(
+        &[(1, 2), (2, 2)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 4);
+    assert_eq!(parts.tasks.len(), 1);
+    // {1,2} bin: tie picks the lower level.
+    assert_eq!(parts.tasks[0].level, 1);
+    assert_eq!(task_part_counts(&parts), vec![4]);
 
     Ok(())
 }
