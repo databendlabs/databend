@@ -319,24 +319,16 @@ fn add_arrow_internal_columns(
                     Some(key) => Scalar::String(key.to_string()),
                     None => Scalar::Null,
                 };
-                block.add_const_column(
-                    scalar,
-                    DataType::Nullable(Box::new(DataType::String)),
-                );
+                block.add_const_column(scalar, DataType::Nullable(Box::new(DataType::String)));
             }
             InternalColumnType::FileLastModified => {
                 let scalar = match last_modified {
                     Some(ts) => Scalar::Timestamp(ts.timestamp_micros()),
                     None => Scalar::Null,
                 };
-                block.add_const_column(
-                    scalar,
-                    DataType::Nullable(Box::new(DataType::Timestamp)),
-                );
+                block.add_const_column(scalar, DataType::Nullable(Box::new(DataType::Timestamp)));
             }
-            _ => unreachable!(
-                "unexpected InternalColumnType in stage file reader"
-            ),
+            _ => unreachable!("unexpected InternalColumnType in stage file reader"),
         }
     }
 }
@@ -349,12 +341,7 @@ impl AccumulatingTransform for ArrowBlockBuilder {
             .get_owned_meta()
             .ok_or_else(|| ErrorCode::Internal("ArrowBlockBuilder expects file data meta"))?;
         let (path, data, content_key, last_modified) = match BytesBatch::downcast_from_err(meta) {
-            Ok(data) => (
-                data.path,
-                data.data,
-                data.content_key,
-                data.last_modified,
-            ),
+            Ok(data) => (data.path, data.data, data.content_key, data.last_modified),
             Err(meta) => {
                 let data = WholeFileData::downcast_from(meta).ok_or_else(|| {
                     ErrorCode::Internal("ArrowBlockBuilder expects Arrow file data")

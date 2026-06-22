@@ -39,7 +39,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
-use databend_storages_common_stage::add_internal_columns;
+use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
@@ -184,11 +184,13 @@ impl Processor for ParquetVariantSource {
                     if let Some(batch) = reader.next() {
                         let mut block =
                             record_batch_to_variant_block(batch?, &self.tz, typ, data_schema)?;
-                        add_internal_columns(
+                        add_internal_columns_with_meta(
                             &self.internal_columns,
                             location.clone(),
                             &mut block,
                             start_row,
+                            None,
+                            None,
                         );
 
                         if self.is_copy {
@@ -221,11 +223,13 @@ impl Processor for ParquetVariantSource {
                         });
                     }
                     let mut rows_start = 0;
-                    add_internal_columns(
+                    add_internal_columns_with_meta(
                         &self.internal_columns,
                         path.to_string(),
                         &mut block,
                         &mut rows_start,
+                        None,
+                        None,
                     );
                     blocks.push(block);
                 }

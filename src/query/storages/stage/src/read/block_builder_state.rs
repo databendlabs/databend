@@ -136,29 +136,22 @@ impl BlockBuilderState {
                         .push_repeat(&ScalarRef::String(&self.file_path), n);
                 }
                 InternalColumnType::FileBasename => {
-                    let basename = self
-                        .file_path
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or(&self.file_path);
-                    self.internal_column_builders[i]
-                        .push_repeat(&ScalarRef::String(basename), n);
+                    let basename = self.file_path.rsplit('/').next().unwrap_or(&self.file_path);
+                    self.internal_column_builders[i].push_repeat(&ScalarRef::String(basename), n);
                 }
                 InternalColumnType::FileContentKey => {
                     let scalar = match &self.file_content_key {
                         Some(key) => Scalar::String(key.clone()),
                         None => Scalar::Null,
                     };
-                    self.internal_column_builders[i]
-                        .push_repeat(&scalar.as_ref(), n);
+                    self.internal_column_builders[i].push_repeat(&scalar.as_ref(), n);
                 }
                 InternalColumnType::FileLastModified => {
                     let scalar = match &self.file_last_modified {
                         Some(ts) => Scalar::Timestamp(ts.timestamp_micros()),
                         None => Scalar::Null,
                     };
-                    self.internal_column_builders[i]
-                        .push_repeat(&scalar.as_ref(), n);
+                    self.internal_column_builders[i].push_repeat(&scalar.as_ref(), n);
                 }
                 InternalColumnType::FileRowNumber => {}
                 _ => {

@@ -198,8 +198,12 @@ impl InternalColumn {
             InternalColumnType::FileRowNumber => TableDataType::Number(NumberDataType::UInt64),
             InternalColumnType::FilePath => TableDataType::String,
             InternalColumnType::FileBasename => TableDataType::String,
-            InternalColumnType::FileContentKey => TableDataType::Nullable(Box::new(TableDataType::String)),
-            InternalColumnType::FileLastModified => TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            InternalColumnType::FileContentKey => {
+                TableDataType::Nullable(Box::new(TableDataType::String))
+            }
+            InternalColumnType::FileLastModified => {
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp))
+            }
         }
     }
 
@@ -336,9 +340,12 @@ impl InternalColumn {
                 }
                 Float32Type::from_data(scores).into()
             }
-            InternalColumnType::FileName | InternalColumnType::FileRowNumber
-            | InternalColumnType::FilePath | InternalColumnType::FileBasename
-            | InternalColumnType::FileContentKey | InternalColumnType::FileLastModified => {
+            InternalColumnType::FileName
+            | InternalColumnType::FileRowNumber
+            | InternalColumnType::FilePath
+            | InternalColumnType::FileBasename
+            | InternalColumnType::FileContentKey
+            | InternalColumnType::FileLastModified => {
                 todo!("generate_column_values not support for file related")
             }
         }

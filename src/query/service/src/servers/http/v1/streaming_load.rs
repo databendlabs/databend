@@ -361,6 +361,8 @@ async fn read_multi_part(
                             path: filename.clone(),
                             offset: 0,
                             is_eof: true,
+                            content_key: None,
+                            last_modified: None,
                         };
                         let block = DataBlock::empty_with_meta(Box::new(batch));
                         if let Err(e) = tx.send(Ok(block)).await {
@@ -384,6 +386,8 @@ async fn read_multi_part(
                                 path: filename.clone(),
                                 offset,
                                 is_eof: n == 0,
+                                content_key: None,
+                                last_modified: None,
                             };
                             let block = DataBlock::empty_with_meta(Box::new(batch));
                             if let Err(e) = tx.send(Ok(block)).await {

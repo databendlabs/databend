@@ -40,7 +40,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
-use databend_storages_common_stage::add_internal_columns;
+use databend_storages_common_stage::add_internal_columns_with_meta;
 use parquet::arrow::parquet_to_arrow_schema;
 
 use crate::ParquetFilePart;
@@ -216,11 +216,13 @@ impl Processor for ParquetSource {
             } => {
                 if let Some((reader, start_row)) = vs.front_mut() {
                     if let Some(mut block) = reader.as_mut().read_block()? {
-                        add_internal_columns(
+                        add_internal_columns_with_meta(
                             &self.internal_columns,
                             location.clone(),
                             &mut block,
                             start_row,
+                            None,
+                            None,
                         );
 
                         if self.is_copy {
@@ -260,11 +262,13 @@ impl Processor for ParquetSource {
                     }
                     let mut rows_start = 0;
                     for b in bs.iter_mut() {
-                        add_internal_columns(
+                        add_internal_columns_with_meta(
                             &self.internal_columns,
                             path.to_string(),
                             b,
                             &mut rows_start,
+                            None,
+                            None,
                         );
                     }
                     blocks.extend(bs);
