@@ -15,23 +15,16 @@
 mod aggregate_scatter;
 mod serde_meta;
 mod transform_aggregate_serializer;
-mod transform_aggregate_spill_writer;
 mod transform_deserializer;
 mod transform_exchange_aggregate_serializer;
-mod transform_exchange_async_barrier;
-mod transform_spill_reader;
 
 pub use aggregate_scatter::*;
 pub use serde_meta::*;
 pub use transform_aggregate_serializer::*;
-pub use transform_aggregate_spill_writer::*;
 pub use transform_deserializer::*;
 pub use transform_exchange_aggregate_serializer::*;
-pub use transform_exchange_async_barrier::*;
-pub use transform_spill_reader::*;
 
 pub mod exchange_defines {
-    use arrow_ipc::writer::IpcWriteOptions;
     use arrow_schema::Schema;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
@@ -41,34 +34,13 @@ pub mod exchange_defines {
     pub fn spilled_schema() -> DataSchema {
         DataSchema::new(vec![
             DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
-            DataField::new("data_range_start", DataType::Number(NumberDataType::UInt64)),
-            DataField::new("data_range_end", DataType::Number(NumberDataType::UInt64)),
-            DataField::new(
-                "columns_layout",
-                DataType::Array(Box::new(DataType::Number(NumberDataType::UInt64))),
-            ),
+            DataField::new("location", DataType::String),
+            DataField::new("row_group", DataType::Binary),
         ])
     }
 
     pub fn spilled_arrow_schema() -> Schema {
         let schema = spilled_schema();
         Schema::from(&schema)
-    }
-
-    pub fn new_spilled_schema() -> DataSchema {
-        DataSchema::new(vec![
-            DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
-            DataField::new("location", DataType::String),
-            DataField::new("row_group", DataType::Binary),
-        ])
-    }
-
-    pub fn new_spilled_arrow_schema() -> Schema {
-        let schema = new_spilled_schema();
-        Schema::from(&schema)
-    }
-
-    pub fn spilled_write_options() -> IpcWriteOptions {
-        IpcWriteOptions::default()
     }
 }
