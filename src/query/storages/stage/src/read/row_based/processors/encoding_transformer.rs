@@ -170,6 +170,8 @@ impl AccumulatingTransform for DecodingTransformer {
             path: batch.path,
             offset: batch.offset,
             is_eof: batch.is_eof,
+            content_key: batch.content_key,
+            last_modified: batch.last_modified,
         }))])
     }
 }
@@ -201,6 +203,8 @@ mod tests {
                 path: "test.csv".to_string(),
                 offset: 0,
                 is_eof: false,
+                content_key: None,
+                last_modified: None,
             })))
             .unwrap();
         assert!(first.is_empty());
@@ -211,6 +215,8 @@ mod tests {
                 path: "test.csv".to_string(),
                 offset: 1,
                 is_eof: true,
+                content_key: None,
+                last_modified: None,
             })))
             .unwrap();
         assert_eq!(second.len(), 1);
@@ -235,6 +241,8 @@ mod tests {
                 path: "bad.csv".to_string(),
                 offset: 0,
                 is_eof: true,
+                content_key: None,
+                last_modified: None,
             })))
             .unwrap_err();
 
@@ -251,6 +259,8 @@ mod tests {
                 path: "bad.csv".to_string(),
                 offset: 0,
                 is_eof: true,
+                content_key: None,
+                last_modified: None,
             })))
             .unwrap();
 

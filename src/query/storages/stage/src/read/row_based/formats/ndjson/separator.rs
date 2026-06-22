@@ -48,6 +48,13 @@ impl NdJsonRowSeparator {
         &mut self,
         mut batch: BytesBatch,
     ) -> Result<(Vec<RowBatchWithPosition>, FileStatus)> {
+        // Capture file-level metadata from the first batch
+        if batch.content_key.is_some() {
+            self.pos.content_key = batch.content_key;
+        }
+        if batch.last_modified.is_some() {
+            self.pos.last_modified = batch.last_modified;
+        }
         let data = std::mem::take(&mut batch.data);
         let mut rows: NdjsonRowBatch = Default::default();
         let mut check_first = !self.last_partial_row.is_empty();
@@ -114,6 +121,8 @@ mod tests {
             path: "".to_string(),
             offset: 0,
             is_eof,
+            content_key: None,
+            last_modified: None,
         };
 
         let (batches, _) = sep.append(input).unwrap();

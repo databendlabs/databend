@@ -184,6 +184,8 @@ pub fn parse_tsv_records_for_infer_schema(
         path: "infer_schema".to_string(),
         offset: 0,
         is_eof,
+        content_key: None,
+        last_modified: None,
     };
     let (batches, _) = separator.append(batch)?;
 

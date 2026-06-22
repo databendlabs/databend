@@ -107,6 +107,8 @@ impl AccumulatingTransform for Decompressor {
                     path: batch.path.clone(),
                     offset: 0,
                     is_eof: batch.is_eof,
+                    content_key: batch.content_key.clone(),
+                    last_modified: batch.last_modified,
                 });
                 self.zip_buf.clear();
                 Ok(vec![DataBlock::empty_with_meta(new_batch)])
@@ -144,6 +146,8 @@ impl AccumulatingTransform for Decompressor {
                 path: batch.path.clone(),
                 offset: *offset,
                 is_eof: batch.is_eof,
+                content_key: batch.content_key.clone(),
+                last_modified: batch.last_modified,
             });
             *offset += batch.data.len();
             if batch.is_eof {
