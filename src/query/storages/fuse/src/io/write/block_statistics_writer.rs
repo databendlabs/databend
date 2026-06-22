@@ -40,6 +40,13 @@ pub fn build_column_hlls(
 
 pub struct BlockStatsBuilder {
     builders: Vec<ColumnNDVBuilder>,
+    dropped_top_n: Vec<ColumnId>,
+}
+
+pub struct BlockStats {
+    pub hll: BlockHLL,
+    pub top_n: BlockTopN,
+    pub dropped_top_n: Vec<ColumnId>,
 }
 
 pub struct ColumnNDVBuilder {
@@ -83,7 +90,10 @@ impl BlockStatsBuilder {
             }
         }
 
-        BlockStatsBuilder { builders }
+        BlockStatsBuilder {
+            builders,
+            dropped_top_n: vec![],
+        }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -101,6 +111,12 @@ impl BlockStatsBuilder {
                 }
                 BlockEntry::Column(col) => {
                     if col.check_large_string() {
+                        if column_builder.top_n.is_some() {
+                            let column_id = column_builder.field.column_id();
+                            if !self.dropped_top_n.contains(&column_id) {
+                                self.dropped_top_n.push(column_id);
+                            }
+                        }
                         keys_to_remove.push(index);
                         continue;
                     }
@@ -149,17 +165,21 @@ impl BlockStatsBuilder {
 
     pub fn finalize(self) -> Result<Option<BlockHLL>> {
         self.finalize_with_top_n()
-            .map(|stats| stats.map(|(hll, _)| hll))
+            .map(|stats| stats.map(|stats| stats.hll))
     }
 
-    pub fn finalize_with_top_n(self) -> Result<Option<(BlockHLL, BlockTopN)>> {
-        if self.builders.is_empty() {
+    pub fn finalize_with_top_n(self) -> Result<Option<BlockStats>> {
+        let BlockStatsBuilder {
+            builders,
+            dropped_top_n,
+        } = self;
+        if builders.is_empty() && dropped_top_n.is_empty() {
             return Ok(None);
         }
 
-        let mut column_hlls = HashMap::with_capacity(self.builders.len());
-        let mut column_top_n = HashMap::with_capacity(self.builders.len());
-        for column_builder in self.builders {
+        let mut column_hlls = HashMap::with_capacity(builders.len());
+        let mut column_top_n = HashMap::with_capacity(builders.len());
+        for column_builder in builders {
             let column_id = column_builder.field.column_id();
             if let Some(hll) = column_builder.hll {
                 column_hlls.insert(column_id, hll.into_hll());
@@ -171,10 +191,14 @@ impl BlockStatsBuilder {
             }
         }
 
-        if column_hlls.is_empty() && column_top_n.is_empty() {
+        if column_hlls.is_empty() && column_top_n.is_empty() && dropped_top_n.is_empty() {
             Ok(None)
         } else {
-            Ok(Some((column_hlls, column_top_n)))
+            Ok(Some(BlockStats {
+                hll: column_hlls,
+                top_n: column_top_n,
+                dropped_top_n,
+            }))
         }
     }
 }
@@ -189,6 +213,7 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::types::string::StringType;
 
     use super::*;
 
@@ -199,6 +224,12 @@ mod tests {
             TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         );
         ndv_columns_map
+    }
+
+    fn string_columns_map() -> BTreeMap<FieldIndex, TableField> {
+        let mut columns_map = BTreeMap::new();
+        columns_map.insert(0, TableField::new("s", TableDataType::String));
+        columns_map
     }
 
     fn empty_columns_map() -> BTreeMap<FieldIndex, TableField> {
@@ -213,13 +244,23 @@ mod tests {
         DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 2, 2])])
     }
 
+    fn small_string_block() -> DataBlock {
+        DataBlock::new_from_columns(vec![StringType::from_data(vec!["hot", "hot", "cold"])])
+    }
+
+    fn large_string_block() -> DataBlock {
+        let value = "x".repeat(257);
+        DataBlock::new_from_columns(vec![StringType::from_data(vec![value])])
+    }
+
     #[test]
     fn test_block_stats_builder_without_top_n() -> Result<()> {
         let ndv_columns_map = int32_ndv_columns_map();
         let mut builder = BlockStatsBuilder::new(&ndv_columns_map, None);
         builder.add_block(&int32_block())?;
 
-        let (_, top_n) = builder.finalize_with_top_n()?.unwrap();
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        let top_n = stats.top_n;
         assert!(top_n.is_empty());
         Ok(())
     }
@@ -230,7 +271,8 @@ mod tests {
         let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&ndv_columns_map, 2)));
         builder.add_block(&int32_block())?;
 
-        let (_, top_n) = builder.finalize_with_top_n()?.unwrap();
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        let top_n = stats.top_n;
         assert_eq!(top_n.len(), 1);
         assert!(top_n.values().all(|column_top_n| {
             !column_top_n.values.is_empty() && column_top_n.values.len() <= 2
@@ -245,7 +287,9 @@ mod tests {
         let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)));
         builder.add_block(&int32_block())?;
 
-        let (hll, top_n) = builder.finalize_with_top_n()?.unwrap();
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        let hll = stats.hll;
+        let top_n = stats.top_n;
         assert!(hll.is_empty());
         assert_eq!(top_n.len(), 1);
         Ok(())
@@ -258,13 +302,29 @@ mod tests {
         let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 1)));
         builder.add_block(&int32_block_with_delayed_hot_run())?;
 
-        let (_, top_n) = builder.finalize_with_top_n()?.unwrap();
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        let top_n = stats.top_n;
         let column_top_n = top_n.values().next().unwrap();
         assert_eq!(column_top_n.values.len(), 1);
         let entry = &column_top_n.values[0];
         assert_eq!(entry.scalar, Scalar::Number(NumberScalar::Int32(2)));
         assert_eq!(entry.count, 4);
         assert_eq!(entry.error, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_stats_builder_drops_top_n_after_large_string() -> Result<()> {
+        let ndv_columns_map = empty_columns_map();
+        let top_n_columns_map = string_columns_map();
+        let column_id = top_n_columns_map.get(&0).unwrap().column_id();
+        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)));
+        builder.add_block(&small_string_block())?;
+        builder.add_block(&large_string_block())?;
+
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        assert!(stats.top_n.is_empty());
+        assert_eq!(stats.dropped_top_n, vec![column_id]);
         Ok(())
     }
 }

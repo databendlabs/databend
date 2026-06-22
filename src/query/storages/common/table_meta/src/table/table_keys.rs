@@ -42,6 +42,7 @@ pub const OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR: &str =
     "analyze_histogram_kll_relative_error";
 pub const OPT_KEY_ANALYZE_TOP_N_COLUMNS: &str = "analyze_top_n_columns";
 pub const OPT_KEY_ANALYZE_TOP_N_SIZE: &str = "analyze_top_n_size";
+pub const MAX_ANALYZE_TOP_N_SIZE: usize = 10_000;
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
@@ -115,6 +116,11 @@ pub fn analyze_top_n_size_from_options(
             "{OPT_KEY_ANALYZE_TOP_N_SIZE} must be a non-negative integer, got: {value}"
         ))
     })?;
+    if top_n_size > MAX_ANALYZE_TOP_N_SIZE {
+        return Err(ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_TOP_N_SIZE} must be no greater than {MAX_ANALYZE_TOP_N_SIZE}, got: {top_n_size}"
+        )));
+    }
     Ok((top_n_size > 0).then_some(top_n_size))
 }
 
@@ -161,6 +167,12 @@ mod tests {
 
         options.insert(OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(), "2".to_string());
         assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), Some(2));
+
+        options.insert(
+            OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(),
+            (MAX_ANALYZE_TOP_N_SIZE + 1).to_string(),
+        );
+        assert!(analyze_top_n_size_from_options(&options).is_err());
 
         options.insert(
             OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(),

@@ -30,6 +30,7 @@ pub struct AnalyzeNDVMeta {
     pub unstats_rows: u64,
     pub column_hlls: HashMap<ColumnId, MetaHLL>,
     pub top_n: Option<BlockTopN>,
+    pub dropped_top_n_columns: Vec<ColumnId>,
     pub kll_histograms: HashMap<ColumnId, KllSketch>,
 }
 
@@ -39,6 +40,7 @@ impl AnalyzeNDVMeta {
         unstats_rows: u64,
         column_hlls: HashMap<ColumnId, MetaHLL>,
         top_n: Option<BlockTopN>,
+        dropped_top_n_columns: Vec<ColumnId>,
         kll_histograms: HashMap<ColumnId, KllSketch>,
     ) -> BlockMetaInfoPtr {
         Box::new(AnalyzeNDVMeta {
@@ -46,6 +48,7 @@ impl AnalyzeNDVMeta {
             unstats_rows,
             column_hlls,
             top_n,
+            dropped_top_n_columns,
             kll_histograms,
         })
     }

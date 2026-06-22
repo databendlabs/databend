@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -65,6 +66,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockReader;
+use crate::io::BlockStats;
 use crate::io::BlockStatsBuilder;
 use crate::io::CachedMetaWriter;
 use crate::io::CompactSegmentInfoReader;
@@ -86,11 +88,15 @@ struct SegmentWithHLL {
 }
 
 fn split_block_hll_top_n(
-    column_hlls: Option<(BlockHLL, BlockTopN)>,
-) -> (Option<BlockHLL>, BlockTopN) {
-    match column_hlls {
-        Some((hll, top_n)) => ((!hll.is_empty()).then_some(hll), top_n),
-        None => (None, HashMap::new()),
+    block_stats: Option<BlockStats>,
+) -> (Option<BlockHLL>, BlockTopN, Vec<ColumnId>) {
+    match block_stats {
+        Some(stats) => (
+            (!stats.hll.is_empty()).then_some(stats.hll),
+            stats.top_n,
+            stats.dropped_top_n,
+        ),
+        None => (None, HashMap::new(), vec![]),
     }
 }
 
@@ -127,6 +133,7 @@ pub struct AnalyzeCollectNDVSource {
     io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     top_n: Option<BlockTopN>,
+    dropped_top_n_columns: BTreeSet<ColumnId>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
     row_count: u64,
     unstats_rows: u64,
@@ -198,6 +205,7 @@ impl AnalyzeCollectNDVSource {
             io_request_semaphore,
             column_hlls: HashMap::new(),
             top_n: (!top_n_columns_map.is_empty()).then(HashMap::new),
+            dropped_top_n_columns: BTreeSet::new(),
             kll_histograms: HashMap::new(),
             row_count: 0,
             segment_with_hll: None,
@@ -351,6 +359,9 @@ impl Processor for AnalyzeCollectNDVSource {
                         self.unstats_rows,
                         std::mem::take(&mut self.column_hlls),
                         std::mem::take(&mut self.top_n),
+                        std::mem::take(&mut self.dropped_top_n_columns)
+                            .into_iter()
+                            .collect(),
                         std::mem::take(&mut self.kll_histograms),
                     ))));
                 self.state = State::Finish;
@@ -437,7 +448,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
                 let new_top_n = std::mem::take(&mut segment_with_hll.new_block_top_n);
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for ((new, top_n), idx) in new_hlls
+                for ((new, mut top_n), idx) in new_hlls
                     .into_iter()
                     .zip(new_top_n.into_iter())
                     .zip(new_indexes.into_iter())
@@ -454,6 +465,8 @@ impl Processor for AnalyzeCollectNDVSource {
                     if let (Some(block_top_n), Some(top_n_size)) =
                         (&mut self.top_n, self.top_n_size)
                     {
+                        let dropped_top_n_columns = &self.dropped_top_n_columns;
+                        top_n.retain(|column_id, _| !dropped_top_n_columns.contains(column_id));
                         merge_column_top_n_mut(block_top_n, top_n, top_n_size);
                     }
                 }
@@ -552,7 +565,13 @@ impl Processor for AnalyzeCollectNDVSource {
                 let mut new_hlls = Vec::with_capacity(block_stats.len());
                 let mut new_top_n = Vec::with_capacity(block_stats.len());
                 for (column_hlls, kll_histograms) in block_stats {
-                    let (hll, top_n) = split_block_hll_top_n(column_hlls);
+                    let (hll, top_n, dropped_top_n) = split_block_hll_top_n(column_hlls);
+                    for column_id in dropped_top_n {
+                        self.dropped_top_n_columns.insert(column_id);
+                        if let Some(top_n) = &mut self.top_n {
+                            top_n.remove(&column_id);
+                        }
+                    }
                     new_hlls.push(hll);
                     new_top_n.push(top_n);
                     for (column_id, sketch) in kll_histograms {
@@ -707,9 +726,14 @@ mod tests {
     fn split_block_hll_top_n_keeps_top_n_only_out_of_hll_slots() {
         let top_n = HashMap::from([(1, Default::default())]);
 
-        let (hll, top_n) = split_block_hll_top_n(Some((HashMap::new(), top_n)));
+        let (hll, top_n, dropped_top_n) = split_block_hll_top_n(Some(BlockStats {
+            hll: HashMap::new(),
+            top_n,
+            dropped_top_n: vec![7],
+        }));
 
         assert!(hll.is_none());
         assert_eq!(top_n.len(), 1);
+        assert_eq!(dropped_top_n, vec![7]);
     }
 }
