@@ -85,6 +85,15 @@ struct SegmentWithHLL {
     block_indexes: Vec<usize>,
 }
 
+fn split_block_hll_top_n(
+    column_hlls: Option<(BlockHLL, BlockTopN)>,
+) -> (Option<BlockHLL>, BlockTopN) {
+    match column_hlls {
+        Some((hll, top_n)) => ((!hll.is_empty()).then_some(hll), top_n),
+        None => (None, HashMap::new()),
+    }
+}
+
 enum State {
     ReadData(Option<PartInfoPtr>),
     CollectNDV {
@@ -543,16 +552,9 @@ impl Processor for AnalyzeCollectNDVSource {
                 let mut new_hlls = Vec::with_capacity(block_stats.len());
                 let mut new_top_n = Vec::with_capacity(block_stats.len());
                 for (column_hlls, kll_histograms) in block_stats {
-                    match column_hlls {
-                        Some((hll, top_n)) => {
-                            new_hlls.push(Some(hll));
-                            new_top_n.push(top_n);
-                        }
-                        None => {
-                            new_hlls.push(None);
-                            new_top_n.push(HashMap::new());
-                        }
-                    }
+                    let (hll, top_n) = split_block_hll_top_n(column_hlls);
+                    new_hlls.push(hll);
+                    new_top_n.push(top_n);
                     for (column_id, sketch) in kll_histograms {
                         if let Some(existing) = self.kll_histograms.get_mut(&column_id) {
                             existing.merge(sketch)?;
@@ -561,7 +563,9 @@ impl Processor for AnalyzeCollectNDVSource {
                         }
                     }
                 }
-                if new_hlls.iter().all(|v| v.is_none()) {
+                if new_hlls.iter().all(|v| v.is_none())
+                    && new_top_n.iter().all(|top_n| top_n.is_empty())
+                {
                     self.segment_with_hll = None;
                     self.state = State::ReadData(None);
                 } else {
@@ -697,5 +701,15 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a", "c"]
         );
+    }
+
+    #[test]
+    fn split_block_hll_top_n_keeps_top_n_only_out_of_hll_slots() {
+        let top_n = HashMap::from([(1, Default::default())]);
+
+        let (hll, top_n) = split_block_hll_top_n(Some((HashMap::new(), top_n)));
+
+        assert!(hll.is_none());
+        assert_eq!(top_n.len(), 1);
     }
 }
