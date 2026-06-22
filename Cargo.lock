@@ -6343,6 +6343,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-planner-replay"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-exception",
+ "databend-common-sql",
+ "databend-common-sql-test-support",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
