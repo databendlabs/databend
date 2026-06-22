@@ -35,6 +35,7 @@ use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -288,6 +289,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             &mut build_res.main_pipeline,
             histogram_info,
             analyze_top_n_size_from_options(table_options)?,
+            table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned(),
             self.plan.no_scan,
             true,
         )?;

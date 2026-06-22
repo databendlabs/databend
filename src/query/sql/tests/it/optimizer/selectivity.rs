@@ -305,6 +305,32 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         )?;
     }
 
+    write_case_title(
+        &mut file,
+        "topn_equality_cache_with_error",
+        "Approximate TopN frequencies should use the count upper bound for equality and the lower bound for inequality.",
+    )?;
+    let approximate_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(42)),
+            count: 100,
+            error: 60,
+        }],
+        min_index: None,
+    })]);
+    for expr in ["id = 42", "id != 42"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            top_n_stats.clone(),
+            StatCardinality::estimate(1000.0),
+            Some(approximate_top_n.clone()),
+        )?;
+    }
+
     Ok(())
 }
 

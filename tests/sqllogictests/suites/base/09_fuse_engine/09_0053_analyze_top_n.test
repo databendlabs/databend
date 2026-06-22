@@ -44,4 +44,19 @@ EXPLAIN SELECT * FROM t_topn_on WHERE a = 1
 table: default.db_09_0053.t_topn_on<slt:ignore>estimated rows: 90.00
 
 statement ok
+CREATE TABLE t_topn_pending(a int, b int) approx_distinct_columns = ''
+
+statement ok
+INSERT INTO t_topn_pending
+SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ALTER TABLE t_topn_pending SET OPTIONS(enable_auto_analyze = 1, analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+
+query T
+EXPLAIN SELECT * FROM t_topn_pending WHERE b = 1
+----
+table: default.db_09_0053.t_topn_pending<slt:ignore>estimated rows: 90.00
+
+statement ok
 DROP DATABASE db_09_0053

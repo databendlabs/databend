@@ -711,18 +711,19 @@ impl SelectivityVisitor<'_> {
         let Some(top_n) = self.top_n.get(&column_index) else {
             return Ok(None);
         };
-        let Some(count) = top_n.get(scalar) else {
+        let Some(entry) = top_n.get_entry(scalar) else {
             return Ok(None);
         };
         let cardinality = self.cardinality.value();
         if cardinality == 0.0 {
             return Ok(Some(Selectivity::N(0.0)));
         }
-        let count = (count as f64).min(cardinality);
+        let upper_count = (entry.count as f64).min(cardinality);
+        let lower_count = (entry.count.saturating_sub(entry.error) as f64).min(upper_count);
         let matched = if matches!(op, ComparisonOp::NotEqual) {
-            cardinality - count
+            cardinality - lower_count
         } else {
-            count
+            upper_count
         };
         Selectivity::checked_estimate(matched / cardinality).map(Some)
     }

@@ -100,11 +100,66 @@ impl ColumnTopN {
     }
 
     pub fn merge_with_size(&mut self, other: ColumnTopN, top_n_size: usize) {
-        for entry in other.values {
-            if self.should_insert(&entry.scalar.as_ref(), entry.count, entry.error) {
-                self.insert_new_with_options(top_n_size, entry);
+        if top_n_size == 0 {
+            self.values.clear();
+            self.min_index = None;
+            return;
+        }
+
+        let lhs_missing_error = self.absent_error(top_n_size);
+        let rhs_missing_error = other.absent_error(top_n_size);
+        let lhs_values = std::mem::take(&mut self.values);
+        self.min_index = None;
+
+        let mut lhs_iter = lhs_values.into_iter().peekable();
+        let mut rhs_iter = other.values.into_iter().peekable();
+        let mut values = Vec::with_capacity(top_n_size.saturating_mul(2));
+
+        loop {
+            match (lhs_iter.peek(), rhs_iter.peek()) {
+                (Some(lhs), Some(rhs)) => match lhs.scalar.cmp(&rhs.scalar) {
+                    Ordering::Less => {
+                        let mut entry = lhs_iter.next().unwrap();
+                        entry.count = entry.count.saturating_add(rhs_missing_error);
+                        entry.error = entry.error.saturating_add(rhs_missing_error);
+                        values.push(entry);
+                    }
+                    Ordering::Equal => {
+                        let mut entry = lhs_iter.next().unwrap();
+                        let rhs = rhs_iter.next().unwrap();
+                        entry.count = entry.count.saturating_add(rhs.count);
+                        entry.error = entry.error.saturating_add(rhs.error);
+                        values.push(entry);
+                    }
+                    Ordering::Greater => {
+                        let mut entry = rhs_iter.next().unwrap();
+                        entry.count = entry.count.saturating_add(lhs_missing_error);
+                        entry.error = entry.error.saturating_add(lhs_missing_error);
+                        values.push(entry);
+                    }
+                },
+                (Some(_), None) => {
+                    for mut entry in lhs_iter {
+                        entry.count = entry.count.saturating_add(rhs_missing_error);
+                        entry.error = entry.error.saturating_add(rhs_missing_error);
+                        values.push(entry);
+                    }
+                    break;
+                }
+                (None, Some(_)) => {
+                    for mut entry in rhs_iter {
+                        entry.count = entry.count.saturating_add(lhs_missing_error);
+                        entry.error = entry.error.saturating_add(lhs_missing_error);
+                        values.push(entry);
+                    }
+                    break;
+                }
+                (None, None) => break,
             }
         }
+
+        self.values = values;
+        self.prune_to_capacity(top_n_size);
     }
 
     pub fn finish_with_size(mut self, top_n_size: usize) -> Self {
@@ -119,29 +174,32 @@ impl ColumnTopN {
         count: u64,
         error: u64,
     ) {
-        if self.should_insert(&scalar, count, error) {
-            self.insert_new_with_options(capacity, ColumnTopNEntry {
-                scalar: scalar.to_owned(),
-                count,
-                error,
-            });
+        if capacity == 0 || count == 0 || matches!(scalar, ScalarRef::Null) {
+            return;
         }
+
+        if let Ok(index) = self.find(&scalar) {
+            self.update_existing(index, count, error);
+            return;
+        }
+
+        let mut entry = ColumnTopNEntry {
+            scalar: scalar.to_owned(),
+            count,
+            error,
+        };
+        if self.values.len() >= capacity
+            && let Some(min_entry) = self.remove_min()
+        {
+            entry.count = entry.count.saturating_add(min_entry.count);
+            entry.error = entry.error.saturating_add(min_entry.count);
+        }
+        self.insert_new(entry);
     }
 
     fn find(&self, scalar: &ScalarRef<'_>) -> std::result::Result<usize, usize> {
         self.values
             .binary_search_by(|entry| entry.scalar.as_ref().cmp(scalar))
-    }
-
-    fn should_insert(&mut self, scalar: &ScalarRef<'_>, count: u64, error: u64) -> bool {
-        if count == 0 || matches!(scalar, ScalarRef::Null) {
-            return false;
-        }
-        if let Ok(index) = self.find(scalar) {
-            self.update_existing(index, count, error);
-            return false;
-        }
-        true
     }
 
     fn update_existing(&mut self, index: usize, count: u64, error: u64) {
@@ -154,15 +212,12 @@ impl ColumnTopN {
         }
     }
 
-    fn insert_new_with_options(&mut self, capacity: usize, entry: ColumnTopNEntry) {
+    fn insert_new(&mut self, entry: ColumnTopNEntry) {
         let index = self
             .find(&entry.scalar.as_ref())
             .unwrap_or_else(|index| index);
         self.values.insert(index, entry);
         self.on_insert(index);
-        if self.values.len() > capacity {
-            self.prune_to_capacity(capacity);
-        }
     }
 
     fn prune_to_capacity(&mut self, capacity: usize) {
@@ -171,21 +226,32 @@ impl ColumnTopN {
         }
 
         while self.values.len() > capacity {
-            if self.prune_min().is_none() {
+            if self.remove_min().is_none() {
                 break;
             }
         }
     }
 
-    fn prune_min(&mut self) -> Option<()> {
+    fn remove_min(&mut self) -> Option<ColumnTopNEntry> {
         let (min_index, next_min_index) = match self.min_index.take() {
             Some(index) if index < self.values.len() => (index, None),
             _ => self.find_min_and_next_index()?,
         };
-        self.values.remove(min_index);
+        let entry = self.values.remove(min_index);
         self.min_index =
             next_min_index.map(|index| if index > min_index { index - 1 } else { index });
-        Some(())
+        Some(entry)
+    }
+
+    fn absent_error(&self, capacity: usize) -> u64 {
+        if self.values.len() < capacity {
+            return 0;
+        }
+        self.values
+            .iter()
+            .map(|entry| entry.count)
+            .min()
+            .unwrap_or(0)
     }
 
     fn on_insert(&mut self, index: usize) {
@@ -250,9 +316,7 @@ impl ColumnTopN {
 
     #[cfg(test)]
     fn add_entry_for_test(&mut self, capacity: usize, entry: ColumnTopNEntry) {
-        if self.should_insert(&entry.scalar.as_ref(), entry.count, entry.error) {
-            self.insert_new_with_options(capacity, entry);
-        }
+        self.add_ref_with_options(capacity, entry.scalar.as_ref(), entry.count, entry.error);
     }
 }
 
@@ -280,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn column_top_n_prunes_to_capacity() {
+    fn column_top_n_replaces_min_with_error() {
         let mut top_n = ColumnTopN::default();
         top_n.add_entry_for_test(2, ColumnTopNEntry {
             scalar: uint_scalar(1),
@@ -298,15 +362,44 @@ mod tests {
             error: 0,
         });
         assert_eq!(top_n.values.len(), 2);
+        assert_eq!(top_n.get(&uint_scalar(1)), Some(5));
+        assert_eq!(top_n.get(&uint_scalar(2)), None);
+        let entry = top_n.get_entry(&uint_scalar(3)).unwrap();
+        assert_eq!(entry.count, 4);
+        assert_eq!(entry.error, 3);
+    }
 
-        top_n.add_entry_for_test(2, ColumnTopNEntry {
-            scalar: uint_scalar(4),
-            count: 1,
+    #[test]
+    fn column_top_n_merge_accounts_for_missing_side_error() {
+        let mut lhs = ColumnTopN::default();
+        lhs.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 10,
             error: 0,
         });
-        assert_eq!(top_n.values.len(), 2);
-        assert_eq!(top_n.get(&uint_scalar(1)), Some(5));
-        assert_eq!(top_n.get(&uint_scalar(2)), Some(3));
+        lhs.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 5,
+            error: 0,
+        });
+        let mut rhs = ColumnTopN::default();
+        rhs.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 7,
+            error: 0,
+        });
+        rhs.add_entry_for_test(2, ColumnTopNEntry {
+            scalar: uint_scalar(3),
+            count: 4,
+            error: 0,
+        });
+
+        lhs.merge_with_size(rhs, 2);
+
+        assert_eq!(lhs.get(&uint_scalar(1)), Some(17));
+        let entry = lhs.get_entry(&uint_scalar(2)).unwrap();
+        assert_eq!(entry.count, 9);
+        assert_eq!(entry.error, 4);
     }
 
     #[test]
@@ -326,7 +419,12 @@ mod tests {
         );
         assert_eq!(top_n.get(&Scalar::String("a".to_string())), Some(5));
         assert_eq!(top_n.get(&Scalar::String("a".to_string())), Some(5));
-        assert_eq!(top_n.get(&Scalar::String("b".to_string())), Some(1));
+        assert_eq!(top_n.get(&Scalar::String("b".to_string())), None);
+        let entry = top_n
+            .get_entry(&Scalar::String("c".to_string()))
+            .expect("new scalar should replace the current minimum");
+        assert_eq!(entry.count, 2);
+        assert_eq!(entry.error, 1);
     }
 }
 

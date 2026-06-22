@@ -58,7 +58,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -164,6 +163,7 @@ impl AnalyzeCollectNDVSource {
         no_scan: bool,
         histogram_info: AnalyzeCollectHistogramInfo,
         top_n_size: Option<usize>,
+        top_n_columns: Option<String>,
     ) -> Result<ProcessorPtr> {
         let table_schema = table.schema();
         let AnalyzeColumnProjection {
@@ -176,6 +176,7 @@ impl AnalyzeCollectNDVSource {
             table_schema.clone(),
             histogram_info,
             top_n_size,
+            top_n_columns.as_deref(),
         )?;
         let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
         let dal = table.get_operator();
@@ -219,19 +220,14 @@ struct AnalyzeColumnProjection {
 type AnalyzeColumnFields = (Option<TableField>, Option<TableField>, Option<TableField>);
 
 fn top_n_column_fields_from_options(
-    table: &FuseTable,
     table_schema: TableSchemaRef,
     top_n_size: Option<usize>,
+    top_n_columns: Option<&str>,
 ) -> Result<BTreeMap<FieldIndex, TableField>> {
     let Some(_) = top_n_size else {
         return Ok(BTreeMap::new());
     };
-    let Some(columns) = table
-        .table_info
-        .meta
-        .options
-        .get(OPT_KEY_ANALYZE_TOP_N_COLUMNS)
-    else {
+    let Some(columns) = top_n_columns else {
         return Ok(BTreeMap::new());
     };
     columns
@@ -244,12 +240,13 @@ fn build_analyze_column_projection(
     table_schema: TableSchemaRef,
     histogram_info: AnalyzeCollectHistogramInfo,
     top_n_size: Option<usize>,
+    top_n_columns: Option<&str>,
 ) -> Result<AnalyzeColumnProjection> {
     let ndv_columns_map = table
         .approx_distinct_cols
         .distinct_column_fields(table_schema.clone(), RangeIndex::supported_table_type)?;
     let top_n_columns_map =
-        top_n_column_fields_from_options(table, table_schema.clone(), top_n_size)?;
+        top_n_column_fields_from_options(table_schema.clone(), top_n_size, top_n_columns)?;
     let mut analyze_columns: BTreeMap<FieldIndex, AnalyzeColumnFields> = BTreeMap::new();
     for (field_index, field) in ndv_columns_map {
         analyze_columns.insert(field_index, (Some(field), None, None));

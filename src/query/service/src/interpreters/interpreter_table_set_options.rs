@@ -42,6 +42,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -354,6 +355,9 @@ async fn analyze_table(
     let mut effective_options = fuse_table.get_table_info().options().clone();
     effective_options.extend(options.clone());
     let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
+    let top_n_columns = effective_options
+        .get(OPT_KEY_ANALYZE_TOP_N_COLUMNS)
+        .cloned();
     let mut pipeline = Pipeline::create();
     fuse_table.do_analyze(
         ctx.clone(),
@@ -361,6 +365,7 @@ async fn analyze_table(
         &mut pipeline,
         AnalyzeHistogramInfo::None,
         top_n_size,
+        top_n_columns,
         false,
         true,
     )?;

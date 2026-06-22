@@ -136,6 +136,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         histogram_info: AnalyzeHistogramInfo,
         top_n_size: Option<usize>,
+        top_n_columns: Option<String>,
         no_scan: bool,
         retry_commit: bool,
     ) -> Result<()> {
@@ -161,6 +162,7 @@ impl FuseTable {
                     no_scan,
                     collect_histogram_info,
                     top_n_size,
+                    top_n_columns.clone(),
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
