@@ -274,6 +274,30 @@ in topn       :
 out stats     :
 0 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
 
+=== topn_equality_cache_with_and_constraints ===
+description: TopN equality estimates should not bypass accumulated AND constraints.
+expr          : and_filters(id = 1, id = 2)
+cardinality   : 1000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(1_u64) => 300 (error 0)
+0 Number(2_u64) => 200 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : and_filters(id > 10, id = 1)
+cardinality   : 1000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(1_u64) => 300 (error 0)
+0 Number(2_u64) => 200 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 0.0, null_count: 0, histogram: None }
+
 === topn_equality_cache_with_error ===
 description: Approximate TopN frequencies should use the count upper bound for equality and the lower bound for inequality.
 expr          : id = 42

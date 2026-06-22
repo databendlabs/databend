@@ -669,6 +669,11 @@ impl SelectivityVisitor<'_> {
                         ValueConstraint::from_comparison(op, const_datum.clone()),
                     )?;
                     if let Some(selectivity) =
+                        self.derive_accumulated_constraint_selectivity(column_index, column_stat)?
+                    {
+                        return Ok(selectivity);
+                    }
+                    if let Some(selectivity) =
                         self.derive_top_n_equality_selectivity(column_index, op, &constant.scalar)?
                     {
                         return Ok(selectivity);
@@ -697,6 +702,20 @@ impl SelectivityVisitor<'_> {
         }
 
         self.derive_function_selectivity(func)
+    }
+
+    fn derive_accumulated_constraint_selectivity(
+        &self,
+        column_index: Symbol,
+        column_stat: &ColumnStat,
+    ) -> Result<Option<Selectivity>> {
+        let column_stat = self
+            .constraints
+            .apply_to_column_stat(column_index, column_stat)?;
+        if column_stat.ndv.upper == 0.0 {
+            return Ok(Some(Selectivity::Zero));
+        }
+        Ok(None)
     }
 
     fn derive_top_n_equality_selectivity(
