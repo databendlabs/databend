@@ -60,25 +60,17 @@ pub fn add_internal_columns_with_meta(
                     Some(key) => Scalar::String(key.to_string()),
                     None => Scalar::Null,
                 };
-                b.add_const_column(
-                    scalar,
-                    DataType::Nullable(Box::new(DataType::String)),
-                );
+                b.add_const_column(scalar, DataType::Nullable(Box::new(DataType::String)));
             }
             InternalColumnType::FileLastModified => {
                 let scalar = match last_modified {
                     Some(ts) => Scalar::Timestamp(ts.timestamp_micros()),
                     None => Scalar::Null,
                 };
-                b.add_const_column(
-                    scalar,
-                    DataType::Nullable(Box::new(DataType::Timestamp)),
-                );
+                b.add_const_column(scalar, DataType::Nullable(Box::new(DataType::Timestamp)));
             }
             _ => {
-                unreachable!(
-                    "unexpected InternalColumnType in stage file reader"
-                );
+                unreachable!("unexpected InternalColumnType in stage file reader");
             }
         }
     }
