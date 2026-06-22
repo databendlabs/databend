@@ -718,10 +718,14 @@ impl SelectivityVisitor<'_> {
         if cardinality == 0.0 {
             return Ok(Some(Selectivity::N(0.0)));
         }
-        let upper_count = (entry.count as f64).min(cardinality);
+        let Some(column_stat) = self.column_stats.get(&column_index) else {
+            return Ok(None);
+        };
+        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count);
+        let upper_count = (entry.count as f64).min(non_null_cardinality);
         let lower_count = (entry.count.saturating_sub(entry.error) as f64).min(upper_count);
         let matched = if matches!(op, ComparisonOp::NotEqual) {
-            cardinality - lower_count
+            non_null_cardinality - lower_count
         } else {
             upper_count
         };

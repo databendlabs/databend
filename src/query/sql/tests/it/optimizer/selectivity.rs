@@ -331,6 +331,40 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         )?;
     }
 
+    write_case_title(
+        &mut file,
+        "topn_nullable_not_equal",
+        "TopN inequality estimates should exclude null rows from SQL not-equal matches.",
+    )?;
+    let nullable_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(1),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(5.0),
+        null_count: StatCount::exact(50),
+        histogram: None,
+    })]);
+    let nullable_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(1)),
+            count: 10,
+            error: 0,
+        }],
+        min_index: None,
+    })]);
+    let nullable_top_n_columns = &[("n", UInt64Type::data_type().wrap_nullable())];
+    for expr in ["n = 1", "n != 1"] {
+        let raw_expr = parse_raw_expr(expr, nullable_top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, nullable_top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            nullable_top_n_stats.clone(),
+            StatCardinality::estimate(100.0),
+            Some(nullable_top_n.clone()),
+        )?;
+    }
+
     Ok(())
 }
 

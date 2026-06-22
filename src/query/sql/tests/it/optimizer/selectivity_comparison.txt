@@ -296,3 +296,25 @@ in topn       :
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 960.0, null_count: 0, histogram: None }
 
+=== topn_nullable_not_equal ===
+description: TopN inequality estimates should exclude null rows from SQL not-equal matches.
+expr          : n = 1
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: 5.0, null_count: 50, histogram: None }
+in topn       :
+0 Number(1_u64) => 10 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : n != 1
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: 5.0, null_count: 50, histogram: None }
+in topn       :
+0 Number(1_u64) => 10 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: ~20.0, histogram: None }
+
