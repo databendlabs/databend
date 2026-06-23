@@ -128,10 +128,10 @@ impl FromToProto for mt::principal::CopyOptions {
 
     fn to_pb(&self) -> Result<pb::stage_info::CopyOptions, Incompatible> {
         let on_error = mt::principal::OnErrorMode::to_pb(&self.on_error)?;
-        let size_limit: u64 = convert_field(self.size_limit, "CopyOptions.size_limit")?;
-        let max_files: u64 = convert_field(self.max_files, "CopyOptions.max_files")?;
-        let split_size: u64 = convert_field(self.split_size, "CopyOptions.split_size")?;
-        let max_file_size: u64 = convert_field(self.max_file_size, "CopyOptions.max_file_size")?;
+        let size_limit = self.size_limit as u64;
+        let max_files = self.max_files as u64;
+        let split_size = self.split_size as u64;
+        let max_file_size = self.max_file_size as u64;
         Ok(pb::stage_info::CopyOptions {
             on_error: Some(on_error),
             size_limit,

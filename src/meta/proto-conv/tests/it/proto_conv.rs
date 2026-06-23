@@ -26,7 +26,6 @@ use databend_common_expression as ce;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -313,8 +312,8 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
         ]),
         language: "python".to_string(),
         arg_names: vec![],
-        arg_types: vec![DataType::String],
-        return_type: DataType::Boolean,
+        arg_types: vec![TableDataType::String],
+        return_type: TableDataType::Boolean,
         immutable: None,
     }
 }
@@ -402,8 +401,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let db_meta = new_db_meta_share();
         let p = db_meta.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("db from share:{:?}", buf);
     }
 
@@ -412,8 +410,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let db_meta = new_db_meta();
         let p = db_meta.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("db:{:?}", buf);
     }
 
@@ -423,8 +420,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let p = tbl.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table:{:?}", buf);
     }
 
@@ -433,8 +429,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let index = new_index_meta();
         let p = index.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("index meta:{buf:?}");
     }
 
@@ -443,8 +438,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let copied_file = new_table_copied_file_info_v6();
         let p = copied_file.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("copied_file:{:?}", buf);
     }
 
@@ -453,18 +447,14 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let empty_proto = new_empty_proto();
         let p = empty_proto.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("empty_proto:{:?}", buf);
     }
 
     // LockMeta
     {
         let table_lock_meta = new_lock_meta();
-        let p = table_lock_meta.to_pb()?;
-
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        table_lock_meta.to_pb()?;
     }
 
     // schema
@@ -472,8 +462,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let schema = new_latest_schema();
         let p = schema.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("schema:{:?}", buf);
     }
 
@@ -482,8 +471,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let data_mask_meta = new_data_mask_meta();
         let p = data_mask_meta.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("data mask:{:?}", buf);
     }
 
@@ -492,8 +480,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let table_statistics = new_table_statistics();
         let p = table_statistics.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table statistics:{:?}", buf);
     }
 
@@ -502,8 +489,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let catalog_meta = new_catalog_meta();
         let p = catalog_meta.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("catalog catalog_meta:{:?}", buf);
     }
 
@@ -512,8 +498,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let lvt = new_lvt();
         let p = lvt.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("lvt:{:?}", buf);
     }
 
@@ -522,8 +507,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let sequence_meta = new_sequence_meta();
         let p = sequence_meta.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("sequence:{:?}", buf);
     }
 
@@ -532,8 +516,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let virtual_data_schema = new_virtual_data_schema();
         let p = virtual_data_schema.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("virtual data schema:{:?}", buf);
     }
 
@@ -542,8 +525,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let udf_server = new_udf_server();
         let p = udf_server.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("udf server:{:?}", buf);
     }
 
@@ -552,8 +534,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let table_index = new_table_index();
         let p = table_index.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("table index:{:?}", buf);
     }
 

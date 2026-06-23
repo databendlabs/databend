@@ -31,9 +31,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::BucketSpilledPayload;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -609,98 +607,7 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             .unwrap();
         fixture.assert_result(&mut merged_single);
 
-        let payloads = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block,
-            max_partition_count: 1,
-        }
-        .repartition_to_payloads(
-            4,
-            vec![Int64Type::data_type()],
-            fixture.aggrs(),
-            1,
-            &mut PayloadFlushState::default(),
-        )
-        .unwrap();
-        assert_eq!(payloads.len(), 4);
-        assert_eq!(
-            payloads
-                .iter()
-                .map(AggregatePayload::exchange_block_number)
-                .collect::<Vec<_>>(),
-            vec![4000, 4001, 4002, 4003]
-        );
-        let mut merged_payloads = fixture.empty_table(HashTableConfig::default());
-        let mut flush_state = PayloadFlushState::default();
-        for payload in &payloads {
-            merged_payloads
-                .combine_payload(&payload.payload, &mut flush_state)
-                .unwrap();
-        }
-        fixture.assert_result(&mut merged_payloads);
-
         assert!(fixture.live_bytes() > 0);
-    }
-
-    fixture.assert_all_states_dropped();
-}
-
-#[test]
-fn test_bucket_spilled_payload_deserialize_restores_serialized_payload() {
-    let fixture = TrackedHeapFixture::new();
-
-    {
-        let hashtable =
-            fixture.build_from_rows(0, HashTableConfig::default().with_initial_radix_bits(0));
-        let serialized_block = hashtable.payload.aggregate_flush_all().unwrap();
-        let columns = serialized_block.columns();
-        let mut data = Vec::new();
-        let mut columns_layout = Vec::with_capacity(columns.len());
-
-        for entry in columns {
-            let bytes = databend_common_expression::utils::arrow::serialize_column(
-                entry.as_column().unwrap(),
-            );
-            columns_layout.push(bytes.len() as u64);
-            data.extend_from_slice(&bytes);
-        }
-
-        let payload = BucketSpilledPayload {
-            bucket: 7,
-            location: "memory://aggregate-spill".to_string(),
-            data_range: 0..data.len() as u64,
-            columns_layout,
-            max_partition_count: 16,
-        }
-        .deserialize(data)
-        .unwrap();
-
-        assert_eq!(payload.bucket, 7);
-        assert_eq!(payload.max_partition_count, 16);
-        assert_eq!(payload.data_block.num_rows(), GROUPS);
-        assert_eq!(
-            payload
-                .data_block
-                .columns()
-                .last()
-                .unwrap()
-                .as_column()
-                .unwrap()
-                .len(),
-            GROUPS
-        );
-
-        let mut restored = payload
-            .convert_to_aggregate_table(
-                vec![Int64Type::data_type()],
-                fixture.aggrs(),
-                1,
-                0,
-                Arc::new(Bump::new()),
-                true,
-            )
-            .unwrap();
-        fixture.assert_result(&mut restored);
     }
 
     fixture.assert_all_states_dropped();

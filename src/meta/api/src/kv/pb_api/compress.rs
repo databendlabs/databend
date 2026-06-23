@@ -78,9 +78,7 @@ impl Encoder {
     /// Encode a `FromToProto` value to protobuf bytes, with optional zstd compression.
     pub fn encode_pb<T: FromToProto>(&self, value: &T) -> Result<Vec<u8>, PbEncodeError> {
         let p = value.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
-        Ok(self.encode_value(buf))
+        Ok(self.encode_value(prost::Message::encode_to_vec(&p)))
     }
 
     /// Optionally compress `buf` with zstd.

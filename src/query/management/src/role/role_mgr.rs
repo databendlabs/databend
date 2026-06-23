@@ -22,6 +22,7 @@ use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;

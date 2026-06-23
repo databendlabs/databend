@@ -158,8 +158,7 @@ mod tests {
             gc_in_progress: false,
         };
         let pb = meta.to_pb()?;
-        let mut pb_buf = vec![];
-        pb.encode(&mut pb_buf)?;
+        let pb_buf = pb.encode_to_vec();
 
         let cmd = Cmd::UpsertKV(UpsertKV::update("__fd_database_by_id/123", &pb_buf));
         let log_entry = LogEntry::new(cmd);
@@ -210,8 +209,7 @@ mod tests {
             gc_in_progress: false,
         };
         let pb = meta.to_pb()?;
-        let mut pb_buf = vec![];
-        pb.encode(&mut pb_buf)?;
+        let pb_buf = pb.encode_to_vec();
 
         let raw_bytes_str = format!(
             "[{}]",

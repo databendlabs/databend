@@ -286,6 +286,11 @@ impl ReclusterTableInterpreter {
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
                     hook_vacuum_temp_files(&ctx)?;
+                    // RECLUSTER FINAL runs independent pipelines under one query id.
+                    // We allow hook vacuum to be best-effort for each round, and avoid
+                    // carrying this round's spill progress into later rounds.
+                    // Leftovers beyond the hook vacuum limit are handled by normal vacuum.
+                    ctx.clear_cluster_spill_progress();
                     hook_disk_temp_dir(&ctx)?;
                     match &info.res {
                         Ok(_) => {
