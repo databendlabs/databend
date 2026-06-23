@@ -21,8 +21,10 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
+use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 
 use crate::io::write::stream::ColumnNDVEstimator;
@@ -33,20 +35,21 @@ pub fn build_column_hlls(
     block: &DataBlock,
     ndv_columns_map: &BTreeMap<FieldIndex, TableField>,
 ) -> Result<Option<BlockHLL>> {
-    let mut builder = BlockStatsBuilder::new(ndv_columns_map, None);
+    let mut builder = BlockStatsBuilder::new(ndv_columns_map, None, None)?;
     builder.add_block(block)?;
     builder.finalize()
 }
 
 pub struct BlockStatsBuilder {
     builders: Vec<ColumnNDVBuilder>,
-    dropped_top_n: Vec<ColumnId>,
+    dropped_frequency: Vec<ColumnId>,
 }
 
 pub struct BlockStats {
     pub hll: BlockHLL,
     pub top_n: BlockTopN,
-    pub dropped_top_n: Vec<ColumnId>,
+    pub count_min_sketch: BlockCountMinSketch,
+    pub dropped_frequency: Vec<ColumnId>,
 }
 
 pub struct ColumnNDVBuilder {
@@ -54,46 +57,79 @@ pub struct ColumnNDVBuilder {
     field: TableField,
     pub hll: Option<ColumnNDVEstimator>,
     pub top_n: Option<(ColumnTopN, usize)>,
+    pub count_min_sketch: Option<ColumnCountMinSketch>,
 }
 
 impl BlockStatsBuilder {
     pub fn new(
         ndv_columns_map: &BTreeMap<FieldIndex, TableField>,
         top_n: Option<(&BTreeMap<FieldIndex, TableField>, usize)>,
-    ) -> BlockStatsBuilder {
-        let mut builders =
-            Vec::with_capacity(ndv_columns_map.len() + top_n.map_or(0, |(v, _)| v.len()));
+        count_min_sketch: Option<(&BTreeMap<FieldIndex, TableField>, f64)>,
+    ) -> Result<BlockStatsBuilder> {
+        let top_n_columns_map = top_n.map(|(columns, _)| columns);
+        let top_n_size = top_n.map(|(_, size)| size);
+        let count_min_sketch_columns_map = count_min_sketch.map(|(columns, _)| columns);
+        let count_min_sketch_error_rate = count_min_sketch.map(|(_, error_rate)| error_rate);
+        let mut builders = Vec::with_capacity(
+            ndv_columns_map.len()
+                + top_n_columns_map.map_or(0, |v| v.len())
+                + count_min_sketch_columns_map.map_or(0, |v| v.len()),
+        );
 
         for (index, field) in ndv_columns_map {
-            let column_top_n = top_n
+            let column_top_n = top_n_columns_map
+                .zip(top_n_size)
                 .and_then(|(columns, size)| columns.contains_key(index).then_some(size))
                 .map(|size| (ColumnTopN::default(), size));
+            let count_min_sketch = count_min_sketch_columns_map
+                .zip(count_min_sketch_error_rate)
+                .filter(|(columns, _)| columns.contains_key(index))
+                .map(|(_, error_rate)| ColumnCountMinSketch::with_error_rate(error_rate))
+                .transpose()?;
             builders.push(ColumnNDVBuilder {
                 index: *index,
                 field: field.clone(),
                 hll: Some(create_column_ndv_estimator(&field.data_type().into())),
                 top_n: column_top_n,
+                count_min_sketch,
             });
         }
 
-        if let Some((top_n_columns_map, top_n_size)) = top_n {
-            for (index, field) in top_n_columns_map {
-                if ndv_columns_map.contains_key(index) {
-                    continue;
-                }
+        let mut frequency_columns_map = BTreeMap::new();
+        if let Some(top_n_columns_map) = top_n_columns_map {
+            frequency_columns_map.extend(top_n_columns_map.clone());
+        }
+        if let Some(count_min_sketch_columns_map) = count_min_sketch_columns_map {
+            frequency_columns_map.extend(count_min_sketch_columns_map.clone());
+        }
+        for (index, field) in frequency_columns_map {
+            if ndv_columns_map.contains_key(&index) {
+                continue;
+            }
+            let column_top_n = top_n_columns_map
+                .zip(top_n_size)
+                .and_then(|(columns, size)| columns.contains_key(&index).then_some(size))
+                .map(|size| (ColumnTopN::default(), size));
+            let count_min_sketch = count_min_sketch_columns_map
+                .zip(count_min_sketch_error_rate)
+                .filter(|(columns, _)| columns.contains_key(&index))
+                .map(|(_, error_rate)| ColumnCountMinSketch::with_error_rate(error_rate))
+                .transpose()?;
+            if column_top_n.is_some() || count_min_sketch.is_some() {
                 builders.push(ColumnNDVBuilder {
-                    index: *index,
-                    field: field.clone(),
+                    index,
+                    field,
                     hll: None,
-                    top_n: Some((ColumnTopN::default(), top_n_size)),
+                    top_n: column_top_n,
+                    count_min_sketch,
                 });
             }
         }
 
-        BlockStatsBuilder {
+        Ok(BlockStatsBuilder {
             builders,
-            dropped_top_n: vec![],
-        }
+            dropped_frequency: vec![],
+        })
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -108,13 +144,18 @@ impl BlockStatsBuilder {
                     if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
                         top_n.add_with_size(*top_n_size, s.as_ref(), *num_rows as u64);
                     }
+                    if let Some(count_min_sketch) = &mut column_builder.count_min_sketch {
+                        count_min_sketch.add_with_count(s.as_ref(), *num_rows as u64);
+                    }
                 }
                 BlockEntry::Column(col) => {
                     if col.check_large_string() {
-                        if column_builder.top_n.is_some() {
+                        if column_builder.top_n.is_some()
+                            || column_builder.count_min_sketch.is_some()
+                        {
                             let column_id = column_builder.field.column_id();
-                            if !self.dropped_top_n.contains(&column_id) {
-                                self.dropped_top_n.push(column_id);
+                            if !self.dropped_frequency.contains(&column_id) {
+                                self.dropped_frequency.push(column_id);
                             }
                         }
                         keys_to_remove.push(index);
@@ -123,7 +164,7 @@ impl BlockStatsBuilder {
                     if let Some(hll) = &mut column_builder.hll {
                         hll.update_column(col);
                     }
-                    if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
+                    if column_builder.top_n.is_some() || column_builder.count_min_sketch.is_some() {
                         let mut row = 0;
                         while row < col.len() {
                             if let Some(scalar) = col.index(row) {
@@ -133,7 +174,13 @@ impl BlockStatsBuilder {
                                 {
                                     count += 1;
                                 }
-                                top_n.add_with_size(*top_n_size, scalar, count as u64);
+                                if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
+                                    top_n.add_with_size(*top_n_size, scalar.clone(), count as u64);
+                                }
+                                if let Some(count_min_sketch) = &mut column_builder.count_min_sketch
+                                {
+                                    count_min_sketch.add_with_count(scalar, count as u64);
+                                }
                                 row += count;
                             } else {
                                 row += 1;
@@ -171,14 +218,15 @@ impl BlockStatsBuilder {
     pub fn finalize_with_top_n(self) -> Result<Option<BlockStats>> {
         let BlockStatsBuilder {
             builders,
-            dropped_top_n,
+            dropped_frequency,
         } = self;
-        if builders.is_empty() && dropped_top_n.is_empty() {
+        if builders.is_empty() && dropped_frequency.is_empty() {
             return Ok(None);
         }
 
         let mut column_hlls = HashMap::with_capacity(builders.len());
         let mut column_top_n = HashMap::with_capacity(builders.len());
+        let mut column_count_min_sketch = HashMap::with_capacity(builders.len());
         for column_builder in builders {
             let column_id = column_builder.field.column_id();
             if let Some(hll) = column_builder.hll {
@@ -189,15 +237,25 @@ impl BlockStatsBuilder {
             {
                 column_top_n.insert(column_id, top_n.finish_with_size(top_n_size));
             }
+            if let Some(count_min_sketch) = column_builder.count_min_sketch
+                && !count_min_sketch.is_empty()
+            {
+                column_count_min_sketch.insert(column_id, count_min_sketch);
+            }
         }
 
-        if column_hlls.is_empty() && column_top_n.is_empty() && dropped_top_n.is_empty() {
+        if column_hlls.is_empty()
+            && column_top_n.is_empty()
+            && column_count_min_sketch.is_empty()
+            && dropped_frequency.is_empty()
+        {
             Ok(None)
         } else {
             Ok(Some(BlockStats {
                 hll: column_hlls,
                 top_n: column_top_n,
-                dropped_top_n,
+                count_min_sketch: column_count_min_sketch,
+                dropped_frequency,
             }))
         }
     }
@@ -256,19 +314,21 @@ mod tests {
     #[test]
     fn test_block_stats_builder_without_top_n() -> Result<()> {
         let ndv_columns_map = int32_ndv_columns_map();
-        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, None);
+        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, None, None)?;
         builder.add_block(&int32_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
         let top_n = stats.top_n;
         assert!(top_n.is_empty());
+        assert!(stats.count_min_sketch.is_empty());
         Ok(())
     }
 
     #[test]
     fn test_block_stats_builder_with_top_n() -> Result<()> {
         let ndv_columns_map = int32_ndv_columns_map();
-        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&ndv_columns_map, 2)));
+        let mut builder =
+            BlockStatsBuilder::new(&ndv_columns_map, Some((&ndv_columns_map, 2)), None)?;
         builder.add_block(&int32_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
@@ -277,6 +337,7 @@ mod tests {
         assert!(top_n.values().all(|column_top_n| {
             !column_top_n.values.is_empty() && column_top_n.values.len() <= 2
         }));
+        assert!(stats.count_min_sketch.is_empty());
         Ok(())
     }
 
@@ -284,7 +345,8 @@ mod tests {
     fn test_block_stats_builder_with_top_n_only() -> Result<()> {
         let ndv_columns_map = empty_columns_map();
         let top_n_columns_map = int32_ndv_columns_map();
-        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)));
+        let mut builder =
+            BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)), None)?;
         builder.add_block(&int32_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
@@ -292,6 +354,29 @@ mod tests {
         let top_n = stats.top_n;
         assert!(hll.is_empty());
         assert_eq!(top_n.len(), 1);
+        assert!(stats.count_min_sketch.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_stats_builder_with_count_min_sketch_only() -> Result<()> {
+        let ndv_columns_map = empty_columns_map();
+        let count_min_sketch_columns_map = int32_ndv_columns_map();
+        let mut builder = BlockStatsBuilder::new(
+            &ndv_columns_map,
+            None,
+            Some((&count_min_sketch_columns_map, 0.01)),
+        )?;
+        builder.add_block(&int32_block_with_delayed_hot_run())?;
+
+        let stats = builder.finalize_with_top_n()?.unwrap();
+        assert!(stats.hll.is_empty());
+        assert!(stats.top_n.is_empty());
+        let count_min_sketch = stats.count_min_sketch.values().next().unwrap();
+        assert_eq!(
+            count_min_sketch.estimate(&Scalar::Number(NumberScalar::Int32(2))),
+            Some(3)
+        );
         Ok(())
     }
 
@@ -299,7 +384,11 @@ mod tests {
     fn test_block_stats_builder_counts_top_n_runs_before_pruning() -> Result<()> {
         let ndv_columns_map = empty_columns_map();
         let top_n_columns_map = int32_ndv_columns_map();
-        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 1)));
+        let mut builder = BlockStatsBuilder::new(
+            &ndv_columns_map,
+            Some((&top_n_columns_map, 1)),
+            Some((&top_n_columns_map, 0.01)),
+        )?;
         builder.add_block(&int32_block_with_delayed_hot_run())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
@@ -310,6 +399,11 @@ mod tests {
         assert_eq!(entry.scalar, Scalar::Number(NumberScalar::Int32(2)));
         assert_eq!(entry.count, 4);
         assert_eq!(entry.error, 1);
+        let count_min_sketch = stats.count_min_sketch.values().next().unwrap();
+        assert_eq!(
+            count_min_sketch.estimate(&Scalar::Number(NumberScalar::Int32(2))),
+            Some(3)
+        );
         Ok(())
     }
 
@@ -318,13 +412,18 @@ mod tests {
         let ndv_columns_map = empty_columns_map();
         let top_n_columns_map = string_columns_map();
         let column_id = top_n_columns_map.get(&0).unwrap().column_id();
-        let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)));
+        let mut builder = BlockStatsBuilder::new(
+            &ndv_columns_map,
+            Some((&top_n_columns_map, 2)),
+            Some((&top_n_columns_map, 0.01)),
+        )?;
         builder.add_block(&small_string_block())?;
         builder.add_block(&large_string_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
         assert!(stats.top_n.is_empty());
-        assert_eq!(stats.dropped_top_n, vec![column_id]);
+        assert!(stats.count_min_sketch.is_empty());
+        assert_eq!(stats.dropped_frequency, vec![column_id]);
         Ok(())
     }
 }

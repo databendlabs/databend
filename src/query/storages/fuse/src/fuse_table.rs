@@ -1162,7 +1162,7 @@ impl Table for FuseTable {
                 .as_ref()
                 .map(|v| v.histograms.clone())
                 .unwrap_or_default();
-            let top_n = table_statistics
+            let aligned_table_statistics = table_statistics
                 .as_ref()
                 .filter(|v| v.row_count == snapshot.summary.row_count)
                 .filter(|v| {
@@ -1170,8 +1170,12 @@ impl Table for FuseTable {
                         .prev_snapshot_id
                         .as_ref()
                         .is_some_and(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
-                })
+                });
+            let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
+                .unwrap_or_default();
+            let count_min_sketch = aligned_table_statistics
+                .map(|v| v.count_min_sketch.clone())
                 .unwrap_or_default();
             let stats_row_count = additional_stats_meta
                 .map(|v| v.row_count)
@@ -1181,6 +1185,7 @@ impl Table for FuseTable {
                 stats,
                 histograms,
                 top_n,
+                count_min_sketch,
                 column_distinct_values,
                 stats_row_count,
                 snapshot.summary.row_count,

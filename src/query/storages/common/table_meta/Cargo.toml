@@ -30,6 +30,7 @@ parquet = { workspace = true }
 rmp-serde = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+siphasher = { workspace = true }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 uuid = { workspace = true }

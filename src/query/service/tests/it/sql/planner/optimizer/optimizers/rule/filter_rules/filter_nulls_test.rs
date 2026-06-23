@@ -115,6 +115,7 @@ fn scan_with_stats(table_index: usize, column: Symbol, null_count: u64) -> SExpr
                 precise_cardinality: None,
                 column_stats: HashMap::from([(column, column_stat(null_count))]),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         })),
     )
