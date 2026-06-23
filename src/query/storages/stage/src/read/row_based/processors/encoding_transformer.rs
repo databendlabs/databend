@@ -232,6 +232,54 @@ mod tests {
     }
 
     #[test]
+    fn test_encoding_transformer_preserves_meta_when_first_batch_buffered() {
+        // The first chunk is an incomplete multibyte sequence, so the
+        // transformer buffers it and emits nothing. The file metadata is
+        // stamped on every batch (as BytesReader now does), so the batch that
+        // actually emits rows must still carry content_key/last_modified.
+        let (encoded, _, had_errors) = GBK.encode("张三,1\n");
+        assert!(!had_errors);
+
+        let last_modified = chrono::DateTime::from_timestamp(1_700_000_000, 0);
+        let mut transformer =
+            DecodingTransformer::try_create("gbk".to_string(), "strict".to_string()).unwrap();
+
+        let first = transformer
+            .transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
+                data: encoded[..1].to_vec(),
+                path: "test.csv".to_string(),
+                offset: 0,
+                is_eof: false,
+                content_key: Some("etag-123".to_string()),
+                last_modified,
+            })))
+            .unwrap();
+        assert!(first.is_empty());
+
+        let second = transformer
+            .transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
+                data: encoded[1..].to_vec(),
+                path: "test.csv".to_string(),
+                offset: 1,
+                is_eof: true,
+                content_key: Some("etag-123".to_string()),
+                last_modified,
+            })))
+            .unwrap();
+        assert_eq!(second.len(), 1);
+
+        let batch = second
+            .into_iter()
+            .next()
+            .unwrap()
+            .get_owned_meta()
+            .and_then(BytesBatch::downcast_from)
+            .unwrap();
+        assert_eq!(batch.content_key.as_deref(), Some("etag-123"));
+        assert_eq!(batch.last_modified, last_modified);
+    }
+
+    #[test]
     fn test_encoding_transformer_strict_invalid_utf8() {
         let mut transformer =
             DecodingTransformer::try_create("utf-8".to_string(), "strict".to_string()).unwrap();
