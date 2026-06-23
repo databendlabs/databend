@@ -202,7 +202,7 @@ impl Spiller {
         let mut partition_ids = Vec::new();
         for (partition_id, data_blocks) in partitioned_data.into_iter() {
             partition_ids.push(partition_id);
-            encoder.add_blocks(data_blocks);
+            encoder.add_blocks(data_blocks)?;
         }
 
         let write_bytes = encoder.size();
