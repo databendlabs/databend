@@ -416,6 +416,9 @@ impl HttpSessionConf {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
             }
+        }
+        http_ctx.restore_client_session_state(session);
+        if let Some(state) = &self.internal {
             if let Some(id) = state.last_query_ids.first() {
                 if let Some(last_query) = http_query_manager.get_query(id) {
                     let state = *last_query.client_state.lock();
