@@ -482,6 +482,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     column_stats,
                     histograms,
                     top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(
