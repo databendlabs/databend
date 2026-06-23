@@ -282,7 +282,7 @@ pub async fn check_storage_params_endpoints(sp: &StorageParams) -> Result<()> {
 
 /// Enumerate every endpoint URL field of a `StorageParams` variant that the
 /// egress policy validates. Variants without user-controlled URLs (Fs,
-/// Memory, Moka, FTP, HDFS name node, Huggingface, None) return empty.
+/// Memory, FTP, HDFS name node, Huggingface) return empty.
 fn storage_params_endpoints(sp: &StorageParams) -> Vec<&str> {
     match sp {
         StorageParams::Azblob(c) => vec![c.endpoint_url.as_str()],
@@ -304,9 +304,7 @@ fn storage_params_endpoints(sp: &StorageParams) -> Vec<&str> {
         | StorageParams::Ftp(_)
         | StorageParams::Hdfs(_)
         | StorageParams::Memory
-        | StorageParams::Moka(_)
-        | StorageParams::Huggingface(_)
-        | StorageParams::None => Vec::new(),
+        | StorageParams::Huggingface(_) => Vec::new(),
     }
 }
 
@@ -1022,7 +1020,6 @@ mod tests {
         for sp in [
             StorageParams::Fs(StorageFsConfig::default()),
             StorageParams::Memory,
-            StorageParams::None,
         ] {
             assert!(storage_params_endpoints(&sp).is_empty());
         }

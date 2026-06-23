@@ -35,7 +35,6 @@ use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
@@ -1368,42 +1367,6 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
             network_config: None,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct MokaStorageConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for MokaStorageConfig {
-    fn default() -> Self {
-        InnerStorageMokaConfig::default().into()
-    }
-}
-
-impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(v: InnerStorageMokaConfig) -> Self {
-        Self {
-            max_capacity: v.max_capacity,
-            time_to_live: v.time_to_live,
-            time_to_idle: v.time_to_idle,
-        }
-    }
-}
-
-impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig {
-            max_capacity: self.max_capacity,
-            time_to_live: self.time_to_live,
-            time_to_idle: self.time_to_idle,
         })
     }
 }

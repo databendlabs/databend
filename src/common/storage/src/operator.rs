@@ -35,7 +35,6 @@ use databend_common_meta_app::storage::StorageHdfsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
 use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
@@ -126,9 +125,6 @@ pub(crate) fn init_operator_uncached(
         )?,
         StorageParams::Memory => {
             build_operator(init_memory_operator()?, None, endpoint_policy_scope)?
-        }
-        StorageParams::Moka(cfg) => {
-            build_operator(init_moka_operator(cfg)?, None, endpoint_policy_scope)?
         }
         StorageParams::Obs(cfg) => build_operator(
             init_obs_operator(cfg)?,
@@ -547,16 +543,6 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
     if cfg.role_arn.is_empty() && cfg.access_key_id.is_empty() && cfg.access_key_secret.is_empty() {
         builder = builder.allow_anonymous();
     }
-
-    Ok(builder)
-}
-
-/// init_moka_operator will init a moka operator.
-fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
-    let builder = services::Moka::default()
-        .max_capacity(v.max_capacity)
-        .time_to_live(std::time::Duration::from_secs(v.time_to_live as u64))
-        .time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
     Ok(builder)
 }
