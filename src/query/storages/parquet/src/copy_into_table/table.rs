@@ -86,10 +86,15 @@ impl ParquetTableForCopy {
             };
             let num_rows = meta.meta.file_metadata().num_rows() as usize;
             stats.read_rows += num_rows;
-            copy_status.add_chunk(meta.location.as_str(), FileStatus {
-                num_rows_loaded: num_rows,
-                error: None,
-            });
+            // For files with no row groups, no blocks will be produced by the
+            // source processor, so register them here to ensure they appear in
+            // the COPY result with rows_loaded = 0.
+            if meta.meta.row_groups().is_empty() {
+                copy_status.add_chunk(meta.location.as_str(), FileStatus {
+                    num_rows_loaded: 0,
+                    error: None,
+                });
+            }
             let mut start_row = 0;
             for rg in meta.meta.row_groups() {
                 let part = ParquetRowGroupPart {
