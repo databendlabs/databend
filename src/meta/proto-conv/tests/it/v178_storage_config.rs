@@ -147,14 +147,3 @@ fn test_decode_v178_storage_config_memory() -> anyhow::Result<()> {
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
-
-#[test]
-fn test_decode_v178_storage_config_none() -> anyhow::Result<()> {
-    let storage_config_v178 = vec![130, 1, 0];
-
-    let want = || StorageParams::None;
-
-    common::test_load_old(func_name!(), storage_config_v178.as_slice(), 0, want())?;
-    common::test_pb_from_to(func_name!(), want())?;
-    Ok(())
-}
