@@ -67,6 +67,10 @@ pub enum EndpointUrlPolicy {
     /// Reject high-risk targets such as loopback, private, link-local,
     /// multicast, unspecified and metadata addresses unless explicitly allowed.
     Strict,
+    /// Reject all endpoints unless they match the configured allowlist
+    /// (`allowed_hosts` or `allowed_cidrs`). This is the most restrictive
+    /// mode: even public addresses are denied by default.
+    Allowlist,
 }
 
 /// Runtime egress policy for external storage endpoint URLs.

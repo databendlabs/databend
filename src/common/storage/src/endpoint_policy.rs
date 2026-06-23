@@ -394,7 +394,7 @@ impl CompiledPolicy {
         // `check_storage_endpoint_url` remains the security boundary in
         // either mode.
         let needs_dns = match self.policy {
-            EndpointUrlPolicy::Strict => true,
+            EndpointUrlPolicy::Strict | EndpointUrlPolicy::Allowlist => true,
             EndpointUrlPolicy::Permissive => {
                 !self.blocked_cidrs.is_empty()
                     || self
@@ -433,6 +433,17 @@ impl CompiledPolicy {
             return self.check_ip(&host, port, ip);
         }
 
+        // Allowlist mode rejects hostnames not covered by any allowlist
+        // entry. If allowed_cidrs is configured we must defer to the DNS
+        // phase so check_ip can evaluate the resolved addresses against
+        // those CIDRs.
+        if matches!(self.policy, EndpointUrlPolicy::Allowlist)
+            && !host_matches_any(&host, &self.allowed_hosts)
+            && self.allowed_cidrs.is_empty()
+        {
+            return deny(&host, None, "not in allowlist");
+        }
+
         Ok(())
     }
 
@@ -451,6 +462,10 @@ impl CompiledPolicy {
 
         let allowed = host_matches_any(host, &self.allowed_hosts)
             || self.allowed_cidrs.iter().any(|cidr| cidr.contains(ip));
+
+        if matches!(self.policy, EndpointUrlPolicy::Allowlist) && !allowed {
+            return deny(host, Some(ip), "not in allowlist");
+        }
 
         if let Some(reason) = builtin_blocked_ip_reason(ip) {
             if matches!(self.policy, EndpointUrlPolicy::Strict) && !allowed {
@@ -1023,5 +1038,110 @@ mod tests {
         ] {
             assert!(storage_params_endpoints(&sp).is_empty());
         }
+    }
+
+    fn allowlist_only() -> CompiledPolicy {
+        CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            ..Default::default()
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn test_allowlist_rejects_public_ip_without_allowlist() {
+        let policy = allowlist_only();
+        assert!(check(&policy, "https://93.184.216.34:443").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_rejects_private_ip_without_allowlist() {
+        let policy = allowlist_only();
+        assert!(check(&policy, "http://10.0.0.1:9000").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_allows_configured_cidr() {
+        let policy = CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            allowed_cidrs: vec!["93.184.216.0/24".to_string()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert!(check(&policy, "https://93.184.216.34:443").is_ok());
+        assert!(check(&policy, "https://8.8.8.8:443").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_allows_configured_host() {
+        let policy = CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            allowed_hosts: vec!["*.example.com".to_string()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert!(check(&policy, "https://s3.example.com:443").is_ok());
+        assert!(check(&policy, "https://evil.attacker.com:443").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_empty_allowlist_rejects_all() {
+        let policy = allowlist_only();
+
+        assert!(check(&policy, "https://93.184.216.34:443").is_err());
+        assert!(check(&policy, "http://10.0.0.1:80").is_err());
+        assert!(check(&policy, "http://127.0.0.1:80").is_err());
+        assert!(check(&policy, "https://s3.amazonaws.com:443").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_blocked_hosts_still_rejected() {
+        // Even if a host is in allowed_hosts, blocked_hosts takes precedence.
+        let policy = CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            allowed_hosts: vec!["*.example.com".to_string()],
+            blocked_hosts: vec!["evil.example.com".to_string()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert!(check(&policy, "https://good.example.com:443").is_ok());
+        assert!(check(&policy, "https://evil.example.com:443").is_err());
+    }
+
+    #[test]
+    fn test_allowlist_cidr_defers_hostname_to_dns_phase() {
+        // When allowed_cidrs is configured, hostnames must not be early-rejected
+        // so DNS resolution can check the resolved IP against the CIDR allowlist.
+        let policy = CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            allowed_cidrs: vec!["93.184.216.0/24".to_string()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Hostname should pass the pre-DNS check (not early-rejected).
+        let url = normalize_endpoint_url("https://example.com:443").unwrap();
+        assert!(policy.check_url_without_dns(&url).is_ok());
+    }
+
+    #[test]
+    fn test_allowlist_no_cidr_early_rejects_hostname() {
+        // Without allowed_cidrs, hostnames not in allowed_hosts are
+        // rejected early without DNS.
+        let policy = CompiledPolicy::try_from(&EndpointUrlPolicyConfig {
+            policy: EndpointUrlPolicy::Allowlist,
+            allowed_hosts: vec!["good.example.com".to_string()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        let url = normalize_endpoint_url("https://other.example.com:443").unwrap();
+        assert!(policy.check_url_without_dns(&url).is_err());
+
+        let url = normalize_endpoint_url("https://good.example.com:443").unwrap();
+        assert!(policy.check_url_without_dns(&url).is_ok());
     }
 }

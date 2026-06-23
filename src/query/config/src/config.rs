@@ -471,6 +471,7 @@ pub enum EndpointUrlPolicyConfigValue {
     #[default]
     Permissive,
     Strict,
+    Allowlist,
 }
 
 impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
@@ -478,6 +479,7 @@ impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
         match value {
             EndpointUrlPolicyConfigValue::Permissive => EndpointUrlPolicy::Permissive,
             EndpointUrlPolicyConfigValue::Strict => EndpointUrlPolicy::Strict,
+            EndpointUrlPolicyConfigValue::Allowlist => EndpointUrlPolicy::Allowlist,
         }
     }
 }
@@ -487,6 +489,7 @@ impl From<&EndpointUrlPolicy> for EndpointUrlPolicyConfigValue {
         match value {
             EndpointUrlPolicy::Permissive => EndpointUrlPolicyConfigValue::Permissive,
             EndpointUrlPolicy::Strict => EndpointUrlPolicyConfigValue::Strict,
+            EndpointUrlPolicy::Allowlist => EndpointUrlPolicyConfigValue::Allowlist,
         }
     }
 }
