@@ -1347,6 +1347,8 @@ async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Levels 1 and 2 share the {1-3} bin; level 0 stays isolated, so only the
+    // two mature blocks overlap and form one rewrite task.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
         &[(0, 1), (1, 1), (2, 1)],
         thresholds,
@@ -1357,40 +1359,13 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
 
     assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
+    // {1-3} bin: majority tie between level 1 and 2 picks the lower level.
     assert_eq!(parts.tasks[0].level, 1);
     assert_eq!(task_part_counts(&parts), vec![2]);
 
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(3, 2), (4, 1)],
-        thresholds,
-        1,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 3);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].level, 3);
-    assert_eq!(task_part_counts(&parts), vec![3]);
-
-    // A level 2-3 overlap of only two blocks does not rewrite: two blocks that
-    // are both at or above MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS never form a
-    // rewrite task, regardless of binning, so this is repacked.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(2, 1), (3, 1)],
-        thresholds,
-        1,
-        ReclusterMode::Final,
-    )
-    .await?;
-
-    assert_eq!(block_num, 2);
-    assert!(parts.tasks.is_empty());
-    assert_eq!(parts.remained_blocks.len(), 2);
-    assert_eq!(parts.removed_segment_indexes.len(), 2);
-
-    // Two high-level blocks alone do not produce rewrite tasks, but they can
-    // still be repacked when that reduces segment count.
+    // Two high-level blocks alone do not produce rewrite tasks (both are at or
+    // above MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS), but they can still be repacked
+    // when that reduces segment count.
     let (block_num, parts) =
         materialize_segments_by_level_with_mode(&[(2, 2)], thresholds, 1, ReclusterMode::Final)
             .await?;
@@ -1404,13 +1379,34 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_staggered_bins_merge_boundary_levels() -> anyhow::Result<()> {
+async fn test_final_wide_bin_merges_mature_levels() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 2 and 3 straddle the pass-1 bin boundary ({1,2} vs {3,4}), so the
-    // first pass cannot merge them. With more than two blocks the staggered
-    // second pass bins them together as {2,3} and rewrites the overlap.
+    // Levels 4 and 8 sit at the edges of the {4-8} bin; the fixed wide bin packs
+    // them into a single task even though they are four levels apart.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(2, 2), (3, 2)],
+        &[(4, 1), (8, 1), (8, 1)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 3);
+    assert_eq!(parts.tasks.len(), 1);
+    // Majority level in {4-8} is 8 (two blocks vs one at level 4).
+    assert_eq!(parts.tasks[0].level, 8);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_high_maturity_bin_majority_level() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Levels 9 and above all fall in the {9+} bin and merge into one task; the
+    // output level follows the majority, picking the smaller level on a tie.
+    let (block_num, parts) = materialize_segments_by_level_with_mode(
+        &[(9, 1), (10, 2), (12, 1)],
         thresholds,
         1,
         ReclusterMode::Final,
@@ -1419,31 +1415,35 @@ async fn test_final_staggered_bins_merge_boundary_levels() -> anyhow::Result<()>
 
     assert_eq!(block_num, 4);
     assert_eq!(parts.tasks.len(), 1);
-    // {2,3} bin: tie between level 2 and 3 picks the lower level.
-    assert_eq!(parts.tasks[0].level, 2);
+    assert_eq!(parts.tasks[0].level, 10);
     assert_eq!(task_part_counts(&parts), vec![4]);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_pass_one_wins_without_running_pass_two() -> anyhow::Result<()> {
+async fn test_final_bin_boundary_is_a_hard_split() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 1 and 2 already share the pass-1 bin {1,2}, so pass 1 rewrites them
-    // and the staggered pass never runs (no block is selected twice).
+    // Levels 3 and 4 fall in different bins ({1-3} vs {4-8}). The fixed bins do
+    // not merge across that boundary, so the two level bands form two separate
+    // tasks rather than one merged overlap.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(1, 2), (2, 2)],
+        &[(3, 3), (4, 3)],
         thresholds,
-        1,
+        2,
         ReclusterMode::Final,
     )
     .await?;
 
-    assert_eq!(block_num, 4);
-    assert_eq!(parts.tasks.len(), 1);
-    // {1,2} bin: tie picks the lower level.
-    assert_eq!(parts.tasks[0].level, 1);
-    assert_eq!(task_part_counts(&parts), vec![4]);
+    assert_eq!(block_num, 6);
+    assert_eq!(parts.tasks.len(), 2);
+    let mut levels = parts
+        .tasks
+        .iter()
+        .map(|task| task.level)
+        .collect::<Vec<_>>();
+    levels.sort_unstable();
+    assert_eq!(levels, vec![3, 4]);
 
     Ok(())
 }

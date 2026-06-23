@@ -83,49 +83,57 @@ const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReclusterGroup {
+    /// A single level forms its own group.
     Level(i32),
-    /// A two-level FINAL bin covering `lo` and `lo + 1`.
-    Mixed(i32),
+    /// FINAL mode: a fixed maturity bin identified by its lower bound `lo`.
+    Range(i32),
 }
 
 impl ReclusterGroup {
-    /// Assign a block's recluster group for the given mode and stagger `offset`.
-    ///
-    /// FINAL packs mature levels into fixed two-level bins whose boundaries
-    /// depend on `offset`, so two passes together cover every adjacent pair:
-    ///   - offset = 1: {0} {1,2} {3,4} {5,6} ... (covers boundaries 1-2, 3-4, ...)
-    ///   - offset = 0: {0,1} {2,3} {4,5} {6,7} ... (covers boundaries 0-1, 2-3, ...)
-    fn assign(level: i32, mode: ReclusterMode, offset: i32) -> ReclusterGroup {
+    /// Assign a block's recluster group for the given mode.
+    fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
         match mode {
             ReclusterMode::Normal => ReclusterGroup::Level(level),
-            ReclusterMode::Final if level < offset => ReclusterGroup::Level(level),
+            ReclusterMode::Final if level == 0 => ReclusterGroup::Level(level),
             ReclusterMode::Final => {
-                let lo = ((level - offset) / 2) * 2 + offset;
-                ReclusterGroup::Mixed(lo)
+                // FINAL packs blocks into fixed maturity bins so each round can pick tasks
+                // across a wider level span, letting high-overlap blocks at high levels land
+                // in the same candidate group instead of being split across narrow windows:
+                //   - {1..=3}: young-ish blocks, room for early recluster.
+                //   - {4..=8}: mature blocks.
+                //   - {9..}  : high-maturity blocks (upper-bounded by MAX_RECLUSTER_LEVEL).
+                debug_assert!(level > 0);
+                let lo = match level {
+                    1..=3 => 1,
+                    4..=8 => 4,
+                    _ => 9,
+                };
+                ReclusterGroup::Range(lo)
             }
         }
     }
 
+    /// Output level for a selected task.
+    ///
+    /// NORMAL keeps the single level. FINAL takes the majority level of the
+    /// selected blocks (ties pick the smaller level), representing the maturity
+    /// of most blocks in the task. Rewrite still advances this by one level.
     fn output_level(self, task_indices: &[usize], blocks: &[&ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::Mixed(lo) => {
-                let hi = lo + 1;
-                let mut hi_count = 0u32;
-                let mut total = 0u32;
+            ReclusterGroup::Range(lo) => {
+                let mut counts: BTreeMap<i32, usize> = BTreeMap::new();
                 for &idx in task_indices {
                     let level = blocks[idx].stats().level;
-                    debug_assert!(
-                        level == lo || level == hi,
-                        "unexpected level {level} in Mixed bin [{lo},{hi}]"
-                    );
-                    total += 1;
-                    if level == hi {
-                        hi_count += 1;
+                    *counts.entry(level).or_default() += 1;
+                }
+                let mut best = (lo, 0usize);
+                for (level, count) in counts {
+                    if count > best.1 {
+                        best = (level, count);
                     }
                 }
-                // Same count picks the smaller level (matches original semantics).
-                if hi_count > total - hi_count { hi } else { lo }
+                best.0
             }
         }
     }
@@ -135,7 +143,10 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::Mixed(lo) => write!(f, "{}-{}", lo, lo + 1),
+            ReclusterGroup::Range(1) => write!(f, "1-3"),
+            ReclusterGroup::Range(4) => write!(f, "4-8"),
+            ReclusterGroup::Range(9) => write!(f, "9+"),
+            ReclusterGroup::Range(lo) => unreachable!("unexpected FINAL bin lower bound: {lo}"),
         }
     }
 }
@@ -445,18 +456,10 @@ impl ReclusterMutator {
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
-        // Pass 1: the primary bins isolate level 0 and group mature levels as
-        // {1,2} {3,4} {5,6} ...; this matches the prior FINAL behavior. NORMAL
-        // mode only uses this pass (each level stays its own group).
-        let mut tasks = self.build_tasks_for_offset(1, &blocks, mode, task_budget)?;
-        // Pass 2: only for FINAL when pass 1 produced nothing. Re-bin the same
-        // blocks with staggered bins {0,1} {2,3} {4,5} ... so the boundaries
-        // pass 1 cannot merge (2-3, 4-5, ...) get a chance. Pass 2 runs only
-        // when pass 1 is empty, so no block is selected by both.
-        if tasks.is_empty() && mode == ReclusterMode::Final {
-            debug!("recluster: primary bins produced no task, retry with staggered bins");
-            tasks = self.build_tasks_for_offset(0, &blocks, mode, task_budget)?;
-        }
+        // FINAL bins blocks into fixed maturity ranges ({0} {1-3} {4-8} {9+});
+        // NORMAL keeps each level as its own group. A single pass over the
+        // window builds rewrite-task candidates per group.
+        let tasks = self.build_tasks(&blocks, mode, task_budget)?;
 
         for candidate in &tasks {
             for (window_pos, _) in &candidate.selected_blocks {
@@ -523,19 +526,16 @@ impl ReclusterMutator {
         Ok(candidate_window)
     }
 
-    /// Re-bin block indices into staggered groups for the given `offset` and
-    /// build rewrite-task candidates. This reuses the already decoded block
-    /// metas in this window; it only rebuilds in-memory groups and reruns
-    /// candidate selection, without extra pruning or IO.
-    fn build_tasks_for_offset(
+    /// Bin block indices into recluster groups and build rewrite-task
+    /// candidates. This reuses the already decoded block metas in this window;
+    /// it only builds in-memory groups and runs candidate selection, without
+    /// extra pruning or IO.
+    fn build_tasks(
         &self,
-        offset: i32,
         blocks: &[&ReclusterBlock],
         mode: ReclusterMode,
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        debug_assert!(offset == 0 || offset == 1);
-
         let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             let level = block.stats().level;
@@ -547,7 +547,7 @@ impl ReclusterMutator {
                 continue;
             }
             blocks_map
-                .entry(ReclusterGroup::assign(level, mode, offset))
+                .entry(ReclusterGroup::assign(level, mode))
                 .or_default()
                 .push(idx);
         }
