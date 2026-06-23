@@ -30,7 +30,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storage::FileStatus;
 use databend_common_storage::init_stage_operator;
 use parquet::file::metadata::FileMetaData;
 
@@ -73,7 +72,6 @@ impl ParquetTableForCopy {
 
         let mut schemas = vec![];
         let mut parts = vec![];
-        let copy_status = ctx.copy_state().copy_status();
         let mut stats = PartStatistics::default();
         for meta in metas.iter() {
             let schema = meta.meta.file_metadata().schema_descr_ptr();
@@ -86,10 +84,6 @@ impl ParquetTableForCopy {
             };
             let num_rows = meta.meta.file_metadata().num_rows() as usize;
             stats.read_rows += num_rows;
-            copy_status.add_chunk(meta.location.as_str(), FileStatus {
-                num_rows_loaded: num_rows,
-                error: None,
-            });
             let mut start_row = 0;
             for rg in meta.meta.row_groups() {
                 let part = ParquetRowGroupPart {
