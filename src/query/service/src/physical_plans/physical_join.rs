@@ -22,7 +22,6 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::plans::spatial_join_gate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -148,15 +147,11 @@ impl PhysicalPlanBuilder {
 
         // 2. Try Build physical spatial join plan.
         if self.ctx.get_settings().get_enable_spatial_join()? {
-            let left_prop = s_expr.left_child().derive_relational_prop()?;
-            let right_prop = s_expr.right_child().derive_relational_prop()?;
-            if let Ok(candidate) =
-                spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
-            {
+            if let Some(candidate) = join.spatial_join.clone() {
                 if let Some(plan) = self
                     .try_build_spatial_join(
                         join,
-                        candidate,
+                        *candidate,
                         s_expr,
                         required.clone(),
                         left_required.clone(),

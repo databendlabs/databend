@@ -95,6 +95,7 @@ impl JoinNode {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            spatial_join: None,
         });
         let children = self
             .children
