@@ -24,18 +24,13 @@ def _storage_type(conn):
     return row.values()[0]
 
 
-# Parquet reads go through the columnar ParquetPart pipeline, which does not yet
-# thread stage file metadata (ETag/last-modified) into the scan. So for parquet
-# both metadata$file_content_key and metadata$file_last_modified are always NULL,
-# regardless of the storage backend. Other (row-based) formats thread it through.
-def _content_key_present(conn, fmt):
-    if fmt == "parquet":
-        return False
+def _content_key_present(conn):
+    """content_key is backed by ETag/md5, present only on object stores.
+
+    Object stores (s3/minio/azblob/...) expose an ETag or md5; the local fs
+    backend has no such value, so content_key is NULL there.
+    """
     return _storage_type(conn) != "fs"
-
-
-def _last_modified_present(fmt):
-    return fmt != "parquet"
 
 
 def _unload(conn, name, path, fmt, query="select number as a, number + 100 as b from numbers(2)"):
@@ -120,7 +115,7 @@ def test_metadata_file_content_key(copy_env, fmt):
     _unload(conn, name, f"ck/f1.{fmt}", fmt)
 
     # On fs: content_key is NULL. On object stores: it must be non-null.
-    content_present_expected = _content_key_present(conn, fmt)
+    content_present_expected = _content_key_present(conn)
 
     run_all(conn, [
         (
@@ -141,12 +136,6 @@ def test_metadata_file_last_modified(copy_env, fmt):
     col = _col_ref(fmt)
     _unload(conn, name, f"lm/f1.{fmt}", fmt)
 
-    if _last_modified_present(fmt):
-        recent_expected, before_now_expected = True, True
-    else:
-        # parquet: last_modified is not threaded through, always NULL
-        recent_expected, before_now_expected = None, None
-
     run_all(conn, [
         (
             f"select typeof(metadata$file_last_modified), "
@@ -154,7 +143,7 @@ def test_metadata_file_last_modified(copy_env, fmt):
             f"metadata$file_last_modified <= now() "
             f"from (select {col}, metadata$file_last_modified "
             f"from @{name}/lm/f1.{fmt} (file_format => '{fmt}')) limit 1;",
-            [("TIMESTAMP NULL", recent_expected, before_now_expected)],
+            [("TIMESTAMP NULL", True, True)],
         ),
     ])
 
@@ -167,8 +156,7 @@ def test_metadata_all_columns_together(copy_env, fmt):
     col = _col_ref(fmt)
     _unload(conn, name, f"all/f1.{fmt}", fmt)
 
-    content_present_expected = _content_key_present(conn, fmt)
-    last_modified_recent = True if _last_modified_present(fmt) else None
+    content_present_expected = _content_key_present(conn)
 
     run_all(conn, [
         (
@@ -184,8 +172,8 @@ def test_metadata_all_columns_together(copy_env, fmt):
             f"from @{name}/all/f1.{fmt} (file_format => '{fmt}')) "
             f"order by metadata$file_row_number;",
             [
-                (True, True, 0, content_present_expected, last_modified_recent),
-                (True, True, 1, content_present_expected, last_modified_recent),
+                (True, True, 0, content_present_expected, True),
+                (True, True, 1, content_present_expected, True),
             ],
         ),
     ])

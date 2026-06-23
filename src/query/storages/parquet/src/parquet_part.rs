@@ -18,6 +18,8 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -27,6 +29,19 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::partition::ParquetRowGroupPart;
+
+/// File-level metadata carried from a stage listing into a parquet partition,
+/// used to populate the metadata$file_content_key / metadata$file_last_modified
+/// internal columns. Non-stage callers (iceberg/delta/result-cache) leave these
+/// empty, so those columns stay NULL as before.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone, Default)]
+pub struct ParquetFileMeta {
+    pub content_key: Option<String>,
+    pub last_modified: Option<DateTime<Utc>>,
+}
+
+/// One file to turn into partition(s): (path, size, dedup_key, file-meta).
+pub type CollectFile = (String, u64, String, ParquetFileMeta);
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum DeleteType {
@@ -85,6 +100,11 @@ pub struct ParquetFilePart {
     // But we don't read metadata during plan stage, so we split them by 128MB into buckets
     // (bucket_idx, bucket_num)
     pub bucket_option: Option<(usize, usize)>,
+
+    // File-level metadata for the metadata$file_content_key /
+    // metadata$file_last_modified internal columns. Empty for non-stage reads.
+    #[serde(default)]
+    pub meta: ParquetFileMeta,
 }
 
 impl ParquetFilePart {
@@ -155,7 +175,7 @@ impl ParquetPart {
 /// 2. to avoid OOM, the total size of small files in one part is limited,
 ///    and we need compression_ratio to estimate the uncompressed size.
 fn collect_small_file_parts(
-    small_files: Vec<(String, u64, String)>,
+    small_files: Vec<CollectFile>,
     mut max_compression_ratio: f64,
     mut max_compressed_size: u64,
     partitions: &mut Partitions,
@@ -177,8 +197,8 @@ fn collect_small_file_parts(
     let total_len = small_files.len();
     let max_files = 8;
 
-    for (i, (path, size, dedup_key)) in small_files.into_iter().enumerate() {
-        small_part.push((path.clone(), size, dedup_key));
+    for (i, (path, size, dedup_key, meta)) in small_files.into_iter().enumerate() {
+        small_part.push((path.clone(), size, dedup_key, meta));
         stats.read_bytes += size as usize;
         part_size += size;
         let is_last = i + 1 == total_len;
@@ -189,12 +209,13 @@ fn collect_small_file_parts(
             let files = small_part
                 .iter()
                 .cloned()
-                .map(|(path, size, dedup_key)| ParquetFilePart {
+                .map(|(path, size, dedup_key, meta)| ParquetFilePart {
                     file: path,
                     compressed_size: size,
                     estimated_uncompressed_size: (size as f64 * max_compression_ratio) as u64,
                     dedup_key,
                     bucket_option: None,
+                    meta,
                 })
                 .collect::<Vec<_>>();
 
@@ -210,7 +231,7 @@ fn collect_small_file_parts(
 }
 
 fn collect_file_parts(
-    files: Vec<(String, u64, String)>,
+    files: Vec<CollectFile>,
     compress_ratio: f64,
     partitions: &mut Partitions,
     stats: &mut PartStatistics,
@@ -218,7 +239,7 @@ fn collect_file_parts(
     total_columns_to_read: usize,
     rowgroup_hint_bytes: u64,
 ) {
-    for (file, size, dedup_key) in files.into_iter() {
+    for (file, size, dedup_key, meta) in files.into_iter() {
         stats.read_bytes += size as usize;
         let estimated_read_rows: f64 = size as f64 / (total_columns_to_read * 8) as f64;
         let read_bytes =
@@ -235,6 +256,7 @@ fn collect_file_parts(
                     estimated_uncompressed_size: estimated_uncompressed_size as u64,
                     dedup_key: dedup_key.clone(),
                     bucket_option: Some((bucket, bucket_num)),
+                    meta: meta.clone(),
                 })) as Box<dyn PartInfo>));
 
             stats.partitions_scanned += 1;
@@ -249,7 +271,7 @@ fn collect_file_parts(
 
 pub(crate) fn collect_parts(
     ctx: Arc<dyn TableContext>,
-    files: Vec<(String, u64, String)>,
+    files: Vec<CollectFile>,
     compression_ratio: f64,
     num_columns_to_read: usize,
     total_columns_to_read: usize,
@@ -262,11 +284,11 @@ pub(crate) fn collect_parts(
 
     let mut large_files = vec![];
     let mut small_files = vec![];
-    for (location, size, dedup_key) in files.into_iter() {
+    for (location, size, dedup_key, meta) in files.into_iter() {
         if size > fast_read_bytes {
-            large_files.push((location, size, dedup_key));
+            large_files.push((location, size, dedup_key, meta));
         } else if size > 0 {
-            small_files.push((location, size, dedup_key));
+            small_files.push((location, size, dedup_key, meta));
         }
     }
 
