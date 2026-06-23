@@ -42,7 +42,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -54,10 +54,12 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
 use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
-use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
@@ -119,6 +121,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
         is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
         is_valid_analyze_top_n_size(&self.plan.set_options)?;
+        is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
@@ -203,7 +206,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
         is_valid_bloom_index_type(&self.plan.set_options)?;
         is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
-        is_valid_analyze_top_n_columns(&self.plan.set_options, table.schema())?;
+        is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
 
         if let Some(new_snapshot_location) =
             set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
@@ -355,8 +358,10 @@ async fn analyze_table(
     let mut effective_options = fuse_table.get_table_info().options().clone();
     effective_options.extend(options.clone());
     let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
-    let top_n_columns = effective_options
-        .get(OPT_KEY_ANALYZE_TOP_N_COLUMNS)
+    let count_min_sketch_error_rate =
+        analyze_count_min_sketch_error_rate_from_options(&effective_options)?;
+    let frequency_columns = effective_options
+        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
         .cloned();
     let mut pipeline = Pipeline::create();
     fuse_table.do_analyze(
@@ -365,7 +370,8 @@ async fn analyze_table(
         &mut pipeline,
         AnalyzeHistogramInfo::None,
         top_n_size,
-        top_n_columns,
+        frequency_columns,
+        count_min_sketch_error_rate,
         false,
         true,
     )?;
