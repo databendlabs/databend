@@ -34,7 +34,6 @@ message StorageConfig {
     HttpStorageConfig http = 12;
     IpfsStorageConfig ipfs = 13;
     MemoryStorageConfig memory = 14;
-    Empty none = 16;
   }
 }
 

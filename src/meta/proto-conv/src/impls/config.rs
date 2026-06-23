@@ -89,7 +89,6 @@ impl FromToProto for mt::storage::StorageParams {
                 reader_check_msg(s.version, s.min_reader_ver)?;
                 Ok(mt::storage::StorageParams::Memory)
             }
-            Some(pb::storage_config::Storage::None(_)) => Ok(mt::storage::StorageParams::None),
             None => Err(Incompatible::new(
                 "StageStorage.storage cannot be None".to_string(),
             )),
@@ -145,13 +144,6 @@ impl FromToProto for mt::storage::StorageParams {
                     },
                 )),
             }),
-            mt::storage::StorageParams::None => Ok(pb::StorageConfig {
-                storage: Some(pb::storage_config::Storage::None(pb::Empty {})),
-            }),
-            others => Err(Incompatible::new(format!(
-                "stage type: {} not supported",
-                others
-            ))),
         }
     }
 }
