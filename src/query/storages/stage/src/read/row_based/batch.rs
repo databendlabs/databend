@@ -59,9 +59,9 @@ pub struct BytesBatch {
     pub path: String,
     pub offset: usize,
     pub is_eof: bool,
-    /// etag or md5 of the file (set on first batch of file)
+    /// etag or md5 of the file (stamped on every batch of the file)
     pub content_key: Option<String>,
-    /// last modified time of the file (set on first batch of file)
+    /// last modified time of the file (stamped on every batch of the file)
     pub last_modified: Option<DateTime<Utc>>,
 }
 
