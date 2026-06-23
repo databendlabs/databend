@@ -41,9 +41,9 @@ use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
-use crate::MetaTxnManager;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::txn::meta_txn;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
@@ -169,29 +169,37 @@ where
         let key_tag = TableIdTagName::new(req.table_id, &req.tag_name);
         let ctx = func_name!();
         let req = &req;
-        MetaTxnManager::new(self, ctx)
-            .run(|txn| {
-                let key_tag = key_tag.clone();
-                async move {
-                    let tag = txn.get_for_update(key_tag).await?;
-                    let tag = tag.some_or_unknown(ctx).map_err(AppError::from)?;
 
-                    let seq_tag = tag.seq();
-                    if req.seq.match_seq(&seq_tag).is_err() {
-                        return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                            format!(
-                                "Tag '{}' seq mismatched: expect {}, current {}",
-                                req.tag_name, req.seq, seq_tag
-                            ),
-                        ))));
-                    }
+        let mgr = meta_txn::MetaTxnManager::new(self, ctx);
+        mgr.run(|txn| {
+            let key_tag = key_tag.clone();
+            async move {
+                let tag = txn.get_for_update(key_tag).await?;
+                let tag = tag
+                    .some_or_unknown(ctx)
+                    .map_err(meta_txn::KvApiOrUserError::User)?;
 
-                    tag.stage_delete();
-
-                    Ok(())
+                let seq_tag = tag.seq();
+                if req.seq.match_seq(&seq_tag).is_err() {
+                    return Err(meta_txn::KvApiOrUserError::User(UnknownReference::new(
+                        format!(
+                            "Tag '{}' seq mismatched: expect {}, current {}",
+                            req.tag_name, req.seq, seq_tag
+                        ),
+                    )));
                 }
-            })
-            .await
+
+                tag.stage_delete();
+
+                Ok(())
+            }
+        })
+        .await
+        .map_err(|err| match err {
+            meta_txn::RunError::KvApi(err) => KVAppError::MetaError(err),
+            meta_txn::RunError::TxnRetryMaxTimes(err) => KVAppError::AppError(AppError::from(err)),
+            meta_txn::RunError::User(err) => KVAppError::AppError(AppError::from(err)),
+        })
     }
 
     /// Get a table tag.

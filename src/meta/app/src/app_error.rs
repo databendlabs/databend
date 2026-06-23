@@ -21,6 +21,7 @@ use databend_meta_client::types::MatchSeq;
 
 use crate::KeyExistsBuilder;
 use crate::KeyUnknownBuilder;
+use crate::UnknownOrExistsError;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;
 use crate::principal::procedure_name_ident;
@@ -1035,6 +1036,17 @@ impl AppError {
         AppError: From<K::ExistError>,
     {
         AppError::from(key.exist_error(ctx))
+    }
+}
+
+impl<UnknownError, ExistError> From<UnknownOrExistsError<UnknownError, ExistError>> for AppError
+where AppError: From<UnknownError> + From<ExistError>
+{
+    fn from(error: UnknownOrExistsError<UnknownError, ExistError>) -> Self {
+        match error {
+            UnknownOrExistsError::Unknown(error) => AppError::from(error),
+            UnknownOrExistsError::Exists(error) => AppError::from(error),
+        }
     }
 }
 

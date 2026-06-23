@@ -34,15 +34,21 @@ use super::read_record::ReadRecord;
 use crate::kv_pb_api::decode_seqv;
 use crate::kv_pb_api::errors::PbDecodeError;
 
+mod kv_api_or_user_error;
 mod manager;
 #[cfg(test)]
 mod mem_kv;
+mod move_key_error;
 mod read_entry;
+mod run_error;
 #[cfg(test)]
 mod tests;
 
+pub use kv_api_or_user_error::KvApiOrUserError;
 pub use manager::MetaTxnManager;
+pub use move_key_error::MoveKeyError;
 use read_entry::ReadEntry;
+pub use run_error::RunError;
 
 /// The reads and writes staged by one transaction attempt.
 ///
