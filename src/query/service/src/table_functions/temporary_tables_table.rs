@@ -189,10 +189,7 @@ fn parse_temp_table_session_key<'a>(
 }
 
 fn invalid_temp_table_session_key<T>(session_key: &str, typ: &SessionType) -> Result<T> {
-    Err(format!(
-        "Invalid temporary table session key: {session_key} for session type {typ}"
-    )
-    .into())
+    Err(format!("Invalid temporary table session key: {session_key} for session type {typ}").into())
 }
 
 impl TemporaryTablesTable {
