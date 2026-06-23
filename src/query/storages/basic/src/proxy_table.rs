@@ -115,6 +115,8 @@ struct StatisticsRouteScore {
     cluster_key_len: usize,
 }
 
+const STATISTICS_PREFIX_COST_TOLERANCE: usize = 4;
+
 #[derive(Default)]
 struct PredicateColumns {
     equality: HashSet<String>,
@@ -1110,8 +1112,35 @@ fn is_better_statistics_route(
 ) -> bool {
     let candidate_cost = statistics_cost(candidate_statistics);
     let selected_cost = statistics_cost(selected_statistics);
+    if candidate_score.prefix > selected_score.prefix
+        && cost_within_prefix_tolerance(candidate_cost, selected_cost)
+    {
+        return true;
+    }
+    if selected_score.prefix > candidate_score.prefix
+        && cost_within_prefix_tolerance(selected_cost, candidate_cost)
+    {
+        return false;
+    }
     candidate_cost < selected_cost
         || (candidate_cost == selected_cost && candidate_score > selected_score)
+}
+
+fn cost_within_prefix_tolerance(
+    candidate_cost: (usize, usize),
+    selected_cost: (usize, usize),
+) -> bool {
+    if selected_cost.0 == 0 || selected_cost.1 == 0 {
+        return candidate_cost == selected_cost;
+    }
+    candidate_cost.0 <= tolerated_cost(selected_cost.0)
+        && candidate_cost.1 <= tolerated_cost(selected_cost.1)
+}
+
+fn tolerated_cost(value: usize) -> usize {
+    value
+        .saturating_mul(STATISTICS_PREFIX_COST_TOLERANCE)
+        .max(value.saturating_add(STATISTICS_PREFIX_COST_TOLERANCE))
 }
 
 fn database_from_desc(desc: &str) -> Option<String> {
@@ -1197,9 +1226,9 @@ mod tests {
     }
 
     #[test]
-    fn test_statistics_route_prefers_lower_cost_before_cluster_score() {
+    fn test_statistics_route_prefers_much_lower_cost_before_cluster_score() {
         let lower_cost = PartStatistics::new_exact(100, 10, 2, 10);
-        let higher_cost = PartStatistics::new_exact(90, 10, 3, 10);
+        let higher_cost = PartStatistics::new_exact(1000, 10, 20, 20);
         let weak_score = StatisticsRouteScore {
             prefix: PrefixRouteScore {
                 matched_prefix: 1,
@@ -1225,6 +1254,66 @@ mod tests {
             &higher_cost,
             strong_score,
             &lower_cost,
+            weak_score
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_prefers_stronger_prefix_when_cost_is_close() {
+        let weak_cost = PartStatistics::new_exact(708, 10, 3, 10);
+        let strong_cost = PartStatistics::new_exact(267, 10, 4, 10);
+        let weak_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            },
+            cluster_key_len: 1,
+        };
+        let strong_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 3,
+                equality_prefix: 3,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(is_better_statistics_route(
+            &strong_cost,
+            strong_score,
+            &weak_cost,
+            weak_score
+        ));
+        assert!(!is_better_statistics_route(
+            &weak_cost,
+            weak_score,
+            &strong_cost,
+            strong_score
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_does_not_override_zero_cost() {
+        let zero_cost = PartStatistics::new_exact(0, 0, 0, 10);
+        let non_zero_cost = PartStatistics::new_exact(1, 10, 1, 10);
+        let weak_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            },
+            cluster_key_len: 1,
+        };
+        let strong_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 3,
+                equality_prefix: 3,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(!is_better_statistics_route(
+            &non_zero_cost,
+            strong_score,
+            &zero_cost,
             weak_score
         ));
     }
