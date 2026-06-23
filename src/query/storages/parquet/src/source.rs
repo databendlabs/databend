@@ -43,6 +43,7 @@ use databend_common_storage::OperatorRegistry;
 use databend_storages_common_stage::add_internal_columns_with_meta;
 use parquet::arrow::parquet_to_arrow_schema;
 
+use crate::ParquetFileMeta;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
@@ -62,8 +63,10 @@ enum State {
     ReadRowGroup {
         readers: VecDeque<(ReadPolicyImpl, u64)>,
         location: String,
+        meta: ParquetFileMeta,
     },
-    ReadFiles(Vec<(Bytes, String)>),
+    // (bytes, path, file-meta)
+    ReadFiles(Vec<(Bytes, String, ParquetFileMeta)>),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -213,6 +216,7 @@ impl Processor for ParquetSource {
             State::ReadRowGroup {
                 readers: mut vs,
                 location,
+                meta,
             } => {
                 if let Some((reader, start_row)) = vs.front_mut() {
                     if let Some(mut block) = reader.as_mut().read_block()? {
@@ -221,8 +225,8 @@ impl Processor for ParquetSource {
                             location.clone(),
                             &mut block,
                             start_row,
-                            None,
-                            None,
+                            meta.content_key.as_deref(),
+                            meta.last_modified,
                         );
 
                         if self.is_copy {
@@ -238,13 +242,14 @@ impl Processor for ParquetSource {
                     self.state = State::ReadRowGroup {
                         readers: vs,
                         location,
+                        meta,
                     };
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
-                for (buffer, path) in buffers {
+                for (buffer, path, meta) in buffers {
                     let bs: Result<Vec<DataBlock>> = self
                         .whole_file_reader
                         .as_ref()
@@ -267,8 +272,8 @@ impl Processor for ParquetSource {
                             path.to_string(),
                             b,
                             &mut rows_start,
-                            None,
-                            None,
+                            meta.content_key.as_deref(),
+                            meta.last_modified,
                         );
                     }
                     blocks.extend(bs);
@@ -310,6 +315,7 @@ impl Processor for ParquetSource {
                                 self.state = State::ReadRowGroup {
                                     readers: vec![(reader, part.start_row)].into(),
                                     location: part.location.clone(),
+                                    meta: ParquetFileMeta::default(),
                                 };
                             }
                             // Else: keep in init state.
@@ -320,6 +326,7 @@ impl Processor for ParquetSource {
                             for part in parts {
                                 let (op, path) =
                                     self.row_group_reader.operator(part.file.as_str())?;
+                                let meta = part.meta.clone();
 
                                 handlers.push(async move {
                                     let bs = cached_range_full_read(
@@ -329,7 +336,7 @@ impl Processor for ParquetSource {
                                         false,
                                     )
                                     .await?;
-                                    Ok::<_, ErrorCode>((bs, path.to_owned()))
+                                    Ok::<_, ErrorCode>((bs, path.to_owned(), meta))
                                 });
                             }
                             let results = futures::future::try_join_all(handlers).await?;
@@ -341,6 +348,7 @@ impl Processor for ParquetSource {
                                 self.state = State::ReadRowGroup {
                                     readers,
                                     location: part.file.clone(),
+                                    meta: part.meta.clone(),
                                 };
                             }
                         }
@@ -350,6 +358,7 @@ impl Processor for ParquetSource {
                                 self.state = State::ReadRowGroup {
                                     readers,
                                     location: inner.file.clone(),
+                                    meta: inner.meta.clone(),
                                 };
                             }
                         }

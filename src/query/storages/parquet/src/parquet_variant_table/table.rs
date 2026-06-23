@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::init_stage_operator;
 
+use crate::parquet_part::ParquetFileMeta;
 use crate::parquet_part::collect_parts;
 use crate::parquet_variant_table::source::ParquetVariantSource;
 
@@ -45,7 +46,12 @@ impl ParquetVariantTable {
             .await?
             .into_iter()
             .filter(|f| f.size > 0)
-            .map(|f| (f.path.clone(), f.size, f.dedup_key()))
+            .map(|f| {
+                (f.path.clone(), f.size, f.dedup_key(), ParquetFileMeta {
+                    content_key: f.etag.clone().or_else(|| f.md5.clone()),
+                    last_modified: f.last_modified,
+                })
+            })
             .collect::<Vec<_>>();
         collect_parts(ctx, files, 1.0, 1, 1)
     }
