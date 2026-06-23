@@ -22,6 +22,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_statistics::KllSketch;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockTopN;
 
 #[derive(Clone)]
@@ -30,7 +31,8 @@ pub struct AnalyzeNDVMeta {
     pub unstats_rows: u64,
     pub column_hlls: HashMap<ColumnId, MetaHLL>,
     pub top_n: Option<BlockTopN>,
-    pub dropped_top_n_columns: Vec<ColumnId>,
+    pub count_min_sketch: Option<BlockCountMinSketch>,
+    pub dropped_frequency_columns: Vec<ColumnId>,
     pub kll_histograms: HashMap<ColumnId, KllSketch>,
 }
 
@@ -40,7 +42,8 @@ impl AnalyzeNDVMeta {
         unstats_rows: u64,
         column_hlls: HashMap<ColumnId, MetaHLL>,
         top_n: Option<BlockTopN>,
-        dropped_top_n_columns: Vec<ColumnId>,
+        count_min_sketch: Option<BlockCountMinSketch>,
+        dropped_frequency_columns: Vec<ColumnId>,
         kll_histograms: HashMap<ColumnId, KllSketch>,
     ) -> BlockMetaInfoPtr {
         Box::new(AnalyzeNDVMeta {
@@ -48,7 +51,8 @@ impl AnalyzeNDVMeta {
             unstats_rows,
             column_hlls,
             top_n,
-            dropped_top_n_columns,
+            count_min_sketch,
+            dropped_frequency_columns,
             kll_histograms,
         })
     }
