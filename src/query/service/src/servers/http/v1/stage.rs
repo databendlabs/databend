@@ -116,10 +116,9 @@ pub async fn upload_to_stage(
     };
 
     let op = init_stage_operator(&stage).map_err(InternalServerError)?;
-    let path_traversal_policy = context
-        .get_settings()
-        .get_stage_path_traversal_policy()
-        .map_err(InternalServerError)?;
+    let path_traversal_policy = databend_common_config::GlobalConfig::instance()
+        .storage
+        .stage_path_traversal_policy;
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {

@@ -43,6 +43,7 @@ pub use config::EndpointPolicyScope;
 pub use config::EndpointUrlPolicy;
 pub use config::EndpointUrlPolicyConfig;
 pub use config::ShareTableConfig;
+pub use config::StagePathTraversalPolicy;
 pub use config::StorageConfig;
 pub use endpoint_policy::EndpointUrlPolicyRegistry;
 pub use endpoint_policy::check_storage_endpoint_url;
