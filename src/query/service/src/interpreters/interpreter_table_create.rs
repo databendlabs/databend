@@ -68,9 +68,10 @@ use log::info;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
-use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
@@ -489,8 +490,9 @@ impl CreateTableInterpreter {
         is_valid_data_page_bytes(&table_meta.options)?;
         is_valid_analyze_histogram_algorithm(&table_meta.options)?;
         is_valid_analyze_histogram_kll_relative_error(&table_meta.options)?;
-        is_valid_analyze_top_n_columns(&table_meta.options, schema)?;
+        is_valid_analyze_frequency_columns(&table_meta.options, schema)?;
         is_valid_analyze_top_n_size(&table_meta.options)?;
+        is_valid_analyze_count_min_sketch_error_rate(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
