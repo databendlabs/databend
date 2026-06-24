@@ -537,6 +537,9 @@ impl ReclusterTableInterpreter {
         linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<Option<PhysicalPlan>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
+        // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
+        // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
+        // materializes the option with value 1.
         let mode = if self.plan.is_final
             && fuse_table.get_option(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER, 0u32) != 0
         {
