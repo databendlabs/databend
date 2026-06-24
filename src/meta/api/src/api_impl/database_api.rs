@@ -187,10 +187,10 @@ where
                     txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                 ]);
                 txn.if_then.extend(vec![
-                    txn_put_pb(name_key, &id_key)?, // (tenant, db_name) -> db_id
-                    txn_put_pb(&id_key, &req.meta)?, // (db_id) -> db_meta
-                    txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/<tenant>/<db_name> -> db_id_list */
-                    txn_put_pb(&id_to_name_key, &DatabaseNameIdentRaw::from(name_key))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                    txn_put_pb(name_key, &id_key), // (tenant, db_name) -> db_id
+                    txn_put_pb(&id_key, &req.meta), // (db_id) -> db_meta
+                    txn_put_pb(&dbid_idlist, &db_id_list), /* _fd_db_id_list/<tenant>/<db_name> -> db_id_list */
+                    txn_put_pb(&id_to_name_key, &DatabaseNameIdentRaw::from(name_key)), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
                 ]);
 
                 let (succ, _responses) = send_txn(self, txn).await?;
@@ -333,8 +333,8 @@ where
                         txn_cond_seq(&dbid, Eq, db_meta_seq),
                     ],
                     vec![
-                        txn_put_pb(name_key, &dbid)?, // (tenant, db_name) -> db_id
-                        txn_put_pb(&dbid, &db_meta)?, // (db_id) -> db_meta
+                        txn_put_pb(name_key, &dbid), // (tenant, db_name) -> db_id
+                        txn_put_pb(&dbid, &db_meta), // (db_id) -> db_meta
                     ],
                 );
 
@@ -471,10 +471,10 @@ where
             let if_then = vec![
                 txn_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
-                txn_put_pb(&tenant_newdbname, &old_db_id)?, /* (tenant, new_db_name) -> old_db_id */
-                txn_put_pb(&new_dbid_idlist, &new_db_id_list)?, /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
-                txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/tenant/db_name -> db_id_list */
-                txn_put_pb(&db_id_key, &DatabaseNameIdentRaw::from(&tenant_newdbname))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                txn_put_pb(&tenant_newdbname, &old_db_id), // (tenant, new_db_name) -> old_db_id
+                txn_put_pb(&new_dbid_idlist, &new_db_id_list), /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
+                txn_put_pb(&dbid_idlist, &db_id_list), /* _fd_db_id_list/tenant/db_name -> db_id_list */
+                txn_put_pb(&db_id_key, &DatabaseNameIdentRaw::from(&tenant_newdbname)), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
             ];
 
             let txn_req = TxnRequest::new(condition, if_then);

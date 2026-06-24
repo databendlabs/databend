@@ -62,7 +62,7 @@ fn meta_at(address: &str) -> CatalogMeta {
 }
 
 fn encoded() -> Vec<u8> {
-    encode_pb(&meta()).unwrap()
+    encode_pb(&meta())
 }
 
 /// A re-read returns the snapshot cached on the first read, even after the
@@ -85,7 +85,7 @@ async fn test_read_is_cached() -> anyhow::Result<()> {
     mem.seed(
         &k.to_string_key(),
         9,
-        encode_pb(&meta_at("127.0.0.1:29999")).unwrap(),
+        encode_pb(&meta_at("127.0.0.1:29999")),
     );
 
     // The transaction serves its cached snapshot, not the new backend record.
@@ -293,7 +293,7 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
 
     let req = mem.last_request();
     assert_eq!(req.if_then, vec![
-        txn_put_pb_with_ttl(&k1, &meta(), None)?,
+        txn_put_pb_with_ttl(&k1, &meta(), None),
         txn_del(&k2),
     ]);
     Ok(())
@@ -309,7 +309,7 @@ async fn test_some_or_unknown() -> anyhow::Result<()> {
     mem.seed(
         &present.to_string_key(),
         3,
-        encode_pb(&DatabaseMeta::default()).unwrap(),
+        encode_pb(&DatabaseMeta::default()),
     );
 
     let txn = MetaTxn::new(&mem);
@@ -337,11 +337,7 @@ async fn test_none_or_exist() -> anyhow::Result<()> {
         DBIdTableName::new(7, "absent"),
         DBIdTableName::new(7, "present"),
     );
-    mem.seed(
-        &present.to_string_key(),
-        3,
-        encode_pb(&TableId::new(8)).unwrap(),
-    );
+    mem.seed(&present.to_string_key(), 3, encode_pb(&TableId::new(8)));
 
     let txn = MetaTxn::new(&mem);
 

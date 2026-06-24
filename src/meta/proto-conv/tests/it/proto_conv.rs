@@ -332,27 +332,27 @@ fn new_table_index() -> databend_common_meta_app::schema::TableIndex {
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
-    let p = db.to_pb()?;
+    let p = db.to_pb();
     let got = mt::DatabaseMeta::from_pb(p)?;
     assert_eq!(db, got);
 
     let tbl = new_table_meta();
-    let p = tbl.to_pb()?;
+    let p = tbl.to_pb();
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
     let index = new_index_meta();
-    let p = index.to_pb()?;
+    let p = index.to_pb();
     let got = mt::IndexMeta::from_pb(p)?;
     assert_eq!(index, got);
 
     let data_mask_meta = new_data_mask_meta();
-    let p = data_mask_meta.to_pb()?;
+    let p = data_mask_meta.to_pb();
     let got = databend_common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
     assert_eq!(data_mask_meta, got);
 
     let lvt = new_lvt();
-    let p = lvt.to_pb()?;
+    let p = lvt.to_pb();
     let got = mt::LeastVisibleTime::from_pb(p)?;
     assert_eq!(lvt, got);
 
@@ -362,7 +362,7 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 #[test]
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
-    let mut p = db_meta.to_pb()?;
+    let mut p = db_meta.to_pb();
     p.ver = VER + 1;
     p.min_reader_ver = VER + 1;
 
@@ -377,7 +377,7 @@ fn test_incompatible() -> anyhow::Result<()> {
     );
 
     let db_meta = new_db_meta();
-    let mut p = db_meta.to_pb()?;
+    let mut p = db_meta.to_pb();
     p.ver = 0;
     p.min_reader_ver = 0;
 
@@ -399,7 +399,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // share DatabaseMeta
     {
         let db_meta = new_db_meta_share();
-        let p = db_meta.to_pb()?;
+        let p = db_meta.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("db from share:{:?}", buf);
@@ -408,7 +408,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // DatabaseMeta
     {
         let db_meta = new_db_meta();
-        let p = db_meta.to_pb()?;
+        let p = db_meta.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("db:{:?}", buf);
@@ -418,7 +418,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     {
         let tbl = new_table_meta();
 
-        let p = tbl.to_pb()?;
+        let p = tbl.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("table:{:?}", buf);
@@ -427,7 +427,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // IndexMeta
     {
         let index = new_index_meta();
-        let p = index.to_pb()?;
+        let p = index.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("index meta:{buf:?}");
@@ -436,7 +436,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // TableCopiedFileInfo
     {
         let copied_file = new_table_copied_file_info_v6();
-        let p = copied_file.to_pb()?;
+        let p = copied_file.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("copied_file:{:?}", buf);
@@ -445,7 +445,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // EmptyProto
     {
         let empty_proto = new_empty_proto();
-        let p = empty_proto.to_pb()?;
+        let p = empty_proto.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("empty_proto:{:?}", buf);
@@ -454,13 +454,13 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // LockMeta
     {
         let table_lock_meta = new_lock_meta();
-        table_lock_meta.to_pb()?;
+        table_lock_meta.to_pb();
     }
 
     // schema
     {
         let schema = new_latest_schema();
-        let p = schema.to_pb()?;
+        let p = schema.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("schema:{:?}", buf);
@@ -469,7 +469,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // data mask
     {
         let data_mask_meta = new_data_mask_meta();
-        let p = data_mask_meta.to_pb()?;
+        let p = data_mask_meta.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("data mask:{:?}", buf);
@@ -478,7 +478,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // table statistics
     {
         let table_statistics = new_table_statistics();
-        let p = table_statistics.to_pb()?;
+        let p = table_statistics.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("table statistics:{:?}", buf);
@@ -487,7 +487,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // catalog meta
     {
         let catalog_meta = new_catalog_meta();
-        let p = catalog_meta.to_pb()?;
+        let p = catalog_meta.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("catalog catalog_meta:{:?}", buf);
@@ -496,7 +496,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // lvt
     {
         let lvt = new_lvt();
-        let p = lvt.to_pb()?;
+        let p = lvt.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("lvt:{:?}", buf);
@@ -505,7 +505,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // sequence
     {
         let sequence_meta = new_sequence_meta();
-        let p = sequence_meta.to_pb()?;
+        let p = sequence_meta.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("sequence:{:?}", buf);
@@ -514,7 +514,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // virtual data schema
     {
         let virtual_data_schema = new_virtual_data_schema();
-        let p = virtual_data_schema.to_pb()?;
+        let p = virtual_data_schema.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("virtual data schema:{:?}", buf);
@@ -523,7 +523,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // udf server
     {
         let udf_server = new_udf_server();
-        let p = udf_server.to_pb()?;
+        let p = udf_server.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("udf server:{:?}", buf);
@@ -532,7 +532,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
     // table index
     {
         let table_index = new_table_index();
-        let p = table_index.to_pb()?;
+        let p = table_index.to_pb();
 
         let buf = prost::Message::encode_to_vec(&p);
         println!("table index:{:?}", buf);
