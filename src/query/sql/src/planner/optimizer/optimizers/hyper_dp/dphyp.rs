@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -20,12 +21,15 @@ use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
 
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::hyper_dp::JoinNode;
 use crate::optimizer::optimizers::hyper_dp::JoinRelation;
@@ -57,6 +61,7 @@ pub struct DPhpyOptimizer {
     filters: HashSet<Filter>,
     // The number of times emit_csg_cmp is called
     emit_count: usize,
+    cluster_key_cost: ClusterKeyCostModel,
 }
 
 impl DPhpyOptimizer {
@@ -70,6 +75,7 @@ impl DPhpyOptimizer {
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
             emit_count: 0,
+            cluster_key_cost: ClusterKeyCostModel::default(),
         }
     }
 
@@ -475,6 +481,12 @@ impl DPhpyOptimizer {
             self.opt_ctx.set_flag("dphyp_optimized", true);
             return Ok(s_expr.as_ref().clone());
         }
+        self.cluster_key_cost = ClusterKeyCostModel::new(
+            self.opt_ctx
+                .get_table_ctx()
+                .get_settings()
+                .get_cost_factor_cluster_key()?,
+        );
 
         // Second, use `join_conditions` to create edges in `query_graph`
         if !self.build_query_graph(&join_conditions)? {
@@ -805,22 +817,25 @@ impl DPhpyOptimizer {
         left: &[IndexType],
         right: &[IndexType],
         join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
-        left_cardinality: f64,
-        right_cardinality: f64,
-        left_join: JoinNode,
-        right_join: JoinNode,
+        probe_cardinality: f64,
+        build_cardinality: f64,
+        probe_join: JoinNode,
+        build_join: JoinNode,
     ) -> Result<JoinNode> {
-        let parent_set = union(left, right);
-
         if !join_conditions.is_empty() {
+            let probe_factor = if self.cluster_key_cost.enabled() {
+                self.cluster_key_cost.probe_join_factor(
+                    &probe_join,
+                    &self.join_relations,
+                    &join_conditions,
+                )?
+            } else {
+                1.0
+            };
             let mut join_node = JoinNode {
                 join_type: JoinType::Inner,
-                leaves: Arc::new(parent_set.clone()),
-                children: if left_cardinality < right_cardinality {
-                    Arc::new(vec![right_join, left_join])
-                } else {
-                    Arc::new(vec![left_join, right_join])
-                },
+                leaves: Arc::new(union(left, right)),
+                children: Arc::new(vec![probe_join, build_join]),
                 cost: 0.0,
                 join_conditions: Arc::new(join_conditions),
                 cardinality: None,
@@ -828,7 +843,7 @@ impl DPhpyOptimizer {
             };
 
             // Calculate cost for inner join
-            let cost = join_node.cardinality(&self.join_relations).await?
+            let cost = join_node.cardinality(&self.join_relations).await? * probe_factor
                 + join_node.children[0].cost
                 + join_node.children[1].cost;
 
@@ -839,13 +854,9 @@ impl DPhpyOptimizer {
             // Create cross join
             let join_node = JoinNode {
                 join_type: JoinType::Cross,
-                leaves: Arc::new(parent_set.clone()),
-                children: if left_cardinality < right_cardinality {
-                    Arc::new(vec![right_join, left_join])
-                } else {
-                    Arc::new(vec![left_join, right_join])
-                },
-                cost: left_cardinality * right_cardinality,
+                leaves: Arc::new(union(left, right)),
+                children: Arc::new(vec![probe_join, build_join]),
+                cost: probe_cardinality * build_cardinality,
                 join_conditions: Arc::new(vec![]),
                 cardinality: None,
                 s_expr: None,
@@ -872,12 +883,32 @@ impl DPhpyOptimizer {
         let left_cardinality = left_join.cardinality(&self.join_relations).await?;
         let right_cardinality = right_join.cardinality(&self.join_relations).await?;
 
-        // Swap join conditions if left cardinality is smaller
-        if left_cardinality < right_cardinality {
-            for join_condition in join_conditions.iter_mut() {
-                std::mem::swap(&mut join_condition.0, &mut join_condition.1);
-            }
-        }
+        let (probe_cardinality, build_cardinality, probe_join, build_join) =
+            if self.cluster_key_cost.enabled() {
+                let left_filter_factor = self
+                    .cluster_key_cost
+                    .filter_factor(&left_join, &self.join_relations)?;
+                let right_filter_factor = self
+                    .cluster_key_cost
+                    .filter_factor(&right_join, &self.join_relations)?;
+
+                // Use the cheaper side as build input after cluster-key filter discount.
+                if left_cardinality * left_filter_factor < right_cardinality * right_filter_factor {
+                    for join_condition in join_conditions.iter_mut() {
+                        std::mem::swap(&mut join_condition.0, &mut join_condition.1);
+                    }
+                    (right_cardinality, left_cardinality, right_join, left_join)
+                } else {
+                    (left_cardinality, right_cardinality, left_join, right_join)
+                }
+            } else if left_cardinality < right_cardinality {
+                for join_condition in join_conditions.iter_mut() {
+                    std::mem::swap(&mut join_condition.0, &mut join_condition.1);
+                }
+                (right_cardinality, left_cardinality, right_join, left_join)
+            } else {
+                (left_cardinality, right_cardinality, left_join, right_join)
+            };
 
         // Create join node
         let join_node = self
@@ -885,10 +916,10 @@ impl DPhpyOptimizer {
                 left,
                 right,
                 join_conditions,
-                left_cardinality,
-                right_cardinality,
-                left_join,
-                right_join,
+                probe_cardinality,
+                build_cardinality,
+                probe_join,
+                build_join,
             )
             .await?;
 
@@ -1139,6 +1170,120 @@ impl DPhpyOptimizer {
         }
 
         Ok(s_expr)
+    }
+}
+
+#[derive(Clone, Default)]
+struct ClusterKeyCostModel {
+    enabled: bool,
+    factor: f64,
+}
+
+impl ClusterKeyCostModel {
+    fn new(factor_percent: u64) -> Self {
+        Self {
+            enabled: factor_percent > 0,
+            factor: factor_percent as f64 / 100.0,
+        }
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn probe_join_factor(
+        &self,
+        probe_node: &JoinNode,
+        join_relations: &[JoinRelation],
+        join_conditions: &[(ScalarExpr, ScalarExpr)],
+    ) -> Result<f64> {
+        let probe_join_keys = {
+            let mut probe_join_keys = Vec::with_capacity(join_conditions.len());
+            for (probe_key, _) in join_conditions {
+                probe_join_keys.push(probe_key.as_symbol_expr()?);
+            }
+            probe_join_keys
+        };
+        if probe_join_keys.is_empty() {
+            return Ok(1.0);
+        }
+
+        let s_expr = probe_node.s_expr(join_relations);
+        let stat_info = RelExpr::with_s_expr(&s_expr).derive_cardinality()?;
+        Ok(self
+            .best_cluster_key_candidate(
+                &stat_info.statistics.cluster_key_stats.keys,
+                &probe_join_keys,
+            )
+            .unwrap_or(1.0))
+    }
+
+    fn filter_factor(&self, node: &JoinNode, join_relations: &[JoinRelation]) -> Result<f64> {
+        let s_expr = node.s_expr(join_relations);
+        let stat_info = RelExpr::with_s_expr(&s_expr).derive_cardinality()?;
+        let filter_keys = &stat_info.statistics.cluster_key_stats.filter_keys;
+        if filter_keys.is_empty() {
+            return Ok(1.0);
+        }
+
+        Ok(self
+            .best_cluster_key_candidate(&stat_info.statistics.cluster_key_stats.keys, filter_keys)
+            .unwrap_or(1.0))
+    }
+
+    fn best_cluster_key_candidate(
+        &self,
+        cluster_keys: &BTreeMap<IndexType, Vec<Expr<Symbol>>>,
+        candidate_keys: &[Expr<Symbol>],
+    ) -> Option<f64> {
+        cluster_keys
+            .iter()
+            .filter_map(|(_, cluster_key)| {
+                let factor = self.cluster_key_prefix_cost_factor(cluster_key, candidate_keys);
+                (factor < 1.0).then_some(factor)
+            })
+            .min_by(|left, right| left.total_cmp(right))
+    }
+
+    fn cluster_key_prefix_cost_factor(
+        &self,
+        cluster_key: &[Expr<Symbol>],
+        candidate_keys: &[Expr<Symbol>],
+    ) -> f64 {
+        let mut matched_join_keys = vec![false; candidate_keys.len()];
+        let mut factor = 1.0;
+
+        for cluster_key_expr in cluster_key {
+            let mut matched = false;
+            for (idx, join_key_expr) in candidate_keys.iter().enumerate() {
+                if matched_join_keys[idx] {
+                    continue;
+                }
+                if Self::cluster_key_matches(cluster_key_expr, join_key_expr) {
+                    factor *= self.factor;
+                    matched_join_keys[idx] = true;
+                    matched = true;
+                    break;
+                }
+            }
+            if !matched {
+                return factor;
+            }
+        }
+
+        factor
+    }
+
+    fn cluster_key_matches(cluster_key_expr: &Expr<Symbol>, join_key_expr: &Expr<Symbol>) -> bool {
+        match cluster_key_expr {
+            Expr::ColumnRef(cluster_key)
+                if let Expr::ColumnRef(join_key) = join_key_expr
+                    && cluster_key.id == join_key.id =>
+            {
+                true
+            }
+            _ => cluster_key_expr == join_key_expr,
+        }
     }
 }
 

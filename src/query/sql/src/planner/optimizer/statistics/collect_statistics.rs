@@ -26,6 +26,7 @@ use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::analyze_cluster_key_order;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -39,14 +40,20 @@ use crate::plans::Statistics;
 pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    collect_cluster_keys: bool,
 }
 
 impl CollectStatisticsOptimizer {
-    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
-        CollectStatisticsOptimizer {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
+        Ok(CollectStatisticsOptimizer {
+            collect_cluster_keys: opt_ctx
+                .get_table_ctx()
+                .get_settings()
+                .get_cost_factor_cluster_key()?
+                > 0,
             table_ctx: opt_ctx.get_table_ctx(),
             metadata: opt_ctx.get_metadata(),
-        }
+        })
     }
 
     pub async fn optimize_async(&mut self, s_expr: &SExpr) -> Result<SExpr> {
@@ -73,6 +80,7 @@ impl CollectStatisticsOptimizer {
 
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
+                let mut column_id_to_symbol = HashMap::new();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -81,6 +89,7 @@ impl CollectStatisticsOptimizer {
                         ..
                     }) = column
                     {
+                        column_id_to_symbol.insert(*column_id, *column_index);
                         if virtual_expr.is_none() {
                             let col_stat = column_statistics_provider
                                 .column_statistics(*column_id as ColumnId);
@@ -91,12 +100,32 @@ impl CollectStatisticsOptimizer {
                         }
                     }
                 }
+                let cluster_key_order = if self.collect_cluster_keys
+                    && let Some((_, cluster_key)) = table.cluster_key_meta()
+                {
+                    analyze_cluster_key_order(
+                        self.table_ctx.clone(),
+                        table.clone(),
+                        &cluster_key,
+                        &column_id_to_symbol,
+                    )?
+                } else {
+                    Default::default()
+                };
+                let cluster_keys = if cluster_key_order.is_empty() {
+                    Default::default()
+                } else {
+                    [(scan.table_index, cluster_key_order)]
+                        .into_iter()
+                        .collect()
+                };
 
                 let mut scan = scan.clone();
                 scan.statistics = Arc::new(Statistics {
                     table_stats,
                     column_stats,
                     histograms,
+                    cluster_keys,
                 });
                 let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
                 if let Some(sample) = &scan.sample {
