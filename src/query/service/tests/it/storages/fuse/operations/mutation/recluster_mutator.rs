@@ -849,9 +849,8 @@ async fn test_accumulates_tasks_across_windows() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 2);
 
     // Two overlapping clusters that are far apart in key space. With a window cap
-    // of 2 they fall into two separate, segment-disjoint windows. A single window
-    // only yields one task, so reaching the budget of 2 requires accumulating
-    // tasks across both windows.
+    // of 2 they fall into two separate, segment-disjoint windows, so reaching
+    // the budget of 2 requires accumulating tasks across both windows.
     let segment_locations = gen_recluster_segments_by_ranges(
         &data_accessor,
         &location_generator,
@@ -922,6 +921,83 @@ async fn test_accumulates_tasks_across_windows() -> anyhow::Result<()> {
         .copied()
         .collect::<HashSet<_>>();
     assert_eq!(removed.len(), 4);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 1);
+
+    // Peak A is the deepest. Its side expansion may absorb Peak B's remaining
+    // block, but Peak C is independent and should still fill the second slot.
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 39)],
+            vec![(2, 10)],
+            vec![(3, 9)],
+            vec![(20, 30)],
+            vec![(50, 60)],
+            vec![(51, 59)],
+        ],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = test_cluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        segment_locations,
+    )
+    .await?;
+    let mutator = new_test_mutator(
+        ctx.clone(),
+        data_accessor,
+        schema,
+        thresholds,
+        cluster_key_id,
+        2,
+    );
+
+    let mut segment_windows = mutator.select_segments(&compact_segments, 1000)?;
+    assert_eq!(segment_windows.len(), 1);
+    let (_, parts) = materialize_candidate_window(
+        &mutator,
+        segment_windows.remove(0),
+        ReclusterMode::Normal,
+        2,
+    )
+    .await?;
+
+    assert_eq!(parts.tasks.len(), 2);
+
+    let mut selected_locations = HashSet::new();
+    let mut selected_count = 0;
+    for task in &parts.tasks {
+        for part in &task.parts.partitions {
+            let fuse_part = FuseBlockPartInfo::from_part(part)?;
+            selected_count += 1;
+            assert!(selected_locations.insert(fuse_part.location.clone()));
+        }
+    }
+    assert_eq!(selected_count, 6);
 
     Ok(())
 }

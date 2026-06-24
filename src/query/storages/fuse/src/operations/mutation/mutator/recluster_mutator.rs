@@ -1190,7 +1190,9 @@ impl ReclusterMutator {
         let mut live = vec![false; block_count];
         let mut live_count = 0usize;
         let mut max_depth = 0;
-        let mut max_point = 0;
+        // Peak tuple: (max point position, max depth, width of depth > threshold region).
+        let mut peaks = Vec::new();
+        let mut current_peak: Option<(usize, usize, usize)> = None;
         for i in 0..num_points {
             let value_idx = order[i] as usize;
             let (starts, ends) = &values[value_idx];
@@ -1198,7 +1200,20 @@ impl ReclusterMutator {
             point_depths[i] = point_depth;
             if point_depth > max_depth {
                 max_depth = point_depth;
-                max_point = i;
+            }
+            if point_depth as f64 > self.depth_threshold {
+                match &mut current_peak {
+                    Some((peak_pos, peak_depth, width)) => {
+                        *width += 1;
+                        if point_depth > *peak_depth {
+                            *peak_pos = i;
+                            *peak_depth = point_depth;
+                        }
+                    }
+                    None => current_peak = Some((i, point_depth, 1)),
+                }
+            } else if let Some(peak) = current_peak.take() {
+                peaks.push(peak);
             }
             for &s in starts {
                 if !live[s] {
@@ -1214,6 +1229,9 @@ impl ReclusterMutator {
                     close_pos[e] = i;
                 }
             }
+        }
+        if let Some(peak) = current_peak {
+            peaks.push(peak);
         }
 
         // PASS 2: gate by each interval's max folded point depth.
@@ -1252,19 +1270,23 @@ impl ReclusterMutator {
             return Ok(Vec::new());
         }
 
-        let mut hotspot_left = max_point;
-        while hotspot_left > 0 && point_depths[hotspot_left - 1] == max_depth {
-            hotspot_left -= 1;
-        }
-        let mut hotspot_right = max_point;
-        while hotspot_right + 1 < num_points && point_depths[hotspot_right + 1] == max_depth {
-            hotspot_right += 1;
-        }
-        // Treat adjacent max-depth points as one hotspot plateau, so blocks
-        // covering the same peak area stay ahead of side expansion.
+        peaks.sort_by(
+            |(left_pos, left_depth, left_width), (right_pos, right_depth, right_width)| {
+                right_depth
+                    .cmp(left_depth)
+                    .then_with(|| right_width.cmp(left_width))
+                    .then_with(|| left_pos.cmp(right_pos))
+            },
+        );
+
         let push_task = |candidates: &mut Vec<ReclusterTaskCandidate>,
+                         used_blocks: &mut [bool],
                          local_indices: Vec<usize>,
-                         task_bytes: usize| {
+                         task_bytes: usize,
+                         max_depth: usize| {
+            for &local_idx in &local_indices {
+                used_blocks[local_idx] = true;
+            }
             let task_indices = local_indices
                 .into_iter()
                 .map(|local_idx| indices[local_idx])
@@ -1283,107 +1305,135 @@ impl ReclusterMutator {
         };
 
         let mut candidates = Vec::new();
+        let mut used_blocks = vec![false; block_count];
 
-        // Pack hotspot-overlapping blocks first. Tasks split only on memory, so
-        // a deep hotspot is not scattered by parallelism balancing.
-        let mut task_bytes = 0usize;
-        let mut task_indices = Vec::new();
-        for local_idx in 0..block_count {
+        for &(peak_pos, peak_depth, _) in &peaks {
             if candidates.len() >= task_budget {
                 break;
             }
-            if open_pos[local_idx] > hotspot_right || close_pos[local_idx] < hotspot_left {
-                continue;
-            }
-            let idx = indices[local_idx];
-            let block_size = blocks[idx].meta.block_size as usize;
-            let should_split_for_memory = !task_indices.is_empty()
-                && task_bytes.saturating_add(block_size) > self.memory_threshold;
 
-            if should_split_for_memory {
-                if task_indices.len() >= 2 {
-                    push_task(
-                        &mut candidates,
-                        std::mem::take(&mut task_indices),
-                        task_bytes,
-                    );
-                    if candidates.len() >= task_budget {
+            // Treat adjacent peak-depth points as one hotspot plateau, so blocks
+            // covering the same peak area stay ahead of side expansion.
+            let mut hotspot_left = peak_pos;
+            while hotspot_left > 0 && point_depths[hotspot_left - 1] == peak_depth {
+                hotspot_left -= 1;
+            }
+            let mut hotspot_right = peak_pos;
+            while hotspot_right + 1 < num_points && point_depths[hotspot_right + 1] == peak_depth {
+                hotspot_right += 1;
+            }
+
+            // Pack hotspot-overlapping blocks first. Tasks split only on memory,
+            // so a deep hotspot is not scattered by parallelism balancing.
+            // Keep the peak depth from the initial sweep. Here used_blocks only
+            // prevents the same block from being assigned to multiple tasks.
+            let mut task_bytes = 0usize;
+            let mut task_indices = Vec::new();
+            for local_idx in 0..block_count {
+                if used_blocks[local_idx] {
+                    continue;
+                }
+                if open_pos[local_idx] > hotspot_right || close_pos[local_idx] < hotspot_left {
+                    continue;
+                }
+                let idx = indices[local_idx];
+                let block_size = blocks[idx].meta.block_size as usize;
+                let should_split_for_memory = !task_indices.is_empty()
+                    && task_bytes.saturating_add(block_size) > self.memory_threshold;
+
+                if should_split_for_memory {
+                    if task_indices.len() >= 2 {
+                        let local_indices = std::mem::take(&mut task_indices);
+                        push_task(
+                            &mut candidates,
+                            &mut used_blocks,
+                            local_indices,
+                            task_bytes,
+                            peak_depth,
+                        );
+                        if candidates.len() >= task_budget {
+                            break;
+                        }
+                    } else {
+                        task_indices.clear();
+                    }
+                    task_bytes = 0;
+                }
+
+                task_bytes = task_bytes.saturating_add(block_size);
+                task_indices.push(local_idx);
+            }
+
+            if !task_indices.is_empty()
+                && (task_bytes < self.memory_threshold || task_indices.len() < 2)
+            {
+                // Fill only the last hotspot tail from the deeper adjacent side.
+                let mut left = hotspot_left;
+                let mut right = hotspot_right;
+                'fill_remaining: while task_bytes < self.memory_threshold || task_indices.len() < 2
+                {
+                    let left_depth = if left > 0 {
+                        point_depths[left - 1] as f64
+                    } else {
+                        0.0
+                    };
+                    let right_depth = if right + 1 < num_points {
+                        point_depths[right + 1] as f64
+                    } else {
+                        0.0
+                    };
+                    if left_depth.max(right_depth) <= self.depth_threshold {
                         break;
                     }
-                } else {
-                    task_indices.clear();
+
+                    let (cur, use_ends) = if left_depth >= right_depth {
+                        left -= 1;
+                        (order[left] as usize, true)
+                    } else {
+                        right += 1;
+                        (order[right] as usize, false)
+                    };
+                    let group_indices = if use_ends {
+                        &values[cur].1
+                    } else {
+                        &values[cur].0
+                    };
+                    for &local_idx in group_indices {
+                        if used_blocks[local_idx] {
+                            continue;
+                        }
+                        let idx = indices[local_idx];
+                        let block_size = blocks[idx].meta.block_size as usize;
+                        if !task_indices.is_empty()
+                            && task_bytes.saturating_add(block_size) > self.memory_threshold
+                        {
+                            break 'fill_remaining;
+                        }
+                        task_bytes = task_bytes.saturating_add(block_size);
+                        task_indices.push(local_idx);
+                    }
                 }
-                task_bytes = 0;
             }
 
-            task_bytes = task_bytes.saturating_add(block_size);
-            task_indices.push(local_idx);
-        }
-
-        if candidates.len() < task_budget
-            && !task_indices.is_empty()
-            && (task_bytes < self.memory_threshold || task_indices.len() < 2)
-        {
-            // Fill only the last hotspot tail from the deeper adjacent side.
-            // Skip blocks that already overlap the hotspot plateau.
-            let mut left = hotspot_left;
-            let mut right = hotspot_right;
-            'fill_remaining: while task_bytes < self.memory_threshold || task_indices.len() < 2 {
-                let left_depth = if left > 0 {
-                    point_depths[left - 1] as f64
-                } else {
-                    0.0
-                };
-                let right_depth = if right + 1 < num_points {
-                    point_depths[right + 1] as f64
-                } else {
-                    0.0
-                };
-                if left_depth.max(right_depth) <= self.depth_threshold {
-                    break;
-                }
-
-                let (cur, use_ends) = if left_depth >= right_depth {
-                    left -= 1;
-                    (order[left] as usize, true)
-                } else {
-                    right += 1;
-                    (order[right] as usize, false)
-                };
-                let group_indices = if use_ends {
-                    &values[cur].1
-                } else {
-                    &values[cur].0
-                };
-                for &local_idx in group_indices {
-                    if open_pos[local_idx] <= hotspot_right && close_pos[local_idx] >= hotspot_left
-                    {
-                        continue;
-                    }
-                    let idx = indices[local_idx];
-                    let block_size = blocks[idx].meta.block_size as usize;
-                    if !task_indices.is_empty()
-                        && task_bytes.saturating_add(block_size) > self.memory_threshold
-                    {
-                        break 'fill_remaining;
-                    }
-                    task_bytes = task_bytes.saturating_add(block_size);
-                    task_indices.push(local_idx);
-                }
+            if task_indices.len() >= 2 {
+                push_task(
+                    &mut candidates,
+                    &mut used_blocks,
+                    task_indices,
+                    task_bytes,
+                    peak_depth,
+                );
             }
-        }
-
-        if candidates.len() < task_budget && task_indices.len() >= 2 {
-            push_task(&mut candidates, task_indices, task_bytes);
         }
 
         debug!(
-            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} task_count={}",
+            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} peak_count={} task_count={}",
             group,
             block_count,
             average_depth,
             self.depth_threshold,
             max_depth,
+            peaks.len(),
             candidates.len(),
         );
 
