@@ -185,11 +185,11 @@ impl ClusterStatsGenerator {
 }
 
 pub fn sort_by_cluster_stats(
-    v1: &Option<ClusterStatistics>,
-    v2: &Option<ClusterStatistics>,
+    v1: Option<&ClusterStatistics>,
+    v2: Option<&ClusterStatistics>,
     default_cluster_key: u32,
 ) -> Ordering {
-    match (v1.as_ref(), v2.as_ref()) {
+    match (v1, v2) {
         (Some(a), Some(b)) => {
             if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
                 return Ordering::Equal;

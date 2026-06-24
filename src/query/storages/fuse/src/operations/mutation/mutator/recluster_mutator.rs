@@ -70,6 +70,7 @@ use crate::statistics::RangeMaxTree;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 
 /// Maximum recluster depth allowed when only two blocks remain.
 /// For two-block layouts, repeated reclustering beyond this level
@@ -79,7 +80,6 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
-const NORMAL_CONSERVATIVE_WINDOW_LIMIT: usize = 2;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -472,14 +472,22 @@ impl ReclusterMutator {
         candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
+            let unordered = || {
+                blocks.windows(2).any(|window| {
+                    sort_by_cluster_stats(
+                        Some(window[0].stats()),
+                        Some(window[1].stats()),
+                        self.cluster_key_id,
+                    ) == cmp::Ordering::Greater
+                })
+            };
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.block_thresholds.block_per_segment);
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack =
-                self.mode == ReclusterMode::Conservative && Self::blocks_unordered(&blocks);
+            let unordered_repack = self.mode == ReclusterMode::Conservative && unordered();
             if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
@@ -529,26 +537,6 @@ impl ReclusterMutator {
         }
 
         Ok(candidate_window)
-    }
-
-    fn blocks_unordered(blocks: &[&ReclusterBlock]) -> bool {
-        blocks.windows(2).any(|window| {
-            let left = window[0].stats();
-            let right = window[1].stats();
-            let ord_min = left
-                .min()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(right.min().iter().map(Scalar::as_ref));
-            if ord_min != cmp::Ordering::Equal {
-                return ord_min == cmp::Ordering::Greater;
-            }
-            left.max()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(right.max().iter().map(Scalar::as_ref))
-                == cmp::Ordering::Greater
-        })
     }
 
     /// Bin block indices into recluster groups and build rewrite-task
@@ -1015,7 +1003,11 @@ impl ReclusterMutator {
         });
 
         if self.mode == ReclusterMode::Conservative {
-            windows = Self::select_normal_conservative_windows(windows);
+            // Conservative mode is kept for legacy tables without
+            // `aggressive_recluster`. Probe only the deepest window per round to
+            // avoid over-reclustering old tables and creating a sharp behavior
+            // gap from the pre-option strategy.
+            windows.truncate(1);
         }
 
         debug!(
@@ -1036,20 +1028,6 @@ impl ReclusterMutator {
             })
             .filter(|window| !window.is_empty())
             .collect())
-    }
-
-    fn select_normal_conservative_windows(
-        windows: Vec<(IndexSet<usize>, usize)>,
-    ) -> Vec<(IndexSet<usize>, usize)> {
-        if windows.iter().any(|(_, depth)| *depth > 1) {
-            windows
-                .into_iter()
-                .filter(|(_, depth)| *depth > 1)
-                .take(NORMAL_CONSERVATIVE_WINDOW_LIMIT)
-                .collect()
-        } else {
-            windows
-        }
     }
 
     fn build_cluster_stats_for_recluster(

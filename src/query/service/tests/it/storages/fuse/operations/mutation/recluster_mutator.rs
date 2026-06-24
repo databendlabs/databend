@@ -1015,7 +1015,7 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
             .iter()
             .map(|window| window.len())
             .collect::<Vec<_>>(),
-        vec![4, 3]
+        vec![4]
     );
 
     let segment_locations = gen_recluster_segments_by_ranges(
