@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -50,22 +51,18 @@ pub type DictionaryMoveKeyError = meta_txn::MoveKeyError<
     ExistError<DictionaryNameRsc, DictionaryIdentity>,
 >;
 
-impl From<DictionaryMoveKeyError> for KVAppError {
-    fn from(error: DictionaryMoveKeyError) -> Self {
-        match error {
-            meta_txn::MoveKeyError::KvApi(error) => KVAppError::MetaError(error),
-            meta_txn::MoveKeyError::TxnRetryMaxTimes(error) => {
-                KVAppError::AppError(AppError::from(error))
-            }
-            meta_txn::MoveKeyError::Unknown(error) => KVAppError::AppError(AppError::from(error)),
-            meta_txn::MoveKeyError::Exists(error) => KVAppError::AppError(AppError::from(error)),
-        }
-    }
-}
-
 impl From<DictionaryMoveKeyError> for ErrorCode {
     fn from(error: DictionaryMoveKeyError) -> Self {
-        KVAppError::from(error).into()
+        match error {
+            meta_txn::MoveKeyError::KvApi(error) => ErrorCode::MetaServiceError(error.to_string()),
+            meta_txn::MoveKeyError::TxnRetryMaxTimes(error) => {
+                ErrorCode::TxnRetryMaxTimes(error.message())
+            }
+            meta_txn::MoveKeyError::Unknown(error) => ErrorCode::UnknownDictionary(error.message()),
+            meta_txn::MoveKeyError::Exists(error) => {
+                ErrorCode::DictionaryAlreadyExists(error.message())
+            }
+        }
     }
 }
 
