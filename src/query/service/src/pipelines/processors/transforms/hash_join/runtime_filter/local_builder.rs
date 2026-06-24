@@ -66,11 +66,12 @@ impl SingleFilterBuilder {
         spatial_threshold: usize,
     ) -> Result<Self> {
         let data_type = desc.build_key.data_type().clone();
+        let bloom_data_type = data_type.remove_nullable();
         let hash_method = if desc.spatial_mode.is_some() {
             None
         } else {
             Some(DataBlock::choose_hash_method_with_types(&[
-                data_type.clone()
+                bloom_data_type,
             ])?)
         };
 
@@ -151,7 +152,7 @@ impl SingleFilterBuilder {
             None => Vec::with_capacity(column.len()),
         };
         hashes.reserve(column.len());
-        let entry = BlockEntry::from(column.clone());
+        let entry = BlockEntry::from(column.remove_nullable());
         let hash_method = self
             .hash_method
             .as_ref()
