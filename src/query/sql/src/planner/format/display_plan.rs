@@ -69,10 +69,18 @@ impl Plan {
             // Databases
             Plan::ShowCreateDatabase(_) => Ok("ShowCreateDatabase".to_string()),
             Plan::CreateDatabase(_) => Ok("CreateDatabase".to_string()),
+            Plan::CreateDatabaseFromShare(_) => Ok("CreateDatabaseFromShare".to_string()),
             Plan::DropDatabase(_) => Ok("DropDatabase".to_string()),
             Plan::UndropDatabase(_) => Ok("UndropDatabase".to_string()),
             Plan::RenameDatabase(_) => Ok("RenameDatabase".to_string()),
             Plan::RefreshDatabaseCache(_) => Ok("RefreshDatabaseCache".to_string()),
+            Plan::CreateShare(_) => Ok("CreateShare".to_string()),
+            Plan::DropShare(_) => Ok("DropShare".to_string()),
+            Plan::AlterShare(_) => Ok("AlterShare".to_string()),
+            Plan::GrantShare(_) => Ok("GrantShare".to_string()),
+            Plan::RevokeShare(_) => Ok("RevokeShare".to_string()),
+            Plan::ShowShares(_) => Ok("ShowShares".to_string()),
+            Plan::DescShare(_) => Ok("DescShare".to_string()),
 
             // Tables
             Plan::CreateTable(create_table) => format_create_table(create_table, options),

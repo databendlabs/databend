@@ -913,6 +913,108 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_shares = map(
+        rule! { SHOW ~ SHARES ~ #show_options? },
+        |(_, _, show_options)| Statement::ShowShares(ShowSharesStmt { show_options }),
+    );
+
+    let desc_share = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ SHARE ~ #share_ref
+        },
+        |(_, _, name)| Statement::DescShare(DescShareStmt { name }),
+    );
+
+    let create_share = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ SHARE
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, opt_or_replace, _, opt_if_not_exists, name, comment)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok::<_, nom::Err<ErrorKind>>(Statement::CreateShare(CreateShareStmt {
+                create_option,
+                name,
+                comment: comment.map(|(_, _, comment)| comment),
+            }))
+        },
+    );
+
+    let drop_share = map(
+        rule! {
+            DROP ~ SHARE ~ #ident
+        },
+        |(_, _, name)| Statement::DropShare(DropShareStmt { name }),
+    );
+
+    let alter_share_add_remove = map(
+        rule! {
+            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ #share_accounts
+        },
+        |(_, _, opt_if_exists, name, add, accounts)| {
+            let action = if add {
+                AlterShareAction::AddAccounts { accounts }
+            } else {
+                AlterShareAction::RemoveAccounts { accounts }
+            };
+            Statement::AlterShare(AlterShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                action,
+            })
+        },
+    );
+
+    let alter_share_set = map(
+        rule! {
+            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
+            ~ #share_accounts?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, opt_if_exists, name, _, accounts, comment)| {
+            Statement::AlterShare(AlterShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                action: AlterShareAction::Set {
+                    accounts,
+                    comment: comment.map(|(_, _, comment)| comment),
+                },
+            })
+        },
+    );
+    let alter_share = alt((alter_share_add_remove, alter_share_set));
+
+    let grant_share = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #share_grant_object ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShare(GrantShareStmt {
+                privilege,
+                object,
+                share,
+            })
+        },
+    );
+
+    let revoke_share = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #share_grant_object ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShare(RevokeShareStmt {
+                privilege,
+                object,
+                share,
+            })
+        },
+    );
+
     let create_database = map_res(
         rule! {
             CREATE
@@ -920,13 +1022,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( DATABASE | SCHEMA )
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #database_ref
+            ~ ( FROM ~ ^SHARE ~ ^#share_ref )?
             ~ ( ENGINE ~ ^"=" ~ ^#database_engine )?
             ~ ( OPTIONS ~ ^"(" ~ ^#sql_property_list ~ ^")" )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, database, engine_opt, options_opt)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            database,
+            share_opt,
+            engine_opt,
+            options_opt,
+        )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
+            let from_share = share_opt.map(|(_, _, share)| share);
             let engine = engine_opt.map(|(_, _, engine)| engine);
             let options = options_opt
                 .map(|(_, _, options, _)| options)
@@ -935,6 +1048,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             let statement = Statement::CreateDatabase(CreateDatabaseStmt {
                 create_option,
                 database,
+                from_share,
                 engine,
                 options,
             });
@@ -2895,6 +3009,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
                 | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
                 | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+                | #show_shares : "`SHOW SHARES [LIKE '<pattern>'] [LIMIT <rows>]`"
             )
             | (
                 #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
@@ -2998,10 +3113,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
         ).parse(i),
         GRANT => rule!(
-            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            #grant_share : "`GRANT { USAGE ON DATABASE <db> | SELECT ON TABLE [<db>.]<table> } TO SHARE <share>`"
+            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
         ).parse(i),
-        REVOKE => rule!(#revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+        REVOKE => rule!(
+            #revoke_share : "`REVOKE { USAGE ON DATABASE <db> | SELECT ON TABLE [<db>.]<table> } FROM SHARE <share>`"
+            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             ).parse(i),
         COMMENT => rule!(#comment).parse(i),
         DESC | DESCRIBE => rule!(
@@ -3018,6 +3136,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
             | #describe_stream : "`DESCRIBE STREAM [<database>.]<stream>`"
+            | #desc_share : "`DESC[RIBE] SHARE [<provider_tenant>.]<share>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #sequence
         ).parse(i),
@@ -3037,7 +3156,8 @@ AS
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
                 | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name> [WITH <key>=<value> [, ...]]`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
-                | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
+                | #create_share : "`CREATE [OR REPLACE] SHARE [IF NOT EXISTS] <name> [COMMENT = '<string_literal>']`"
+                | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [FROM SHARE <provider>.<share>] [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
@@ -3085,6 +3205,7 @@ AS
                 | #drop_worker: "`DROP WORKER [IF EXISTS] <name>`"
                 | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
                 | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
+                | #drop_share : "`DROP SHARE <name>`"
                 | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
                 | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
@@ -3114,27 +3235,32 @@ AS
             )
         ).parse(i),
         ALTER => rule!(
-            #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
-            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
-            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
-            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
-            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
-            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
-            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
-            | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
-            | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
-            | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
-            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
-            | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
-            | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
-            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
-            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
-            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            (
+                #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
+                | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
+                | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+                | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+                | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+                | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+                | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
+                | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
+                | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
+                | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+                | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
+                | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
+            )
+            | (
+                #alter_share : "`ALTER SHARE [IF EXISTS] <name> { ADD | REMOVE } ACCOUNTS = <tenant> [, ...] | SET [ACCOUNTS = <tenant> [, ...]] [COMMENT = '<string_literal>']`"
+                | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+                | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+                | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+                | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
+                | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
+                | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+                | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+                | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
+                | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            )
         ).parse(i),
         RENAME => rule!(
             #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
@@ -4159,6 +4285,36 @@ pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
         value(
             ShareGrantObjectPrivilege::ReferenceUsage,
             rule! { REFERENCE_USAGE },
+        ),
+    ))
+    .parse(i)
+}
+
+pub fn share_ref(i: Input) -> IResult<ShareRef> {
+    map(rule! { #dot_separated_idents_1_to_2 }, |(tenant, share)| {
+        ShareRef { tenant, share }
+    })
+    .parse(i)
+}
+
+pub fn share_accounts(i: Input) -> IResult<Vec<Identifier>> {
+    map(
+        rule! {
+            ACCOUNTS ~ ^"=" ~ ^#comma_separated_list1(ident)
+        },
+        |(_, _, accounts)| accounts,
+    )
+    .parse(i)
+}
+
+pub fn share_grant_object(i: Input) -> IResult<ShareGrantObjectName> {
+    alt((
+        map(rule! { DATABASE ~ #ident }, |(_, database)| {
+            ShareGrantObjectName::Database(database)
+        }),
+        map(
+            rule! { TABLE ~ #dot_separated_idents_1_to_2 },
+            |(_, (database, table))| ShareGrantObjectName::Table(database, table),
         ),
     ))
     .parse(i)

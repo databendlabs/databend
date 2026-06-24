@@ -216,7 +216,7 @@ impl Display for UserPrivilegeType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ShareGrantObjectPrivilege {
     // For DATABASE or SCHEMA
     Usage,
