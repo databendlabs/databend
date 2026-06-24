@@ -274,8 +274,8 @@ in topn       :
 out stats     :
 0 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
 
-=== topn_equality_cache_with_and_constraints ===
-description: TopN equality estimates should not bypass accumulated AND constraints.
+=== topn_equality_cache_with_and_filters ===
+description: TopN equality estimates should compose with AND filters.
 expr          : and_filters(id = 1, id = 2)
 cardinality   : 1000
 estimated     : 0

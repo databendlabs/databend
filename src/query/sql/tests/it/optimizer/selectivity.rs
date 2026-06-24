@@ -307,8 +307,8 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
-        "topn_equality_cache_with_and_constraints",
-        "TopN equality estimates should not bypass accumulated AND constraints.",
+        "topn_equality_cache_with_and_filters",
+        "TopN equality estimates should compose with AND filters.",
     )?;
     let constrained_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
         values: vec![
