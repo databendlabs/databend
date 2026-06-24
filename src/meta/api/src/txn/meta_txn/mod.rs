@@ -100,12 +100,9 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
     }
 
     /// Stage a delete. Replaces any operation previously staged for `key`.
-    ///
-    /// If `match_seq` is set, the delete operation itself only applies when the
-    /// stored seq exactly matches.
-    pub(crate) fn stage_delete<K>(&self, key: &K, match_seq: Option<u64>)
+    pub(crate) fn stage_delete<K>(&self, key: &K)
     where K: kvapi::Key {
-        let op = txn_del(key).match_seq(match_seq);
+        let op = txn_del(key);
         self.state
             .lock()
             .unwrap()
