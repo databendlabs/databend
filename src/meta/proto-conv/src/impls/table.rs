@@ -53,14 +53,13 @@ impl FromToProto for mt::TableCopiedFileInfo {
     }
 
     fn to_pb(&self) -> pb::TableCopiedFileInfo {
-        let p = pb::TableCopiedFileInfo {
+        pb::TableCopiedFileInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             etag: self.etag.clone(),
             content_length: self.content_length,
             last_modified: self.last_modified.to_pb_opt(),
-        };
-        p
+        }
     }
 }
 
@@ -77,11 +76,10 @@ impl FromToProto for mt::EmptyProto {
     }
 
     fn to_pb(&self) -> pb::EmptyProto {
-        let p = pb::EmptyProto {
+        pb::EmptyProto {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-        };
-        p
+        }
     }
 }
 
@@ -107,14 +105,13 @@ impl FromToProto for mt::TableNameIdent {
     }
 
     fn to_pb(&self) -> pb::TableNameIdent {
-        let p = pb::TableNameIdent {
+        pb::TableNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             tenant: self.tenant.tenant_name().to_string(),
             db_name: self.db_name.clone(),
             table_name: self.table_name.clone(),
-        };
-        p
+        }
     }
 }
 
@@ -134,13 +131,12 @@ impl FromToProto for mt::DBIdTableName {
     }
 
     fn to_pb(&self) -> pb::DbIdTableName {
-        let p = pb::DbIdTableName {
+        pb::DbIdTableName {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             db_id: self.db_id,
             table_name: self.table_name.clone(),
-        };
-        p
+        }
     }
 }
 
@@ -160,14 +156,12 @@ impl FromToProto for mt::TableIdent {
     }
 
     fn to_pb(&self) -> pb::TableIdent {
-        let p = pb::TableIdent {
+        pb::TableIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             table_id: self.table_id,
             seq: self.seq,
-        };
-
-        p
+        }
     }
 }
 
@@ -265,7 +259,8 @@ impl FromToProto for mt::TableMeta {
         let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         // Field 37 stays reserved so normal table-meta writes do not recreate
         // the removed legacy table-ref encoding.
-        let p = pb::TableMeta {
+
+        pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             schema: Some(self.schema.to_pb()),
@@ -301,8 +296,7 @@ impl FromToProto for mt::TableMeta {
             indexes,
             virtual_schema: self.virtual_schema.to_pb_opt(),
             constraints,
-        };
-        p
+        }
     }
 }
 
@@ -325,13 +319,12 @@ impl FromToProto for SecurityPolicyColumnMap {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::RowAccessPolicyColumnMap {
+        pb::RowAccessPolicyColumnMap {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             policy_id: self.policy_id,
             columns_ids: self.columns_ids.clone(),
-        };
-        p
+        }
     }
 }
 
@@ -392,7 +385,7 @@ impl FromToProto for mt::TableStatistics {
     }
 
     fn to_pb(&self) -> pb::TableStatistics {
-        let p = pb::TableStatistics {
+        pb::TableStatistics {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             number_of_rows: self.number_of_rows,
@@ -406,8 +399,7 @@ impl FromToProto for mt::TableStatistics {
             inverted_index_size: self.inverted_index_size,
             vector_index_size: self.vector_index_size,
             virtual_column_size: self.virtual_column_size,
-        };
-        p
+        }
     }
 }
 
@@ -424,12 +416,11 @@ impl FromToProto for mt::TableIdList {
     }
 
     fn to_pb(&self) -> pb::TableIdList {
-        let p = pb::TableIdList {
+        pb::TableIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
-        };
-        p
+        }
     }
 }
 
@@ -454,7 +445,7 @@ impl FromToProto for mt::TableIndex {
     }
 
     fn to_pb(&self) -> pb::TableIndex {
-        let p = pb::TableIndex {
+        pb::TableIndex {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
@@ -463,7 +454,6 @@ impl FromToProto for mt::TableIndex {
             version: self.version.clone(),
             options: self.options.clone(),
             index_type: self.index_type.clone() as i32,
-        };
-        p
+        }
     }
 }

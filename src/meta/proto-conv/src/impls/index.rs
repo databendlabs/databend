@@ -55,7 +55,7 @@ impl FromToProto for mt::IndexMeta {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::IndexMeta {
+        pb::IndexMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             table_id: self.table_id,
@@ -66,8 +66,7 @@ impl FromToProto for mt::IndexMeta {
             original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,
-        };
-        p
+        }
     }
 }
 

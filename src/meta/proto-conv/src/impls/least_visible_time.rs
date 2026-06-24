@@ -44,11 +44,10 @@ impl FromToProto for mt::LeastVisibleTime {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::LeastVisibleTime {
+        pb::LeastVisibleTime {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             time: self.time.to_pb(),
-        };
-        p
+        }
     }
 }

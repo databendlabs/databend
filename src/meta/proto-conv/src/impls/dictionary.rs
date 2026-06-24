@@ -52,7 +52,7 @@ impl FromToProto for mt::DictionaryMeta {
         Ok(v)
     }
     fn to_pb(&self) -> pb::DictionaryMeta {
-        let p = pb::DictionaryMeta {
+        pb::DictionaryMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             source: self.source.clone(),
@@ -63,7 +63,6 @@ impl FromToProto for mt::DictionaryMeta {
             comment: self.comment.clone(),
             schema: Some(self.schema.to_pb()),
             field_comments: self.field_comments.clone(),
-        };
-        p
+        }
     }
 }

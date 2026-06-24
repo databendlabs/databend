@@ -43,7 +43,7 @@ impl FromToProto for tenant::TenantQuota {
     }
 
     fn to_pb(&self) -> pb::TenantQuota {
-        let p = pb::TenantQuota {
+        pb::TenantQuota {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             max_databases: self.max_databases,
@@ -51,7 +51,6 @@ impl FromToProto for tenant::TenantQuota {
             max_stages: self.max_stages,
             max_files_per_stage: self.max_files_per_stage,
             max_users: self.max_users,
-        };
-        p
+        }
     }
 }

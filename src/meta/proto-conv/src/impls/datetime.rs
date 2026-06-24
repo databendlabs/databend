@@ -36,7 +36,6 @@ impl FromToProto for DateTime<Utc> {
     }
 
     fn to_pb(&self) -> String {
-        let p = self.to_string();
-        p
+        self.to_string()
     }
 }

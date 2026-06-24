@@ -47,7 +47,7 @@ impl FromToProto for SequenceMeta {
     }
 
     fn to_pb(&self) -> pb::SequenceMeta {
-        let p = pb::SequenceMeta {
+        pb::SequenceMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             comment: self.comment.clone(),
@@ -57,7 +57,6 @@ impl FromToProto for SequenceMeta {
             current: self.current,
             step: self.step,
             storage_version: self.storage_version,
-        };
-        p
+        }
     }
 }

@@ -45,12 +45,11 @@ impl FromToProto for mt::QueryTokenInfo {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::TokenInfo {
+        pb::TokenInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             token_type: self.token_type.clone() as i32,
             parent: self.parent.clone(),
-        };
-        p
+        }
     }
 }

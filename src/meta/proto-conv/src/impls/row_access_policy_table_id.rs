@@ -40,10 +40,9 @@ impl FromToProto for mt::RowAccessPolicyTableId {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::RowAccessPolicyTableId {
+        pb::RowAccessPolicyTableId {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-        };
-        p
+        }
     }
 }

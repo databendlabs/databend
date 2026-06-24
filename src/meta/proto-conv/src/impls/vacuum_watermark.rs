@@ -43,11 +43,10 @@ impl FromToProto for mt::VacuumWatermark {
     }
 
     fn to_pb(&self) -> Self::PB {
-        let p = pb::VacuumWatermark {
+        pb::VacuumWatermark {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             time: self.time.to_pb(),
-        };
-        p
+        }
     }
 }

@@ -50,7 +50,7 @@ impl FromToProto for mt::DatabaseMeta {
     }
 
     fn to_pb(&self) -> pb::DatabaseMeta {
-        let p = pb::DatabaseMeta {
+        pb::DatabaseMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             engine: self.engine.clone(),
@@ -64,8 +64,7 @@ impl FromToProto for mt::DatabaseMeta {
             from_share: None,
             using_share_endpoint: None,
             from_share_db_id: None,
-        };
-        p
+        }
     }
 }
 
@@ -119,11 +118,10 @@ impl FromToProto for mt::DbIdList {
     }
 
     fn to_pb(&self) -> pb::DbIdList {
-        let p = pb::DbIdList {
+        pb::DbIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
-        };
-        p
+        }
     }
 }

@@ -94,7 +94,7 @@ impl FromToProto for mt::LockMeta {
     }
 
     fn to_pb(&self) -> pb::LockMeta {
-        let p = pb::LockMeta {
+        pb::LockMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             user: self.user.clone(),
@@ -104,7 +104,6 @@ impl FromToProto for mt::LockMeta {
             acquired_on: self.acquired_on.to_pb_opt(),
             lock_type: self.lock_type.clone() as i32,
             extra_info: self.extra_info.clone(),
-        };
-        p
+        }
     }
 }

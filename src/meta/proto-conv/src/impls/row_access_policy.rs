@@ -71,7 +71,7 @@ impl FromToProto for mt::RowAccessPolicyMeta {
             })
             .collect();
 
-        let p = pb::RowAccessPolicyMeta {
+        pb::RowAccessPolicyMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             args: BTreeMap::new(), // Keep empty for backward compatibility
@@ -80,7 +80,6 @@ impl FromToProto for mt::RowAccessPolicyMeta {
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb(),
             update_on: self.update_on.to_pb_opt(),
-        };
-        p
+        }
     }
 }

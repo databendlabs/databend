@@ -56,14 +56,13 @@ impl FromToProto for ex::TableSchema {
             fs.push(f.to_pb());
         }
 
-        let p = pb::DataSchema {
+        pb::DataSchema {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
             next_column_id: self.next_column_id(),
-        };
-        p
+        }
     }
 }
 
@@ -97,7 +96,8 @@ impl FromToProto for ex::TableField {
     fn to_pb(&self) -> pb::DataField {
         let computed_expr = self.computed_expr().map(FromToProto::to_pb);
         let auto_increment_expr = self.auto_increment_expr().map(FromToProto::to_pb);
-        let p = pb::DataField {
+
+        pb::DataField {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name().clone(),
@@ -106,8 +106,7 @@ impl FromToProto for ex::TableField {
             column_id: self.column_id(),
             computed_expr,
             auto_increment_expr,
-        };
-        p
+        }
     }
 }
 
@@ -316,7 +315,7 @@ impl FromToProto for ex::TableDataType {
     }
 
     fn to_pb(&self) -> pb::DataType {
-        let x = match self {
+        match self {
             TableDataType::Null => new_pb_dt24(Dt24::NullT(pb::Empty {})),
             TableDataType::EmptyArray => new_pb_dt24(Dt24::EmptyArrayT(pb::Empty {})),
             TableDataType::EmptyMap => new_pb_dt24(Dt24::EmptyMapT(pb::Empty {})),
@@ -376,8 +375,7 @@ impl FromToProto for ex::TableDataType {
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
             TableDataType::TimestampTz => new_pb_dt24(Dt24::TimestampTzT(pb::Empty {})),
-        };
-        x
+        }
     }
 }
 

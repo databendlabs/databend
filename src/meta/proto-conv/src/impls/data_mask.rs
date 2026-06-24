@@ -72,7 +72,7 @@ impl FromToProto for mt::DatamaskMeta {
             })
             .collect();
 
-        let p = pb::DatamaskMeta {
+        pb::DatamaskMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             args: BTreeMap::new(),
@@ -82,8 +82,7 @@ impl FromToProto for mt::DatamaskMeta {
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb(),
             update_on: self.update_on.to_pb_opt(),
-        };
-        p
+        }
     }
 }
 
@@ -102,11 +101,10 @@ impl FromToProto for mt::MaskpolicyTableIdList {
     }
 
     fn to_pb(&self) -> pb::DbIdList {
-        let p = pb::DbIdList {
+        pb::DbIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.iter().copied().collect(),
-        };
-        p
+        }
     }
 }

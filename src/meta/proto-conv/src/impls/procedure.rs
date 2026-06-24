@@ -83,7 +83,7 @@ impl FromToProto for mt::principal::ProcedureMeta {
             return_types.push(arg_type.to_pb());
         }
 
-        let p = pb::ProcedureMeta {
+        pb::ProcedureMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             return_types,
@@ -93,7 +93,6 @@ impl FromToProto for mt::principal::ProcedureMeta {
             script: self.script.to_string(),
             comment: self.comment.to_string(),
             language: self.procedure_language.to_string(),
-        };
-        p
+        }
     }
 }

@@ -40,12 +40,11 @@ where R: TenantResource
     }
 
     fn to_pb(&self) -> pb::TIdent {
-        let p = pb::TIdent {
+        pb::TIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             tenant: self.tenant_name().to_string(),
             name: self.name().to_string(),
-        };
-        p
+        }
     }
 }

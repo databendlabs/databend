@@ -51,14 +51,12 @@ impl FromToProto for mt::CatalogMeta {
     }
 
     fn to_pb(&self) -> pb::CatalogMeta {
-        let p = pb::CatalogMeta {
+        pb::CatalogMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             option: Some(mt::CatalogOption::to_pb(&self.catalog_option)),
             created_on: self.created_on.to_pb(),
-        };
-
-        p
+        }
     }
 }
 
