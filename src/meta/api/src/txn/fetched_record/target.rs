@@ -27,8 +27,8 @@ where
     KV: ?Sized,
     K: kvapi::Key,
 {
-    pub(crate) fn stage_delete(self, match_seq: Option<u64>) {
-        self.txn.stage_delete(&self.key, match_seq);
+    pub(crate) fn stage_delete(self) {
+        self.txn.stage_delete(&self.key);
     }
 }
 

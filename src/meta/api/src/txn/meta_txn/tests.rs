@@ -227,7 +227,7 @@ async fn test_multiple_for_update_held() -> anyhow::Result<()> {
     assert_eq!(a.seq(), 7);
     assert_eq!(b.seq(), 9);
     a.stage_put(&meta());
-    b.stage_delete(None);
+    b.stage_delete();
 
     commit.execute().await?;
 
@@ -292,7 +292,7 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
     txn.stage_unconditional_put(&k1, &meta());
-    txn.stage_delete(&k2, None);
+    txn.stage_delete(&k2);
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -444,7 +444,7 @@ async fn test_move_key_returns_retry_error_on_conflict() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_remove_key_generates_delete_txn() -> anyhow::Result<()> {
+async fn test_remove_key_fetches_then_deletes() -> anyhow::Result<()> {
     let mem = MemKV::new();
     let key = DBIdTableName::new(7, "tag");
     mem.seed(&key.to_string_key(), 3, encode_pb(&TableId::new(8)));
@@ -455,9 +455,12 @@ async fn test_remove_key_generates_delete_txn() -> anyhow::Result<()> {
         .unwrap();
 
     let req = mem.last_request();
-    assert_eq!(mem.read_count(), 0);
-    assert_eq!(req.condition, vec![]);
-    assert_eq!(req.if_then, vec![txn_del(&key).match_seq(Some(3))]);
+    assert_eq!(mem.read_count(), 1);
+    assert_eq!(req.condition, vec![TxnCondition::eq_seq(
+        key.to_string_key(),
+        3
+    )]);
+    assert_eq!(req.if_then, vec![txn_del(&key)]);
     Ok(())
 }
 
@@ -471,7 +474,7 @@ async fn test_remove_key_returns_unknown_when_absent() -> anyhow::Result<()> {
         .await
         .unwrap_err();
 
-    assert_eq!(mem.read_count(), 0);
+    assert_eq!(mem.read_count(), 1);
     assert_eq!(err, super::RunError::User(key.unknown_error("ctx")));
     Ok(())
 }
@@ -487,7 +490,7 @@ async fn test_remove_key_returns_unknown_on_seq_mismatch() -> anyhow::Result<()>
         .await
         .unwrap_err();
 
-    assert_eq!(mem.read_count(), 0);
+    assert_eq!(mem.read_count(), 1);
     assert_eq!(
         err,
         super::RunError::User(key.unknown_error("ctx; seq mismatched: expect 4, current 3"))
@@ -496,7 +499,7 @@ async fn test_remove_key_returns_unknown_on_seq_mismatch() -> anyhow::Result<()>
 }
 
 #[tokio::test]
-async fn test_remove_key_without_seq_generates_unconditional_delete() -> anyhow::Result<()> {
+async fn test_remove_key_without_seq_uses_fetched_seq_guard() -> anyhow::Result<()> {
     let mem = MemKV::new();
     let key = DBIdTableName::new(7, "tag");
     mem.seed(&key.to_string_key(), 3, encode_pb(&TableId::new(8)));
@@ -507,8 +510,11 @@ async fn test_remove_key_without_seq_generates_unconditional_delete() -> anyhow:
         .unwrap();
 
     let req = mem.last_request();
-    assert_eq!(mem.read_count(), 0);
-    assert_eq!(req.condition, vec![]);
+    assert_eq!(mem.read_count(), 1);
+    assert_eq!(req.condition, vec![TxnCondition::eq_seq(
+        key.to_string_key(),
+        3
+    )]);
     assert_eq!(req.if_then, vec![txn_del(&key)]);
     Ok(())
 }
