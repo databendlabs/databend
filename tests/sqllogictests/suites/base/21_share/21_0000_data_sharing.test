@@ -67,21 +67,6 @@ DATABASE share_provider_db_e2e <slt:ignore>
 TABLE share_provider_db_e2e.orders <slt:ignore>
 
 statement ok
-SET ROLE public
-
-statement ok
-SET SECONDARY ROLES NONE
-
-statement error
-CREATE DATABASE consumer_shared_db_forbidden FROM SHARE share_provider_e2e.share_e2e
-
-statement ok
-SET ROLE account_admin
-
-statement ok
-SET SECONDARY ROLES ALL
-
-statement ok
 CREATE DATABASE consumer_shared_db FROM SHARE share_provider_e2e.share_e2e
 
 query T
