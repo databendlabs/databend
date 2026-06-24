@@ -50,8 +50,11 @@ where
     }
 
     /// Stage a delete of the read key.
-    pub fn stage_delete(self) {
-        self.target.stage_delete();
+    ///
+    /// If `match_seq` is set, the delete operation itself only applies when the
+    /// stored seq exactly matches.
+    pub fn stage_delete(self, match_seq: Option<u64>) {
+        self.target.stage_delete(match_seq);
     }
 }
 

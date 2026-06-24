@@ -18,7 +18,6 @@ use databend_common_meta_app::app_error::ReferenceAlreadyExists;
 use databend_common_meta_app::app_error::ReferenceExpired;
 use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
-use databend_common_meta_app::app_error::UnknownReference;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableTagReq;
@@ -167,39 +166,25 @@ where
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let key_tag = TableIdTagName::new(req.table_id, &req.tag_name);
-        let ctx = func_name!();
-        let req = &req;
+        let ctx = format!(
+            "{}: table_id={}, tag_name='{}', seq={}",
+            func_name!(),
+            req.table_id,
+            req.tag_name,
+            req.seq
+                .map_or_else(|| "any".to_string(), |seq| seq.to_string())
+        );
 
         let mgr = meta_txn::MetaTxnManager::new(self, ctx);
-        mgr.run(|txn| {
-            let key_tag = key_tag.clone();
-            async move {
-                let tag = txn.get_for_update(key_tag).await?;
-                let tag = tag
-                    .some_or_unknown(ctx)
-                    .map_err(meta_txn::KvApiOrUserError::User)?;
-
-                let seq_tag = tag.seq();
-                if req.seq.match_seq(&seq_tag).is_err() {
-                    return Err(meta_txn::KvApiOrUserError::User(UnknownReference::new(
-                        format!(
-                            "Tag '{}' seq mismatched: expect {}, current {}",
-                            req.tag_name, req.seq, seq_tag
-                        ),
-                    )));
+        mgr.remove_key(key_tag, req.seq)
+            .await
+            .map_err(|err| match err {
+                meta_txn::RunError::KvApi(err) => KVAppError::MetaError(err),
+                meta_txn::RunError::TxnRetryMaxTimes(err) => {
+                    KVAppError::AppError(AppError::from(err))
                 }
-
-                tag.stage_delete();
-
-                Ok(())
-            }
-        })
-        .await
-        .map_err(|err| match err {
-            meta_txn::RunError::KvApi(err) => KVAppError::MetaError(err),
-            meta_txn::RunError::TxnRetryMaxTimes(err) => KVAppError::AppError(AppError::from(err)),
-            meta_txn::RunError::User(err) => KVAppError::AppError(AppError::from(err)),
-        })
+                meta_txn::RunError::User(err) => KVAppError::AppError(AppError::from(err)),
+            })
     }
 
     /// Get a table tag.
