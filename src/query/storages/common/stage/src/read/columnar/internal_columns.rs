@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::file_basename;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -45,7 +46,7 @@ pub fn add_internal_columns_with_meta(
                 b.add_const_column(Scalar::String(path.clone()), DataType::String);
             }
             InternalColumnType::FileBasename => {
-                let basename = path.rsplit('/').next().unwrap_or(&path).to_string();
+                let basename = file_basename(&path).to_string();
                 b.add_const_column(Scalar::String(basename), DataType::String);
             }
             InternalColumnType::FileRowNumber => {

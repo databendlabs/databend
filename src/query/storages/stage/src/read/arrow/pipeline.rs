@@ -26,6 +26,7 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::plan::file_basename;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -304,7 +305,7 @@ fn add_arrow_internal_columns(
                 block.add_const_column(Scalar::String(path.clone()), DataType::String);
             }
             InternalColumnType::FileBasename => {
-                let basename = path.rsplit('/').next().unwrap_or(&path).to_string();
+                let basename = file_basename(&path).to_string();
                 block.add_const_column(Scalar::String(basename), DataType::String);
             }
             InternalColumnType::FileRowNumber => {

@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::file_basename;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -136,7 +137,7 @@ impl BlockBuilderState {
                         .push_repeat(&ScalarRef::String(&self.file_path), n);
                 }
                 InternalColumnType::FileBasename => {
-                    let basename = self.file_path.rsplit('/').next().unwrap_or(&self.file_path);
+                    let basename = file_basename(&self.file_path);
                     self.internal_column_builders[i].push_repeat(&ScalarRef::String(basename), n);
                 }
                 InternalColumnType::FileContentKey => {

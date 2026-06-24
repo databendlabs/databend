@@ -163,6 +163,14 @@ pub enum InternalColumnType {
     FileLastModified,
 }
 
+/// Extract the file name (last path component) from a stage file path.
+///
+/// Backs the `metadata$file_basename` internal column. Stage paths are
+/// normalized with forward slashes, so splitting on `/` is sufficient.
+pub fn file_basename(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InternalColumn {
     pub column_name: String,

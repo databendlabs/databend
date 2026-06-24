@@ -64,7 +64,8 @@ impl TextRowSeparator {
         &mut self,
         mut batch: BytesBatch,
     ) -> Result<(Vec<RowBatchWithPosition>, FileStatus)> {
-        // Capture file-level metadata from the first batch
+        // File-level metadata is stamped on every batch (identical for the whole
+        // file); keep the latest non-empty value (last-writer-wins).
         if batch.content_key.is_some() {
             self.pos.content_key = batch.content_key;
         }
