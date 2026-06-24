@@ -14,6 +14,8 @@
 
 use std::intrinsics::unlikely;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_expression::BlockMetaInfo;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -24,6 +26,8 @@ pub struct Position {
     pub path: String,
     pub rows: usize,
     pub offset: usize,
+    pub content_key: Option<String>,
+    pub last_modified: Option<DateTime<Utc>>,
 }
 
 impl Position {
@@ -32,6 +36,8 @@ impl Position {
             path,
             rows: 0,
             offset: 0,
+            content_key: None,
+            last_modified: None,
         }
     }
 
@@ -40,6 +46,8 @@ impl Position {
             path: batch.path.clone(),
             rows: start_row_id,
             offset: batch.offset,
+            content_key: batch.content_key.clone(),
+            last_modified: batch.last_modified,
         }
     }
 }
@@ -51,6 +59,10 @@ pub struct BytesBatch {
     pub path: String,
     pub offset: usize,
     pub is_eof: bool,
+    /// etag or md5 of the file (stamped on every batch of the file)
+    pub content_key: Option<String>,
+    /// last modified time of the file (stamped on every batch of the file)
+    pub last_modified: Option<DateTime<Utc>>,
 }
 
 impl BytesBatch {
@@ -60,6 +72,8 @@ impl BytesBatch {
             path: self.path.clone(),
             offset: self.offset,
             is_eof: self.is_eof,
+            content_key: self.content_key.clone(),
+            last_modified: self.last_modified,
         }
     }
 }

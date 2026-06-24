@@ -5238,6 +5238,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "bstr",
+ "chrono",
  "csv-core",
  "databend-common-ast",
  "databend-common-base",
@@ -6770,6 +6771,7 @@ name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
  "arrow-array 58.1.0",
+ "chrono",
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",

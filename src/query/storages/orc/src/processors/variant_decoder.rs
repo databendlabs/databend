@@ -27,7 +27,7 @@ use databend_common_expression::TableSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
-use databend_storages_common_stage::add_internal_columns;
+use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
 use orc_rust::array_decoder::NaiveStripeDecoder;
@@ -96,11 +96,13 @@ impl AccumulatingTransform for StripeDecoderForVariantTable {
                     error: None,
                 })
             }
-            add_internal_columns(
+            add_internal_columns_with_meta(
                 &self.internal_columns,
                 stripe.path.clone(),
                 &mut block,
                 &mut start_row,
+                stripe.content_key.as_deref(),
+                stripe.last_modified,
             );
             blocks.push(block);
         }
