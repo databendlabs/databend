@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shlex
@@ -89,6 +90,7 @@ class AccuracyResult:
     exact_count: float
     estimated_count: float
     absolute_error: float
+    q_error: float
     relative_error: float | None
 
 
@@ -621,6 +623,7 @@ def evaluate_accuracy(
         estimate = estimate_probe(buckets, probe)
         exact = counts[probe.label]
         absolute = abs(estimate - exact)
+        q_error = cardinality_q_error(estimate, exact)
         relative = None if exact == 0 else absolute / exact
         results.append(
             AccuracyResult(
@@ -632,10 +635,17 @@ def evaluate_accuracy(
                 exact_count=exact,
                 estimated_count=estimate,
                 absolute_error=absolute,
+                q_error=q_error,
                 relative_error=relative,
             )
         )
     return results
+
+
+def cardinality_q_error(estimated: float, exact: float) -> float:
+    estimated = max(estimated, 1.0)
+    exact = max(exact, 1.0)
+    return max(estimated / exact, exact / estimated)
 
 
 def summarize_histograms(histograms: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -653,18 +663,44 @@ def summarize_histograms(histograms: dict[str, dict[str, Any]]) -> dict[str, Any
 
 
 def summarize_accuracy_values(values: list[AccuracyResult]) -> dict[str, Any]:
+    q_errors = sorted(result.q_error for result in values)
     relatives = sorted(
         result.relative_error for result in values if result.relative_error is not None
     )
     absolutes = sorted(result.absolute_error for result in values)
     return {
         "probe_count": len(values),
+        "q_error_count": len(q_errors),
+        "max_q_error": max(q_errors) if q_errors else None,
+        "mean_q_error": sum(q_errors) / len(q_errors) if q_errors else None,
+        "geomean_q_error": geometric_mean(q_errors),
+        "p50_q_error": percentile(q_errors, 0.50),
+        "p90_q_error": percentile(q_errors, 0.90),
+        "p95_q_error": percentile(q_errors, 0.95),
         "relative_probe_count": len(relatives),
         "max_absolute_error": max(absolutes) if absolutes else None,
         "mean_absolute_error": sum(absolutes) / len(absolutes) if absolutes else None,
         "max_relative_error": max(relatives) if relatives else None,
         "mean_relative_error": sum(relatives) / len(relatives) if relatives else None,
     }
+
+
+def geometric_mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return math.exp(sum(math.log(value) for value in values) / len(values))
+
+
+def percentile(values: list[float], quantile: float) -> float | None:
+    if not values:
+        return None
+    if len(values) == 1:
+        return values[0]
+    index = (len(values) - 1) * quantile
+    lower_index = int(index)
+    upper_index = min(lower_index + 1, len(values) - 1)
+    fraction = index - lower_index
+    return values[lower_index] * (1.0 - fraction) + values[upper_index] * fraction
 
 
 def summarize_accuracy(results: list[AccuracyResult]) -> dict[str, Any]:

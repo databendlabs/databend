@@ -49,4 +49,5 @@ pub(crate) use stats::JoinKeyStatUpdate;
 pub(crate) use stats::JoinStatsEstimator;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::SelectivityEstimator;
+pub use stats::TopNSet;
 pub use stats::UniformSampleSet;

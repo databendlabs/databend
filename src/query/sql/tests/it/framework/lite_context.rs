@@ -113,6 +113,7 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -200,6 +201,7 @@ type TableKey = (String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
 type HistogramStatsMap = HashMap<String, Histogram>;
+type TopNStatsMap = HashMap<String, ColumnTopN>;
 
 #[derive(Clone)]
 struct DummyCatalog {
@@ -249,12 +251,14 @@ struct FakeTable {
     table_stats: Option<TableStatistics>,
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
     histograms: HashMap<ColumnId, Histogram>,
+    top_n: HashMap<ColumnId, ColumnTopN>,
 }
 
 #[derive(Debug, Clone)]
 struct FakeColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
     histograms: HashMap<ColumnId, Histogram>,
+    top_n: HashMap<ColumnId, ColumnTopN>,
     num_rows: Option<u64>,
 }
 
@@ -283,6 +287,10 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
         self.histograms.get(&column_id).cloned()
+    }
+
+    fn top_n(&self, column_id: ColumnId) -> Option<ColumnTopN> {
+        self.top_n.get(&column_id).cloned()
     }
 }
 
@@ -333,6 +341,7 @@ impl Table for FakeTable {
         Ok(Box::new(FakeColumnStatisticsProvider {
             column_stats: self.column_stats.clone(),
             histograms: self.histograms.clone(),
+            top_n: self.top_n.clone(),
             num_rows: self.table_stats.and_then(|stats| stats.num_rows),
         }))
     }
@@ -749,6 +758,7 @@ impl LiteTableContext {
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
+        top_n: TopNStatsMap,
         options: BTreeMap<String, String>,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
@@ -766,6 +776,14 @@ impl LiteTableContext {
                 let index = schema.index_of(&name)?;
                 let column_id = schema.field(index).column_id();
                 Ok((column_id, histogram))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+        let top_n = top_n
+            .into_iter()
+            .map(|(name, top_n)| {
+                let index = schema.index_of(&name)?;
+                let column_id = schema.field(index).column_id();
+                Ok((column_id, top_n))
             })
             .collect::<Result<HashMap<_, _>>>()?;
 
@@ -789,6 +807,7 @@ impl LiteTableContext {
             table_stats,
             column_stats,
             histograms,
+            top_n,
         }))
     }
 
@@ -935,6 +954,30 @@ impl LiteTableContext {
         histograms: HistogramStatsMap,
         options: BTreeMap<String, String>,
     ) -> Result<()> {
+        self.register_table_with_stats_and_top_n(
+            database,
+            table_name,
+            fields,
+            table_stats,
+            column_stats,
+            histograms,
+            HashMap::new(),
+            options,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn register_table_with_stats_and_top_n(
+        self: &Arc<Self>,
+        database: &str,
+        table_name: &str,
+        fields: Vec<TableField>,
+        table_stats: Option<TableStatistics>,
+        column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
+        top_n: TopNStatsMap,
+        options: BTreeMap<String, String>,
+    ) -> Result<()> {
         let table = self.build_fake_table(
             database,
             table_name,
@@ -942,6 +985,7 @@ impl LiteTableContext {
             table_stats,
             column_stats,
             histograms,
+            top_n,
             options,
         )?;
         self.default_catalog.insert_table(database, table);

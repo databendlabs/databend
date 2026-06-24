@@ -48,6 +48,8 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_SIZE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -69,6 +71,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+pub use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use log::error;
 
 /// Table option keys that can occur in 'create table statement'.
@@ -111,6 +114,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
     r
 });
 
@@ -169,6 +174,8 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
     r
 });
 
@@ -298,6 +305,16 @@ pub fn is_valid_approx_distinct_columns(
     Ok(())
 }
 
+pub fn is_valid_analyze_top_n_columns(
+    options: &BTreeMap<String, String>,
+    schema: TableSchemaRef,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS) {
+        ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
+    }
+    Ok(())
+}
+
 pub fn is_valid_analyze_histogram_algorithm(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
@@ -330,6 +347,12 @@ pub fn is_valid_analyze_histogram_kll_relative_error(
         }
     }
     Ok(())
+}
+
+pub fn is_valid_analyze_top_n_size(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    analyze_top_n_size_from_options(options).map(|_| ())
 }
 
 pub fn is_valid_change_tracking(

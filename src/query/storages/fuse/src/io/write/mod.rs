@@ -23,6 +23,7 @@ mod vector_index_writer;
 mod virtual_column_builder;
 mod write_settings;
 
+pub use block_statistics_writer::BlockStats;
 pub use block_statistics_writer::BlockStatsBuilder;
 pub use block_statistics_writer::build_column_hlls;
 pub use block_writer::BlockBuilder;
