@@ -126,7 +126,7 @@ async fn test_for_update_becomes_guard() -> anyhow::Result<()> {
     // A plain get of another key arms no guard.
     txn.get(other.clone()).await?;
 
-    assert!(commit.execute().await?);
+    assert!(commit.execute().await?.0);
 
     let req = mem.last_request();
     assert_eq!(
@@ -227,7 +227,7 @@ async fn test_multiple_for_update_held() -> anyhow::Result<()> {
     assert_eq!(a.seq(), 7);
     assert_eq!(b.seq(), 9);
     a.stage_put(&meta());
-    b.stage_delete();
+    b.stage_delete(None);
 
     commit.execute().await?;
 
@@ -292,7 +292,7 @@ async fn test_writes_generate_operations() -> anyhow::Result<()> {
     let txn = MetaTxn::new(&mem);
     let commit = txn.clone();
     txn.stage_unconditional_put(&k1, &meta());
-    txn.stage_unconditional_delete(&k2);
+    txn.stage_delete(&k2, None);
     commit.execute().await?;
 
     let req = mem.last_request();
@@ -440,5 +440,75 @@ async fn test_move_key_returns_retry_error_on_conflict() -> anyhow::Result<()> {
         err,
         MoveKeyError::TxnRetryMaxTimes(TxnRetryMaxTimes::new("ctx", 1))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_remove_key_generates_delete_txn() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let key = DBIdTableName::new(7, "tag");
+    mem.seed(&key.to_string_key(), 3, encode_pb(&TableId::new(8)));
+
+    MetaTxnManager::new(&mem, "ctx")
+        .remove_key(key.clone(), Some(3))
+        .await
+        .unwrap();
+
+    let req = mem.last_request();
+    assert_eq!(mem.read_count(), 0);
+    assert_eq!(req.condition, vec![]);
+    assert_eq!(req.if_then, vec![txn_del(&key).match_seq(Some(3))]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_remove_key_returns_unknown_when_absent() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let key = DBIdTableName::new(7, "tag");
+
+    let err = MetaTxnManager::new(&mem, "ctx")
+        .remove_key(key.clone(), Some(3))
+        .await
+        .unwrap_err();
+
+    assert_eq!(mem.read_count(), 0);
+    assert_eq!(err, super::RunError::User(key.unknown_error("ctx")));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_remove_key_returns_unknown_on_seq_mismatch() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let key = DBIdTableName::new(7, "tag");
+    mem.seed(&key.to_string_key(), 3, encode_pb(&TableId::new(8)));
+
+    let err = MetaTxnManager::new(&mem, "ctx")
+        .remove_key(key.clone(), Some(4))
+        .await
+        .unwrap_err();
+
+    assert_eq!(mem.read_count(), 0);
+    assert_eq!(
+        err,
+        super::RunError::User(key.unknown_error("ctx; seq mismatched: expect 4, current 3"))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_remove_key_without_seq_generates_unconditional_delete() -> anyhow::Result<()> {
+    let mem = MemKV::new();
+    let key = DBIdTableName::new(7, "tag");
+    mem.seed(&key.to_string_key(), 3, encode_pb(&TableId::new(8)));
+
+    MetaTxnManager::new(&mem, "ctx")
+        .remove_key(key.clone(), None)
+        .await
+        .unwrap();
+
+    let req = mem.last_request();
+    assert_eq!(mem.read_count(), 0);
+    assert_eq!(req.condition, vec![]);
+    assert_eq!(req.if_then, vec![txn_del(&key)]);
     Ok(())
 }

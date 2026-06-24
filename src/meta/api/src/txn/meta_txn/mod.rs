@@ -23,6 +23,7 @@ use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnOpResponse;
 use databend_meta_client::types::TxnRequest;
 use seq_marked::SeqValue;
 
@@ -98,14 +99,18 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
         }
     }
 
-    /// Stage an unguarded delete. Replaces any operation previously staged for `key`.
-    pub(crate) fn stage_unconditional_delete<K>(&self, key: &K)
+    /// Stage a delete. Replaces any operation previously staged for `key`.
+    ///
+    /// If `match_seq` is set, the delete operation itself only applies when the
+    /// stored seq exactly matches.
+    pub(crate) fn stage_delete<K>(&self, key: &K, match_seq: Option<u64>)
     where K: kvapi::Key {
+        let op = txn_del(key).match_seq(match_seq);
         self.state
             .lock()
             .unwrap()
             .operations
-            .insert(key.to_string_key(), txn_del(key));
+            .insert(key.to_string_key(), op);
     }
 
     /// Stage an unguarded put. Replaces any operation previously staged for `key`.
@@ -208,9 +213,9 @@ where KV: KVApi + ?Sized
         self.state.lock().unwrap().operations.is_empty()
     }
 
-    /// Send the staged reads and writes as one commit and report whether its
-    /// guards held.
-    async fn execute(&self) -> Result<bool, KV::Error> {
+    /// Send the staged reads and writes as one commit and return its operation
+    /// responses.
+    async fn execute(&self) -> Result<(bool, Vec<TxnOpResponse>), KV::Error> {
         let (reads, operations) = {
             let mut state = self.state.lock().unwrap();
             (
@@ -219,8 +224,7 @@ where KV: KVApi + ?Sized
             )
         };
         let req = build_request(reads, operations);
-        let (succ, _responses) = send_txn(self.kv, req).await?;
-        Ok(succ)
+        send_txn(self.kv, req).await
     }
 }
 

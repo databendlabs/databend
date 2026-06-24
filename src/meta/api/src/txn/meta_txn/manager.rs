@@ -14,12 +14,15 @@
 
 use std::fmt::Display;
 use std::future::Future;
+use std::io;
 
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::types::InvalidReply;
+use databend_meta_client::types::TxnOpResponse;
 
 use super::KvApiOrUserError;
 use super::MetaTxn;
@@ -89,7 +92,7 @@ where KV: KVApi + ?Sized
                 let new = new.none_or_exists(&ctx).map_err(KvApiOrUserError::exists)?;
 
                 new.stage_put(old.value());
-                old.stage_delete();
+                old.stage_delete(None);
 
                 Ok(())
             }
@@ -97,6 +100,28 @@ where KV: KVApi + ?Sized
         .await?;
 
         Ok(())
+    }
+
+    /// Remove `key` if it exists and its sequence matches `seq`.
+    ///
+    /// On sequence mismatch, the key's own unknown error is built from the
+    /// manager context plus expected/current seq details.
+    pub async fn remove_key<K>(
+        &self,
+        key: K,
+        seq: Option<u64>,
+    ) -> Result<(), RunError<KV::Error, K::UnknownError>>
+    where
+        K: kvapi::Key + KeyUnknownBuilder + Clone,
+        KV::Error: From<InvalidReply>,
+    {
+        let ctx = self.ctx.clone();
+
+        let txn = MetaTxn::new(self.kv);
+        txn.stage_delete(&key, seq);
+        let (succ, responses) = txn.execute().await.map_err(RunError::KvApi)?;
+
+        handle_remove_key_reply(key, &ctx, seq, succ, responses)
     }
 
     /// Drive `build` as a CAS retry loop, handing it a fresh [`MetaTxn`] each
@@ -148,10 +173,58 @@ where KV: KVApi + ?Sized
                 return Ok(out);
             }
 
-            if commit.execute().await.map_err(RunError::KvApi)? {
+            let (succ, _responses) = commit.execute().await.map_err(RunError::KvApi)?;
+            if succ {
                 return Ok(out);
             }
             // Commit failed: a read changed under us. Retry on a fresh txn.
         }
     }
+}
+
+fn handle_remove_key_reply<KVError, K>(
+    key: K,
+    ctx: &str,
+    expected_seq: Option<u64>,
+    succ: bool,
+    responses: Vec<TxnOpResponse>,
+) -> Result<(), RunError<KVError, K::UnknownError>>
+where
+    KVError: From<InvalidReply>,
+    K: KeyUnknownBuilder,
+{
+    if !succ {
+        return Err(invalid_reply("remove_key transaction unexpectedly failed"));
+    }
+
+    let Some(response) = responses.first() else {
+        return Err(invalid_reply("remove_key did not return a response"));
+    };
+
+    let Some(delete) = response.try_as_delete() else {
+        return Err(invalid_reply("remove_key did not return a delete response"));
+    };
+
+    if delete.success {
+        return Ok(());
+    }
+
+    match &delete.prev_value {
+        Some(prev) => Err(RunError::User(key.unknown_error(
+            remove_key_seq_mismatch_context(ctx, expected_seq, prev.seq),
+        ))),
+        None => Err(RunError::User(key.unknown_error(ctx))),
+    }
+}
+
+fn remove_key_seq_mismatch_context(ctx: &str, expected: Option<u64>, current: u64) -> String {
+    let expected = expected.map_or_else(|| "any".to_string(), |seq| seq.to_string());
+    format!("{ctx}; seq mismatched: expect {expected}, current {current}")
+}
+
+fn invalid_reply<KVError, UserError>(msg: impl ToString) -> RunError<KVError, UserError>
+where KVError: From<InvalidReply> {
+    let msg = msg.to_string();
+    let source = io::Error::new(io::ErrorKind::InvalidData, msg.clone());
+    RunError::KvApi(KVError::from(InvalidReply::new(msg, &source)))
 }
