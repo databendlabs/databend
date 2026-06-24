@@ -141,9 +141,7 @@ impl KVApi for MemKV {
                 Some(Request::Delete(delete)) => {
                     let prev = store.get(&delete.key).cloned();
                     let success = prev.as_ref().is_some_and(|v| {
-                        delete
-                            .match_seq
-                            .map_or(true, |match_seq| v.seq == match_seq)
+                        delete.match_seq.is_none_or(|match_seq| v.seq == match_seq)
                     });
 
                     if success {
