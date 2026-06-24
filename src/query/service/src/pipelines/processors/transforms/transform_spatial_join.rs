@@ -250,6 +250,13 @@ impl SpatialJoinState {
         if probe.is_empty() {
             return Ok(vec![]);
         }
+        // All build-side geometries are NULL: nothing can match, and there is no
+        // build SRID to validate the probe against. Match the fallback join
+        // semantics (ST_Intersects(.., NULL) yields no rows) instead of hitting
+        // the build_srid unwrap below.
+        let Some(build_srid) = build_data.srid else {
+            return Ok(vec![]);
+        };
 
         let evaluator = Evaluator::new(&probe, &self.function_context, &BUILTIN_FUNCTIONS);
         let probe_geometry = evaluator.run(&self.probe_geometry.as_expr(&BUILTIN_FUNCTIONS))?;
@@ -264,6 +271,7 @@ impl SpatialJoinState {
         for probe_row in 0..probe.num_rows() {
             output.extend(self.probe_one_row(
                 build_data,
+                build_srid,
                 &rtree,
                 &probe,
                 &probe_geometry,
@@ -276,6 +284,7 @@ impl SpatialJoinState {
     fn probe_one_row(
         &self,
         build_data: &SpatialJoinBuildData,
+        build_srid: i32,
         rtree: &RTreeRef<f64>,
         probe: &DataBlock,
         probe_geometry: &Value<AnyType>,
@@ -286,7 +295,7 @@ impl SpatialJoinState {
         else {
             return Ok(vec![]);
         };
-        check_probe_srid_compatible(probe_srid, build_data.srid.unwrap(), self.build_side)?;
+        check_probe_srid_compatible(probe_srid, build_srid, self.build_side)?;
 
         let Some(probe_bbox) = probe_bbox else {
             return Ok(vec![]);

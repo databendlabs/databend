@@ -1,0 +1,102 @@
+statement ok
+DROP DATABASE IF EXISTS test_spatial_join
+
+statement ok
+CREATE DATABASE test_spatial_join
+
+statement ok
+USE test_spatial_join
+
+statement ok
+CREATE TABLE build_t(id INT, geom GEOMETRY)
+
+statement ok
+CREATE TABLE probe_t(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO probe_t VALUES
+(10, TO_GEOMETRY('POINT(1 1)')),
+(20, TO_GEOMETRY('POINT(2 2)')),
+(30, TO_GEOMETRY('POINT(3 3)'))
+
+statement ok
+SET enable_spatial_join = 1
+
+# All build-side geometries are NULL: the join must produce no rows instead of
+# panicking on the build-side SRID lookup (regression for the all-NULL build
+# Option::unwrap panic).
+statement ok
+INSERT INTO build_t VALUES (1, NULL), (2, NULL)
+
+query II
+SELECT b.id, p.id FROM build_t b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+
+# The all-NULL build join must match the fallback (hash join) result.
+statement ok
+SET enable_spatial_join = 0
+
+query II
+SELECT b.id, p.id FROM build_t b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+
+statement ok
+SET enable_spatial_join = 1
+
+# Mixed NULL and valid build geometries: NULL rows are skipped, valid rows still
+# match every overlapping probe geometry.
+statement ok
+CREATE OR REPLACE TABLE build_mix(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO build_mix VALUES
+(1, NULL),
+(2, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(3, NULL)
+
+query II
+SELECT b.id, p.id FROM build_mix b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+2 10
+2 20
+2 30
+
+statement ok
+SET enable_spatial_join = 0
+
+query II
+SELECT b.id, p.id FROM build_mix b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+2 10
+2 20
+2 30
+
+statement ok
+SET enable_spatial_join = 1
+
+# An incompatible SRID must fail the whole query rather than produce wrong
+# results. Standalone can report this from the spatial join path as 1090, while
+# cluster falls back to the regular join path and reports the function eval
+# error through HTTP as 1006.
+statement ok
+CREATE OR REPLACE TABLE build_srid(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO build_srid VALUES
+(1, TO_GEOMETRY('SRID=4326;POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(2, TO_GEOMETRY('SRID=3857;POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'))
+
+statement ok
+CREATE OR REPLACE TABLE probe_srid(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO probe_srid VALUES (10, TO_GEOMETRY('SRID=4326;POINT(1 1)'))
+
+statement error (?s)(1090|1006).*Incompatible SRID
+SELECT b.id, p.id FROM build_srid b JOIN probe_srid p ON ST_Intersects(b.geom, p.geom)
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE test_spatial_join
