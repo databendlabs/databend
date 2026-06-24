@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;
@@ -55,6 +58,62 @@ pub struct StorageConfig {
     /// - They apply to all storage operators created in this process.
     pub disable_config_load: bool,
     pub disable_instance_profile: bool,
+    /// Controls whether stage paths containing parent directory components
+    /// (`../`) are allowed.
+    pub stage_path_traversal_policy: StagePathTraversalPolicy,
+}
+
+/// Policy controlling stage paths that contain parent directory traversal
+/// components (`../`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StagePathTraversalPolicy {
+    /// Reject traversal paths for both read and write operations.
+    #[default]
+    Disable,
+    /// Allow traversal paths for both read and write operations.
+    Enable,
+    /// Existing traversal paths can be read but new ones cannot be written.
+    ReadOnly,
+}
+
+impl StagePathTraversalPolicy {
+    pub fn allows_read(self) -> bool {
+        matches!(
+            self,
+            StagePathTraversalPolicy::Enable | StagePathTraversalPolicy::ReadOnly
+        )
+    }
+
+    pub fn allows_write(self) -> bool {
+        matches!(self, StagePathTraversalPolicy::Enable)
+    }
+}
+
+impl FromStr for StagePathTraversalPolicy {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "disable" => Ok(StagePathTraversalPolicy::Disable),
+            "enable" => Ok(StagePathTraversalPolicy::Enable),
+            "readonly" => Ok(StagePathTraversalPolicy::ReadOnly),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid stage_path_traversal_policy: {:?}, valid values are: disable, enable, readonly",
+                s
+            ))),
+        }
+    }
+}
+
+impl Display for StagePathTraversalPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StagePathTraversalPolicy::Disable => write!(f, "disable"),
+            StagePathTraversalPolicy::Enable => write!(f, "enable"),
+            StagePathTraversalPolicy::ReadOnly => write!(f, "readonly"),
+        }
+    }
 }
 
 /// Endpoint target validation mode for external storage URLs.
