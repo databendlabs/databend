@@ -22,6 +22,10 @@ use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 
 use super::TableLvtCheck;
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
+use crate::app_error::ReferenceAlreadyExists;
+use crate::app_error::UnknownReference;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {
@@ -55,6 +59,25 @@ impl TableIdTagName {
 impl Display for TableIdTagName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.table_id, self.tag_name)
+    }
+}
+
+impl KeyUnknownBuilder for TableIdTagName {
+    type UnknownError = UnknownReference;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownReference::new(format!("Unknown tag: '{}'; when:({})", self.tag_name, ctx))
+    }
+}
+
+impl KeyExistsBuilder for TableIdTagName {
+    type ExistError = ReferenceAlreadyExists;
+
+    fn exist_error(&self, ctx: impl Display) -> Self::ExistError {
+        ReferenceAlreadyExists::new(format!(
+            "Tag already exists: '{}'; when:({})",
+            self.tag_name, ctx
+        ))
     }
 }
 
@@ -100,10 +123,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for TableIdTagName {
         type ValueType = TableTag;
     }
-
-    impl kvapi::Value for TableTag {
-        type KeyType = TableIdTagName;
-    }
 }
 
 #[cfg(test)]
@@ -111,9 +130,25 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TableIdTagName;
+    use crate::KeyExistsBuilder;
+    use crate::KeyUnknownBuilder;
 
     #[test]
     fn test_table_id_tag_name_key_format() {
         assert_round_trip(TableIdTagName::new(9, "tag/a"), "__fd_table_tag/9/tag%2fa");
+    }
+
+    #[test]
+    fn test_table_id_tag_name_error_builder() {
+        let ident = TableIdTagName::new(9, "tag");
+
+        assert_eq!(
+            ident.unknown_error("ctx").to_string(),
+            "UnknownReference: `Unknown tag: 'tag'; when:(ctx)`"
+        );
+        assert_eq!(
+            ident.exist_error("ctx").to_string(),
+            "ReferenceAlreadyExists: Tag already exists: 'tag'; when:(ctx)"
+        );
     }
 }

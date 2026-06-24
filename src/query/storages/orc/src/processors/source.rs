@@ -70,6 +70,8 @@ pub struct ReadingFile {
     pub size: usize,
     pub schema: Option<HashableSchema>,
     pub rows: u64,
+    pub content_key: Option<String>,
+    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub struct ORCSource {
@@ -128,6 +130,8 @@ impl ORCSource {
         };
         let file = SingleFilePartition::from_part(&part)?.clone();
         let size = file.size;
+        let content_key = file.content_key.clone();
+        let last_modified = file.last_modified;
 
         let (operator, path) = self.op_registry.get_operator_path(&file.path)?;
         let file = OrcChunkReader {
@@ -164,6 +168,8 @@ impl ORCSource {
             size,
             schema,
             rows: 0,
+            content_key,
+            last_modified,
         });
         Ok(true)
     }
@@ -208,6 +214,8 @@ impl AsyncSource for ORCSource {
                             stripe,
                             schema: file.schema.clone(),
                             start_row: file.rows,
+                            content_key: file.content_key.clone(),
+                            last_modified: file.last_modified,
                         });
                         self.reader = Some(ReadingFile {
                             path: file.path.clone(),
@@ -215,6 +223,8 @@ impl AsyncSource for ORCSource {
                             size: file.size,
                             schema: file.schema.clone(),
                             rows: (rows as u64) + file.rows,
+                            content_key: file.content_key.clone(),
+                            last_modified: file.last_modified,
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }

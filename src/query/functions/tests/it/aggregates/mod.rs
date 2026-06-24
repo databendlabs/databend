@@ -16,6 +16,7 @@
 
 mod agg;
 mod agg_hashtable;
+mod quantile_tdigest;
 
 use std::io::Write;
 

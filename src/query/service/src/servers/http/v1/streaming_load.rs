@@ -342,7 +342,9 @@ async fn read_multi_part(
                 match file_format {
                     FileFormatParams::Parquet(_)
                     | FileFormatParams::Avro(_)
-                    | FileFormatParams::Orc(_) => {
+                    | FileFormatParams::Orc(_)
+                    | FileFormatParams::Arrow(_)
+                    | FileFormatParams::ArrowStream(_) => {
                         let mut data = Vec::new();
                         let mut buf = vec![0; input_read_buffer_size];
                         loop {
@@ -359,6 +361,8 @@ async fn read_multi_part(
                             path: filename.clone(),
                             offset: 0,
                             is_eof: true,
+                            content_key: None,
+                            last_modified: None,
                         };
                         let block = DataBlock::empty_with_meta(Box::new(batch));
                         if let Err(e) = tx.send(Ok(block)).await {
@@ -382,6 +386,8 @@ async fn read_multi_part(
                                 path: filename.clone(),
                                 offset,
                                 is_eof: n == 0,
+                                content_key: None,
+                                last_modified: None,
                             };
                             let block = DataBlock::empty_with_meta(Box::new(batch));
                             if let Err(e) = tx.send(Ok(block)).await {

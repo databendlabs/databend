@@ -15,5 +15,17 @@
 pub mod backoff;
 pub mod condition;
 pub mod core;
+pub mod fetched_record;
+pub mod meta_txn;
 pub mod op_builder;
 pub mod reply;
+
+pub use fetched_record::AbsentRecord;
+pub use fetched_record::FetchedRecord;
+pub use fetched_record::PresentRecord;
+pub use meta_txn::MetaTxn;
+pub use meta_txn::MetaTxnManager;
+
+pub mod meta_txn_manager {
+    pub use super::meta_txn::MetaTxnManager;
+}

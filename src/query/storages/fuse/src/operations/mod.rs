@@ -40,6 +40,7 @@ mod util;
 mod vacuum;
 
 pub use agg_index_sink::AggIndexSink;
+pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
 pub use common::*;
@@ -51,6 +52,7 @@ pub use read::DeserializeDataTransform;
 pub use read::ReadState;
 pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
+pub use recluster::ReclusterMode;
 pub use replace_into::*;
 pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;

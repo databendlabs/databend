@@ -47,6 +47,10 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             pb::StageFileFormatType::Parquet => Ok(mt::principal::StageFileFormatType::Parquet),
             pb::StageFileFormatType::Xml => Ok(mt::principal::StageFileFormatType::Xml),
             pb::StageFileFormatType::Lance => Ok(mt::principal::StageFileFormatType::Lance),
+            pb::StageFileFormatType::Arrow => Ok(mt::principal::StageFileFormatType::Arrow),
+            pb::StageFileFormatType::ArrowStream => {
+                Ok(mt::principal::StageFileFormatType::ArrowStream)
+            }
         }
     }
 
@@ -61,9 +65,10 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             mt::principal::StageFileFormatType::Parquet => Ok(pb::StageFileFormatType::Parquet),
             mt::principal::StageFileFormatType::Xml => Ok(pb::StageFileFormatType::Xml),
             mt::principal::StageFileFormatType::Lance => Ok(pb::StageFileFormatType::Lance),
-            mt::principal::StageFileFormatType::None => Err(Incompatible::new(
-                "StageFileFormatType::None cannot be converted to protobuf".to_string(),
-            )),
+            mt::principal::StageFileFormatType::Arrow => Ok(pb::StageFileFormatType::Arrow),
+            mt::principal::StageFileFormatType::ArrowStream => {
+                Ok(pb::StageFileFormatType::ArrowStream)
+            }
         }
     }
 }
@@ -263,6 +268,16 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::LanceFileFormatParams::from_pb(p)?,
                 ))
             }
+            Some(pb::file_format_params::Format::Arrow(p)) => {
+                Ok(mt::principal::FileFormatParams::Arrow(
+                    mt::principal::ArrowFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::ArrowStream(p)) => {
+                Ok(mt::principal::FileFormatParams::ArrowStream(
+                    mt::principal::ArrowFileFormatParams::from_pb(p)?,
+                ))
+            }
             None => Err(Incompatible::new(
                 "FileFormatParams.format cannot be None".to_string(),
             )),
@@ -316,7 +331,39 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::LanceFileFormatParams::to_pb(p)?,
                 )),
             }),
+            Self::Arrow(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Arrow(
+                    mt::principal::ArrowFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::ArrowStream(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::ArrowStream(
+                    mt::principal::ArrowFileFormatParams::to_pb(p)?,
+                )),
+            }),
         }
+    }
+}
+
+impl FromToProto for mt::principal::ArrowFileFormatParams {
+    type PB = pb::ArrowFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ArrowFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        mt::principal::ArrowFileFormatParams::try_create(p.missing_field_as.as_deref())
+            .map_err(|e| Incompatible::new(e.to_string()))
+    }
+
+    fn to_pb(&self) -> Result<pb::ArrowFileFormatParams, Incompatible> {
+        Ok(pb::ArrowFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+        })
     }
 }
 

@@ -70,6 +70,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::VirtualColumnAccumulator;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
@@ -134,6 +135,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
+        let insert_rows = self.appended_statistics.row_count;
 
         let conflict_resolve_context = match self.write_segment_ctx.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
@@ -177,6 +179,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
+            insert_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
@@ -923,12 +926,12 @@ fn fill_missing_segment_cluster_stats(
         return;
     }
 
+    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(cluster_key_exprs, schema);
     let (min, max) = get_min_max_stats(
-        cluster_key_exprs,
+        &prepared_cluster_key_exprs,
         &summary.col_stats,
         None,
         Some(cluster_key_id),
-        schema,
     );
     summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0, None));
 }

@@ -32,7 +32,6 @@ use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -44,10 +43,8 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
-use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::sessions::TableContextCluster;
 
@@ -64,7 +61,6 @@ pub struct AggregatePartial {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 
-    // Only used when enable_experiment_aggregate is true
     pub shuffle_mode: AggregateShuffleMode,
 }
 
@@ -176,9 +172,6 @@ impl IPhysicalPlan for AggregatePartial {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
         let max_threads = builder.settings.get_max_threads()?;
-        let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
-        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
-        let enable_experiment_hash_index = builder.settings.get_enable_experiment_hash_index()?;
         let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
@@ -186,9 +179,6 @@ impl IPhysicalPlan for AggregatePartial {
             &self.group_by,
             &self.agg_funcs,
             builder.is_exchange_parent(),
-            max_spill_io_requests as usize,
-            enable_experiment_aggregate,
-            enable_experiment_hash_index,
             max_block_rows,
             max_block_bytes,
         )?;
@@ -201,24 +191,12 @@ impl IPhysicalPlan for AggregatePartial {
 
         let schema_before_group_by = params.input_schema.clone();
 
-        let partial_agg_config = if enable_experiment_aggregate {
-            let radix_bits = self.shuffle_mode.determine_radix_bits();
-            HashTableConfig::new_experiment_partial(
-                radix_bits,
-                cluster.nodes.len(),
-                max_threads as usize,
-            )
-        } else {
-            // Need a global atomic to read the max current radix bits hint
-            if !builder.is_exchange_parent() {
-                HashTableConfig::default().with_partial(true, max_threads as usize)
-            } else {
-                HashTableConfig::default()
-                    .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
-            }
-        };
-        let partial_agg_config =
-            partial_agg_config.with_experiment_hash_index(enable_experiment_hash_index);
+        let radix_bits = self.shuffle_mode.determine_radix_bits();
+        let partial_agg_config = HashTableConfig::partial_aggregate(
+            radix_bits,
+            cluster.nodes.len(),
+            max_threads as usize,
+        );
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
@@ -229,77 +207,37 @@ impl IPhysicalPlan for AggregatePartial {
             });
         }
 
-        if params.enable_experiment_aggregate {
-            let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
-            let bucket_num = if is_row_shuffle {
-                cluster.nodes.len()
-            } else {
-                2_usize.pow(partial_agg_config.initial_radix_bits as u32)
-            };
-            let shared_partition_streams = SharedPartitionStream::new(
-                builder.main_pipeline.output_len(),
-                0,
-                max_block_bytes,
-                bucket_num,
-            );
-
-            builder.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    NewTransformPartialAggregate::try_create(
-                        builder.ctx.clone(),
-                        input,
-                        output,
-                        params.clone(),
-                        partial_agg_config.clone(),
-                        shared_partition_streams.clone(),
-                        bucket_num,
-                        is_row_shuffle,
-                    )?,
-                ))
-            })?;
+        let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
+        let bucket_num = if is_row_shuffle {
+            cluster.nodes.len()
         } else {
-            builder.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
-                    builder.ctx.clone(),
-                    input,
-                    output,
-                    params.clone(),
-                    partial_agg_config.clone(),
-                )?))
-            })?;
-        }
-
-        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !builder.is_exchange_parent() && !params.enable_experiment_aggregate {
-            let operator = DataOperator::instance().spill_operator();
-            let location_prefix = builder.ctx.query_id_spill_prefix();
-            builder.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        builder.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
-        }
-
-        builder.exchange_injector = if params.enable_experiment_aggregate {
-            AggregateInjector::<true>::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            )
-        } else {
-            AggregateInjector::<false>::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            )
+            2_usize.pow(partial_agg_config.initial_radix_bits as u32)
         };
+        let shared_partition_streams = SharedPartitionStream::new(
+            builder.main_pipeline.output_len(),
+            0,
+            max_block_bytes,
+            bucket_num,
+        );
+
+        builder.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                builder.ctx.clone(),
+                input,
+                output,
+                params.clone(),
+                partial_agg_config.clone(),
+                shared_partition_streams.clone(),
+                bucket_num,
+                is_row_shuffle,
+            )?))
+        })?;
+
+        builder.exchange_injector = AggregateInjector::create(
+            builder.ctx.clone(),
+            params.clone(),
+            self.shuffle_mode.clone(),
+        );
         Ok(())
     }
 }

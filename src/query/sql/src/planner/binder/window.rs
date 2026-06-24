@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -49,17 +51,18 @@ use crate::plans::Window;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
 
 impl Binder {
-    pub(super) fn bind_window_function(
+    pub(super) fn bind_window_functions(
         &mut self,
-        window_info: &WindowFunctionInfo,
+        window_infos: &[WindowFunctionInfo],
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_window_function_info(&self.ctx, window_info, child)
+        bind_window_function_infos(&self.ctx, window_infos, child)
     }
 
     pub(super) fn analyze_window_definition(
@@ -95,9 +98,25 @@ impl Binder {
         let mut window_specs = HashMap::new();
         let mut resolved_window_specs = HashMap::new();
         for window in window_list {
-            window_specs.insert(window.name.name.clone(), window.spec.clone());
-            if window.spec.existing_window_name.is_none() {
-                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
+            let window_name = self.normalize_identifier(&window.name).name;
+            let mut window_spec = window.spec.clone();
+            if let Some(existing_window_name) = &mut window_spec.existing_window_name {
+                *existing_window_name = self.normalize_identifier(existing_window_name);
+            }
+
+            match window_specs.entry(window_name.clone()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(window_spec.clone());
+                }
+                Entry::Occupied(_) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Duplicate window name: {window_name}"
+                    )));
+                }
+            }
+
+            if window_spec.existing_window_name.is_none() {
+                resolved_window_specs.insert(window_name, window_spec);
             }
         }
         Ok((window_specs, resolved_window_specs))
@@ -595,6 +614,7 @@ pub fn bind_window_function_info(
         order_by: window_info.order_by_items.clone(),
         frame: window_info.frame.clone(),
         limit: None,
+        top: None,
     };
 
     // eval scalars before sort
@@ -669,6 +689,127 @@ pub fn bind_window_function_info(
         Arc::new(window_plan.into()),
         Arc::new(child),
     ))
+}
+
+pub fn bind_window_function_infos(
+    ctx: &Arc<dyn TableContext>,
+    window_infos: &[WindowFunctionInfo],
+    child: SExpr,
+) -> Result<SExpr> {
+    if window_infos.is_empty() {
+        return Ok(child);
+    }
+
+    if window_infos.len() == 1 {
+        return bind_window_function_info(ctx, &window_infos[0], child);
+    }
+
+    let mut groups = Vec::new();
+    let mut windows = Vec::new();
+    let mut scalar_items = Vec::new();
+    let mut current_window_key: Option<WindowGroupKey> = None;
+    let mut scalar_indexes = HashSet::new();
+    let mut partition_order_scalar_indexes = HashMap::new();
+
+    for window_info in window_infos {
+        let mut window_plan = Window {
+            span: window_info.span,
+            index: window_info.index,
+            function: window_info.func.clone(),
+            arguments: window_info.arguments.clone(),
+            partition_by: window_info.partition_by_items.clone(),
+            order_by: window_info.order_by_items.clone(),
+            frame: window_info.frame.clone(),
+            limit: None,
+            top: None,
+        };
+
+        let arguments = window_plan.arguments.clone();
+        for item in &mut window_plan.partition_by {
+            canonicalize_window_group_scalar_item(item, &mut partition_order_scalar_indexes);
+        }
+        for order in &mut window_plan.order_by {
+            canonicalize_window_group_scalar_item(
+                &mut order.order_by_item,
+                &mut partition_order_scalar_indexes,
+            );
+        }
+
+        let window_key = WindowGroupKey::from_window(&window_plan);
+        if current_window_key
+            .as_ref()
+            .is_some_and(|current| current != &window_key)
+        {
+            groups.push(WindowGroup {
+                windows: std::mem::take(&mut windows),
+                scalar_items: std::mem::take(&mut scalar_items),
+            });
+            scalar_indexes.clear();
+            partition_order_scalar_indexes.clear();
+        }
+        current_window_key = Some(window_key);
+
+        for item in arguments.iter() {
+            if scalar_indexes.insert(item.index) {
+                scalar_items.push(item.clone());
+            }
+        }
+        for item in &window_plan.partition_by {
+            if scalar_indexes.insert(item.index) {
+                scalar_items.push(item.clone());
+            }
+        }
+        for order in &window_plan.order_by {
+            if scalar_indexes.insert(order.order_by_item.index) {
+                scalar_items.push(order.order_by_item.clone());
+            }
+        }
+        windows.push(window_plan);
+    }
+
+    groups.push(WindowGroup {
+        windows,
+        scalar_items,
+    });
+    groups.sort_by_key(|group| {
+        group
+            .windows
+            .first()
+            .is_none_or(|window| window.partition_by.is_empty())
+    });
+
+    Ok(groups.into_iter().fold(child, |child, window_group| {
+        SExpr::create_unary(Arc::new(window_group.into()), Arc::new(child))
+    }))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WindowGroupKey {
+    partition_by: Vec<ScalarExpr>,
+}
+
+impl WindowGroupKey {
+    fn from_window(window: &Window) -> Self {
+        Self {
+            partition_by: window
+                .partition_by
+                .iter()
+                .map(|item| item.scalar.clone())
+                .collect(),
+        }
+    }
+}
+
+fn canonicalize_window_group_scalar_item(
+    item: &mut ScalarItem,
+    scalar_item_indexes: &mut HashMap<ScalarExpr, Symbol>,
+) {
+    if let Some(index) = scalar_item_indexes.get(&item.scalar) {
+        item.index = *index;
+        return;
+    }
+
+    scalar_item_indexes.insert(item.scalar.clone(), item.index);
 }
 
 impl Binder {

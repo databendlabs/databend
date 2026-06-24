@@ -22,8 +22,6 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::tenant::TenantQuota;
     use crate::tenant_key::resource::TenantResource;
 
@@ -33,10 +31,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "TenantQuotaIdent";
         const HAS_TENANT: bool = true;
         type ValueType = TenantQuota;
-    }
-
-    impl kvapi::Value for TenantQuota {
-        type KeyType = super::TenantQuotaIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

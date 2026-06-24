@@ -27,7 +27,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_native::read::NativeColumnsReader;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
@@ -49,13 +48,11 @@ pub struct BlockReader {
     pub put_cache: bool,
 
     pub original_schema: TableSchemaRef,
-    pub native_columns_reader: NativeColumnsReader,
 }
 
 #[derive(Clone)]
 pub struct BlockReadProjection {
     pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
-    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
 }
 
 #[derive(Clone)]
@@ -157,7 +154,6 @@ impl BlockReader {
             all_field_default_vals,
             put_cache,
             original_schema,
-            native_columns_reader: NativeColumnsReader::new()?,
         }))
     }
 
@@ -238,7 +234,6 @@ impl BlockReader {
             operator: self.operator.clone(),
             projection: BlockReadProjection {
                 project_indices: self.project_indices.clone(),
-                project_column_nodes: self.project_column_nodes.clone(),
             },
             put_cache: self.put_cache,
         }
@@ -252,10 +247,6 @@ impl BlockReadContext {
 
     pub(crate) fn project_indices(&self) -> &BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
         self.projection.project_indices.as_ref()
-    }
-
-    pub(crate) fn project_column_nodes(&self) -> &[ColumnNode] {
-        self.projection.project_column_nodes.as_ref()
     }
 
     pub(crate) fn put_cache(&self) -> bool {

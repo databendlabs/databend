@@ -60,7 +60,7 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -78,7 +78,7 @@ jobs:
       - 16c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and meta client need tag as its version.
           fetch-depth: 0
@@ -97,7 +97,7 @@ jobs:
           artifacts: all
       - name: upload sccache log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
@@ -111,7 +111,7 @@ jobs:
       - 16c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -129,7 +129,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
@@ -142,7 +142,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
@@ -155,7 +155,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
@@ -168,7 +168,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
@@ -181,7 +181,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: python_client
@@ -196,7 +196,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: java_client
@@ -211,7 +211,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: go_client
@@ -226,7 +226,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -243,13 +243,51 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
+
+  test_proxy_routing_benchmark:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c
+      - "${{ inputs.runner_provider }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: statistics
+            proxy_routing_model: statistics
+            min_top1_hit_ratio: "0.85"
+            min_acceptable_hit_ratio: "1.0"
+          - name: prefix
+            proxy_routing_model: prefix
+            min_top1_hit_ratio: "0.50"
+            min_acceptable_hit_ratio: "0.75"
+    name: PROXY routing benchmark (${{ matrix.name }})
+    env:
+      ROWS: "50000"
+      PROXY_ROUTING_MODEL: ${{ matrix.proxy_routing_model }}
+      MIN_TOP1_HIT_RATIO: ${{ matrix.min_top1_hit_ratio }}
+      MIN_ACCEPTABLE_HIT_RATIO: ${{ matrix.min_acceptable_hit_ratio }}
+      PAYLOAD_BYTES: "16"
+      WARMUP_ROUNDS: "0"
+      MEASURE_ROUNDS: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup_test
+        with:
+          artifacts: meta,query
+      - name: Run PROXY routing benchmark
+        timeout-minutes: 20
+        run: bash scripts/ci/ci-run-proxy-routing-benchmark.sh
 
   test_sandbox_udf:
     needs: [build, check]
@@ -260,7 +298,7 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -277,7 +315,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
@@ -290,7 +328,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 25
 
@@ -303,7 +341,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -320,7 +358,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_standalone_linux
         timeout-minutes: 15
       - name: Upload failure
@@ -338,7 +376,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -361,7 +399,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
@@ -374,7 +412,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_iceberg_catalogs_standalone
         timeout-minutes: 10
       - name: Upload failure
@@ -393,7 +431,7 @@ jobs:
   #     - 2c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #     - uses: ./.github/actions/test_stateful_hive_standalone
   #       timeout-minutes: 10
   #     - name: Upload failure
@@ -411,7 +449,7 @@ jobs:
   #     - 2c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #     - uses: ./.github/actions/test_fuzz_standalone_linux
   #       timeout-minutes: 10
   #       continue-on-error: true
@@ -425,7 +463,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -452,7 +490,7 @@ jobs:
   #      - 2c
   #      - "${{ inputs.runner_provider }}"
   #    steps:
-  #      - uses: actions/checkout@v4
+  #      - uses: actions/checkout@v6
   #      - uses: ./.github/actions/setup_license
   #        with:
   #          runner_provider: ${{ inputs.runner_provider }}
@@ -474,7 +512,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/setup_license
         with:

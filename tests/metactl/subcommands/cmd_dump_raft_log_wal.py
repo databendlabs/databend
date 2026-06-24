@@ -83,8 +83,8 @@ def test_dump_raft_log_wal():
     # Expected output with time field that will be masked
     expected = """RaftLog:
 ChunkId(00_000_000_000_000_000_000)
-  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
-  R-00001: [000_000_018, 000_000_046) Size(28): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
+  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
+  R-00001: [000_000_018, 000_000_046) Size(28): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
   R-00002: [000_000_046, 000_000_125) Size(79): Append(log_id: T0-N1.0, payload: membership:{voters:[{1:EmptyNode}], learners:[]})
   R-00003: [000_000_125, 000_000_175) Size(50): SaveVote(<T1-N1:->)
   R-00004: [000_000_175, 000_000_225) Size(50): SaveVote(<T1-N1:Q>)
@@ -104,8 +104,8 @@ ChunkId(00_000_000_000_000_000_000)
 
     expected2 = """RaftLog:
 ChunkId(00_000_000_000_000_000_000)
-  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
-  R-00001: [000_000_018, 000_000_046) Size(28): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
+  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
+  R-00001: [000_000_018, 000_000_046) Size(28): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
   R-00002: [000_000_046, 000_000_125) Size(79): Append(log_id: T0-N1.0, payload: membership:{voters:[{1:EmptyNode}], learners:[]})
   R-00003: [000_000_125, 000_000_175) Size(50): SaveVote(<T1-N1:->)
   R-00004: [000_000_175, 000_000_225) Size(50): SaveVote(<T1-N1:Q>)
@@ -125,8 +125,8 @@ ChunkId(00_000_000_000_000_000_000)
 
     expected3 = """RaftLog:
 ChunkId(00_000_000_000_000_000_000)
-  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
-  R-00001: [000_000_018, 000_000_046) Size(28): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
+  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
+  R-00001: [000_000_018, 000_000_046) Size(28): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
   R-00002: [000_000_046, 000_000_125) Size(79): Append(log_id: T0-N1.0, payload: membership:{voters:[{1:EmptyNode}], learners:[]})
   R-00003: [000_000_125, 000_000_175) Size(50): SaveVote(<T1-N1:->)
   R-00004: [000_000_175, 000_000_225) Size(50): SaveVote(<T1-N1:Q>)

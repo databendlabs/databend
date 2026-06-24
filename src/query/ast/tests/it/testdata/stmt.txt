@@ -7263,6 +7263,85 @@ AnalyzeTable(
             ident_type: None,
         },
         no_scan: true,
+        histogram_options: None,
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: None,
+                error_rate: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;
+---------- Output ---------
+ANALYZE TABLE test_db.test WITH HISTOGRAM ALGORITHM = 'kll_full', ERROR_RATE = 0.01
+---------- AST ------------
+AnalyzeTable(
+    AnalyzeTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    14..21,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                22..26,
+            ),
+            name: "test",
+            quote: None,
+            ident_type: None,
+        },
+        no_scan: false,
+        histogram_options: Some(
+            AnalyzeHistogramOptions {
+                algorithm: Some(
+                    "kll_full",
+                ),
+                error_rate: Some(
+                    0.01,
+                ),
+            },
+        ),
     },
 )
 
@@ -23444,6 +23523,128 @@ CopyIntoLocation(
             use_raw_path: None,
             include_query_id: None,
             overwrite: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+    FROM @external_stage/path/to/file.arrow
+    FILE_FORMAT = (
+        type = ARROW
+        missing_field_as = FIELD_DEFAULT
+    )
+---------- Output ---------
+COPY INTO mytable FROM '@external_stage/path/to/file.arrow' FILE_FORMAT = (missing_field_as = FIELD_DEFAULT, type = ARROW)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.arrow",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "missing_field_as": Keyword(
+                    "FIELD_DEFAULT",
+                ),
+                "type": Keyword(
+                    "ARROW",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+    FROM @external_stage/path/to/file.arrow_stream
+    FILE_FORMAT = (
+        type = ARROW_STREAM
+        missing_field_as = FIELD_DEFAULT
+    )
+---------- Output ---------
+COPY INTO mytable FROM '@external_stage/path/to/file.arrow_stream' FILE_FORMAT = (missing_field_as = FIELD_DEFAULT, type = ARROW_STREAM)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.arrow_stream",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "missing_field_as": Keyword(
+                    "FIELD_DEFAULT",
+                ),
+                "type": Keyword(
+                    "ARROW_STREAM",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
         },
     },
 )

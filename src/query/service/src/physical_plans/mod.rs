@@ -118,7 +118,6 @@ mod physical_cte_consumer;
 mod physical_materialized_cte;
 mod physical_plan;
 pub mod physical_plan_builder;
-mod physical_plan_visitor;
 mod physical_sequence;
 
 pub use format::FormatContext;

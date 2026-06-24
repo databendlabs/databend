@@ -55,12 +55,20 @@ impl RuleEliminateUnion {
             return Ok(false);
         }
         if child_num == 0 {
-            Ok(matches!(
+            return Ok(matches!(
                 s_expr.plan(),
                 RelOperator::ConstantTableScan(ConstantTableScan { num_rows: 0, .. })
-            ))
-        } else {
+            ));
+        }
+
+        // Only pass through unary operators that preserve empty input as empty output.
+        if matches!(
+            s_expr.plan().rel_op(),
+            RelOp::Filter | RelOp::EvalScalar | RelOp::Sort | RelOp::Limit | RelOp::Exchange
+        ) {
             Self::is_empty_scan(s_expr.child(0)?)
+        } else {
+            Ok(false)
         }
     }
 }
@@ -120,5 +128,37 @@ impl Rule for RuleEliminateUnion {
 
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+    use crate::plans::Aggregate;
+    use crate::plans::Filter;
+
+    fn empty_scan_expr() -> SExpr {
+        let empty_scan =
+            ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(vec![]), BTreeSet::new());
+        SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)))
+    }
+
+    #[test]
+    fn only_empty_preserving_unary_nodes_are_transparent() -> Result<()> {
+        let filter = SExpr::create_unary(
+            Arc::new(RelOperator::Filter(Filter { predicates: vec![] })),
+            Arc::new(empty_scan_expr()),
+        );
+        assert!(RuleEliminateUnion::is_empty_scan(&filter)?);
+
+        let aggregate = SExpr::create_unary(
+            Arc::new(RelOperator::Aggregate(Aggregate::default())),
+            Arc::new(empty_scan_expr()),
+        );
+        assert!(!RuleEliminateUnion::is_empty_scan(&aggregate)?);
+
+        Ok(())
     }
 }

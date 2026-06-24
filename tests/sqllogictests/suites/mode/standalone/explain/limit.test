@@ -72,6 +72,29 @@ Limit
                 └── estimated rows: 10.00
 
 query T
+explain select number from numbers(10) order by number asc limit 3
+----
+Limit
+├── output columns: [numbers.number (#0)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── Sort(Single)
+    ├── output columns: [numbers.number (#0)]
+    ├── sort keys: [number ASC NULLS LAST]
+    ├── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── scan id: 0
+        ├── output columns: [number (#0)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: 3]
+        └── estimated rows: 10.00
+
+query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3
 ----
 Limit
@@ -249,13 +272,13 @@ digraph {
     3 [ label = "CompoundBlockOperator(Map)" ]
     4 [ label = "TransformRankLimitSort" ]
     5 [ label = "TransformRankLimitSort" ]
-    6 [ label = "NewTransformPartialAggregate" ]
-    7 [ label = "NewTransformPartialAggregate" ]
+    6 [ label = "TransformPartialAggregate" ]
+    7 [ label = "TransformPartialAggregate" ]
     8 [ label = "LocalScatterTransform(Bucket)" ]
     9 [ label = "LocalScatterTransform(Bucket)" ]
     10 [ label = "ExchangeShuffleTransform" ]
-    11 [ label = "NewTransformFinalAggregate" ]
-    12 [ label = "NewTransformFinalAggregate" ]
+    11 [ label = "TransformFinalAggregate" ]
+    12 [ label = "TransformFinalAggregate" ]
     13 [ label = "Resize" ]
     14 [ label = "Resize" ]
     15 [ label = "LimitTransform" ]

@@ -73,6 +73,7 @@ pub struct TxnBuffer {
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+    multi_table_insert_rows: HashMap<u64, u64>,
 
     // TODO doc this
     table_tnx_begin_timestamps: HashMap<u64, DateTime<Utc>>,
@@ -214,6 +215,23 @@ impl TxnManager {
 
     pub fn update_multi_table_meta(&mut self, req: UpdateMultiTableMetaReq) {
         self.txn_buffer.update_multi_table_meta(req);
+    }
+
+    pub fn add_multi_table_insert_rows(&mut self, insert_rows: HashMap<u64, u64>) {
+        for (table_id, rows) in insert_rows {
+            match self.txn_buffer.multi_table_insert_rows.get_mut(&table_id) {
+                Some(current_rows) => *current_rows += rows,
+                None => {
+                    self.txn_buffer
+                        .multi_table_insert_rows
+                        .insert(table_id, rows);
+                }
+            }
+        }
+    }
+
+    pub fn multi_table_insert_rows(&self) -> HashMap<u64, u64> {
+        self.txn_buffer.multi_table_insert_rows.clone()
     }
 
     pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -427,12 +445,36 @@ impl TxnManager {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::TxnBuffer;
+    use super::TxnManager;
 
     #[test]
     fn test_normalize_temp_table_desc() {
         let (db, table) = TxnBuffer::parse_db_tbl_name("'db'.'tbl'");
         assert_eq!(db, "db");
         assert_eq!(table, "tbl");
+    }
+
+    #[test]
+    fn test_multi_table_insert_rows_accumulate_and_clear() {
+        let txn_mgr = TxnManager::init();
+        {
+            let mut txn_mgr = txn_mgr.lock();
+            txn_mgr.begin();
+            txn_mgr.add_multi_table_insert_rows(HashMap::from([(1, 10), (2, 20)]));
+            txn_mgr.add_multi_table_insert_rows(HashMap::from([(1, 3), (3, 30)]));
+            txn_mgr.set_auto_commit();
+
+            assert_eq!(
+                txn_mgr.multi_table_insert_rows(),
+                HashMap::from([(1, 13), (2, 20), (3, 30)])
+            );
+        }
+
+        txn_mgr.lock().clear();
+
+        assert!(txn_mgr.lock().multi_table_insert_rows().is_empty());
     }
 }

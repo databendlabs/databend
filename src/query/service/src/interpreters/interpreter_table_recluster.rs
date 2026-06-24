@@ -50,6 +50,8 @@ use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -273,6 +275,11 @@ impl ReclusterTableInterpreter {
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
                     hook_vacuum_temp_files(&ctx)?;
+                    // RECLUSTER FINAL runs independent pipelines under one query id.
+                    // We allow hook vacuum to be best-effort for each round, and avoid
+                    // carrying this round's spill progress into later rounds.
+                    // Leftovers beyond the hook vacuum limit are handled by normal vacuum.
+                    ctx.clear_cluster_spill_progress();
                     hook_disk_temp_dir(&ctx)?;
                     match &info.res {
                         Ok(_) => {
@@ -516,8 +523,18 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<PhysicalPlan>> {
-        let Some((parts, snapshot)) = tbl
-            .recluster(self.ctx.clone(), push_downs.clone(), limit)
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+        let Some((parts, snapshot)) = fuse_table
+            .do_recluster(
+                self.ctx.clone(),
+                push_downs.clone(),
+                limit,
+                if self.plan.is_final {
+                    ReclusterMode::Final
+                } else {
+                    ReclusterMode::Normal
+                },
+            )
             .await?
         else {
             return Ok(None);

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod arrow_file;
+mod column_based;
 mod lance_dataset;
 mod output;
 mod parquet_file;
@@ -20,8 +22,7 @@ mod path;
 mod row_based_file;
 mod stage_sink_table;
 
-mod column_based;
-
+pub(crate) use arrow_file::append_data_to_arrow_files;
 pub(crate) use lance_dataset::append_data_to_lance_dataset;
 pub use output::UnloadOutput;
 pub use stage_sink_table::StageSinkTable;

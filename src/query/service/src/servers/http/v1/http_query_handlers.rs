@@ -791,14 +791,16 @@ pub(crate) async fn query_handler(
         .await
         {
             Err(err) => {
-                let err = err.display_with_sql(&sql);
+                let masked_sql = mask_connection_info(&sql);
+                let err = err.display_with_sql(&masked_sql);
                 error!("Failed to start SQL query, error: {:?}", err);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
-                    let err = err.display_with_sql(&sql);
+                    let masked_sql = mask_connection_info(&sql);
+                    let err = err.display_with_sql(&masked_sql);
                     error!("Failed to start SQL query, error: {:?}", err);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());

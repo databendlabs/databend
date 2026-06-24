@@ -12,18 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::LazyLock;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::warn;
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::timeout;
 
 const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
+const REGION_CACHE_TTL: Duration = Duration::from_secs(3600);
+const REGION_CACHE_MAX_ENTRIES: usize = 1024;
+
+type RegionCache = LazyLock<RwLock<HashMap<(String, String), (String, Instant)>>>;
+
+/// Cache for S3 region detection results.
+///
+/// Key: (endpoint, bucket) — a bucket name alone is not unique because the same
+/// name can exist on different S3-compatible endpoints (AWS, MinIO, OSS, etc.).
+///
+/// Uses `RwLock<HashMap>` rather than a concurrent map because writes are rare
+/// (only on first access to a new bucket or after TTL expiry) while reads are
+/// frequent. Under this workload the uncontended read-lock path is effectively
+/// free, and write-side contention is negligible.
+pub(crate) static REGION_CACHE: RegionCache = LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -37,18 +57,12 @@ pub enum StorageParams {
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
     Memory,
-    Moka(StorageMokaConfig),
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
     Huggingface(StorageHuggingfaceConfig),
-
-    /// None means this storage type is none.
-    ///
-    /// This type is mostly for cache which mean bypass the cache logic.
-    None,
 }
 
 impl Default for StorageParams {
@@ -69,14 +83,12 @@ impl StorageParams {
             StorageParams::Http(_) => "http",
             StorageParams::Ipfs(_) => "ipfs",
             StorageParams::Memory => "memory",
-            StorageParams::Moka(_) => "moka",
             StorageParams::Obs(_) => "obs",
             StorageParams::Oss(_) => "oss",
             StorageParams::S3(_) => "s3",
             StorageParams::Webhdfs(_) => "webhdfs",
             StorageParams::Cos(_) => "cos",
             StorageParams::Huggingface(_) => "huggingface",
-            StorageParams::None => "none",
         }
     }
 
@@ -150,7 +162,6 @@ impl StorageParams {
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
-            StorageParams::Moka(_) => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -158,7 +169,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Huggingface(_) => true,
-            StorageParams::None => false,
         }
     }
 
@@ -172,7 +182,6 @@ impl StorageParams {
             StorageParams::Http(_) => {}
             StorageParams::Ipfs(v) => v.root = f(&v.root),
             StorageParams::Memory => {}
-            StorageParams::Moka(_) => {}
             StorageParams::Obs(v) => v.root = f(&v.root),
             StorageParams::Oss(v) => v.root = f(&v.root),
             StorageParams::S3(v) => v.root = f(&v.root),
@@ -180,7 +189,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
             StorageParams::Huggingface(v) => v.root = f(&v.root),
-            StorageParams::None => {}
         };
 
         self
@@ -206,29 +214,33 @@ impl StorageParams {
     pub async fn auto_detect(self) -> Result<Self> {
         let sp = match self {
             StorageParams::S3(mut s3) if s3.region.is_empty() => {
-                // Remove the possible trailing `/` in endpoint.
-                let endpoint = s3.endpoint_url.trim_end_matches('/');
+                let endpoint = normalize_s3_endpoint(&s3.endpoint_url);
+                let cache_key = (endpoint.clone(), s3.bucket.clone());
 
-                // Make sure the endpoint contains the scheme.
-                let endpoint = if endpoint.starts_with("http") {
-                    endpoint.to_string()
+                if let Some(cached) = get_cached_region(&cache_key) {
+                    s3.region = cached;
                 } else {
-                    // Prefix https if endpoint doesn't start with scheme.
-                    format!("https://{}", endpoint)
-                };
+                    s3.region = match timeout(
+                        Duration::from_secs(DEFAULT_DETECT_REGION_TIMEOUT_SEC),
+                        opendal::services::S3::detect_region(&endpoint, &s3.bucket),
+                    )
+                    .await
+                    {
+                        Ok(v) => v.unwrap_or_default(),
+                        Err(_) => {
+                            warn!(
+                                "detect region timeout ({}s) for endpoint={}, bucket={}, \
+                                 will rely on downstream fallback",
+                                DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, s3.bucket
+                            );
+                            String::new()
+                        }
+                    };
 
-                s3.region = timeout(
-                    Duration::from_secs(DEFAULT_DETECT_REGION_TIMEOUT_SEC),
-                    opendal::services::S3::detect_region(&endpoint, &s3.bucket),
-                )
-                .await
-                .map_err(|e| {
-                    ErrorCode::StorageOther(format!(
-                        "detect region timeout: {}s, endpoint: {}, elapsed: {}",
-                        DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, e
-                    ))
-                })?
-                .unwrap_or_default();
+                    if !s3.region.is_empty() {
+                        insert_cached_region(cache_key, s3.region.clone());
+                    }
+                }
 
                 StorageParams::S3(s3)
             }
@@ -280,7 +292,7 @@ impl StorageParams {
     /// OSS, OBS, COS, Azblob), file-like backends (FS, WebHDFS, HDFS), as well as HuggingFace
     /// and IPFS locations. HTTP locations render the expanded glob patterns (if any), so the
     /// output can differ from the original shorthand. Backends that don't carry enough context
-    /// (Memory, Moka, None) return `None`.
+    /// (Memory, None) return `None`.
     pub fn url(&self) -> Option<String> {
         match self {
             StorageParams::Azblob(cfg) => bucket_style_url("azblob", &cfg.container, &cfg.root),
@@ -327,7 +339,6 @@ impl StorageParams {
                 Some(format!("ipfs://ipfs{}", normalized_dir_path(suffix, true)))
             }
             StorageParams::Memory => None,
-            StorageParams::Moka(_) => None,
             StorageParams::Obs(cfg) => bucket_style_url("obs", &cfg.bucket, &cfg.root),
             StorageParams::Oss(cfg) => bucket_style_url("oss", &cfg.bucket, &cfg.root),
             StorageParams::S3(cfg) => bucket_style_url("s3", &cfg.bucket, &cfg.root),
@@ -353,7 +364,6 @@ impl StorageParams {
                     normalized_dir_path(&cfg.root, true)
                 ))
             }
-            StorageParams::None => None,
         }
     }
 
@@ -411,9 +421,7 @@ impl StorageParams {
             | StorageParams::Hdfs(_)
             | StorageParams::Http(_)
             | StorageParams::Ipfs(_)
-            | StorageParams::Memory
-            | StorageParams::Moka(_)
-            | StorageParams::None => false,
+            | StorageParams::Memory => false,
         }
     }
 
@@ -435,8 +443,6 @@ impl Display for StorageParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
-            StorageParams::None => write!(f, "none"),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
@@ -535,6 +541,38 @@ fn ensure_path_prefix(path: &str) -> String {
         path.to_string()
     } else {
         format!("/{}", path)
+    }
+}
+
+pub(crate) fn normalize_s3_endpoint(endpoint_url: &str) -> String {
+    let endpoint = endpoint_url.trim_end_matches('/');
+    if endpoint.starts_with("http") {
+        endpoint.to_string()
+    } else {
+        format!("https://{}", endpoint)
+    }
+}
+
+pub(crate) fn get_cached_region(key: &(String, String)) -> Option<String> {
+    let cache = REGION_CACHE.read();
+    if let Some((region, ts)) = cache.get(key)
+        && ts.elapsed() < REGION_CACHE_TTL
+    {
+        return Some(region.clone());
+    }
+    None
+}
+
+pub(crate) fn insert_cached_region(key: (String, String), region: String) {
+    let mut cache = REGION_CACHE.write();
+    // Evict expired entries when hitting the capacity limit to prevent
+    // unbounded growth (e.g. from crafted bucket names).
+    if cache.len() >= REGION_CACHE_MAX_ENTRIES {
+        cache.retain(|_, (_, ts)| ts.elapsed() < REGION_CACHE_TTL);
+    }
+    // If still at capacity after eviction, skip caching this entry.
+    if cache.len() < REGION_CACHE_MAX_ENTRIES {
+        cache.insert(key, (region, Instant::now()));
     }
 }
 
@@ -914,27 +952,6 @@ impl Debug for StorageOssConfig {
     }
 }
 
-/// config for Moka Object Storage Service
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct StorageMokaConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for StorageMokaConfig {
-    fn default() -> Self {
-        Self {
-            // Use 1G as default.
-            max_capacity: 1024 * 1024 * 1024,
-            // Use 1 hour as default time to live
-            time_to_live: 3600,
-            // Use 10 minutes as default time to idle.
-            time_to_idle: 600,
-        }
-    }
-}
-
 /// config for WebHDFS Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageWebhdfsConfig {
@@ -1025,13 +1042,14 @@ impl Debug for StorageHuggingfaceConfig {
 ///
 /// Copied from `common-base` so that we don't need to depend on it.
 #[inline]
-pub fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+pub fn mask_string(s: &str, _unmask_len: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 

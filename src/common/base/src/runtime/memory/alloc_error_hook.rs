@@ -12,14 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::Cell;
+
 use crate::runtime::LimitMemGuard;
 use crate::runtime::ThreadTracker;
+
+thread_local! {
+    static ALLOC_ERROR_PANIC: Cell<bool> = const { Cell::new(false) };
+}
+
+fn mark_alloc_error_panic() {
+    ALLOC_ERROR_PANIC.with(|flag| flag.set(true));
+}
+
+pub fn take_alloc_error_panic() -> bool {
+    ALLOC_ERROR_PANIC.with(|flag| flag.replace(false))
+}
 
 pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
         let out_of_limit_desc = ThreadTracker::replace_error_message(None);
+        mark_alloc_error_panic();
 
         panic!(
             "{}",

@@ -43,6 +43,7 @@ pub enum SpillerType {
     Window,
     OrderBy,
     Aggregation,
+    MaterializedCTE,
     ResultSet,
 }
 
@@ -54,6 +55,7 @@ impl Display for SpillerType {
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
             SpillerType::Aggregation => write!(f, "Aggregation"),
+            SpillerType::MaterializedCTE => write!(f, "MaterializedCTE"),
             SpillerType::ResultSet => write!(f, "ResultSet"),
         }
     }
@@ -110,7 +112,7 @@ pub struct SpillerInner<A> {
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
     pub(super) use_parquet: bool,
-    pub(super) writer_pool_bytes: usize,
+    _writer_pool_bytes: usize,
     _spiller_type: SpillerType,
 }
 
@@ -139,7 +141,7 @@ impl<A> SpillerInner<A> {
             temp_dir,
             local_operator,
             use_parquet,
-            writer_pool_bytes,
+            _writer_pool_bytes: writer_pool_bytes,
             _spiller_type: spiller_type,
         })
     }
@@ -153,7 +155,7 @@ impl<A> SpillerInner<A> {
 
         // Spill data to storage.
         let mut encoder = self.block_encoder();
-        encoder.add_blocks(data_block);
+        encoder.add_blocks(data_block)?;
         let data_size = encoder.size();
         let BlocksEncoder {
             buf,

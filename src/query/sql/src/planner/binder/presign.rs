@@ -19,7 +19,8 @@ use databend_common_exception::Result;
 
 use crate::BindContext;
 use crate::binder::Binder;
-use crate::binder::resolve_stage_location;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
 use crate::plans::Plan;
 use crate::plans::PresignAction;
 use crate::plans::PresignPlan;
@@ -33,8 +34,18 @@ impl Binder {
     ) -> Result<Plan> {
         match &stmt.location {
             PresignLocation::StageLocation(stage_location) => {
-                let (stage_info, path) =
-                    resolve_stage_location(self.ctx.as_ref(), stage_location).await?;
+                let (stage_info, path) = StageResolver::from_table_context(
+                    self.ctx.clone(),
+                    databend_common_users::UserApiProvider::instance(),
+                    databend_common_config::GlobalConfig::instance()
+                        .storage
+                        .allow_insecure,
+                )?
+                .resolve_stage_location(stage_location, match stmt.action {
+                    AstPresignAction::Upload => StagePathAccess::Write,
+                    AstPresignAction::Download => StagePathAccess::Read,
+                })
+                .await?;
 
                 Ok(Plan::Presign(Box::new(PresignPlan {
                     stage: Box::new(stage_info),

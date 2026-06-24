@@ -277,9 +277,6 @@ statement ok
 drop database sample_test
 
 statement ok
-set enable_experiment_aggregate = 1;
-
-statement ok
 set force_aggregate_shuffle_mode = 'bucket';
 
 query I

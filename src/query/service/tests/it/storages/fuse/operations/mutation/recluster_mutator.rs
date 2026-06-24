@@ -23,14 +23,13 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -234,10 +233,11 @@ async fn gen_recluster_segments_by_ranges(
     Ok(segment_locations)
 }
 
-async fn target_select_segments_by_level(
+async fn target_select_segments_by_level_with_mode(
     level_counts: &[(i32, usize)],
     thresholds: BlockThresholds,
     max_tasks: usize,
+    mode: ReclusterMode,
 ) -> anyhow::Result<(u64, ReclusterParts)> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -259,7 +259,7 @@ async fn target_select_segments_by_level(
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = target_select_segment_locations(
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
         ctx,
         data_accessor,
         segment_locations,
@@ -267,12 +267,13 @@ async fn target_select_segments_by_level(
         cluster_key_id,
         max_tasks,
         1000,
+        mode,
     )
     .await?;
     Ok((block_num, parts))
 }
 
-async fn target_select_segment_locations(
+async fn target_select_segment_locations_with_mode(
     ctx: Arc<dyn TableContext>,
     data_accessor: opendal::Operator,
     segment_locations: Vec<meta::Location>,
@@ -280,8 +281,9 @@ async fn target_select_segment_locations(
     cluster_key_id: u32,
     max_tasks: usize,
     max_segments: usize,
+    mode: ReclusterMode,
 ) -> anyhow::Result<(usize, u64, ReclusterParts)> {
-    let schema = TableSchemaRef::new(TableSchema::empty());
+    let schema = TestFixture::default_table_schema();
     let segment_locations = create_segment_location_vector(segment_locations, None);
     let compact_segments = FuseTable::segment_pruning(
         &ctx,
@@ -293,9 +295,9 @@ async fn target_select_segment_locations(
     .await?;
 
     let mutator = ReclusterMutator::new(
-        ctx,
-        data_accessor,
-        schema,
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
         vec![test_cluster_key_expr()],
         1.0,
         thresholds,
@@ -303,9 +305,20 @@ async fn target_select_segment_locations(
         max_tasks,
     );
 
-    let compact_segments = mutator.select_segments(&compact_segments, max_segments)?;
-    let selected_segments = compact_segments.len();
-    let (block_num, parts) = mutator.target_select(compact_segments).await?;
+    let segment_windows = mutator.select_segments(&compact_segments, max_segments)?;
+    let mut selected_segments = 0;
+    let mut block_num = 0;
+    let mut parts = ReclusterParts::default();
+    for selected_segs in segment_windows {
+        selected_segments = selected_segs.len();
+        let (candidate_block_num, candidate_parts) =
+            mutator.target_select(selected_segs, mode).await?;
+        if !candidate_parts.is_empty() {
+            block_num = candidate_block_num;
+            parts = candidate_parts;
+            break;
+        }
+    }
     Ok((selected_segments, block_num, parts))
 }
 
@@ -345,7 +358,7 @@ async fn test_recluster_mutator_limits_removed_segments_to_selected_blocks() -> 
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (selected_segments, block_num, parts) = target_select_segment_locations(
+    let (selected_segments, block_num, parts) = target_select_segment_locations_with_mode(
         ctx,
         data_accessor,
         segment_locations,
@@ -353,6 +366,7 @@ async fn test_recluster_mutator_limits_removed_segments_to_selected_blocks() -> 
         cluster_key_id,
         1,
         1000,
+        ReclusterMode::Normal,
     )
     .await?;
 
@@ -389,7 +403,7 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, _, parts) = target_select_segment_locations(
+    let (_, _, parts) = target_select_segment_locations_with_mode(
         ctx,
         data_accessor,
         segment_locations,
@@ -397,6 +411,7 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
         cluster_key_id,
         1,
         8,
+        ReclusterMode::Normal,
     )
     .await?;
     let need_recluster = !parts.is_empty();
@@ -405,6 +420,139 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     assert_eq!(tasks.len(), 1);
     let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
     assert_eq!(total_block_nums, 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_selects_multiple_segment_windows() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(2)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
+
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 10)],
+            vec![(2, 9)],
+            vec![(20, 30)],
+            vec![(21, 29)],
+            vec![(40, 41)],
+            vec![(50, 51)],
+            vec![(60, 61)],
+        ],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = TestFixture::default_table_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = FuseTable::segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        &None,
+        segment_locations,
+    )
+    .await?;
+
+    let mutator = ReclusterMutator::new(
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+    );
+
+    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+    let window_index_sets = segment_windows
+        .iter()
+        .map(|window| {
+            window
+                .iter()
+                .map(|segment| segment.loc.segment_idx)
+                .collect::<HashSet<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert!(window_index_sets.contains(&HashSet::from([0, 1])));
+    assert!(window_index_sets.contains(&HashSet::from([2, 3])));
+    let selected_segments = window_index_sets
+        .iter()
+        .flat_map(|window| window.iter().copied())
+        .collect::<HashSet<_>>();
+    assert_eq!(selected_segments.len(), 7);
+
+    let thresholds = BlockThresholds::new(1000, 100, 100, 1);
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 10)],
+            vec![(2, 9)],
+            vec![(3, 8)],
+            vec![(4, 7)],
+            vec![(5, 6)],
+        ],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = FuseTable::segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        &None,
+        segment_locations,
+    )
+    .await?;
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+    );
+    let segment_windows = mutator.select_segments(&compact_segments, 3)?;
+    let window_sizes = segment_windows
+        .iter()
+        .map(|window| window.len())
+        .collect::<Vec<_>>();
+    assert_eq!(window_sizes, vec![3, 3]);
+    let first_window = segment_windows[0]
+        .iter()
+        .map(|segment| segment.loc.segment_idx)
+        .collect::<HashSet<_>>();
+    let second_window = segment_windows[1]
+        .iter()
+        .map(|segment| segment.loc.segment_idx)
+        .collect::<HashSet<_>>();
+    let union = first_window
+        .union(&second_window)
+        .copied()
+        .collect::<HashSet<_>>();
+    assert_eq!(union.len(), 5);
+    assert_eq!(first_window.intersection(&second_window).count(), 1);
 
     Ok(())
 }
@@ -420,12 +568,12 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
 
-    // 200 small blocks with four workers should be selected and split by the
-    // parallel budget, instead of collapsing into one or two oversized tasks.
+    // 300 small blocks with four workers should be selected and split by the
+    // parallel budget while keeping each task above the minimum fill ratio.
     let segment_locations = gen_recluster_segments(
         &data_accessor,
         &location_generator,
-        20,
+        30,
         10,
         1000,
         10,
@@ -436,7 +584,7 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = target_select_segment_locations(
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
         ctx,
         data_accessor,
         segment_locations,
@@ -444,12 +592,108 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
         cluster_key_id,
         4,
         1000,
+        ReclusterMode::Normal,
     )
     .await?;
 
-    assert_eq!(block_num, 200);
+    assert_eq!(block_num, 300);
     assert_eq!(parts.tasks.len(), 4);
-    assert_eq!(task_part_counts(&parts), vec![50, 50, 50, 50]);
+    assert_eq!(task_part_counts(&parts), vec![75, 75, 75, 75]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_when_minimal_task_exceeds_memory() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(150)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 10)], vec![(2, 9)], vec![(3, 8)]],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_singleton_over_memory_boundary() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(100)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    // The selected order is [40, 40, 90, 20]. The first two blocks form a
+    // valid task, then 90 + 20 crosses the memory boundary. Since the pending
+    // 90-byte singleton cannot form a normal recluster task, it is dropped and
+    // no over-budget tail task is emitted.
+    let mut segment_locations = Vec::new();
+    for (range, block_size) in [((1, 10), 40), ((2, 9), 40), ((3, 8), 90), ((4, 7), 20)] {
+        segment_locations.extend(
+            gen_recluster_segments_by_ranges(
+                &data_accessor,
+                &location_generator,
+                &[vec![range]],
+                1000,
+                block_size,
+                100,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        2,
+        1000,
+        ReclusterMode::Normal,
+    )
+    .await?;
+
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
+    assert_eq!(parts.tasks[0].total_bytes, 80);
 
     Ok(())
 }
@@ -457,8 +701,13 @@ async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Resu
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_only_lowest_small_batch_yields() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) =
-        target_select_segments_by_level(&[(0, 3), (1, 3), (2, 10)], thresholds, 1).await?;
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(0, 3), (1, 3), (2, 10)],
+        thresholds,
+        1,
+        ReclusterMode::Normal,
+    )
+    .await?;
 
     assert_eq!(block_num, 3);
     assert_eq!(parts.tasks.len(), 1);
@@ -471,8 +720,13 @@ async fn test_recluster_mutator_only_lowest_small_batch_yields() -> anyhow::Resu
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) =
-        target_select_segments_by_level(&[(1, 3), (2, 4)], thresholds, 2).await?;
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(1, 3), (2, 4)],
+        thresholds,
+        2,
+        ReclusterMode::Normal,
+    )
+    .await?;
 
     assert_eq!(block_num, 7);
     assert_eq!(parts.tasks.len(), 2);
@@ -485,6 +739,77 @@ async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Res
         vec![2, 1]
     );
     assert_eq!(task_part_counts(&parts), vec![4, 3]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_recluster_groups_mature_levels_in_two_level_bands() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(0, 1), (1, 1), (2, 1)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level, 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
+
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(3, 2), (4, 1)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 3);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level, 3);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+
+    // The mature bands are fixed and non-overlapping. A 2-3 overlap crosses
+    // the 1-2 / 3-4 boundary by design, so it is not one rewrite task.
+    let (block_num, parts) = target_select_segments_by_level_with_mode(
+        &[(2, 1), (3, 1)],
+        thresholds,
+        1,
+        ReclusterMode::Final,
+    )
+    .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_recluster_skips_high_level_two_block_batch() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level_with_mode(&[(2, 2)], thresholds, 1, ReclusterMode::Final)
+            .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_skips_max_level_blocks() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level_with_mode(&[(32, 3)], thresholds, 1, ReclusterMode::Final)
+            .await?;
+
+    assert_eq!(block_num, 0);
+    assert!(parts.tasks.is_empty());
 
     Ok(())
 }
@@ -577,15 +902,16 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
             cluster_key_id,
             max_tasks,
         ));
-        let selected_segs = mutator.select_segments(&compact_segments, 8)?;
+        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
         // select the blocks with the highest depth.
-        if selected_segs.is_empty() {
-            let result = FuseTable::generate_recluster_parts(mutator, compact_segments).await?;
-            if let Some((_, _, recluster_parts)) = result {
-                parts = recluster_parts;
+        for selected_segs in segment_windows {
+            let (_, candidate_parts) = mutator
+                .target_select(selected_segs, ReclusterMode::Normal)
+                .await?;
+            if !candidate_parts.is_empty() {
+                parts = candidate_parts;
+                break;
             }
-        } else {
-            (_, parts) = mutator.target_select(selected_segs).await?;
         }
 
         if !parts.is_empty() {
@@ -631,37 +957,4 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-#[test]
-fn test_check_point() {
-    // [1,2] [2,3], check point 2
-    let start = vec![1];
-    let end = vec![0];
-    assert!(ReclusterMutator::check_point(&start, &end));
-
-    // [1,2] [2,2], check point 2
-    let start = vec![1];
-    let end = vec![0, 1];
-    assert!(ReclusterMutator::check_point(&start, &end));
-
-    // [1,1] [1,2], check point 1
-    let start = vec![0, 1];
-    let end = vec![0];
-    assert!(ReclusterMutator::check_point(&start, &end));
-
-    // [1,2] [1,3], check point 1
-    let start = vec![0, 1];
-    let end = vec![];
-    assert!(!ReclusterMutator::check_point(&start, &end));
-
-    // [1,3] [2,3], check point 3
-    let start = vec![];
-    let end = vec![0, 1];
-    assert!(!ReclusterMutator::check_point(&start, &end));
-
-    // [1,3] [3,3] [3,4], check point 3
-    let start = vec![1, 2];
-    let end = vec![0, 1];
-    assert!(!ReclusterMutator::check_point(&start, &end));
 }

@@ -20,6 +20,10 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::FILE_BASENAME_COLUMN_NAME;
+use databend_common_expression::FILE_CONTENT_KEY_COLUMN_NAME;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_NAME;
+use databend_common_expression::FILE_PATH_COLUMN_NAME;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_NAME;
 use databend_common_expression::FILENAME_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
@@ -95,6 +99,32 @@ impl InternalColumnFactory {
             InternalColumn::new(
                 FILE_ROW_NUMBER_COLUMN_NAME,
                 InternalColumnType::FileRowNumber,
+            ),
+        );
+
+        internal_columns.insert(
+            FILE_PATH_COLUMN_NAME.to_string(),
+            InternalColumn::new(FILE_PATH_COLUMN_NAME, InternalColumnType::FilePath),
+        );
+
+        internal_columns.insert(
+            FILE_BASENAME_COLUMN_NAME.to_string(),
+            InternalColumn::new(FILE_BASENAME_COLUMN_NAME, InternalColumnType::FileBasename),
+        );
+
+        internal_columns.insert(
+            FILE_CONTENT_KEY_COLUMN_NAME.to_string(),
+            InternalColumn::new(
+                FILE_CONTENT_KEY_COLUMN_NAME,
+                InternalColumnType::FileContentKey,
+            ),
+        );
+
+        internal_columns.insert(
+            FILE_LAST_MODIFIED_COLUMN_NAME.to_string(),
+            InternalColumn::new(
+                FILE_LAST_MODIFIED_COLUMN_NAME,
+                InternalColumnType::FileLastModified,
             ),
         );
 

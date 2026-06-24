@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_native;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::GzipLevel;
 use parquet::basic::ZstdLevel;
@@ -44,18 +43,6 @@ impl TryFrom<&str> for TableCompression {
                 "unsupported table compression: {}",
                 other
             ))),
-        }
-    }
-}
-
-/// Convert to native Compression.
-impl From<TableCompression> for databend_common_native::CommonCompression {
-    fn from(value: TableCompression) -> Self {
-        match value {
-            TableCompression::None => databend_common_native::CommonCompression::None,
-            TableCompression::LZ4 => databend_common_native::CommonCompression::Lz4,
-            TableCompression::Snappy => databend_common_native::CommonCompression::Snappy,
-            TableCompression::Zstd => databend_common_native::CommonCompression::Zstd,
         }
     }
 }

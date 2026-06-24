@@ -662,6 +662,18 @@ select number from numbers(10000) order by number limit 1
 0
 
 
+query I
+select number from (select number from numbers(10) order by number limit 3) where number > 1 order by number
+----
+2
+
+
+query B
+select exists(select number from (select number from numbers(10) order by number limit 1) where number = 5)
+----
+0
+
+
 statement ok
 drop table if exists temp
 

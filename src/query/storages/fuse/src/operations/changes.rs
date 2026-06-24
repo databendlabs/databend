@@ -132,7 +132,7 @@ impl FuseTable {
                             'INSERT' as change$action, \
                             false as change$is_update, \
                             if(is_not_null(_origin_block_id), \
-                                concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                 {append_alias}._base_row_id \
                             ) as change$row_id \
                     from {table_desc} as {append_alias} \
@@ -181,7 +181,7 @@ impl FuseTable {
                             select {a_cols}, \
                                     'INSERT' as a_change$action, \
                                     if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                         {a_table_alias}._base_row_id \
                                     ) as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
@@ -190,7 +190,7 @@ impl FuseTable {
                             select {d_cols_alias}, \
                                     'DELETE' as d_change$action, \
                                     if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
                                         {d_table_alias}._base_row_id \
                                     ) as d_change$row_id \
                             from {table_desc} as {d_table_alias} \
@@ -287,12 +287,10 @@ impl FuseTable {
         }
 
         let table_schema = self.schema_with_stream();
-        let cluster_key_meta = self.cluster_key_meta();
-        let (cluster_keys, cluster_key_meta) = if !self.is_native() || cluster_key_meta.is_none() {
-            (vec![], None)
-        } else {
-            (self.linear_cluster_keys(ctx.clone()), cluster_key_meta)
-        };
+        // Page-level cluster pruning was only used by the native format; for parquet
+        // tables there are no cluster keys or cluster key meta to push down here.
+        let cluster_keys = vec![];
+        let cluster_key_meta = None;
         let bloom_index_cols = self.bloom_index_cols();
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
@@ -333,7 +331,6 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (stats, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             table_schema,
             push_downs,
             &block_metas,

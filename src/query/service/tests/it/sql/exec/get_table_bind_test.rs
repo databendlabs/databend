@@ -52,11 +52,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -575,6 +573,10 @@ impl TableContextQueryState for CtxDelegation {
         todo!()
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.ctx.get_nodes_memory_usage()
+    }
+
     fn push_warning(&self, _warn: String) {
         todo!()
     }
@@ -872,17 +874,8 @@ impl TableContextCopy for CtxDelegation {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for CtxDelegation {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        todo!()
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        todo!()
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
 }

@@ -1,0 +1,127 @@
+=== materialized_cte_virtual_column_rewrites ===
+description: A materialized CTE consumer should still expose the full base-table JSON path when virtual-column rewrite is enabled.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t) 
+        SELECT message['attribute']['user_id'] FROM logs 
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+
+status: ok
+Sequence(Sequence)
+├── MaterializedCTE(MaterializedCTE { cte_name: "__materialized_cte_0_logs", ref_count: 0, channel_size: None })
+│   └── EvalScalar
+│       ├── scalars: [default.t.v['message'] (#1) AS (#1), default.t.v['message']['attribute']['account_id'] (#2) AS (#2), default.t.v['message']['attribute']['user_id'] (#3) AS (#3)]
+│       └── Scan
+│           ├── table: default.t (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── UnionAll
+    ├── output: [__databend_virtual_column__0 (#12)]
+    ├── left: [default.t.v['message']['attribute']['user_id'] (#7)]
+    ├── right: [default.t.v['message']['attribute']['account_id'] (#10)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [default.t.v['message']['attribute']['user_id'] (#7) AS (#7)]
+    │   └── MaterializedCTERef(MaterializedCTERef { cte_name: "__materialized_cte_0_logs", output_columns: [5, 6, 7], def: SExpr { plan: EvalScalar(EvalScalar { items: [ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: Some(115..126), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(1), column_name: "v['message']", column_name_lower: None, index: 5, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 5 }, ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(1), column_name: "v['message']['attribute']['account_id']", column_name_lower: None, index: 6, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 6 }, ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(1), column_name: "v['message']['attribute']['user_id']", column_name_lower: None, index: 7, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 7 }] }), children: [SExpr { plan: Scan(Scan { table_index: 1, columns: {4, 5, 6, 7}, push_down_predicates: None, secure_predicates: None, limit: None, order_by: None, prewhere: None, agg_index: None, change_type: None, update_stream_columns: false, inverted_index: None, vector_index: None, is_lazy_table: false, sample: None, scan_id: 1, statistics: Statistics { table_stats: None, column_stats: {}, histograms: {} } }), children: [], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }, column_mapping: {5: 1, 6: 2, 7: 3}, stat_info: None })
+    └── EvalScalar
+        ├── scalars: [default.t.v['message']['attribute']['account_id'] (#10) AS (#10)]
+        └── MaterializedCTERef(MaterializedCTERef { cte_name: "__materialized_cte_0_logs", output_columns: [9, 10, 11], def: SExpr { plan: EvalScalar(EvalScalar { items: [ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: Some(115..126), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(2), column_name: "v['message']", column_name_lower: None, index: 9, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 9 }, ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(2), column_name: "v['message']['attribute']['account_id']", column_name_lower: None, index: 10, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 10 }, ScalarItem { scalar: BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: None, table_index: Some(2), column_name: "v['message']['attribute']['user_id']", column_name_lower: None, index: 11, data_type: Nullable(Variant), visibility: InVisible, virtual_expr: None, is_srf: false } }), index: 11 }] }), children: [SExpr { plan: Scan(Scan { table_index: 2, columns: {8, 9, 10, 11}, push_down_predicates: None, secure_predicates: None, limit: None, order_by: None, prewhere: None, agg_index: None, change_type: None, update_stream_columns: false, inverted_index: None, vector_index: None, is_lazy_table: false, sample: None, scan_id: 2, statistics: Statistics { table_stats: None, column_stats: {}, histograms: {} } }), children: [], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }, column_mapping: {9: 1, 10: 2, 11: 3}, stat_info: None })
+
+
+=== materialized_cte_virtual_column_rewrites_chained_ctes ===
+description: A chained materialized CTE should preserve the original base-table JSON path across multiple CTE layers.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t), 
+        attrs AS (SELECT message['attribute'] AS attr FROM logs),
+        users AS (SELECT attr['user_id'] AS user_id, attr['name'] AS name FROM attrs)
+        SELECT user_id, name FROM users;
+
+status: ok
+EvalScalar
+├── scalars: [default.t.v['message']['attribute']['user_id'] (#3) AS (#3), default.t.v['message']['attribute']['name'] (#4) AS (#4)]
+└── EvalScalar
+    ├── scalars: [default.t.v['message']['attribute']['user_id'] (#3) AS (#3), default.t.v['message']['attribute']['name'] (#4) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [default.t.v['message']['attribute'] (#2) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [default.t.v['message'] (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== materialized_cte_virtual_column_rewrites_multi_fields ===
+description: Multiple downstream CTE fields reading the same materialized source CTE should push their JSON path requirements back to the source.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message, v['response'] AS response FROM t),
+        base AS (SELECT message['attribute']['user_id']::Int32 AS user_id, 
+            message['attribute']['trace_id']::Int32 AS trace_id, 
+            message['attribute']['level']::String AS level,
+            response['status_code']::Int64 AS status_code,
+            response['error_message']::String AS error_message FROM logs)
+        SELECT user_id, trace_id, level, status_code, error_message FROM base
+
+status: ok
+EvalScalar
+├── scalars: [user_id (#8) AS (#8), trace_id (#9) AS (#9), level (#10) AS (#10), status_code (#11) AS (#11), error_message (#12) AS (#12)]
+└── EvalScalar
+    ├── scalars: [CAST(default.t.v['message']['attribute']['user_id'] (#3) AS Int32 NULL) AS (#8), CAST(default.t.v['message']['attribute']['trace_id'] (#4) AS Int32 NULL) AS (#9), CAST(default.t.v['message']['attribute']['level'] (#5) AS String NULL) AS (#10), CAST(default.t.v['response']['status_code'] (#6) AS Int64 NULL) AS (#11), CAST(default.t.v['response']['error_message'] (#7) AS String NULL) AS (#12)]
+    └── EvalScalar
+        ├── scalars: [default.t.v['message'] (#1) AS (#1), default.t.v['response'] (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== materialized_cte_static_json_paths_without_table_virtual_columns ===
+description: A materialized CTE should still precompute static JSON paths inside the producer even when the source table has no Fuse virtual columns.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t_no_vc)
+        SELECT message['attribute']['user_id'] FROM logs
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+    
+status: ok
+Sequence(Sequence)
+├── MaterializedCTE(MaterializedCTE { cte_name: "__materialized_cte_0_logs", ref_count: 0, channel_size: None })
+│   └── EvalScalar
+│       ├── scalars: [get_by_keypath(t_no_vc.v (#0), '{"message"}') AS (#1), get_by_keypath(t_no_vc.v (#0), '{"message","attribute","account_id"}') AS (#2), get_by_keypath(t_no_vc.v (#0), '{"message","attribute","user_id"}') AS (#3)]
+│       └── Scan
+│           ├── table: default.t_no_vc (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── UnionAll
+    ├── output: [__databend_virtual_column__0 (#12)]
+    ├── left: [__databend_virtual_column__0 (#7)]
+    ├── right: [__databend_virtual_column__1 (#10)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [__databend_virtual_column__0 (#7) AS (#7)]
+    │   └── MaterializedCTERef(MaterializedCTERef { cte_name: "__materialized_cte_0_logs", output_columns: [5, 6, 7], def: SExpr { plan: EvalScalar(EvalScalar { items: [ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(1), column_name: "v", column_name_lower: None, index: 4, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\"}") })] }), index: 5 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(1), column_name: "v", column_name_lower: None, index: 4, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\",\"attribute\",\"account_id\"}") })] }), index: 6 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(1), column_name: "v", column_name_lower: None, index: 4, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\",\"attribute\",\"user_id\"}") })] }), index: 7 }] }), children: [SExpr { plan: Scan(Scan { table_index: 1, columns: {4}, push_down_predicates: None, secure_predicates: None, limit: None, order_by: None, prewhere: None, agg_index: None, change_type: None, update_stream_columns: false, inverted_index: None, vector_index: None, is_lazy_table: false, sample: None, scan_id: 1, statistics: Statistics { table_stats: None, column_stats: {}, histograms: {} } }), children: [], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }, column_mapping: {5: 1, 6: 2, 7: 3}, stat_info: None })
+    └── EvalScalar
+        ├── scalars: [__databend_virtual_column__1 (#10) AS (#10)]
+        └── MaterializedCTERef(MaterializedCTERef { cte_name: "__materialized_cte_0_logs", output_columns: [9, 10, 11], def: SExpr { plan: EvalScalar(EvalScalar { items: [ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(2), column_name: "v", column_name_lower: None, index: 8, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\"}") })] }), index: 9 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(2), column_name: "v", column_name_lower: None, index: 8, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\",\"attribute\",\"account_id\"}") })] }), index: 10 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: None, func_name: "get_by_keypath", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(113..114), column: ColumnBinding { database_name: Some("default"), table_name: Some("t_no_vc"), column_position: Some(1), table_index: Some(2), column_name: "v", column_name_lower: None, index: 8, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: String("{\"message\",\"attribute\",\"user_id\"}") })] }), index: 11 }] }), children: [SExpr { plan: Scan(Scan { table_index: 2, columns: {8}, push_down_predicates: None, secure_predicates: None, limit: None, order_by: None, prewhere: None, agg_index: None, change_type: None, update_stream_columns: false, inverted_index: None, vector_index: None, is_lazy_table: false, sample: None, scan_id: 2, statistics: Statistics { table_stats: None, column_stats: {}, histograms: {} } }), children: [], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }], original_group: None, rel_prop: OnceLock(<uninit>), stat_info: OnceLock(<uninit>), applied_rules: AppliedRules { rules: RuleSet { rules: RoaringBitmap<[]> } } }, column_mapping: {9: 1, 10: 2, 11: 3}, stat_info: None })
+
+
+=== materialized_cte_unqualified_column_preserves_ambiguity ===
+description: An unqualified materialized CTE output should not be rewritten before binder can reject an ambiguous column reference.
+sql: 
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t)
+        SELECT message['attribute']['user_id'] FROM logs, other_table
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs, other_table;
+    
+status: error
+code: 1065
+message: column message reference or alias is ambiguous, please use another alias name
+

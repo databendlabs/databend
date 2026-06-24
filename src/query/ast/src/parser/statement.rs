@@ -47,6 +47,11 @@ pub enum ShowGrantOption {
     OfRole(String),
 }
 
+enum AnalyzeHistogramOption {
+    Algorithm(String),
+    ErrorRate(f64),
+}
+
 // (tenant, share name, endpoint name)
 pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 
@@ -76,6 +81,20 @@ pub fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
 
 fn query_statement(i: Input) -> IResult<Statement> {
     map(query, |query| Statement::Query(Box::new(query))).parse(i)
+}
+
+fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
+    move |i| {
+        let (next, ident) = ident(i)?;
+        if ident.name.eq_ignore_ascii_case(text) {
+            Ok((next, ()))
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::ExpectText(text),
+            )))
+        }
+    }
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -1309,16 +1328,63 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let analyze_histogram_keyword = match_ident_text("HISTOGRAM");
+    let analyze_algorithm_keyword = match_ident_text("ALGORITHM");
+    let analyze_error_rate_keyword = match_ident_text("ERROR_RATE");
+    let analyze_histogram_algorithm = map(
+        rule! {
+            #analyze_algorithm_keyword ~ "=" ~ #literal_string
+        },
+        |(_, _, algorithm)| AnalyzeHistogramOption::Algorithm(algorithm),
+    );
+    let analyze_histogram_error_rate = map_res(
+        rule! {
+            #analyze_error_rate_keyword ~ "=" ~ #literal
+        },
+        |(_, _, value)| {
+            value
+                .as_double()
+                .map(AnalyzeHistogramOption::ErrorRate)
+                .map_err(|_| nom::Err::Failure(ErrorKind::ExpectText("number")))
+        },
+    );
+    let analyze_histogram_option = rule! {
+        #analyze_histogram_algorithm
+        | #analyze_histogram_error_rate
+    };
+    let analyze_histogram_options = map(
+        rule! {
+            WITH ~ #analyze_histogram_keyword ~ #comma_separated_list1(analyze_histogram_option)?
+        },
+        |(_, _, options)| {
+            let mut histogram_options = AnalyzeHistogramOptions {
+                algorithm: None,
+                error_rate: None,
+            };
+            for option in options.unwrap_or_default() {
+                match option {
+                    AnalyzeHistogramOption::Algorithm(algorithm) => {
+                        histogram_options.algorithm = Some(algorithm);
+                    }
+                    AnalyzeHistogramOption::ErrorRate(error_rate) => {
+                        histogram_options.error_rate = Some(error_rate);
+                    }
+                }
+            }
+            histogram_options
+        },
+    );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
+            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN? ~ #analyze_histogram_options?
         },
-        |(_, _, (catalog, database, table), no_scan)| {
+        |(_, _, (catalog, database, table), no_scan, histogram_options)| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
                 catalog,
                 database,
                 table,
                 no_scan: no_scan.is_some(),
+                histogram_options,
             })
         },
     );
@@ -5641,6 +5707,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
+        value(Engine::Proxy, rule! { PROXY }),
     ));
 
     map(

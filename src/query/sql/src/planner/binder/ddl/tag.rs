@@ -23,6 +23,8 @@ use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTagsStmt;
 use databend_common_ast::ast::TagSetItem;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -96,7 +98,10 @@ impl Binder {
         stmt: &ShowTagsStmt,
     ) -> Result<Plan> {
         let default_catalog = self.ctx.get_default_catalog()?.name();
-        let mut select_builder = SelectBuilder::from(&format!("{}.system.tags", default_catalog));
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.tags",
+            QuotedIdent(&default_catalog, '`')
+        ));
         select_builder
             .with_column("name")
             .with_column("allowed_values")
@@ -106,8 +111,10 @@ impl Binder {
 
         match &stmt.filter {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder
-                    .with_filter(format!("LOWER(name) LIKE '{}'", pattern.to_lowercase()));
+                select_builder.with_filter(format!(
+                    "LOWER(name) LIKE {}",
+                    QuotedString(pattern.to_lowercase(), '\'')
+                ));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));

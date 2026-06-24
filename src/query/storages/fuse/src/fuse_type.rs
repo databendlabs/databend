@@ -46,14 +46,19 @@ impl FuseTableType {
 #[derive(Clone, Copy, Debug)]
 pub enum FuseStorageFormat {
     Parquet,
-    Native,
+    /// Tombstone for storage formats that are no longer supported (e.g. the
+    /// removed `native` format). Tables using such a format can still be
+    /// instantiated so that metadata-only operations (SHOW, DESC, DROP) keep
+    /// working, but any operation touching the data must be rejected via
+    /// [`crate::FuseTable::check_format_supported`].
+    Unsupported,
 }
 
 impl Display for FuseStorageFormat {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FuseStorageFormat::Parquet => write!(f, "Parquet"),
-            FuseStorageFormat::Native => write!(f, "Native"),
+            FuseStorageFormat::Unsupported => write!(f, "Unsupported"),
         }
     }
 }
@@ -61,16 +66,47 @@ impl Display for FuseStorageFormat {
 impl FromStr for FuseStorageFormat {
     type Err = ErrorCode;
 
+    /// Strict parsing used when validating CREATE / ALTER ... SET OPTIONS.
+    /// The removed `native` format and any unknown format are rejected so that
+    /// new tables can never be created with an unsupported storage format.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "" | "parquet" => Ok(FuseStorageFormat::Parquet),
-            "native" => Ok(FuseStorageFormat::Native),
+            "native" => Err(ErrorCode::UnknownFormat(
+                "native storage_format is no longer supported".to_string(),
+            )),
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unknown fuse storage_format {}",
                 other
             ))),
         }
     }
+}
+
+impl FuseStorageFormat {
+    /// Lenient parsing used when instantiating an existing table from its
+    /// stored options. Unknown / removed formats become
+    /// [`FuseStorageFormat::Unsupported`] so that instantiation never fails;
+    /// this keeps catalog-wide operations (e.g. listing tables) working even
+    /// when some tables use a format that is no longer supported. The original
+    /// format string remains available via the table options for diagnostics.
+    pub fn from_table_option(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "" | "parquet" => FuseStorageFormat::Parquet,
+            _ => FuseStorageFormat::Unsupported,
+        }
+    }
+}
+
+/// Defensive error for code paths that operate on block data but receive a
+/// table whose storage format is no longer supported. These paths are
+/// unreachable in practice because [`crate::FuseTable::check_format_supported`]
+/// rejects such tables at the operation entry point; this helper exists so the
+/// low-level `match` arms can stay exhaustive without panicking.
+pub fn unsupported_storage_format_error() -> ErrorCode {
+    ErrorCode::StorageUnsupported(
+        "storage_format is no longer supported for read/write; the table can only be dropped",
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,5 +135,54 @@ impl FromStr for FuseSegmentFormat {
                 other
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CREATE / ALTER ... SET OPTIONS path: strict parsing must reject the
+    /// removed `native` format and any unknown format, so new tables can never
+    /// be created with an unsupported storage format.
+    #[test]
+    fn strict_from_str_rejects_native_and_unknown() {
+        assert!(matches!(
+            FuseStorageFormat::from_str(""),
+            Ok(FuseStorageFormat::Parquet)
+        ));
+        assert!(matches!(
+            FuseStorageFormat::from_str("parquet"),
+            Ok(FuseStorageFormat::Parquet)
+        ));
+        assert!(matches!(
+            FuseStorageFormat::from_str("PARQUET"),
+            Ok(FuseStorageFormat::Parquet)
+        ));
+        assert!(FuseStorageFormat::from_str("native").is_err());
+        assert!(FuseStorageFormat::from_str("bogus").is_err());
+    }
+
+    /// Instantiation path (FuseTable::try_create): lenient parsing must never
+    /// fail, mapping removed/unknown formats to the `Unsupported` tombstone so
+    /// that listing and dropping tables keeps working catalog-wide.
+    #[test]
+    fn lenient_from_table_option_tolerates_native() {
+        assert!(matches!(
+            FuseStorageFormat::from_table_option(""),
+            FuseStorageFormat::Parquet
+        ));
+        assert!(matches!(
+            FuseStorageFormat::from_table_option("parquet"),
+            FuseStorageFormat::Parquet
+        ));
+        assert!(matches!(
+            FuseStorageFormat::from_table_option("native"),
+            FuseStorageFormat::Unsupported
+        ));
+        assert!(matches!(
+            FuseStorageFormat::from_table_option("some_future_format"),
+            FuseStorageFormat::Unsupported
+        ));
     }
 }

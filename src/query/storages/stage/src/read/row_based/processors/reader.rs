@@ -85,6 +85,14 @@ impl BytesReader {
                 path: state.file.path.clone(),
                 offset,
                 is_eof,
+                // Stamp file-level metadata on every batch, not just the first.
+                // A stateful upstream transformer (encoding decoder buffering an
+                // incomplete multibyte sequence, a record/header longer than the
+                // read buffer, etc.) may drop or buffer the offset-0 batch, so
+                // pinning the metadata to offset 0 could lose it before any row
+                // is emitted. The value is identical for the whole file.
+                content_key: state.file.content_key.clone(),
+                last_modified: state.file.last_modified,
             });
             if is_eof {
                 self.file_state = None;

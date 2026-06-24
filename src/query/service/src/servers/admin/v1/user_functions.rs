@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::UserFunctionsTable;
 use http::StatusCode;
@@ -23,6 +24,19 @@ use poem::web::Path;
 #[async_backtrace::framed]
 pub async fn user_functions(Path(tenant): Path<String>) -> poem::Result<impl IntoResponse> {
     match UserFunctionsTable::get_udfs(&Tenant::new_literal(&tenant)).await {
+        Ok(v) => Ok(Json(v)),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to user functions. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn user_functions_local() -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    match UserFunctionsTable::get_udfs(tenant).await {
         Ok(v) => Ok(Json(v)),
         Err(cause) => Err(poem::Error::from_string(
             format!("failed to user functions. cause: {:?}", cause),

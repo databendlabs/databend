@@ -89,35 +89,22 @@ sql: SELECT rank() OVER w1, dense_rank() OVER w2 FROM empsalary WINDOW w1 AS (PA
 status: ok
 EvalScalar
 ├── scalars: [rank() OVER w1 (#2) AS (#2), dense_rank() OVER w2 (#3) AS (#3)]
-└── Window
-    ├── aggregate function: rank
-    ├── partition items: [empsalary.depname (#0) AS (#0)]
-    ├── order by items: []
-    ├── frame: [Range: Preceding(None) ~ Following(None)]
-    └── Sort
-        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST]
-        ├── limit: [NONE]
-        ├── window top: NONE
-        ├── window function: Rank
-        └── EvalScalar
-            ├── scalars: [empsalary.depname (#0) AS (#0)]
-            └── Window
-                ├── aggregate function: dense_rank
-                ├── partition items: [empsalary.depname (#0) AS (#0)]
-                ├── order by items: [empsalary.salary (#1) AS (#1) DESC]
-                ├── frame: [Range: Preceding(None) ~ CurrentRow]
-                └── Sort
-                    ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.salary (#1) DESC NULLS LAST]
-                    ├── limit: [NONE]
-                    ├── window top: NONE
-                    ├── window function: DenseRank
-                    └── EvalScalar
-                        ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
-                        └── Scan
-                            ├── table: default.empsalary (#0)
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: dense_rank
+    │   ├── partition items: [empsalary.depname (#0) AS (#0)]
+    │   ├── order by items: [empsalary.salary (#1) AS (#1) DESC]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: rank
+    │   ├── partition items: [empsalary.depname (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Scan
+        ├── table: default.empsalary (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
 
 === recursive_named_window_chain_binds ===
@@ -151,6 +138,13 @@ sql: SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname
 status: error
 code: 1005
 message: Window definition w not found
+
+=== named_window_rejects_duplicate_name ===
+description: A WINDOW clause must reject duplicate names instead of silently keeping the later definition.
+sql: SELECT rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname), W AS (ORDER BY salary)
+status: error
+code: 1065
+message: Duplicate window name: w
 
 === inherited_named_window_rejects_partition_override ===
 description: Referencing a named window must not add a new PARTITION BY clause.

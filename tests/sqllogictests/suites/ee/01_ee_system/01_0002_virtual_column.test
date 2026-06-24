@@ -28,13 +28,19 @@ statement ok
 drop table if exists t1
 
 statement ok
-create table t1(id int, val json) storage_format = 'native'
+create table t1(id int, val json) storage_format = 'parquet'
 
 statement ok
 insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
 query TTTITT
 show virtual columns from t1
+----
+
+# This EE fixture does not expose a creatable virtual-column name matching
+# a'b%; keep this empty result as rewrite escaping coverage.
+query TTTITT
+show virtual columns from t1 like 'a''b%'
 ----
 
 statement ok

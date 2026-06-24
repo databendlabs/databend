@@ -842,6 +842,14 @@ pub struct AnalyzeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub no_scan: bool,
+    pub histogram_options: Option<AnalyzeHistogramOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct AnalyzeHistogramOptions {
+    pub algorithm: Option<String>,
+    #[drive(skip)]
+    pub error_rate: Option<f64>,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -856,6 +864,17 @@ impl Display for AnalyzeTableStmt {
         )?;
         if self.no_scan {
             write!(f, " NOSCAN")?;
+        }
+        if let Some(options) = &self.histogram_options {
+            write!(f, " WITH HISTOGRAM")?;
+            let mut sep = " ";
+            if let Some(algorithm) = &options.algorithm {
+                write!(f, "{sep}ALGORITHM = '{algorithm}'")?;
+                sep = ", ";
+            }
+            if let Some(error_rate) = options.error_rate {
+                write!(f, "{sep}ERROR_RATE = {error_rate}")?;
+            }
         }
 
         Ok(())
@@ -891,6 +910,7 @@ pub enum Engine {
     Random,
     Iceberg,
     Delta,
+    Proxy,
 }
 
 impl Display for Engine {
@@ -903,6 +923,7 @@ impl Display for Engine {
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
             Engine::Delta => write!(f, "DELTA"),
+            Engine::Proxy => write!(f, "PROXY"),
         }
     }
 }
@@ -917,6 +938,7 @@ impl From<&str> for Engine {
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
             "delta" => Engine::Delta,
+            "proxy" => Engine::Proxy,
             _ => unreachable!("invalid engine: {}", s),
         }
     }

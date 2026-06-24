@@ -40,6 +40,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
+        self.check_format_supported()?;
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             self.build_truncate_pipeline(ctx, pipeline, mode, prev_snapshot)?;
         }
@@ -67,6 +68,7 @@ impl FuseTable {
                     conflict_resolve_context: ConflictResolveContext::None,
                     new_segment_locs: vec![],
                     table_id: self.get_id(),
+                    insert_rows: 0,
                     virtual_schema: None,
                     virtual_schema_mode: VirtualSchemaMode::Merge,
                     hll: HashMap::new(),

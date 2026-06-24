@@ -28,8 +28,6 @@ pub use read::CompactSegmentInfoReader;
 pub use read::DataItem;
 pub use read::InvertedIndexReader;
 pub use read::MetaReaders;
-pub use read::NativeReaderExt;
-pub use read::NativeSourceData;
 pub use read::RowSelection;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;

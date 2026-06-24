@@ -175,8 +175,9 @@ pub enum StageFileFormatType {
     Orc,
     Parquet,
     Lance,
+    Arrow,
+    ArrowStream,
     Xml,
-    None,
 }
 
 impl Default for StageFileFormatType {
@@ -198,8 +199,10 @@ impl FromStr for StageFileFormatType {
             "JSON" => Ok(StageFileFormatType::Json),
             "ORC" => Ok(StageFileFormatType::Orc),
             "AVRO" => Ok(StageFileFormatType::Avro),
+            "ARROW" => Ok(StageFileFormatType::Arrow),
+            "ARROW_STREAM" => Ok(StageFileFormatType::ArrowStream),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TEXT | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON )"
+                "Unknown file format type '{s}', must be one of ( CSV | TEXT | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON | ARROW | ARROW_STREAM )"
             )),
         }
     }
@@ -216,8 +219,9 @@ impl Display for StageFileFormatType {
             StageFileFormatType::Orc => write!(f, "ORC"),
             StageFileFormatType::Parquet => write!(f, "PARQUET"),
             StageFileFormatType::Lance => write!(f, "LANCE"),
+            StageFileFormatType::Arrow => write!(f, "ARROW"),
+            StageFileFormatType::ArrowStream => write!(f, "ARROW_STREAM"),
             StageFileFormatType::Xml => write!(f, "XML"),
-            StageFileFormatType::None => write!(f, "NONE"),
         }
     }
 }
@@ -256,30 +260,10 @@ impl Default for FileFormatOptions {
 }
 
 impl FileFormatOptions {
-    pub fn new() -> Self {
-        Self {
-            format: StageFileFormatType::None,
-            field_delimiter: "".to_string(),
-            record_delimiter: "".to_string(),
-            nan_display: "".to_string(),
-            skip_header: 0,
-            escape: "".to_string(),
-            compression: StageFileCompression::None,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        }
-    }
-
     pub fn from_map(opts: &BTreeMap<String, String>) -> Result<Self> {
-        let mut file_format_options = Self::new();
-        file_format_options.apply(opts, false)?;
-        if file_format_options.format == StageFileFormatType::None {
-            return Err(ErrorCode::SyntaxException(
-                "File format type must be specified",
-            ));
-        }
-        Ok(file_format_options)
+        let mut builder = FileFormatOptionsBuilder::default();
+        builder.apply(opts)?;
+        builder.build()
     }
 
     pub fn to_map(&self) -> BTreeMap<String, String> {
@@ -319,8 +303,41 @@ impl FileFormatOptions {
         }
         options
     }
+}
 
-    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
+#[derive(Default)]
+struct FileFormatOptionsBuilder {
+    format: Option<StageFileFormatType>,
+    skip_header: Option<u64>,
+    field_delimiter: Option<String>,
+    record_delimiter: Option<String>,
+    nan_display: Option<String>,
+    escape: Option<String>,
+    compression: Option<StageFileCompression>,
+    row_tag: Option<String>,
+    quote: Option<String>,
+    name: Option<String>,
+}
+
+impl FileFormatOptionsBuilder {
+    fn build(self) -> Result<FileFormatOptions> {
+        Ok(FileFormatOptions {
+            format: self
+                .format
+                .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?,
+            skip_header: self.skip_header.unwrap_or_default(),
+            field_delimiter: self.field_delimiter.unwrap_or_default(),
+            record_delimiter: self.record_delimiter.unwrap_or_default(),
+            nan_display: self.nan_display.unwrap_or_default(),
+            escape: self.escape.unwrap_or_default(),
+            compression: self.compression.unwrap_or_default(),
+            row_tag: self.row_tag.unwrap_or_default(),
+            quote: self.quote.unwrap_or_default(),
+            name: self.name,
+        })
+    }
+
+    fn apply(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
         if opts.is_empty() {
             return Ok(());
         }
@@ -328,29 +345,28 @@ impl FileFormatOptions {
             match k.as_str() {
                 "format" | "type" => {
                     let format = StageFileFormatType::from_str(v)?;
-                    self.format = format;
+                    self.format = Some(format);
                 }
                 "skip_header" => {
                     let skip_header = u64::from_str(v)?;
-                    self.skip_header = skip_header;
+                    self.skip_header = Some(skip_header);
                 }
-                "field_delimiter" => self.field_delimiter = v.clone(),
-                "record_delimiter" => self.record_delimiter = v.clone(),
-                "nan_display" => self.nan_display = v.clone(),
-                "escape" => self.escape = v.clone(),
+                "field_delimiter" => self.field_delimiter = Some(v.clone()),
+                "record_delimiter" => self.record_delimiter = Some(v.clone()),
+                "nan_display" => self.nan_display = Some(v.clone()),
+                "escape" => self.escape = Some(v.clone()),
                 "compression" => {
                     let compression = StageFileCompression::from_str(v)?;
-                    self.compression = compression;
+                    self.compression = Some(compression);
                 }
-                "row_tag" => self.row_tag = v.clone(),
-                "quote" => self.quote = v.clone(),
+                "row_tag" => self.row_tag = Some(v.clone()),
+                "quote" => self.quote = Some(v.clone()),
+                "name" => self.name = Some(v.clone()),
                 _ => {
-                    if !ignore_unknown {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "Unknown stage file format option {}",
-                            k
-                        )));
-                    }
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unknown stage file format option {}",
+                        k
+                    )));
                 }
             }
         }

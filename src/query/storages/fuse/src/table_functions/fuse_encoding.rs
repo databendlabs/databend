@@ -48,12 +48,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_native::read::reader::NativeReader;
-use databend_common_native::stat::ColumnInfo;
-use databend_common_native::stat::PageBody;
-use databend_common_native::stat::stat_simple;
-use databend_storages_common_io::MergeIOReader;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream;
@@ -64,7 +58,6 @@ use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::Encoding as ParquetEncoding;
 use parquet::basic::Type as ParquetPhysicalType;
 
-use crate::BlockReadResult;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
@@ -224,16 +217,6 @@ impl<'a> FuseEncodingImpl<'a> {
             let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
 
             match table.storage_format {
-                FuseStorageFormat::Native => {
-                    self.collect_native_rows(
-                        table,
-                        snapshot.as_ref(),
-                        &segments_io,
-                        chunk_size,
-                        &mut rows,
-                    )
-                    .await?;
-                }
                 FuseStorageFormat::Parquet => {
                     self.collect_parquet_rows(
                         table,
@@ -244,6 +227,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     )
                     .await?;
                 }
+                FuseStorageFormat::Unsupported => continue,
             }
         }
 
@@ -312,74 +296,6 @@ impl<'a> FuseEncodingImpl<'a> {
             ],
             num_rows,
         ))
-    }
-
-    #[async_backtrace::framed]
-    async fn collect_native_rows(
-        &self,
-        table: &'a FuseTable,
-        snapshot: &TableSnapshot,
-        segments_io: &SegmentsIO,
-        chunk_size: usize,
-        rows: &mut Vec<EncodingRow>,
-    ) -> Result<()> {
-        let schema = table.schema();
-        let fields = schema.fields();
-        for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
-                .await?;
-            for segment in segments {
-                let segment = segment?;
-                for block in segment.blocks.iter() {
-                    for field in fields {
-                        if field.is_nested() {
-                            continue;
-                        }
-                        if !self.column_matches(field.name()) {
-                            continue;
-                        }
-                        let column_id = field.column_id;
-                        let Some(column_meta) = block.col_metas.get(&column_id) else {
-                            continue;
-                        };
-                        let (offset, len) = column_meta.offset_length();
-                        let ranges = vec![(column_id, offset..(offset + len))];
-                        let read_settings = ReadSettings::from_ctx(&self.ctx)?;
-                        let merge_io_result = MergeIOReader::merge_io_read(
-                            &read_settings,
-                            table.operator.clone(),
-                            &block.location.0,
-                            &ranges,
-                        )
-                        .await?;
-
-                        let block_read_res =
-                            BlockReadResult::create(merge_io_result, vec![], vec![]);
-                        let column_chunks = block_read_res.columns_chunks()?;
-                        let pages = column_chunks
-                            .get(&column_id)
-                            .unwrap()
-                            .as_raw_data()
-                            .unwrap()
-                            .to_bytes();
-                        let pages = std::io::Cursor::new(pages);
-                        let page_metas = column_meta.as_native().unwrap().pages.clone();
-                        let reader = NativeReader::new(pages, page_metas, vec![]);
-                        let column_info = stat_simple(reader, field.clone())?;
-                        self.push_native_column_rows(
-                            table.name(),
-                            table.storage_format,
-                            &block.location.0,
-                            field,
-                            column_info,
-                            rows,
-                        );
-                    }
-                }
-            }
-        }
-        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -533,40 +449,8 @@ impl<'a> FuseEncodingImpl<'a> {
         Ok(())
     }
 
-    fn push_native_column_rows(
-        &self,
-        table_name: &str,
-        storage_format: FuseStorageFormat,
-        block_location: &str,
-        field: &TableField,
-        column_info: ColumnInfo,
-        rows: &mut Vec<EncodingRow>,
-    ) {
-        let column_name = field.name().clone();
-        let column_type = field.data_type().sql_name();
-        let block_location = block_location.to_string();
-        for page in column_info.pages {
-            rows.push(EncodingRow {
-                table_name: table_name.to_string(),
-                storage_format,
-                block_location: block_location.clone(),
-                column_name: column_name.clone(),
-                column_type: column_type.clone(),
-                validity_size: page.validity_size,
-                compressed_size: page.compressed_size as u64,
-                uncompressed_size: page.uncompressed_size as u64,
-                level_one: encoding_to_string(&page.body),
-                level_two: native_level_two_encoding(&page.body),
-            });
-        }
-    }
-
     fn table_matches(&self, table_name: &str) -> bool {
         Self::filter_matches(&self.table_name_filter, table_name)
-    }
-
-    fn column_matches(&self, column_name: &str) -> bool {
-        Self::filter_matches(&self.column_name_filter, column_name)
     }
 
     fn filter_matches(filter: &Option<String>, value: &str) -> bool {
@@ -601,30 +485,6 @@ impl<'a> FuseEncodingImpl<'a> {
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ])
-    }
-}
-
-fn encoding_to_string(page_body: &PageBody) -> String {
-    match page_body {
-        PageBody::Dict(_) => "Dict".to_string(),
-        PageBody::Freq(_) => "Freq".to_string(),
-        PageBody::OneValue => "OneValue".to_string(),
-        PageBody::Rle => "Rle".to_string(),
-        PageBody::Patas => "Patas".to_string(),
-        PageBody::Bitpack => "Bitpack".to_string(),
-        PageBody::DeltaBitpack => "DeltaBitpack".to_string(),
-        PageBody::Common(c) => format!("Common({:?})", c),
-    }
-}
-
-fn native_level_two_encoding(page_body: &PageBody) -> Option<String> {
-    match page_body {
-        PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
-        PageBody::Freq(freq) => freq
-            .exceptions
-            .as_ref()
-            .map(|e| encoding_to_string(&e.body)),
-        _ => None,
     }
 }
 

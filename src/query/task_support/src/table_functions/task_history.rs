@@ -287,7 +287,8 @@ impl TableHistoryArgsParsed {
         let mut error_only = None;
         let mut root_task_id = None;
         for (k, v) in &args {
-            match k.to_lowercase().as_str() {
+            let key = k.to_lowercase();
+            match key.as_str() {
                 "task_name" => task_name = v.as_string().cloned(),
                 "scheduled_time_range_start" | "scheduled_time_range_end" => {
                     if v.as_timestamp().is_none() && v.as_date().is_none() {
@@ -296,7 +297,7 @@ impl TableHistoryArgsParsed {
                             k,
                         )));
                     }
-                    if k == "scheduled_time_range_start" {
+                    if key == "scheduled_time_range_start" {
                         scheduled_time_range_start = parse_date_or_timestamp(v);
                     } else {
                         scheduled_time_range_end = parse_date_or_timestamp(v);

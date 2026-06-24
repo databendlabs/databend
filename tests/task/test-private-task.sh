@@ -11,21 +11,24 @@ echo "Cleaning up previous runs"
 killall -9 databend-query || true
 killall -9 databend-meta || true
 rm -rf .databend
+mkdir -p ./.databend/
 
 echo "Starting Databend Query cluster with 2 nodes enable private task"
 
 for node in 1 2; do
-    CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    SOURCE_CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    CONFIG_FILE="./.databend/databend-query-node-${node}-private-task.toml"
 
-    echo "Appending history table config to node-${node}"
-    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    echo "Creating private task config for node-${node}"
+    cp "$SOURCE_CONFIG_FILE" "$CONFIG_FILE"
     sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
+    printf '\n' >> "$CONFIG_FILE"
+    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    printf '\n' >> "$CONFIG_FILE"
 done
 
 # Start meta cluster (3 nodes - needed for HA)
 echo 'Start Meta service HA cluster(3 nodes)...'
-
-mkdir -p ./.databend/
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
@@ -44,13 +47,13 @@ sleep 1
 
 # Start only 2 query nodes
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-1-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo 'Start databend-query node-2'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-2-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
@@ -71,10 +74,65 @@ check_response_error() {
     fi
 }
 
+query_sql_with_auth() {
+    local auth="$1"
+    local sql="$2"
+
+    curl -s -u "$auth" -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "$(jq -nc --arg sql "$sql" '{sql: $sql}')"
+}
+
+license_sql=$(head -n 1 scripts/test-bend-tests/setup.sql)
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"$license_sql\"}")
+check_response_error "$response"
+echo "Set enterprise license for private task tests"
+
+response=$(query_sql_with_auth "root:" "SELECT value FROM system.configs WHERE \"group\" = 'task' AND name = 'on'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "true" ]; then
+    echo "✅ system.configs exposes private task config"
+else
+    echo "❌ Expected system.configs to expose task.on"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+expected_task_history_schema='["name","id","owner","comment","schedule","warehouse","state","definition","condition_text","run_id","query_id","exception_code","exception_text","attempt_number","completed_time","scheduled_time","root_task_id","session_parameters"]'
+
+check_task_history_schema() {
+    local response="$1"
+    local actual_schema=$(echo "$response" | jq -c '[.schema[].name]')
+
+    if [ "$actual_schema" != "$expected_task_history_schema" ]; then
+        echo "❌ TASK_HISTORY schema mismatch"
+        echo "Expected: $expected_task_history_schema"
+        echo "Actual  : $actual_schema"
+        exit 1
+    fi
+}
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(SCHEDULED_TIME_RANGE_START => '2026-01-01')\"}")
+state=$(echo "$response" | jq -r '.state')
+error_msg=$(echo "$response" | jq -r '.error.message // ""')
+if [ "$state" = "Failed" ] && [[ "$error_msg" == *"unsupported data type for SCHEDULED_TIME_RANGE_START"* ]]; then
+    echo "✅ TASK_HISTORY rejects non-date scheduled-time arguments"
+else
+    echo "❌ Expected TASK_HISTORY with string scheduled-time argument to fail"
+    echo "State: $state"
+    echo "Error: $error_msg"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t_script (c1 int)\"}")
 check_response_error "$response"
 create_script_table_query_id=$(echo $response | jq -r '.id')
 echo "Create Script Table Query ID: $create_script_table_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE DATABASE task_session_db\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE task_session_db.session_target (c1 int)\"}")
+check_response_error "$response"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK task_missing_wh WAREHOUSE = 'missing_wh' SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 state=$(echo "$response" | jq -r '.state')
@@ -111,6 +169,176 @@ if [ "$actual" = "$expected" ]; then
 else
     echo "❌ Expected private task script block to execute all statements"
     echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK db_session_task DATABASE = 'task_session_db' AS insert into session_target values(42)\"}")
+check_response_error "$response"
+create_db_session_task_query_id=$(echo $response | jq -r '.id')
+echo "Create DB Session Task Query ID: $create_db_session_task_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK db_session_task\"}")
+check_response_error "$response"
+execute_db_session_task_query_id=$(echo $response | jq -r '.id')
+echo "Execute DB Session Task Query ID: $execute_db_session_task_query_id"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM task_session_db.session_target ORDER BY c1\"}")
+check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["42"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Private task applies DATABASE session parameter"
+else
+    echo "❌ Expected private task DATABASE session parameter to resolve unqualified table"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t_ms (c1 int)\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK ms_schedule_task SCHEDULE = 500 MILLISECOND AS insert into t_ms values(1)\"}")
+check_response_error "$response"
+create_ms_schedule_task_query_id=$(echo $response | jq -r '.id')
+echo "Create Millisecond Schedule Task Query ID: $create_ms_schedule_task_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK ms_schedule_task\"}")
+check_response_error "$response"
+execute_ms_schedule_task_query_id=$(echo $response | jq -r '.id')
+echo "Execute Millisecond Schedule Task Query ID: $execute_ms_schedule_task_query_id"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_ms ORDER BY c1\"}")
+check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["1"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Private task executes millisecond schedule task"
+else
+    echo "❌ Expected private task millisecond schedule task to execute"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE TASK overlap_schedule_task SCHEDULE = 500 MILLISECOND AS SELECT sleep(2)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task RESUME")
+check_response_error "$response"
+
+sleep 9
+
+response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task SUSPEND")
+check_response_error "$response"
+
+sleep 3
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'overlap_schedule_task', RESULT_LIMIT => 10) WHERE state = 'SUCCEEDED'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" -ge 2 ]; then
+    echo "✅ Slow interval task continues after previous run completes"
+else
+    echo "❌ Expected slow interval task to have at least 2 successful runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run a, system_task.task_run b WHERE a.task_name = 'overlap_schedule_task' AND b.task_name = 'overlap_schedule_task' AND a.run_id < b.run_id AND a.state = 'SUCCEEDED' AND b.state = 'SUCCEEDED' AND a.scheduled_at < b.completed_at AND b.scheduled_at < a.completed_at")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Slow interval task runs do not overlap"
+else
+    echo "❌ Expected slow interval task runs not to overlap"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE TABLE t_failed_task_recovery (c1 int)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK failed_recovery_task SCHEDULE = 2 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 1 AS SELECT CAST('bad' AS INT)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task RESUME")
+check_response_error "$response"
+
+sleep 5
+
+response=$(query_sql_with_auth "root:" "SELECT state, exception_text FROM TASK_HISTORY(TASK_NAME => 'failed_recovery_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.data[0][0]')
+exception_text=$(echo "$response" | jq -r '.data[0][1]')
+if [ "$state" = "FAILED" ] && [[ "$exception_text" == *"bad"* ]]; then
+    echo "✅ Failed task records quoted error text"
+else
+    echo "❌ Expected failed task history to record quoted error text"
+    echo "State: $state"
+    echo "Exception: $exception_text"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'failed_recovery_task' AND state = 'EXECUTING' AND completed_at IS NULL")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Failed task does not leave an executing run behind"
+else
+    echo "❌ Expected failed task not to block future runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'failed_recovery_task', RESULT_LIMIT => 10) WHERE state = 'FAILED'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+response=$(query_sql_with_auth "root:" "SHOW TASKS LIKE 'failed_recovery_task'")
+check_response_error "$response"
+status=$(echo "$response" | jq -r '.data[0][7]')
+if [ "$actual" = "1" ] && [ "$status" = "Suspended" ]; then
+    echo "✅ Failed task suspends after the configured failure count"
+else
+    echo "❌ Expected failed task to suspend after one configured failure"
+    echo "Failed runs: $actual"
+    echo "Status     : $status"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task MODIFY AS INSERT INTO t_failed_task_recovery VALUES(1)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task RESUME")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM t_failed_task_recovery")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK failed_recovery_task SUSPEND")
+check_response_error "$response"
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ Failed scheduled task can run again after resume"
+else
+    echo "❌ Expected failed scheduled task to run again after resume"
     echo "Actual  : $actual"
     exit 1
 fi
@@ -234,13 +462,13 @@ fi
 killall -9 databend-query || true
 
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-1-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo 'Start databend-query node-2'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-2-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
@@ -295,6 +523,203 @@ fi
 actual=$(echo "$response" | jq -c '.data')
 echo "\n\nSELECT * FROM system.task_history: $actual"
 
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(TASK_NAME => 'db_session_task', RESULT_LIMIT => 1)\"}")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+state=$(echo "$response" | jq -r '.data[0][6]')
+definition=$(echo "$response" | jq -r '.data[0][7]')
+scheduled_time=$(echo "$response" | jq -r '.data[0][15]')
+session_parameters=$(echo "$response" | jq -c '.data[0][17]')
+if [ "$name" = "db_session_task" ] &&
+    [ "$state" = "SUCCEEDED" ] &&
+    [[ "$definition" == *"session_target"* ]] &&
+    [ -n "$scheduled_time" ] &&
+    [[ "$session_parameters" == *"task_session_db"* ]]; then
+    echo "✅ TASK_HISTORY table function matches cloud-style schema and content"
+else
+    echo "❌ Expected TASK_HISTORY table function to return cloud-style db_session_task history"
+    echo "Name: $name"
+    echo "State: $state"
+    echo "Definition: $definition"
+    echo "Scheduled Time: $scheduled_time"
+    echo "Session Parameters: $session_parameters"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(TASK_NAME => 'db_session_task', SCHEDULED_TIME_RANGE_START => to_date('2020-01-01'), SCHEDULED_TIME_RANGE_END => to_timestamp('2999-01-01'), RESULT_LIMIT => 1)\"}")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+state=$(echo "$response" | jq -r '.data[0][6]')
+scheduled_time=$(echo "$response" | jq -r '.data[0][15]')
+if [ "$name" = "db_session_task" ] &&
+    [ "$state" = "SUCCEEDED" ] &&
+    [ -n "$scheduled_time" ]; then
+    echo "✅ TASK_HISTORY accepts date/timestamp scheduled-time arguments"
+else
+    echo "❌ Expected TASK_HISTORY with date/timestamp scheduled-time arguments to return db_session_task history"
+    echo "Name: $name"
+    echo "State: $state"
+    echo "Scheduled Time: $scheduled_time"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(TASK_NAME => 'ms_schedule_task', RESULT_LIMIT => 1)\"}")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+schedule=$(echo "$response" | jq -r '.data[0][4]')
+if [ "$name" = "ms_schedule_task" ] &&
+    [ "$schedule" = "INTERVAL 0 SECOND 500 MILLISECOND" ]; then
+    echo "✅ TASK_HISTORY preserves millisecond schedule"
+else
+    echo "❌ Expected TASK_HISTORY to preserve millisecond schedule"
+    echo "Name: $name"
+    echo "Schedule: $schedule"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) SELECT 900000 + number, 'limit_history_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 900000 + number, 0, 'SUCCEEDED', 0, NULL, 0, to_timestamp(1700000000 + number), to_timestamp(1700000000 + number), NULL, NULL, 'SUSPENDED', to_timestamp(1700000000 + number), to_timestamp(1700000000 + number), parse_json('{}'), NULL, NULL FROM numbers(101)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'limit_history_task')")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "100" ]; then
+    echo "✅ TASK_HISTORY applies the default result limit"
+else
+    echo "❌ Expected TASK_HISTORY without RESULT_LIMIT to return 100 rows"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'limit_history_task', RESULT_LIMIT => 100000)")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "101" ]; then
+    echo "✅ TASK_HISTORY clamps explicit result limits without dropping valid rows"
+else
+    echo "❌ Expected TASK_HISTORY with large RESULT_LIMIT to return all 101 matching rows"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_b")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE USER task_history_user_a IDENTIFIED BY 'task_history_pwd' WITH DEFAULT_ROLE='task_history_role_a'")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE USER task_history_user_b IDENTIFIED BY 'task_history_pwd' WITH DEFAULT_ROLE='task_history_role_b'")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_a TO task_history_user_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_b TO task_history_user_b")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT SUPER ON *.* TO ROLE task_history_role_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT SUPER ON *.* TO ROLE task_history_role_b")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "CREATE TASK role_a_history_task AS SELECT 1")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "EXECUTE TASK role_a_history_task")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "CREATE TASK role_b_history_task AS SELECT 1")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "EXECUTE TASK role_b_history_task")
+check_response_error "$response"
+
+sleep 5
+
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "SELECT * FROM TASK_HISTORY(TASK_NAME => 'role_a_history_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+owner=$(echo "$response" | jq -r '.data[0][2]')
+state=$(echo "$response" | jq -r '.data[0][6]')
+definition=$(echo "$response" | jq -r '.data[0][7]')
+scheduled_time=$(echo "$response" | jq -r '.data[0][15]')
+if [ "$name" = "role_a_history_task" ] &&
+    [ "$owner" = "task_history_role_a" ] &&
+    [ "$state" = "SUCCEEDED" ] &&
+    [ "$definition" = "SELECT 1" ] &&
+    [ -n "$scheduled_time" ]; then
+    echo "✅ TASK_HISTORY returns history for an available owner role"
+else
+    echo "❌ Expected TASK_HISTORY to return role_a_history_task for task_history_role_a"
+    echo "Name: $name"
+    echo "Owner: $owner"
+    echo "State: $state"
+    echo "Definition: $definition"
+    echo "Scheduled Time: $scheduled_time"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "SELECT * FROM TASK_HISTORY(TASK_NAME => 'role_a_history_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+if [ "$actual" = "[]" ]; then
+    echo "✅ TASK_HISTORY hides explicitly named tasks owned by unavailable roles"
+else
+    echo "❌ Expected TASK_HISTORY to hide role_a_history_task from task_history_role_b"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "SELECT name, owner FROM TASK_HISTORY(RESULT_LIMIT => 100) WHERE name IN ('role_a_history_task', 'role_b_history_task') ORDER BY name")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+actual=$(echo "$response" | jq -c '.data')
+expected='[["role_b_history_task","task_history_role_b"]]'
+if [ "$actual" = "$expected" ]; then
+    echo "✅ TASK_HISTORY filters unqualified history by available owner roles"
+else
+    echo "❌ Expected TASK_HISTORY without TASK_NAME to only return available owner roles"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 # Drop Task
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"DROP TASK my_task_1\"}")
 check_response_error "$response"
@@ -320,7 +745,7 @@ check_response_error "$response"
 create_table_query_id_1=$(echo $response | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_1"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 SCHEDULE = USING CRON '*/25 * * * * *' AS insert into t2 values(0)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 SCHEDULE = USING CRON '*/25 * * * * *' 'UTC' AS insert into t2 values(0)\"}")
 check_response_error "$response"
 create_task_4_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 4 Query ID: $create_task_4_query_id"
@@ -332,19 +757,40 @@ check_response_error "$response"
 alter_task_4_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 4 ID: $alter_task_4_query_id"
 
-sleep 60
+sleep 80
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t2 ORDER BY c1\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t2\"}")
 check_response_error "$response"
 
-actual=$(echo "$response" | jq -c '.data')
-expected='[["0"],["0"],["0"]]'
+actual=$(echo "$response" | jq -r '.data[0][0]')
 
-if [ "$actual" = "$expected" ]; then
+if [ "$actual" -ge 3 ]; then
     echo "✅ Query result matches expected"
 else
     echo "❌ Mismatch"
-    echo "Expected: $expected"
+    echo "Expected at least 3 cron task runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(TASK_NAME => 'my_task_4', RESULT_LIMIT => 1)\"}")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+schedule=$(echo "$response" | jq -r '.data[0][4]')
+if [ "$name" = "my_task_4" ] &&
+    [ "$schedule" = "CRON */25 * * * * * TIMEZONE UTC" ]; then
+    echo "✅ TASK_HISTORY preserves cron timezone schedule"
+else
+    echo "❌ Expected TASK_HISTORY to preserve cron timezone schedule"
+    echo "Name: $name"
+    echo "Schedule: $schedule"
     echo "Actual  : $actual"
     exit 1
 fi

@@ -63,12 +63,18 @@ struct ApplyState {
 
 pub struct FinishedCallbackChain {
     chain: VecDeque<(&'static Location<'static>, Box<dyn Callback>)>,
+    // Guard so the chain fires at most once per query, regardless of whether
+    // `apply` is invoked via the pipeline executor's normal finish path, the
+    // executor's Drop path, or an explicit caller. The second `apply` is a
+    // no-op and returns Ok(()).
+    applied: bool,
 }
 
 impl FinishedCallbackChain {
     pub fn create() -> FinishedCallbackChain {
         FinishedCallbackChain {
             chain: VecDeque::new(),
+            applied: false,
         }
     }
 
@@ -81,6 +87,11 @@ impl FinishedCallbackChain {
     }
 
     pub fn apply(&mut self, mut info: ExecutionInfo) -> Result<()> {
+        if self.applied {
+            return Ok(());
+        }
+        self.applied = true;
+
         let chain = std::mem::take(&mut self.chain);
 
         let mut states = Vec::with_capacity(chain.len());

@@ -13,19 +13,17 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
-use databend_common_base::base::convert_byte_size;
-use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::PayloadFlushState;
+use databend_common_expression::PartitionedPayload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline::core::InputPort;
@@ -36,8 +34,13 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
+use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
@@ -52,16 +55,72 @@ impl Default for HashTable {
     }
 }
 
-// SELECT column_name, agg(xxx) FROM table_name GROUP BY column_name
+pub struct Spiller {
+    inner: AggregateSpiller<SharedPartitionStream>,
+    bucket_num: usize,
+}
+
+impl Spiller {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        schema: DataSchemaRef,
+        partition_streams: SharedPartitionStream,
+        bucket_num: usize,
+    ) -> Result<Self> {
+        let spiller =
+            AggregateSpiller::try_create(ctx.clone(), bucket_num, schema, partition_streams)?;
+        Ok(Self {
+            inner: spiller,
+            bucket_num,
+        })
+    }
+
+    pub fn spill(&mut self, partition: PartitionedPayload, is_row_shuffle: bool) -> Result<()> {
+        if is_row_shuffle {
+            for (bucket, p) in partition
+                .scatter_into_buckets(self.bucket_num)
+                .into_iter()
+                .enumerate()
+            {
+                for (_, payload) in p.into_non_empty_bucket_payloads() {
+                    let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+                    self.inner.spill(bucket, data_block)?;
+                }
+            }
+        } else {
+            for (bucket, payload) in partition.into_non_empty_bucket_payloads() {
+                let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+                self.inner.spill(bucket, data_block)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn finish(&mut self) -> Result<Vec<DataBlock>> {
+        let payloads = self.inner.spill_finish()?;
+
+        if payloads.is_empty() {
+            return Ok(vec![]);
+        }
+        let partitioned_payload = DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+            None,
+            PartitionedData::BucketSpilled(payloads),
+        ));
+        return Ok(vec![partitioned_payload]);
+    }
+}
+
+/// TransformPartialAggregate combine partial aggregation and spilling logic
+/// When memory exceeds threshold, it will spill out current hash table into a buffer
+/// and real spill out will happen when the buffer is full.
 pub struct TransformPartialAggregate {
     hash_table: HashTable,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
-    start: Instant,
-    first_block_start: Option<Instant>,
-    processed_bytes: usize,
-    processed_rows: usize,
+    statistics: AggregationStatistics,
     settings: MemorySettings,
+    spillers: Spiller,
+    is_row_shuffle: bool,
 }
 
 impl TransformPartialAggregate {
@@ -71,26 +130,21 @@ impl TransformPartialAggregate {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
+        partition_stream: SharedPartitionStream,
+        bucket_num: usize,
+        is_row_shuffle: bool,
     ) -> Result<Box<dyn Processor>> {
+        let spill_schema = params.spill_schema();
+        let spillers = Spiller::create(ctx.clone(), spill_schema, partition_stream, bucket_num)?;
+
         let arena = Arc::new(Bump::new());
-        // when enable_experiment_aggregate, we will repartition again in the final stage
-        // it will be too small if we use max radix bits here
-        let hash_table = if params.has_distinct_combinator() {
-            let max_radix_bits = config.max_radix_bits;
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config.with_initial_radix_bits(max_radix_bits),
-                arena,
-            ))
-        } else {
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config,
-                arena,
-            ))
-        };
+
+        let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            config,
+            arena,
+        ));
 
         Ok(AccumulatingTransformer::create(
             input,
@@ -100,15 +154,13 @@ impl TransformPartialAggregate {
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
-                start: Instant::now(),
-                first_block_start: None,
-                processed_bytes: 0,
-                processed_rows: 0,
+                statistics: AggregationStatistics::new("PartialAggregate"),
+                spillers,
+                is_row_shuffle,
             },
         ))
     }
 
-    // Block should be `convert_to_full`.
     #[inline(always)]
     fn aggregate_arguments<'a>(
         block: &'a DataBlock,
@@ -130,12 +182,9 @@ impl TransformPartialAggregate {
 
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
+        let block_bytes = block.memory_size();
 
-        self.processed_bytes += block.memory_size();
-        self.processed_rows += rows_num;
-        if self.first_block_start.is_none() {
-            self.first_block_start = Some(Instant::now());
-        }
+        self.statistics.record_block(rows_num, block_bytes);
 
         {
             match &mut self.hash_table {
@@ -183,6 +232,25 @@ impl TransformPartialAggregate {
             }
         }
     }
+
+    fn spill_out(&mut self) -> Result<()> {
+        if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+            let config = v.config.clone();
+
+            self.spillers.spill(v.payload, self.is_row_shuffle)?;
+
+            let arena = Arc::new(Bump::new());
+            self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                self.params.group_data_types.clone(),
+                self.params.aggregate_functions.clone(),
+                config,
+                arena,
+            ));
+        } else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
+        }
+        Ok(())
+    }
 }
 
 impl AccumulatingTransform for TransformPartialAggregate {
@@ -192,37 +260,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
         self.execute_one_block(block)?;
 
         if self.settings.check_spill() {
-            if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-                let group_types = v.payload.group_types.clone();
-                let aggrs = v.payload.aggrs.clone();
-                v.config.update_current_max_radix_bits();
-                let config = v
-                    .config
-                    .clone()
-                    .with_initial_radix_bits(v.config.max_radix_bits);
-
-                let mut state = PayloadFlushState::default();
-
-                // repartition to max for normalization
-                let partitioned_payload = v
-                    .payload
-                    .repartition(1 << config.max_radix_bits, &mut state);
-
-                let blocks = vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_agg_spilling(partitioned_payload),
-                )];
-
-                let arena = Arc::new(Bump::new());
-                self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                    group_types,
-                    aggrs,
-                    config,
-                    arena,
-                ));
-                return Ok(blocks);
-            }
-
-            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
+            self.spill_out()?;
         }
 
         Ok(vec![])
@@ -237,40 +275,25 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 }
             },
             HashTable::AggregateHashTable(hashtable) => {
-                let partition_count = hashtable.payload.partition_count();
-                let mut blocks = Vec::with_capacity(partition_count);
+                let mut blocks = self.spillers.finish()?;
 
-                log::info!(
-                    "[TRANSFORM-AGGREGATOR] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
-                    self.processed_rows,
-                    hashtable.payload.len(),
-                    self.start.elapsed().as_secs_f64(),
-                    if let Some(t) = &self.first_block_start {
-                        t.elapsed().as_secs_f64()
-                    } else {
-                        self.start.elapsed().as_secs_f64()
-                    },
-                    convert_number_size(
-                        self.processed_rows as f64 / self.start.elapsed().as_secs_f64()
+                self.statistics.log_finish_statistics(&hashtable);
+
+                let payloads = hashtable
+                    .payload
+                    .into_bucket_payloads()
+                    .map(|(bucket, payload)| AggregatePayload {
+                        bucket: bucket as isize,
+                        payload,
+                        max_partition_count: 0,
+                    })
+                    .collect::<Vec<_>>();
+                blocks.push(DataBlock::empty_with_meta(
+                    AggregateMeta::create_partitioned(
+                        None,
+                        PartitionedData::AggregatePayload(payloads),
                     ),
-                    convert_byte_size(
-                        self.processed_bytes as f64 / self.start.elapsed().as_secs_f64()
-                    ),
-                    convert_byte_size(self.processed_bytes as f64),
-                );
-
-                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    if payload.len() != 0 {
-                        blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::create_agg_payload(
-                                bucket as isize,
-                                payload,
-                                partition_count,
-                            ),
-                        ));
-                    }
-                }
-
+                ));
                 blocks
             }
         })

@@ -168,3 +168,4 @@ mod v173_csv_quote_style;
 mod v174_user_key_pair;
 mod v175_field_stats_truncate_len;
 mod v176_task_script_sql;
+mod v177_arrow_file_format_params;

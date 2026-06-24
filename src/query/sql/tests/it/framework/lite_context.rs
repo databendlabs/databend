@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -75,8 +76,10 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
+use databend_common_license::license::Feature;
+use databend_common_license::license::LicenseInfo;
 use databend_common_license::license_manager::LicenseManager;
-use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::*;
 use databend_common_meta_app::schema::*;
 use databend_common_meta_app::tenant::Tenant;
@@ -94,6 +97,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -112,8 +116,11 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use jwt_simple::claims::JWTClaims;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+
+const LITE_COMMERCIAL_LICENSE_KEY: &str = "lite-test-commercial";
 
 static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     semantic: Version::new(0, 0, 0),
@@ -138,7 +145,7 @@ pub(crate) fn init_testing_globals() {
                 GlobalInstance::init_testing(&thread_name);
                 GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
                     .expect("init global config");
-                OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+                LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
                 SecurityPolicyCacheManager::init().unwrap();
             });
         });
@@ -151,8 +158,35 @@ pub(crate) fn init_testing_globals() {
             GlobalInstance::init_production();
             GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
                 .expect("init global config");
-            OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+            LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
         });
+    }
+}
+
+struct LiteLicenseManager;
+
+impl LicenseManager for LiteLicenseManager {
+    fn init(_tenant: String) -> Result<()> {
+        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(Self))));
+        Ok(())
+    }
+
+    fn instance() -> Arc<Box<dyn LicenseManager>> {
+        GlobalInstance::get()
+    }
+
+    fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
+        if license_key == LITE_COMMERCIAL_LICENSE_KEY {
+            return Ok(());
+        }
+
+        feature.verify_default("Need Commercial License".to_string())
+    }
+
+    fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        Err(ErrorCode::LicenceDenied(
+            "Need Commercial License".to_string(),
+        ))
     }
 }
 
@@ -165,6 +199,7 @@ fn unsupported<T>(name: &str) -> Result<T> {
 type TableKey = (String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
+type HistogramStatsMap = HashMap<String, Histogram>;
 
 #[derive(Clone)]
 struct DummyCatalog {
@@ -213,11 +248,13 @@ struct FakeTable {
     warehouse_distribution: bool,
     table_stats: Option<TableStatistics>,
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
+    histograms: HashMap<ColumnId, Histogram>,
 }
 
 #[derive(Debug, Clone)]
 struct FakeColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
+    histograms: HashMap<ColumnId, Histogram>,
     num_rows: Option<u64>,
 }
 
@@ -242,6 +279,10 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
         self.column_stats
             .get(&column_id)
             .map(|stats| stats.in_memory_size / num_rows)
+    }
+
+    fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
+        self.histograms.get(&column_id).cloned()
     }
 }
 
@@ -291,6 +332,7 @@ impl Table for FakeTable {
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         Ok(Box::new(FakeColumnStatisticsProvider {
             column_stats: self.column_stats.clone(),
+            histograms: self.histograms.clone(),
             num_rows: self.table_stats.and_then(|stats| stats.num_rows),
         }))
     }
@@ -660,6 +702,7 @@ pub struct LiteTableContext {
     selected_segment_locations: SegmentLocationsState,
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
+    license_key: RwLock<String>,
 }
 
 impl LiteTableContext {
@@ -705,6 +748,8 @@ impl LiteTableContext {
         fields: Vec<TableField>,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
+        options: BTreeMap<String, String>,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
         let column_stats = column_stats
@@ -713,6 +758,14 @@ impl LiteTableContext {
                 let index = schema.index_of(&name)?;
                 let column_id = schema.field(index).column_id();
                 Ok((column_id, stats))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+        let histograms = histograms
+            .into_iter()
+            .map(|(name, histogram)| {
+                let index = schema.index_of(&name)?;
+                let column_id = schema.field(index).column_id();
+                Ok((column_id, histogram))
             })
             .collect::<Result<HashMap<_, _>>>()?;
 
@@ -726,6 +779,7 @@ impl LiteTableContext {
                 name: table_name.to_string(),
                 meta: TableMeta {
                     schema,
+                    options,
                     ..Default::default()
                 },
                 catalog_info: self.default_catalog.info(),
@@ -734,6 +788,7 @@ impl LiteTableContext {
             warehouse_distribution,
             table_stats,
             column_stats,
+            histograms,
         }))
     }
 
@@ -821,9 +876,14 @@ impl LiteTableContext {
             selected_segment_locations: Default::default(),
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
+            license_key: RwLock::new(String::new()),
         });
         ctx.reset_user_api_state().await?;
         Ok(ctx)
+    }
+
+    pub fn enable_commercial_license_for_test(&self) {
+        *self.license_key.write() = LITE_COMMERCIAL_LICENSE_KEY.to_string();
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -872,15 +932,24 @@ impl LiteTableContext {
         fields: Vec<TableField>,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
+        options: BTreeMap<String, String>,
     ) -> Result<()> {
-        let table =
-            self.build_fake_table(database, table_name, fields, table_stats, column_stats)?;
+        let table = self.build_fake_table(
+            database,
+            table_name,
+            fields,
+            table_stats,
+            column_stats,
+            histograms,
+            options,
+        )?;
         self.default_catalog.insert_table(database, table);
         Ok(())
     }
 
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
-        self.register_table_sql_with_stats(sql, None, HashMap::new())
+        self.register_table_sql_with_stats(sql, None, HashMap::new(), HashMap::new())
             .await
     }
 
@@ -930,6 +999,7 @@ impl LiteTableContext {
         sql: &str,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
     ) -> Result<()> {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
@@ -1025,6 +1095,8 @@ impl LiteTableContext {
                     fields,
                     table_stats,
                     column_stats,
+                    histograms,
+                    stmt.table_options,
                 )
             }
             _ => unsupported("lite sql harness table registration from non-DDL SQL"),
@@ -1122,6 +1194,12 @@ impl TableContextSettings for LiteTableContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
+        if self.shared_settings.is_changed() && self.shared_settings.query_level_change() {
+            unsafe {
+                self.settings
+                    .unchecked_apply_changes(self.shared_settings.changes());
+            }
+        }
         self.settings.clone()
     }
 
@@ -1136,7 +1214,7 @@ impl TableContextSettings for LiteTableContext {
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
-        String::new()
+        self.license_key.read().clone()
     }
 }
 
@@ -1295,6 +1373,10 @@ impl TableContextQueryState for LiteTableContext {
         None
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        0
+    }
+
     fn push_warning(&self, _warning: String) {}
 }
 
@@ -1402,18 +1484,9 @@ impl TableContextCopy for LiteTableContext {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for LiteTableContext {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         None
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        unsupported("table_ctx::get_file_format")
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        unsupported("table_ctx::get_connection")
     }
 }
 
@@ -1741,8 +1814,24 @@ $$
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_fake_tables_have_unique_ids() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
-        ctx.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
-        ctx.register_table_with_stats("default", "t2", test_fields(), None, HashMap::new())?;
+        ctx.register_table_with_stats(
+            "default",
+            "t1",
+            test_fields(),
+            None,
+            HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
+        )?;
+        ctx.register_table_with_stats(
+            "default",
+            "t2",
+            test_fields(),
+            None,
+            HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
+        )?;
 
         let table1 = ctx
             .default_catalog
@@ -1763,7 +1852,15 @@ $$
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_create_clears_catalog_tables() -> Result<()> {
         let ctx1 = LiteTableContext::create().await?;
-        ctx1.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
+        ctx1.register_table_with_stats(
+            "default",
+            "t1",
+            test_fields(),
+            None,
+            HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
+        )?;
         ctx1.default_catalog
             .get_table(&ctx1.tenant, "default", "t1")
             .await?;
@@ -1790,6 +1887,8 @@ $$
             ],
             None,
             HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
         )?;
         ctx.register_setup_sql(test_udaf_sql()).await?;
 
@@ -1811,6 +1910,8 @@ $$
             ],
             None,
             HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
         )?;
         ctx1.register_setup_sql(test_udaf_sql()).await?;
         ctx1.bind_sql("SELECT weighted_avg(a, b) FROM t").await?;
@@ -1825,6 +1926,8 @@ $$
             ],
             None,
             HashMap::new(),
+            HashMap::new(),
+            BTreeMap::new(),
         )?;
 
         assert!(

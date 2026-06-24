@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_api::RowAccessPolicyApi;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;

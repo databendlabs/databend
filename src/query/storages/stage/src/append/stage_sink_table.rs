@@ -29,6 +29,7 @@ use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::StageTable;
+use crate::append::append_data_to_arrow_files;
 use crate::append::append_data_to_lance_dataset;
 use crate::append::output::SumSummaryTransform;
 use crate::append::parquet_file::append_data_to_parquet_files;
@@ -109,6 +110,18 @@ impl StageSinkTable {
                 max_threads,
                 self.create_by.clone(),
             )?,
+            FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
+                append_data_to_arrow_files(
+                    pipeline,
+                    self.info.clone(),
+                    self.schema.clone(),
+                    op,
+                    query_id,
+                    &group_id,
+                    mem_limit,
+                    max_threads,
+                )?
+            }
             FileFormatParams::Lance(_) => append_data_to_lance_dataset(
                 pipeline,
                 self.info.clone(),

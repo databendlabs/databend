@@ -238,6 +238,8 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"undrop table test_db.test;"#,
         r#"analyze table test_db.test noscan;"#,
+        r#"analyze table test_db.test with histogram;"#,
+        r#"analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;"#,
         r#"exists table test_db.test;"#,
         r#"create role role1 comment='test';"#,
         r#"alter role role1 set comment='test';"#,
@@ -655,6 +657,22 @@ SELECT * from s;"#,
                 FROM (SELECT * FROM numbers(10))
                 FILE_FORMAT = (
                     type = LANCE
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow
+                FILE_FORMAT = (
+                    type = ARROW
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow_stream
+                FILE_FORMAT = (
+                    type = ARROW_STREAM
+                    missing_field_as = FIELD_DEFAULT
                 )
         "#,
         r#"
@@ -1422,6 +1440,9 @@ fn test_query() {
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
         r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => true)"#,
+        r#"select * from t at (timestamp => '2024-01-01'::TIMESTAMP, NO_CHECK => true)"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => false)"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,

@@ -17,3 +17,4 @@ mod udf_validator;
 
 pub use expression_parser::*;
 pub use udf_validator::UDFValidator;
+pub use udf_validator::UdfValidationConfig;

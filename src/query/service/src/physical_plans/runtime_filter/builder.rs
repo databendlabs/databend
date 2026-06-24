@@ -152,16 +152,8 @@ pub async fn build_runtime_filter(
             })
         })
     {
-        // Skip if the probe expression is neither a direct column reference nor a
-        // cast from not null to nullable type (e.g. CAST(col AS Nullable(T))).
-        match &probe_key {
-            RemoteExpr::ColumnRef { .. } => {}
-            RemoteExpr::Cast {
-                expr: box RemoteExpr::ColumnRef { data_type, .. },
-                dest_type,
-                ..
-            } if &dest_type.remove_nullable() == data_type => {}
-            _ => continue,
+        if !supported_probe_key_for_runtime_filter(&probe_key) {
+            continue;
         }
 
         let probe_targets =
@@ -277,28 +269,48 @@ fn scalar_to_remote_expr(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
 ) -> Result<Option<(RemoteExpr<String>, usize, Symbol)>> {
-    if scalar.used_columns().iter().all(|idx| {
-        matches!(
-            metadata.read().column(*idx),
-            ColumnEntry::BaseTableColumn(_)
-        )
-    }) {
-        if let Some(column_idx) = scalar.used_columns().iter().next() {
-            let scan_id = metadata.read().base_column_scan_id(*column_idx);
+    let used_columns = scalar.used_columns();
+    if used_columns.len() != 1 {
+        return Ok(None);
+    }
 
-            if let Some(scan_id) = scan_id {
-                let remote_expr = scalar
-                    .as_raw_expr()
-                    .type_check(&*metadata.read())?
-                    .project_column_ref(|col| Ok(col.column_name.clone()))?
-                    .as_remote_expr();
+    let column_idx = *used_columns.iter().next().unwrap();
+    if !matches!(
+        metadata.read().column(column_idx),
+        ColumnEntry::BaseTableColumn(_)
+    ) {
+        return Ok(None);
+    }
 
-                return Ok(Some((remote_expr, scan_id, *column_idx)));
-            }
-        }
+    let Some(scan_id) = metadata.read().base_column_scan_id(column_idx) else {
+        return Ok(None);
+    };
+
+    let remote_expr = scalar
+        .as_raw_expr()
+        .type_check(&*metadata.read())?
+        .project_column_ref(|col| Ok(col.column_name.clone()))?
+        .as_remote_expr();
+
+    if supported_probe_key_for_runtime_filter(&remote_expr) {
+        return Ok(Some((remote_expr, scan_id, column_idx)));
     }
 
     Ok(None)
+}
+
+fn supported_probe_key_for_runtime_filter(probe_key: &RemoteExpr<String>) -> bool {
+    match probe_key {
+        RemoteExpr::ColumnRef { .. } => true,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T)).
+        RemoteExpr::Cast {
+            expr, dest_type, ..
+        } => matches!(
+            expr.as_ref(),
+            RemoteExpr::ColumnRef { data_type, .. } if &dest_type.remove_nullable() == data_type
+        ),
+        _ => false,
+    }
 }
 
 struct UnionFind {

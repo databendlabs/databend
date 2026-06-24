@@ -26,6 +26,7 @@ use async_channel::Receiver;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
@@ -49,9 +50,7 @@ use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
@@ -60,7 +59,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -69,6 +67,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
@@ -172,7 +171,8 @@ pub struct QueryContextShared {
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
-    pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
+    pub(super) materialized_cte_receivers:
+        Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
     // Temp tables created for recursive CTE cleanup.
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
@@ -571,7 +571,7 @@ impl QueryContextShared {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
-                query,
+                mask_connection_info(&query),
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),
@@ -674,12 +674,6 @@ impl QueryContextShared {
     pub fn get_status_info(&self) -> String {
         let status = self.status.read();
         status.clone()
-    }
-
-    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {

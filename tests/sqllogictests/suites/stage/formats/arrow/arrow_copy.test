@@ -1,0 +1,78 @@
+statement ok
+drop table if exists arrow_copy_t
+
+statement ok
+create table arrow_copy_t(id int, name string, extra int default 7)
+
+query ?????
+copy into arrow_copy_t from @data/arrow/ files = ('sample.arrow') file_format = (type=arrow missing_field_as=field_default)
+----
+arrow/sample.arrow 2 0 NULL NULL
+
+query ???
+select * from arrow_copy_t order by id
+----
+1 alice 7
+2 bob 7
+
+query ??
+select id, name from @data/arrow/ (files=>('sample.arrow'), file_format=>'arrow') order by id
+----
+1 alice
+2 bob
+
+query ??
+select id, name from @data (files=>('empty.txt', 'arrow/sample.arrow'), file_format=>'arrow') order by id
+----
+1 alice
+2 bob
+
+query ????
+select metadata$filename, metadata$file_row_number, id, name from @data/arrow/ (files=>('sample.arrow'), file_format=>'arrow') order by metadata$file_row_number
+----
+arrow/sample.arrow 0 1 alice
+arrow/sample.arrow 1 2 bob
+
+statement ok
+drop table if exists arrow_stream_copy_t
+
+statement ok
+create table arrow_stream_copy_t(id int, name string, extra int default 7)
+
+query ?????
+copy into arrow_stream_copy_t from @data/arrow/ files = ('sample.arrow_stream') file_format = (type=arrow_stream missing_field_as=field_default)
+----
+arrow/sample.arrow_stream 2 0 NULL NULL
+
+query ???
+select * from arrow_stream_copy_t order by id
+----
+1 alice 7
+2 bob 7
+
+query ??
+select id, name from @data/arrow/ (files=>('sample.arrow_stream'), file_format=>'arrow_stream') order by id
+----
+1 alice
+2 bob
+
+query ????
+select metadata$filename, metadata$file_row_number, id, name from @data/arrow/ (files=>('sample.arrow_stream'), file_format=>'arrow_stream') order by metadata$file_row_number
+----
+arrow/sample.arrow_stream 0 1 alice
+arrow/sample.arrow_stream 1 2 bob
+
+statement ok
+CREATE OR REPLACE TABLE vector(id int, embeddings vector(4));
+
+statement ok
+COPY INTO vector FROM @data/arrow/ FILES = ('list.arrow') FILE_FORMAT = (TYPE = arrow);
+
+query IT
+SELECT * FROM vector ORDER BY id;
+----
+1 [-0.0029487917,0.035842653,-0.046431996,-0.036314666]
+2 [-0.0071870354,-0.059680913,0.034321904,0.029986938]
+3 [0.010190959,0.01149214,0.023494562,0.008591366]
+4 [0.024801085,0.012556179,0.025798246,0.018770922]
+

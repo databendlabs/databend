@@ -41,6 +41,7 @@ pub use broadcast::BroadcastSourceProcessor;
 pub use databend_query_script_udf_support::TransformUdfScript;
 pub use hash_join::*;
 pub use materialized_cte::CTESource;
+pub use materialized_cte::MaterializedCtePayload;
 pub use materialized_cte::MaterializedCteSink;
 pub use new_hash_join::Join;
 pub use new_hash_join::TransformHashJoin;

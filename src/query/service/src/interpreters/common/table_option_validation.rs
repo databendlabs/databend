@@ -42,11 +42,12 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -108,6 +109,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r
 });
 
@@ -138,6 +141,14 @@ pub static CREATE_MEMORY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::ne
     r
 });
 
+pub static CREATE_PROXY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_ENGINE);
+    r.insert("targets");
+    r.insert("default");
+    r
+});
+
 pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
@@ -155,6 +166,8 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r
 });
 
@@ -166,6 +179,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
+        Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
     }
 }
@@ -283,6 +297,40 @@ pub fn is_valid_approx_distinct_columns(
     Ok(())
 }
 
+pub fn is_valid_analyze_histogram_algorithm(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM) {
+        match value.to_lowercase().as_str() {
+            "window" | "kll_fast" | "kll_full" => {}
+            _ => {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM} must be one of 'window', 'kll_fast', or 'kll_full', got: {value}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_histogram_kll_relative_error(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR) {
+        let relative_error = value.parse::<f64>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be a floating-point number, got: {value}"
+            ))
+        })?;
+        if relative_error <= 0.0 || !relative_error.is_finite() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be finite and greater than zero, got: {relative_error}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn is_valid_change_tracking(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
@@ -322,14 +370,8 @@ pub fn is_valid_fuse_parquet_dictionary_opt(
 
 pub fn is_valid_fuse_virtual_column_opt(
     options: &BTreeMap<String, String>,
-    storage_format: FuseStorageFormat,
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN) {
-        if !matches!(storage_format, FuseStorageFormat::Parquet) {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "table option {FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN} only support {OPT_KEY_STORAGE_FORMAT}=parquet, but got {storage_format}"
-            )));
-        }
         value.parse::<bool>()?;
     }
     Ok(())

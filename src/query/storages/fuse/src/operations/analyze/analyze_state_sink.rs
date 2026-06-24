@@ -13,30 +13,42 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use async_channel::Receiver;
+use backoff::backoff::Backoff;
 use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
+use databend_common_statistics::KllBucketBounds;
+use databend_common_statistics::KllSketch;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -44,17 +56,75 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use tokio::sync::Semaphore;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
+use crate::operations::analyze::AnalyzeCollectHistogramInfo;
 use crate::operations::analyze::AnalyzeCollectNDVSource;
 use crate::operations::analyze::AnalyzeNDVMeta;
+use crate::operations::util::set_backoff;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
 use crate::statistics::reducers::reduce_virtual_column_statistics;
+
+const ANALYZE_COMMIT_MAX_RETRY_ELAPSED: Duration = Duration::from_secs(15 * 60);
+
+#[derive(Clone)]
+pub enum AnalyzeHistogramInfo {
+    None,
+    Window(HashMap<u32, Receiver<DataBlock>>),
+    KllFast { relative_error: f64 },
+    KllFull { relative_error: f64 },
+}
+
+impl AnalyzeHistogramInfo {
+    fn collect_info(&self) -> AnalyzeCollectHistogramInfo {
+        match self {
+            AnalyzeHistogramInfo::KllFast { relative_error }
+            | AnalyzeHistogramInfo::KllFull { relative_error } => {
+                AnalyzeCollectHistogramInfo::Kll {
+                    relative_error: *relative_error,
+                }
+            }
+            AnalyzeHistogramInfo::None | AnalyzeHistogramInfo::Window(_) => {
+                AnalyzeCollectHistogramInfo::None
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+enum SinkAnalyzeHistogramInfo {
+    None,
+    Window(HashMap<u32, Receiver<DataBlock>>),
+    KllFast,
+    KllFull,
+}
+
+impl From<AnalyzeHistogramInfo> for SinkAnalyzeHistogramInfo {
+    fn from(value: AnalyzeHistogramInfo) -> Self {
+        match value {
+            AnalyzeHistogramInfo::None => SinkAnalyzeHistogramInfo::None,
+            AnalyzeHistogramInfo::Window(receivers) => SinkAnalyzeHistogramInfo::Window(receivers),
+            AnalyzeHistogramInfo::KllFast { .. } => SinkAnalyzeHistogramInfo::KllFast,
+            AnalyzeHistogramInfo::KllFull { .. } => SinkAnalyzeHistogramInfo::KllFull,
+        }
+    }
+}
+
+impl SinkAnalyzeHistogramInfo {
+    fn accuracy(&self) -> bool {
+        matches!(self, SinkAnalyzeHistogramInfo::Window(_))
+    }
+
+    fn collect_statistics(&self) -> bool {
+        !matches!(self, SinkAnalyzeHistogramInfo::None)
+    }
+}
 
 impl FuseTable {
     pub fn do_analyze(
@@ -62,8 +132,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         snapshot: Arc<TableSnapshot>,
         pipeline: &mut Pipeline,
-        histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+        histogram_info: AnalyzeHistogramInfo,
         no_scan: bool,
+        retry_commit: bool,
     ) -> Result<()> {
         let mut parts = Vec::with_capacity(snapshot.segments.len());
         for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -74,6 +145,9 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let collect_histogram_info = histogram_info.collect_info();
+        let sink_histogram_info = SinkAnalyzeHistogramInfo::from(histogram_info);
+        let snapshot_id = snapshot.snapshot_id;
         pipeline.add_source(
             |output| {
                 AnalyzeCollectNDVSource::try_create(
@@ -82,6 +156,7 @@ impl FuseTable {
                     ctx.clone(),
                     io_request_semaphore.clone(),
                     no_scan,
+                    collect_histogram_info,
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
@@ -91,9 +166,11 @@ impl FuseTable {
             SinkAnalyzeState::create(
                 ctx.clone(),
                 self,
-                snapshot.snapshot_id,
+                snapshot.clone(),
+                snapshot_id,
                 input,
-                histogram_info_receivers.clone(),
+                sink_histogram_info.clone(),
+                retry_commit,
             )
         })?;
         Ok(())
@@ -105,6 +182,7 @@ enum AnalyzeStep {
     CollectNDV,
     CollectHistogram,
     CommitStatistics,
+    Finished,
 }
 
 struct SinkAnalyzeState {
@@ -112,38 +190,44 @@ struct SinkAnalyzeState {
     input_port: Arc<InputPort>,
 
     table: Arc<dyn Table>,
+    snapshot: Arc<TableSnapshot>,
     snapshot_id: SnapshotId,
-    histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+    histogram_info: SinkAnalyzeHistogramInfo,
     input_data: Option<DataBlock>,
-    committed: bool,
     row_count: u64,
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
+    kll_histograms: HashMap<ColumnId, KllSketch>,
     step: AnalyzeStep,
+    retry_commit: bool,
 }
 
 impl SinkAnalyzeState {
-    pub fn create(
+    fn create(
         ctx: Arc<dyn TableContext>,
         table: &FuseTable,
+        snapshot: Arc<TableSnapshot>,
         snapshot_id: SnapshotId,
         input_port: Arc<InputPort>,
-        histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+        histogram_info: SinkAnalyzeHistogramInfo,
+        retry_commit: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
             ctx,
             input_port,
             table: Arc::new(table.clone()),
+            snapshot,
             snapshot_id,
-            histogram_info_receivers,
+            histogram_info,
             input_data: None,
-            committed: false,
             row_count: 0,
             unstats_rows: 0,
             ndv_states: Default::default(),
             histograms: Default::default(),
+            kll_histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
+            retry_commit,
         })))
     }
 
@@ -198,6 +282,110 @@ impl SinkAnalyzeState {
         Ok(())
     }
 
+    fn collect_kll_fast_histograms(&mut self) -> Result<()> {
+        for (column_id, sketch) in std::mem::take(&mut self.kll_histograms) {
+            let column_ndv = self
+                .ndv_states
+                .get(&column_id)
+                .map(|hll| hll.count() as f64);
+            let buckets = sketch.into_equal_depth_buckets(DEFAULT_HISTOGRAM_BUCKETS, column_ndv)?;
+            if !buckets.is_empty() {
+                self.histograms.insert(column_id, buckets);
+            }
+        }
+        Ok(())
+    }
+
+    async fn collect_kll_full_histograms(&mut self) -> Result<()> {
+        let Some(mut kll_histograms) = self.create_kll_histogram_collectors()? else {
+            return Ok(());
+        };
+        self.scan_kll_histogram_buckets(&mut kll_histograms).await?;
+
+        for histogram in kll_histograms {
+            let column_id = histogram.column_id;
+            let buckets = histogram.into_histogram_buckets()?;
+            if !buckets.is_empty() {
+                self.histograms.insert(column_id, buckets);
+            }
+        }
+        Ok(())
+    }
+
+    fn create_kll_histogram_collectors(&mut self) -> Result<Option<Vec<KllHistogramCollector>>> {
+        if self.kll_histograms.is_empty() {
+            return Ok(None);
+        }
+
+        let table = FuseTable::try_from_table(self.table.as_ref())?;
+        let mut kll_histograms = std::mem::take(&mut self.kll_histograms);
+        let mut collectors = Vec::with_capacity(kll_histograms.len());
+        for field in table.schema().fields() {
+            let column_id = field.column_id();
+            let Some(sketch) = kll_histograms.remove(&column_id) else {
+                continue;
+            };
+            let bounds = sketch.into_equal_depth_bounds(DEFAULT_HISTOGRAM_BUCKETS)?;
+            let collector = KllHistogramCollector::new(column_id, bounds)?;
+            if collector.is_empty() {
+                continue;
+            }
+            collectors.push(collector);
+        }
+
+        if collectors.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(collectors))
+        }
+    }
+
+    async fn scan_kll_histogram_buckets(
+        &self,
+        collectors: &mut [KllHistogramCollector],
+    ) -> Result<()> {
+        let table = FuseTable::try_from_table(self.table.as_ref())?;
+        let mut field_indices = Vec::with_capacity(collectors.len());
+        let mut collector_offsets = HashMap::with_capacity(collectors.len());
+        for (field_index, field) in table.schema().fields().iter().enumerate() {
+            if let Some(collector_index) = collectors
+                .iter()
+                .position(|collector| collector.column_id == field.column_id())
+            {
+                collector_offsets.insert(field_indices.len(), collector_index);
+                field_indices.push(field_index as FieldIndex);
+            }
+        }
+        if field_indices.is_empty() {
+            return Ok(());
+        }
+
+        let projection = Projection::Columns(field_indices);
+        let block_reader = table.create_block_reader(self.ctx.clone(), projection, false)?;
+        let settings = ReadSettings::from_ctx(&self.ctx)?;
+        let storage_format = table.get_storage_format();
+        let segments_io =
+            SegmentsIO::create(self.ctx.clone(), table.operator.clone(), table.schema());
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
+
+        for chunk in self.snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?;
+            for segment in segments {
+                let segment = segment?;
+                for block_meta in segment.block_metas()? {
+                    let block = block_reader
+                        .read_by_meta(&settings, &block_meta, &storage_format)
+                        .await?;
+                    update_kll_histogram_collectors(block, &collector_offsets, collectors)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn commit_statistics(&mut self) -> Result<()> {
         let table = self.table.refresh(self.ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
@@ -224,14 +412,20 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
-        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()? {
+        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()?
+            || self.histogram_info.collect_statistics()
+        {
             let histograms = self
                 .histograms
                 .iter()
                 .map(|(column_id, buckets)| {
                     Ok((
                         *column_id,
-                        Histogram::try_from_buckets(true, buckets.clone(), None)?,
+                        Histogram::try_from_buckets(
+                            self.histogram_info.accuracy(),
+                            buckets.clone(),
+                            None,
+                        )?,
                     ))
                 })
                 .collect::<Result<_>>()?;
@@ -271,6 +465,35 @@ impl SinkAnalyzeState {
                 &table.operator,
             )
             .await
+    }
+
+    async fn commit_statistics_with_retry(&mut self) -> Result<()> {
+        if !self.retry_commit {
+            return self.commit_statistics().await;
+        }
+
+        let mut retries = 0;
+        let mut backoff = set_backoff(None, None, Some(ANALYZE_COMMIT_MAX_RETRY_ELAPSED));
+        loop {
+            match self.commit_statistics().await {
+                Ok(_) => return Ok(()),
+                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
+                    let Some(duration) = backoff.next_backoff() else {
+                        return Err(ErrorCode::StorageOther(format!(
+                            "commit analyze statistics failed after {retries} retries"
+                        )));
+                    };
+                    retries += 1;
+                    log::warn!(
+                        "Retry analyze statistics commit after TableVersionMismatched, sleep {} ms, retrying {} times",
+                        duration.as_millis(),
+                        retries
+                    );
+                    tokio::time::sleep(duration).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     async fn regenerate_statistics(
@@ -375,11 +598,10 @@ impl Processor for SinkAnalyzeState {
                     return Ok(Event::Async);
                 }
                 AnalyzeStep::CommitStatistics => {
-                    if self.committed {
-                        return Ok(Event::Finished);
-                    } else {
-                        return Ok(Event::Async);
-                    }
+                    return Ok(Event::Async);
+                }
+                AnalyzeStep::Finished => {
+                    return Ok(Event::Finished);
                 }
             }
         }
@@ -411,6 +633,13 @@ impl Processor for SinkAnalyzeState {
                             }
                             self.row_count += meta.row_count;
                         }
+                        for (column_id, sketch) in meta.kll_histograms {
+                            if let Some(existing) = self.kll_histograms.get_mut(&column_id) {
+                                existing.merge(sketch)?;
+                            } else {
+                                self.kll_histograms.insert(column_id, sketch);
+                            }
+                        }
                         self.unstats_rows += meta.unstats_rows;
                     }
                 }
@@ -424,36 +653,212 @@ impl Processor for SinkAnalyzeState {
     async fn async_process(&mut self) -> Result<()> {
         match self.step {
             AnalyzeStep::CollectHistogram => {
-                let mut finished_count = 0;
-                let receivers = self.histogram_info_receivers.clone();
-                for (id, receiver) in receivers.iter() {
-                    if let Ok(res) = receiver.recv().await {
-                        self.create_histogram(*id, res).await?;
-                    } else {
-                        finished_count += 1;
+                let should_commit = match &self.histogram_info {
+                    SinkAnalyzeHistogramInfo::Window(receivers) => {
+                        let mut finished_count = 0;
+                        let receivers = receivers.clone();
+                        for (id, receiver) in receivers.iter() {
+                            if let Ok(res) = receiver.recv().await {
+                                self.create_histogram(*id, res).await?;
+                            } else {
+                                finished_count += 1;
+                            }
+                        }
+                        finished_count == receivers.len()
                     }
-                }
-                if finished_count == self.histogram_info_receivers.len() {
+                    SinkAnalyzeHistogramInfo::KllFast => {
+                        self.collect_kll_fast_histograms()?;
+                        true
+                    }
+                    SinkAnalyzeHistogramInfo::KllFull => {
+                        self.collect_kll_full_histograms().await?;
+                        true
+                    }
+                    SinkAnalyzeHistogramInfo::None => true,
+                };
+                if should_commit {
                     self.step = AnalyzeStep::CommitStatistics;
                 }
             }
             AnalyzeStep::CommitStatistics => {
-                let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
-                loop {
-                    if let Err(e) = self.commit_statistics().await {
-                        if e.code() == mismatch_code {
-                            log::warn!("Retry after got TableVersionMismatched");
-                            continue;
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                    break;
-                }
-                self.committed = true;
+                self.commit_statistics_with_retry().await?;
+                self.step = AnalyzeStep::Finished;
             }
             _ => unreachable!(),
         }
         Ok(())
+    }
+}
+
+struct KllHistogramCollector {
+    column_id: ColumnId,
+    buckets: Vec<KllBucketStats>,
+}
+
+impl KllHistogramCollector {
+    fn new(
+        column_id: ColumnId,
+        bounds: impl IntoIterator<Item = Result<KllBucketBounds>>,
+    ) -> Result<Self> {
+        let buckets = bounds
+            .into_iter()
+            .map(|bounds| bounds.map(KllBucketStats::new))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self { column_id, buckets })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.buckets.is_empty()
+    }
+
+    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
+        let bucket_index = self.locate_bucket(&value)?;
+        self.buckets[bucket_index].add_value(value, ndv_value)
+    }
+
+    fn locate_bucket(&self, value: &Datum) -> Result<usize> {
+        for (idx, bucket) in self.buckets.iter().enumerate() {
+            if !matches!(
+                value.compare(&bucket.routing_upper_bound)?,
+                Ordering::Greater
+            ) {
+                return Ok(idx);
+            }
+        }
+        Ok(self.buckets.len().saturating_sub(1))
+    }
+
+    fn into_histogram_buckets(self) -> Result<Vec<HistogramBucket>> {
+        self.buckets
+            .into_iter()
+            .filter_map(KllBucketStats::into_histogram_bucket)
+            .collect()
+    }
+}
+
+struct KllBucketStats {
+    routing_upper_bound: Datum,
+    observed_lower_bound: Option<Datum>,
+    observed_upper_bound: Option<Datum>,
+    count: u64,
+    ndv: MetaHLL,
+}
+
+impl KllBucketStats {
+    fn new(bounds: KllBucketBounds) -> Self {
+        Self {
+            routing_upper_bound: bounds.upper,
+            observed_lower_bound: None,
+            observed_upper_bound: None,
+            count: 0,
+            ndv: MetaHLL::new(),
+        }
+    }
+
+    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
+        self.observed_lower_bound = match self.observed_lower_bound.take() {
+            Some(lower_bound) => {
+                if value.compare(&lower_bound)?.is_lt() {
+                    Some(value.clone())
+                } else {
+                    Some(lower_bound)
+                }
+            }
+            None => Some(value.clone()),
+        };
+        self.observed_upper_bound = match self.observed_upper_bound.take() {
+            Some(upper_bound) => {
+                if value.compare(&upper_bound)?.is_gt() {
+                    Some(value.clone())
+                } else {
+                    Some(upper_bound)
+                }
+            }
+            None => Some(value.clone()),
+        };
+        self.count += 1;
+        self.ndv.add_object(ndv_value);
+        Ok(())
+    }
+
+    fn into_histogram_bucket(self) -> Option<Result<HistogramBucket>> {
+        if self.count == 0 {
+            return None;
+        }
+        let lower_bound = self.observed_lower_bound?;
+        let upper_bound = self.observed_upper_bound?;
+        Some(
+            HistogramBucket::try_from_bounds(
+                lower_bound,
+                upper_bound,
+                self.count as f64,
+                self.ndv.count() as f64,
+            )
+            .map_err(ErrorCode::Internal),
+        )
+    }
+}
+
+fn update_kll_histogram_collectors(
+    block: DataBlock,
+    collector_offsets: &HashMap<usize, usize>,
+    collectors: &mut [KllHistogramCollector],
+) -> Result<()> {
+    for (column_offset, entry) in block.take_columns().into_iter().enumerate() {
+        let Some(collector_index) = collector_offsets.get(&column_offset) else {
+            continue;
+        };
+        let collector = &mut collectors[*collector_index];
+        match entry {
+            BlockEntry::Const(scalar, _, num_rows) => {
+                let Some(value) = scalar.clone().to_datum() else {
+                    continue;
+                };
+                for _ in 0..num_rows {
+                    collector.add_value(value.clone(), &scalar)?;
+                }
+            }
+            BlockEntry::Column(column) => {
+                for value in column.iter() {
+                    let Some(datum) = value.clone().to_datum() else {
+                        continue;
+                    };
+                    collector.add_value(datum, &value)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    #[test]
+    fn kll_bucket_ndv_hashes_original_decimal_value() {
+        let size = DecimalSize::new(38, 0).unwrap();
+        let left = Scalar::Decimal(DecimalScalar::Decimal128(9_007_199_254_740_992, size));
+        let right = Scalar::Decimal(DecimalScalar::Decimal128(9_007_199_254_740_993, size));
+        let left_datum = left.clone().to_datum().unwrap();
+        let right_datum = right.clone().to_datum().unwrap();
+
+        assert_eq!(left_datum, right_datum);
+
+        let mut bucket = KllBucketStats::new(KllBucketBounds {
+            lower: left_datum.clone(),
+            upper: right_datum.clone(),
+            num_values: 2,
+        });
+        bucket.add_value(left_datum, &left).unwrap();
+        bucket.add_value(right_datum, &right).unwrap();
+        let histogram_bucket = bucket.into_histogram_bucket().unwrap().unwrap();
+
+        assert_eq!(histogram_bucket.num_values(), 2.0);
+        assert_eq!(histogram_bucket.num_distinct(), 2.0);
     }
 }

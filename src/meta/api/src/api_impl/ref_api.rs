@@ -41,12 +41,12 @@ use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
+use crate::MetaTxnManager;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_del;
 use crate::txn_put_pb;
 
 async fn build_lvt_condition(
@@ -167,33 +167,31 @@ where
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let key_tag = TableIdTagName::new(req.table_id, &req.tag_name);
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let ctx = func_name!();
+        let req = &req;
+        MetaTxnManager::new(self, ctx)
+            .run(|txn| {
+                let key_tag = key_tag.clone();
+                async move {
+                    let tag = txn.get_for_update(key_tag).await?;
+                    let tag = tag.some_or_unknown(ctx).map_err(AppError::from)?;
 
-            let seq_tag = self.get_pb(&key_tag).await?;
-            let Some(seq_tag) = seq_tag else {
-                return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                    format!("Unknown tag '{}'", req.tag_name),
-                ))));
-            };
-            if req.seq.match_seq(&seq_tag).is_err() {
-                return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                    format!(
-                        "Tag '{}' seq mismatched: expect {}, current {}",
-                        req.tag_name, req.seq, seq_tag.seq
-                    ),
-                ))));
-            }
+                    let seq_tag = tag.seq();
+                    if req.seq.match_seq(&seq_tag).is_err() {
+                        return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
+                            format!(
+                                "Tag '{}' seq mismatched: expect {}, current {}",
+                                req.tag_name, req.seq, seq_tag
+                            ),
+                        ))));
+                    }
 
-            let txn = TxnRequest::new(vec![txn_cond_seq(&key_tag, Eq, seq_tag.seq)], vec![
-                txn_del(&key_tag),
-            ]);
-            let (succ, _responses) = send_txn(self, txn).await?;
-            if succ {
-                return Ok(());
-            }
-        }
+                    tag.stage_delete();
+
+                    Ok(())
+                }
+            })
+            .await
     }
 
     /// Get a table tag.

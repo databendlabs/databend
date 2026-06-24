@@ -17,11 +17,11 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
-use databend_common_expression::PayloadFlushState;
+use databend_common_expression::SerializedPayload;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -29,8 +29,9 @@ use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::Transformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::PartitionItem;
+use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -76,221 +77,199 @@ pub struct AggregateRowScatter {
     pub(crate) aggregate_params: Arc<AggregatorParams>,
 }
 
-fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
-    let mut buckets = Vec::with_capacity(buckets);
-
-    let group_types = payload.group_types.clone();
-    let aggrs = payload.aggrs.clone();
-    let mut state = PayloadFlushState::default();
-
-    for _ in 0..buckets.capacity() {
-        let p = Payload::new(
-            payload.arena.clone(),
-            group_types.clone(),
-            aggrs.clone(),
-            payload.states_layout().cloned(),
-        );
-        buckets.push(p);
-    }
-
-    // scatter each page of the payload.
-    while payload.scatter(&mut state, buckets.len()) {
-        // copy to the corresponding bucket.
-        let probe_state = &*state.probe_state;
-        for (bucket, (count, sel)) in buckets.iter_mut().zip(&probe_state.partition_entries) {
-            if *count > 0 {
-                bucket.copy_rows(&sel[..*count as usize], &state.addresses);
-            }
-        }
-    }
-    payload.state_move_out = true;
-
-    Ok(buckets)
-}
-
-pub fn scatter_partitioned_payload(
-    partitioned_payload: PartitionedPayload,
-    buckets: usize,
-) -> Result<Vec<PartitionedPayload>> {
-    let mut buckets = Vec::with_capacity(buckets);
-
-    let group_types = partitioned_payload.group_types.clone();
-    let aggrs = partitioned_payload.aggrs.clone();
-    let partition_count = partitioned_payload.partition_count() as u64;
-    let mut state = PayloadFlushState::default();
-
-    for _ in 0..buckets.capacity() {
-        buckets.push(PartitionedPayload::new(
-            group_types.clone(),
-            aggrs.clone(),
-            partition_count,
-            partitioned_payload.arenas.clone(),
-        ));
-    }
-
-    let mut payloads = Vec::with_capacity(buckets.len());
-
-    for _ in 0..payloads.capacity() {
-        payloads.push(Payload::new(
-            Arc::new(Bump::new()),
-            group_types.clone(),
-            aggrs.clone(),
-            partitioned_payload.states_layout().cloned(),
-        ));
-    }
-
-    for mut payload in partitioned_payload.payloads.into_iter() {
-        // scatter each page of the payload.
-        while payload.scatter(&mut state, buckets.len()) {
-            // copy to the corresponding bucket.
-            for (bucket, (count, sel)) in payloads
-                .iter_mut()
-                .zip(&state.probe_state.partition_entries)
-            {
-                if *count > 0 {
-                    bucket.copy_rows(&sel[..*count as usize], &state.addresses);
-                }
-            }
-        }
-        state.clear();
-        payload.state_move_out = true;
-    }
-
-    for (idx, payload) in payloads.into_iter().enumerate() {
-        buckets[idx].combine_single(payload, &mut state, None);
-    }
-
-    Ok(buckets)
-}
-
 impl AggregateRowScatter {
     pub fn scatter(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
-                let mut blocks = Vec::with_capacity(self.buckets);
-                match block_meta {
-                    AggregateMeta::Spilled(_) => unreachable!(),
-                    AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::Serialized(payload) => {
-                        let mut partition = payload.convert_to_partitioned_payload(
-                            self.aggregate_params.group_data_types.clone(),
-                            self.aggregate_params.aggregate_functions.clone(),
-                            self.aggregate_params.num_states(),
-                            0,
-                            self.aggregate_params.enable_experiment_hash_index,
-                            Arc::new(Bump::new()),
-                        )?;
-                        let payload = partition.payloads.pop();
-                        if let Some(payload) = payload {
-                            for (bucket, payload) in scatter_payload(payload, self.buckets)?
-                                .into_iter()
-                                .enumerate()
-                            {
-                                blocks.push(DataBlock::empty_with_meta(
-                                    AggregateMeta::create_agg_payload(bucket as isize, payload, 0),
-                                ));
-                            }
-                        }
-                    }
-                    AggregateMeta::Partitioned { data, bucket } => {
-                        let mut partitions = Vec::with_capacity(self.buckets);
-                        partitions.resize_with(self.buckets, Vec::new);
-
-                        for meta in data {
-                            match meta {
-                                AggregateMeta::AggregatePayload(payload) => {
-                                    let bucket_id = payload.bucket;
-                                    for (index, payload) in
-                                        scatter_payload(payload.payload, self.buckets)?
-                                            .into_iter()
-                                            .enumerate()
-                                    {
-                                        partitions[index].push(AggregateMeta::AggregatePayload(
-                                            AggregatePayload {
-                                                bucket: bucket_id,
-                                                payload,
-                                                max_partition_count: 0,
-                                            },
-                                        ));
-                                    }
-                                }
-                                AggregateMeta::Serialized(payload) => {
-                                    let bucket_id = payload.bucket;
-                                    let mut partition = payload.convert_to_partitioned_payload(
-                                        self.aggregate_params.group_data_types.clone(),
-                                        self.aggregate_params.aggregate_functions.clone(),
-                                        self.aggregate_params.num_states(),
-                                        0,
-                                        self.aggregate_params.enable_experiment_hash_index,
-                                        Arc::new(Bump::new()),
-                                    )?;
-                                    let payload = partition.payloads.pop();
-                                    if let Some(payload) = payload {
-                                        for (index, payload) in
-                                            scatter_payload(payload, self.buckets)?
-                                                .into_iter()
-                                                .enumerate()
-                                        {
-                                            partitions[index].push(
-                                                AggregateMeta::AggregatePayload(AggregatePayload {
-                                                    bucket: bucket_id,
-                                                    payload,
-                                                    max_partition_count: 0,
-                                                }),
-                                            );
-                                        }
-                                    }
-                                }
-                                AggregateMeta::NewBucketSpilled(payload) => {
-                                    // we will restore it after sending to the target node
-                                    // so we just use bucket id to scatter here
-                                    let bucket = payload.bucket as usize;
-                                    partitions[bucket % self.buckets]
-                                        .push(AggregateMeta::NewBucketSpilled(payload));
-                                }
-                                _ => {
-                                    unreachable!(
-                                        "Internal, AggregateRowScatter only recv AggregatePayload/Serialized in Partitioned"
-                                    )
-                                }
-                            }
-                        }
-
-                        for payloads in partitions {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::create_partitioned(bucket, payloads),
-                            ));
-                        }
-                    }
-                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
-                    AggregateMeta::NewSpilled(_) => unreachable!(),
-                    AggregateMeta::AggregateSpilling(payload) => {
-                        for p in scatter_partitioned_payload(payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::create_agg_spilling(p),
-                            ));
-                        }
-                    }
-                    AggregateMeta::AggregatePayload(p) => {
-                        for payload in scatter_payload(p.payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::create_agg_payload(
-                                    p.bucket,
-                                    payload,
-                                    p.max_partition_count,
-                                ),
-                            ));
-                        }
-                    }
-                };
-
-                return Ok(blocks);
+                return Ok(self
+                    .scatter_by_rows(block_meta)?
+                    .into_iter()
+                    .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
+                    .collect());
             }
         }
 
         Err(ErrorCode::Internal(
             "Internal, HashTableHashScatter only recv AggregateMeta",
         ))
+    }
+
+    fn scatter_by_rows(&self, block_meta: AggregateMeta) -> Result<Vec<AggregateMeta>> {
+        let params = &self.aggregate_params;
+        match block_meta {
+            AggregateMeta::Serialized(payload) => {
+                let payload = payload.convert_to_single_payload(
+                    params.group_data_types.clone(),
+                    params.aggregate_functions.clone(),
+                    params.num_states(),
+                    Arc::new(Bump::new()),
+                )?;
+                Ok(payload
+                    .scatter_into_buckets(self.buckets)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(bucket, payload)| {
+                        AggregateMeta::AggregatePayload(AggregatePayload {
+                            bucket: bucket as isize,
+                            payload,
+                            max_partition_count: 0,
+                        })
+                    })
+                    .collect())
+            }
+            AggregateMeta::Partitioned { bucket, data } => match data {
+                PartitionedData::Empty => Ok((0..self.buckets)
+                    .map(|_| AggregateMeta::Partitioned {
+                        bucket,
+                        data: PartitionedData::Empty,
+                    })
+                    .collect()),
+                PartitionedData::AggregatePayload(payloads) => {
+                    let mut partitions = Vec::with_capacity(self.buckets);
+                    partitions.resize_with(self.buckets, Vec::new);
+
+                    for payload in payloads {
+                        for (index, payload) in self
+                            .scatter_payload(payload.bucket, payload.payload, 0)
+                            .into_iter()
+                            .enumerate()
+                        {
+                            partitions[index].push(payload);
+                        }
+                    }
+
+                    Ok(partitions
+                        .into_iter()
+                        .map(|payloads| AggregateMeta::Partitioned {
+                            bucket,
+                            data: PartitionedData::AggregatePayload(payloads),
+                        })
+                        .collect())
+                }
+                PartitionedData::Serialized(payloads) => {
+                    let mut partitions = Vec::with_capacity(self.buckets);
+                    partitions.resize_with(self.buckets, Vec::new);
+
+                    for payload in payloads {
+                        for (index, payload) in self
+                            .scatter_serialized_payload(payload, 0)?
+                            .into_iter()
+                            .enumerate()
+                        {
+                            partitions[index].push(payload);
+                        }
+                    }
+
+                    Ok(partitions
+                        .into_iter()
+                        .map(|payloads| AggregateMeta::Partitioned {
+                            bucket,
+                            data: PartitionedData::AggregatePayload(payloads),
+                        })
+                        .collect())
+                }
+                PartitionedData::BucketSpilled(payloads) => {
+                    let mut partitions = Vec::with_capacity(self.buckets);
+                    partitions.resize_with(self.buckets, Vec::new);
+
+                    for payload in payloads {
+                        let bucket = payload.bucket as usize;
+                        partitions[bucket % self.buckets].push(payload);
+                    }
+
+                    Ok(partitions
+                        .into_iter()
+                        .map(|payloads| AggregateMeta::Partitioned {
+                            bucket,
+                            data: PartitionedData::BucketSpilled(payloads),
+                        })
+                        .collect())
+                }
+                PartitionedData::Mixed(items) => {
+                    let mut partitions = Vec::with_capacity(self.buckets);
+                    partitions.resize_with(self.buckets, Vec::new);
+
+                    for item in items {
+                        match item {
+                            PartitionItem::AggregatePayload(payload) => {
+                                for (index, payload) in self
+                                    .scatter_payload(payload.bucket, payload.payload, 0)
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    partitions[index]
+                                        .push(PartitionItem::AggregatePayload(payload));
+                                }
+                            }
+                            PartitionItem::Serialized(payload) => {
+                                for (index, payload) in self
+                                    .scatter_serialized_payload(payload, 0)?
+                                    .into_iter()
+                                    .enumerate()
+                                {
+                                    partitions[index]
+                                        .push(PartitionItem::AggregatePayload(payload));
+                                }
+                            }
+                            PartitionItem::BucketSpilled(payload) => {
+                                // we will restore it after sending to the target node
+                                // so we just use bucket id to scatter here
+                                let bucket = payload.bucket as usize;
+                                partitions[bucket % self.buckets]
+                                    .push(PartitionItem::BucketSpilled(payload));
+                            }
+                        }
+                    }
+
+                    Ok(partitions
+                        .into_iter()
+                        .map(|data| AggregateMeta::Partitioned {
+                            bucket,
+                            data: PartitionedData::Mixed(data),
+                        })
+                        .collect())
+                }
+            },
+            AggregateMeta::AggregatePayload(p) => Ok(self
+                .scatter_payload(p.bucket, p.payload, p.max_partition_count)
+                .into_iter()
+                .map(AggregateMeta::AggregatePayload)
+                .collect()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn scatter_payload(
+        &self,
+        bucket: isize,
+        payload: Payload,
+        max_partition_count: usize,
+    ) -> Vec<AggregatePayload> {
+        payload
+            .scatter_into_buckets(self.buckets)
+            .into_iter()
+            .map(|payload| AggregatePayload {
+                bucket,
+                payload,
+                max_partition_count,
+            })
+            .collect()
+    }
+
+    fn scatter_serialized_payload(
+        &self,
+        payload: SerializedPayload,
+        max_partition_count: usize,
+    ) -> Result<Vec<AggregatePayload>> {
+        let bucket = payload.bucket;
+        let params = &self.aggregate_params;
+        let payload = payload.convert_to_single_payload(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            params.num_states(),
+            Arc::new(Bump::new()),
+        )?;
+        Ok(self.scatter_payload(bucket, payload, max_partition_count))
     }
 }
 
@@ -320,67 +299,133 @@ pub struct AggregateBucketScatter {
 
 impl AggregateBucketScatter {
     pub fn scatter(&self, mut data_block: DataBlock, is_local: bool) -> Result<Vec<DataBlock>> {
-        if let Some(block_meta) = data_block.take_meta() {
-            if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
-                match block_meta {
-                    AggregateMeta::Partitioned { data, .. } => {
-                        let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
-                        for bucket_payload in data {
-                            match bucket_payload {
-                                AggregateMeta::Serialized(mut payload) => {
-                                    let bucket = payload.bucket as usize;
-                                    if !is_local {
-                                        payload.bucket /= self.buckets as isize;
-                                    }
-                                    chunks[bucket % self.buckets]
-                                        .push(AggregateMeta::Serialized(payload));
-                                }
-                                AggregateMeta::AggregatePayload(mut payload) => {
-                                    let bucket = payload.bucket as usize;
-                                    if !is_local {
-                                        payload.bucket /= self.buckets as isize;
-                                    }
-                                    chunks[bucket % self.buckets]
-                                        .push(AggregateMeta::AggregatePayload(payload));
-                                }
-                                AggregateMeta::NewBucketSpilled(mut spilled_payload) => {
-                                    let bucket = spilled_payload.bucket as usize;
-                                    if !is_local {
-                                        spilled_payload.bucket /= self.buckets as isize;
-                                    }
-                                    chunks[bucket % self.buckets]
-                                        .push(AggregateMeta::NewBucketSpilled(spilled_payload));
-                                }
+        let Some(block_meta) = data_block
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            return Err(ErrorCode::Internal(
+                "Internal, AggregateBucketScatter only recv AggregateMeta",
+            ));
+        };
 
-                                _ => {
-                                    unreachable!(
-                                        "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
-                                    )
+        Ok(match block_meta {
+            AggregateMeta::Partitioned { data, .. } => match data {
+                PartitionedData::Empty => (0..self.buckets)
+                    .map(|_| {
+                        AggregateMeta::Partitioned {
+                            bucket: None,
+                            data: PartitionedData::Empty,
+                        }
+                        .into_datablock()
+                    })
+                    .collect(),
+                PartitionedData::Serialized(payloads) => {
+                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                    for mut payload in payloads {
+                        let bucket = payload.bucket as usize;
+                        if !is_local {
+                            payload.bucket /= self.buckets as isize;
+                        }
+                        chunks[bucket % self.buckets].push(payload);
+                    }
+                    chunks
+                        .into_iter()
+                        .map(|payload| {
+                            AggregateMeta::Partitioned {
+                                bucket: None,
+                                data: PartitionedData::Serialized(payload),
+                            }
+                            .into_datablock()
+                        })
+                        .collect()
+                }
+                PartitionedData::AggregatePayload(payloads) => {
+                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                    for mut payload in payloads {
+                        let bucket = payload.bucket as usize;
+                        if !is_local {
+                            payload.bucket /= self.buckets as isize;
+                        }
+                        chunks[bucket % self.buckets].push(payload);
+                    }
+                    chunks
+                        .into_iter()
+                        .map(|payload| {
+                            AggregateMeta::Partitioned {
+                                bucket: None,
+                                data: PartitionedData::AggregatePayload(payload),
+                            }
+                            .into_datablock()
+                        })
+                        .collect()
+                }
+                PartitionedData::BucketSpilled(payloads) => {
+                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                    for mut spilled_payload in payloads {
+                        let bucket = spilled_payload.bucket as usize;
+                        if !is_local {
+                            spilled_payload.bucket /= self.buckets as isize;
+                        }
+                        chunks[bucket % self.buckets].push(spilled_payload);
+                    }
+                    chunks
+                        .into_iter()
+                        .map(|payload| {
+                            AggregateMeta::Partitioned {
+                                bucket: None,
+                                data: PartitionedData::BucketSpilled(payload),
+                            }
+                            .into_datablock()
+                        })
+                        .collect()
+                }
+                PartitionedData::Mixed(items) => {
+                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                    for item in items {
+                        match item {
+                            PartitionItem::Serialized(mut payload) => {
+                                let bucket = payload.bucket as usize;
+                                if !is_local {
+                                    payload.bucket /= self.buckets as isize;
                                 }
+                                chunks[bucket % self.buckets]
+                                    .push(PartitionItem::Serialized(payload));
+                            }
+                            PartitionItem::AggregatePayload(mut payload) => {
+                                let bucket = payload.bucket as usize;
+                                if !is_local {
+                                    payload.bucket /= self.buckets as isize;
+                                }
+                                chunks[bucket % self.buckets]
+                                    .push(PartitionItem::AggregatePayload(payload));
+                            }
+                            PartitionItem::BucketSpilled(mut payload) => {
+                                let bucket = payload.bucket as usize;
+                                if !is_local {
+                                    payload.bucket /= self.buckets as isize;
+                                }
+                                chunks[bucket % self.buckets]
+                                    .push(PartitionItem::BucketSpilled(payload));
                             }
                         }
-                        let blocks = chunks
-                            .into_iter()
-                            .map(|payload| {
-                                DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
-                                    None, payload,
-                                ))
-                            })
-                            .collect::<Vec<_>>();
-                        return Ok(blocks);
                     }
-                    _ => {
-                        unreachable!(
-                            "Internal, AggregateBucketScatter only recv Partitioned AggregateMeta"
-                        )
-                    }
-                };
-            }
-        }
 
-        Err(ErrorCode::Internal(
-            "Internal, AggregateBucketScatter only recv AggregateMeta",
-        ))
+                    chunks
+                        .into_iter()
+                        .map(|data| {
+                            AggregateMeta::Partitioned {
+                                bucket: None,
+                                data: PartitionedData::Mixed(data),
+                            }
+                            .into_datablock()
+                        })
+                        .collect()
+                }
+            },
+            _ => {
+                unreachable!("Internal, AggregateBucketScatter only recv Partitioned AggregateMeta")
+            }
+        })
     }
 }
 
