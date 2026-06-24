@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
@@ -163,13 +164,19 @@ impl Binder {
             None,
             table_alias_name,
             false,
-            false,
             true,
             None,
         );
 
-        let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None, &None, false)?;
+        let (s_expr, mut bind_context) = self.bind_base_table(
+            bind_context,
+            "system",
+            table_index,
+            None,
+            &None,
+            false,
+            false,
+        )?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -206,6 +213,7 @@ impl Binder {
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            agg_index_table_binding: None,
             window_definitions: DashMap::new(),
         };
 
@@ -376,6 +384,7 @@ impl Binder {
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
         case_sensitive: bool,
+        skip_internal_columns: bool,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
@@ -389,6 +398,7 @@ impl Binder {
             table
         );
         let mut base_column_scan_id = HashMap::new();
+        let mut scan_columns = BTreeSet::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -420,6 +430,7 @@ impl Binder {
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);
+                    scan_columns.insert(*column_index);
                 }
                 ColumnEntry::VirtualColumn(VirtualColumn {
                     table_index,
@@ -440,7 +451,9 @@ impl Binder {
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);
+                    scan_columns.insert(*column_index);
                 }
+                ColumnEntry::InternalColumn(_) if skip_internal_columns => {}
                 other => {
                     return Err(ErrorCode::Internal(format!(
                         "Invalid column entry '{:?}' encountered while binding the base table '{}'. Ensure that the table definition and column references are correct.",
@@ -457,7 +470,7 @@ impl Binder {
         let scan_s_expr = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,
-                columns: columns.into_iter().map(|col| col.index()).collect(),
+                columns: scan_columns,
                 change_type,
                 sample: sample.clone(),
                 scan_id,

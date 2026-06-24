@@ -155,6 +155,7 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         std::env::var("TEST_SUBDIR").ok(),
     );
     let mut mints = suite.create_mints();
+    let ctx = LiteTableContext::create_isolated().await?;
 
     for (case, spec) in suite.load_cases()?.into_iter().filter_map(|case| {
         LITE_REPLAY_CASE_SPECS
@@ -162,7 +163,6 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
             .find(|spec| spec.matches(&case))
             .map(|spec| (case, spec))
     }) {
-        let ctx = LiteTableContext::create().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
     Ok(())

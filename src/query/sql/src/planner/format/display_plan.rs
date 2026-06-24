@@ -26,10 +26,7 @@ use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 
 impl SExpr {
-    pub(crate) fn to_format_tree<I: IdHumanizer>(
-        &self,
-        id_humanizer: &I,
-    ) -> Result<FormatTreeNode> {
+    pub fn to_format_tree<I: IdHumanizer>(&self, id_humanizer: &I) -> Result<FormatTreeNode> {
         let operator_humanizer = DefaultOperatorHumanizer;
         let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
         tree_humanizer.humanize_s_expr(self)

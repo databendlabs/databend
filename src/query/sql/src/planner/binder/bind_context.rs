@@ -140,6 +140,20 @@ pub struct ViewIdent {
     pub name: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct AggIndexTableBinding {
+    pub catalog: String,
+    pub database: String,
+    pub table_name: String,
+    pub table_index: IndexType,
+}
+
+impl AggIndexTableBinding {
+    pub fn matches(&self, catalog: &str, database: &str, table: &str) -> bool {
+        self.catalog == catalog && self.database == database && self.table_name == table
+    }
+}
+
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -194,6 +208,9 @@ pub struct BindContext {
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
+
+    /// Canonical table binding used while binding an aggregating index definition.
+    pub agg_index_table_binding: Option<AggIndexTableBinding>,
 
     pub window_definitions: DashMap<String, WindowSpec>,
 }
@@ -279,6 +296,7 @@ impl BindContext {
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            agg_index_table_binding: None,
             window_definitions: DashMap::new(),
         }
     }
@@ -326,6 +344,7 @@ impl BindContext {
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            agg_index_table_binding: None,
             window_definitions: DashMap::new(),
         })
     }
