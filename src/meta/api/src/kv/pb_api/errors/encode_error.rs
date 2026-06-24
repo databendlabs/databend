@@ -21,24 +21,19 @@ use databend_meta_client::types::MetaNetworkError;
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbEncodeError: {0}")]
 pub enum PbEncodeError {
-    EncodeError(#[from] prost::EncodeError),
     Incompatible(#[from] Incompatible),
 }
 
 impl From<PbEncodeError> for MetaError {
     fn from(value: PbEncodeError) -> Self {
-        match value {
-            PbEncodeError::EncodeError(e) => MetaError::from(InvalidArgument::new(e, "")),
-            PbEncodeError::Incompatible(e) => MetaError::from(InvalidArgument::new(e, "")),
-        }
+        let PbEncodeError::Incompatible(e) = value;
+        MetaError::from(InvalidArgument::new(e, ""))
     }
 }
 
 impl From<PbEncodeError> for MetaNetworkError {
     fn from(value: PbEncodeError) -> Self {
-        match value {
-            PbEncodeError::EncodeError(e) => MetaNetworkError::from(InvalidArgument::new(e, "")),
-            PbEncodeError::Incompatible(e) => MetaNetworkError::from(InvalidArgument::new(e, "")),
-        }
+        let PbEncodeError::Incompatible(e) = value;
+        MetaNetworkError::from(InvalidArgument::new(e, ""))
     }
 }

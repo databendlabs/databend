@@ -35,8 +35,6 @@ impl PipelineBuilder {
         group_by: &[Symbol],
         agg_funcs: &[AggregateFunctionDesc],
         cluster_aggregator: bool,
-        max_spill_io_requests: usize,
-        enable_experiment_aggregate: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -130,8 +128,6 @@ impl PipelineBuilder {
             &aggs,
             &agg_args,
             cluster_aggregator,
-            max_spill_io_requests,
-            enable_experiment_aggregate,
             max_block_rows,
             max_block_bytes,
         )?;

@@ -133,7 +133,6 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let max_query_memory_usage = max_memory_usage / 2;
             let recluster_block_size = Self::recluster_block_size(max_memory_usage);
-            let default_max_spill_io_requests = Self::spill_io_requests(num_cpus);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
             let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
@@ -238,13 +237,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("max_spill_io_requests", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(default_max_spill_io_requests),
-                    desc: "Sets the maximum number of concurrent spill I/O requests.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("grouping_sets_channel_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
@@ -351,17 +343,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("stage_path_traversal_policy", DefaultSettingValue {
-                    value: UserSettingValue::String("readonly".to_string()),
-                    desc: "Controls stage paths that contain parent directory components.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec![
-                        "disable".into(),
-                        "enable".into(),
-                        "readonly".into(),
-                    ])),
-                }),
+
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
@@ -1652,13 +1634,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-                ("max_aggregate_restore_worker", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(16),
-                    desc: "Sets the maximum number of worker to aggregate restore.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=1024)),
-                }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental virtual column",
@@ -1703,13 +1678,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
-                }),
-                ("enable_experiment_aggregate", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enable experiment aggregate(enabled by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_aggregate_spill_level", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
@@ -1765,16 +1733,6 @@ impl DefaultSettings {
                 true => 48,
                 // This value is chosen based on the performance test of pruning phase on cloud platform.
                 false => 64,
-            },
-        }
-    }
-
-    fn spill_io_requests(num_cpus: u64) -> u64 {
-        match GlobalConfig::try_get_instance() {
-            None => std::cmp::min(num_cpus, 64),
-            Some(conf) => match conf.storage.params.is_fs() {
-                true => 48,
-                false => std::cmp::min(num_cpus, 64),
             },
         }
     }

@@ -51,6 +51,7 @@ use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -130,6 +131,9 @@ impl Interpreter for ReclusterTableInterpreter {
         let mut times = 0;
         let mut push_downs = None;
         let mut hilbert_info = None;
+        // Linear FINAL carry is scoped to this fixed-scan statement loop.
+        // A new FINAL statement starts from the table head again.
+        let mut linear_final_carry = ReclusterFinalCarry::default();
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         let is_final = self.plan.is_final;
@@ -143,7 +147,7 @@ impl Interpreter for ReclusterTableInterpreter {
             }
 
             let res = self
-                .execute_recluster(&mut push_downs, &mut hilbert_info)
+                .execute_recluster(&mut push_downs, &mut hilbert_info, &mut linear_final_carry)
                 .await;
 
             match res {
@@ -166,6 +170,9 @@ impl Interpreter for ReclusterTableInterpreter {
                                 | ErrorCode::UNRESOLVABLE_CONFLICT
                         )
                     {
+                        // Keep FINAL carry across retryable conflicts. FINAL is
+                        // a bounded fixed scan and does not restart from table
+                        // head to chase concurrent snapshot drift.
                         warn!(
                             "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
                             times + 1,
@@ -217,6 +224,7 @@ impl ReclusterTableInterpreter {
         &self,
         push_downs: &mut Option<PushDownInfo>,
         hilbert_info: &mut Option<HilbertBuildInfo>,
+        linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<bool> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
@@ -253,7 +261,10 @@ impl ReclusterTableInterpreter {
                 self.build_hilbert_plan(&tbl, push_downs, hilbert_info)
                     .await?
             }
-            ClusterType::Linear => self.build_linear_plan(&tbl, push_downs, *limit).await?,
+            ClusterType::Linear => {
+                self.build_linear_plan(tbl.as_ref(), push_downs, *limit, linear_final_carry)
+                    .await?
+            }
         };
         let Some(mut physical_plan) = physical_plan else {
             return Ok(true);
@@ -275,6 +286,11 @@ impl ReclusterTableInterpreter {
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
                     hook_vacuum_temp_files(&ctx)?;
+                    // RECLUSTER FINAL runs independent pipelines under one query id.
+                    // We allow hook vacuum to be best-effort for each round, and avoid
+                    // carrying this round's spill progress into later rounds.
+                    // Leftovers beyond the hook vacuum limit are handled by normal vacuum.
+                    ctx.clear_cluster_spill_progress();
                     hook_disk_temp_dir(&ctx)?;
                     match &info.res {
                         Ok(_) => {
@@ -514,11 +530,12 @@ impl ReclusterTableInterpreter {
 
     async fn build_linear_plan(
         &self,
-        tbl: &Arc<dyn Table>,
+        tbl: &dyn Table,
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
+        linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<Option<PhysicalPlan>> {
-        let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+        let fuse_table = FuseTable::try_from_table(tbl)?;
         let Some((parts, snapshot)) = fuse_table
             .do_recluster(
                 self.ctx.clone(),
@@ -529,6 +546,7 @@ impl ReclusterTableInterpreter {
                 } else {
                     ReclusterMode::Normal
                 },
+                linear_final_carry,
             )
             .await?
         else {
@@ -539,7 +557,7 @@ impl ReclusterTableInterpreter {
         }
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
+            .get_table_meta_timestamps(tbl, Some(snapshot.clone()))?;
 
         let table_info = tbl.get_table_info().clone();
         let is_distributed = parts.is_distributed(self.ctx.clone());

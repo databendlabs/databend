@@ -28,8 +28,7 @@ where MT: FromToProto + PartialEq + Debug {
 
     let n = std::any::type_name::<MT>();
 
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf)?;
+    let buf = prost::Message::encode_to_vec(&p);
 
     let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatibility test.

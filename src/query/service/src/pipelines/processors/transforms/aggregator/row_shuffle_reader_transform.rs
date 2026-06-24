@@ -22,18 +22,18 @@ use databend_common_pipeline_transforms::BlockMetaTransform;
 use databend_common_pipeline_transforms::BlockMetaTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::AggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 
 pub struct RowShuffleReaderTransform {
-    reader: NewAggregateSpillReader,
+    reader: AggregateSpillReader,
 }
 
 impl RowShuffleReaderTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        reader: NewAggregateSpillReader,
+        reader: AggregateSpillReader,
     ) -> Box<dyn Processor> {
         BlockMetaTransformer::create(input, output, Self { reader })
     }
@@ -49,7 +49,7 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         // We only processed Partitioned meta with new spilled buckets in it.
         let payloads = match meta {
             AggregateMeta::Partitioned {
-                data: PartitionedData::NewBucketSpilled(payloads),
+                data: PartitionedData::BucketSpilled(payloads),
                 ..
             } => payloads,
             meta => return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]),

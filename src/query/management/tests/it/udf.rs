@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType as DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;

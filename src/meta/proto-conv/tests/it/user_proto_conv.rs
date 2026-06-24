@@ -613,8 +613,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let user_info = test_user_info();
         let p = user_info.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("user_info: {:?}", buf);
     }
 
@@ -622,8 +621,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let stage_file = test_stage_file();
         let p = stage_file.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("stage_file: {:?}", buf);
     }
 
@@ -633,8 +631,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let p = fs_stage_info.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("fs_stage_info: {:?}", buf);
     }
 
@@ -644,8 +641,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let p = s3_stage_info.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info: {:?}", buf);
     }
 
@@ -655,8 +651,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let p = s3_stage_info.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info_v16: {:?}", buf);
     }
 
@@ -666,8 +661,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let p = s3_stage_info.to_pb()?;
 
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("s3_stage_info_v14: {:?}", buf);
     }
 
@@ -675,8 +669,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let gcs_stage_info = test_gcs_stage_info();
         let p = gcs_stage_info.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("gcs_stage_info: {:?}", buf);
     }
 
@@ -684,8 +677,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
     {
         let oss_stage_info = test_oss_stage_info();
         let p = oss_stage_info.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
+        let buf = prost::Message::encode_to_vec(&p);
         println!("oss_stage_info: {:?}", buf);
     }
 

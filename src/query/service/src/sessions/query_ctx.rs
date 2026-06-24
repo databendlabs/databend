@@ -554,6 +554,10 @@ impl QueryContext {
             .or_insert(p);
     }
 
+    pub fn clear_cluster_spill_progress(&self) {
+        self.shared.cluster_spill_progress.write().clear();
+    }
+
     pub fn add_spill_file(&self, location: spillers::Location, layout: spillers::Layout) {
         let mut w = self.shared.spilled_files.write();
         w.insert(location, layout);

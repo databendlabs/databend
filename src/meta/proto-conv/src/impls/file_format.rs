@@ -69,9 +69,6 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             mt::principal::StageFileFormatType::ArrowStream => {
                 Ok(pb::StageFileFormatType::ArrowStream)
             }
-            mt::principal::StageFileFormatType::None => Err(Incompatible::new(
-                "StageFileFormatType::None cannot be converted to protobuf".to_string(),
-            )),
         }
     }
 }

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::convert_to_type_name;
 use derive_visitor::VisitorMut as StatementVisitorMut;
@@ -253,12 +254,12 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 #[derive(StatementVisitorMut)]
 #[visitor(Expr(exit))]
 pub struct UDFArgVisitor<'a> {
-    arg_types: &'a [(String, DataType)],
+    arg_types: &'a [(String, TableDataType)],
     args: &'a [Expr],
 }
 
 impl<'a> UDFArgVisitor<'a> {
-    pub fn new(arg_types: &'a [(String, DataType)], args: &'a [Expr]) -> Self {
+    pub fn new(arg_types: &'a [(String, TableDataType)], args: &'a [Expr]) -> Self {
         Self { arg_types, args }
     }
 
@@ -279,7 +280,7 @@ impl<'a> UDFArgVisitor<'a> {
             *expr = Expr::Cast {
                 span: *span,
                 expr: Box::new(self.args[pos].clone()),
-                target_type: convert_to_type_name(ty),
+                target_type: convert_to_type_name(&DataType::from(ty)),
                 pg_style: false,
             }
         }

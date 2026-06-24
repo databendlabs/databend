@@ -119,10 +119,9 @@ impl Binder {
         )?
         .resolve_file_location(&stmt.dst, StagePathAccess::Write)
         .await?;
-        let allow_path_traversal = self
-            .ctx
-            .get_settings()
-            .get_stage_path_traversal_policy()?
+        let allow_path_traversal = databend_common_config::GlobalConfig::instance()
+            .storage
+            .stage_path_traversal_policy
             .allows_write();
 
         if !stmt.file_format.is_empty() {

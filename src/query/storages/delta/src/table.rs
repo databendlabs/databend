@@ -348,6 +348,7 @@ impl DeltaTable {
                                 estimated_uncompressed_size: add.size as u64, // This field is not used here.
                                 dedup_key: format!("{}_{}", add.modification_time, add.size),
                                 bucket_option: None,
+                                meta: Default::default(),
                             },
                         ),
                     }) as _))
