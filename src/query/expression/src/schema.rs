@@ -82,6 +82,10 @@ pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 pub const FILENAME_COLUMN_NAME: &str = "metadata$filename";
 pub const FILE_ROW_NUMBER_COLUMN_NAME: &str = "metadata$file_row_number";
+pub const FILE_PATH_COLUMN_NAME: &str = "metadata$file_path";
+pub const FILE_BASENAME_COLUMN_NAME: &str = "metadata$file_basename";
+pub const FILE_CONTENT_KEY_COLUMN_NAME: &str = "metadata$file_content_key";
+pub const FILE_LAST_MODIFIED_COLUMN_NAME: &str = "metadata$file_last_modified";
 
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
@@ -90,6 +94,10 @@ pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
 
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
+pub const FILE_PATH_COLUMN_ID: u32 = u32::MAX - 16;
+pub const FILE_BASENAME_COLUMN_ID: u32 = u32::MAX - 17;
+pub const FILE_CONTENT_KEY_COLUMN_ID: u32 = u32::MAX - 18;
+pub const FILE_LAST_MODIFIED_COLUMN_ID: u32 = u32::MAX - 19;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
@@ -117,13 +125,17 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         ORIGIN_BLOCK_ROW_NUM_COL_NAME,
         FILENAME_COLUMN_NAME,
         FILE_ROW_NUMBER_COLUMN_NAME,
+        FILE_PATH_COLUMN_NAME,
+        FILE_BASENAME_COLUMN_NAME,
+        FILE_CONTENT_KEY_COLUMN_NAME,
+        FILE_LAST_MODIFIED_COLUMN_NAME,
     ])
 });
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= VECTOR_SCORE_COLUMN_ID
-        || (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+        || (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]

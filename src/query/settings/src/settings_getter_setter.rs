@@ -65,42 +65,6 @@ pub enum OutofMemoryBehavior {
     Spilling,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StagePathTraversalPolicy {
-    Disable,
-    Enable,
-    ReadOnly,
-}
-
-impl StagePathTraversalPolicy {
-    pub fn allows_read(self) -> bool {
-        matches!(
-            self,
-            StagePathTraversalPolicy::Enable | StagePathTraversalPolicy::ReadOnly
-        )
-    }
-
-    pub fn allows_write(self) -> bool {
-        matches!(self, StagePathTraversalPolicy::Enable)
-    }
-}
-
-impl FromStr for StagePathTraversalPolicy {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "disable" => Ok(StagePathTraversalPolicy::Disable),
-            "enable" => Ok(StagePathTraversalPolicy::Enable),
-            "readonly" => Ok(StagePathTraversalPolicy::ReadOnly),
-            _ => Err(ErrorCode::InvalidConfig(format!(
-                "invalid StagePathTraversalPolicy: {:?}",
-                s
-            ))),
-        }
-    }
-}
-
 impl SpillFileFormat {
     pub fn range() -> Vec<String> {
         ["arrow", "parquet"]
@@ -375,10 +339,6 @@ impl Settings {
 
     pub fn get_enable_purge_duplicated_files_in_copy(&self) -> Result<bool> {
         Ok(self.try_get_u64("purge_duplicated_files_in_copy")? != 0)
-    }
-
-    pub fn get_stage_path_traversal_policy(&self) -> Result<StagePathTraversalPolicy> {
-        StagePathTraversalPolicy::from_str(&self.try_get_string("stage_path_traversal_policy")?)
     }
 
     pub fn get_timezone(&self) -> Result<String> {

@@ -377,7 +377,6 @@ opendal = { version = "0.54.1", features = [
     "services-azdls",
     "services-ipfs",
     "services-http",
-    "services-moka",
     "services-webhdfs",
     "services-huggingface",
 ] }
