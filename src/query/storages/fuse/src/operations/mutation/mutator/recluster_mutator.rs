@@ -79,13 +79,14 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
+const NORMAL_CONSERVATIVE_WINDOW_LIMIT: usize = 2;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReclusterGroup {
     /// A single level forms its own group.
     Level(i32),
-    /// FINAL mode: a fixed maturity bin identified by its lower bound `lo`.
+    /// Aggressive mode: a fixed maturity bin identified by its lower bound `lo`.
     Range(i32),
 }
 
@@ -93,12 +94,13 @@ impl ReclusterGroup {
     /// Assign a block's recluster group for the given mode.
     fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
         match mode {
-            ReclusterMode::Normal => ReclusterGroup::Level(level),
-            ReclusterMode::Final if level == 0 => ReclusterGroup::Level(level),
-            ReclusterMode::Final => {
-                // FINAL packs blocks into fixed maturity bins so each round can pick tasks
-                // across a wider level span, letting high-overlap blocks at high levels land
-                // in the same candidate group instead of being split across narrow windows:
+            ReclusterMode::Conservative => ReclusterGroup::Level(level),
+            ReclusterMode::Aggressive if level == 0 => ReclusterGroup::Level(level),
+            ReclusterMode::Aggressive => {
+                // Aggressive recluster packs blocks into fixed maturity bins so each
+                // round can pick tasks across a wider level span, letting high-overlap
+                // blocks at high levels land in the same candidate group instead of
+                // being split across narrow windows:
                 //   - {1..=3}: young-ish blocks, room for early recluster.
                 //   - {4..=8}: mature blocks.
                 //   - {9..}  : high-maturity blocks (upper-bounded by MAX_RECLUSTER_LEVEL).
@@ -304,6 +306,7 @@ pub struct SelectedReclusterSegment {
 pub struct ReclusterMutator {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) operator: Operator,
+    pub(crate) mode: ReclusterMode,
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
@@ -319,6 +322,7 @@ impl ReclusterMutator {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         snapshot: &TableSnapshot,
+        mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
         let cluster_key_id = table.cluster_key_id().unwrap();
@@ -364,6 +368,7 @@ impl ReclusterMutator {
         Ok(Self {
             ctx,
             operator: table.get_operator(),
+            mode,
             schema,
             depth_threshold,
             block_thresholds,
@@ -386,6 +391,7 @@ impl ReclusterMutator {
         block_thresholds: BlockThresholds,
         cluster_key_id: u32,
         max_tasks: usize,
+        mode: ReclusterMode,
     ) -> Self {
         assert!(
             !cluster_key_exprs.is_empty(),
@@ -405,6 +411,7 @@ impl ReclusterMutator {
         Self {
             ctx,
             operator,
+            mode,
             schema,
             depth_threshold,
             block_thresholds,
@@ -420,7 +427,6 @@ impl ReclusterMutator {
     pub async fn probe_candidate_window(
         &self,
         compact_segments: Vec<SelectedReclusterSegment>,
-        mode: ReclusterMode,
         task_budget: usize,
         decode_runtime: Arc<Runtime>,
         decode_semaphore: Arc<Semaphore>,
@@ -456,10 +462,7 @@ impl ReclusterMutator {
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
-        // FINAL bins blocks into fixed maturity ranges ({0} {1-3} {4-8} {9+});
-        // NORMAL keeps each level as its own group. A single pass over the
-        // window builds rewrite-task candidates per group.
-        let tasks = self.build_tasks(&blocks, mode, task_budget)?;
+        let tasks = self.build_tasks(&blocks, task_budget)?;
 
         for candidate in &tasks {
             for (window_pos, _) in &candidate.selected_blocks {
@@ -472,10 +475,12 @@ impl ReclusterMutator {
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.block_thresholds.block_per_segment);
-            if total_block_count > 0
+            let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
-                && target_segment_count < selected_segment_count
-            {
+                && target_segment_count < selected_segment_count;
+            let unordered_repack =
+                self.mode == ReclusterMode::Conservative && Self::blocks_unordered(&blocks);
+            if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
                 candidate_window.tasks.push(ReclusterTaskCandidate {
@@ -526,6 +531,26 @@ impl ReclusterMutator {
         Ok(candidate_window)
     }
 
+    fn blocks_unordered(blocks: &[&ReclusterBlock]) -> bool {
+        blocks.windows(2).any(|window| {
+            let left = window[0].stats();
+            let right = window[1].stats();
+            let ord_min = left
+                .min()
+                .iter()
+                .map(Scalar::as_ref)
+                .cmp(right.min().iter().map(Scalar::as_ref));
+            if ord_min != cmp::Ordering::Equal {
+                return ord_min == cmp::Ordering::Greater;
+            }
+            left.max()
+                .iter()
+                .map(Scalar::as_ref)
+                .cmp(right.max().iter().map(Scalar::as_ref))
+                == cmp::Ordering::Greater
+        })
+    }
+
     /// Bin block indices into recluster groups and build rewrite-task
     /// candidates. This reuses the already decoded block metas in this window;
     /// it only builds in-memory groups and runs candidate selection, without
@@ -533,7 +558,6 @@ impl ReclusterMutator {
     fn build_tasks(
         &self,
         blocks: &[&ReclusterBlock],
-        mode: ReclusterMode,
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
@@ -547,7 +571,7 @@ impl ReclusterMutator {
                 continue;
             }
             blocks_map
-                .entry(ReclusterGroup::assign(level, mode))
+                .entry(ReclusterGroup::assign(level, self.mode))
                 .or_default()
                 .push(idx);
         }
@@ -990,6 +1014,10 @@ impl ReclusterMutator {
                 .then_with(|| right_indices.len().cmp(&left_indices.len()))
         });
 
+        if self.mode == ReclusterMode::Conservative {
+            windows = Self::select_normal_conservative_windows(windows);
+        }
+
         debug!(
             "recluster: segment selection windows segments={} blocks={} window_count={}",
             compact_segments.len(),
@@ -1008,6 +1036,20 @@ impl ReclusterMutator {
             })
             .filter(|window| !window.is_empty())
             .collect())
+    }
+
+    fn select_normal_conservative_windows(
+        windows: Vec<(IndexSet<usize>, usize)>,
+    ) -> Vec<(IndexSet<usize>, usize)> {
+        if windows.iter().any(|(_, depth)| *depth > 1) {
+            windows
+                .into_iter()
+                .filter(|(_, depth)| *depth > 1)
+                .take(NORMAL_CONSERVATIVE_WINDOW_LIMIT)
+                .collect()
+        } else {
+            windows
+        }
     }
 
     fn build_cluster_stats_for_recluster(
