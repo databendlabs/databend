@@ -23,6 +23,11 @@ use std::time::Instant;
 
 #[derive(Default)]
 pub struct FusePruningStatistics {
+    /// Segment read cost.
+    pub segments_read_cost: AtomicU64,
+    /// Segment block metas decompress cost.
+    pub segments_decompress_cost: AtomicU64,
+
     /// Segment range pruning stats.
     pub segments_range_pruning_before: AtomicU64,
     pub segments_range_pruning_after: AtomicU64,
@@ -37,6 +42,7 @@ pub struct FusePruningStatistics {
     pub blocks_bloom_pruning_before: AtomicU64,
     pub blocks_bloom_pruning_after: AtomicU64,
     pub blocks_bloom_pruning_cost: AtomicU64,
+    pub blocks_bloom_index_read_cost: AtomicU64,
 
     /// Block inverted index filter pruning stats.
     pub blocks_inverted_index_pruning_before: AtomicU64,
@@ -60,6 +66,24 @@ pub struct FusePruningStatistics {
 }
 
 impl FusePruningStatistics {
+    pub fn add_segments_read_cost(&self, duration: Duration) {
+        self.segments_read_cost
+            .fetch_add(duration_to_micros(duration), Ordering::Relaxed);
+    }
+
+    pub fn get_segments_read_cost(&self) -> u64 {
+        self.segments_read_cost.load(Ordering::Relaxed)
+    }
+
+    pub fn add_segments_decompress_cost(&self, duration: Duration) {
+        self.segments_decompress_cost
+            .fetch_add(duration_to_micros(duration), Ordering::Relaxed);
+    }
+
+    pub fn get_segments_decompress_cost(&self) -> u64 {
+        self.segments_decompress_cost.load(Ordering::Relaxed)
+    }
+
     pub fn set_segments_range_pruning_before(&self, v: u64) {
         self.segments_range_pruning_before
             .fetch_add(v, Ordering::Relaxed);
@@ -139,6 +163,15 @@ impl FusePruningStatistics {
 
     pub fn get_blocks_bloom_pruning_cost(&self) -> u64 {
         self.blocks_bloom_pruning_cost.load(Ordering::Relaxed)
+    }
+
+    pub fn add_blocks_bloom_index_read_cost(&self, duration: Duration) {
+        self.blocks_bloom_index_read_cost
+            .fetch_add(duration_to_micros(duration), Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_bloom_index_read_cost(&self) -> u64 {
+        self.blocks_bloom_index_read_cost.load(Ordering::Relaxed)
     }
 
     pub fn set_blocks_inverted_index_pruning_before(&self, v: u64) {
@@ -315,8 +348,11 @@ impl PruningCostController {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PruningCostKind {
+    SegmentsRead,
+    SegmentsDecompress,
     SegmentsRange,
     BlocksRange,
+    BlocksBloomIndexRead,
     BlocksBloom,
     BlocksInverted,
     BlocksVector,
@@ -324,18 +360,21 @@ pub enum PruningCostKind {
     BlocksTopN,
 }
 
-const PRUNING_COST_KIND_COUNT: usize = 7;
+const PRUNING_COST_KIND_COUNT: usize = 10;
 
 impl PruningCostKind {
     const fn as_index(self) -> usize {
         match self {
-            PruningCostKind::SegmentsRange => 0,
-            PruningCostKind::BlocksRange => 1,
-            PruningCostKind::BlocksBloom => 2,
-            PruningCostKind::BlocksInverted => 3,
-            PruningCostKind::BlocksVector => 4,
-            PruningCostKind::BlocksSpatial => 5,
-            PruningCostKind::BlocksTopN => 6,
+            PruningCostKind::SegmentsRead => 0,
+            PruningCostKind::SegmentsDecompress => 1,
+            PruningCostKind::SegmentsRange => 2,
+            PruningCostKind::BlocksRange => 3,
+            PruningCostKind::BlocksBloomIndexRead => 4,
+            PruningCostKind::BlocksBloom => 5,
+            PruningCostKind::BlocksInverted => 6,
+            PruningCostKind::BlocksVector => 7,
+            PruningCostKind::BlocksSpatial => 8,
+            PruningCostKind::BlocksTopN => 9,
         }
     }
 }
@@ -365,11 +404,20 @@ impl PruningCostGuardToken {
         };
 
         match self.kind {
+            PruningCostKind::SegmentsRead => {
+                stats.add_segments_read_cost(elapsed);
+            }
+            PruningCostKind::SegmentsDecompress => {
+                stats.add_segments_decompress_cost(elapsed);
+            }
             PruningCostKind::SegmentsRange => {
                 stats.add_segments_range_pruning_cost(elapsed);
             }
             PruningCostKind::BlocksRange => {
                 stats.add_blocks_range_pruning_cost(elapsed);
+            }
+            PruningCostKind::BlocksBloomIndexRead => {
+                stats.add_blocks_bloom_index_read_cost(elapsed);
             }
             PruningCostKind::BlocksBloom => {
                 stats.add_blocks_bloom_pruning_cost(elapsed);
