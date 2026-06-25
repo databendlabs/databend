@@ -1,6 +1,6 @@
 === aggregate_argument_alias__aggregate_argument_prefers_input_column ===
 matrix: aggregate_argument_alias
-key: A0N0S0_0_0
+key: A0N0S0_0_00
 setting: enable_group_by_column_first=0
 sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
 status: ok
@@ -20,7 +20,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_falls_back_to_prior_select_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S0_0_1
+key: A0N0S0_0_10
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
 status: ok
@@ -33,6 +33,46 @@ EvalScalar
         ├── scalars: [modulo(t.number (#0), 3) AS (#1)]
         └── Scan
             ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__udaf_argument_prefers_input_column ===
+matrix: aggregate_argument_alias
+key: A0N0S0_0_01
+setting: enable_group_by_column_first=0
+sql: SELECT a AS c2, weighted_avg(c2, 1) FROM udaf_prior_t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [udaf_prior_t.a (#0) AS (#0), weighted_avg(c2, 1) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [udaf_prior_t.a (#0) AS (#0)]
+    ├── aggregate functions: [weighted_avg(c2, 1) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [udaf_prior_t.a (#0) AS (#0), CAST(udaf_prior_t.c2 (#1) AS Int32 NULL) AS (#2), CAST(1 AS Int32 NULL) AS (#3)]
+        └── Scan
+            ├── table: default.udaf_prior_t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__udaf_argument_falls_back_to_prior_select_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S0_0_11
+setting: enable_group_by_column_first=0
+sql: SELECT number % 3 AS c1, weighted_avg(c1, 1) FROM udaf_prior_t GROUP BY number % 3
+status: ok
+EvalScalar
+├── scalars: [weighted_avg(c1, 1) (#4) AS (#4), number % 3 (#1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(udaf_prior_t.number (#0), 3) AS (#1)]
+    ├── aggregate functions: [weighted_avg(c1, 1) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [modulo(udaf_prior_t.number (#0), 3) AS (#1), CAST(modulo(udaf_prior_t.number (#0), 3) AS Int32 NULL) AS (#2), CAST(1 AS Int32 NULL) AS (#3)]
+        └── Scan
+            ├── table: default.udaf_prior_t (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -89,29 +129,56 @@ message: column c reference or alias is ambiguous, please use another alias name
 
 === aggregate_argument_alias__udaf_argument_prefers_input_column_over_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_2_001
+key: A0N0S2_1_001
 setting: enable_group_by_column_first=0
-sql: SELECT creative_name, weighted_avg(cost, weight) AS cost FROM udaf_t GROUP BY creative_name HAVING weighted_avg(cost, weight) > 0
+sql: SELECT count(*) AS c, weighted_avg(c, 1) FROM udaf_t
 status: ok
 EvalScalar
-├── scalars: [udaf_t.creative_name (#0) AS (#0), weighted_avg(cost, weight) (#5) AS (#5)]
-└── Filter
-    ├── filters: [gt(weighted_avg(cost, weight) (#5), 0)]
-    └── Aggregate(Initial)
-        ├── group items: [udaf_t.creative_name (#0) AS (#0)]
-        ├── aggregate functions: [weighted_avg(cost, weight) AS (#5)]
-        └── EvalScalar
-            ├── scalars: [udaf_t.creative_name (#0) AS (#0), CAST(udaf_t.cost (#2) AS Int32 NULL) AS (#3), CAST(udaf_t.weight (#1) AS Int32 NULL) AS (#4)]
-            └── Scan
-                ├── table: default.udaf_t (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+├── scalars: [COUNT(*) (#2) AS (#2), weighted_avg(c, 1) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2), weighted_avg(c, 1) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [CAST(udaf_t.c (#0) AS Int32 NULL) AS (#3), CAST(1 AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.udaf_t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
+
+=== aggregate_argument_alias__udaf_argument_consumes_unique_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_1_101
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, weighted_avg(c, 1) FROM udaf_t
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#1) AS (#1), weighted_avg(c, 1) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#1), weighted_avg(c, 1) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [CAST(count() AS Int32 NULL) AS (#2), CAST(1 AS Int32 NULL) AS (#3)]
+        └── Scan
+            ├── table: default.udaf_t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__udaf_argument_rejects_duplicate_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_1_111
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, max(number) AS c, weighted_avg(c, 1) FROM udaf_t
+status: error
+code: 1065
+message: column c reference or alias is ambiguous, please use another alias name
 
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_prior_select_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S0_4_
+key: A0N1S0_3_
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3
 status: error
@@ -120,7 +187,7 @@ message: column c1 doesn't exist
 
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S2_4_
+key: A0N1S2_3_
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(t.c) FROM t AS t
 status: error
