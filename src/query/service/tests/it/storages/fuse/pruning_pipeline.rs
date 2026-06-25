@@ -51,6 +51,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -73,12 +74,13 @@ async fn apply_snapshot_pruning(
     bloom_index_cols: BloomIndexColumns,
     fuse_table: &FuseTable,
     cache_key: Option<String>,
-) -> Result<Vec<PartInfoPtr>> {
-    let ctx: Arc<dyn TableContext> = ctx;
+    plan_id: u32,
+) -> Result<(Vec<PartInfoPtr>, PartStatistics)> {
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
     let fuse_pruner = Arc::new(FusePruner::create(
-        &ctx,
+        &table_ctx,
         op,
         schema,
         push_down,
@@ -100,7 +102,7 @@ async fn apply_snapshot_pruning(
         res_tx,
         cache_key,
         segment_locs.len(),
-        0,
+        plan_id,
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
@@ -140,7 +142,13 @@ async fn apply_snapshot_pruning(
         got.push(segment);
     }
 
-    Ok(got)
+    let stats = ctx
+        .get_pruned_partitions_stats()
+        .get(&plan_id)
+        .cloned()
+        .ok_or_else(|| ErrorCode::Internal("missing pruning statistics for test"))?;
+
+    Ok((got, stats))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -336,7 +344,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
 
     for (id, (extra, expected_blocks, expected_rows)) in extras.into_iter().enumerate() {
         let cache_key = Some(format!("test_block_pruner_{}", id));
-        let parts = apply_snapshot_pruning(
+        let (parts, stats) = apply_snapshot_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
             &extra,
@@ -345,6 +353,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
             fuse_table.bloom_index_cols(),
             fuse_table,
             cache_key.clone(),
+            id as u32,
         )
         .await?;
         let rows = parts
@@ -360,8 +369,9 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, parts.len());
 
-        let (stats, partitions) = FuseTable::check_prune_cache(&cache_key).unwrap();
         check_stats(stats, &stats_res, id)?;
+        let (stats, partitions) = FuseTable::check_prune_cache(&cache_key).unwrap();
+        assert_eq!(stats.pruning_stats, Default::default());
         assert_eq!(expected_blocks, partitions.partitions.len());
     }
 
