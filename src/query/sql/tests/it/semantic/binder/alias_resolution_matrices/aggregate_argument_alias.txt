@@ -40,7 +40,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_prefers_input_column_over_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_1_00
+key: A0N0S2_1_000
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(c) FROM t
 status: ok
@@ -60,7 +60,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_consumes_unique_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_1_10
+key: A0N0S2_1_100
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(c) FROM t
 status: ok
@@ -80,16 +80,38 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_rejects_duplicate_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_1_11
+key: A0N0S2_1_110
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, max(number) AS c, sum(c) FROM t
 status: error
 code: 1065
 message: column c reference or alias is ambiguous, please use another alias name
 
+=== aggregate_argument_alias__udaf_argument_prefers_input_column_over_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_2_001
+setting: enable_group_by_column_first=0
+sql: SELECT creative_name, weighted_avg(cost, weight) AS cost FROM udaf_t GROUP BY creative_name HAVING weighted_avg(cost, weight) > 0
+status: ok
+EvalScalar
+├── scalars: [udaf_t.creative_name (#0) AS (#0), weighted_avg(cost, weight) (#5) AS (#5)]
+└── Filter
+    ├── filters: [gt(weighted_avg(cost, weight) (#5), 0)]
+    └── Aggregate(Initial)
+        ├── group items: [udaf_t.creative_name (#0) AS (#0)]
+        ├── aggregate functions: [weighted_avg(cost, weight) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [udaf_t.creative_name (#0) AS (#0), CAST(udaf_t.cost (#2) AS Int32 NULL) AS (#3), CAST(udaf_t.weight (#1) AS Int32 NULL) AS (#4)]
+            └── Scan
+                ├── table: default.udaf_t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_prior_select_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S0_3_
+key: A0N1S0_4_
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3
 status: error
@@ -98,7 +120,7 @@ message: column c1 doesn't exist
 
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S2_3_
+key: A0N1S2_4_
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(t.c) FROM t AS t
 status: error

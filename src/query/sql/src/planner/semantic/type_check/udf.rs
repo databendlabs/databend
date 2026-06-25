@@ -73,6 +73,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
+use crate::binder::ExprContext;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::wrap_cast;
@@ -724,6 +725,13 @@ where A: super::TypeCheckAdapter
             .set_span(span));
         }
 
+        let is_udaf = matches!(&udf.definition, UDFDefinition::UDAFScript(_));
+        let original_context = self.bind_context.expr_context;
+        let disallow_alias_resolution =
+            is_udaf && self.bind_context.expr_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = ExprContext::InAggregateFunction;
+        }
         let arguments = args
             .iter()
             .map(|(display_name, arg)| {
@@ -734,7 +742,11 @@ where A: super::TypeCheckAdapter
                     data_type,
                 })
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = original_context;
+        }
+        let arguments = arguments?;
         let udf = {
             let mut udf_resolver = UdfCallResolver {
                 udf_adapter: self.adapter.udf_adapter()?,
