@@ -195,7 +195,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 5
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
 │   └── estimated rows: 1.25
 └── TableScan(Probe)
