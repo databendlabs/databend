@@ -4,6 +4,8 @@ local_dimensions:
     values: [input-conflict, no-input]
   - name: ambiguity
     values: [unique-select-alias, duplicate-select-alias]
+  - name: function_kind
+    values: [builtin-aggregate, udaf]
 regions:
   - description: aggregate arguments bind bare names against input columns before falling back to prior SELECT aliases
     main:
@@ -25,7 +27,7 @@ regions:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3"
-  - description: aggregate arguments can consume prior aggregate SELECT aliases when the alias name is unique and no input column wins first
+  - description: builtin aggregate arguments can consume prior aggregate SELECT aliases when the alias name is unique and no input column wins first
     main:
       consumers: [A0]
       name_shapes: [N0]
@@ -33,6 +35,7 @@ regions:
     local:
       relation: [input-conflict, no-input]
       ambiguity: [unique-select-alias, duplicate-select-alias]
+      function_kind: [builtin-aggregate]
     masks:
       - when:
           local:
@@ -40,24 +43,65 @@ regions:
             ambiguity: [duplicate-select-alias]
         reason: input-column precedence decides aggregate arguments before duplicate SELECT aliases are considered
     cases:
-      - key: A0N0S2_1_00
+      - key: A0N0S2_1_000
         name: aggregate_argument_prefers_input_column_over_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(c UInt64)"
         runs:
           - sql: "SELECT count(*) AS c, sum(c) FROM t"
-      - key: A0N0S2_1_10
+      - key: A0N0S2_1_100
         name: aggregate_argument_consumes_unique_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT count(*) AS c, sum(c) FROM t"
-      - key: A0N0S2_1_11
+      - key: A0N0S2_1_110
         name: aggregate_argument_rejects_duplicate_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT count(*) AS c, max(number) AS c, sum(c) FROM t"
+  - description: UDAF arguments keep input-column precedence over SELECT aggregate aliases
+    main:
+      consumers: [A0]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [input-conflict]
+      ambiguity: [unique-select-alias]
+      function_kind: [udaf]
+    cases:
+      - key: A0N0S2_2_001
+        name: udaf_argument_prefers_input_column_over_prior_aggregate_alias
+        setup_sqls:
+          - "CREATE TABLE udaf_t(creative_name String, weight UInt64, cost UInt64)"
+          - |
+            CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
+            LANGUAGE javascript AS $$
+            export function create_state() {
+                return {sum: 0, weight: 0};
+            }
+            export function accumulate(state, value, weight) {
+                state.sum += value * weight;
+                state.weight += weight;
+                return state;
+            }
+            export function retract(state, value, weight) {
+                state.sum -= value * weight;
+                state.weight -= weight;
+                return state;
+            }
+            export function merge(state1, state2) {
+                state1.sum += state2.sum;
+                state1.weight += state2.weight;
+                return state1;
+            }
+            export function finish(state) {
+                return state.sum / state.weight;
+            }
+            $$
+        runs:
+          - sql: "SELECT creative_name, weighted_avg(cost, weight) AS cost FROM udaf_t GROUP BY creative_name HAVING weighted_avg(cost, weight) > 0"
   - description: qualified aggregate-argument names included to document why alias fallback is unavailable
     main:
       consumers: [A0]
@@ -80,13 +124,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
-      - key: A0N1S0_3_
+      - key: A0N1S0_4_
         name: aggregate_argument_qualified_name_does_not_consume_prior_select_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3"
-      - key: A0N1S2_3_
+      - key: A0N1S2_4_
         name: aggregate_argument_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
