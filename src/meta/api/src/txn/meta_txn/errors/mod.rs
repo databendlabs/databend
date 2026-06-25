@@ -12,25 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+mod kv_api_or_user_error;
+mod move_key_error;
+mod run_error;
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-pub enum UnknownOrExistsError<UnknownError, ExistError> {
-    #[error(transparent)]
-    Unknown(UnknownError),
-
-    #[error(transparent)]
-    Exists(ExistError),
-}
-
-pub trait KeyUnknownBuilder {
-    type UnknownError;
-
-    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError;
-}
-
-pub trait KeyExistsBuilder {
-    type ExistError;
-
-    fn exist_error(&self, ctx: impl Display) -> Self::ExistError;
-}
+pub use kv_api_or_user_error::KvApiOrUserError;
+pub use move_key_error::MoveKeyError;
+pub use run_error::RunError;

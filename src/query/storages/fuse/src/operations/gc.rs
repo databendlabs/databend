@@ -30,7 +30,6 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
@@ -659,7 +658,7 @@ impl FuseTable {
                         .drop_table_tag(DropTableTagReq {
                             table_id: self.get_id(),
                             tag_name,
-                            seq: MatchSeq::Exact(seq_tag.seq),
+                            seq: Some(seq_tag.seq),
                         })
                         .await
                     {

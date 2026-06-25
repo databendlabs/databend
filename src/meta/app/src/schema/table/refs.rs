@@ -98,7 +98,7 @@ pub struct CreateTableTagReq {
 pub struct DropTableTagReq {
     pub table_id: u64,
     pub tag_name: String,
-    pub seq: MatchSeq,
+    pub seq: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
