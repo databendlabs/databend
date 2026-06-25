@@ -111,15 +111,17 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
             )
         }
         ScalarExpr::FunctionCall(func) => {
-            format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(|arg| format_scalar(id_humanizer, arg))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let arguments = func
+                .arguments
+                .iter()
+                .map(|arg| format_scalar(id_humanizer, arg))
+                .join(", ");
+            if params.is_empty() {
+                format!("{}({})", &func.func_name, arguments)
+            } else {
+                format!("{}({})({})", &func.func_name, params, arguments)
+            }
         }
         ScalarExpr::CastExpr(cast) => {
             format!(
