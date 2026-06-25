@@ -33,6 +33,7 @@ use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
@@ -399,7 +400,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     fn geometry_text(&self, value: &[u8]) -> Result<(Cow<'static, str>, bool)> {
         match ewkb_to_geo(&mut Ewkb(value)) {
             Ok((geo, srid)) => {
-                let srid = srid.unwrap_or(0);
+                let srid = srid.unwrap_or(UNKNOWN_SRID);
                 match self.settings.geometry_format {
                     GeometryDataType::WKB => {
                         Ok((Cow::Owned(hex::encode_upper(geo_to_wkb(geo)?)), true))
