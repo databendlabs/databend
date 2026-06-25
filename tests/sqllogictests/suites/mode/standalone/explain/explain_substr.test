@@ -19,7 +19,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(substr(t1.c (#0), 1, 2) = 'ab')], limit: NONE]
 └── estimated rows: 0.80
 
@@ -34,7 +34,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 2
-├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(substr(t1.c (#0), 2, 2) = 'ab')], limit: NONE]
 └── estimated rows: 0.80
 
@@ -50,7 +50,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(left(t1.c (#0), 2) = 'ab')], limit: NONE]
 └── estimated rows: 0.80
 

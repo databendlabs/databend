@@ -17,6 +17,9 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::PruningStatistics;
+use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -69,6 +72,25 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
             }
         }
     }
+}
+
+fn pruning_stats_query_log_extra(part_stats: &HashMap<u32, PartStatistics>) -> Result<String> {
+    if part_stats.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut pruning_stats = PruningStatistics::default();
+    for stats in part_stats.values() {
+        pruning_stats.merge(&stats.pruning_stats);
+    }
+
+    Ok(serde_json::to_string(&serde_json::json!({
+        "pruning_stats": {
+            "segments_read_cost_us": pruning_stats.segments_read_cost,
+            "segments_decompress_cost_us": pruning_stats.segments_decompress_cost,
+            "blocks_bloom_index_read_cost_us": pruning_stats.blocks_bloom_index_read_cost,
+        }
+    }))?)
 }
 
 impl InterpreterQueryLog {
@@ -362,6 +384,7 @@ impl InterpreterQueryLog {
         drop(guard);
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
+        let extra = pruning_stats_query_log_extra(&ctx.get_pruned_partitions_stats())?;
 
         Self::write_log(QueryLogElement {
             log_type,
@@ -422,12 +445,77 @@ impl InterpreterQueryLog {
             server_version: ctx.get_version().commit_detail.to_string(),
             query_tag,
             session_settings,
-            extra: "".to_string(),
+            extra,
             has_profiles,
             txn_state,
             txn_id,
             peek_memory_usage,
             session_id,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::*;
+
+    #[test]
+    fn pruning_stats_query_log_extra_formats_io_costs() {
+        let mut first = PartStatistics::default();
+        first.pruning_stats.segments_read_cost = 7;
+        first.pruning_stats.segments_decompress_cost = 11;
+        first.pruning_stats.blocks_bloom_index_read_cost = 13;
+
+        let mut second = PartStatistics::default();
+        second.pruning_stats.segments_read_cost = 17;
+        second.pruning_stats.segments_decompress_cost = 19;
+        second.pruning_stats.blocks_bloom_index_read_cost = 23;
+
+        let mut part_stats = HashMap::new();
+        part_stats.insert(1, first);
+        part_stats.insert(2, second);
+
+        let extra = pruning_stats_query_log_extra(&part_stats).unwrap();
+        let value: Value = serde_json::from_str(&extra).unwrap();
+        let pruning_stats = &value["pruning_stats"];
+
+        assert_eq!(pruning_stats["segments_read_cost_us"].as_u64(), Some(24));
+        assert_eq!(
+            pruning_stats["segments_decompress_cost_us"].as_u64(),
+            Some(30)
+        );
+        assert_eq!(
+            pruning_stats["blocks_bloom_index_read_cost_us"].as_u64(),
+            Some(36)
+        );
+    }
+
+    #[test]
+    fn pruning_stats_query_log_extra_preserves_zero_costs() {
+        let mut part_stats = HashMap::new();
+        part_stats.insert(1, PartStatistics::default());
+
+        let extra = pruning_stats_query_log_extra(&part_stats).unwrap();
+        let value: Value = serde_json::from_str(&extra).unwrap();
+        let pruning_stats = &value["pruning_stats"];
+
+        assert_eq!(pruning_stats["segments_read_cost_us"].as_u64(), Some(0));
+        assert_eq!(
+            pruning_stats["segments_decompress_cost_us"].as_u64(),
+            Some(0)
+        );
+        assert_eq!(
+            pruning_stats["blocks_bloom_index_read_cost_us"].as_u64(),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn pruning_stats_query_log_extra_is_empty_without_fuse_pruning() {
+        let part_stats = HashMap::new();
+
+        assert_eq!(pruning_stats_query_log_extra(&part_stats).unwrap(), "");
     }
 }

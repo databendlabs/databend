@@ -21,6 +21,8 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -49,6 +51,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -264,6 +267,10 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         table.clone(),
         "a > 0 and b > 6",
     )?);
+    let deterministic_filter = PushDownInfo {
+        is_deterministic: true,
+        ..e2.clone()
+    };
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit: TopN-pruner.
@@ -357,6 +364,39 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         check_stats(stats, &stats_res, id)?;
         assert_eq!(expected_blocks, partitions.partitions.len());
     }
+
+    let segment_locs = create_segment_location_vector(snapshot.segments.clone(), None);
+    let normal_stats = fuse_table
+        .prune_snapshot_blocks(
+            ctx.clone(),
+            Some(deterministic_filter.clone()),
+            table.get_table_info().schema(),
+            segment_locs.clone(),
+            snapshot.summary.block_count as usize,
+            ReadPartitionsPruningMode::Normal,
+            None,
+        )
+        .await?
+        .0;
+    assert_eq!(0, normal_stats.pruning_stats.segments_read_cost);
+    assert_eq!(0, normal_stats.pruning_stats.segments_decompress_cost);
+
+    let explain_ctx = fixture.new_query_ctx().await?;
+    explain_ctx.attach_query_str(QueryKind::Explain, "explain".to_string());
+    let explain_stats = fuse_table
+        .prune_snapshot_blocks(
+            explain_ctx,
+            Some(deterministic_filter),
+            table.get_table_info().schema(),
+            segment_locs,
+            snapshot.summary.block_count as usize,
+            ReadPartitionsPruningMode::Normal,
+            None,
+        )
+        .await?
+        .0;
+    assert!(explain_stats.pruning_stats.segments_read_cost > 0);
+    assert!(explain_stats.pruning_stats.segments_decompress_cost > 0);
 
     Ok(())
 }
