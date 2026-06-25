@@ -76,8 +76,21 @@ impl PhysicalPlanBuilder {
 
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
+        self.publish_synchronous_pruning_stats(&plan);
 
         Ok(plan)
+    }
+
+    fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
+        let mut sources = Vec::new();
+        plan.get_all_data_source(&mut sources);
+
+        for (plan_id, source) in sources {
+            if source.statistics.pruning_stats != Default::default() {
+                self.ctx
+                    .set_pruned_partitions_stats(plan_id, source.statistics);
+            }
+        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]

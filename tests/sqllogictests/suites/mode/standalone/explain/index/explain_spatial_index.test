@@ -32,7 +32,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 4
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_within(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
@@ -47,7 +47,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 4
 ├── partitions scanned: 4
-├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 4 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 4 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_intersects(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or stores.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 4.00
 
@@ -62,7 +62,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 4
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
@@ -77,7 +77,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 4
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_coveredby(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
@@ -92,7 +92,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 4
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_covers('POLYGON((9 9,9 12,12 12,12 9,9 9))', stores.location (#4)) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
@@ -116,7 +116,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 7
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_within(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 2.80
 
@@ -131,7 +131,7 @@ TableScan
 ├── read size: 1.33 KiB
 ├── partitions total: 7
 ├── partitions scanned: 7
-├── pruning stats: [segments: <range pruning: 7 to 7 cost: <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>, spatial pruning: 7 to 7 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 cost: <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>, spatial pruning: 7 to 7 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_intersects(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or stores.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 7.00
 
@@ -146,7 +146,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 7
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 2.80
 
@@ -181,7 +181,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
@@ -192,7 +192,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 7
     ├── partitions scanned: 7
-    ├── pruning stats: [segments: <range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 14.00
@@ -218,7 +218,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
@@ -229,7 +229,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 7
     ├── partitions scanned: 7
-    ├── pruning stats: [segments: <range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 14.00
@@ -264,7 +264,7 @@ AggregateFinal
         │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 4.00
         └── TableScan(Probe)
@@ -275,7 +275,7 @@ AggregateFinal
             ├── read size: < 1 KiB
             ├── partitions total: 7
             ├── partitions scanned: 7
-            ├── pruning stats: [segments: <range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
             ├── push downs: [filters: [], limit: NONE]
             ├── apply join filters: [#0]
             └── estimated rows: 14.00
@@ -313,7 +313,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
@@ -335,7 +335,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 7
     ├── partitions scanned: 7
-    ├── pruning stats: [segments: <range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 14.00
@@ -373,7 +373,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
@@ -395,7 +395,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 7
     ├── partitions scanned: 7
-    ├── pruning stats: [segments: <range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 14.00
@@ -423,7 +423,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 3
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, spatial pruning: 2 to 1 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, spatial pruning: 2 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_within(t_nullable.location (#2), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t_nullable.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 1.20
 

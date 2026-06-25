@@ -94,12 +94,11 @@ impl SendPartState {
         let send_part_cache = self.cache.lock();
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
+                let mut cache_statistics = send_part_cache.statistics.clone();
+                cache_statistics.pruning_stats = Default::default();
                 cache.insert(
                     cache_key.clone(),
-                    (
-                        send_part_cache.statistics.clone(),
-                        send_part_cache.partitions.clone(),
-                    ),
+                    (cache_statistics, send_part_cache.partitions.clone()),
                 );
             }
         }

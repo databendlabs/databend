@@ -22,7 +22,7 @@ Sequence
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: NONE]
 │       └── estimated rows: 6.00
 └── HashJoin
@@ -122,7 +122,7 @@ Sequence
 │           │       ├── read size: < 1 KiB
 │           │       ├── partitions total: 1
 │           │       ├── partitions scanned: 1
-│           │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│           │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │           │       ├── push downs: [filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2], limit: NONE]
 │           │       └── estimated rows: 3.00
 │           └── Filter(Probe)
@@ -137,7 +137,7 @@ Sequence
 │                   ├── read size: < 1 KiB
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │                   ├── push downs: [filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2], limit: NONE]
 │                   ├── apply join filters: [#0]
 │                   └── estimated rows: 3.00
@@ -412,7 +412,7 @@ Sequence
 │       │   ├── read size: < 1 KiB
 │       │   ├── partitions total: 1
 │       │   ├── partitions scanned: 1
-│       │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│       │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
 │       │   ├── push downs: [filters: [is_true(store.s_store_name (#10) = 'ese')], limit: NONE]
 │       │   └── estimated rows: 1.00
 │       └── HashJoin(Probe)
@@ -437,7 +437,7 @@ Sequence
 │           │       ├── read size: < 1 KiB
 │           │       ├── partitions total: 1
 │           │       ├── partitions scanned: 1
-│           │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│           │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
 │           │       ├── push downs: [filters: [time_dim.t_hour (#7) = 8 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 12 and time_dim.t_minute (#8) < 30], limit: NONE]
 │           │       └── estimated rows: 9.00
 │           └── HashJoin(Probe)
@@ -458,7 +458,7 @@ Sequence
 │               │   ├── read size: < 1 KiB
 │               │   ├── partitions total: 1
 │               │   ├── partitions scanned: 1
-│               │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│               │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
 │               │   ├── push downs: [filters: [household_demographics.hd_dep_count (#4) = 4 and household_demographics.hd_vehicle_count (#5) <= 6 or household_demographics.hd_dep_count (#4) = 2 and household_demographics.hd_vehicle_count (#5) <= 4 or household_demographics.hd_dep_count (#4) = 0 and household_demographics.hd_vehicle_count (#5) <= 2], limit: NONE]
 │               │   └── estimated rows: 2.20
 │               └── TableScan(Probe)
@@ -469,7 +469,7 @@ Sequence
 │                   ├── read size: < 1 KiB
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │                   ├── push downs: [filters: [], limit: NONE]
 │                   ├── apply join filters: [#2, #1, #0]
 │                   └── estimated rows: 36.00
