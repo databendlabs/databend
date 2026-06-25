@@ -82,8 +82,53 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
     ];
 
-    // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
+    // Example:
+    // pruning stats: [segments: <read cost: ..., decompress cost: ...>,
+    //                 blocks: <range pruning: x to y, bloom index read cost: ...>]
+    let mut segments_pruning_description = String::new();
     let mut blocks_pruning_description = String::new();
+
+    // segment read status.
+    if info.pruning_stats.segments_read_cost > 0
+        || info.pruning_stats.segments_range_pruning_before > 0
+    {
+        write!(
+            segments_pruning_description,
+            "read{}",
+            format_pruning_cost_suffix(info.pruning_stats.segments_read_cost)
+        )
+        .unwrap();
+    }
+
+    // segment decompress status.
+    if info.pruning_stats.segments_decompress_cost > 0
+        || info.pruning_stats.blocks_range_pruning_before > 0
+    {
+        if !segments_pruning_description.is_empty() {
+            segments_pruning_description.push_str(", ");
+        }
+        write!(
+            segments_pruning_description,
+            "decompress{}",
+            format_pruning_cost_suffix(info.pruning_stats.segments_decompress_cost)
+        )
+        .unwrap();
+    }
+
+    // segment range pruning status.
+    if info.pruning_stats.segments_range_pruning_before > 0 {
+        if !segments_pruning_description.is_empty() {
+            segments_pruning_description.push_str(", ");
+        }
+        write!(
+            segments_pruning_description,
+            "range pruning: {} to {}{}",
+            info.pruning_stats.segments_range_pruning_before,
+            info.pruning_stats.segments_range_pruning_after,
+            format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
+        )
+        .unwrap();
+    }
 
     // range pruning status.
     if info.pruning_stats.blocks_range_pruning_before > 0 {
@@ -93,6 +138,21 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             info.pruning_stats.blocks_range_pruning_before,
             info.pruning_stats.blocks_range_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_range_pruning_cost)
+        )
+        .unwrap();
+    }
+
+    // bloom index read status.
+    if info.pruning_stats.blocks_bloom_index_read_cost > 0
+        || info.pruning_stats.blocks_bloom_pruning_before > 0
+    {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description.push_str(", ");
+        }
+        write!(
+            blocks_pruning_description,
+            "bloom index read{}",
+            format_pruning_cost_suffix(info.pruning_stats.blocks_bloom_index_read_cost)
         )
         .unwrap();
     }
@@ -173,18 +233,14 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
     }
 
     // Combine segment pruning and blocks pruning descriptions if any
-    if info.pruning_stats.segments_range_pruning_before > 0
-        || !blocks_pruning_description.is_empty()
-    {
+    if !segments_pruning_description.is_empty() || !blocks_pruning_description.is_empty() {
         let mut pruning_description = String::new();
 
-        if info.pruning_stats.segments_range_pruning_before > 0 {
+        if !segments_pruning_description.is_empty() {
             write!(
                 pruning_description,
-                "segments: <range pruning: {} to {}{}>",
-                info.pruning_stats.segments_range_pruning_before,
-                info.pruning_stats.segments_range_pruning_after,
-                format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
+                "segments: <{}>",
+                segments_pruning_description
             )
             .unwrap();
         }
@@ -215,6 +271,40 @@ pub fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNod
         "estimated rows: {0:.2}",
         info.estimated_rows
     ))]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_pruning_stats_with_io_costs() {
+        let mut stats = PartStatistics::default_exact();
+        stats.pruning_stats.segments_read_cost = 2_400;
+        stats.pruning_stats.segments_decompress_cost = 900;
+        stats.pruning_stats.segments_range_pruning_before = 10;
+        stats.pruning_stats.segments_range_pruning_after = 3;
+        stats.pruning_stats.segments_range_pruning_cost = 1_100;
+        stats.pruning_stats.blocks_range_pruning_before = 20;
+        stats.pruning_stats.blocks_range_pruning_after = 5;
+        stats.pruning_stats.blocks_range_pruning_cost = 2_200;
+        stats.pruning_stats.blocks_bloom_index_read_cost = 3_300;
+        stats.pruning_stats.blocks_bloom_pruning_before = 5;
+        stats.pruning_stats.blocks_bloom_pruning_after = 1;
+        stats.pruning_stats.blocks_bloom_pruning_cost = 4_400;
+
+        let nodes = part_stats_info_to_format_tree(&stats);
+        let pruning_stats = nodes
+            .iter()
+            .map(|node| node.payload.as_str())
+            .find(|payload| payload.starts_with("pruning stats:"))
+            .unwrap();
+
+        assert_eq!(
+            pruning_stats,
+            "pruning stats: [segments: <read cost: 2 ms, decompress cost: 1 ms, range pruning: 10 to 3 cost: 1 ms>, blocks: <range pruning: 20 to 5 cost: 2 ms, bloom index read cost: 3 ms, bloom pruning: 5 to 1 cost: 4 ms>]"
+        );
+    }
 }
 
 pub fn format_output_columns(
