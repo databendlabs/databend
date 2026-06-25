@@ -334,6 +334,7 @@ impl PhysicalPlanBuilder {
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             });
             plan.adjust_plan_id(&mut 0);
+            plan.assign_profile_group_id();
             return Ok(plan);
         }
 
@@ -428,6 +429,7 @@ impl PhysicalPlanBuilder {
             });
 
             plan.adjust_plan_id(&mut 0);
+            plan.assign_profile_group_id();
             return Ok(plan);
         }
 
@@ -669,6 +671,7 @@ impl PhysicalPlanBuilder {
         });
 
         physical_plan.adjust_plan_id(&mut 0);
+        physical_plan.assign_profile_group_id();
         Ok(physical_plan)
     }
 

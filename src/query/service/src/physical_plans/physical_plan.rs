@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::ProfileLabel;
@@ -41,10 +43,19 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::SimplePhysicalFormat;
 use crate::pipelines::PipelineBuilder;
 
+/// Process-wide monotonic source of profile group ids.
+static PROFILE_GROUP_ID: AtomicU64 = AtomicU64::new(1);
+
+pub fn next_profile_group_id() -> u64 {
+    PROFILE_GROUP_ID.fetch_add(1, Ordering::Relaxed)
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PhysicalPlanMeta {
     pub plan_id: u32,
     pub name: String,
+    #[serde(default)]
+    pub profile_group_id: u64,
 }
 
 impl PhysicalPlanMeta {
@@ -56,6 +67,7 @@ impl PhysicalPlanMeta {
         PhysicalPlanMeta {
             plan_id,
             name: name.into(),
+            profile_group_id: 0,
         }
     }
 }
@@ -98,6 +110,21 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         for child in self.children_mut() {
             child.adjust_plan_id(next_id);
         }
+    }
+
+    /// Stamp every node of this plan tree with `group_id`.
+    #[recursive::recursive]
+    fn adjust_profile_group_id(&mut self, group_id: u64) {
+        self.get_meta_mut().profile_group_id = group_id;
+
+        for child in self.children_mut() {
+            child.adjust_profile_group_id(group_id);
+        }
+    }
+
+    /// Allocate a fresh process-wide group id and stamp the whole tree with it.
+    fn assign_profile_group_id(&mut self) {
+        self.adjust_profile_group_id(next_profile_group_id());
     }
 
     #[recursive::recursive]
@@ -203,6 +230,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         let scope = PlanScope::create(
             self.get_id(),
             self.get_name(),
+            self.get_meta().profile_group_id,
             Arc::new(desc),
             Arc::new(profile_labels),
         );

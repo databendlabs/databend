@@ -105,6 +105,7 @@ impl CopyIntoLocationInterpreter {
 
         let mut next_plan_id = 0;
         physical_plan.adjust_plan_id(&mut next_plan_id);
+        physical_plan.assign_profile_group_id();
         Ok((
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?,
             update_stream_meta_req,
