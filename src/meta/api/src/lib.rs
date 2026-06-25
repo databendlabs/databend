@@ -25,6 +25,8 @@ pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;
 pub mod api_impl;
 pub mod error;
 pub mod kv;
+#[cfg(test)]
+pub(crate) mod testing;
 pub mod txn;
 pub mod util;
 

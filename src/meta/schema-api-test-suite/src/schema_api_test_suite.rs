@@ -37,7 +37,6 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
-use databend_common_meta_api::RefApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -75,7 +74,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -90,7 +88,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
-use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -98,7 +95,6 @@ use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
-use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexMeta;
@@ -141,7 +137,6 @@ use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagNameIdent;
@@ -368,7 +363,6 @@ impl SchemaApiTestSuite {
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + 'static,
     {
         self.table_upsert_option(&b.build().await).await?;
-        self.table_tag_drop_match_seq(&b.build().await).await?;
         self.table_list(&b.build().await).await?;
         self.table_list_many(&b.build().await).await?;
 
@@ -3134,84 +3128,6 @@ impl SchemaApiTestSuite {
                 assert_eq!(updated.meta.comment, "lvt guard success");
             }
         }
-        Ok(())
-    }
-
-    async fn table_tag_drop_match_seq<
-        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
-    >(
-        &self,
-        mt: &MT,
-    ) -> anyhow::Result<()> {
-        let tenant_name = "tenant1";
-        let db_name = "db1";
-        let tbl_name = "tb1";
-        let tag_name = "tag1";
-        let snapshot_loc = "snapshot-location";
-
-        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
-        util.create_db().await?;
-        util.create_table().await?;
-
-        let table = util.get_table().await?;
-        let table_id = table.ident.table_id;
-        let tenant = util.tenant();
-
-        mt.create_table_tag(CreateTableTagReq {
-            table_id,
-            seq: MatchSeq::Exact(table.ident.seq),
-            tag_name: tag_name.to_string(),
-            snapshot_loc: snapshot_loc.to_string(),
-            expire_at: None,
-            lvt_check: TableLvtCheck {
-                tenant: tenant.clone(),
-                time: Utc::now(),
-            },
-        })
-        .await?;
-
-        let get_req = || GetTableTagReq {
-            table_id,
-            tag_name: tag_name.to_string(),
-            include_expired: true,
-        };
-        let table_tag = TableTag {
-            expire_at: None,
-            snapshot_loc: snapshot_loc.to_string(),
-        };
-        let seq_tag = mt.get_table_tag(get_req()).await?.unwrap();
-        assert_eq!(seq_tag.data, table_tag);
-
-        let wrong_seq = seq_tag.seq + 1;
-        let err = mt
-            .drop_table_tag(DropTableTagReq {
-                table_id,
-                tag_name: tag_name.to_string(),
-                seq: Some(wrong_seq),
-            })
-            .await
-            .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            format!(
-                "UnknownReference: `Unknown tag: '{}'; when:(drop_table_tag: table_id={}, tag_name='{}', seq={}; seq mismatched: expect {}, current {})`",
-                tag_name, table_id, tag_name, wrong_seq, wrong_seq, seq_tag.seq
-            )
-        );
-        assert!(matches!(
-            err,
-            KVAppError::AppError(AppError::UnknownReference(_))
-        ));
-        assert_eq!(mt.get_table_tag(get_req()).await?, Some(seq_tag.clone()));
-
-        mt.drop_table_tag(DropTableTagReq {
-            table_id,
-            tag_name: tag_name.to_string(),
-            seq: Some(seq_tag.seq),
-        })
-        .await?;
-        assert_eq!(mt.get_table_tag(get_req()).await?, None);
-
         Ok(())
     }
 
