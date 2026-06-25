@@ -45,8 +45,8 @@ tokio = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
 temp-env = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
