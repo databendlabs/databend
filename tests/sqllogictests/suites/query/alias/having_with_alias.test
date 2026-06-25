@@ -17,3 +17,37 @@ query I
 select a+1 as a from (select number+1 as a from numbers(1)) having a = 2
 ----
 2
+
+statement error (?s)1065.*column cost_alias doesn't exist
+SELECT SUM(number) AS cost_alias FROM numbers(5) HAVING SUM(cost_alias) > 0
+
+query II
+SELECT
+    creative_name,
+    SUM(cost) AS cost
+FROM
+    (
+        SELECT
+            number % 2 AS creative_name,
+            number AS cost,
+            number AS impressions,
+            number AS clicks,
+            number AS c_bi_install,
+            TO_DATE('2026-06-17') AS install_date
+        FROM
+            numbers(5)
+    ) AS t
+WHERE
+    install_date BETWEEN '2026-06-17' AND '2026-06-24'
+GROUP BY
+    creative_name
+HAVING
+    SUM(impressions) > 0
+    OR SUM(clicks) > 0
+    OR SUM(cost) > 0
+    OR SUM(c_bi_install) > 0
+ORDER BY
+    creative_name
+----
+0 6
+1 4

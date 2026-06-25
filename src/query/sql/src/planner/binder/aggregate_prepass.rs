@@ -314,6 +314,7 @@ struct Scanner<'a> {
     ast_aliases: &'a SelectAliasCatalog,
     in_subquery: bool,
     window_depth: usize,
+    aggregate_depth: usize,
     expanding_aliases: HashSet<String>,
     expansion_stack: Vec<String>,
     facts: Vec<AggregatePrepassFact>,
@@ -334,6 +335,7 @@ impl Scanner<'_> {
             ast_aliases,
             in_subquery: false,
             window_depth: 0,
+            aggregate_depth: 0,
             expanding_aliases: HashSet::new(),
             expansion_stack: Vec::new(),
             facts: Vec::new(),
@@ -365,8 +367,30 @@ impl Scanner<'_> {
         Ok(VisitControl::Continue)
     }
 
+    fn visit_aggregate_expr_children(&mut self, expr: &Expr) -> VisitResult {
+        match expr {
+            Expr::CountAll {
+                window: None,
+                qualified,
+                ..
+            } => {
+                for item in qualified {
+                    if let databend_common_ast::ast::Indirection::Identifier(ident) = item {
+                        try_ast_walk!(ident.walk(self));
+                    }
+                }
+            }
+            Expr::FunctionCall { func, .. } => {
+                try_ast_walk!(func.walk(self));
+            }
+            _ => unreachable!("aggregate expr helper must only be called for aggregate exprs"),
+        }
+
+        Ok(VisitControl::Continue)
+    }
+
     fn handle_column_ref(&mut self, column: &ColumnRef) {
-        if self.in_subquery || self.window_depth > 0 {
+        if self.in_subquery || self.window_depth > 0 || self.aggregate_depth > 0 {
             return;
         }
 
@@ -441,6 +465,16 @@ impl Scanner<'_> {
         let ast = &ast_aliases.unique_aggregate_prepass_expr_info(&alias)?.ast;
         Some((alias, ast))
     }
+
+    fn is_aggregate_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::CountAll { window: None, .. } => true,
+            Expr::FunctionCall { func, .. } => {
+                is_aggregate_target(self.name_resolution_ctx, self.udaf_names, func)
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Visitor for Scanner<'_> {
@@ -454,6 +488,14 @@ impl Visitor for Scanner<'_> {
         if is_window_expr(expr) {
             let result = self.visit_window_expr_children(expr);
             self.window_depth -= 1;
+            result?;
+            return Ok(VisitControl::SkipChildren);
+        }
+
+        if self.is_aggregate_expr(expr) && !self.in_subquery {
+            self.aggregate_depth += 1;
+            let result = self.visit_aggregate_expr_children(expr);
+            self.aggregate_depth -= 1;
             result?;
             return Ok(VisitControl::SkipChildren);
         }
@@ -808,6 +850,19 @@ mod tests {
 
         assert_eq!(facts.len(), 1);
         assert!(!facts[0].contains_window);
+    }
+
+    #[test]
+    fn aggregate_prepass_does_not_expand_alias_inside_aggregate_arguments() {
+        let test_bed = AggregatePrepassTestBed::new();
+        let facts = test_bed.scan(
+            ExprContext::HavingClause,
+            &[("cost", "sum(cost)")],
+            "sum(cost) > 0",
+        );
+
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].source, AggregatePrepassSource::DirectClause);
     }
 
     #[test]
