@@ -27,6 +27,10 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 
+fn is_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1)) || stat_info.cardinality == 1.0
+}
+
 enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
@@ -63,6 +67,7 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let left_stat_info = left_rel_expr.derive_cardinality()?;
     let right_stat_info = right_rel_expr.derive_cardinality()?;
 
     if !join.equi_conditions.is_empty() {
@@ -75,10 +80,10 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-        || right_stat_info.cardinality == 1.0
-    {
-        // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
+    if is_single_row(&left_stat_info) || is_single_row(&right_stat_info) {
+        // If one side has a single row, use CROSS JOIN + FILTER instead of RANGE JOIN.
+        // Range join is optimized for a larger right side and can degenerate when join
+        // commutation places the large input on the left.
         return Ok(PhysicalJoinType::Hash);
     }
 
@@ -142,10 +147,29 @@ impl PhysicalPlanBuilder {
             .union(&others_required)
             .cloned()
             .collect();
-        let left_required = left_required.union(&others_required).cloned().collect();
-        let right_required = right_required.union(&others_required).cloned().collect();
+        let left_required: ColumnSet = left_required.union(&others_required).cloned().collect();
+        let right_required: ColumnSet = right_required.union(&others_required).cloned().collect();
 
-        // 2. Build physical plan.
+        // 2. Try Build physical spatial join plan.
+        if self.ctx.get_settings().get_enable_spatial_join()? {
+            if let Some(candidate) = join.spatial_join.clone() {
+                if let Some(plan) = self
+                    .try_build_spatial_join(
+                        join,
+                        *candidate,
+                        s_expr,
+                        required.clone(),
+                        left_required.clone(),
+                        right_required.clone(),
+                    )
+                    .await?
+                {
+                    return Ok(plan);
+                }
+            }
+        }
+
+        // 3. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
             if !join.equi_conditions.is_empty() {

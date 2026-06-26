@@ -68,6 +68,7 @@ pub use geometry::Bbox;
 pub use geometry::EwkbBbox;
 pub use geometry::Extremum;
 pub use geometry::GeometryDataType;
+pub use geometry::UNKNOWN_SRID;
 pub use geometry::ewkb_to_bbox;
 pub use geometry::ewkb_to_geo;
 pub use geometry::geo_to_ewkb;

@@ -20,10 +20,10 @@ use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnOpResponse;
 use databend_meta_client::types::TxnRequest;
 use seq_marked::SeqValue;
 
@@ -31,9 +31,11 @@ use super::core::send_txn;
 use super::fetched_record::FetchedRecord;
 use super::op_builder::txn_del;
 use super::op_builder::txn_put_pb_with_ttl;
+use super::read_record::ReadRecord;
 use crate::kv_pb_api::decode_seqv;
 use crate::kv_pb_api::errors::PbDecodeError;
 
+pub mod errors;
 mod manager;
 #[cfg(test)]
 mod mem_kv;
@@ -41,6 +43,9 @@ mod read_entry;
 #[cfg(test)]
 mod tests;
 
+pub use errors::KvApiOrUserError;
+pub use errors::MoveKeyError;
+pub use errors::RunError;
 pub use manager::MetaTxnManager;
 use read_entry::ReadEntry;
 
@@ -65,9 +70,9 @@ struct TxnState {
 /// update, so a read that a write depends on can never be left unguarded.
 ///
 /// The read and write sets sit behind an `Arc<Mutex<…>>`, so reads and writes
-/// take `&self`. A [`FetchedRecord`] handle can borrow the transaction and write
-/// straight back to it, and several handles can be held at once without passing
-/// the transaction around.
+/// take `&self`. A guarded [`FetchedRecord`] handle can borrow the transaction
+/// and write straight back to it, and several handles can be held at once
+/// without passing the transaction around.
 ///
 /// Usually obtained from [`MetaTxnManager::run`](crate::MetaTxnManager::run).
 pub struct MetaTxn<'a, KV: ?Sized> {
@@ -93,13 +98,28 @@ impl<'a, KV: ?Sized> MetaTxn<'a, KV> {
     }
 
     /// Stage a delete. Replaces any operation previously staged for `key`.
-    pub fn stage_delete<K>(&self, key: &K)
+    pub(crate) fn stage_delete<K>(&self, key: &K)
     where K: kvapi::Key {
+        let op = txn_del(key);
         self.state
             .lock()
             .unwrap()
             .operations
-            .insert(key.to_string_key(), txn_del(key));
+            .insert(key.to_string_key(), op);
+    }
+
+    /// Stage an unguarded put. Replaces any operation previously staged for `key`.
+    pub(crate) fn stage_unconditional_put<K>(&self, key: &K, value: &K::ValueType)
+    where
+        K: kvapi::Key,
+        K::ValueType: FromToProto + 'static,
+    {
+        let op = txn_put_pb_with_ttl(key, value, None);
+        self.state
+            .lock()
+            .unwrap()
+            .operations
+            .insert(key.to_string_key(), op);
     }
 }
 
@@ -109,12 +129,13 @@ where
     KV::Error: From<PbDecodeError>,
 {
     /// Read a key without arming a guard.
-    pub async fn get<K>(&self, key: K) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
+    pub async fn get<K>(&self, key: K) -> Result<ReadRecord<K>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        self.fetch(key, false).await
+        let seq_v = self.fetch(&key, false).await?;
+        Ok(ReadRecord::new(seq_v))
     }
 
     /// Read a key and mark it for update, so it becomes an `eq_seq` guard at
@@ -130,7 +151,8 @@ where
         K: kvapi::Key,
         K::ValueType: FromToProto,
     {
-        self.fetch(key, true).await
+        let seq_v = self.fetch(&key, true).await?;
+        Ok(FetchedRecord::new(self, key, seq_v))
     }
 
     /// Read a key through the snapshot cache, recording it in the read set.
@@ -140,9 +162,9 @@ where
     /// by a for-update read upgrades the key to a guard.
     async fn fetch<K>(
         &self,
-        key: K,
+        key: &K,
         for_update: bool,
-    ) -> Result<FetchedRecord<'_, 'a, KV, K>, KV::Error>
+    ) -> Result<Option<SeqV<K::ValueType>>, KV::Error>
     where
         K: kvapi::Key,
         K::ValueType: FromToProto,
@@ -173,29 +195,7 @@ where
             }
         };
 
-        let seq_v = decode_raw::<K::ValueType, KV::Error>(raw, &key_str)?;
-        Ok(FetchedRecord::new(self, key, seq_v))
-    }
-}
-
-impl<KV> MetaTxn<'_, KV>
-where
-    KV: KVApi + ?Sized,
-    KV::Error: From<InvalidArgument>,
-{
-    /// Stage a put. Replaces any operation previously staged for `key`.
-    pub fn stage_put<K>(&self, key: &K, value: &K::ValueType) -> Result<(), KV::Error>
-    where
-        K: kvapi::Key,
-        K::ValueType: FromToProto + 'static,
-    {
-        let op = txn_put_pb_with_ttl(key, value, None);
-        self.state
-            .lock()
-            .unwrap()
-            .operations
-            .insert(key.to_string_key(), op);
-        Ok(())
+        decode_raw::<K::ValueType, KV::Error>(raw, &key_str)
     }
 }
 
@@ -208,9 +208,9 @@ where KV: KVApi + ?Sized
         self.state.lock().unwrap().operations.is_empty()
     }
 
-    /// Send the staged reads and writes as one commit and report whether its
-    /// guards held.
-    async fn execute(&self) -> Result<bool, KV::Error> {
+    /// Send the staged reads and writes as one commit and return its operation
+    /// responses.
+    async fn execute(&self) -> Result<(bool, Vec<TxnOpResponse>), KV::Error> {
         let (reads, operations) = {
             let mut state = self.state.lock().unwrap();
             (
@@ -219,8 +219,7 @@ where KV: KVApi + ?Sized
             )
         };
         let req = build_request(reads, operations);
-        let (succ, _responses) = send_txn(self.kv, req).await?;
-        Ok(succ)
+        send_txn(self.kv, req).await
     }
 }
 

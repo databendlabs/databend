@@ -26,6 +26,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::ewkb_to_bbox;
 use geo::Rect;
 use unicase::Ascii;
@@ -142,7 +143,7 @@ impl<'a> SpatialPredicateVisitor<'a> {
                     let (min_x, min_y, max_x, max_y) = bbox.corners();
                     Rect::new((min_x, min_y), (max_x, max_y))
                 });
-                Some((rect, result.srid.unwrap_or(0)))
+                Some((rect, result.srid.unwrap_or(UNKNOWN_SRID)))
             }
             _ => None,
         }
