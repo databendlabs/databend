@@ -70,6 +70,7 @@ use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -6258,7 +6259,7 @@ impl SchemaApiTestSuite {
         info!("--- create sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 start: 1,
@@ -6267,7 +6268,24 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
+        }
+
+        info!("--- create sequence again without override");
+        {
+            let req = CreateSequenceReq {
+                override_existing: false,
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                create_on,
+                start: 2,
+                increment: 2,
+                comment: Some("seq2".to_string()),
+                storage_version,
+            };
+
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: false });
         }
 
         info!("--- get sequence");
@@ -6282,7 +6300,7 @@ impl SchemaApiTestSuite {
         info!("--- list sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 ident: SequenceIdent::new(&tenant, "seq1"),
                 create_on,
                 start: 1,
@@ -6291,7 +6309,8 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
             let values = mt.list_sequences(&tenant).await?;
             assert_eq!(values.len(), 2);
             assert_eq!(values[0].0, sequence_name);
@@ -6333,7 +6352,7 @@ impl SchemaApiTestSuite {
         info!("--- replace sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 start: 1,
@@ -6342,7 +6361,8 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
 
             let req = SequenceIdent::new(&tenant, sequence_name);
 
