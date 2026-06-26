@@ -279,7 +279,7 @@ fn build_vector_statistics_variant(
     func_ctx: &FunctionContext,
 ) -> Vec<u8> {
     let scalar = Scalar::Tuple(vec![
-        Scalar::String(distance_type.as_str().to_string()),
+        Scalar::String(distance_type.as_string()),
         Scalar::Array(Float32Type::from_data(
             vector_stat
                 .centroid
