@@ -224,8 +224,41 @@ impl PhysicalPlanBuilder {
         } else {
             match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
+                    // When a LeftSingle/RightSingle join (scalar subquery) has no
+                    // equi-conditions, the hash join executes as a cross join + filter.
+                    // The FROM_LEFT_SINGLE runtime check ("at most 1 build row per probe
+                    // row") fires during the cross-product matching phase — before the
+                    // filter is applied — and false-positives because in a cross join
+                    // every probe row matches all build rows.
+                    //
+                    // We only clear single_to_inner when we can independently verify that
+                    // one side is genuinely a single-row producer (precise_cardinality == 1
+                    // or cardinality == 1.0). This covers no-group-by aggregates (MIN, MAX,
+                    // COUNT without GROUP BY) whose single-row output is guaranteed by
+                    // construction. For subqueries that *might* produce multiple rows (e.g.
+                    // GROUP BY aggregates), we preserve the marker so the runtime still
+                    // enforces the scalar-subquery cardinality contract.
+                    let left_stat =
+                        RelExpr::with_s_expr(s_expr.left_child()).derive_cardinality()?;
+                    let right_stat =
+                        RelExpr::with_s_expr(s_expr.right_child()).derive_cardinality()?;
+                    let either_side_single =
+                        matches!(left_stat.statistics.precise_cardinality, Some(1))
+                            || left_stat.cardinality == 1.0
+                            || matches!(right_stat.statistics.precise_cardinality, Some(1))
+                            || right_stat.cardinality == 1.0;
+                    let join = if join.equi_conditions.is_empty()
+                        && join.single_to_inner.is_some()
+                        && either_side_single
+                    {
+                        let mut j = join.clone();
+                        j.single_to_inner = None;
+                        j
+                    } else {
+                        join.clone()
+                    };
                     self.build_hash_join(
-                        join,
+                        &join,
                         s_expr,
                         required,
                         others_required,
