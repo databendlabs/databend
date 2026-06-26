@@ -50,20 +50,19 @@ impl FromToProto for ex::TableSchema {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DataSchema, Incompatible> {
+    fn to_pb(&self) -> pb::DataSchema {
         let mut fs = Vec::with_capacity(self.fields().len());
         for f in self.fields() {
-            fs.push(f.to_pb()?);
+            fs.push(f.to_pb());
         }
 
-        let p = pb::DataSchema {
+        pb::DataSchema {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
             next_column_id: self.next_column_id(),
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -94,23 +93,20 @@ impl FromToProto for ex::TableField {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
-        let computed_expr = self.computed_expr().map(FromToProto::to_pb).transpose()?;
-        let auto_increment_expr = self
-            .auto_increment_expr()
-            .map(FromToProto::to_pb)
-            .transpose()?;
-        let p = pb::DataField {
+    fn to_pb(&self) -> pb::DataField {
+        let computed_expr = self.computed_expr().map(FromToProto::to_pb);
+        let auto_increment_expr = self.auto_increment_expr().map(FromToProto::to_pb);
+
+        pb::DataField {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
-            data_type: Some(self.data_type().to_pb()?),
+            data_type: Some(self.data_type().to_pb()),
             column_id: self.column_id(),
             computed_expr,
             auto_increment_expr,
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -135,7 +131,7 @@ impl FromToProto for ex::ComputedExpr {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::ComputedExpr, Incompatible> {
+    fn to_pb(&self) -> pb::ComputedExpr {
         let x = match self {
             ex::ComputedExpr::Virtual(expr) => {
                 pb::computed_expr::ComputedExpr::Virtual(expr.clone())
@@ -143,12 +139,12 @@ impl FromToProto for ex::ComputedExpr {
             ex::ComputedExpr::Stored(expr) => pb::computed_expr::ComputedExpr::Stored(expr.clone()),
         };
 
-        Ok(pb::ComputedExpr {
+        pb::ComputedExpr {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             computed_expr: Some(x),
-        })
+        }
     }
 }
 
@@ -171,15 +167,15 @@ impl FromToProto for ex::AutoIncrementExpr {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::AutoIncrementExpr {
+    fn to_pb(&self) -> Self::PB {
+        pb::AutoIncrementExpr {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             start: self.start,
             step: self.step,
             column_id: self.column_id,
             is_ordered: self.is_ordered,
-        })
+        }
     }
 }
 
@@ -318,8 +314,8 @@ impl FromToProto for ex::TableDataType {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
-        let x = match self {
+    fn to_pb(&self) -> pb::DataType {
+        match self {
             TableDataType::Null => new_pb_dt24(Dt24::NullT(pb::Empty {})),
             TableDataType::EmptyArray => new_pb_dt24(Dt24::EmptyArrayT(pb::Empty {})),
             TableDataType::EmptyMap => new_pb_dt24(Dt24::EmptyMapT(pb::Empty {})),
@@ -328,26 +324,26 @@ impl FromToProto for ex::TableDataType {
             TableDataType::String => new_pb_dt24(Dt24::StringT(pb::Empty {})),
             TableDataType::Opaque(size) => new_pb_dt24(Dt24::OpaqueT(*size as _)),
             TableDataType::Number(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 new_pb_dt24(Dt24::NumberT(x))
             }
             TableDataType::Decimal(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 new_pb_dt24(Dt24::DecimalT(x))
             }
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
             TableDataType::Interval => new_pb_dt24(Dt24::IntervalT(pb::Empty {})),
             TableDataType::Nullable(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::NullableT(Box::new(x)))
             }
             TableDataType::Array(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::ArrayT(Box::new(x)))
             }
             TableDataType::Map(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::MapT(Box::new(x)))
             }
             TableDataType::Bitmap => new_pb_dt24(Dt24::BitmapT(pb::Empty {})),
@@ -358,7 +354,7 @@ impl FromToProto for ex::TableDataType {
                 //
                 let mut types = vec![];
                 for t in fields_type {
-                    let p = t.to_pb()?;
+                    let p = t.to_pb();
                     types.push(p);
                 }
 
@@ -374,13 +370,12 @@ impl FromToProto for ex::TableDataType {
             TableDataType::Geometry => new_pb_dt24(Dt24::GeometryT(pb::Empty {})),
             TableDataType::Geography => new_pb_dt24(Dt24::GeographyT(pb::Empty {})),
             TableDataType::Vector(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::VectorT(x))
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
             TableDataType::TimestampTz => new_pb_dt24(Dt24::TimestampTzT(pb::Empty {})),
-        };
-        Ok(x)
+        }
     }
 }
 
@@ -413,7 +408,7 @@ impl FromToProto for ex::types::NumberDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Number, Incompatible> {
+    fn to_pb(&self) -> pb::Number {
         let x = match self {
             ex::types::NumberDataType::UInt8 => Num::Uint8Type(pb::Empty {}),
             ex::types::NumberDataType::UInt16 => Num::Uint16Type(pb::Empty {}),
@@ -426,12 +421,12 @@ impl FromToProto for ex::types::NumberDataType {
             ex::types::NumberDataType::Float32 => Num::Float32Type(pb::Empty {}),
             ex::types::NumberDataType::Float64 => Num::Float64Type(pb::Empty {}),
         };
-        Ok(pb::Number {
+        pb::Number {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             num: Some(x),
-        })
+        }
     }
 }
 
@@ -460,22 +455,22 @@ impl FromToProto for ex::types::DecimalDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
+    fn to_pb(&self) -> pb::Decimal {
         let x = match self {
             ex::types::DecimalDataType::Decimal64(size)
             | ex::types::DecimalDataType::Decimal128(size) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(size)?)
+                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(size))
             }
             ex::types::DecimalDataType::Decimal256(size) => {
-                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(size)?)
+                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(size))
             }
         };
-        Ok(pb::Decimal {
+        pb::Decimal {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             decimal: Some(x),
-        })
+        }
     }
 }
 
@@ -495,13 +490,13 @@ impl FromToProto for ex::types::decimal::DecimalSize {
         ))
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::DecimalSize {
+    fn to_pb(&self) -> Self::PB {
+        pb::DecimalSize {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             precision: self.precision() as i32,
             scale: self.scale() as i32,
-        })
+        }
     }
 }
 
@@ -534,7 +529,7 @@ impl FromToProtoEnum for ex::VariantDataType {
         })
     }
 
-    fn to_pb_enum(&self) -> Result<pb::VariantDataType, Incompatible> {
+    fn to_pb_enum(&self) -> pb::VariantDataType {
         let dt = match self {
             VariantDataType::Jsonb => pb::variant_data_type::Dt::JsonbT(pb::Empty {}),
             VariantDataType::Boolean => pb::variant_data_type::Dt::BoolT(pb::Empty {}),
@@ -543,10 +538,10 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Float64 => pb::variant_data_type::Dt::Float64T(pb::Empty {}),
             VariantDataType::String => pb::variant_data_type::Dt::StringT(pb::Empty {}),
             VariantDataType::Array(dt) => {
-                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
+                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()))
             }
             VariantDataType::Decimal(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 pb::variant_data_type::Dt::DecimalT(x)
             }
             VariantDataType::Binary => pb::variant_data_type::Dt::BinaryT(pb::Empty {}),
@@ -555,7 +550,7 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Interval => pb::variant_data_type::Dt::IntervalT(pb::Empty {}),
         };
 
-        Ok(pb::VariantDataType { dt: Some(dt) })
+        pb::VariantDataType { dt: Some(dt) }
     }
 }
 
@@ -597,7 +592,7 @@ impl FromToProto for ex::VirtualDataSchema {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let fields = self
             .fields
             .iter()
@@ -606,25 +601,25 @@ impl FromToProto for ex::VirtualDataSchema {
                     .data_types
                     .iter()
                     .map(ex::VariantDataType::to_pb_enum)
-                    .collect::<Result<Vec<pb::VariantDataType>, Incompatible>>()?;
+                    .collect();
 
-                Ok(pb::VirtualDataField {
+                pb::VirtualDataField {
                     name: field.name.clone(),
                     data_types,
                     source_column_id: field.source_column_id,
                     column_id: field.column_id,
-                })
+                }
             })
-            .collect::<Result<Vec<pb::VirtualDataField>, Incompatible>>()?;
+            .collect();
 
-        Ok(pb::VirtualDataSchema {
+        pb::VirtualDataSchema {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             fields,
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
             number_of_blocks: self.number_of_blocks,
-        })
+        }
     }
 }
 
@@ -650,20 +645,20 @@ impl FromToProto for ex::types::VectorDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Vector, Incompatible> {
+    fn to_pb(&self) -> pb::Vector {
         let (number_ty, dimension) = match self {
             ex::types::VectorDataType::Int8(d) => (ex::types::NumberDataType::Int8, *d),
             ex::types::VectorDataType::Float32(d) => (ex::types::NumberDataType::Float32, *d),
         };
-        let num = number_ty.to_pb()?;
+        let num = number_ty.to_pb();
 
-        Ok(pb::Vector {
+        pb::Vector {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             num: Some(num),
             dimension,
-        })
+        }
     }
 }
 

@@ -454,6 +454,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
     }
 
+    pub fn get_enable_spatial_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_spatial_join")? != 0)
+    }
+
+    pub fn get_spatial_join_max_build_rows(&self) -> Result<u64> {
+        self.try_get_u64("spatial_join_max_build_rows")
+    }
+
     pub fn get_join_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
         self.try_get_u64("join_runtime_filter_selectivity_threshold")
     }

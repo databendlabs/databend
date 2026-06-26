@@ -18,6 +18,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
@@ -89,6 +90,9 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
                     meta.cluster_key_v2 = cluster_key_meta;
                     meta.options
                         .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
+                    meta.options
+                        .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                        .or_insert_with(|| "1".to_owned());
                 }
             },
         )

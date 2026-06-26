@@ -42,12 +42,11 @@ impl FromToProto for mt::VacuumWatermark {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::VacuumWatermark {
+    fn to_pb(&self) -> Self::PB {
+        pb::VacuumWatermark {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            time: self.time.to_pb()?,
-        };
-        Ok(p)
+            time: self.time.to_pb(),
+        }
     }
 }

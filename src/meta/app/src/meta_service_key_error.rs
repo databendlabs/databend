@@ -14,6 +14,15 @@
 
 use std::fmt::Display;
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum UnknownOrExistsError<UnknownError, ExistError> {
+    #[error(transparent)]
+    Unknown(UnknownError),
+
+    #[error(transparent)]
+    Exists(ExistError),
+}
+
 pub trait KeyUnknownBuilder {
     type UnknownError;
 

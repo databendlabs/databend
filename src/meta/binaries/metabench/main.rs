@@ -544,8 +544,7 @@ async fn benchmark_table_copy_file(
             &copied_file_ident,
             &copied_file_value,
             param.ttl_ms.map(Duration::from_millis),
-        )
-        .unwrap();
+        );
 
         txn.if_then.push(put_op);
     }

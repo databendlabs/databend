@@ -23,12 +23,17 @@ use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::Change;
+use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnCondition;
+use databend_meta_client::types::TxnOpResponse;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::StreamItem;
+use databend_meta_client::types::protobuf::txn_condition::Target;
+use databend_meta_client::types::protobuf::txn_op::Request;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
@@ -113,8 +118,69 @@ impl KVApi for MemKV {
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
-        self.requests.lock().unwrap().push(txn);
+        self.requests.lock().unwrap().push(txn.clone());
         let ok = self.replies.lock().unwrap().pop_front().unwrap_or(true);
-        Ok(TxnReply::new(if ok { "then" } else { "else" }))
+        if !ok {
+            return Ok(TxnReply::new("else"));
+        }
+
+        let mut store = self.store.lock().unwrap();
+        let conditions_match = txn
+            .condition
+            .iter()
+            .all(|condition| condition_matches(&store, condition));
+        let mut reply = TxnReply::new(if conditions_match { "then" } else { "else" });
+        let ops = if conditions_match {
+            txn.if_then
+        } else {
+            txn.else_then
+        };
+
+        for op in ops {
+            match op.request {
+                Some(Request::Delete(delete)) => {
+                    let prev = store.get(&delete.key).cloned();
+                    let success = prev.as_ref().is_some_and(|v| {
+                        delete.match_seq.is_none_or(|match_seq| v.seq == match_seq)
+                    });
+
+                    if success {
+                        store.remove(&delete.key);
+                    }
+
+                    reply.responses.push(TxnOpResponse::delete(
+                        delete.key,
+                        success,
+                        prev.map(Into::into),
+                    ));
+                }
+                Some(Request::Get(get)) => {
+                    reply.responses.push(TxnOpResponse::get(
+                        get.key.clone(),
+                        store.get(&get.key).cloned(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+
+        Ok(reply)
+    }
+}
+
+fn condition_matches(store: &BTreeMap<String, SeqV<Vec<u8>>>, condition: &TxnCondition) -> bool {
+    let Some(Target::Seq(expected_seq)) = condition.target.as_ref() else {
+        return true;
+    };
+
+    let seq = store.get(&condition.key).map(|v| v.seq).unwrap_or(0);
+    match condition.expected {
+        x if x == ConditionResult::Eq as i32 => seq == *expected_seq,
+        x if x == ConditionResult::Gt as i32 => seq > *expected_seq,
+        x if x == ConditionResult::Ge as i32 => seq >= *expected_seq,
+        x if x == ConditionResult::Lt as i32 => seq < *expected_seq,
+        x if x == ConditionResult::Le as i32 => seq <= *expected_seq,
+        x if x == ConditionResult::Ne as i32 => seq != *expected_seq,
+        _ => false,
     }
 }

@@ -52,13 +52,6 @@ pub enum CreateIdValueResult<IdRsc> {
     Existing(SeqV<DataId<IdRsc>>),
 }
 
-/// Defines how to handle an existing `name -> id` mapping when creating.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CreateIdValueMode {
-    CreateOnly,
-    CreateOrReplace,
-}
-
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
 /// Such a two level mapping provides a consistent id `id` for internal use,
@@ -99,7 +92,7 @@ where
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
-        create_mode: CreateIdValueMode,
+        override_existing: bool,
         associated_records: A,
         mark_delete_records: M,
         on_override_fn: O,
@@ -125,9 +118,9 @@ where
                 let get_res = self.get_id_and_value(name_ident).await?;
 
                 if let Some((seq_id, seq_meta)) = get_res {
-                    let CreateIdValueMode::CreateOrReplace = create_mode else {
+                    if !override_existing {
                         return Ok(CreateIdValueResult::Existing(seq_id));
-                    };
+                    }
 
                     // Override take place only when the id -> value does not change.
                     // If it does not override, no such condition is required.
@@ -161,10 +154,9 @@ where
             txn.condition
                 .push(txn_cond_eq_seq(name_ident, current_id_seq));
 
+            txn.if_then.push(txn_put_pb_with_ttl(name_ident, &id, None)); // (tenant, name) -> id
             txn.if_then
-                .push(txn_put_pb_with_ttl(name_ident, &id, None)?); // (tenant, name) -> id
-            txn.if_then
-                .push(txn_put_pb_with_ttl(&id_ident, value, None)?); // (id) -> value
+                .push(txn_put_pb_with_ttl(&id_ident, value, None)); // (id) -> value
 
             // Add associated
             let kvs = associated_records(id);
@@ -477,7 +469,7 @@ mod tests {
             gc_in_progress: false,
         };
 
-        let v = db_meta(1).to_pb()?.encode_to_vec();
+        let v = db_meta(1).to_pb().encode_to_vec();
 
         let db_id = |i| DatabaseId::new(i).to_string().as_bytes().to_vec();
 

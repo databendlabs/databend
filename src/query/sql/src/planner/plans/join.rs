@@ -36,6 +36,7 @@ use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::SpatialJoinCandidate;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -293,6 +294,9 @@ pub struct Join {
     pub single_to_inner: Option<JoinType>,
     // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    // Derived annotation. The canonical join condition remains
+    // `non_equi_conditions`; this is finalized after logical rewrites.
+    pub spatial_join: Option<Box<SpatialJoinCandidate>>,
 }
 
 impl Default for Join {
@@ -307,6 +311,7 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            spatial_join: None,
         }
     }
 }
@@ -572,6 +577,7 @@ impl Join {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
             },
         }))
     }
@@ -591,6 +597,7 @@ impl Join {
         }
 
         self.build_side_cache_info = None;
+        self.spatial_join = None;
 
         Ok(())
     }
@@ -1008,6 +1015,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1018,6 +1026,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1056,6 +1065,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1066,6 +1076,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 2.3333333333333335, true);
         let condition = JoinEquiCondition::new(
@@ -1104,6 +1115,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1114,6 +1126,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1152,6 +1165,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1162,6 +1176,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1201,6 +1216,7 @@ mod tests {
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
+                top_n: Default::default(),
             },
         });
         let right_stat_info = Arc::new(StatInfo {
@@ -1214,6 +1230,7 @@ mod tests {
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
+                top_n: Default::default(),
             },
         });
         let join = Join {
@@ -1247,6 +1264,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1257,6 +1275,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1298,6 +1317,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let right_statistics = Statistics {
             precise_cardinality: None,
@@ -1308,6 +1328,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            top_n: Default::default(),
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(

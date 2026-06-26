@@ -21,7 +21,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_meta_client::types::MetaId;
 
-use super::CreateOption;
 use crate::KeyWithTenant;
 use crate::schema::IndexNameIdent;
 use crate::tenant::Tenant;
@@ -100,34 +99,27 @@ impl Default for IndexMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
-    pub create_option: CreateOption,
+    pub override_existing: bool,
     pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
 
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::Create => {
-                write!(
-                    f,
-                    "create_index:{}={:?}",
-                    self.name_ident.tenant_name(),
-                    self.meta
-                )
-            }
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_index_if_not_exists:{}={:?}",
-                self.name_ident.tenant_name(),
-                self.meta
-            ),
-            CreateOption::CreateOrReplace => write!(
+        if self.override_existing {
+            write!(
                 f,
                 "create_or_replace_index:{}={:?}",
                 self.name_ident.tenant_name(),
                 self.meta
-            ),
+            )
+        } else {
+            write!(
+                f,
+                "create_index:{}={:?}",
+                self.name_ident.tenant_name(),
+                self.meta
+            )
         }
     }
 }
@@ -135,6 +127,7 @@ impl Display for CreateIndexReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateIndexReply {
     pub index_id: u64,
+    pub created: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

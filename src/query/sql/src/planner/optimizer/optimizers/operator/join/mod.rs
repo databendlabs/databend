@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod finalize_spatial_join;
 mod single_to_inner;
 
+pub use finalize_spatial_join::FinalizeSpatialJoinOptimizer;
 pub use single_to_inner::SingleToInnerOptimizer;

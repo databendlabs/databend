@@ -136,8 +136,8 @@ impl BlockCompactMutator {
                 // sort descending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        &b.1.summary.cluster_stats,
-                        &a.1.summary.cluster_stats,
+                        b.1.summary.cluster_stats.as_ref(),
+                        a.1.summary.cluster_stats.as_ref(),
                         default_cluster_key,
                     )
                 });
@@ -628,7 +628,11 @@ impl CompactTaskBuilder {
         if let Some(default_cluster_key) = self.cluster_key_id {
             // sort ascending.
             blocks.sort_by(|a, b| {
-                sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, default_cluster_key)
+                sort_by_cluster_stats(
+                    a.0.cluster_stats.as_ref(),
+                    b.0.cluster_stats.as_ref(),
+                    default_cluster_key,
+                )
             });
         }
 

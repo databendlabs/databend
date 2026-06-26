@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -50,6 +51,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -58,6 +60,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use tokio::sync::Semaphore;
 
 use crate::FuseLazyPartInfo;
@@ -133,6 +136,8 @@ impl FuseTable {
         snapshot: Arc<TableSnapshot>,
         pipeline: &mut Pipeline,
         histogram_info: AnalyzeHistogramInfo,
+        top_n_size: Option<usize>,
+        top_n_columns: Option<String>,
         no_scan: bool,
         retry_commit: bool,
     ) -> Result<()> {
@@ -142,6 +147,11 @@ impl FuseTable {
         }
         ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 
+        let (top_n_size, top_n_columns) = if no_scan {
+            (None, None)
+        } else {
+            (top_n_size, top_n_columns)
+        };
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
@@ -157,6 +167,8 @@ impl FuseTable {
                     io_request_semaphore.clone(),
                     no_scan,
                     collect_histogram_info,
+                    top_n_size,
+                    top_n_columns.clone(),
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
@@ -170,6 +182,7 @@ impl FuseTable {
                 snapshot_id,
                 input,
                 sink_histogram_info.clone(),
+                top_n_size,
                 retry_commit,
             )
         })?;
@@ -197,8 +210,11 @@ struct SinkAnalyzeState {
     row_count: u64,
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
+    top_n: Option<BlockTopN>,
+    dropped_top_n_columns: BTreeSet<ColumnId>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
+    top_n_size: Option<usize>,
     step: AnalyzeStep,
     retry_commit: bool,
 }
@@ -211,6 +227,7 @@ impl SinkAnalyzeState {
         snapshot_id: SnapshotId,
         input_port: Arc<InputPort>,
         histogram_info: SinkAnalyzeHistogramInfo,
+        top_n_size: Option<usize>,
         retry_commit: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
@@ -224,8 +241,11 @@ impl SinkAnalyzeState {
             row_count: 0,
             unstats_rows: 0,
             ndv_states: Default::default(),
+            top_n: top_n_size.map(|_| Default::default()),
+            dropped_top_n_columns: BTreeSet::new(),
             histograms: Default::default(),
             kll_histograms: Default::default(),
+            top_n_size,
             step: AnalyzeStep::CollectNDV,
             retry_commit,
         })))
@@ -396,6 +416,9 @@ impl SinkAnalyzeState {
         let snapshot = snapshot.unwrap();
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         self.ndv_states.retain(|k, _| column_ids.contains(k));
+        if let Some(top_n) = &mut self.top_n {
+            top_n.retain(|k, _| column_ids.contains(k) && !self.dropped_top_n_columns.contains(k));
+        }
 
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
@@ -412,8 +435,10 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
+        let has_top_n = self.top_n.as_ref().is_some_and(|top_n| !top_n.is_empty());
         let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()?
             || self.histogram_info.collect_statistics()
+            || has_top_n
         {
             let histograms = self
                 .histograms
@@ -431,6 +456,7 @@ impl SinkAnalyzeState {
                 .collect::<Result<_>>()?;
             let stats = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
+                self.top_n.clone().unwrap_or_default(),
                 histograms,
                 self.snapshot_id,
                 self.row_count,
@@ -630,6 +656,27 @@ impl Processor for SinkAnalyzeState {
                                     .entry(*column_id)
                                     .and_modify(|hll| hll.merge(column_hll))
                                     .or_insert_with(|| column_hll.clone());
+                            }
+                            for column_id in meta.dropped_top_n_columns {
+                                self.dropped_top_n_columns.insert(column_id);
+                                if let Some(top_n) = &mut self.top_n {
+                                    top_n.remove(&column_id);
+                                }
+                            }
+                            if let Some(top_n_size) = self.top_n_size {
+                                let dropped_top_n_columns = &self.dropped_top_n_columns;
+                                match (&mut self.top_n, meta.top_n) {
+                                    (Some(top_n), Some(mut meta_top_n)) => {
+                                        meta_top_n.retain(|column_id, _| {
+                                            !dropped_top_n_columns.contains(column_id)
+                                        });
+                                        merge_column_top_n_mut(top_n, meta_top_n, top_n_size);
+                                    }
+                                    (_, None) => {
+                                        self.top_n = None;
+                                    }
+                                    (None, Some(_)) => {}
+                                }
                             }
                             self.row_count += meta.row_count;
                         }

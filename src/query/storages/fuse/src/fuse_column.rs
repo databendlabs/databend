@@ -18,7 +18,9 @@ use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_expression::ColumnId;
 use databend_common_statistics::Histogram;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 
 /// A column statistics provider for fuse table.
 #[derive(Default)]
@@ -27,12 +29,14 @@ pub struct FuseTableColumnStatisticsProvider {
     row_count: u64,
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     histograms: HashMap<ColumnId, Histogram>,
+    top_n: BlockTopN,
 }
 
 impl FuseTableColumnStatisticsProvider {
     pub fn new(
         column_stats: HashMap<ColumnId, FuseColumnStatistics>,
         histograms: HashMap<ColumnId, Histogram>,
+        top_n: BlockTopN,
         column_distinct_values: Option<HashMap<ColumnId, u64>>,
         stats_row_count: u64,
         row_count: u64,
@@ -58,6 +62,7 @@ impl FuseTableColumnStatisticsProvider {
         Self {
             column_stats,
             histograms,
+            top_n,
             stats_row_count,
             row_count,
         }
@@ -86,5 +91,9 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
         self.histograms.get(&column_id).cloned()
+    }
+
+    fn top_n(&self, column_id: ColumnId) -> Option<ColumnTopN> {
+        self.top_n.get(&column_id).cloned()
     }
 }

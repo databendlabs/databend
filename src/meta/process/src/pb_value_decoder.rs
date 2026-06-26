@@ -323,7 +323,7 @@ mod tests {
     }
 
     fn encode_pb<T: FromToProto>(val: &T) -> Vec<u8> {
-        kv_pb_api::encode_pb(val).unwrap()
+        kv_pb_api::encode_pb(val)
     }
 
     // -- decode_pb_value tests --
