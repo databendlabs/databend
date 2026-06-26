@@ -137,6 +137,22 @@ fn number_to_i128<N: Number>(value: N) -> Option<i128> {
     }
 }
 
+fn number_is_nan<N: Number>(value: N) -> bool {
+    match N::upcast_scalar(value) {
+        NumberScalar::Float32(value) => value.is_nan(),
+        NumberScalar::Float64(value) => value.is_nan(),
+        _ => false,
+    }
+}
+
+fn domain_or_full<N: Number>(min: N, max: N) -> FunctionDomain<NumberType<N>> {
+    if number_is_nan(min) || number_is_nan(max) {
+        FunctionDomain::Full
+    } else {
+        FunctionDomain::Domain(SimpleDomain { min, max })
+    }
+}
+
 fn derive_modulo_stat<L, R, M, O>(stat: StatBinaryArg) -> Result<Option<ReturnStat>, String>
 where
     L: Number,
@@ -255,10 +271,7 @@ where
                 let rm: AddMulResult<L, R> = num_traits::cast::cast(rhs.max)?;
                 let rn: AddMulResult<L, R> = num_traits::cast::cast(rhs.min)?;
 
-                FunctionDomain::Domain(SimpleDomain::<AddMulResult<L, R>> {
-                    min: ln.checked_add(rn)?,
-                    max: lm.checked_add(rm)?,
-                })
+                domain_or_full(ln.checked_add(rn)?, lm.checked_add(rm)?)
             }
             .unwrap_or(FunctionDomain::Full)
         })
@@ -349,10 +362,7 @@ where
                 let rm: MinusResult<L, R> = num_traits::cast::cast(rhs.max)?;
                 let rn: MinusResult<L, R> = num_traits::cast::cast(rhs.min)?;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<MinusResult<L, R>> {
-                    min: ln.checked_sub(rm)?,
-                    max: lm.checked_sub(rn)?,
-                }))
+                Some(domain_or_full(ln.checked_sub(rm)?, lm.checked_sub(rn)?))
             })()
             .unwrap_or(FunctionDomain::Full)
         },
@@ -383,10 +393,10 @@ where
                 let m = ln.checked_mul(rm)?;
                 let n = ln.checked_mul(rn)?;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<AddMulResult<L, R>> {
-                    min: x.min(y).min(m).min(n),
-                    max: x.max(y).max(m).max(n),
-                }))
+                Some(domain_or_full(
+                    x.min(y).min(m).min(n),
+                    x.max(y).max(m).max(n),
+                ))
             })()
             .unwrap_or(FunctionDomain::Full)
         },
