@@ -37,7 +37,6 @@ use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::normalize_vector;
 use databend_storages_common_index::vector_stat_distance;
-use databend_storages_common_index::vector_statistics_distance_type;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -505,7 +504,7 @@ impl VectorIndexBuilder {
             let Some(column) = concated_columns.get(offset) else {
                 return Err(ErrorCode::Internal("Can't find vector column"));
             };
-            let vector_distance_type = vector_statistics_distance_type(*distance_type);
+            let vector_distance_type = distance_type.vector_distance_type();
             if let Some(vector_stats) = vector_statistics_from_column(column, *distance_type)? {
                 statistics.insert((*column_id, vector_distance_type), vector_stats);
             }
@@ -592,7 +591,7 @@ fn vector_l1_l2_statistics_from_vectors(
         .collect::<Vec<_>>();
 
     let mut radius = 0.0_f32;
-    let vector_distance_type = vector_statistics_distance_type(distance_type);
+    let vector_distance_type = distance_type.vector_distance_type();
     for vector in values.chunks_exact(dimension) {
         radius = radius.max(vector_stat_distance(
             vector,
@@ -634,7 +633,7 @@ fn vector_dot_statistics_from_vectors(
     normalize_vector(&mut centroid);
 
     let mut radius = 0.0_f32;
-    let vector_distance_type = vector_statistics_distance_type(DistanceType::Dot);
+    let vector_distance_type = DistanceType::Dot.vector_distance_type();
     for vector in normalized_values.chunks_exact(dimension) {
         radius = radius.max(vector_stat_distance(
             vector,

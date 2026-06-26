@@ -112,6 +112,68 @@ pub enum VectorDistanceType {
     Dot,
 }
 
+impl VectorDistanceType {
+    pub fn from_index_option(distance_type: &str) -> Option<Self> {
+        match distance_type.trim() {
+            "cosine" | "dot" => Some(Self::Dot),
+            "l1" => Some(Self::L1),
+            "l2" => Some(Self::L2),
+            _ => None,
+        }
+    }
+
+    pub fn from_index_options<'a>(
+        column_name: &str,
+        distances: impl IntoIterator<Item = Option<&'a str>>,
+    ) -> databend_common_exception::Result<Self> {
+        let mut distance_types = Vec::new();
+        for distance in distances {
+            let Some(distance) = distance else {
+                return Err(databend_common_exception::ErrorCode::InvalidClusterKeys(
+                    format!(
+                        "Vector cluster key `{column_name}` requires a vector index with distance option"
+                    ),
+                ));
+            };
+
+            for distance in distance.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                let Some(distance_type) = Self::from_index_option(distance) else {
+                    return Err(databend_common_exception::ErrorCode::InvalidClusterKeys(
+                        format!(
+                            "Vector cluster key `{column_name}` has unsupported vector index distance type `{distance}`"
+                        ),
+                    ));
+                };
+                if !distance_types.contains(&distance_type) {
+                    distance_types.push(distance_type);
+                }
+            }
+        }
+
+        match distance_types.as_slice() {
+            [distance_type] => Ok(*distance_type),
+            [] => Err(databend_common_exception::ErrorCode::InvalidClusterKeys(
+                format!(
+                    "Vector cluster key `{column_name}` requires a vector index with distance option"
+                ),
+            )),
+            _ => Err(databend_common_exception::ErrorCode::InvalidClusterKeys(
+                format!(
+                    "Vector cluster key `{column_name}` has multiple vector index distance types; use exactly one distance type for vector clustering"
+                ),
+            )),
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            Self::L1 => "l1".to_string(),
+            Self::L2 => "l2".to_string(),
+            Self::Dot => "dot".to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
 pub struct VectorColumnStatistics {
     pub centroid: Vec<F32>,

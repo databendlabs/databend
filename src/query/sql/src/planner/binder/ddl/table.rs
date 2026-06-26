@@ -70,7 +70,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
-use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
@@ -99,6 +98,7 @@ use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -2428,11 +2428,15 @@ impl Binder {
                         cluster_expr
                     )));
                 };
-                Self::validate_vector_cluster_key_index(
-                    table_indexes,
-                    field.column_id(),
-                    field.name(),
-                )?;
+                let distances = table_indexes
+                    .into_iter()
+                    .flat_map(|table_indexes| table_indexes.values())
+                    .filter(|index| {
+                        index.index_type == TableIndexType::Vector
+                            && index.column_ids.contains(&field.column_id())
+                    })
+                    .map(|index| index.options.get("distance").map(String::as_str));
+                VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 
             let mut cluster_expr = cluster_expr.clone();
@@ -2441,51 +2445,6 @@ impl Binder {
         }
 
         Ok(cluster_keys)
-    }
-
-    fn validate_vector_cluster_key_index(
-        table_indexes: Option<&BTreeMap<String, TableIndex>>,
-        column_id: ColumnId,
-        column_name: &str,
-    ) -> Result<()> {
-        let mut has_vector_index = false;
-        let mut distances = Vec::new();
-        for index in table_indexes
-            .into_iter()
-            .flat_map(|table_indexes| table_indexes.values())
-            .filter(|index| {
-                index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
-            })
-        {
-            has_vector_index = true;
-            let Some(distance) = index.options.get("distance") else {
-                return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Vector cluster key `{column_name}` requires a vector index with distance option"
-                )));
-            };
-
-            for distance in distance.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-                if !distances.contains(&distance) {
-                    distances.push(distance);
-                }
-            }
-        }
-
-        if !has_vector_index {
-            return Err(ErrorCode::InvalidClusterKeys(format!(
-                "Vector cluster key `{column_name}` requires a vector index with distance option"
-            )));
-        }
-
-        match distances.as_slice() {
-            [_] => Ok(()),
-            [] => Err(ErrorCode::InvalidClusterKeys(format!(
-                "Vector cluster key `{column_name}` requires a vector index with distance option"
-            ))),
-            _ => Err(ErrorCode::InvalidClusterKeys(format!(
-                "Vector cluster key `{column_name}` has multiple vector index distance types; use exactly one distance type for vector clustering"
-            ))),
-        }
     }
 
     pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> (bool, bool) {

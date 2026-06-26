@@ -48,7 +48,6 @@ use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruni
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::FixedLengthPriorityQueue;
 use databend_storages_common_index::ScoredPointOffset;
-use databend_storages_common_index::vector_statistics_distance_type;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -119,7 +118,7 @@ impl VectorIndexPruner {
 
         let query_values =
             unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
-        let vector_distance_type = vector_statistics_distance_type(distance_type);
+        let vector_distance_type = distance_type.vector_distance_type();
 
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
@@ -249,8 +248,9 @@ impl VectorIndexPruner {
         let candidates = self.vector_prune_candidates(metas)?;
         let (candidates, stat_skipped_blocks) =
             self.filter_candidates_by_topn_stats(candidates, limit);
-
-        info!("Vector stat pruned {stat_skipped_blocks} blocks before hnsw topn");
+        if stat_skipped_blocks > 0 {
+            info!("Vector stat pruned {stat_skipped_blocks} blocks before hnsw topn");
+        }
 
         let keep_metas = candidates
             .into_iter()
