@@ -29,7 +29,6 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
@@ -186,6 +185,18 @@ impl Interpreter for CreateTableInterpreter {
 }
 
 impl CreateTableInterpreter {
+    fn table_exists_error(req: &CreateTableReq) -> ErrorCode {
+        let name = &req.name_ident.table_name;
+        let name_ident = &req.name_ident;
+        let msg = format!("{} already exists: {}", name, name_ident);
+
+        match req.table_meta.engine.as_str() {
+            "STREAM" => ErrorCode::StreamAlreadyExists(msg),
+            "VIEW" => ErrorCode::ViewAlreadyExists(msg),
+            _ => ErrorCode::TableAlreadyExists(msg),
+        }
+    }
+
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         assert!(
@@ -204,7 +215,11 @@ impl CreateTableInterpreter {
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
         let reply = catalog.create_table(req.clone()).await?;
-        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+        if !reply.new_table && !self.plan.create_option.is_overriding() {
+            if self.plan.create_option.if_return_error() {
+                return Err(Self::table_exists_error(&req));
+            }
+
             return Ok(PipelineBuildResult::create());
         }
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
@@ -385,6 +400,14 @@ impl CreateTableInterpreter {
         }
 
         let reply = catalog.create_table(req.clone()).await?;
+        if !reply.new_table {
+            if self.plan.create_option.if_return_error() {
+                return Err(Self::table_exists_error(&req));
+            }
+
+            return Ok(PipelineBuildResult::create());
+        }
+
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
         }
@@ -521,7 +544,7 @@ impl CreateTableInterpreter {
         }
 
         let req = CreateTableReq {
-            create_option: self.plan.create_option,
+            override_existing: self.plan.create_option.is_overriding(),
             catalog_name: if self.plan.create_option.is_overriding() {
                 Some(self.plan.catalog.to_string())
             } else {

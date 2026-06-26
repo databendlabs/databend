@@ -29,9 +29,7 @@ use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
-use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
-use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
@@ -40,14 +38,12 @@ use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -217,30 +213,6 @@ where
     #[logcall::logcall]
     #[fastrace::trace]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
-        // Make an error if table exists.
-        fn make_exists_err(req: &CreateTableReq) -> AppError {
-            let name = &req.name_ident.table_name;
-            let name_ident = &req.name_ident;
-
-            match req.table_meta.engine.as_str() {
-                "STREAM" => {
-                    let exist_err =
-                        StreamAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
-                "VIEW" => {
-                    let exist_err =
-                        ViewAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
-                _ => {
-                    let exist_err =
-                        TableAlreadyExists::new(name, format!("create_table: {}", name_ident));
-                    AppError::from(exist_err)
-                }
-            }
-        }
-
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
@@ -337,46 +309,37 @@ where
                 assert_eq!(key_dbid_tbname, k);
 
                 if let Some(id) = v {
-                    // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
-                    match req.create_option {
-                        CreateOption::Create => {
-                            let app_err = make_exists_err(&req);
-                            return Err(KVAppError::AppError(app_err));
-                        }
-                        CreateOption::CreateIfNotExists => {
-                            return Ok(CreateTableReply {
-                                table_id: *id.data,
-                                table_id_seq: None,
-                                db_id: *seq_db_id.data,
-                                new_table: false,
-                                prev_table_id: None,
-                                orphan_table_name: None,
-                            });
-                        }
-                        CreateOption::CreateOrReplace => {
-                            if req.as_dropped {
-                                // If the table is being created as a dropped table, we do not
-                                // need to combine with drop_table_txn operations, just return
-                                // the sequence number associated with the value part of
-                                // the key-value pair (key_dbid_tbname, table_id).
+                    if !req.override_existing {
+                        return Ok(CreateTableReply {
+                            table_id: *id.data,
+                            table_id_seq: None,
+                            db_id: *seq_db_id.data,
+                            new_table: false,
+                            prev_table_id: None,
+                            orphan_table_name: None,
+                        });
+                    }
 
-                                SeqV::new(id.seq, *id.data)
-                            } else {
-                                let (seq, id) = construct_drop_table_txn_operations(
-                                    self,
-                                    req.name_ident.table_name.clone(),
-                                    &req.name_ident.tenant,
-                                    req.catalog_name.clone(),
-                                    *id.data,
-                                    *seq_db_id.data,
-                                    true,
-                                    false,
-                                    &mut txn,
-                                )
-                                .await?;
-                                SeqV::new(seq, id)
-                            }
-                        }
+                    if req.as_dropped {
+                        // If the table is being created as a dropped table, we do not
+                        // need to combine with drop_table_txn operations, just return
+                        // the sequence number associated with the value part of
+                        // the key-value pair (key_dbid_tbname, table_id).
+                        SeqV::new(id.seq, *id.data)
+                    } else {
+                        let (seq, id) = construct_drop_table_txn_operations(
+                            self,
+                            req.name_ident.table_name.clone(),
+                            &req.name_ident.tenant,
+                            req.catalog_name.clone(),
+                            *id.data,
+                            *seq_db_id.data,
+                            true,
+                            false,
+                            &mut txn,
+                        )
+                        .await?;
+                        SeqV::new(seq, id)
                     }
                 } else {
                     SeqV::new(0, 0)

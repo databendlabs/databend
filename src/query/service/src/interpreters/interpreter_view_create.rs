@@ -116,7 +116,7 @@ impl Interpreter for CreateViewInterpreter {
         options.insert(QUERY.to_string(), subquery);
 
         let plan = CreateTableReq {
-            create_option: self.plan.create_option,
+            override_existing: self.plan.create_option.is_overriding(),
             catalog_name: if self.plan.create_option.is_overriding() {
                 Some(self.plan.catalog.to_string())
             } else {
@@ -136,7 +136,13 @@ impl Interpreter for CreateViewInterpreter {
             table_properties: None,
             table_partition: None,
         };
-        catalog.create_table(plan).await?;
+        let reply = catalog.create_table(plan).await?;
+        if !reply.new_table && self.plan.create_option.if_return_error() {
+            return Err(ErrorCode::ViewAlreadyExists(format!(
+                "{} view exists",
+                self.plan.view_name
+            )));
+        }
 
         Ok(PipelineBuildResult::create())
     }

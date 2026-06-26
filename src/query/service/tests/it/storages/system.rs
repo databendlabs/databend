@@ -557,7 +557,7 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
     // try to fetch the last snapshot hint and fail.
     catalog
         .create_table(CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: tenant.clone(),

@@ -35,7 +35,6 @@ use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_api::txn_put_pb_with_ttl;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -417,7 +416,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             catalog_name: None,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
@@ -471,7 +470,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             catalog_name: None,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),

@@ -24,7 +24,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -182,7 +181,7 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
         let table_meta = f(table_meta);
 
         let req = CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: self.tenant(),
@@ -208,7 +207,7 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
     pub(crate) async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
         let table_meta = self.table_meta();
         let req = CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: self.tenant(),

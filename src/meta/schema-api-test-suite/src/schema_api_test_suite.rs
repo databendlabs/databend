@@ -1684,7 +1684,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
@@ -1778,7 +1778,7 @@ impl SchemaApiTestSuite {
                         meta
                     },
                     |mut req| {
-                        req.create_option = CreateOption::CreateIfNotExists;
+                        req.override_existing = false;
                         req
                     },
                 )
@@ -1802,7 +1802,7 @@ impl SchemaApiTestSuite {
         info!("--- create table again with if_not_exists = false");
         {
             let req = CreateTableReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
@@ -1817,16 +1817,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_table(req).await;
             info!("create table res: {:?}", res);
 
-            let status = res.err().unwrap();
-            let err_code = ErrorCode::from(status);
-
-            assert_eq!(
-                format!(
-                    "TableAlreadyExists. Code: 2302, Text = Table '{}' already exists.",
-                    tbl_name
-                ),
-                err_code.to_string()
-            );
+            assert!(!res?.new_table);
 
             // get_table returns the old table
 
@@ -2021,7 +2012,7 @@ impl SchemaApiTestSuite {
                         meta
                     },
                     |mut req| {
-                        req.create_option = CreateOption::CreateOrReplace;
+                        req.override_existing = true;
                         req.name_ident.table_name = table.to_string();
                         req
                     },
@@ -2053,7 +2044,7 @@ impl SchemaApiTestSuite {
             };
 
             let create_table_req = CreateTableReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
@@ -2107,7 +2098,7 @@ impl SchemaApiTestSuite {
                 // case 1: table exists
                 let create_table_if_not_exist_req = {
                     let mut req = create_table_req.clone();
-                    req.create_option = CreateOption::CreateIfNotExists;
+                    req.override_existing = false;
                     req
                 };
 
@@ -2130,7 +2121,7 @@ impl SchemaApiTestSuite {
                 let create_table_if_not_exist_req = {
                     let mut req = create_table_req.clone();
                     req.name_ident.table_name = "not_exist".to_owned();
-                    req.create_option = CreateOption::CreateIfNotExists;
+                    req.override_existing = false;
                     req
                 };
 
@@ -2152,7 +2143,7 @@ impl SchemaApiTestSuite {
             {
                 let create_or_replace_req = {
                     let mut req = create_table_req.clone();
-                    req.create_option = CreateOption::CreateOrReplace;
+                    req.override_existing = true;
                     req
                 };
 
@@ -4356,7 +4347,7 @@ impl SchemaApiTestSuite {
         };
 
         let req = CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
@@ -5178,7 +5169,7 @@ impl SchemaApiTestSuite {
             for i in 0..number {
                 let table_name = format!("tb{:?}", i);
                 let req = CreateTableReq {
-                    create_option: CreateOption::Create,
+                    override_existing: false,
                     catalog_name: None,
                     name_ident: TableNameIdent {
                         tenant: Tenant::new_or_err(tenant, func_name!())?,
@@ -5667,7 +5658,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let create_table_req = CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: util.tenant(),
@@ -5756,7 +5747,7 @@ impl SchemaApiTestSuite {
             util.create_table_with(
                 |_meta| table_meta(created_on),
                 |mut req| {
-                    req.create_option = CreateOption::CreateOrReplace;
+                    req.override_existing = true;
                     req
                 },
             )
@@ -5787,7 +5778,7 @@ impl SchemaApiTestSuite {
 
             // replace with a new as_dropped = true and table_meta.as_drop is None table
             let create_table_req = CreateTableReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: util.tenant(),
@@ -5807,7 +5798,7 @@ impl SchemaApiTestSuite {
             ));
 
             let create_table_req = CreateTableReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: util.tenant(),
@@ -5843,7 +5834,7 @@ impl SchemaApiTestSuite {
             let tenant = orphan_util.tenant();
 
             let create_table_req = CreateTableReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: Tenant::new_or_err(tenant_name, func_name!())?,
@@ -5936,7 +5927,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let create_table_req = CreateTableReq {
-            create_option: CreateOption::CreateOrReplace,
+            override_existing: true,
             catalog_name: Some("default".to_string()),
             name_ident: TableNameIdent {
                 tenant: Tenant::new_or_err(tenant_name, func_name!())?,

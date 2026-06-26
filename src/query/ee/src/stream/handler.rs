@@ -141,7 +141,7 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let req = CreateTableReq {
-            create_option: plan.create_option,
+            override_existing: plan.create_option.is_overriding(),
             catalog_name: if plan.create_option.is_overriding() {
                 Some(plan.catalog.to_string())
             } else {
