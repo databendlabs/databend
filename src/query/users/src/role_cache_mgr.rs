@@ -131,27 +131,43 @@ impl RoleCacheManager {
         tenant: &Tenant,
         roles: &[String],
     ) -> Result<Vec<RoleInfo>> {
-        self.maybe_reload(tenant).await?;
-        let cached = self.cache.read();
-        let cached_roles = match cached.get(tenant) {
-            None => return Ok(vec![]),
-            Some(cached_roles) => cached_roles,
+        let cached_roles = match self.maybe_reload(tenant).await? {
+            Some(roles) => roles,
+            None => {
+                let cached_roles = {
+                    let cached = self.cache.read();
+                    cached
+                        .get(tenant)
+                        .map(|cached_roles| cached_roles.roles.clone())
+                };
+                match cached_roles {
+                    Some(cached_roles) => cached_roles,
+                    None => self.load_and_cache_roles(tenant).await?,
+                }
+            }
         };
-        Ok(find_all_related_roles(&cached_roles.roles, roles))
+        Ok(find_all_related_roles(&cached_roles, roles))
     }
 
     #[async_backtrace::framed]
     pub async fn force_reload(&self, tenant: &Tenant) -> Result<()> {
+        self.load_and_cache_roles(tenant).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn load_and_cache_roles(&self, tenant: &Tenant) -> Result<HashMap<String, RoleInfo>> {
         let data = load_roles_data(&self.user_manager, tenant).await?;
+        let roles = data.roles.clone();
         let mut cached = self.cache.write();
         cached.insert(tenant.clone(), data);
-        Ok(())
+        Ok(roles)
     }
 
     // Load roles data if not found in cache. Watch this tenant's role data in background if
     // once it loads successfully.
     #[async_backtrace::framed]
-    async fn maybe_reload(&self, tenant: &Tenant) -> Result<()> {
+    async fn maybe_reload(&self, tenant: &Tenant) -> Result<Option<HashMap<String, RoleInfo>>> {
         let need_reload = {
             let cached = self.cache.read();
             match cached.get(tenant) {
@@ -167,9 +183,9 @@ impl RoleCacheManager {
             }
         };
         if need_reload {
-            self.force_reload(tenant).await?;
+            return self.load_and_cache_roles(tenant).await.map(Some);
         }
-        Ok(())
+        Ok(None)
     }
 }
 
