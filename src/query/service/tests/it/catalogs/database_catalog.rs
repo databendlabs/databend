@@ -20,7 +20,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -152,7 +151,7 @@ async fn test_catalogs_table() -> anyhow::Result<()> {
         let created_on = Utc::now();
 
         let req = CreateTableReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: tenant.clone(),

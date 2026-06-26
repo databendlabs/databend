@@ -31,7 +31,6 @@ use databend_common_expression::TableDataType::Timestamp;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType::Float32;
 use databend_common_expression::types::NumberDataType::Float64;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseId;
@@ -207,24 +206,23 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let table_name = TableIdent::new(self.ident.clone(), req.table_name().to_string());
+        let mut new_table = true;
 
-        match req.create_option {
-            CreateOption::Create => {}
-            CreateOption::CreateIfNotExists => {
-                if let Ok(exists) = self.ctl.iceberg_catalog().table_exists(&table_name).await {
-                    if exists {
-                        return Ok(CreateTableReply {
-                            table_id: 0,
-                            table_id_seq: None,
-                            db_id: 0,
-                            new_table: true,
-                            prev_table_id: None,
-                            orphan_table_name: None,
-                        });
-                    }
-                }
+        if let Ok(exists) = self.ctl.iceberg_catalog().table_exists(&table_name).await {
+            new_table = !exists;
+            if exists && !req.override_existing {
+                return Ok(CreateTableReply {
+                    table_id: 0,
+                    table_id_seq: None,
+                    db_id: 0,
+                    new_table,
+                    created: false,
+                    prev_table_id: None,
+                    orphan_table_name: None,
+                });
             }
-            CreateOption::CreateOrReplace => {
+
+            if exists {
                 self.drop_table_by_id(DropTableByIdReq {
                     if_exists: true,
                     tenant: req.tenant().clone(),
@@ -269,7 +267,8 @@ impl Database for IcebergDatabase {
             table_id: 0,
             table_id_seq: None,
             db_id: 0,
-            new_table: true,
+            new_table,
+            created: true,
             prev_table_id: None,
             orphan_table_name: None,
         })

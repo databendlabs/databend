@@ -514,15 +514,12 @@ impl Display for TableIdList {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
-    pub create_option: CreateOption,
+    pub override_existing: bool,
     pub catalog_name: Option<String>,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 
     /// Set it to true if a dropped table needs to be created,
-    ///
-    /// since [CreateOption] is used by various scenarios, we use
-    /// this dedicated flag to mark this behavior.
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
@@ -547,31 +544,24 @@ impl CreateTableReq {
 
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self.create_option {
-            CreateOption::Create => write!(
-                f,
-                "create_table:{}/{}-{}={}",
-                self.tenant().tenant_name(),
-                self.db_name(),
-                self.table_name(),
-                self.table_meta
-            ),
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_table_if_not_exists:{}/{}-{}={}",
-                self.tenant().tenant_name(),
-                self.db_name(),
-                self.table_name(),
-                self.table_meta
-            ),
-            CreateOption::CreateOrReplace => write!(
+        if self.override_existing {
+            write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
                 self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
-            ),
+            )
+        } else {
+            write!(
+                f,
+                "create_table:{}/{}-{}={}",
+                self.tenant().tenant_name(),
+                self.db_name(),
+                self.table_name(),
+                self.table_meta
+            )
         }
     }
 }
@@ -581,7 +571,10 @@ pub struct CreateTableReply {
     pub table_id: u64,
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
+    /// Whether this request inserted a new table-name binding.
     pub new_table: bool,
+    /// Whether this request created a table object. False means an existing table was returned.
+    pub created: bool,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }

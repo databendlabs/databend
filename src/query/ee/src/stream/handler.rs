@@ -141,7 +141,7 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let req = CreateTableReq {
-            create_option: plan.create_option,
+            override_existing: plan.create_option.is_overriding(),
             catalog_name: if plan.create_option.is_overriding() {
                 Some(plan.catalog.to_string())
             } else {
@@ -163,7 +163,15 @@ impl StreamHandler for RealStreamHandler {
             table_partition: None,
         };
 
-        catalog.create_table(req).await
+        let reply = catalog.create_table(req).await?;
+        if !reply.created && plan.create_option.if_return_error() {
+            return Err(ErrorCode::StreamAlreadyExists(format!(
+                "'{}' as stream Already Exists",
+                plan.stream_name
+            )));
+        }
+
+        Ok(reply)
     }
 
     #[async_backtrace::framed]

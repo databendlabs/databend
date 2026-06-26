@@ -23,7 +23,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -120,7 +119,7 @@ impl AutoIncrementApiTestSuite {
             let tenant = orphan_util.tenant();
 
             let create_table_req = CreateTableReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: Tenant::new_or_err(tenant_name, func_name!())?,
