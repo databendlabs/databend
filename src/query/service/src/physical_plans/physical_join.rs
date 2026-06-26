@@ -224,8 +224,40 @@ impl PhysicalPlanBuilder {
         } else {
             match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
+                    // When a LeftSingle/RightSingle join (scalar subquery) has no
+                    // equi-conditions, the hash join executes as a cross join + filter.
+                    // The FROM_LEFT_SINGLE runtime check ("at most 1 build row per probe
+                    // row") fires during the cross-product matching phase — before the
+                    // filter is applied — and false-positives because in a cross join
+                    // every probe row matches all build rows (match_count = build rows).
+                    //
+                    // We only clear single_to_inner when the probe (left) child has
+                    // precise_cardinality == Some(1). This indicates the scalar subquery
+                    // landed on the probe side (e.g. after RuleCommuteJoin swapped
+                    // children) and is a deterministic single-row producer (no-group-by
+                    // aggregate). In that case the build side is the main table whose
+                    // multiple rows are expected — the filter will reduce them after the
+                    // cross product. We intentionally do NOT clear when only the build
+                    // (right) side is single-row (match_count would be 1 anyway, so the
+                    // check never fires) or when only a fuzzy cardinality == 1.0 estimate
+                    // holds (could be a single-row main table like numbers(1), not the
+                    // subquery — we must preserve the runtime check for that case).
+                    let left_stat =
+                        RelExpr::with_s_expr(s_expr.left_child()).derive_cardinality()?;
+                    let probe_is_scalar =
+                        matches!(left_stat.statistics.precise_cardinality, Some(1));
+                    let join = if join.equi_conditions.is_empty()
+                        && join.single_to_inner.is_some()
+                        && probe_is_scalar
+                    {
+                        let mut j = join.clone();
+                        j.single_to_inner = None;
+                        j
+                    } else {
+                        join.clone()
+                    };
                     self.build_hash_join(
-                        join,
+                        &join,
                         s_expr,
                         required,
                         others_required,
