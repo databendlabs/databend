@@ -46,6 +46,7 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -236,6 +237,13 @@ impl Catalog for DatabaseCatalog {
             .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
+            if !req.override_existing {
+                return Ok(CreateDatabaseReply {
+                    db_id: DatabaseId::new(0),
+                    created: false,
+                });
+            }
+
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
                 req.name_ident.database_name()

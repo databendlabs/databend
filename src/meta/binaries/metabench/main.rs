@@ -401,7 +401,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
 
     let res = client
         .create_database(CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(tenant(), db_name()),
             meta: Default::default(),

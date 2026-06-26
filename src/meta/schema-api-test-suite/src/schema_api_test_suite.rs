@@ -651,10 +651,10 @@ impl SchemaApiTestSuite {
             assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
-        info!("--- create db1 again with if_not_exists=false");
+        info!("--- create db1 again without override");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
@@ -663,19 +663,16 @@ impl SchemaApiTestSuite {
                 },
             };
 
-            let res = mt.create_database(req).await;
+            let res = mt.create_database(req).await?;
             info!("create database res: {:?}", res);
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::DATABASE_ALREADY_EXISTS,
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(1, *res.db_id, "db1 id is 1");
+            assert!(!res.created);
         }
 
         info!("--- create db1 again with if_not_exists=true");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::CreateIfNotExists,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
@@ -688,6 +685,7 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, *res.db_id, "db1 id is 1");
+            assert!(!res.created);
         }
 
         info!("--- get db1");
@@ -780,7 +778,7 @@ impl SchemaApiTestSuite {
             assert_eq!(ret_db_name_ident, DatabaseNameIdentRaw::from(&db_name));
 
             let req = CreateDatabaseReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 catalog_name: Some("default".to_string()),
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
@@ -1171,7 +1169,7 @@ impl SchemaApiTestSuite {
         {
             // first create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
@@ -1263,7 +1261,7 @@ impl SchemaApiTestSuite {
 
             // then create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
@@ -1293,7 +1291,7 @@ impl SchemaApiTestSuite {
         {
             // first create db2
             let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: new_db_name_ident.clone(),
                 meta: DatabaseMeta {
@@ -4157,7 +4155,7 @@ impl SchemaApiTestSuite {
 
             // first create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
@@ -4216,7 +4214,7 @@ impl SchemaApiTestSuite {
         delete: bool,
     ) -> anyhow::Result<()> {
         let req = CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: db_name.clone(),
             meta: DatabaseMeta {
