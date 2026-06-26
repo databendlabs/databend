@@ -50,6 +50,7 @@ use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -536,16 +537,22 @@ impl ReclusterTableInterpreter {
         linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<Option<PhysicalPlan>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
+        // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
+        // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
+        // materializes the option with value 1.
+        let mode = if self.plan.is_final
+            && fuse_table.get_option(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER, 0u32) != 0
+        {
+            ReclusterMode::Aggressive
+        } else {
+            ReclusterMode::Conservative
+        };
         let Some((parts, snapshot)) = fuse_table
             .do_recluster(
                 self.ctx.clone(),
                 push_downs.clone(),
                 limit,
-                if self.plan.is_final {
-                    ReclusterMode::Final
-                } else {
-                    ReclusterMode::Normal
-                },
+                mode,
                 linear_final_carry,
             )
             .await?

@@ -48,8 +48,8 @@ const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReclusterMode {
-    Normal,
-    Final,
+    Conservative,
+    Aggressive,
 }
 
 impl FuseTable {
@@ -84,6 +84,7 @@ impl FuseTable {
             self,
             ctx.clone(),
             snapshot.as_ref(),
+            mode,
         )?);
 
         // Carry is tied to the current cluster key because cached block metas
@@ -281,7 +282,6 @@ impl FuseTable {
                                 mutator
                                     .probe_candidate_window(
                                         selected_segs,
-                                        mode,
                                         remaining_task_budget,
                                         decode_runtime,
                                         decode_semaphore,
@@ -413,7 +413,7 @@ impl FuseTable {
             }
         };
 
-        if mode != ReclusterMode::Final {
+        if mode != ReclusterMode::Aggressive {
             *carry = ReclusterFinalCarry::default();
         }
 

@@ -1059,8 +1059,8 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         for chunks in segments.chunks_mut(chunk_size) {
             chunks.sort_by(|a, b| {
                 sort_by_cluster_stats(
-                    &a.summary.cluster_stats,
-                    &b.summary.cluster_stats,
+                    a.summary.cluster_stats.as_ref(),
+                    b.summary.cluster_stats.as_ref(),
                     cluster_key_id,
                 )
             });

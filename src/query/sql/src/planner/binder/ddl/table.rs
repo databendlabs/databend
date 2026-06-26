@@ -174,6 +174,8 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
+const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
+
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
@@ -937,6 +939,9 @@ impl Binder {
                     OPT_KEY_CLUSTER_TYPE.to_owned(),
                     cluster_opt.cluster_type.to_string().to_lowercase(),
                 );
+                options
+                    .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
         }
