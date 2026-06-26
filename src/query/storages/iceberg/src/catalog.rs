@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
@@ -359,25 +358,22 @@ impl Catalog for IcebergMutableCatalog {
 
     #[async_backtrace::framed]
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        match req.create_option {
-            CreateOption::Create => {}
-            CreateOption::CreateIfNotExists => {
-                if self
-                    .exists_database(req.name_ident.tenant(), req.name_ident.name())
-                    .await?
-                {
-                    return Ok(CreateDatabaseReply {
-                        db_id: DatabaseId::new(0),
-                    });
-                }
+        if self
+            .exists_database(req.name_ident.tenant(), req.name_ident.name())
+            .await?
+        {
+            if !req.override_existing {
+                return Ok(CreateDatabaseReply {
+                    db_id: DatabaseId::new(0),
+                    created: false,
+                });
             }
-            CreateOption::CreateOrReplace => {
-                self.drop_database(DropDatabaseReq {
-                    if_exists: true,
-                    name_ident: req.name_ident.clone(),
-                })
-                .await?;
-            }
+
+            self.drop_database(DropDatabaseReq {
+                if_exists: true,
+                name_ident: req.name_ident.clone(),
+            })
+            .await?;
         }
 
         let ns = NamespaceIdent::new(req.name_ident.name().to_owned());
@@ -394,6 +390,7 @@ impl Catalog for IcebergMutableCatalog {
 
         Ok(CreateDatabaseReply {
             db_id: DatabaseId::new(0),
+            created: true,
         })
     }
 
