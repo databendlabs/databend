@@ -224,8 +224,26 @@ impl PhysicalPlanBuilder {
         } else {
             match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
+                    // When a LeftSingle/RightSingle join (scalar subquery) has no
+                    // equi-conditions, the hash join executes as a cross join + filter.
+                    // The FROM_LEFT_SINGLE runtime check ("at most 1 build row per probe
+                    // row") fires during the cross-product matching phase — before the
+                    // filter is applied — and false-positives because in a cross join
+                    // every probe row matches all build rows. Clear single_to_inner so
+                    // the runtime doesn't enforce it in this context; the scalar guarantee
+                    // is already satisfied by construction (the aggregate always produces
+                    // exactly one row).
+                    let join = if join.equi_conditions.is_empty()
+                        && join.single_to_inner.is_some()
+                    {
+                        let mut j = join.clone();
+                        j.single_to_inner = None;
+                        j
+                    } else {
+                        join.clone()
+                    };
                     self.build_hash_join(
-                        join,
+                        &join,
                         s_expr,
                         required,
                         others_required,
