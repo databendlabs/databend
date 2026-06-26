@@ -40,7 +40,6 @@ use log::debug;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::txn::meta_txn;
@@ -92,7 +91,7 @@ where
             .create_id_value(
                 name_ident,
                 &req.dictionary_meta,
-                CreateIdValueMode::CreateOnly,
+                false,
                 |_| vec![],
                 |_, _| Ok(vec![]),
                 |_, _| {},

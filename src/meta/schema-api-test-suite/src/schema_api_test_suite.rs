@@ -70,6 +70,7 @@ use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -4633,7 +4634,7 @@ impl SchemaApiTestSuite {
         }
 
         let agg_index_create_req = CreateIndexReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             name_ident: IndexNameIdent::new(&tenant, idx1_name),
             meta: IndexMeta {
                 table_id,
@@ -6258,7 +6259,7 @@ impl SchemaApiTestSuite {
         info!("--- create sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 start: 1,
@@ -6267,7 +6268,24 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
+        }
+
+        info!("--- create sequence again without override");
+        {
+            let req = CreateSequenceReq {
+                override_existing: false,
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                create_on,
+                start: 2,
+                increment: 2,
+                comment: Some("seq2".to_string()),
+                storage_version,
+            };
+
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: false });
         }
 
         info!("--- get sequence");
@@ -6282,7 +6300,7 @@ impl SchemaApiTestSuite {
         info!("--- list sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 ident: SequenceIdent::new(&tenant, "seq1"),
                 create_on,
                 start: 1,
@@ -6291,7 +6309,8 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
             let values = mt.list_sequences(&tenant).await?;
             assert_eq!(values.len(), 2);
             assert_eq!(values[0].0, sequence_name);
@@ -6333,7 +6352,7 @@ impl SchemaApiTestSuite {
         info!("--- replace sequence");
         {
             let req = CreateSequenceReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 start: 1,
@@ -6342,7 +6361,8 @@ impl SchemaApiTestSuite {
                 storage_version,
             };
 
-            mt.create_sequence(req).await?;
+            let resp = mt.create_sequence(req).await?;
+            assert_eq!(resp, CreateSequenceReply { success: true });
 
             let req = SequenceIdent::new(&tenant, sequence_name);
 
@@ -7160,7 +7180,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index");
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7177,7 +7197,7 @@ impl SchemaApiTestSuite {
             }
 
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
@@ -7187,24 +7207,22 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- create index again with if_not_exists = false");
+            info!("--- create index again without override");
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
 
-            let res = mt.create_index(req).await;
-            let status = res.err().unwrap();
-            let err_code = ErrorCode::from(status);
-
-            assert_eq!(ErrorCode::INDEX_ALREADY_EXISTS, err_code.code());
+            let res = mt.create_index(req).await?;
+            assert_eq!(index_id, res.index_id);
+            assert!(!res.created);
         }
 
         {
-            info!("--- create index again with if_not_exists = true");
+            info!("--- create index again without override");
             let req = CreateIndexReq {
-                create_option: CreateOption::CreateIfNotExists,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7377,7 +7395,7 @@ impl SchemaApiTestSuite {
             let replace_index_name = "replace_idx";
             let replace_name_ident = IndexNameIdent::new(&tenant, replace_index_name);
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: replace_name_ident.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7394,7 +7412,7 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.index_meta, index_meta_1);
 
             let req = CreateIndexReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 name_ident: replace_name_ident.clone(),
                 meta: index_meta_2.clone(),
             };
