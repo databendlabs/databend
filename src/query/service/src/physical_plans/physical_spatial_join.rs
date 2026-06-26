@@ -29,7 +29,6 @@ use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::Join;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -52,6 +51,7 @@ pub struct PhysicalSpatialJoin {
     pub build_side: SpatialBuildSide,
     pub build_geometry: RemoteExpr,
     pub probe_geometry: RemoteExpr,
+    pub search_distance: Option<f64>,
     pub predicates: Vec<RemoteExpr>,
     pub output_projection: Vec<usize>,
     pub output_schema: DataSchemaRef,
@@ -112,6 +112,7 @@ impl IPhysicalPlan for PhysicalSpatialJoin {
             build_side: self.build_side,
             build_geometry: self.build_geometry.clone(),
             probe_geometry: self.probe_geometry.clone(),
+            search_distance: self.search_distance,
             predicates: self.predicates.clone(),
             output_projection: self.output_projection.clone(),
             output_schema: self.output_schema.clone(),
@@ -127,6 +128,7 @@ impl IPhysicalPlan for PhysicalSpatialJoin {
             self.predicates.clone(),
             self.output_projection.clone(),
             self.build_side,
+            self.search_distance,
             max_block_size,
         );
 
@@ -168,41 +170,16 @@ impl PhysicalSpatialJoin {
 }
 
 impl PhysicalPlanBuilder {
-    /// Whether the join's *shape* is one the spatial join path supports. This
-    /// only inspects the join/candidate structure; row/byte-size admission is
-    /// handled separately in `try_build_spatial_join`.
-    fn is_spatial_join_eligible(&self, join: &Join, candidate: &SpatialJoinCandidate) -> bool {
-        // The spatial join is node-local, takes no equi key, and cannot
-        // serve the single-to-inner rewrite.
-        if !self.ctx.get_cluster().is_empty()
-            || join.single_to_inner.is_some()
-            || !join.equi_conditions.is_empty()
-        {
-            return false;
-        }
-        // CacheScan on the build side depends on state registered by the hash join path.
-        if join.build_side_cache_info.is_some() {
-            return false;
-        }
-        // Residual predicates can short-circuit throwing spatial predicates in
-        // the fallback path. Keep those joins out of the spatial path until it
-        // can preserve that evaluation order.
-        if !candidate.residual_predicates.is_empty() {
-            return false;
-        }
-        true
-    }
-
     pub async fn try_build_spatial_join(
         &mut self,
-        join: &Join,
         candidate: SpatialJoinCandidate,
         s_expr: &SExpr,
         required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
-        if !self.is_spatial_join_eligible(join, &candidate) {
+        // The spatial join don't support cluster mode for now.
+        if !self.ctx.get_cluster().is_empty() {
             return Ok(None);
         }
 
@@ -237,10 +214,10 @@ impl PhysicalPlanBuilder {
             left_user_columns,
             right_user_columns,
         );
-        let predicates = spatial_join_predicates(&candidate)
-            .into_iter()
+        let predicates = std::iter::once(candidate.predicate.clone())
             .map(|predicate| remote_expr_for_schema(&predicate, &merged_schema, &self.func_ctx))
             .collect::<Result<Vec<_>>>()?;
+        let search_distance = candidate.distance.map(|distance| distance.into_inner());
         let mut required = required;
         {
             let metadata = self.metadata.read();
@@ -266,6 +243,7 @@ impl PhysicalPlanBuilder {
             build_side,
             build_geometry,
             probe_geometry,
+            search_distance,
             predicates,
             output_projection,
             output_schema,
@@ -301,12 +279,6 @@ fn merged_user_schema(
             .cloned(),
     );
     DataSchemaRefExt::create(fields)
-}
-
-fn spatial_join_predicates(candidate: &SpatialJoinCandidate) -> Vec<ScalarExpr> {
-    std::iter::once(candidate.predicate.clone())
-        .chain(candidate.residual_predicates.iter().cloned())
-        .collect()
 }
 
 fn spatial_output_projection_and_schema(
