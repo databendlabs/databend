@@ -213,7 +213,7 @@ impl Database for IcebergDatabase {
                     table_id: 0,
                     table_id_seq: None,
                     db_id: 0,
-                    new_table: false,
+                    created: false,
                     prev_table_id: None,
                     orphan_table_name: None,
                 });
@@ -264,7 +264,7 @@ impl Database for IcebergDatabase {
             table_id: 0,
             table_id_seq: None,
             db_id: 0,
-            new_table: true,
+            created: true,
             prev_table_id: None,
             orphan_table_name: None,
         })

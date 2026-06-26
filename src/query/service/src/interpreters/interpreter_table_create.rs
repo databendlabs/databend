@@ -215,7 +215,7 @@ impl CreateTableInterpreter {
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
         let reply = catalog.create_table(req.clone()).await?;
-        if !reply.new_table && !self.plan.create_option.is_overriding() {
+        if !reply.created {
             if self.plan.create_option.if_return_error() {
                 return Err(Self::table_exists_error(&req));
             }
@@ -400,7 +400,7 @@ impl CreateTableInterpreter {
         }
 
         let reply = catalog.create_table(req.clone()).await?;
-        if !reply.new_table {
+        if !reply.created {
             if self.plan.create_option.if_return_error() {
                 return Err(Self::table_exists_error(&req));
             }

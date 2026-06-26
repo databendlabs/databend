@@ -1817,7 +1817,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_table(req).await;
             info!("create table res: {:?}", res);
 
-            assert!(!res?.new_table);
+            assert!(!res?.created);
 
             // get_table returns the old table
 
@@ -2104,8 +2104,8 @@ impl SchemaApiTestSuite {
 
                 let create_if_not_exist_resp =
                     mt.create_table(create_table_if_not_exist_req).await?;
-                // no new table should be created
-                assert!(!create_if_not_exist_resp.new_table);
+                // no table should be created
+                assert!(!create_if_not_exist_resp.created);
                 // the tabled id that returned should be the same
                 assert_eq!(
                     create_if_not_exist_resp.table_id,
@@ -2127,8 +2127,8 @@ impl SchemaApiTestSuite {
 
                 let create_if_not_exist_resp =
                     mt.create_table(create_table_if_not_exist_req).await?;
-                // new table should be created
-                assert!(create_if_not_exist_resp.new_table);
+                // table should be created
+                assert!(create_if_not_exist_resp.created);
                 // table should not be visible
                 let req = GetTableReq::new(&tenant, db_name, "not_exist");
                 let got = mt.get_table(req).await;
@@ -2148,9 +2148,8 @@ impl SchemaApiTestSuite {
                 };
 
                 let create_or_replace_resp = mt.create_table(create_or_replace_req).await?;
-                // since table of same name has been created, "new_table" (in the sense of table name) should be false
-                assert!(!create_or_replace_resp.new_table);
-                // but a table of different id should be created
+                assert!(create_or_replace_resp.created);
+                // a table of different id should be created
                 assert_ne!(
                     create_or_replace_resp.table_id,
                     create_table_as_dropped_resp.table_id
@@ -5456,7 +5455,7 @@ impl SchemaApiTestSuite {
                 table_id_seq: None,
                 db_id: *util.db_id(),
                 prev_table_id: None,
-                new_table: true,
+                created: true,
                 orphan_table_name: None,
             };
             let cur_db = util.get_database().await?;

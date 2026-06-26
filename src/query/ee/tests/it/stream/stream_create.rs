@@ -14,6 +14,7 @@
 
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::generate_snapshots;
@@ -68,6 +69,12 @@ async fn test_stream_create() -> anyhow::Result<()> {
         );
         let r = fixture.execute_command(&qry).await;
         assert!(r.is_ok());
+    }
+
+    {
+        let qry = format!("create stream s on table {}.{}", db, tbl);
+        let r = fixture.execute_command(&qry).await;
+        assert_eq!(r.unwrap_err().code(), ErrorCode::STREAM_ALREADY_EXISTS);
     }
 
     Ok(())

@@ -137,7 +137,7 @@ impl Interpreter for CreateViewInterpreter {
             table_partition: None,
         };
         let reply = catalog.create_table(plan).await?;
-        if !reply.new_table && self.plan.create_option.if_return_error() {
+        if !reply.created && self.plan.create_option.if_return_error() {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{} view exists",
                 self.plan.view_name

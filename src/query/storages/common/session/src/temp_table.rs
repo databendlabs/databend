@@ -116,7 +116,7 @@ impl TempTblMgr {
         let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
-        let new_table = match (self.name_to_id.contains_key(&desc), override_existing) {
+        let created = match (self.name_to_id.contains_key(&desc), override_existing) {
             (true, false) => false,
             _ => {
                 let desc = orphan_table_name
@@ -146,7 +146,7 @@ impl TempTblMgr {
             table_id,
             table_id_seq: Some(0),
             db_id,
-            new_table,
+            created,
             prev_table_id: None,
             orphan_table_name,
         })

@@ -163,7 +163,15 @@ impl StreamHandler for RealStreamHandler {
             table_partition: None,
         };
 
-        catalog.create_table(req).await
+        let reply = catalog.create_table(req).await?;
+        if !reply.created && plan.create_option.if_return_error() {
+            return Err(ErrorCode::StreamAlreadyExists(format!(
+                "{} stream exists",
+                plan.stream_name
+            )));
+        }
+
+        Ok(reply)
     }
 
     #[async_backtrace::framed]
