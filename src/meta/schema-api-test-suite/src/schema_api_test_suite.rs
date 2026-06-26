@@ -4634,7 +4634,7 @@ impl SchemaApiTestSuite {
         }
 
         let agg_index_create_req = CreateIndexReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             name_ident: IndexNameIdent::new(&tenant, idx1_name),
             meta: IndexMeta {
                 table_id,
@@ -7180,7 +7180,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index");
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7197,7 +7197,7 @@ impl SchemaApiTestSuite {
             }
 
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
@@ -7207,24 +7207,22 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- create index again with if_not_exists = false");
+            info!("--- create index again without override");
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
 
-            let res = mt.create_index(req).await;
-            let status = res.err().unwrap();
-            let err_code = ErrorCode::from(status);
-
-            assert_eq!(ErrorCode::INDEX_ALREADY_EXISTS, err_code.code());
+            let res = mt.create_index(req).await?;
+            assert_eq!(index_id, res.index_id);
+            assert!(!res.created);
         }
 
         {
-            info!("--- create index again with if_not_exists = true");
+            info!("--- create index again without override");
             let req = CreateIndexReq {
-                create_option: CreateOption::CreateIfNotExists,
+                override_existing: false,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7397,7 +7395,7 @@ impl SchemaApiTestSuite {
             let replace_index_name = "replace_idx";
             let replace_name_ident = IndexNameIdent::new(&tenant, replace_index_name);
             let req = CreateIndexReq {
-                create_option: CreateOption::Create,
+                override_existing: false,
                 name_ident: replace_name_ident.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -7414,7 +7412,7 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.index_meta, index_meta_1);
 
             let req = CreateIndexReq {
-                create_option: CreateOption::CreateOrReplace,
+                override_existing: true,
                 name_ident: replace_name_ident.clone(),
                 meta: index_meta_2.clone(),
             };
