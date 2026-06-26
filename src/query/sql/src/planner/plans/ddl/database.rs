@@ -38,7 +38,7 @@ pub struct CreateDatabasePlan {
 impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            create_option: p.create_option,
+            override_existing: p.create_option.is_overriding(),
             catalog_name: if p.create_option.is_overriding() {
                 Some(p.catalog.to_string())
             } else {
@@ -53,7 +53,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
 impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            create_option: p.create_option,
+            override_existing: p.create_option.is_overriding(),
             catalog_name: if p.create_option.is_overriding() {
                 Some(p.catalog.to_string())
             } else {

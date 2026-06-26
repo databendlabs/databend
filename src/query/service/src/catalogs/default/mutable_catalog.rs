@@ -52,7 +52,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
@@ -213,7 +212,7 @@ impl MutableCatalog {
 
         // Create default database.
         let req = CreateDatabaseReq {
-            create_option: CreateOption::CreateIfNotExists,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(&tenant, "default"),
             meta: DatabaseMeta {
@@ -359,6 +358,10 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
+        if !res.created {
+            return Ok(res);
+        }
+
         info!(
             "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
@@ -374,7 +377,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(res)
     }
 
     #[async_backtrace::framed]
