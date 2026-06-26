@@ -33,7 +33,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
-use databend_storages_common_index::vector_distance_type_name;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -280,7 +279,7 @@ fn build_vector_statistics_variant(
     func_ctx: &FunctionContext,
 ) -> Vec<u8> {
     let scalar = Scalar::Tuple(vec![
-        Scalar::String(vector_distance_type_name(distance_type).to_string()),
+        Scalar::String(distance_type.as_str().to_string()),
         Scalar::Array(Float32Type::from_data(
             vector_stat
                 .centroid

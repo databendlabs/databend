@@ -37,7 +37,6 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::statistics_to_domain;
-use databend_storages_common_index::vector_distance_type_from_index_option;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
@@ -87,15 +86,15 @@ fn vector_cluster_distance_type(
         index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
     }) {
         let Some(distance) = index.options.get("distance") else {
-            continue;
+            return Err(ErrorCode::InvalidClusterKeys(format!(
+                "Vector cluster key `{column_name}` requires a vector index with distance option"
+            )));
         };
         for distance_type in distance
             .split(',')
-            .filter_map(vector_distance_type_from_index_option)
+            .filter_map(VectorDistanceType::from_index_option)
         {
-            if !distance_types.contains(&distance_type) {
-                distance_types.push(distance_type);
-            }
+            distance_types.push(distance_type);
         }
     }
 

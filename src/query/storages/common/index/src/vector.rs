@@ -19,8 +19,6 @@ use databend_common_vector::l2_distance;
 use databend_common_vector::vector_norm;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 
-use crate::DistanceType;
-
 pub fn vector_stat_distance(
     left: &[f32],
     right: &[f32],
@@ -40,31 +38,6 @@ pub fn normalize_vector(vector: &mut [f32]) {
     }
     for value in vector {
         *value /= norm;
-    }
-}
-
-pub fn vector_statistics_distance_type(distance_type: DistanceType) -> VectorDistanceType {
-    match distance_type {
-        DistanceType::L1 => VectorDistanceType::L1,
-        DistanceType::L2 => VectorDistanceType::L2,
-        DistanceType::Dot => VectorDistanceType::Dot,
-    }
-}
-
-pub fn vector_distance_type_from_index_option(distance_type: &str) -> Option<VectorDistanceType> {
-    match distance_type.trim() {
-        "cosine" | "dot" => Some(VectorDistanceType::Dot),
-        "l1" => Some(VectorDistanceType::L1),
-        "l2" => Some(VectorDistanceType::L2),
-        _ => None,
-    }
-}
-
-pub fn vector_distance_type_name(distance_type: VectorDistanceType) -> &'static str {
-    match distance_type {
-        VectorDistanceType::L1 => "l1",
-        VectorDistanceType::L2 => "l2",
-        VectorDistanceType::Dot => "dot",
     }
 }
 
