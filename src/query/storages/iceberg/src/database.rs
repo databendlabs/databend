@@ -206,13 +206,16 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let table_name = TableIdent::new(self.ident.clone(), req.table_name().to_string());
+        let mut new_table = true;
 
         if let Ok(exists) = self.ctl.iceberg_catalog().table_exists(&table_name).await {
+            new_table = !exists;
             if exists && !req.override_existing {
                 return Ok(CreateTableReply {
                     table_id: 0,
                     table_id_seq: None,
                     db_id: 0,
+                    new_table,
                     created: false,
                     prev_table_id: None,
                     orphan_table_name: None,
@@ -264,6 +267,7 @@ impl Database for IcebergDatabase {
             table_id: 0,
             table_id_seq: None,
             db_id: 0,
+            new_table,
             created: true,
             prev_table_id: None,
             orphan_table_name: None,

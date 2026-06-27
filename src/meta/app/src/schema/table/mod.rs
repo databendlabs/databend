@@ -571,6 +571,8 @@ pub struct CreateTableReply {
     pub table_id: u64,
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
+    /// Whether this request inserted a new table-name binding.
+    pub new_table: bool,
     /// Whether this request created a table object. False means an existing table was returned.
     pub created: bool,
     pub prev_table_id: Option<u64>,
