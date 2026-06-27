@@ -185,11 +185,11 @@ impl ClusterStatsGenerator {
 }
 
 pub fn sort_by_cluster_stats(
-    v1: &Option<ClusterStatistics>,
-    v2: &Option<ClusterStatistics>,
+    v1: Option<&ClusterStatistics>,
+    v2: Option<&ClusterStatistics>,
     default_cluster_key: u32,
 ) -> Ordering {
-    match (v1.as_ref(), v2.as_ref()) {
+    match (v1, v2) {
         (Some(a), Some(b)) => {
             if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
                 return Ordering::Equal;
@@ -218,13 +218,15 @@ pub struct BlockOverlapDepth {
     pub depth: usize,
 }
 
-struct RangeMaxTree {
+/// Iterative segment tree answering range-max queries over a fixed sequence.
+/// `build` is O(n), `range_max` is O(log n) over an inclusive `[l, r]` range.
+pub(crate) struct RangeMaxTree {
     size: usize,
     tree: Vec<usize>,
 }
 
 impl RangeMaxTree {
-    fn build(values: &[usize]) -> Self {
+    pub(crate) fn build(values: &[usize]) -> Self {
         let size = values.len();
         debug_assert!(size > 0, "RangeMaxTree requires a non-empty input");
         let mut tree = vec![0usize; size * 2];
@@ -235,7 +237,8 @@ impl RangeMaxTree {
         Self { size, tree }
     }
 
-    fn range_max(&self, l: usize, r: usize) -> usize {
+    /// Max over the inclusive range `[l, r]`. Caller must ensure `l <= r < size`.
+    pub(crate) fn range_max(&self, l: usize, r: usize) -> usize {
         debug_assert!(l <= r && r < self.size, "range [{l}, {r}] out of bounds");
         let mut lo = l + self.size;
         let mut hi = r + self.size + 1;

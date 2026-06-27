@@ -25,6 +25,8 @@ pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;
 pub mod api_impl;
 pub mod error;
 pub mod kv;
+#[cfg(test)]
+pub(crate) mod testing;
 pub mod txn;
 pub mod util;
 
@@ -95,6 +97,7 @@ pub use txn::FetchedRecord;
 pub use txn::MetaTxn;
 pub use txn::MetaTxnManager;
 pub use txn::PresentRecord;
+pub use txn::ReadRecord;
 pub use txn::backoff as txn_backoff;
 pub use txn::backoff::txn_backoff;
 pub use txn::condition as txn_condition_util;

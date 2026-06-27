@@ -800,6 +800,10 @@ impl QueryContextShared {
             .or_insert(stats);
     }
 
+    pub fn clear_pruned_partitions_stats(&self) {
+        self.pruned_partitions_stats.write().clear();
+    }
+
     pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
         let mut guard = self.pruned_partitions_stats.write();
         for (plan_id, stats) in other.iter() {

@@ -142,10 +142,29 @@ impl PhysicalPlanBuilder {
             .union(&others_required)
             .cloned()
             .collect();
-        let left_required = left_required.union(&others_required).cloned().collect();
-        let right_required = right_required.union(&others_required).cloned().collect();
+        let left_required: ColumnSet = left_required.union(&others_required).cloned().collect();
+        let right_required: ColumnSet = right_required.union(&others_required).cloned().collect();
 
-        // 2. Build physical plan.
+        // 2. Try Build physical spatial join plan.
+        if self.ctx.get_settings().get_enable_spatial_join()? {
+            if let Some(candidate) = join.spatial_join.clone() {
+                if let Some(plan) = self
+                    .try_build_spatial_join(
+                        join,
+                        *candidate,
+                        s_expr,
+                        required.clone(),
+                        left_required.clone(),
+                        right_required.clone(),
+                    )
+                    .await?
+                {
+                    return Ok(plan);
+                }
+            }
+        }
+
+        // 3. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
             if !join.equi_conditions.is_empty() {

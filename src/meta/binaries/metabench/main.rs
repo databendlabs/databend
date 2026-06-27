@@ -401,7 +401,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
 
     let res = client
         .create_database(CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(tenant(), db_name()),
             meta: Default::default(),
@@ -544,8 +544,7 @@ async fn benchmark_table_copy_file(
             &copied_file_ident,
             &copied_file_value,
             param.ttl_ms.map(Duration::from_millis),
-        )
-        .unwrap();
+        );
 
         txn.if_then.push(put_op);
     }

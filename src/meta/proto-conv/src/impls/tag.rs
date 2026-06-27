@@ -45,8 +45,8 @@ impl FromToProto for mt::TagMeta {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             allowed_values: self.allowed_values.as_ref().map(|values| {
@@ -55,10 +55,10 @@ impl FromToProto for mt::TagMeta {
                 }
             }),
             comment: self.comment.clone(),
-            created_on: self.created_on.to_pb()?,
-            updated_on: self.updated_on.to_pb_opt()?,
-            drop_on: self.drop_on.to_pb_opt()?,
-        })
+            created_on: self.created_on.to_pb(),
+            updated_on: self.updated_on.to_pb_opt(),
+            drop_on: self.drop_on.to_pb_opt(),
+        }
     }
 }
 
@@ -77,11 +77,11 @@ impl FromToProto for mt::ObjectTagIdRefValue {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             tag_allowed_value: self.tag_allowed_value.clone(),
-        })
+        }
     }
 }

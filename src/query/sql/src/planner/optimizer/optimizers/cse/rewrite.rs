@@ -127,6 +127,7 @@ mod tests {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            spatial_join: None,
         };
         SExpr::create_binary(Arc::new(RelOperator::Join(join)), left, right)
     }

@@ -343,17 +343,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("stage_path_traversal_policy", DefaultSettingValue {
-                    value: UserSettingValue::String("readonly".to_string()),
-                    desc: "Controls stage paths that contain parent directory components.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec![
-                        "disable".into(),
-                        "enable".into(),
-                        "readonly".into(),
-                    ])),
-                }),
+
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
@@ -591,6 +581,20 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_spatial_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables spatial join for supported inner spatial joins. The smaller side is indexed locally with an R-tree. The setting is off by default.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("spatial_join_max_build_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1_000_000),
+                    desc: "Maximum estimated rows allowed on the spatial join build side.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),

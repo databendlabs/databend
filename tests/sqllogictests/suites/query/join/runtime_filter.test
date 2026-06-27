@@ -91,3 +91,59 @@ drop table table1;
 
 statement ok
 drop table table2;
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+drop table if exists rf_expr_probe_t1;
+
+statement ok
+drop table if exists rf_expr_probe_t2;
+
+statement ok
+drop table if exists rf_expr_probe_t3;
+
+statement ok
+create table rf_expr_probe_t1(a bigint);
+
+statement ok
+create table rf_expr_probe_t2(x int, y int);
+
+statement ok
+create table rf_expr_probe_t3(a bigint);
+
+statement ok
+insert into rf_expr_probe_t1 values (3), (5);
+
+statement ok
+insert into rf_expr_probe_t2 values (1, 2), (2, 3);
+
+statement ok
+insert into rf_expr_probe_t3 values (3);
+
+query I
+select count(*)
+from rf_expr_probe_t1 t1
+join rf_expr_probe_t2 t2 on t1.a = cast(t2.x + t2.y as bigint)
+join rf_expr_probe_t3 t3 on t1.a = t3.a;
+----
+1
+
+statement ok
+drop table rf_expr_probe_t1;
+
+statement ok
+drop table rf_expr_probe_t2;
+
+statement ok
+drop table rf_expr_probe_t3;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;

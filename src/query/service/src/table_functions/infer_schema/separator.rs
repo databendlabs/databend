@@ -465,6 +465,8 @@ mod tests {
             path: "sample.ndjson".to_string(),
             offset: 0,
             is_eof: false,
+            content_key: None,
+            last_modified: None,
         })))?;
         assert_eq!(output.len(), 1);
         assert!(output[0].is_empty());
@@ -474,6 +476,8 @@ mod tests {
             path: "sample.ndjson".to_string(),
             offset: 13,
             is_eof: true,
+            content_key: None,
+            last_modified: None,
         })))?;
         assert_eq!(output.len(), 1);
         assert!(!output[0].is_empty());

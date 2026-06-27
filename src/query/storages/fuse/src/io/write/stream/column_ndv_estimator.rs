@@ -46,11 +46,11 @@ use enum_dispatch::enum_dispatch;
 #[enum_dispatch]
 pub trait ColumnNDVEstimatorOps: Send + Sync {
     fn update_column(&mut self, column: &Column);
-    fn update_scalar(&mut self, scalar: &ScalarRef);
+    fn update_scalar(&mut self, scalar: &ScalarRef, count: u64);
 
     fn peek(&self) -> usize;
     fn finalize(&self) -> usize;
-    fn hll(self) -> MetaHLL;
+    fn into_hll(self) -> MetaHLL;
 }
 
 #[enum_dispatch(ColumnNDVEstimatorOps)]
@@ -76,11 +76,15 @@ pub enum ColumnNDVEstimator {
 
 pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
     macro_rules! match_number_type_create {
-        ($inner_type:expr) => {{
-            with_number_type!(|NUM_TYPE| match $inner_type {
+        ($num_type:expr) => {{
+            with_number_type!(|NUM_TYPE| match $num_type {
                 NumberDataType::NUM_TYPE => {
                     paste::paste! {
-                        ColumnNDVEstimator::NUM_TYPE(ColumnNDVEstimatorImpl::<[<NUM_TYPE Type>]>::new())
+                        ColumnNDVEstimator::NUM_TYPE(
+                            ColumnNDVEstimatorImpl::<[<NUM_TYPE Type>]>::new(
+                                DataType::Number($num_type),
+                            )
+                        )
                     }
                 }
             })
@@ -89,24 +93,35 @@ pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
 
     let inner_type = data_type.remove_nullable();
     match inner_type {
-        DataType::Number(num_type) => {
-            match_number_type_create!(num_type)
+        DataType::Number(num_type) => match_number_type_create!(num_type),
+        DataType::String => {
+            ColumnNDVEstimator::String(ColumnNDVEstimatorImpl::<StringType>::new(DataType::String))
         }
-        DataType::String => ColumnNDVEstimator::String(ColumnNDVEstimatorImpl::<StringType>::new()),
-        DataType::Date => ColumnNDVEstimator::Date(ColumnNDVEstimatorImpl::<DateType>::new()),
-        DataType::Timestamp => {
-            ColumnNDVEstimator::Timestamp(ColumnNDVEstimatorImpl::<TimestampType>::new())
+        DataType::Date => {
+            ColumnNDVEstimator::Date(ColumnNDVEstimatorImpl::<DateType>::new(DataType::Date))
         }
+        DataType::Timestamp => ColumnNDVEstimator::Timestamp(
+            ColumnNDVEstimatorImpl::<TimestampType>::new(DataType::Timestamp),
+        ),
         DataType::TimestampTz => {
-            ColumnNDVEstimator::TimestampTz(ColumnNDVEstimatorImpl::<TimestampTzType>::new())
+            ColumnNDVEstimator::TimestampTz(ColumnNDVEstimatorImpl::<TimestampTzType>::new(
+                DataType::TimestampTz,
+            ))
         }
         DataType::Decimal(size) => {
+            let data_type = DataType::Decimal(size);
             if size.can_carried_by_64() {
-                ColumnNDVEstimator::Decimal64(ColumnNDVEstimatorImpl::<Decimal64Type>::new())
+                ColumnNDVEstimator::Decimal64(ColumnNDVEstimatorImpl::<Decimal64Type>::new(
+                    data_type,
+                ))
             } else if size.can_carried_by_128() {
-                ColumnNDVEstimator::Decimal128(ColumnNDVEstimatorImpl::<Decimal128Type>::new())
+                ColumnNDVEstimator::Decimal128(ColumnNDVEstimatorImpl::<Decimal128Type>::new(
+                    data_type,
+                ))
             } else {
-                ColumnNDVEstimator::Decimal256(ColumnNDVEstimatorImpl::<Decimal256Type>::new())
+                ColumnNDVEstimator::Decimal256(ColumnNDVEstimatorImpl::<Decimal256Type>::new(
+                    data_type,
+                ))
             }
         }
         _ => unreachable!("Unsupported data type: {:?}", data_type),
@@ -116,7 +131,8 @@ pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
 pub struct ColumnNDVEstimatorImpl<T>
 where
     T: ValueType + Send + Sync,
-    for<'a> T::ScalarRef<'a>: Hash,
+    T::Scalar: Sync,
+    for<'a> T::ScalarRef<'a>: Copy + Hash,
 {
     hll: MetaHLL,
     _phantom: PhantomData<T>,
@@ -125,12 +141,43 @@ where
 impl<T> ColumnNDVEstimatorImpl<T>
 where
     T: ValueType + Send + Sync,
-    for<'a> T::ScalarRef<'a>: Hash,
+    T::Scalar: Sync,
+    for<'a> T::ScalarRef<'a>: Copy + Hash,
 {
-    pub fn new() -> Self {
+    pub fn new(_data_type: DataType) -> Self {
         Self {
             hll: MetaHLL::new(),
             _phantom: Default::default(),
+        }
+    }
+
+    fn update_value(&mut self, hll_value: T::ScalarRef<'_>, count: u64) {
+        if count == 0 {
+            return;
+        }
+        self.hll.add_object(&hll_value);
+    }
+
+    fn update_value_runs<'a, I>(&mut self, values: I)
+    where I: IntoIterator<Item = T::ScalarRef<'a>> {
+        let mut current: Option<T::ScalarRef<'a>> = None;
+        let mut count = 0;
+        for value in values {
+            if let Some(current_value) = current.as_ref() {
+                if current_value == &value {
+                    count += 1;
+                    continue;
+                }
+
+                self.update_value(*current_value, count);
+            }
+
+            current = Some(value);
+            count = 1;
+        }
+
+        if let Some(current_value) = current {
+            self.update_value(current_value, count);
         }
     }
 }
@@ -138,7 +185,8 @@ where
 impl<T> ColumnNDVEstimatorOps for ColumnNDVEstimatorImpl<T>
 where
     T: ValueType + Send + Sync,
-    for<'a> T::ScalarRef<'a>: Hash,
+    T::Scalar: Sync,
+    for<'a> T::ScalarRef<'a>: Copy + Hash,
 {
     fn update_column(&mut self, column: &Column) {
         let (column, validity) = match column {
@@ -154,34 +202,33 @@ where
             column => (column, None),
         };
 
-        let column = T::try_downcast_column(column).unwrap();
+        let raw_column = column;
+        let column = T::try_downcast_column(raw_column).unwrap();
         if let Some(v) = validity {
             if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
-                for (data, valid) in T::iter_column(&column).zip(v.iter()) {
-                    if valid {
-                        self.hll.add_object(&data);
-                    }
-                }
+                self.update_value_runs(
+                    T::iter_column(&column)
+                        .zip(v.iter())
+                        .filter_map(|(data, valid)| valid.then_some(data)),
+                );
             } else {
-                TrueIdxIter::new(v.len(), Some(v)).for_each(|idx| {
-                    let val = unsafe { T::index_column_unchecked(&column, idx) };
-                    self.hll.add_object(&val);
-                })
+                self.update_value_runs(
+                    TrueIdxIter::new(v.len(), Some(v))
+                        .map(|idx| unsafe { T::index_column_unchecked(&column, idx) }),
+                );
             }
         } else {
-            for value in T::iter_column(&column) {
-                self.hll.add_object(&value);
-            }
+            self.update_value_runs(T::iter_column(&column));
         }
     }
 
-    fn update_scalar(&mut self, scalar: &ScalarRef) {
+    fn update_scalar(&mut self, scalar: &ScalarRef, count: u64) {
         if matches!(scalar, ScalarRef::Null) {
             return;
         }
 
         let val = T::try_downcast_scalar(scalar).unwrap();
-        self.hll.add_object(&val);
+        self.update_value(val, count);
     }
 
     fn peek(&self) -> usize {
@@ -192,7 +239,7 @@ where
         self.hll.count()
     }
 
-    fn hll(self) -> MetaHLL {
+    fn into_hll(self) -> MetaHLL {
         self.hll
     }
 }

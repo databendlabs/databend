@@ -18,8 +18,6 @@ use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::KVApi;
-use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::SeqV;
 
 use super::meta_txn::MetaTxn;
@@ -32,7 +30,7 @@ pub use absent::AbsentRecord;
 pub use present::PresentRecord;
 use target::FetchedRecordTarget;
 
-/// A record fetched by a transaction get operation.
+/// A record fetched by a transaction for-update read.
 ///
 /// It borrows the transaction and holds the key and value read. If it came from
 /// [`MetaTxn::get_for_update`], the `eq_seq` guard was installed in the
@@ -135,13 +133,12 @@ where
 
 impl<'t, 'a, KV, K> FetchedRecord<'t, 'a, KV, K>
 where
-    KV: KVApi + ?Sized,
-    KV::Error: From<InvalidArgument>,
+    KV: ?Sized,
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
     /// Stage a put to the read key.
-    pub fn stage_put(self, value: &K::ValueType) -> Result<(), KV::Error> {
+    pub fn stage_put(self, value: &K::ValueType) {
         self.target.stage_put(value)
     }
 }

@@ -15,34 +15,8 @@
 use std::cmp::Ordering;
 use std::cmp::min;
 
-use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-
-pub fn filter_block(
-    block: DataBlock,
-    filter: &RemoteExpr,
-    func_ctx: &FunctionContext,
-) -> Result<DataBlock> {
-    let filter = filter.as_expr(&BUILTIN_FUNCTIONS);
-    let other_predicate = cast_expr_to_non_null_boolean(filter)?;
-    assert_eq!(other_predicate.data_type(), &DataType::Boolean);
-
-    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let predicate = evaluator
-        .run(&other_predicate)?
-        .try_downcast::<BooleanType>()
-        .unwrap();
-    block.filter_boolean_value(&predicate)
-}
 
 pub(crate) fn order_match(op: &str, v1: &ScalarRef, v2: &ScalarRef) -> bool {
     if v1.is_null() || v2.is_null() {

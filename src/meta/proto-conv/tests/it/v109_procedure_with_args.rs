@@ -14,7 +14,7 @@
 
 use chrono::TimeZone;
 use chrono::Utc;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::principal as mt;
 use fastrace::func_name;
 
@@ -30,7 +30,7 @@ fn v109_procedure_meta() -> anyhow::Result<()> {
     ];
 
     let want = || mt::ProcedureMeta {
-        return_types: vec![DataType::String],
+        return_types: vec![TableDataType::String],
         arg_names: vec!["message".to_string()],
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
