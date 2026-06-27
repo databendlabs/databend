@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use bytes::Bytes;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -98,7 +97,7 @@ fn build_spatial_index(
         .cloned();
 
     let field_names = result.index_state.as_ref().map(|state| {
-        let reader = SerializedFileReader::new(Bytes::from(state.data.clone())).unwrap();
+        let reader = SerializedFileReader::new(state.data.clone().to_bytes()).unwrap();
         let metadata = reader.metadata().file_metadata();
         let schema = metadata.schema_descr();
         schema

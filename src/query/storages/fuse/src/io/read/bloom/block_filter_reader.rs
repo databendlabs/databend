@@ -348,15 +348,15 @@ mod tests {
         let bloom_index = builder.finalize()?.unwrap();
 
         let index_block = bloom_index.serialize_to_data_block()?;
-        let mut data = Vec::new();
-        let _ = blocks_to_parquet(
+        let data = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
-            &mut data,
             TableCompression::None,
             false,
             None,
-        )?;
+        )?
+        .payload
+        .concat();
 
         let filter_name = BloomIndex::build_filter_bloom_name(
             BlockFilter::VERSION,

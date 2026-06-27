@@ -24,7 +24,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -36,6 +35,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::table::TableCompression;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -43,7 +43,7 @@ use crate::io::BlockReader;
 
 #[derive(Debug)]
 pub struct BloomIndexState {
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: Buffer,
     pub(crate) size: u64,
     pub(crate) ngram_size: Option<u64>,
     pub(crate) location: Location,
@@ -72,16 +72,15 @@ impl BloomIndexState {
         } else {
             None
         };
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
-            &mut data,
             TableCompression::None,
             false,
             None,
         )?;
-        let data_size = data.len() as u64;
+        let data_size = serialized.len() as u64;
+        let data = Buffer::from(serialized.payload);
         Ok(Self {
             data,
             size: data_size,
@@ -119,7 +118,7 @@ impl BloomIndexState {
         self.size
     }
 
-    pub fn data(self) -> Vec<u8> {
+    pub fn data(self) -> Buffer {
         self.data
     }
 
