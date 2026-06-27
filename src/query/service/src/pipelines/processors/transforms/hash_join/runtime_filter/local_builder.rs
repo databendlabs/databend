@@ -38,7 +38,7 @@ use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_fo
 
 struct SingleFilterBuilder {
     id: usize,
-    data_type: DataType,
+    inlist_data_type: DataType,
     hash_method: Option<HashMethodKind>,
 
     min_max_domain: Option<Domain>,
@@ -71,13 +71,13 @@ impl SingleFilterBuilder {
             None
         } else {
             Some(DataBlock::choose_hash_method_with_types(&[
-                bloom_data_type,
+                bloom_data_type.clone(),
             ])?)
         };
 
         Ok(Self {
             id: desc.id,
-            data_type,
+            inlist_data_type: bloom_data_type,
             hash_method,
             min_max_domain: None,
             min_max_threshold: if desc.enable_min_max_runtime_filter {
@@ -134,11 +134,12 @@ impl SingleFilterBuilder {
             self.inlist_builder = None;
             return;
         }
+        let column = column.remove_nullable();
         let mut builder = match self.inlist_builder.take() {
             Some(b) => b,
-            None => ColumnBuilder::with_capacity(&self.data_type, column.len()),
+            None => ColumnBuilder::with_capacity(&self.inlist_data_type, column.len()),
         };
-        builder.append_column(column);
+        builder.append_column(&column);
         self.inlist_builder = Some(builder);
     }
 
@@ -213,7 +214,7 @@ impl SingleFilterBuilder {
                 if column.len() == 0 {
                     None
                 } else {
-                    Some(dedup_column(column, func_ctx, &self.data_type)?)
+                    Some(dedup_column(column, func_ctx, &self.inlist_data_type)?)
                 }
             } else {
                 None
@@ -383,4 +384,43 @@ fn dedup_column(
     let value = evaluator.run(&expr)?;
 
     Ok(value.into_scalar().unwrap().into_array().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
+
+    use super::*;
+
+    #[test]
+    fn test_inlist_runtime_filter_removes_nullable_build_key() -> Result<()> {
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key: Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Nullable(Box::new(DataType::String)),
+                display_name: "build_key".to_string(),
+            }),
+            probe_targets: vec![],
+            build_table_rows: Some(2),
+            enable_bloom_runtime_filter: false,
+            enable_inlist_runtime_filter: true,
+            enable_min_max_runtime_filter: false,
+            spatial_mode: None,
+        };
+
+        let mut builder = SingleFilterBuilder::new(&desc, 10, 0, 0, 0)?;
+        let column = StringType::from_opt_data(vec![Some("a"), Some("b")]);
+        builder.add_column(&column, 0)?;
+
+        let packet = builder.finish(&FunctionContext::default())?;
+        let inlist = packet.inlist.unwrap();
+        assert_eq!(inlist.data_type(), DataType::String);
+        assert_eq!(inlist.len(), 2);
+        Ok(())
+    }
 }
