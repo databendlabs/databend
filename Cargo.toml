@@ -543,7 +543,7 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.32", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 tracing = "0.1.40"
