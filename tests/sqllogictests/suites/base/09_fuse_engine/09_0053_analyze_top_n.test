@@ -1,0 +1,120 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0053
+
+statement ok
+CREATE DATABASE db_09_0053
+
+statement ok
+USE db_09_0053
+
+statement ok
+set enable_analyze_histogram = 0
+
+statement ok
+set enable_table_snapshot_stats = 1
+
+statement ok
+CREATE TABLE t_topn_off(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 0
+
+statement ok
+CREATE TABLE t_topn_on(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_off
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+INSERT INTO t_topn_on
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_off
+
+statement ok
+ANALYZE TABLE t_topn_on
+
+statement error
+ANALYZE TABLE t_topn_on NOSCAN
+
+query T
+EXPLAIN SELECT * FROM t_topn_off WHERE a = 1
+----
+table: default.db_09_0053.t_topn_off<slt:ignore>estimated rows: 9.09
+
+query T
+EXPLAIN SELECT * FROM t_topn_on WHERE a = 1
+----
+table: default.db_09_0053.t_topn_on<slt:ignore>estimated rows: 90.00
+
+statement ok
+CREATE TABLE t_topn_pending(a int, b int) approx_distinct_columns = ''
+
+statement ok
+INSERT INTO t_topn_pending
+SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ALTER TABLE t_topn_pending SET OPTIONS(enable_auto_analyze = 1, analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+
+query T
+EXPLAIN SELECT * FROM t_topn_pending WHERE b = 1
+----
+table: default.db_09_0053.t_topn_pending<slt:ignore>estimated rows: 90.00
+
+statement ok
+set enable_table_snapshot_stats = 0
+
+statement ok
+CREATE TABLE t_topn_without_snapshot_stats(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_without_snapshot_stats
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_without_snapshot_stats
+
+query T
+EXPLAIN SELECT * FROM t_topn_without_snapshot_stats WHERE a = 1
+----
+table: default.db_09_0053.t_topn_without_snapshot_stats<slt:ignore>estimated rows: 90.00
+
+statement ok
+CREATE TABLE t_topn_after_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_after_append
+SELECT if(number < 50, 1, 2)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_after_append
+
+statement ok
+INSERT INTO t_topn_after_append
+SELECT 1::int FROM numbers(900)
+
+query T
+EXPLAIN SELECT * FROM t_topn_after_append WHERE a = 1
+----
+table: default.db_09_0053.t_topn_after_append<slt:ignore>estimated rows: 500.00
+
+statement ok
+CREATE TABLE t_topn_after_update(id int, a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_after_update
+SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_after_update
+
+statement ok
+UPDATE t_topn_after_update SET a = 2 WHERE id < 80
+
+query T
+EXPLAIN SELECT * FROM t_topn_after_update WHERE a = 1
+----
+table: default.db_09_0053.t_topn_after_update<slt:ignore>estimated rows: 9.09
+
+statement ok
+DROP DATABASE db_09_0053

@@ -240,7 +240,7 @@ where MT: AutoIncrementApi + kvapi::KVApi<Error = MetaError>
 
     async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(self.tenant(), self.db_name()),
             meta: DatabaseMeta {

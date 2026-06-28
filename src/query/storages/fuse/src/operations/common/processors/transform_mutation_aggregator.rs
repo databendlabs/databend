@@ -356,8 +356,9 @@ impl TableMutationAggregator {
 
         if let Some(id) = self.write_segment_ctx.default_cluster_key {
             // sort ascending.
-            merged_blocks
-                .sort_by(|a, b| sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, id));
+            merged_blocks.sort_by(|a, b| {
+                sort_by_cluster_stats(a.0.cluster_stats.as_ref(), b.0.cluster_stats.as_ref(), id)
+            });
         }
 
         let mut tasks = Vec::new();

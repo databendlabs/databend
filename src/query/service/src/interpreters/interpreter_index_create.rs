@@ -63,7 +63,7 @@ impl Interpreter for CreateIndexInterpreter {
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
         let create_index_req = CreateIndexReq {
-            create_option: self.plan.create_option,
+            override_existing: self.plan.create_option.is_overriding(),
             name_ident: IndexNameIdent::new(tenant, &index_name),
             meta: IndexMeta {
                 table_id: self.plan.table_id,
@@ -77,7 +77,14 @@ impl Interpreter for CreateIndexInterpreter {
             },
         };
 
-        let _ = catalog.create_index(create_index_req).await?;
+        let reply = catalog.create_index(create_index_req).await?;
+        if !reply.created && self.plan.create_option.if_return_error() {
+            return Err(ErrorCode::IndexAlreadyExists(format!(
+                "{} index exists",
+                index_name
+            )));
+        }
+
         Ok(PipelineBuildResult::create())
     }
 }

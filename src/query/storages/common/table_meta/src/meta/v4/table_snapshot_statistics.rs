@@ -20,6 +20,7 @@ use databend_common_frozen_api::frozen_api;
 use databend_common_statistics::Histogram;
 use databend_common_storage::MetaHLL;
 
+use crate::meta::ColumnTopN;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
@@ -27,7 +28,7 @@ use crate::meta::v1;
 use crate::meta::v2;
 use crate::meta::v3;
 
-#[frozen_api("d78e9c42")]
+#[frozen_api("95cdcc84")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot
@@ -36,6 +37,8 @@ pub struct TableSnapshotStatistics {
     pub snapshot_id: SnapshotId,
     pub row_count: u64,
     pub hll: HashMap<ColumnId, MetaHLL>,
+    #[serde(default)]
+    pub top_n: HashMap<ColumnId, ColumnTopN>,
     #[serde(with = "crate::meta::histogram_serde")]
     pub histograms: HashMap<ColumnId, Histogram>,
 }
@@ -46,6 +49,7 @@ impl TableSnapshotStatistics {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
             histograms: HashMap::new(),
             row_count: 0,
         }
@@ -53,6 +57,7 @@ impl TableSnapshotStatistics {
 
     pub fn new(
         hll: HashMap<ColumnId, MetaHLL>,
+        top_n: HashMap<ColumnId, ColumnTopN>,
         histograms: HashMap<ColumnId, Histogram>,
         snapshot_id: SnapshotId,
         row_count: u64,
@@ -61,6 +66,7 @@ impl TableSnapshotStatistics {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,
             hll,
+            top_n,
             histograms,
             row_count,
         }
@@ -85,6 +91,7 @@ impl From<v1::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
             histograms: HashMap::new(),
         }
     }
@@ -98,6 +105,7 @@ impl From<v2::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll,
+            top_n: HashMap::new(),
             histograms: HashMap::new(),
         }
     }
@@ -111,6 +119,7 @@ impl From<v3::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll,
+            top_n: HashMap::new(),
             histograms: value.histograms,
         }
     }

@@ -112,8 +112,7 @@ impl AsyncSink for AggIndexSink {
                 loc,
                 self.index_id,
             );
-            let mut data = vec![];
-            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
+            let (_, data) = io::serialize_block(&self.write_settings, &self.sink_schema, block)?;
 
             {
                 metrics_inc_agg_index_write_nums(1);

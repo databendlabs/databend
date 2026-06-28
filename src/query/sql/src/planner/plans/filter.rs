@@ -94,7 +94,8 @@ impl Operator for Filter {
             .map(StatCardinality::exact)
             .unwrap_or_else(|| StatCardinality::estimate(stat_info.cardinality));
         let mut sb =
-            SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality);
+            SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality)
+                .with_top_n(stat_info.statistics.top_n.clone());
         let cardinality = sb.apply(&self.predicates)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -107,6 +108,7 @@ impl Operator for Filter {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
             },
         }))
     }

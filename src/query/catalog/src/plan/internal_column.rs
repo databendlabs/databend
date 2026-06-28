@@ -23,6 +23,10 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_common_expression::FILE_BASENAME_COLUMN_ID;
+use databend_common_expression::FILE_CONTENT_KEY_COLUMN_ID;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
+use databend_common_expression::FILE_PATH_COLUMN_ID;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_expression::FromData;
@@ -153,6 +157,10 @@ pub enum InternalColumnType {
 
     FileName,
     FileRowNumber,
+    FilePath,
+    FileBasename,
+    FileContentKey,
+    FileLastModified,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -188,6 +196,14 @@ impl InternalColumn {
             InternalColumnType::VectorScore => TableDataType::Number(NumberDataType::Float32),
             InternalColumnType::FileName => TableDataType::String,
             InternalColumnType::FileRowNumber => TableDataType::Number(NumberDataType::UInt64),
+            InternalColumnType::FilePath => TableDataType::String,
+            InternalColumnType::FileBasename => TableDataType::String,
+            InternalColumnType::FileContentKey => {
+                TableDataType::Nullable(Box::new(TableDataType::String))
+            }
+            InternalColumnType::FileLastModified => {
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp))
+            }
         }
     }
 
@@ -213,6 +229,10 @@ impl InternalColumn {
             InternalColumnType::VectorScore => VECTOR_SCORE_COLUMN_ID,
             InternalColumnType::FileName => FILENAME_COLUMN_ID,
             InternalColumnType::FileRowNumber => FILE_ROW_NUMBER_COLUMN_ID,
+            InternalColumnType::FilePath => FILE_PATH_COLUMN_ID,
+            InternalColumnType::FileBasename => FILE_BASENAME_COLUMN_ID,
+            InternalColumnType::FileContentKey => FILE_CONTENT_KEY_COLUMN_ID,
+            InternalColumnType::FileLastModified => FILE_LAST_MODIFIED_COLUMN_ID,
         }
     }
 
@@ -320,7 +340,12 @@ impl InternalColumn {
                 }
                 Float32Type::from_data(scores).into()
             }
-            InternalColumnType::FileName | InternalColumnType::FileRowNumber => {
+            InternalColumnType::FileName
+            | InternalColumnType::FileRowNumber
+            | InternalColumnType::FilePath
+            | InternalColumnType::FileBasename
+            | InternalColumnType::FileContentKey
+            | InternalColumnType::FileLastModified => {
                 todo!("generate_column_values not support for file related")
             }
         }

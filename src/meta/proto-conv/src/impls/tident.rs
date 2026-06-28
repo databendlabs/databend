@@ -39,13 +39,12 @@ where R: TenantResource
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TIdent, Incompatible> {
-        let p = pb::TIdent {
+    fn to_pb(&self) -> pb::TIdent {
+        pb::TIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             tenant: self.tenant_name().to_string(),
             name: self.name().to_string(),
-        };
-        Ok(p)
+        }
     }
 }

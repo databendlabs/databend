@@ -70,7 +70,7 @@ async fn test_catalogs_database() -> anyhow::Result<()> {
     // Create.
     {
         let req = CreateDatabaseReq {
-            create_option: CreateOption::Create,
+            override_existing: false,
             catalog_name: None,
             name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             meta: DatabaseMeta {

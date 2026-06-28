@@ -142,6 +142,14 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             sql: "SELECT number FROM t HAVING count(*) > 0",
         },
         SqlTestCase {
+            name: "having_aggregate_reuses_select_alias_name_as_input_column",
+            description: "A HAVING aggregate argument should resolve to the input column even when a SELECT aggregate has the same alias.",
+            setup_sqls: &[
+                "CREATE TABLE t(creative_name String, impressions UInt64, clicks UInt64, cost UInt64, installs UInt64)",
+            ],
+            sql: "SELECT creative_name, sum(cost) AS cost FROM t GROUP BY creative_name HAVING sum(impressions) > 0 OR sum(clicks) > 0 OR sum(cost) > 0 OR sum(installs) > 0",
+        },
+        SqlTestCase {
             name: "order_by_can_introduce_aggregate_in_aggregate_query",
             description: "ORDER BY may introduce a new aggregate expression when the query is already aggregated.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

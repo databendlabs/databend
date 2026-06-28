@@ -18,13 +18,16 @@ databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use log::info;
 
+use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::interpreters::hook::table_id_matches_target;
 use crate::pipelines::executor::ExecutorSettings;
@@ -103,6 +106,9 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
         return Ok(());
     }
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let table_options = fuse_table.get_table_info().options();
+    let top_n_size = analyze_top_n_size_from_options(table_options)?;
+    let top_n_columns = table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned();
     let mut pipeline = Pipeline::create();
     let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
         return Ok(());
@@ -112,6 +118,8 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
         table_snapshot,
         &mut pipeline,
         AnalyzeHistogramInfo::None,
+        top_n_size,
+        top_n_columns,
         true,
         false,
     )?;

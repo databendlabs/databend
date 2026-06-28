@@ -31,7 +31,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::geometry::extract_bbox_and_srid;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
@@ -45,6 +44,7 @@ use geo_index::rtree::RTreeBuilder;
 use geo_index::rtree::sort::HilbertSort;
 use log::debug;
 use log::info;
+use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
@@ -55,7 +55,7 @@ use crate::statistics::SpatialStatsBuilder;
 pub struct SpatialIndexState {
     pub location: Location,
     pub size: u64,
-    pub data: Vec<u8>,
+    pub data: Buffer,
 }
 
 #[derive(Debug, Clone)]
@@ -430,17 +430,16 @@ impl SpatialIndexBuilder {
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
 
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
-            &mut data,
             TableCompression::Zstd,
             false,
             Some(metadata),
         )?;
+        let size = serialized.len() as u64;
+        let data = Buffer::from(serialized.payload);
 
-        let size = data.len() as u64;
         Ok(SpatialIndexState {
             location: location.clone(),
             size,

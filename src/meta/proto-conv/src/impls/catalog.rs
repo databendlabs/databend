@@ -50,15 +50,13 @@ impl FromToProto for mt::CatalogMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::CatalogMeta, Incompatible> {
-        let p = pb::CatalogMeta {
+    fn to_pb(&self) -> pb::CatalogMeta {
+        pb::CatalogMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            option: Some(mt::CatalogOption::to_pb(&self.catalog_option)?),
-            created_on: self.created_on.to_pb()?,
-        };
-
-        Ok(p)
+            option: Some(mt::CatalogOption::to_pb(&self.catalog_option)),
+            created_on: self.created_on.to_pb(),
+        }
     }
 }
 
@@ -92,16 +90,16 @@ impl FromToProto for mt::CatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let catalog_option = match self {
             mt::CatalogOption::Default => None,
-            mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb()?)),
+            mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb())),
             mt::CatalogOption::Iceberg(v) => {
-                Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?))
+                Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()))
             }
         };
 
-        Ok(pb::CatalogOption { catalog_option })
+        pb::CatalogOption { catalog_option }
     }
 }
 
@@ -136,25 +134,25 @@ impl FromToProto for mt::IcebergCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::IcebergCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::IcebergCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             iceberg_catalog_option: Some(match self {
                 mt::IcebergCatalogOption::Rest(v) => {
-                    pb::iceberg_catalog_option::IcebergCatalogOption::RestCatalog(v.to_pb()?)
+                    pb::iceberg_catalog_option::IcebergCatalogOption::RestCatalog(v.to_pb())
                 }
                 mt::IcebergCatalogOption::Hms(v) => {
-                    pb::iceberg_catalog_option::IcebergCatalogOption::HmsCatalog(v.to_pb()?)
+                    pb::iceberg_catalog_option::IcebergCatalogOption::HmsCatalog(v.to_pb())
                 }
                 mt::IcebergCatalogOption::Glue(v) => {
-                    pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v.to_pb()?)
+                    pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v.to_pb())
                 }
                 mt::IcebergCatalogOption::Storage(v) => {
-                    pb::iceberg_catalog_option::IcebergCatalogOption::StorageCatalog(v.to_pb()?)
+                    pb::iceberg_catalog_option::IcebergCatalogOption::StorageCatalog(v.to_pb())
                 }
             }),
-        })
+        }
     }
 }
 
@@ -178,8 +176,8 @@ impl FromToProto for mt::IcebergRestCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::IcebergRestCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::IcebergRestCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             uri: self.uri.clone(),
@@ -189,7 +187,7 @@ impl FromToProto for mt::IcebergRestCatalogOption {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-        })
+        }
     }
 }
 
@@ -213,8 +211,8 @@ impl FromToProto for mt::IcebergHmsCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::IcebergHmsCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::IcebergHmsCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
@@ -224,7 +222,7 @@ impl FromToProto for mt::IcebergHmsCatalogOption {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-        })
+        }
     }
 }
 
@@ -248,8 +246,8 @@ impl FromToProto for mt::IcebergGlueCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::IcebergGlueCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::IcebergGlueCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
@@ -259,7 +257,7 @@ impl FromToProto for mt::IcebergGlueCatalogOption {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-        })
+        }
     }
 }
 
@@ -283,8 +281,8 @@ impl FromToProto for mt::IcebergStorageCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::IcebergStorageCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::IcebergStorageCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
@@ -294,7 +292,7 @@ impl FromToProto for mt::IcebergStorageCatalogOption {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-        })
+        }
     }
 }
 
@@ -318,13 +316,13 @@ impl FromToProto for mt::HiveCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::HiveCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::HiveCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
-            storage_params: self.storage_params.to_pb_opt()?,
-        })
+            storage_params: self.storage_params.to_pb_opt(),
+        }
     }
 }
 
@@ -346,13 +344,13 @@ impl FromToProto for mt::ShareCatalogOption {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::ShareCatalogOption {
+    fn to_pb(&self) -> Self::PB {
+        pb::ShareCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             provider: self.provider.clone(),
             share_name: self.share_name.clone(),
             share_endpoint: self.share_endpoint.clone(),
-        })
+        }
     }
 }

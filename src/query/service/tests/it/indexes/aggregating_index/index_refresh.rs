@@ -644,7 +644,7 @@ async fn create_index(
         let tenant = ctx.get_tenant();
 
         let create_index_req = CreateIndexReq {
-            create_option: plan.create_option,
+            override_existing: plan.create_option.is_overriding(),
             name_ident: IndexNameIdent::new(tenant, index_name),
             meta: IndexMeta {
                 table_id: plan.table_id,

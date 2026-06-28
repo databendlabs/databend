@@ -485,6 +485,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     table_stats: Some(table_stats),
                     column_stats,
                     histograms,
+                    top_n: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(

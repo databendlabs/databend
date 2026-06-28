@@ -375,9 +375,13 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                     .map(|r| r.name.clone())
                     .collect::<Vec<_>>()
                     .join(",");
+                let user_name = self
+                    .get_current_user()
+                    .map(|u| u.identity().display().to_string())
+                    .unwrap_or_else(|_| "unknown".to_string());
                 Err(ErrorCode::InvalidRole(format!(
-                    "Invalid role {} for current session, available: {}",
-                    role_name, available_role_names,
+                    "Invalid role {} for current session, user: {}, available: {}",
+                    role_name, user_name, available_role_names,
                 )))
             }
         }

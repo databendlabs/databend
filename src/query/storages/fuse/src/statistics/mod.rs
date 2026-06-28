@@ -26,6 +26,7 @@ pub use accumulator::VirtualColumnAccumulator;
 pub use cluster_statistics::BlockOverlapDepth;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub(crate) use cluster_statistics::PreparedClusterKeyExpr;
+pub(crate) use cluster_statistics::RangeMaxTree;
 pub use cluster_statistics::calculate_block_overlap_depths;
 pub(crate) use cluster_statistics::get_min_max_stats;
 pub(crate) use cluster_statistics::prepare_cluster_key_exprs;

@@ -294,10 +294,7 @@ impl Binder {
         }
         let mut return_types = Vec::with_capacity(return_type.len());
         for arg_type in return_type {
-            return_types.push(DataType::from(&resolve_type_name(
-                &arg_type.data_type,
-                true,
-            )?));
+            return_types.push(resolve_type_name(&arg_type.data_type, true)?);
         }
 
         Ok(ProcedureMeta {

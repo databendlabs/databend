@@ -36,6 +36,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -146,6 +147,11 @@ fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartit
         .as_ref()
         .map(|push_downs| push_downs.read_partitions_pruning_mode)
         .unwrap_or_default()
+}
+
+fn enable_prune_cache_for_query(ctx: &Arc<dyn TableContext>) -> Result<bool> {
+    Ok(ctx.get_settings().get_enable_prune_cache()?
+        && !matches!(ctx.get_query_kind(), QueryKind::Explain))
 }
 
 fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -> bool {
@@ -355,7 +361,8 @@ impl FuseTable {
                     )
                 });
 
-        if ctx.get_settings().get_enable_prune_cache()? {
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
                 let sender = part_info_tx.clone();
@@ -478,7 +485,10 @@ impl FuseTable {
             pruning_mode,
             ctx.get_settings().get_enable_proxy_bloom_pruning()?,
         );
-        if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        if enable_prune_cache
+            && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
+        {
             info!("Retrieved snapshot block pruning result from cache");
             return Ok((cached_result.0, cached_result.1, None));
         }
@@ -567,9 +577,11 @@ impl FuseTable {
             (statistics, partitions, None)
         };
 
-        if let Some(cache_key) = derterministic_cache_key {
+        if enable_prune_cache && let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
-                cache.insert(cache_key, (result.0.clone(), result.1.clone()));
+                let mut cache_statistics = result.0.clone();
+                cache_statistics.pruning_stats = PruningStatistics::default();
+                cache.insert(cache_key, (cache_statistics, result.1.clone()));
             }
         }
         Ok(result)
@@ -623,8 +635,10 @@ impl FuseTable {
             )
         })?;
 
-        prune_pipeline
-            .add_transform(|input, output| ExtractSegmentTransform::create(input, output, true))?;
+        let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
+        prune_pipeline.add_transform(|input, output| {
+            ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
+        })?;
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {
             prune_pipeline.add_transform(|input, output| {
@@ -716,7 +730,7 @@ impl FuseTable {
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
         let enable_prune_cache =
-            ctx.get_settings().get_enable_prune_cache()? && runtime_filter_prune_context.is_none();
+            enable_prune_cache_for_query(&ctx)? && runtime_filter_prune_context.is_none();
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,

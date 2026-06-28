@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
-use std::mem;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
@@ -33,13 +32,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
+use databend_storages_common_blocks::BlockParquetWriter;
 use databend_storages_common_blocks::NdvProvider;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
-use databend_storages_common_blocks::write_batch_with_page_limit;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -49,7 +47,7 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use parquet::arrow::ArrowWriter;
+use opendal::Buffer;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -77,11 +75,11 @@ pub struct UninitializedArrowWriter {
     table_schema: TableSchemaRef,
 }
 impl UninitializedArrowWriter {
-    fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ArrowWriter<Vec<u8>>> {
+    fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<BlockParquetWriter> {
         let write_settings = &self.write_settings;
         let num_rows = cols_ndv_info.num_rows;
 
-        let writer_properties = build_parquet_writer_properties(
+        let writer_properties = Arc::new(build_parquet_writer_properties(
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
             Some(cols_ndv_info),
@@ -90,16 +88,16 @@ impl UninitializedArrowWriter {
             self.table_schema.as_ref(),
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
-        );
-        let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let writer =
-            ArrowWriter::try_new(buffer, self.arrow_schema.clone(), Some(writer_properties))?;
-        Ok(writer)
+        ));
+        Ok(BlockParquetWriter::new(
+            self.arrow_schema.clone(),
+            writer_properties,
+        ))
     }
 }
 
 pub struct InitializedArrowWriter {
-    inner: ArrowWriter<Vec<u8>>,
+    inner: BlockParquetWriter,
 }
 pub enum ArrowParquetWriter {
     Uninitialized(UninitializedArrowWriter),
@@ -124,34 +122,33 @@ impl ArrowParquetWriter {
         Ok(())
     }
 
-    fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()> {
+    fn write(&mut self, block: DataBlock) -> Result<()> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::write called before initialization");
         };
-        let batch = block.to_record_batch(schema)?;
-        write_batch_with_page_limit(&mut writer.inner, &batch, MAX_BATCH_MEMORY_SIZE)?;
+        // The streaming writer encodes and compresses the block's columns immediately into
+        // per-leaf column writers, so buffered memory is the compressed pages, not raw blocks.
+        writer.inner.write_block(block)?;
         Ok(())
     }
 
-    fn finish(&mut self, schema: &TableSchemaRef) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    /// Encode all buffered blocks into a single row group, returning the per-column
+    /// metadata together with the serialized parquet bytes as opendal chunks.
+    fn finish(self, schema: &TableSchemaRef) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
         };
-        let file_meta = writer.inner.finish()?;
-        column_parquet_metas(&file_meta, schema)
-    }
-
-    fn inner_mut(&mut self) -> &mut Vec<u8> {
-        let Initialized(writer) = self else {
-            unreachable!("ArrowParquetWriter::inner_mut called before initialization");
-        };
-        writer.inner.inner_mut()
+        let SerializedParquet { payload, metadata } = writer.inner.finish()?;
+        let col_metas = column_parquet_metas(&metadata, schema)?;
+        Ok((col_metas, Buffer::from(payload)))
     }
 
     fn compressed_size(&self) -> usize {
+        // Encoding happens eagerly in `write`, so the buffered compressed-page size is a live
+        // estimate that `need_flush` can use directly.
         match self {
+            Initialized(writer) => writer.inner.compressed_size(),
             ArrowParquetWriter::Uninitialized(_) => 0,
-            Initialized(writer) => writer.inner.in_progress_size(),
         }
     }
 }
@@ -227,7 +224,7 @@ impl StreamBlockBuilder {
             properties.source_schema.clone(),
             true,
         );
-        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map);
+        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None);
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -299,8 +296,7 @@ impl StreamBlockBuilder {
                 .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
         }
 
-        self.block_writer
-            .write(block, &self.properties.source_schema)?;
+        self.block_writer.write(block)?;
         Ok(())
     }
 
@@ -383,8 +379,8 @@ impl StreamBlockBuilder {
         let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
         let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
 
-        let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
-        let block_raw_data = mem::take(self.block_writer.inner_mut());
+        let (col_metas, block_raw_data) =
+            self.block_writer.finish(&self.properties.source_schema)?;
 
         let file_size = block_raw_data.len();
         let inverted_index_size = inverted_index_states

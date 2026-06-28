@@ -235,6 +235,7 @@ impl Operator for ConstantTableScan {
             statistics: Statistics {
                 precise_cardinality: Some(self.num_rows as u64),
                 column_stats,
+                top_n: Default::default(),
             },
         }))
     }

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -25,6 +27,9 @@ use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::types::MetaError;
@@ -32,13 +37,33 @@ use databend_meta_client::types::SeqV;
 use fastrace::func_name;
 use log::debug;
 
-use crate::MetaTxnManager;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
+use crate::txn::meta_txn;
+
+pub type DictionaryMoveKeyError = meta_txn::MoveKeyError<
+    MetaError,
+    UnknownError<DictionaryNameRsc, DictionaryIdentity>,
+    ExistError<DictionaryNameRsc, DictionaryIdentity>,
+>;
+
+impl From<DictionaryMoveKeyError> for ErrorCode {
+    fn from(error: DictionaryMoveKeyError) -> Self {
+        match error {
+            meta_txn::MoveKeyError::KvApi(error) => ErrorCode::MetaServiceError(error.to_string()),
+            meta_txn::MoveKeyError::TxnRetryMaxTimes(error) => {
+                ErrorCode::TxnRetryMaxTimes(error.message())
+            }
+            meta_txn::MoveKeyError::Unknown(error) => ErrorCode::UnknownDictionary(error.message()),
+            meta_txn::MoveKeyError::Exists(error) => {
+                ErrorCode::DictionaryAlreadyExists(error.message())
+            }
+        }
+    }
+}
 
 /// DictionaryApi defines APIs for dictionary management.
 ///
@@ -66,7 +91,7 @@ where
             .create_id_value(
                 name_ident,
                 &req.dictionary_meta,
-                CreateIdValueMode::CreateOnly,
+                false,
                 |_| vec![],
                 |_, _| Ok(vec![]),
                 |_, _| {},
@@ -145,30 +170,16 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError> {
+    async fn rename_dictionary(
+        &self,
+        req: RenameDictionaryReq,
+    ) -> Result<(), DictionaryMoveKeyError> {
         debug!(req :? =(&req); "DictionaryApi: {}", func_name!());
 
         let ctx = func_name!();
-        let req = &req;
-        MetaTxnManager::new(self, ctx)
-            .run(|txn| async move {
-                // The source must exist; reading it for update arms an `eq_seq` guard.
-                let old = txn.get_for_update(req.name_ident.clone()).await?;
-                let old = old.some_or_unknown(ctx).map_err(AppError::from)?;
-                let dict_id = old.value();
-
-                // The target must be free; reading it guards it stays at seq 0 till commit.
-                let new_name_ident =
-                    DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
-                let new = txn.get_for_update(new_name_ident).await?;
-                let new = new.none_or_exists(ctx).map_err(AppError::from)?;
-
-                // Move the id from the old name to the new one.
-                new.stage_put(dict_id)?;
-                old.stage_delete();
-
-                Ok(())
-            })
+        let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
+        meta_txn::MetaTxnManager::new(self, ctx)
+            .move_key(req.name_ident, new_name_ident)
             .await
     }
 }
