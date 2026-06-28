@@ -30,6 +30,7 @@ mod query_executor_tasks;
 pub use databend_common_base::base::WatchNotify;
 pub use executor_condvar::WorkersCondvar;
 pub use executor_condvar::WorkersWaitingStatus;
+pub use executor_graph::PlanNodeMemoryUsage;
 pub use executor_graph::RunningGraph;
 pub use executor_settings::ExecutorSettings;
 pub use executor_worker_context::CompletedAsyncTask;

@@ -67,6 +67,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
@@ -690,6 +691,13 @@ impl QueryContextShared {
         match self.executor.read().upgrade() {
             None => String::new(),
             Some(executor) => executor.format_graph_nodes(),
+        }
+    }
+
+    pub fn get_top_memory_plan_nodes(&self, limit: usize) -> Vec<PlanNodeMemoryUsage> {
+        match self.executor.read().upgrade() {
+            None => Vec::new(),
+            Some(executor) => executor.top_memory_plan_nodes(limit),
         }
     }
 
