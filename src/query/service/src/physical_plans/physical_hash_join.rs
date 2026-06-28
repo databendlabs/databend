@@ -44,9 +44,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
-use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_storages_common_index::scalar_to_distance_threshold;
 use tokio::sync::Barrier;
@@ -1389,77 +1387,66 @@ impl PhysicalPlanBuilder {
         build_schema: &DataSchema,
         target_schema: &DataSchema,
     ) -> Result<Option<NestedLoopFilterInfo>> {
-        if !matches!(join.join_type, JoinType::Inner) {
-            return Ok(None);
-        }
+        build_nested_loop_filter_info_for_join(join, probe_schema, build_schema, target_schema)
+    }
+}
 
-        let merged = DataSchema::new(
-            probe_schema
-                .fields
-                .iter()
-                .cloned()
-                .chain(build_schema.fields.iter().cloned())
-                .collect(),
-        );
-
-        let mut predicates =
-            Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
-
-        let is_simple_expr = |expr: &ScalarExpr| {
-            matches!(
-                expr,
-                ScalarExpr::BoundColumnRef(_)
-                    | ScalarExpr::ConstantExpr(_)
-                    | ScalarExpr::TypedConstantExpr(_, _)
-            )
-        };
-
-        for condition in &join.equi_conditions {
-            if !is_simple_expr(&condition.left) || !is_simple_expr(&condition.right) {
-                // todo: Filtering after cross join cause expression to be evaluated multiple times
-                return Ok(None);
-            }
-
-            if condition.is_null_equal {
-                return Ok(None);
-            }
-
-            let scalar = condition_to_expr(condition)?;
-            match resolve_scalar(&scalar, &merged) {
-                Ok(expr) => predicates.push(expr),
-                Err(err) => return Err(err.add_message(format!(
-                    "Failed build nested loop filter schema: {merged:#?} equi_conditions: {:#?}",
-                    join.equi_conditions
-                ))),
-            }
-        }
-
-        for scalar in &join.non_equi_conditions {
-            predicates.push(resolve_scalar(scalar, &merged).map_err(|err|{
-                err.add_message(format!(
-                    "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
-                    join.non_equi_conditions
-                ))
-            })?);
-        }
-
-        let projection = target_schema
-            .fields
-            .iter()
-            .map(|column| merged.index_of(column.name()))
-            .collect::<Result<Vec<_>>>()
-            .map_err(|err| {
-                err.add_message(format!(
-                    "Failed build nested loop filter schema: {merged:#?} target: {target_schema:#?}",
-                ))
-            })?;
-
-        Ok(Some(NestedLoopFilterInfo {
-            predicates,
-            projection,
-        }))
+fn build_nested_loop_filter_info_for_join(
+    join: &Join,
+    probe_schema: &DataSchema,
+    build_schema: &DataSchema,
+    target_schema: &DataSchema,
+) -> Result<Option<NestedLoopFilterInfo>> {
+    if !matches!(join.join_type, JoinType::Inner) {
+        return Ok(None);
     }
 
+    if !join.equi_conditions.is_empty() {
+        // Inner joins with equality keys should still use the hash table even
+        // when the build side is small. Falling back to nested-loop evaluates
+        // the equality and residual predicates for every probe/build pair.
+        return Ok(None);
+    }
+
+    let merged = DataSchema::new(
+        probe_schema
+            .fields
+            .iter()
+            .cloned()
+            .chain(build_schema.fields.iter().cloned())
+            .collect(),
+    );
+
+    let mut predicates =
+        Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
+
+    for scalar in &join.non_equi_conditions {
+        predicates.push(resolve_scalar(scalar, &merged).map_err(|err| {
+            err.add_message(format!(
+                "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
+                join.non_equi_conditions
+            ))
+        })?);
+    }
+
+    let projection = target_schema
+        .fields
+        .iter()
+        .map(|column| merged.index_of(column.name()))
+        .collect::<Result<Vec<_>>>()
+        .map_err(|err| {
+            err.add_message(format!(
+                "Failed build nested loop filter schema: {merged:#?} target: {target_schema:#?}",
+            ))
+        })?;
+
+    Ok(Some(NestedLoopFilterInfo {
+        predicates,
+        projection,
+    }))
+}
+
+impl PhysicalPlanBuilder {
     pub async fn build_hash_join(
         &mut self,
         join: &Join,
@@ -1603,27 +1590,76 @@ impl PhysicalPlanBuilder {
     }
 }
 
-fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
-    let left_type = condition.left.data_type()?;
-    let right_type = condition.right.data_type()?;
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_sql::ColumnBindingBuilder;
+    use databend_common_sql::Visibility;
+    use databend_common_sql::plans::BoundColumnRef;
+    use databend_common_sql::plans::FunctionCall;
+    use databend_common_sql::plans::JoinEquiCondition;
 
-    let arguments = match (&left_type, &right_type) {
-        (DataType::Nullable(box left), right) if left == right => vec![
-            condition.left.clone(),
-            condition.right.clone().unify_to_data_type(&left_type),
-        ],
-        (left, DataType::Nullable(box right)) if left == right => vec![
-            condition.left.clone().unify_to_data_type(&right_type),
-            condition.right.clone(),
-        ],
-        _ => vec![condition.left.clone(), condition.right.clone()],
-    };
+    use super::*;
 
-    Ok(FunctionCall {
-        span: condition.left.span(),
-        func_name: "eq".to_string(),
-        params: vec![],
-        arguments,
+    fn int64_type() -> DataType {
+        DataType::Number(NumberDataType::Int64)
     }
-    .into())
+
+    fn column(index: usize) -> ScalarExpr {
+        let column = ColumnBindingBuilder::new(
+            index.to_string(),
+            Symbol::from_field_index(index),
+            Box::new(int64_type()),
+            Visibility::Visible,
+        )
+        .build();
+
+        ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+    }
+
+    fn schemas() -> (DataSchema, DataSchema, DataSchema) {
+        let probe = DataSchema::new(vec![DataField::new("0", int64_type())]);
+        let build = DataSchema::new(vec![DataField::new("1", int64_type())]);
+        let target = DataSchema::new(vec![
+            DataField::new("0", int64_type()),
+            DataField::new("1", int64_type()),
+        ]);
+        (probe, build, target)
+    }
+
+    #[test]
+    fn does_not_build_nested_loop_filter_for_inner_equi_join() -> Result<()> {
+        let join = Join {
+            join_type: JoinType::Inner,
+            equi_conditions: vec![JoinEquiCondition::new(column(0), column(1), false)],
+            ..Default::default()
+        };
+        let (probe, build, target) = schemas();
+
+        let info = build_nested_loop_filter_info_for_join(&join, &probe, &build, &target)?;
+
+        assert!(info.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn still_builds_nested_loop_filter_for_inner_non_equi_join() -> Result<()> {
+        let join = Join {
+            join_type: JoinType::Inner,
+            non_equi_conditions: vec![ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".to_string(),
+                params: vec![],
+                arguments: vec![column(0), column(1)],
+            })],
+            ..Default::default()
+        };
+        let (probe, build, target) = schemas();
+
+        let info = build_nested_loop_filter_info_for_join(&join, &probe, &build, &target)?;
+
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().projection, vec![0, 1]);
+        Ok(())
+    }
 }
