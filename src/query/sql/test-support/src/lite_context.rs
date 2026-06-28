@@ -1080,6 +1080,7 @@ impl LiteTableContext {
             table_stats: None,
             column_stats: HashMap::new(),
             histograms: HashMap::new(),
+            top_n: HashMap::new(),
         });
         self.default_catalog.insert_table(&view.database, table);
         Ok(())
@@ -1106,6 +1107,7 @@ impl LiteTableContext {
             table.table_stats,
             table.column_stats,
             table.histograms,
+            HashMap::new(),
             BTreeMap::new(),
             row_access_policy_columns_ids,
         )?;
