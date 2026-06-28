@@ -46,6 +46,7 @@ use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
 use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
+use crate::sessions::temporary_table_session_prefix;
 
 pub struct TokenPair {
     pub refresh: String,
@@ -96,8 +97,8 @@ impl ClientSessionManager {
         GlobalInstance::get()
     }
 
-    pub fn state_key(client_session_id: &str, user_name: &str) -> String {
-        format!("{user_name}/{client_session_id}")
+    pub fn state_key(tenant: &Tenant, client_session_id: &str, user_name: &str) -> String {
+        temporary_table_session_prefix(tenant, user_name, client_session_id)
     }
 
     fn refresh_token_ttl(&self) -> Duration {
@@ -175,7 +176,7 @@ impl ClientSessionManager {
         sid: &str,
         user_name: &str,
     ) -> Result<()> {
-        if self.refresh_in_memory_states(sid, user_name) {
+        if self.refresh_in_memory_states(&tenant, sid, user_name) {
             self.refresh_session_handle(tenant, user_name.to_string(), sid)
                 .await?;
             info!("refreshing session {}", sid);
@@ -349,7 +350,7 @@ impl ClientSessionManager {
             .drop_client_session_id(session_id, user_name)
             .await
             .ok();
-        let state_key = Self::state_key(session_id, user_name);
+        let state_key = Self::state_key(tenant, session_id, user_name);
         let state = self.session_state.lock().remove(&state_key);
         if let Some(state) = state {
             drop_all_temp_tables_with_logging(&state_key, state.temp_tbl_mgr, "closed").await;
@@ -386,8 +387,13 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
-        let key = Self::state_key(client_session_id, user_name);
+    pub fn refresh_in_memory_states(
+        &self,
+        tenant: &Tenant,
+        client_session_id: &str,
+        user_name: &str,
+    ) -> bool {
+        let key = Self::state_key(tenant, client_session_id, user_name);
         let mut guard = self.session_state.lock();
         if let Entry::Occupied(mut entry) = guard.entry(key) {
             let now = Instant::now();
@@ -401,8 +407,14 @@ impl ClientSessionManager {
         false
     }
 
-    pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
-        let key = Self::state_key(client_session_id, user_name);
+    pub fn on_query_start(
+        &self,
+        tenant: &Tenant,
+        client_session_id: &str,
+        user_name: &str,
+        session: &Arc<Session>,
+    ) {
+        let key = Self::state_key(tenant, client_session_id, user_name);
         let mut guard = self.session_state.lock();
         guard.entry(key).and_modify(|e| {
             if e.temp_tbl_mgr.lock().is_empty() {
@@ -477,5 +489,25 @@ pub async fn drop_all_temp_tables_with_logging(
                 user_name_session_id, duration, e
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::tenant::Tenant;
+
+    use super::ClientSessionManager;
+
+    #[test]
+    fn test_state_key_is_tenant_scoped() {
+        let tenant_a = Tenant::new_literal("tenant_a");
+        let tenant_b = Tenant::new_literal("tenant_b");
+        let user_name = "analyst";
+        let session_id = "018f2b74-0000-7000-8000-000000000001";
+
+        assert_ne!(
+            ClientSessionManager::state_key(&tenant_a, session_id, user_name),
+            ClientSessionManager::state_key(&tenant_b, session_id, user_name)
+        );
     }
 }
