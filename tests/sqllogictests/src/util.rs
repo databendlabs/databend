@@ -271,6 +271,7 @@ mod tests {
             force_load: false,
             database: "default".to_string(),
             port: 8000,
+            http_ports: None,
         }
     }
 
