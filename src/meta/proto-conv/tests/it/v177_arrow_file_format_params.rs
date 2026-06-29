@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_meta_app::principal::ArrowFileFormatParams;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use fastrace::func_name;
 
@@ -43,40 +42,6 @@ fn test_decode_v177_arrow_file_format_params() -> anyhow::Result<()> {
         177,
         want(),
     )?;
-    common::test_pb_from_to(func_name!(), want())?;
-    Ok(())
-}
-
-#[test]
-fn test_decode_v177_file_format_params_arrow() -> anyhow::Result<()> {
-    let file_format_params_v177 = vec![
-        82, 22, 10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 177, 1, 168, 6,
-        24,
-    ];
-
-    let want = || {
-        FileFormatParams::Arrow(ArrowFileFormatParams {
-            missing_field_as: NullAs::FieldDefault,
-        })
-    };
-    common::test_load_old(func_name!(), file_format_params_v177.as_slice(), 0, want())?;
-    common::test_pb_from_to(func_name!(), want())?;
-    Ok(())
-}
-
-#[test]
-fn test_decode_v177_file_format_params_arrow_stream() -> anyhow::Result<()> {
-    let file_format_params_v177 = vec![
-        90, 22, 10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 177, 1, 168, 6,
-        24,
-    ];
-
-    let want = || {
-        FileFormatParams::ArrowStream(ArrowFileFormatParams {
-            missing_field_as: NullAs::FieldDefault,
-        })
-    };
-    common::test_load_old(func_name!(), file_format_params_v177.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }

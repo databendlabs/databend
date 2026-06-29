@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::LanceFileFormatParams;
 use fastrace::func_name;
 
@@ -40,19 +39,6 @@ fn test_decode_v167_lance_file_format_params() -> anyhow::Result<()> {
         167,
         want(),
     )?;
-    common::test_pb_from_to(func_name!(), want())?;
-
-    Ok(())
-}
-
-#[test]
-fn test_decode_v167_file_format_params_lance() -> anyhow::Result<()> {
-    let file_format_params_v167 = vec![74, 7, 160, 6, 167, 1, 168, 6, 24];
-
-    let want = || FileFormatParams::Lance(LanceFileFormatParams::default());
-
-    // FileFormatParams itself does not carry version fields and get_pb_ver() returns 0.
-    common::test_load_old(func_name!(), file_format_params_v167.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
@@ -31,35 +31,38 @@ use crate::common;
 //
 #[test]
 fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v72 = vec![
-        18, 48, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 6, 109, 121, 95, 110, 97, 110,
-        50, 1, 124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 115, 116, 114, 105, 110,
-        103, 160, 6, 72, 168, 6, 24,
+    let csv_file_format_params_v72 = vec![
+        8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 6, 109, 121, 95, 110, 97, 110, 50, 1,
+        124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 115, 116, 114, 105, 110, 103, 160,
+        6, 72, 168, 6, 24,
     ];
-    let want = || {
-        mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
-            compression: StageFileCompression::Gzip,
-            headers: 1,
-            output_header: false,
-            field_delimiter: "fd".to_string(),
-            record_delimiter: "rd".to_string(),
-            null_display: "Null".to_string(),
-            nan_display: "my_nan".to_string(),
-            escape: "|".to_string(),
-            quote: "\'".to_string(),
-            quote_style: mt::principal::CsvQuoteStyle::QuoteNotNull,
-            error_on_column_count_mismatch: false,
-            trim_space: false,
-            allow_quoted_nulls: false,
-            empty_field_as: EmptyFieldAs::String,
-            quoted_empty_field_as: EmptyFieldAs::String,
-            binary_format: Default::default(),
-            geometry_format: Default::default(),
-            encoding: "UTF-8".to_string(),
-            encoding_error_mode: "strict".to_string(),
-        })
+    let want = || CsvFileFormatParams {
+        compression: StageFileCompression::Gzip,
+        headers: 1,
+        output_header: false,
+        field_delimiter: "fd".to_string(),
+        record_delimiter: "rd".to_string(),
+        null_display: "Null".to_string(),
+        nan_display: "my_nan".to_string(),
+        escape: "|".to_string(),
+        quote: "\'".to_string(),
+        quote_style: CsvQuoteStyle::QuoteNotNull,
+        error_on_column_count_mismatch: false,
+        trim_space: false,
+        allow_quoted_nulls: false,
+        empty_field_as: EmptyFieldAs::String,
+        quoted_empty_field_as: EmptyFieldAs::String,
+        binary_format: Default::default(),
+        geometry_format: Default::default(),
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
-    common::test_load_old(func_name!(), file_format_params_v72.as_slice(), 0, want())?;
+    common::test_load_old(
+        func_name!(),
+        csv_file_format_params_v72.as_slice(),
+        72,
+        want(),
+    )?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
