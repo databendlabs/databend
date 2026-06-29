@@ -55,7 +55,7 @@ use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
-use crate::pipelines::executor::executor_worker_context::log_memory_limit_diagnostics;
+use crate::pipelines::executor::memory_limit_diagnostics::log_memory_limit_diagnostics;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 

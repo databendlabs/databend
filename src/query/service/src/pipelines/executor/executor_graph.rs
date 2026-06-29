@@ -79,8 +79,8 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::executor::executor_worker_context::log_memory_limit_diagnostics;
-use crate::pipelines::executor::executor_worker_context::out_of_limit_error;
+use crate::pipelines::executor::memory_limit_diagnostics::log_memory_limit_diagnostics;
+use crate::pipelines::executor::memory_limit_diagnostics::out_of_limit_error;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 
@@ -324,7 +324,7 @@ impl ExecutingGraph {
         pipeline: &mut Pipeline,
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
-        plan_memory_stats: &mut HashMap<Option<u32>, Arc<MemStat>>,
+        plan_memory_stats: &mut HashMap<u32, Arc<MemStat>>,
         perf_enabled: bool,
     ) {
         let offset = graph.node_count();
@@ -338,18 +338,21 @@ impl ExecutingGraph {
                     Some(time_series_profile_builder.register_time_series_profile(plan_id));
             }
 
-            let plan_mem_stat = ThreadTracker::mem_stat().map(|query_mem_stat| {
-                let plan_id = node.scope.as_ref().map(|scope| scope.id);
-                plan_memory_stats
-                    .entry(plan_id)
-                    .or_insert_with(|| {
-                        MemStat::create_child(
-                            None,
-                            0,
-                            ParentMemStat::Normal(query_mem_stat.clone()),
-                        )
-                    })
-                    .clone()
+            let plan_mem_stat = node.scope.as_ref().and_then(|scope| {
+                let query_mem_stat = ThreadTracker::mem_stat()?;
+                let plan_id = scope.id;
+                Some(
+                    plan_memory_stats
+                        .entry(plan_id)
+                        .or_insert_with(|| {
+                            MemStat::create_child(
+                                None,
+                                0,
+                                ParentMemStat::Normal(query_mem_stat.clone()),
+                            )
+                        })
+                        .clone(),
+                )
             });
 
             let graph_node_index = graph.add_node(Node::create(
@@ -1142,16 +1145,13 @@ impl RunningGraph {
                 continue;
             };
 
-            let usage = usages
-                .entry(plan_id)
-                .or_insert_with(|| PlanNodeMemoryUsage {
+            if let Entry::Vacant(entry) = usages.entry(plan_id) {
+                entry.insert(PlanNodeMemoryUsage {
                     identity: plan_node_memory_identity(profile),
-                    current_bytes: 0,
-                    peak_bytes: 0,
+                    current_bytes: mem_stat.get_memory_usage(),
+                    peak_bytes: std::cmp::max(0, mem_stat.get_peak_memory_usage()) as usize,
                 });
-
-            usage.current_bytes = mem_stat.get_memory_usage();
-            usage.peak_bytes = std::cmp::max(0, mem_stat.get_peak_memory_usage()) as usize;
+            }
         }
 
         let mut usages = usages.into_iter().collect::<Vec<_>>();
