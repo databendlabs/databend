@@ -237,7 +237,8 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
             client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
-            client = Client::Http(HttpClient::create(args.port).await?);
+            let port = select_http_port(args.port, args.http_ports.as_deref(), filename);
+            client = Client::Http(HttpClient::create(port).await?);
         }
 
         ClientType::Ttc {
@@ -274,6 +275,39 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
 
     println!("Running {} test for file: {} ...", client_type, filename);
     Ok(Databend::create(client))
+}
+
+fn select_http_port(default_port: u16, ports: Option<&[u16]>, filename: &str) -> u16 {
+    let Some(ports) = ports else {
+        return default_port;
+    };
+    if ports.is_empty() {
+        return default_port;
+    }
+
+    let index = trailing_file_number(filename).unwrap_or_else(|| stable_index(filename));
+    ports[index % ports.len()]
+}
+
+fn trailing_file_number(filename: &str) -> Option<usize> {
+    let stem = Path::new(filename).file_stem()?.to_str()?;
+    let digits_reversed: String = stem
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    if digits_reversed.is_empty() {
+        return None;
+    }
+
+    let digits: String = digits_reversed.chars().rev().collect();
+    digits.parse::<usize>().ok()?.checked_sub(1)
+}
+
+fn stable_index(value: &str) -> usize {
+    value
+        .bytes()
+        .fold(0usize, |acc, b| acc.wrapping_mul(16_777_619) ^ b as usize)
 }
 
 async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
@@ -490,4 +524,37 @@ async fn run_file_async(
         );
     }
     Ok(error_records)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn select_http_port_uses_trailing_file_number_round_robin() {
+        let ports = [8000, 8002, 8003];
+
+        assert_eq!(
+            select_http_port(8000, Some(&ports), "queries_001.test"),
+            8000
+        );
+        assert_eq!(
+            select_http_port(8000, Some(&ports), "queries_002.test"),
+            8002
+        );
+        assert_eq!(
+            select_http_port(8000, Some(&ports), "queries_003.test"),
+            8003
+        );
+        assert_eq!(
+            select_http_port(8000, Some(&ports), "queries_004.test"),
+            8000
+        );
+    }
+
+    #[test]
+    fn select_http_port_falls_back_to_default_port() {
+        assert_eq!(select_http_port(8000, None, "queries_001.test"), 8000);
+        assert_eq!(select_http_port(8000, Some(&[]), "queries_001.test"), 8000);
+    }
 }
