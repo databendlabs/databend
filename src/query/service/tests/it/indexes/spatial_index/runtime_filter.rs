@@ -179,6 +179,7 @@ async fn test_spatial_runtime_filter_pruner() -> anyhow::Result<()> {
         None,
         None,
         None,
+        None,
     );
 
     let pruned_by_stats = prune_with_bounds(schema.clone(), operator.clone(), settings, &part, [
@@ -225,6 +226,7 @@ async fn test_spatial_runtime_filter_pruner_distance_within_bounds() -> anyhow::
         None,
         Some(spatial_stats),
         Compression::Lz4Raw,
+        None,
         None,
         None,
         None,

@@ -188,7 +188,9 @@ impl IPhysicalPlan for TableScan {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
 
-        if builder.ctx.get_settings().get_enable_prune_pipeline()? {
+        if self.source.parts.kind != PartitionsShuffleKind::PreserveOrder
+            && builder.ctx.get_settings().get_enable_prune_pipeline()?
+        {
             if let Some(prune_pipeline) = table.build_prune_pipeline(
                 builder.ctx.clone(),
                 &self.source,

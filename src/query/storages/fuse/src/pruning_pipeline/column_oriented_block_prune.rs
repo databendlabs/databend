@@ -32,11 +32,14 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::MetaEncoding;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::decode;
 use futures_util::future;
 use tokio::sync::OwnedSemaphorePermit;
 
@@ -106,6 +109,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let bloom_index_size_col = segment.bloom_filter_index_size_col();
         let block_size_col = segment.block_size_col();
         let row_count_col = segment.row_count_col();
+        let cluster_stats_col = segment.col_by_name(&[CLUSTER_STATS]);
 
         let pruning_runtime = &self.block_pruner.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.block_pruner.pruning_ctx.pruning_semaphore;
@@ -140,6 +144,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let create_on_col = create_on_col.clone();
             let bloom_index_location_col = bloom_index_location_col.clone();
             let bloom_index_size_col = bloom_index_size_col.clone();
+            let cluster_stats_col = cluster_stats_col.clone();
             let runtime_stats_pruner = runtime_stats_pruner.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
@@ -180,7 +185,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     let row_count = row_count_col[block_idx];
                     let range_input = RangeIndexInput::from_columns(&columns_stat);
                     if !range_pruner.should_keep(&range_input, None) {
-                        return Ok::<_, ()>(());
+                        return Ok::<_, ErrorCode>(());
                     }
 
                     if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
@@ -206,6 +211,17 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         _ => unreachable!(),
                     };
                     let bloom_filter_index_size = bloom_index_size_col[block_idx];
+                    let cluster_stats = match cluster_stats_col
+                        .as_ref()
+                        .and_then(|col| col.index(block_idx))
+                    {
+                        Some(ScalarRef::Binary(bytes)) => Some(decode::<ClusterStatistics>(
+                            &MetaEncoding::MessagePack,
+                            bytes,
+                        )?),
+                        Some(ScalarRef::Null) | None => None,
+                        _ => unreachable!(),
+                    };
 
                     // Bloom filter pruning
                     if let Some(bloom_pruner) = bloom_pruner {
@@ -289,6 +305,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         None,
                         compression,
                         None, // TODO(Sky): sort_min_max
+                        cluster_stats,
                         Some(block_meta_index),
                         create_on,
                     );
@@ -307,9 +324,12 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
             // Wait for all tasks to complete
-            let _ = future::try_join_all(join_handlers)
+            let joint = future::try_join_all(join_handlers)
                 .await
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
+            for result in joint {
+                result?;
+            }
         }
         Ok(false)
     }

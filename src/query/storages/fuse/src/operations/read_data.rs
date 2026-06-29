@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
@@ -131,7 +132,15 @@ impl FuseTable {
         );
 
         let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
-        let rx = if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
+        let preserve_order = plan.parts.kind == PartitionsShuffleKind::PreserveOrder;
+        let rx = if preserve_order {
+            // PreserveOrder scans rely on the part list already being sorted and
+            // annotated with planner-selected streams. Do not consume async
+            // pruning receivers here because channel delivery cannot preserve
+            // that per-stream assignment.
+            let _ = self.pruned_result_receiver.lock().take();
+            None
+        } else if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
             // If the prune pipeline is disabled and is lazy init segments, we need to fallback
             let table = self.clone();
             let table_schema = self.schema_with_stream();

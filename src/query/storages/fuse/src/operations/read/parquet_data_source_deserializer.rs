@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,6 +32,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
@@ -60,8 +62,9 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
-    parts: Vec<PartInfoPtr>,
-    chunks: Vec<ParquetDataSource>,
+    parts: VecDeque<PartInfoPtr>,
+    chunks: VecDeque<ParquetDataSource>,
+    preserve_order: bool,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -80,6 +83,7 @@ impl DeserializeDataTransform {
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
         plan: &DataSourcePlan,
+        preserve_order: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
@@ -120,8 +124,9 @@ impl DeserializeDataTransform {
             output_data: None,
             src_schema,
             output_schema,
-            parts: vec![],
-            chunks: vec![],
+            parts: VecDeque::new(),
+            chunks: VecDeque::new(),
+            preserve_order,
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -172,8 +177,8 @@ impl Processor for DeserializeDataTransform {
                 if let Some(source_meta) =
                     DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
                 {
-                    self.parts = source_meta.meta;
-                    self.chunks = source_meta.data;
+                    self.parts = source_meta.meta.into();
+                    self.chunks = source_meta.data.into();
                     return Ok(Event::Sync);
                 }
             }
@@ -191,8 +196,11 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        let part = self.parts.pop();
-        let chunks = self.chunks.pop();
+        let (part, chunks) = if self.preserve_order {
+            (self.parts.pop_front(), self.chunks.pop_front())
+        } else {
+            (self.parts.pop_back(), self.chunks.pop_back())
+        };
         if let Some((part, read_res)) = part.zip(chunks) {
             match read_res {
                 ParquetDataSource::AggIndex((actual_part, data)) => {
@@ -246,47 +254,67 @@ impl Processor for DeserializeDataTransform {
                         );
                     }
 
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        data_block.memory_size(),
-                    );
-
-                    let mut data_block =
-                        data_block.resort(&self.src_schema, &self.output_schema)?;
-
-                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_meta_options.query_internal_columns {
-                        bitmap_selection.as_ref().map(|bitmap| {
-                            RoaringTreemap::from_sorted_iter(
-                                (0..bitmap.len())
-                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                    .map(|i| i as u64),
-                            )
-                            .unwrap()
-                        })
-                    } else {
-                        None
-                    };
-
-                    data_block = add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?;
-
-                    self.output_data = Some(data_block);
+                    self.set_output_block(data_block, Some(part), bitmap_selection.as_ref(), None)?;
+                }
+                ParquetDataSource::Decoded {
+                    block,
+                    bitmap_selection,
+                    deserialize_milliseconds,
+                } => {
+                    let part = FuseBlockPartInfo::from_part(&part)?;
+                    metrics_inc_remote_io_deserialize_milliseconds(deserialize_milliseconds);
+                    self.set_output_block(block, Some(part), bitmap_selection.as_ref(), None)?;
                 }
             }
         }
 
+        Ok(())
+    }
+}
+
+impl DeserializeDataTransform {
+    fn set_output_block(
+        &mut self,
+        mut data_block: DataBlock,
+        part: Option<&FuseBlockPartInfo>,
+        bitmap_selection: Option<&Bitmap>,
+        offsets: Option<RoaringTreemap>,
+    ) -> Result<()> {
+        let progress_values = ProgressValues {
+            rows: data_block.num_rows(),
+            bytes: data_block.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, data_block.memory_size());
+
+        data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+        if let Some(part) = part {
+            let offsets = offsets.or_else(|| {
+                if self.block_meta_options.query_internal_columns {
+                    bitmap_selection.map(|bitmap| {
+                        RoaringTreemap::from_sorted_iter(
+                            (0..bitmap.len())
+                                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                .map(|i| i as u64),
+                        )
+                        .unwrap()
+                    })
+                } else {
+                    None
+                }
+            });
+
+            data_block = add_data_block_meta(
+                data_block,
+                part,
+                offsets,
+                self.base_block_ids.clone(),
+                &self.block_meta_options,
+            )?;
+        }
+
+        self.output_data = Some(data_block);
         Ok(())
     }
 }

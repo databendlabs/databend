@@ -67,17 +67,12 @@ impl PagePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
-        schema: &'a TableSchemaRef,
+        _schema: &'a TableSchemaRef,
         filter_expr: Option<&'a Expr<String>>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Result<Arc<dyn PagePruner + Send + Sync>> {
-        if cluster_key_meta.is_none()
-            || cluster_keys.is_empty()
-            || cluster_keys
-                .iter()
-                .any(|expr| !matches!(expr, RemoteExpr::ColumnRef { .. }))
-        {
+        if cluster_key_meta.is_none() || cluster_keys.is_empty() {
             return Ok(Arc::new(KeepTrue));
         }
 
@@ -85,20 +80,11 @@ impl PagePrunerCreator {
 
         Ok(match filter_expr {
             Some(expr) => {
-                let cluster_keys = cluster_keys
-                    .iter()
-                    .map(|expr| match expr {
-                        RemoteExpr::ColumnRef { id, .. } => id.to_string(),
-                        _ => unreachable!(),
-                    })
-                    .collect::<Vec<_>>();
-
-                let page_filter = PageIndex::try_create(
+                let page_filter = PageIndex::try_create_with_exprs(
                     func_ctx,
                     cluster_key_meta.0,
-                    cluster_keys,
+                    &cluster_keys,
                     expr,
-                    schema.clone(),
                 )?;
                 match page_filter.try_apply_const() {
                     Ok(v) => {

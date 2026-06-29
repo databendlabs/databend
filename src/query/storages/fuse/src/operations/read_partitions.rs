@@ -1431,6 +1431,7 @@ impl FuseTable {
             },
             meta.compression(),
             sort_min_max,
+            meta.cluster_stats.clone(),
             block_meta_index.to_owned(),
             create_on,
         )
@@ -1496,6 +1497,7 @@ impl FuseTable {
             },
             meta.compression(),
             sort_min_max,
+            meta.cluster_stats.clone(),
             block_meta_index.to_owned(),
             create_on,
         )

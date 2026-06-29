@@ -547,6 +547,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
     }
 
@@ -737,6 +738,7 @@ mod tests {
             Some(column_stats),
             None,
             Compression::Lz4Raw,
+            None,
             None,
             None,
             None,

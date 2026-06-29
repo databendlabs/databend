@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,6 +32,7 @@ use databend_common_sql::IndexType;
 
 use super::read_block_context::ReadBlockContext;
 use crate::io::BlockReader;
+use crate::operations::read::ReadState;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
@@ -44,6 +46,7 @@ pub struct ReadDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    prewhere_info: Option<PrewhereInfo>,
 }
 
 impl ReadDataTransform {
@@ -54,6 +57,7 @@ impl ReadDataTransform {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
+        prewhere_info: Option<PrewhereInfo>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
@@ -67,6 +71,7 @@ impl ReadDataTransform {
                 read_block_context,
                 table_schema,
                 scan_id,
+                prewhere_info,
                 context: ctx,
             },
         )))
@@ -105,6 +110,25 @@ impl ReadDataTransform {
         let mut read_tasks = Vec::with_capacity(parts.len());
         let mut parts_to_read = Vec::with_capacity(parts.len());
         let (expr_runtime_pruner, spatial_runtime_pruner) = self.create_runtime_pruners()?;
+        let has_prewhere = self.prewhere_info.is_some();
+        let should_split_prewhere = (has_prewhere
+            || self.context.has_bloom_runtime_filters(self.scan_id))
+            && self
+                .context
+                .get_settings()
+                .get_prewhere_selectivity_threshold()?
+                != 0
+            && self.read_block_context.can_split_prewhere();
+        let read_state = if should_split_prewhere {
+            Some(ReadState::create(
+                self.context.clone(),
+                self.scan_id,
+                self.prewhere_info.as_ref(),
+                self.block_reader.clone(),
+            )?)
+        } else {
+            None
+        };
 
         for part in parts {
             if expr_runtime_pruner.prune(&part).await? {
@@ -119,10 +143,17 @@ impl ReadDataTransform {
 
             parts_to_read.push(part.clone());
             let read_block_context = self.read_block_context.clone();
+            let read_state = read_state.clone();
 
             read_tasks.push(async move {
                 databend_common_base::runtime::spawn(async move {
-                    read_block_context.read_data(part).await
+                    if let Some(read_state) = read_state {
+                        read_block_context
+                            .read_data_with_prewhere(part, read_state)
+                            .await
+                    } else {
+                        read_block_context.read_data(part).await
+                    }
                 })
                 .await
                 .unwrap()

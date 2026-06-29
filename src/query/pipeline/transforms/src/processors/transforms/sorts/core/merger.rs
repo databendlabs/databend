@@ -122,6 +122,7 @@ where A: SortAlgorithm
 {
     batch_rows: usize,
     limit: Option<usize>,
+    row_by_row: bool,
     unsorted_streams: Vec<S>,
 
     pending_streams: VecDeque<usize>,
@@ -133,6 +134,14 @@ impl<A, S> Merger<A, S>
 where A: SortAlgorithm
 {
     pub fn new(streams: Vec<S>, batch_rows: usize, limit: Option<usize>) -> Self {
+        Self::create(streams, batch_rows, limit, false)
+    }
+
+    pub fn new_row_by_row(streams: Vec<S>, batch_rows: usize, limit: Option<usize>) -> Self {
+        Self::create(streams, batch_rows, limit, true)
+    }
+
+    fn create(streams: Vec<S>, batch_rows: usize, limit: Option<usize>, row_by_row: bool) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
@@ -145,6 +154,7 @@ where A: SortAlgorithm
             sorted_cursors,
             batch_rows,
             limit,
+            row_by_row,
             pending_streams,
             buffers,
         }
@@ -181,16 +191,22 @@ where A: SortAlgorithm
 
         self.buffers.record_output_range(buffer_index, start, count);
 
-        // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
-        // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-        let mut peek_mut = self.sorted_cursors.peek_mut();
-        let cursor = &mut peek_mut.0;
-        cursor.row_index += count;
+        {
+            // `peek_mut` adjusts the sorted cursor container when it is
+            // dropped. Keep the guard scoped to this update so the next
+            // iteration compares the advanced cursor with the other streams.
+            let mut peek_mut = self.sorted_cursors.peek_mut();
+            let cursor = &mut peek_mut.0;
+            cursor.row_index += count;
 
-        if cursor.is_finished() {
-            // Pop the current `cursor`.
-            A::pop_mut(peek_mut);
-            self.buffers.detach(buffer_index, stream_index);
+            if cursor.is_finished() {
+                // Pop the current `cursor`.
+                A::pop_mut(peek_mut);
+                self.buffers.detach(buffer_index, stream_index);
+            }
+        }
+
+        if self.buffers.stream_to_buffer[stream_index].is_none() {
             self.pending_streams.push_back(stream_index);
         }
 
@@ -207,6 +223,10 @@ where A: SortAlgorithm
         let row_index_limit = cursor
             .num_rows()
             .min(start + max_rows - self.buffers.output_len());
+
+        if self.row_by_row {
+            return 1;
+        }
 
         if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
             return row_index_limit - start;
@@ -382,3 +402,105 @@ where
 pub type HeapMerger<R, S> = Merger<HeapSort<R>, S>;
 
 pub type LoserTreeMerger<R, S> = Merger<LoserTreeSort<R>, S>;
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+    use std::sync::Arc;
+
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::super::FixedRows;
+    use super::super::convert_rows;
+    use super::*;
+
+    struct TestStream {
+        blocks: VecDeque<(DataBlock, Column)>,
+    }
+
+    impl SortedStream for TestStream {
+        fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
+            Ok((self.blocks.pop_front(), false))
+        }
+    }
+
+    fn make_compound_streams() -> Result<Vec<TestStream>> {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("a", DataType::Number(NumberDataType::Int32)),
+            DataField::new("b", DataType::Number(NumberDataType::Int32)),
+        ]);
+        let sort_desc: Arc<[SortColumnDescription]> = vec![
+            SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            },
+            SortColumnDescription {
+                offset: 1,
+                asc: false,
+                nulls_first: false,
+            },
+        ]
+        .into();
+
+        let make_stream = |b_values: Vec<i32>| -> Result<TestStream> {
+            let rows = b_values.len();
+            let block = DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1; rows]),
+                Int32Type::from_data(b_values),
+            ]);
+            let order_col = convert_rows(schema.clone(), &sort_desc, block.clone(), true)?;
+            Ok(TestStream {
+                blocks: VecDeque::from([(block, order_col)]),
+            })
+        };
+
+        Ok(vec![
+            make_stream(vec![10, 1])?,
+            make_stream(vec![9, 2])?,
+            make_stream(vec![8, 3])?,
+        ])
+    }
+
+    fn collect_b_values<A>(mut merger: Merger<A, TestStream>) -> Result<Vec<i32>>
+    where A: SortAlgorithm {
+        let mut outputs = Vec::new();
+        while let Some(block) = merger.next_block()? {
+            outputs.push(block.get_by_offset(1).to_column());
+        }
+
+        assert_eq!(outputs.len(), 1);
+        let Some(databend_common_expression::Column::Number(
+            databend_common_expression::types::NumberColumn::Int32(values),
+        )) = outputs.pop()
+        else {
+            unreachable!("expected Int32 b column")
+        };
+        Ok(values.into_iter().collect())
+    }
+
+    #[test]
+    fn test_row_by_row_heap_merge_keeps_compound_desc_order_for_overlaps() -> Result<()> {
+        let streams = make_compound_streams()?;
+        let merger = Merger::<HeapSort<FixedRows<2>>, _>::new_row_by_row(streams, 1024, Some(4));
+        assert_eq!(collect_b_values(merger)?, vec![10, 9, 8, 3]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_by_row_loser_tree_merge_keeps_compound_desc_order_for_overlaps() -> Result<()> {
+        let streams = make_compound_streams()?;
+        let merger =
+            Merger::<LoserTreeSort<FixedRows<2>>, _>::new_row_by_row(streams, 1024, Some(4));
+        assert_eq!(collect_b_values(merger)?, vec![10, 9, 8, 3]);
+        Ok(())
+    }
+}
