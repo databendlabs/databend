@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -43,15 +42,15 @@ async fn test_immutable_catalogs_database() -> anyhow::Result<()> {
     let db_3 = catalog.get_database(&tenant, "test").await;
     assert!(db_3.is_err());
 
-    // create database should failed
+    // create existing database should be a no-op.
     let create_db_req = CreateDatabaseReq {
-        create_option: CreateOption::Create,
+        override_existing: false,
         catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "system"),
         meta: Default::default(),
     };
     let create_db_req = catalog.create_database(create_db_req).await;
-    assert!(create_db_req.is_err());
+    assert!(!create_db_req?.created);
 
     let drop_db_req = DropDatabaseReq {
         if_exists: false,

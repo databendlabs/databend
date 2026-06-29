@@ -8,6 +8,8 @@ edition = { workspace = true }
 
 [dependencies]
 arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+bytes = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
@@ -16,7 +18,6 @@ parquet = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-bytes = { workspace = true }
 
 [build-dependencies]
 

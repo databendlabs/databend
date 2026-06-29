@@ -41,6 +41,7 @@ pub use queue_mgr::QueryEntry;
 pub use queue_mgr::QueueData;
 pub use queue_mgr::QueueManager;
 pub use session::Session;
+pub(crate) use session::temporary_table_session_prefix;
 pub use session_ctx::SessionContext;
 pub use session_info::ProcessInfo;
 pub use session_mgr::SessionManager;

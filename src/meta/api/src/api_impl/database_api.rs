@@ -29,7 +29,6 @@ use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
@@ -126,32 +125,22 @@ where
             let mut txn = TxnRequest::default();
 
             if let Some(ref curr_seq_db_id) = curr_seq_db_id {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
-                            DatabaseAlreadyExists::new(
-                                name_key.database_name(),
-                                format!("create db: tenant: {}", name_key.tenant_name()),
-                            ),
-                        )));
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateDatabaseReply {
-                            db_id: curr_seq_db_id.data,
-                        });
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let _ = drop_database_meta(
-                            self,
-                            name_key,
-                            req.catalog_name.clone(),
-                            false,
-                            false,
-                            &mut txn,
-                        )
-                        .await?;
-                    }
+                if !req.override_existing {
+                    return Ok(CreateDatabaseReply {
+                        db_id: curr_seq_db_id.data,
+                        created: false,
+                    });
                 }
+
+                let _ = drop_database_meta(
+                    self,
+                    name_key,
+                    req.catalog_name.clone(),
+                    false,
+                    false,
+                    &mut txn,
+                )
+                .await?;
             };
 
             // get db id list from _fd_db_id_list/db_id
@@ -203,7 +192,10 @@ where
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { db_id: id_key });
+                    return Ok(CreateDatabaseReply {
+                        db_id: id_key,
+                        created: true,
+                    });
                 }
             }
         }
