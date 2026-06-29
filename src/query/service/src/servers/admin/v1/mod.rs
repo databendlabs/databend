@@ -22,6 +22,7 @@ pub mod query_dump;
 pub mod settings;
 pub mod stream_status;
 pub mod system;
+pub mod table_options;
 pub mod table_statistics;
 pub mod tenant_table_stats;
 pub mod tenant_tables;

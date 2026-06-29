@@ -80,6 +80,11 @@ impl AdminService {
                 get(super::v1::table_statistics::get_table_stats_local_handler),
             )
             .at(
+                "/v1/databases/:database/tables/:table/options",
+                post(super::v1::table_options::set_table_options_local)
+                    .delete(super::v1::table_options::unset_table_options_local),
+            )
+            .at(
                 "/v1/stream_status",
                 get(super::v1::stream_status::stream_status_local_handler),
             )
@@ -167,6 +172,11 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",
                     get(super::v1::table_statistics::get_table_stats_handler),
+                )
+                .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/options",
+                    post(super::v1::table_options::set_table_options)
+                        .delete(super::v1::table_options::unset_table_options),
                 );
         }
 

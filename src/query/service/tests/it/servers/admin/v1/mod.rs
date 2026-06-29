@@ -16,3 +16,4 @@ mod cluster;
 mod clustering_information;
 mod config;
 mod status;
+mod table_options;
