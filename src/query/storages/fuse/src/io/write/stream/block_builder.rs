@@ -72,6 +72,17 @@ use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::operations::column_parquet_metas;
 
+/// Encoded row group produced by [`ArrowParquetWriter::finish`].
+struct FinishedRowGroup {
+    /// Per-column parquet metadata.
+    col_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Serialized parquet bytes of the row group.
+    data: Buffer,
+    /// Per-leaf page layout for building the sparse page index; `Some` only when page-layout
+    /// capture was enabled (clustered table with `index_granularity`).
+    page_layout: Option<Vec<LeafPageLayout>>,
+}
+
 pub struct UninitializedArrowWriter {
     write_settings: WriteSettings,
     arrow_schema: Arc<Schema>,
@@ -155,14 +166,7 @@ impl ArrowParquetWriter {
     /// Encode all buffered blocks into a single row group, returning the per-column
     /// metadata, the serialized parquet bytes as opendal chunks, and (when page-layout capture
     /// was enabled) the per-leaf page layout for building the sparse page index.
-    fn finish(
-        self,
-        schema: &TableSchemaRef,
-    ) -> Result<(
-        HashMap<ColumnId, ColumnMeta>,
-        Buffer,
-        Option<Vec<LeafPageLayout>>,
-    )> {
+    fn finish(self, schema: &TableSchemaRef) -> Result<FinishedRowGroup> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
         };
@@ -172,7 +176,11 @@ impl ArrowParquetWriter {
             page_layout,
         } = writer.inner.finish()?;
         let col_metas = column_parquet_metas(&metadata, schema)?;
-        Ok((col_metas, Buffer::from(payload), page_layout))
+        Ok(FinishedRowGroup {
+            col_metas,
+            data: Buffer::from(payload),
+            page_layout,
+        })
     }
 
     fn compressed_size(&self) -> usize {
@@ -453,8 +461,11 @@ impl StreamBlockBuilder {
         let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
         let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
 
-        let (col_metas, block_raw_data, page_layout) =
-            self.block_writer.finish(&self.properties.source_schema)?;
+        let FinishedRowGroup {
+            col_metas,
+            data: block_raw_data,
+            page_layout,
+        } = self.block_writer.finish(&self.properties.source_schema)?;
 
         // Build the sparse page index from the captured page layout + per-granule cluster-key
         // mins. Both are present together iff index_granularity is set on a clustered table.
