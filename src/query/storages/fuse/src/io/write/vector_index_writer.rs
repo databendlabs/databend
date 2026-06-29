@@ -28,10 +28,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_milliseconds;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
@@ -404,16 +404,14 @@ impl VectorIndexBuilder {
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
 
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
+        let SerializedParquet { payload, .. } = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
-            &mut data,
             TableCompression::Zstd,
             false,
             Some(metadata),
         )?;
-
+        let data = Buffer::from(payload);
         let size = data.len() as u64;
         let state = VectorIndexState {
             location: location.clone(),
