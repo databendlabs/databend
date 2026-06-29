@@ -1,0 +1,27 @@
+statement ok
+drop table if exists orc_unload_t
+
+statement ok
+create table orc_unload_t(a int, b string, c boolean)
+
+statement ok
+remove @data/orc/unload/output_format
+
+statement ok
+copy into @data/orc/unload/output_format/ from (
+    select 1 as a, 'x' as b, true as c
+    union all
+    select 2 as a, 'y' as b, false as c
+) file_format = (type = orc)
+
+statement ok
+copy into orc_unload_t from @data/orc/unload/output_format file_format = (type = orc)
+
+query ITB
+select * from orc_unload_t order by a
+----
+1 x true
+2 y false
+
+statement ok
+drop table orc_unload_t

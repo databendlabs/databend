@@ -52,6 +52,7 @@ num-traits = { workspace = true }
 object_store = { workspace = true }
 object_store_opendal = { workspace = true }
 opendal = { workspace = true }
+orc-rust = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
