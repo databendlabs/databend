@@ -195,13 +195,27 @@ impl ReadState {
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
-        let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        let mut preread_block = self
-            .pre_reader
-            .deserialize_part(part, pre_columns_chunks, None)?;
+        self.deserialize_and_filter_with_num_rows(columns_chunks, part, part.nums_rows)
+    }
 
-        let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
-        let runtime_filter_bitmap = self.runtime_filter(&preread_block, part.nums_rows)?;
+    /// Like [`deserialize_and_filter`], but with an explicit row count for sparse-page-index
+    /// narrowed reads, where the fetched partial chunks cover fewer rows than `part.nums_rows`.
+    pub fn deserialize_and_filter_with_num_rows(
+        &self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+        num_rows: usize,
+    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
+        let mut preread_block = self.pre_reader.deserialize_part_with_num_rows(
+            part,
+            num_rows,
+            pre_columns_chunks,
+            None,
+        )?;
+
+        let filter_bitmap = self.filter(&preread_block, num_rows)?;
+        let runtime_filter_bitmap = self.runtime_filter(&preread_block, num_rows)?;
 
         let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
             (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
@@ -229,8 +243,9 @@ impl ReadState {
             should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
         });
 
-        let mut remain_block = self.remain_reader.deserialize_part(
+        let mut remain_block = self.remain_reader.deserialize_part_with_num_rows(
             part,
+            num_rows,
             remain_columns_chunks,
             push_down_row_selection
                 .then_some(row_selection.as_ref())

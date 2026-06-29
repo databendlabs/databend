@@ -70,6 +70,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_row
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
+use crate::interpreters::common::table_option_validation::is_valid_index_granularity;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
@@ -117,6 +118,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
         is_valid_data_page_rows(&self.plan.set_options)?;
         is_valid_data_page_bytes(&self.plan.set_options)?;
+        is_valid_index_granularity(&self.plan.set_options)?;
         is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
         is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
         is_valid_analyze_top_n_size(&self.plan.set_options)?;

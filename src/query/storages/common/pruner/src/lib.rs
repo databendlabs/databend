@@ -17,7 +17,6 @@
 mod block_meta;
 mod internal_column_pruner;
 mod limiter_pruner;
-mod page_pruner;
 pub mod partition_prunner;
 mod range_pruner;
 mod topn_pruner;
@@ -30,8 +29,6 @@ pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;
 pub use limiter_pruner::LimiterPrunerCreator;
-pub use page_pruner::PagePruner;
-pub use page_pruner::PagePrunerCreator;
 pub use range_pruner::RangeIndexInput;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;

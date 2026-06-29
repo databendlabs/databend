@@ -194,6 +194,13 @@ pub struct BlockMeta {
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
+    /// Location of the sparse page index that maps cluster-key granules to page byte ranges.
+    /// Present only on clustered tables written with `index_granularity`. Old segments without
+    /// this field deserialize to `None`, and the read path falls back to full-block reads.
+    #[serde(default)]
+    pub page_index_location: Option<Location>,
+    #[serde(default)]
+    pub page_index_size: Option<u64>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -242,6 +249,8 @@ impl BlockMeta {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
+            page_index_location: None,
+            page_index_size: None,
             virtual_block_meta,
             compression,
             create_on,
@@ -380,6 +389,8 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            page_index_location: None,
+            page_index_size: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -411,6 +422,8 @@ impl BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            page_index_location: None,
+            page_index_size: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

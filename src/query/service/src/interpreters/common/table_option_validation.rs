@@ -39,6 +39,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_INDEX_GRANULARITY;
 use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -114,6 +115,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
@@ -175,6 +177,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_INDEX_GRANULARITY);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
@@ -440,6 +443,24 @@ pub fn is_valid_data_page_bytes(
         if v > PARQUET_PAGE_SIZE_HARD_LIMIT {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "{FUSE_OPT_KEY_DATA_PAGE_BYTES} {v} exceeds parquet hard limit ({PARQUET_PAGE_SIZE_HARD_LIMIT})"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_index_granularity(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(val) = options.get(FUSE_OPT_KEY_INDEX_GRANULARITY) {
+        let v = val.parse::<usize>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be a positive integer, got: {val}"
+            ))
+        })?;
+        if v == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be >= 1"
             )));
         }
     }

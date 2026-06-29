@@ -46,6 +46,8 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::schema::types::SchemaDescPtr;
 
+use super::DataPageOffset;
+use super::LeafPageLayout;
 use super::SerializedParquet;
 use crate::MAX_BATCH_MEMORY_SIZE;
 use crate::PARQUET_PAGE_SIZE_HARD_LIMIT;
@@ -65,6 +67,9 @@ pub struct BlockParquetWriter {
     /// compressed pages, not the raw blocks.
     state: Option<ColumnWriterState>,
     num_rows: usize,
+    /// When true, `finish` captures the per-leaf page layout (absolute offsets) into
+    /// `SerializedParquet::page_layout`. Off by default so the common write path pays nothing.
+    capture_page_layout: bool,
 }
 
 struct ColumnWriterState {
@@ -81,6 +86,7 @@ impl BlockParquetWriter {
             props,
             state: None,
             num_rows: 0,
+            capture_page_layout: false,
         }
     }
 
@@ -98,6 +104,25 @@ impl BlockParquetWriter {
             });
         }
         Ok(self.state.as_mut().unwrap())
+    }
+
+    /// Ask `finish` to capture the per-leaf page layout (absolute offsets) into
+    /// `SerializedParquet::page_layout`. Pair with [`Self::flush_page`] at granule boundaries so
+    /// the captured pages align to the index granularity.
+    pub fn enable_page_layout(&mut self) {
+        self.capture_page_layout = true;
+    }
+
+    /// Force a page boundary across every leaf column at the current row position, so all columns
+    /// share the same page boundary rows. No-op before the first block is written or when no
+    /// values are buffered. Call this at each index-granularity boundary.
+    pub fn flush_page(&mut self) -> Result<()> {
+        if let Some(state) = self.state.as_mut() {
+            for writer in state.column_writers.iter_mut() {
+                writer.flush_data_page()?;
+            }
+        }
+        Ok(())
     }
 
     /// Encode and compress the block's columns immediately into the per-leaf column writers.
@@ -212,8 +237,15 @@ impl BlockParquetWriter {
             props,
             state,
             num_rows,
+            capture_page_layout,
         } = self;
-        assemble_parquet(&arrow_schema, props, state.unwrap(), num_rows)
+        assemble_parquet(
+            &arrow_schema,
+            props,
+            state.unwrap(),
+            num_rows,
+            capture_page_layout,
+        )
     }
 }
 
@@ -225,6 +257,7 @@ fn assemble_parquet(
     props: WriterPropertiesPtr,
     state: ColumnWriterState,
     num_rows: usize,
+    capture_page_layout: bool,
 ) -> Result<SerializedParquet> {
     let ColumnWriterState {
         column_writers,
@@ -241,8 +274,13 @@ fn assemble_parquet(
 
     let mut column_chunks = Vec::with_capacity(column_writers.len());
     let mut total_uncompressed: i64 = 0;
+    let mut page_layout: Option<Vec<LeafPageLayout>> =
+        capture_page_layout.then(|| Vec::with_capacity(column_writers.len()));
     for writer in column_writers {
         let (data, close) = writer.close()?.into_parts();
+        // The offset index (enabled by default in the fork) carries per-page locations with
+        // chunk-relative offsets; capture it before `close` is partially moved below.
+        let offset_index = close.offset_index.clone();
         let metadata = close.metadata;
 
         // A freshly closed chunk's offsets are relative to its own start (offset 0), so the
@@ -257,6 +295,35 @@ fn assemble_parquet(
             if !chunk.is_empty() {
                 payload.push(chunk);
             }
+        }
+
+        // Capture the per-leaf page layout with offsets remapped to absolute file positions.
+        // `chunk_end` is the post-chunk write position; the dict page (when present) starts at
+        // the chunk's absolute start (`write_offset`) and runs until the first data page.
+        if let Some(layout) = page_layout.as_mut() {
+            let chunk_end = file_offset as u64;
+            let abs_data_offset = map_offset(src_data_offset) as u64;
+            let dict_page = src_dictionary_offset.map(|d| {
+                let abs = map_offset(d) as u64;
+                (abs, abs_data_offset - abs)
+            });
+            let data_pages = offset_index
+                .as_ref()
+                .map(|oi| {
+                    oi.page_locations()
+                        .iter()
+                        .map(|p| DataPageOffset {
+                            first_row_index: p.first_row_index as u64,
+                            offset: map_offset(p.offset) as u64,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            layout.push(LeafPageLayout {
+                dict_page,
+                chunk_end,
+                data_pages,
+            });
         }
 
         total_uncompressed += metadata.uncompressed_size();
@@ -333,7 +400,11 @@ fn assemble_parquet(
     ParquetMetaDataWriter::new(&mut footer, &metadata).finish()?;
     payload.push(Bytes::from(footer));
 
-    Ok(SerializedParquet { payload, metadata })
+    Ok(SerializedParquet {
+        payload,
+        metadata,
+        page_layout,
+    })
 }
 
 #[cfg(test)]
@@ -809,5 +880,113 @@ mod tests {
         let got = DataBlock::concat(&blocks).unwrap();
         assert_eq!(got.num_rows(), n as usize);
         assert_blocks_eq(&block, &got);
+    }
+
+    // flush_page must create a page boundary at each requested granule row, even when the
+    // page-size limit auto-splits a granule into several pages (the 1:N case). The captured
+    // page_layout must carry absolute offsets that point at real page starts, and every granule
+    // boundary row must appear as some page's first_row_index.
+    #[test]
+    fn test_flush_page_aligns_pages_to_granule_rows() {
+        use parquet::file::reader::FileReader;
+        use parquet::file::reader::SerializedFileReader;
+
+        let schema = TableSchema::new(vec![TableField::new(
+            "i",
+            TableDataType::Number(NumberDataType::Int64),
+        )]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        // 8000 rows, granule = 2000 rows -> 4 granules. A granule larger than the column writer's
+        // ~1024-row mini-batch causes each granule to auto-split into several data pages, so this
+        // exercises the 1:N granule-to-page case. flush_page at each boundary guarantees a page
+        // starts exactly on the granule row even when the trailing rows wouldn't auto-flush.
+        let granule_rows = 2000usize;
+        let n = 8000i64;
+        let block = DataBlock::new_from_columns(vec![
+            databend_common_expression::types::Int64Type::from_data((0..n).collect::<Vec<_>>()),
+        ]);
+
+        let mut writer =
+            BlockParquetWriter::new(arrow_schema, props_with_data_page_rows(&schema, 100));
+        writer.enable_page_layout();
+        // Write row-by-row in granule-sized slices, flushing a page at each granule boundary.
+        let mut offset = 0usize;
+        while offset < n as usize {
+            let len = granule_rows.min(n as usize - offset);
+            writer
+                .write_block(block.slice(offset..offset + len))
+                .unwrap();
+            offset += len;
+            if offset < n as usize {
+                writer.flush_page().unwrap();
+            }
+        }
+        let serialized = writer.finish().unwrap();
+
+        let layout = serialized
+            .page_layout
+            .expect("page layout must be captured");
+        assert_eq!(layout.len(), 1, "single leaf column");
+        let leaf = &layout[0];
+
+        // Every granule boundary row must be the first_row_index of some captured page.
+        let page_first_rows: std::collections::HashSet<u64> =
+            leaf.data_pages.iter().map(|p| p.first_row_index).collect();
+        for g in 0..(n as usize / granule_rows) {
+            assert!(
+                page_first_rows.contains(&((g * granule_rows) as u64)),
+                "granule boundary row {} is not a page start; pages: {:?}",
+                g * granule_rows,
+                page_first_rows
+            );
+        }
+
+        // The 1:N split must have produced more pages than granules.
+        assert!(
+            leaf.data_pages.len() > 4,
+            "expected auto-split pages beyond the 4 granule boundaries, got {}",
+            leaf.data_pages.len()
+        );
+
+        // Captured absolute offsets must point at real page starts: read each page via a standard
+        // reader and confirm the set of page start offsets matches what we captured.
+        let bytes = bytes::Bytes::from(serialized.payload.concat());
+        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
+        let rg = reader.get_row_group(0).unwrap();
+        let col_meta = rg.metadata().column(0);
+        let (chunk_start, chunk_end) = col_meta.byte_range();
+        // The data pages' offsets must be ascending, within the column chunk, and the recorded
+        // chunk_end must bound them.
+        let mut prev = 0u64;
+        for p in &leaf.data_pages {
+            assert!(p.offset >= chunk_start, "page offset before chunk start");
+            assert!(p.offset < leaf.chunk_end, "page offset past chunk_end");
+            assert!(p.offset >= prev, "page offsets must be ascending");
+            prev = p.offset;
+        }
+        assert!(
+            leaf.chunk_end >= chunk_end,
+            "recorded chunk_end {} must bound the column chunk end {}",
+            leaf.chunk_end,
+            chunk_end
+        );
+
+        // Round-trip integrity is preserved despite the forced flushes.
+        let (blocks, _) = read_back(bytes.to_vec());
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_blocks_eq(&block, &got);
+    }
+
+    // When flush_page / enable_page_layout are never used, page_layout stays None so the common
+    // write path is unaffected.
+    #[test]
+    fn test_page_layout_absent_without_capture() {
+        let schema = sample_schema();
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        writer.write_block(sample_block()).unwrap();
+        let serialized = writer.finish().unwrap();
+        assert!(serialized.page_layout.is_none());
     }
 }

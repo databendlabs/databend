@@ -94,6 +94,26 @@ impl ClusterStatisticsBuilder {
             operators,
         }))
     }
+
+    pub fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
+    /// Evaluate the cluster-key tuple column for a block: apply any extra-key map operators, then
+    /// gather the cluster-key columns into a single `Column::Tuple`. The block is cloned so the
+    /// caller's columns (including any extra key columns) are untouched.
+    pub fn eval_cluster_tuple(&self, block: &DataBlock) -> Result<Column> {
+        let block = self
+            .operators
+            .iter()
+            .try_fold(block.clone(), |input, op| op.execute(&self.func_ctx, input))?;
+        let cols = self
+            .cluster_key_index
+            .iter()
+            .map(|&i| block.get_by_offset(i).to_column())
+            .collect();
+        Ok(Column::Tuple(cols))
+    }
 }
 
 pub struct ClusterStatisticsState {
@@ -177,5 +197,133 @@ impl ClusterStatisticsState {
             cluster_key_id: self.builder.cluster_key_id,
             pages: None,
         }))
+    }
+}
+
+/// Tracks the cluster-key min for each `granule_rows`-sized granule, used to build the sparse
+/// page index. Rows are fed in arbitrary-sized blocks; this accumulates a running per-granule min
+/// (over the cluster-key tuple) and emits one min Scalar per completed granule. Granule boundaries
+/// here must line up with the page flushes the writer performs at the same row stride.
+pub struct GranuleMinState {
+    granule_rows: usize,
+    builder: Arc<ClusterStatisticsBuilder>,
+    /// Rows already absorbed into the current, not-yet-complete granule.
+    current_rows: usize,
+    /// Running min (cluster-key tuple Scalar) of the current granule; None while empty.
+    current_min: Option<Scalar>,
+    /// Completed per-granule mins, in granule order.
+    granule_mins: Vec<Scalar>,
+}
+
+impl GranuleMinState {
+    pub fn new(builder: Arc<ClusterStatisticsBuilder>, granule_rows: usize) -> Self {
+        Self {
+            granule_rows,
+            builder,
+            current_rows: 0,
+            current_min: None,
+            granule_mins: Vec::new(),
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        !self.builder.cluster_key_index.is_empty() && self.granule_rows > 0
+    }
+
+    /// Absorb one block's rows, folding their cluster-key min into the current granule and
+    /// emitting completed-granule mins as boundaries are crossed. The block must be the same one
+    /// (pre extra-key pop) handed to the writer, so row counts stay aligned with the page flushes.
+    pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
+        if !self.is_active() {
+            return Ok(());
+        }
+        let tuple = self.builder.eval_cluster_tuple(block)?;
+        let num_rows = block.num_rows();
+        let mut offset = 0;
+        while offset < num_rows {
+            let remaining_in_granule = self.granule_rows - self.current_rows;
+            let take = remaining_in_granule.min(num_rows - offset);
+            let slice = tuple.slice(offset..offset + take);
+            let min = column_min(&slice)?;
+            self.current_min = Some(match self.current_min.take() {
+                Some(prev) if prev.as_ref().cmp(&min.as_ref()).is_le() => prev,
+                _ => min,
+            });
+            self.current_rows += take;
+            offset += take;
+            if self.current_rows == self.granule_rows {
+                self.granule_mins.push(self.current_min.take().unwrap());
+                self.current_rows = 0;
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether the per-granule mins (including the trailing partial granule) are non-decreasing.
+    /// Sparse-index pruning uses `mins[i+1]` as granule `i`'s upper bound, which is only sound when
+    /// the block is cluster-sorted. Non-monotonic mins mean the block was not sorted (e.g. a fresh
+    /// insert), so the caller must skip emitting the index.
+    pub fn is_monotonic(&self) -> bool {
+        scalars_non_decreasing(self.granule_mins.iter().chain(self.current_min.as_ref()))
+    }
+
+    /// Close out a trailing partial granule (the block's final rows that didn't fill a granule)
+    /// and return all granule mins. A partial last granule still gets a min, matching the final
+    /// page boundary the writer emits at end-of-block.
+    pub fn finalize(mut self) -> Vec<Scalar> {
+        if self.current_rows > 0 {
+            if let Some(min) = self.current_min.take() {
+                self.granule_mins.push(min);
+            }
+        }
+        self.granule_mins
+    }
+}
+
+fn column_min(col: &Column) -> Result<Scalar> {
+    let entries = [col.clone().into()];
+    let (min, _) = eval_aggr("min", vec![], &entries, col.len(), vec![])?;
+    Ok(min.index(0).unwrap().to_owned())
+}
+
+/// True when `scalars` is non-decreasing under the natural scalar ordering. Used to validate that a
+/// block's per-granule cluster-key mins are monotonic before emitting a sparse page index.
+fn scalars_non_decreasing<'a>(scalars: impl Iterator<Item = &'a Scalar>) -> bool {
+    let mut prev: Option<&Scalar> = None;
+    for cur in scalars {
+        if let Some(prev) = prev {
+            if prev.as_ref().cmp(&cur.as_ref()).is_gt() {
+                return false;
+            }
+        }
+        prev = Some(cur);
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::number::NumberScalar;
+
+    use super::scalars_non_decreasing;
+
+    fn i64s(vals: &[i64]) -> Vec<Scalar> {
+        vals.iter()
+            .map(|v| Scalar::Number(NumberScalar::Int64(*v)))
+            .collect()
+    }
+
+    #[test]
+    fn test_scalars_non_decreasing() {
+        assert!(scalars_non_decreasing(i64s(&[]).iter()));
+        assert!(scalars_non_decreasing(i64s(&[5]).iter()));
+        assert!(scalars_non_decreasing(i64s(&[1, 2, 2, 3, 100]).iter()));
+        // Equal values are allowed (non-strict).
+        assert!(scalars_non_decreasing(i64s(&[7, 7, 7]).iter()));
+        // A single descending step breaks monotonicity.
+        assert!(!scalars_non_decreasing(i64s(&[1, 2, 1]).iter()));
+        assert!(!scalars_non_decreasing(i64s(&[5, 4]).iter()));
+        assert!(!scalars_non_decreasing(i64s(&[1, 2, 3, 2, 4]).iter()));
     }
 }

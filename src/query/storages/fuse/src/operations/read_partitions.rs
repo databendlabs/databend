@@ -920,11 +920,25 @@ impl FuseTable {
         let spatial_index_columns =
             Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
-        let pruner = FusePruner::create(
+        // For linear-clustered tables with a sparse page index, hand the cluster key + linear
+        // cluster-key exprs to the pruner so it can narrow byte-range reads to matching granules.
+        // Other tables pass empty keys, leaving the sparse-page pruner inactive.
+        let (cluster_key_meta, cluster_keys) = if self.sparse_page_index_enabled() {
+            (
+                self.cluster_key_meta(),
+                self.linear_cluster_keys(ctx.clone()),
+            )
+        } else {
+            (None, vec![])
+        };
+
+        let pruner = FusePruner::create_with_pages(
             &ctx,
             dal,
             table_schema.clone(),
             &push_downs,
+            cluster_key_meta,
+            cluster_keys,
             self.bloom_index_cols(),
             ngram_args,
             spatial_index_columns,
@@ -1421,6 +1435,8 @@ impl FuseTable {
             meta.bloom_filter_index_size,
             meta.spatial_index_location.clone(),
             meta.spatial_index_size.unwrap_or(0),
+            meta.page_index_location.clone(),
+            meta.page_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stats),
@@ -1486,6 +1502,8 @@ impl FuseTable {
             meta.bloom_filter_index_size,
             meta.spatial_index_location.clone(),
             meta.spatial_index_size.unwrap_or(0),
+            meta.page_index_location.clone(),
+            meta.page_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stat),

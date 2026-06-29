@@ -126,6 +126,7 @@ use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
+use crate::FUSE_OPT_KEY_INDEX_GRANULARITY;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
@@ -359,6 +360,16 @@ impl FuseTable {
             .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
             .and_then(|v| v.parse::<usize>().ok());
 
+        // The sparse page index maps cluster-key granules to page byte ranges, so it only applies
+        // to clustered tables; ignore the option otherwise.
+        let index_granularity = self.cluster_key_id().and_then(|_| {
+            self.table_info
+                .options()
+                .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
+                .and_then(|v| v.parse::<usize>().ok())
+                .filter(|&g| g > 0)
+        });
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
@@ -367,6 +378,7 @@ impl FuseTable {
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
             data_page_bytes,
+            index_granularity,
             col_stats_truncate_lens: self
                 .table_info
                 .meta
@@ -520,6 +532,21 @@ impl FuseTable {
 
     pub fn cluster_key_id(&self) -> Option<u32> {
         self.table_info.meta.cluster_key_id()
+    }
+
+    /// True when this table has a linear cluster key and a positive `index_granularity`, i.e. the
+    /// sparse page index applies. Hilbert-clustered and unclustered tables are excluded — the
+    /// sparse index narrows on a monotonic cluster-key sequence, which only linear clustering
+    /// guarantees within a block.
+    pub fn sparse_page_index_enabled(&self) -> bool {
+        self.cluster_type() == Some(ClusterType::Linear)
+            && self
+                .table_info
+                .meta
+                .options
+                .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
+                .and_then(|v| v.parse::<usize>().ok())
+                .is_some_and(|g| g > 0)
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
@@ -877,9 +904,12 @@ impl FuseTable {
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && self
+            && (self
                 .cluster_type()
-                .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
+                .is_none_or(|v| matches!(v, ClusterType::Hilbert))
+                // Linear tables with `index_granularity` need the stream path too: it is the only
+                // writer that flushes pages on granule boundaries and emits the sparse page index.
+                || self.sparse_page_index_enabled()))
     }
 
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {

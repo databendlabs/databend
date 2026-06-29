@@ -55,6 +55,33 @@ pub use self::bulk::LeafColumnWriter;
 pub struct SerializedParquet {
     pub payload: Vec<Bytes>,
     pub metadata: ParquetMetaData,
+    /// Per-leaf page layout (absolute byte offsets), in parquet leaf order. Populated only when
+    /// the writer was asked to capture it (see [`BlockParquetWriter::enable_page_layout`]); `None`
+    /// otherwise so the common write path pays nothing. Used to build the sparse page index that
+    /// maps cluster-key granules to physical page byte ranges.
+    pub page_layout: Option<Vec<LeafPageLayout>>,
+}
+
+/// Physical page layout of one parquet leaf column, with all offsets already remapped to
+/// absolute file positions. Used to compute the byte range of a run of granules at read time.
+#[derive(Debug, Clone)]
+pub struct LeafPageLayout {
+    /// Absolute byte range `(offset, len)` of the dictionary page, if the chunk is
+    /// dictionary-encoded. The read path must always fetch this to decode any data page.
+    pub dict_page: Option<(u64, u64)>,
+    /// Absolute end offset of this column chunk's pages (start of the next chunk / footer region
+    /// for the last column). Bounds the last granule's data range.
+    pub chunk_end: u64,
+    /// Data pages in write order; each carries the row index of its first row (within the row
+    /// group) and its absolute start offset. Pages whose `first_row_index` is a multiple of the
+    /// index granularity are granule boundaries; interior pages are size-driven auto-splits.
+    pub data_pages: Vec<DataPageOffset>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DataPageOffset {
+    pub first_row_index: u64,
+    pub offset: u64,
 }
 
 impl SerializedParquet {

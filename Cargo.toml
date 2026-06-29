@@ -644,7 +644,7 @@ lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
-parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "bbbe79543" }
+parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "4dafc978a" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }

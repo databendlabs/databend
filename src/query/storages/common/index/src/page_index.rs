@@ -31,7 +31,6 @@ use databend_common_expression::expr::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use super::eliminate_cast::*;
@@ -42,7 +41,6 @@ pub struct PageIndex {
     expr: Expr<String>,
     column_refs: HashMap<String, DataType>,
     func_ctx: FunctionContext,
-    cluster_key_id: u32,
 
     // index of the cluster key inside the schema
     cluster_key_fields: Vec<DataField>,
@@ -51,7 +49,6 @@ pub struct PageIndex {
 impl PageIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
-        cluster_key_id: u32,
         cluster_keys: Vec<String>,
         expr: &Expr<String>,
         schema: TableSchemaRef,
@@ -66,49 +63,35 @@ impl PageIndex {
             column_refs: expr.column_refs(),
             expr: expr.clone(),
             cluster_key_fields,
-            cluster_key_id,
             func_ctx,
         })
     }
 
-    pub fn try_apply_const(&self) -> Result<bool> {
-        // if the exprs did not contains the first cluster key, we should return true
-        if self.cluster_key_fields.is_empty()
-            || !self
+    /// Whether the filter expression references at least one cluster-key column. If not, the
+    /// sparse page index cannot narrow anything, so the pruner can skip loading the sidecar.
+    pub fn touches_cluster_key(&self) -> bool {
+        !self.cluster_key_fields.is_empty()
+            && self
                 .column_refs
-                .iter()
-                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c.0))
-        {
-            return Ok(true);
-        }
-
-        // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(
-            self.expr,
-            Expr::Constant(Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            })
-        ))
+                .keys()
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
     }
 
-    #[fastrace::trace]
-    pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
-        let Some(stats) = stats else {
-            return Ok((true, None));
-        };
-        let min_values: Vec<Scalar> = match stats.pages {
-            Some(ref pages) => pages.clone(),
-            None => return Ok((true, None)),
-        };
-
-        let max_value = Scalar::Tuple(stats.max().clone());
-
-        if self.cluster_key_id != stats.cluster_key_id {
+    /// Narrow a sorted list of per-granule cluster-key min tuples (`min_values`) plus the block's
+    /// cluster-key max (`max_value`) to the contiguous run of granules `[start, end)` that may
+    /// satisfy the predicate. Returns `(keep, range)`: `keep=false` means the whole block is
+    /// pruned; `range=None` with `keep=true` means no narrowing (read everything).
+    ///
+    /// The sparse sidecar page index supplies its decoded granule mins here.
+    pub fn apply_with_mins(
+        &self,
+        min_values: &[Scalar],
+        max_value: &Scalar,
+    ) -> Result<(bool, Option<Range<usize>>)> {
+        let pages = min_values.len();
+        if pages == 0 {
             return Ok((true, None));
         }
-
-        let pages = min_values.len();
         let mut start = 0;
         let mut end = pages - 1;
 
@@ -117,7 +100,7 @@ impl PageIndex {
             let max_value = if start + 1 < pages {
                 &min_values[start + 1]
             } else {
-                &max_value
+                max_value
             };
 
             if self.eval_single_page(min_value, max_value)? {
@@ -131,7 +114,7 @@ impl PageIndex {
             let max_value = if end + 1 < pages {
                 &min_values[end + 1]
             } else {
-                &max_value
+                max_value
             };
 
             if self.eval_single_page(min_value, max_value)? {

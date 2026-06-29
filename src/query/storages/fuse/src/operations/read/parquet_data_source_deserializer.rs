@@ -213,6 +213,7 @@ impl Processor for DeserializeDataTransform {
                 }
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
+                    let num_rows_override = data.num_rows_override();
                     let columns_chunks = data.columns_chunks()?;
                     let part = FuseBlockPartInfo::from_part(&part)?;
 
@@ -225,11 +226,12 @@ impl Processor for DeserializeDataTransform {
                         )?);
                     }
 
+                    let num_rows = num_rows_override.unwrap_or(part.nums_rows);
                     let (mut data_block, row_selection, bitmap_selection) = self
                         .read_state
                         .as_ref()
                         .unwrap()
-                        .deserialize_and_filter(columns_chunks, part)?;
+                        .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
 
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                         data_block = virtual_reader.deserialize_virtual_columns(

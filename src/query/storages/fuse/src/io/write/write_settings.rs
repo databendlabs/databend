@@ -33,6 +33,9 @@ pub struct WriteSettings {
     pub enable_parquet_dictionary: bool,
     pub data_page_rows: Option<usize>,
     pub data_page_bytes: Option<usize>,
+    /// Rows per sparse-index granule. `Some` only when the table sets `index_granularity` and has
+    /// a cluster key; drives both the page-flush cadence and the recorded granule stride.
+    pub index_granularity: Option<usize>,
     pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
@@ -46,6 +49,7 @@ impl Default for WriteSettings {
             enable_parquet_dictionary: false,
             data_page_rows: None,
             data_page_bytes: None,
+            index_granularity: None,
             col_stats_truncate_lens: BTreeMap::new(),
         }
     }
