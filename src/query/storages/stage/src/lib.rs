@@ -24,6 +24,7 @@
 )]
 
 mod append;
+mod avro_utils;
 mod compression;
 mod infer_schema;
 mod read;
