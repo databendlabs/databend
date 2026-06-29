@@ -1,0 +1,54 @@
+# Backward compat for cluster-key page pruning: an OLD writer writes a clustered table with
+# `row_per_page` set, producing inline per-page cluster-key mins (`ClusterStatistics.pages`) and no
+# page-index sidecar. The CURRENT reader removed the legacy `page_pruner` and reworked the pruning
+# main path; it must still read this old data correctly, falling back to whole-block reads since it
+# no longer consumes inline `pages`.
+
+statement ok
+set global timezone = 'UTC';
+
+statement ok
+set global max_block_size = 65536;
+
+statement ok
+DROP TABLE IF EXISTS page_index_bw_table;
+
+# Old-style clustered table: row_per_page makes the old writer emit inline page cluster-key mins.
+statement ok
+CREATE TABLE page_index_bw_table (
+        a INT,
+        b INT,
+        c VARCHAR
+) Engine = Fuse CLUSTER BY (a) row_per_page = 100;
+
+statement ok
+DROP TABLE IF EXISTS page_index_bw_table_multi;
+
+statement ok
+CREATE TABLE page_index_bw_table_multi (
+        a INT,
+        b INT,
+        c VARCHAR
+) Engine = Fuse CLUSTER BY (a, b) row_per_page = 100;
+
+# Large write: several inserts so the data spans many blocks/segments and many pages per block.
+statement ok
+INSERT INTO page_index_bw_table SELECT number, number * 2, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table SELECT number + 20000, number * 2, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table SELECT number + 40000, number * 2, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table SELECT number + 60000, number * 2, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table SELECT number + 80000, number * 2, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table_multi SELECT number, number % 10, concat('v', to_string(number)) FROM numbers(20000);
+
+statement ok
+INSERT INTO page_index_bw_table_multi SELECT number + 20000, number % 10, concat('v', to_string(number)) FROM numbers(20000);
