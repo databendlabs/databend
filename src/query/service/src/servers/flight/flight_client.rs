@@ -14,6 +14,7 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_flight::Action;
 use arrow_flight::FlightData;
@@ -29,6 +30,7 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
@@ -232,9 +234,15 @@ impl FlightClient {
             if let Ok(value) = params_json.parse() {
                 request.metadata_mut().insert("x-exchange-params", value);
             }
-
+            let start = Instant::now();
             match self.inner.do_exchange(request).await {
-                Ok(response) => Ok(response.into_inner()),
+                Ok(response) => {
+                    let elapsed = start.elapsed();
+                    if elapsed > Duration::from_secs(2) {
+                        warn!("do_exchange established after {} s", elapsed.as_secs_f32());
+                    }
+                    Ok(response.into_inner())
+                }
                 Err(status) => Err(status),
             }
         })
