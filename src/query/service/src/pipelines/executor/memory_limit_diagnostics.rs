@@ -67,9 +67,9 @@ fn format_top_memory_plan_nodes_by_query(
 
         plan_nodes.sort_by(|left, right| {
             right
-                .peak_bytes
-                .cmp(&left.peak_bytes)
-                .then(right.current_bytes.cmp(&left.current_bytes))
+                .current_bytes
+                .cmp(&left.current_bytes)
+                .then(right.peak_bytes.cmp(&left.peak_bytes))
                 .then(left.identity.cmp(&right.identity))
         });
         plan_nodes.truncate(limit);
@@ -119,7 +119,7 @@ mod tests {
             vec![
                 ("query-b".to_string(), vec![PlanNodeMemoryUsage {
                     identity: "AggregateFinal [#2]".to_string(),
-                    current_bytes: 10,
+                    current_bytes: 200,
                     peak_bytes: 100,
                 }]),
                 ("query-a".to_string(), vec![PlanNodeMemoryUsage {
@@ -138,7 +138,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "query_memory: [(\"query-a\", 20), (\"query-b\", 40)]; top_plan_nodes: query_id: query-a [(\"TableScan [#1]\", 20, 80)]; query_id: query-b [(\"AggregatePartial [#3]\", 30, 120), (\"AggregateFinal [#2]\", 10, 100)]"
+            "query_memory: [(\"query-a\", 20), (\"query-b\", 230)]; top_plan_nodes: query_id: query-a [(\"TableScan [#1]\", 20, 80)]; query_id: query-b [(\"AggregateFinal [#2]\", 200, 100), (\"AggregatePartial [#3]\", 30, 120)]"
         );
     }
 }

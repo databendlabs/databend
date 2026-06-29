@@ -1158,9 +1158,9 @@ impl RunningGraph {
         usages.sort_by(|left, right| {
             right
                 .1
-                .peak_bytes
-                .cmp(&left.1.peak_bytes)
-                .then(right.1.current_bytes.cmp(&left.1.current_bytes))
+                .current_bytes
+                .cmp(&left.1.current_bytes)
+                .then(right.1.peak_bytes.cmp(&left.1.peak_bytes))
                 .then(left.0.cmp(&right.0))
         });
         usages

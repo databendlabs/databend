@@ -466,8 +466,8 @@ async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
 
     let graph = RunningGraph::from_pipelines(
         vec![
-            create_memory_tracking_pipeline(10, "left-plan", "left title", &[512, 512])?,
-            create_memory_tracking_pipeline(20, "right-plan", "right title", &[2048])?,
+            create_memory_tracking_pipeline(10, "left-plan", "left title", &[(4096, 3584)])?,
+            create_memory_tracking_pipeline(20, "right-plan", "right title", &[(2048, 0)])?,
         ],
         1,
         Arc::new("test-top-memory-plan-nodes".to_string()),
@@ -496,8 +496,10 @@ async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
         .expect("left plan memory usage should be reported");
 
     assert!(right_plan_offset < left_plan_offset);
+    assert!(top_plan_nodes.contains("current_bytes: 2048"));
+    assert!(top_plan_nodes.contains("current_bytes: 512"));
+    assert!(top_plan_nodes.contains("peak_bytes: 4096"));
     assert!(top_plan_nodes.contains("peak_bytes: 2048"));
-    assert!(top_plan_nodes.contains("peak_bytes: 512"));
 
     let limited_top_plan_nodes = graph.format_top_memory_plan_nodes(1);
     assert!(limited_top_plan_nodes.contains("right-plan [#20] right title"));
@@ -549,7 +551,7 @@ fn create_memory_tracking_pipeline(
     plan_id: u32,
     plan_name: &str,
     title: &str,
-    memory_usages: &[i64],
+    memory_records: &[(i64, i64)],
 ) -> Result<Pipeline> {
     let mut pipeline = Pipeline::create();
     let scope = PlanScope::create(
@@ -560,28 +562,32 @@ fn create_memory_tracking_pipeline(
     );
     let _guard = scope.enter_scope_guard();
 
-    add_memory_tracking_pipe(&mut pipeline, memory_usages);
+    add_memory_tracking_pipe(&mut pipeline, memory_records);
     Ok(pipeline)
 }
 
-fn add_memory_tracking_pipe(pipeline: &mut Pipeline, memory_usages: &[i64]) {
-    let items = memory_usages
+fn add_memory_tracking_pipe(pipeline: &mut Pipeline, memory_records: &[(i64, i64)]) {
+    let items = memory_records
         .iter()
         .copied()
-        .map(|memory_usage| {
+        .map(|(memory_usage, release_memory_usage)| {
             let output = OutputPort::create();
             PipeItem::create(
-                ProcessorPtr::create(Box::new(MemoryTrackingSource { memory_usage })),
+                ProcessorPtr::create(Box::new(MemoryTrackingSource {
+                    memory_usage,
+                    release_memory_usage,
+                })),
                 vec![],
                 vec![output],
             )
         })
         .collect::<Vec<_>>();
-    pipeline.add_pipe(Pipe::create(0, memory_usages.len(), items));
+    pipeline.add_pipe(Pipe::create(0, memory_records.len(), items));
 }
 
 struct MemoryTrackingSource {
     memory_usage: i64,
+    release_memory_usage: i64,
 }
 
 impl Processor for MemoryTrackingSource {
@@ -603,7 +609,7 @@ impl Processor for MemoryTrackingSource {
                 .record_memory::<false>(self.memory_usage, self.memory_usage)
                 .expect("record test memory usage");
             mem_stat
-                .record_memory::<false>(-self.memory_usage, -self.memory_usage)
+                .record_memory::<false>(-self.release_memory_usage, -self.release_memory_usage)
                 .expect("release test memory usage");
         }
         Ok(())
