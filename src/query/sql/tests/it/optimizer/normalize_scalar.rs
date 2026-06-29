@@ -21,6 +21,7 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ScalarExpr;
@@ -36,7 +37,6 @@ use databend_common_sql::plans::DummyTableScan;
 use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Scan;
-use databend_common_sql_test_support::parse_raw_expr;
 
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;

@@ -35,6 +35,7 @@ pub use format::MetaEncoding;
 pub use format::NUM_BLOCK_ID_BITS;
 pub use format::decode;
 pub(crate) use format::load_json;
+pub use histogram_serde::LegacyHistogram;
 pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only

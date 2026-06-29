@@ -29,14 +29,9 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
+use databend_common_sql_test_support::LiteTableContext;
 use parking_lot::RwLock;
 use tokio::runtime::Runtime;
-
-#[allow(dead_code)]
-#[path = "../tests/it/framework/lite_context.rs"]
-mod lite_context;
-
-use lite_context::LiteTableContext;
 
 fn main() {
     divan::main();

@@ -55,7 +55,7 @@ fn parse_histogram(value: serde_json::Value) -> Option<Histogram> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct LegacyHistogram {
+pub struct LegacyHistogram {
     accuracy: bool,
     buckets: Vec<LegacyHistogramBucket>,
     #[serde(default)]

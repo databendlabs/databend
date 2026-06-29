@@ -21,8 +21,8 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql_test_support::parse_raw_expr;
 use databend_storages_common_index::eliminate_cast;
 use goldenfile::Mint;
 
