@@ -191,6 +191,24 @@ impl ScalarExpr {
         visitor.columns
     }
 
+    pub fn is_deterministic(&self) -> bool {
+        match self {
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _) => true,
+            ScalarExpr::FunctionCall(func) => {
+                if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func.func_name) {
+                    if property.kind == FunctionKind::SRF || property.non_deterministic {
+                        return false;
+                    }
+                }
+                func.arguments.iter().all(ScalarExpr::is_deterministic)
+            }
+            ScalarExpr::CastExpr(cast) => cast.argument.is_deterministic(),
+            _ => false,
+        }
+    }
+
     // Get used tables in ScalarExpr
     pub fn used_tables(&self) -> Result<Vec<IndexType>> {
         struct UsedTablesVisitor {

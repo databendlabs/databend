@@ -35,7 +35,6 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-use crate::pruning::SpatialRuntimePruner;
 
 pub struct ReadDataTransform {
     func_ctx: FunctionContext,
@@ -72,7 +71,7 @@ impl ReadDataTransform {
         )))
     }
 
-    fn create_runtime_pruners(&self) -> Result<(ExprRuntimePruner, Option<SpatialRuntimePruner>)> {
+    fn create_runtime_pruners(&self) -> Result<ExprRuntimePruner> {
         let read_settings = self.read_block_context.read_settings();
         let inlist_bloom_prune_threshold =
             self.context
@@ -91,30 +90,18 @@ impl ReadDataTransform {
                 .flat_map(RuntimeFilterExpr::from_entry)
                 .collect(),
         );
-        let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
-            self.table_schema.clone(),
-            self.block_reader.operator(),
-            read_settings,
-            &runtime_filters,
-        )?;
 
-        Ok((runtime_filter, spatial_runtime_pruner))
+        Ok(runtime_filter)
     }
 
     async fn read_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
         let mut read_tasks = Vec::with_capacity(parts.len());
         let mut parts_to_read = Vec::with_capacity(parts.len());
-        let (expr_runtime_pruner, spatial_runtime_pruner) = self.create_runtime_pruners()?;
+        let expr_runtime_pruner = self.create_runtime_pruners()?;
 
         for part in parts {
             if expr_runtime_pruner.prune(&part).await? {
                 continue;
-            }
-
-            if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
-                if spatial_runtime_pruner.prune(&part).await? {
-                    continue;
-                }
             }
 
             parts_to_read.push(part.clone());

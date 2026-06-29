@@ -50,7 +50,6 @@ pub struct AntiRightHashJoin {
     pub(crate) inlist_threshold: usize,
     pub(crate) bloom_threshold: usize,
     pub(crate) min_max_threshold: usize,
-    pub(crate) spatial_threshold: usize,
 
     pub(crate) finished: bool,
 }
@@ -68,7 +67,6 @@ impl AntiRightHashJoin {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -90,7 +88,6 @@ impl AntiRightHashJoin {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
-            spatial_threshold,
             finished: false,
         })
     }
@@ -118,7 +115,6 @@ impl Join for AntiRightHashJoin {
             self.inlist_threshold,
             self.bloom_threshold,
             self.min_max_threshold,
-            self.spatial_threshold,
         )
     }
 
