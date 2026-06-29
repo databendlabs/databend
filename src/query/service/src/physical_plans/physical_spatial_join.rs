@@ -29,6 +29,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::Exchange as SqlExchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -178,25 +179,61 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
-        // The spatial join don't support cluster mode for now.
-        if !self.ctx.get_cluster().is_empty() {
-            return Ok(None);
-        }
-
-        let left_cardinality = RelExpr::with_s_expr(s_expr.left_child())
+        let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
+        let left_card = RelExpr::with_s_expr(s_expr.left_child())
             .derive_cardinality()?
             .cardinality;
-        let right_cardinality = RelExpr::with_s_expr(s_expr.right_child())
+        let right_card = RelExpr::with_s_expr(s_expr.right_child())
             .derive_cardinality()?
             .cardinality;
-
-        let (build_side, build_rows) = if left_cardinality <= right_cardinality {
-            (SpatialBuildSide::Left, left_cardinality)
+        let smaller_side = if left_card < right_card {
+            SpatialBuildSide::Left
         } else {
-            (SpatialBuildSide::Right, right_cardinality)
+            SpatialBuildSide::Right
         };
 
-        if build_rows > self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64 {
+        let is_cluster = !self.ctx.get_cluster().is_empty();
+        let mut is_broadcast = false;
+        let build_side = if is_cluster {
+            let left_distribution = s_expr.left_child().get_data_distribution()?;
+            let right_distribution = s_expr.right_child().get_data_distribution()?;
+            let is_merge = |distribution: &Option<SqlExchange>| {
+                matches!(
+                    distribution,
+                    Some(SqlExchange::Merge | SqlExchange::MergeSort)
+                )
+            };
+            let is_serial_side = |distribution: &Option<SqlExchange>| {
+                distribution.is_none() || is_merge(distribution)
+            };
+
+            let left_is_broadcast = matches!(left_distribution, Some(SqlExchange::Broadcast));
+            let right_is_broadcast = matches!(right_distribution, Some(SqlExchange::Broadcast));
+
+            if left_is_broadcast && right_is_broadcast {
+                return Ok(None);
+            }
+
+            if left_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Left
+            } else if right_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Right
+            } else if is_serial_side(&left_distribution) && is_serial_side(&right_distribution) {
+                smaller_side
+            } else {
+                return Ok(None);
+            }
+        } else {
+            smaller_side
+        };
+
+        let build_card = match build_side {
+            SpatialBuildSide::Left => left_card,
+            SpatialBuildSide::Right => right_card,
+        };
+        if build_card > max_build_rows {
             return Ok(None);
         }
 
@@ -237,7 +274,11 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(Some(PhysicalPlan::new(PhysicalSpatialJoin {
-            meta: PhysicalPlanMeta::new("SpatialJoin"),
+            meta: PhysicalPlanMeta::new(if is_broadcast {
+                "BroadcastSpatialJoin"
+            } else {
+                "SpatialJoin"
+            }),
             probe,
             build,
             build_side,
