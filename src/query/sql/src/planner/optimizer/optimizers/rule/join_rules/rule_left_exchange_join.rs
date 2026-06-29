@@ -102,6 +102,10 @@ impl Rule for RuleLeftExchangeJoin {
         let t2 = s_expr.child(0)?.child(1)?;
         let t3 = s_expr.child(1)?;
 
+        if join1.single_to_inner.is_some() || join2.single_to_inner.is_some() {
+            return Ok(());
+        }
+
         // Ensure inner joins or cross joins.
         if !matches!(join1.join_type, JoinType::Inner | JoinType::Cross)
             || !matches!(join2.join_type, JoinType::Inner | JoinType::Cross)

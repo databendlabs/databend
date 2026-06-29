@@ -101,6 +101,30 @@ async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Re
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_scalar_subquery_guard_with_one_row_outer() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let result = fixture
+        .execute_query("SELECT 1 WHERE (SELECT number FROM numbers(2)) >= 0")
+        .await;
+    let err = match result {
+        Ok(stream) => stream
+            .try_collect::<Vec<DataBlock>>()
+            .await
+            .expect_err("multi-row scalar subquery should fail"),
+        Err(err) => err,
+    };
+    assert!(
+        err.message()
+            .contains("Scalar subquery can't return more than one row"),
+        "unexpected error: {err:?}"
+    );
+
+    Ok(())
+}
+
 fn extract_two_u64(blocks: Vec<DataBlock>) -> (u64, u64) {
     let block = DataBlock::concat(&blocks).expect("concat blocks");
     assert_eq!(block.num_rows(), 1, "unexpected rows: {}", block.num_rows());

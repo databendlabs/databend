@@ -27,6 +27,26 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 
+fn is_precise_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1))
+}
+
+fn single_join_scalar_side_is_precise_single_row(join: &Join, s_expr: &SExpr) -> Result<bool> {
+    match join.single_to_inner {
+        Some(JoinType::LeftSingle) => {
+            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+            let right_stat_info = right_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&right_stat_info))
+        }
+        Some(JoinType::RightSingle) => {
+            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+            let left_stat_info = left_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&left_stat_info))
+        }
+        _ => Ok(false),
+    }
+}
+
 enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
@@ -226,29 +246,14 @@ impl PhysicalPlanBuilder {
                 PhysicalJoinType::Hash => {
                     // When a LeftSingle/RightSingle join (scalar subquery) has no
                     // equi-conditions, the hash join executes as a cross join + filter.
-                    // The FROM_LEFT_SINGLE runtime check ("at most 1 build row per probe
-                    // row") fires during the cross-product matching phase — before the
-                    // filter is applied — and false-positives because in a cross join
-                    // every probe row matches all build rows (match_count = build rows).
-                    //
-                    // We only clear single_to_inner when the probe (left) child has
-                    // precise_cardinality == Some(1). This indicates the scalar subquery
-                    // landed on the probe side (e.g. after RuleCommuteJoin swapped
-                    // children) and is a deterministic single-row producer (no-group-by
-                    // aggregate). In that case the build side is the main table whose
-                    // multiple rows are expected — the filter will reduce them after the
-                    // cross product. We intentionally do NOT clear when only the build
-                    // (right) side is single-row (match_count would be 1 anyway, so the
-                    // check never fires) or when only a fuzzy cardinality == 1.0 estimate
-                    // holds (could be a single-row main table like numbers(1), not the
-                    // subquery — we must preserve the runtime check for that case).
-                    let left_stat =
-                        RelExpr::with_s_expr(s_expr.left_child()).derive_cardinality()?;
-                    let probe_is_scalar =
-                        matches!(left_stat.statistics.precise_cardinality, Some(1));
+                    // The single-join runtime check can fire during the cross-product
+                    // matching phase before the filter is applied. It is only safe to
+                    // clear that marker when the scalar side itself is proven to produce
+                    // exactly one row; an exact one-row outer/probe side says nothing
+                    // about the scalar subquery's cardinality.
                     let join = if join.equi_conditions.is_empty()
                         && join.single_to_inner.is_some()
-                        && probe_is_scalar
+                        && single_join_scalar_side_is_precise_single_row(join, s_expr)?
                     {
                         let mut j = join.clone();
                         j.single_to_inner = None;
