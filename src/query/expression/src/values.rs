@@ -569,6 +569,47 @@ impl Scalar {
         }
     }
 
+    // Convert a scalar distance into a conservative f64 upper bound.
+    //
+    // Decimal values and large integers may lose precision when converted to f64,
+    // so those cases are rounded upward to the next representable f64.
+    pub fn to_distance_threshold(&self) -> Option<f64> {
+        let (threshold, needs_upper_bound) = match self {
+            Scalar::Number(number) => match number {
+                NumberScalar::Int8(v) => (*v as f64, false),
+                NumberScalar::Int16(v) => (*v as f64, false),
+                NumberScalar::Int32(v) => (*v as f64, false),
+                NumberScalar::Int64(v) => (*v as f64, *v > (1_i64 << 53)),
+                NumberScalar::UInt8(v) => (*v as f64, false),
+                NumberScalar::UInt16(v) => (*v as f64, false),
+                NumberScalar::UInt32(v) => (*v as f64, false),
+                NumberScalar::UInt64(v) => (*v as f64, *v > (1_u64 << 53)),
+                NumberScalar::Float32(v) => (v.0 as f64, false),
+                NumberScalar::Float64(v) => (v.0, false),
+            },
+            Scalar::Decimal(decimal) => (
+                match decimal {
+                    DecimalScalar::Decimal64(_, _)
+                    | DecimalScalar::Decimal128(_, _)
+                    | DecimalScalar::Decimal256(_, _) => decimal.to_float64(),
+                },
+                true,
+            ),
+            _ => return None,
+        };
+
+        if !threshold.is_finite() || threshold < 0.0 {
+            return None;
+        }
+
+        let threshold = if needs_upper_bound && threshold != f64::MAX {
+            threshold.next_up()
+        } else {
+            threshold
+        };
+        Some(threshold)
+    }
+
     pub fn as_bytes(&self) -> Option<&[u8]> {
         match self {
             Scalar::String(val) => Some(val.as_bytes()),

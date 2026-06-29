@@ -68,7 +68,6 @@ pub use spatial_index::SpatialIndexMeta;
 pub use spatial_index::rect_contains;
 pub use spatial_index::rects_distance_intersect;
 pub use spatial_index::rects_intersect;
-pub use spatial_index::scalar_to_distance_threshold;
 pub use spatial_index::spatial_false_domain;
 pub use spatial_predicate::SpatialPredicate;
 pub use spatial_predicate::SpatialPredicateOp;
