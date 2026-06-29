@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::F64;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -37,14 +36,8 @@ use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SpatialJoinCandidate {
-    pub predicate: ScalarExpr,
-    pub left_geometry: ScalarExpr,
-    pub right_geometry: ScalarExpr,
-    pub distance: Option<F64>,
-}
+use crate::plans::SpatialJoinCandidate;
+use crate::plans::is_spatial_join_shape;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -706,6 +699,10 @@ impl Operator for Join {
         }
 
         match (&probe_prop.distribution, &build_prop.distribution) {
+            (Distribution::Broadcast, _) if is_spatial_join_shape(self) => Ok(PhysicalProperty {
+                distribution: build_prop.distribution.clone(),
+            }),
+
             // If any side of the join is Broadcast, pass through the other side.
             (_, Distribution::Broadcast) => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
@@ -748,14 +745,50 @@ impl Operator for Join {
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
 
+        // Spatial join (Cascades fallback path on a concrete `SExpr`): there is
+        // no cost-based enumeration here, so single-select by broadcasting the
+        // smaller input. This matches the physical builder, which also prefers
+        // the smaller side as the R-tree build side. If either side is already
+        // Serial, fall back to a Serial spatial join.
+        if !ctx.get_cluster().is_empty() && is_spatial_join_shape(self) {
+            let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+            let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+            if left_physical_prop.distribution == Distribution::Serial
+                || right_physical_prop.distribution == Distribution::Serial
+            {
+                required.distribution = Distribution::Serial;
+                return Ok(required);
+            }
+
+            let left_cardinality = rel_expr.derive_cardinality_child(0)?.cardinality;
+            let right_cardinality = rel_expr.derive_cardinality_child(1)?.cardinality;
+            let broadcast_child = if left_cardinality <= right_cardinality {
+                0
+            } else {
+                1
+            };
+            required.distribution = if child_index == broadcast_child {
+                Distribution::Broadcast
+            } else {
+                Distribution::Any
+            };
+            return Ok(required);
+        }
+
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
+        // if join/probe side is Serial, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
-            || (self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty())
         {
+            // TODO(leiysky): we can enforce redistribution here
+            required.distribution = Distribution::Serial;
+            return Ok(required);
+        }
+
+        // if this is a non-equi join, we use Serial distribution
+        if self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty() {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
             return Ok(required);
@@ -829,6 +862,41 @@ impl Operator for Join {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
+
+        // Spatial join: enumerate the broadcast alternatives and let the cost
+        // model pick the cheaper build side (broadcasting the smaller input is
+        // cheaper). The physical builder reads the materialized exchange to
+        // decide which side actually builds the R-tree, so we do not pick a
+        // build side here, and we must not peek at child physical properties
+        // (they are not available during Cascades exploration).
+        if !ctx.get_cluster().is_empty() && is_spatial_join_shape(self) {
+            return Ok(vec![
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Any,
+                    },
+                ],
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Any,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ],
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                ],
+            ]);
+        }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
         if self.join_type.is_mark_join()
@@ -957,9 +1025,12 @@ mod tests {
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
     use crate::optimizer::ir::ColumnStat;
+    use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
     use crate::plans::CastExpr;
     use crate::plans::ConstantExpr;
+    use crate::plans::DummyTableScan;
+    use crate::plans::Exchange;
     use crate::plans::FunctionCall;
 
     fn column(index: usize, data_type: DataType) -> ScalarExpr {
@@ -993,6 +1064,10 @@ mod tests {
         })
     }
 
+    fn exchanged_scan(exchange: Exchange) -> SExpr {
+        SExpr::create_unary(exchange, SExpr::create_leaf(DummyTableScan::new()))
+    }
+
     fn apply_stats_condition(
         estimator: &mut JoinStatsEstimator,
         condition: &JoinEquiCondition,
@@ -1010,6 +1085,33 @@ mod tests {
             left_statistics,
             right_statistics,
         )
+    }
+
+    #[test]
+    fn test_spatial_join_left_broadcast_preserves_right_distribution() -> Result<()> {
+        let right_distribution =
+            Distribution::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]);
+        let join = Join {
+            non_equi_conditions: vec![function_call("st_intersects", vec![
+                column(0, DataType::Geometry),
+                column(1, DataType::Geometry),
+            ])],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_binary(
+            join,
+            exchanged_scan(Exchange::Broadcast),
+            exchanged_scan(Exchange::GlobalHash(vec![column(
+                2,
+                DataType::Number(NumberDataType::Int32),
+            )])),
+        );
+
+        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+
+        assert_eq!(physical_prop.distribution, right_distribution);
+        Ok(())
     }
 
     #[test]
