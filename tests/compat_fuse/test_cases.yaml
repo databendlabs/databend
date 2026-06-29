@@ -37,4 +37,3 @@
 # BlockMeta fields; an old reader must ignore them and fall back to whole-block reads.
 # index_granularity is a current-only feature, so the writer must always be current.
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: page_index }
-
