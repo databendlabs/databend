@@ -68,6 +68,8 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            page_index_location: None,
+            page_index_size: None,
             virtual_block_meta: None,
             compression: value.compression.into(),
             create_on: None,

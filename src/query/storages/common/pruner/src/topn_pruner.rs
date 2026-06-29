@@ -706,6 +706,7 @@ mod tests {
             segment_idx: 0,
             block_idx: block_id,
             range: None,
+            page_granule_range: None,
             page_size: if matched_rows == 0 { 1 } else { matched_rows },
             block_id,
             block_location: format!("block_{block_id}"),

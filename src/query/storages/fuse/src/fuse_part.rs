@@ -45,6 +45,10 @@ pub struct FuseBlockPartInfo {
     pub bloom_filter_index_size: u64,
     pub spatial_index_location: Option<Location>,
     pub spatial_index_size: u64,
+    #[serde(default)]
+    pub page_index_location: Option<Location>,
+    #[serde(default)]
+    pub page_index_size: u64,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
@@ -88,6 +92,8 @@ impl FuseBlockPartInfo {
         bloom_filter_index_size: u64,
         spatial_index_location: Option<Location>,
         spatial_index_size: u64,
+        page_index_location: Option<Location>,
+        page_index_size: u64,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
@@ -103,6 +109,8 @@ impl FuseBlockPartInfo {
             bloom_filter_index_size,
             spatial_index_location,
             spatial_index_size,
+            page_index_location,
+            page_index_size,
             create_on,
             columns_meta,
             nums_rows: rows_count as usize,

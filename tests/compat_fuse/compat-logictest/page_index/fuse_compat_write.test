@@ -1,0 +1,44 @@
+# Sparse page index forward-compat: current writer emits the page-index sidecar files and the new
+# BlockMeta fields (page_index_location/page_index_size); an older reader must still read the data
+# correctly by ignoring the unknown sidecar and falling back to whole-block reads.
+
+statement ok
+set global timezone = 'UTC';
+
+statement ok
+set global max_block_size = 65536;
+
+statement ok
+DROP TABLE IF EXISTS page_index_compat_table;
+
+# Single-column linear cluster key with a small granularity so each block holds many granules.
+statement ok
+CREATE TABLE page_index_compat_table (
+        a INT,
+        b INT,
+        c VARCHAR
+) Engine = Fuse CLUSTER BY (a) index_granularity = 100;
+
+# Multi-column cluster key exercises the per-element granule-min columns (m0/m1).
+statement ok
+DROP TABLE IF EXISTS page_index_compat_table_multi;
+
+statement ok
+CREATE TABLE page_index_compat_table_multi (
+        a INT,
+        b INT,
+        c VARCHAR
+) Engine = Fuse CLUSTER BY (a, b) index_granularity = 100;
+
+# Two inserts so the table has more than one block.
+statement ok
+INSERT INTO page_index_compat_table SELECT number, number * 2, concat('v', to_string(number)) FROM numbers(5000);
+
+statement ok
+INSERT INTO page_index_compat_table SELECT number + 5000, (number + 5000) * 2, concat('v', to_string(number + 5000)) FROM numbers(5000);
+
+statement ok
+INSERT INTO page_index_compat_table_multi SELECT number, number % 10, concat('v', to_string(number)) FROM numbers(5000);
+
+statement ok
+INSERT INTO page_index_compat_table_multi SELECT number + 5000, number % 10, concat('v', to_string(number + 5000)) FROM numbers(5000);

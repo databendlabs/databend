@@ -1,0 +1,59 @@
+# Read side of the sparse page index forward-compat test. The reader may be an older version that
+# does not understand the page-index sidecar; it must still return correct results by reading whole
+# blocks. The current reader additionally exercises the granule-narrowing read path.
+
+query I
+select count(*) from page_index_compat_table;
+----
+10000
+
+# Point lookup on the cluster key (inside a block, mid-granule).
+query IIT
+select a, b, c from page_index_compat_table where a = 4242;
+----
+4242 8484 v4242
+
+# Point lookup that crosses the two-insert boundary.
+query IIT
+select a, b, c from page_index_compat_table where a = 5000;
+----
+5000 10000 v5000
+
+# Range predicate spanning a granule boundary.
+query III
+select count(*), min(a), max(a) from page_index_compat_table where a between 5000 and 5099;
+----
+100 5000 5099
+
+# Out-of-range predicate: every granule excluded, must return empty.
+query I
+select count(*) from page_index_compat_table where a = 999999;
+----
+0
+
+# Full aggregate over the whole table.
+query III
+select count(*), min(a), max(a) from page_index_compat_table;
+----
+10000 0 9999
+
+# Multi-column cluster key table.
+query I
+select count(*) from page_index_compat_table_multi;
+----
+10000
+
+query IIT
+select a, b, c from page_index_compat_table_multi where a = 4242;
+----
+4242 2 v4242
+
+query III
+select count(*), min(a), max(a) from page_index_compat_table_multi where a between 3000 and 3099;
+----
+100 3000 3099
+
+query I
+select count(*) from page_index_compat_table_multi where a = 999999;
+----
+0

@@ -20,6 +20,7 @@ mod column_statistics_state;
 
 pub(crate) use block_builder::StreamBlockBuilder;
 pub(crate) use block_builder::StreamBlockProperties;
+pub(crate) use cluster_statistics::GranuleMinState;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimator;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimatorOps;
 pub(crate) use column_ndv_estimator::create_column_ndv_estimator;

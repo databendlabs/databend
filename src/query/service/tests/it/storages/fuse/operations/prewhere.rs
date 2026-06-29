@@ -332,6 +332,8 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         bloom_filter_index_size: 0,
         spatial_index_location: None,
         spatial_index_size: 0,
+        page_index_location: None,
+        page_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
         columns_meta: column_metas.clone(),

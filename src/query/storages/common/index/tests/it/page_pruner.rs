@@ -68,7 +68,6 @@ fn test_page_index() -> anyhow::Result<()> {
 
 fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>) {
     let func_ctx = FunctionContext::default();
-    let cluster_key_id = 0;
     let cluster_keys = vec!["a".to_string(), "b".to_string()];
 
     let schema = Arc::new(TableSchema::new(vec![
@@ -79,13 +78,15 @@ fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>
     let columns = [("a", Int32Type::data_type()), ("b", Int32Type::data_type())];
     let expr = parse_expr(text, &columns);
 
-    let index =
-        PageIndex::try_create(func_ctx, cluster_key_id, cluster_keys, &expr, schema).unwrap();
+    let index = PageIndex::try_create(func_ctx, cluster_keys, &expr, schema).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(stats) {
+    let stats = stats.as_ref().unwrap();
+    let mins = stats.pages.clone().unwrap();
+    let max = Scalar::Tuple(stats.max().clone());
+    match index.apply_with_mins(&mins, &max) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }

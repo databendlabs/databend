@@ -44,8 +44,6 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
-use databend_storages_common_pruner::PagePruner;
-use databend_storages_common_pruner::PagePrunerCreator;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
@@ -74,6 +72,7 @@ use crate::pruning::InvertedIndexPruner;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
+use crate::pruning::SparsePageIndexPruner;
 use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
@@ -90,7 +89,7 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
-    pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+    pub sparse_page_index_pruner: Option<Arc<SparsePageIndexPruner>>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
@@ -187,14 +186,20 @@ impl PruningContext {
             )?
         };
 
-        // Page pruner, used in native format
-        let page_pruner = PagePrunerCreator::try_create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            cluster_key_meta,
-            cluster_keys,
-        )?;
+        // Sparse page index pruner, used in parquet format with `index_granularity` set: narrows
+        // the byte ranges read per block to the granules matching the cluster-key predicate.
+        let sparse_page_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            SparsePageIndexPruner::try_create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                cluster_key_meta,
+                cluster_keys,
+                dal.clone(),
+            )?
+        };
 
         // inverted index pruner, used to search matched rows in block
         let inverted_index_pruner = if lightweight_pruning {
@@ -245,7 +250,7 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
-            page_pruner,
+            sparse_page_index_pruner,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,

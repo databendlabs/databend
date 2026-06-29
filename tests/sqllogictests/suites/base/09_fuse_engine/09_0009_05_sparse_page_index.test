@@ -1,0 +1,131 @@
+# Sparse page index: verify cluster-key predicates over a table written with `index_granularity`
+# return correct results. Exercises the write (granule split + index file) and read (byte-range
+# narrowing) paths end to end.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_05
+
+statement ok
+CREATE DATABASE db_09_0009_05
+
+statement ok
+USE db_09_0009_05
+
+# Clustered table with a small granule so a single block spans many granules.
+statement ok
+CREATE TABLE spi_t(a int, b string) CLUSTER BY (a) index_granularity = 100
+
+statement ok
+INSERT INTO spi_t SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+
+# Point lookup on the cluster key: only the matching granule's bytes should be read.
+query IT
+SELECT * FROM spi_t WHERE a = 4242
+----
+4242 v4242
+
+# Range fully inside one granule.
+query III
+SELECT count(*), min(a), max(a) FROM spi_t WHERE a >= 500 AND a < 600
+----
+100 500 599
+
+# Range spanning several granules.
+query I
+SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+# Predicate matching the very first rows.
+query I
+SELECT count(*) FROM spi_t WHERE a < 50
+----
+50
+
+# Predicate matching the tail (partial last granule territory).
+query I
+SELECT count(*) FROM spi_t WHERE a >= 9950
+----
+50
+
+# Predicate that matches nothing: whole-block skip.
+query I
+SELECT count(*) FROM spi_t WHERE a >= 100000
+----
+0
+
+# Aggregate over the full table is unaffected by narrowing (no cluster-key filter).
+query II
+SELECT count(*), sum(a) FROM spi_t
+----
+10000 49995000
+
+# Non-cluster-key predicate must still return correct rows (narrowing must not apply or must be safe).
+query IT
+SELECT * FROM spi_t WHERE b = 'v7777'
+----
+7777 v7777
+
+# Multiple disjoint ranges via OR over the cluster key.
+query I
+SELECT count(*) FROM spi_t WHERE (a >= 100 AND a < 200) OR (a >= 9000 AND a < 9100)
+----
+200
+
+# After reclustering, results must remain correct.
+statement ok
+ALTER TABLE spi_t RECLUSTER FINAL
+
+query IT
+SELECT * FROM spi_t WHERE a = 4242
+----
+4242 v4242
+
+query I
+SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+# ALTER CLUSTER KEY: existing blocks keep the old key id and old-key-sorted granule mins. The
+# sparse pruner must NOT narrow them with the new-key predicate, or it would drop matching rows.
+# Results must stay correct on the not-yet-reclustered data.
+statement ok
+ALTER TABLE spi_t CLUSTER BY (b)
+
+query IT
+SELECT * FROM spi_t WHERE a = 4242
+----
+4242 v4242
+
+query I
+SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+query I
+SELECT count(*) FROM spi_t WHERE a < 50
+----
+50
+
+# A predicate on the new cluster key must also be correct on the old-key blocks.
+query IT
+SELECT * FROM spi_t WHERE b = 'v7777'
+----
+7777 v7777
+
+# After reclustering to the new key, queries remain correct.
+statement ok
+ALTER TABLE spi_t RECLUSTER FINAL
+
+query IT
+SELECT * FROM spi_t WHERE a = 4242
+----
+4242 v4242
+
+query I
+SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+statement ok
+DROP DATABASE db_09_0009_05

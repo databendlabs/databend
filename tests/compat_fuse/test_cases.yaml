@@ -22,8 +22,18 @@
 # Requires writer >= 1.2.832 (procedure enabled by default since this version).
 - { writer: "1.2.833", reader: current, meta: [1.2.833], suite: rbac_current }
 
+# --- Cluster-key page-pruning backward compat: an old writer writes a `row_per_page` clustered
+# table (inline ClusterStatistics.pages, no sidecar); the current reader removed the legacy
+# page_pruner and must still read it correctly via whole-block reads.
+- { writer: "1.2.46", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: page_index_backward }
+
 # --- Forward compat: current writer -> old reader ---
 - { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf }
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: rbac_current }
+
+# --- Sparse page index forward compat: current writer emits the page-index sidecar + new
+# BlockMeta fields; an old reader must ignore them and fall back to whole-block reads.
+# index_granularity is a current-only feature, so the writer must always be current.
+- { writer: current, reader: "1.2.833", meta: [1.2.833], suite: page_index }

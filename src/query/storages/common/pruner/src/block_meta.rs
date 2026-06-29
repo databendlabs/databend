@@ -34,6 +34,12 @@ pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
+    /// Contiguous run of sparse-page-index granules `[start, end)` that survive the cluster-key
+    /// predicate, computed at prune time from the sidecar page index. `None` means no page-index
+    /// narrowing applies (read the whole block). Consumed at read time to issue narrowed,
+    /// granule-bounded byte-range reads. Distinct from `range`, which is the native-format row range.
+    #[serde(default)]
+    pub page_granule_range: Option<Range<usize>>,
     /// The page size of the block.
     /// If the block format is parquet, its page size is the rows count of the block.
     /// If the block format is native, its page size is the rows count of each page. (The rows count of the last page may be smaller than the page size.)

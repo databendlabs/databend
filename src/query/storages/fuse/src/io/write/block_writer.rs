@@ -64,6 +64,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::PageIndexState;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
@@ -92,7 +93,9 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let SerializedParquet { payload, metadata } = blocks_to_parquet_with_stats(
+            let SerializedParquet {
+                payload, metadata, ..
+            } = blocks_to_parquet_with_stats(
                 &schema,
                 vec![block],
                 write_settings.table_compression,
@@ -131,6 +134,7 @@ pub struct BlockSerialization {
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
     pub spatial_index_state: Option<SpatialIndexState>,
+    pub page_index_state: Option<PageIndexState>,
     pub column_hlls: Option<BlockHLLState>,
 }
 
@@ -278,6 +282,8 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
+            page_index_location: None,
+            page_index_size: None,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -301,6 +307,7 @@ impl BlockBuilder {
             virtual_column_state,
             vector_index_state,
             spatial_index_state,
+            page_index_state: None,
             column_hlls,
         };
         Ok(serialized)
@@ -339,6 +346,7 @@ impl BlockWriter {
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
+        Self::write_down_page_index_state(dal, serialized.page_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
@@ -411,6 +419,17 @@ impl BlockWriter {
             metrics_inc_block_spatial_index_write_nums(1);
             metrics_inc_block_spatial_index_write_bytes(index_size);
             metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_page_index_state(
+        dal: &Operator,
+        page_index_state: Option<PageIndexState>,
+    ) -> Result<()> {
+        if let Some(page_index_state) = page_index_state {
+            let location = &page_index_state.location.0;
+            write_data(page_index_state.data, dal, location).await?;
         }
         Ok(())
     }

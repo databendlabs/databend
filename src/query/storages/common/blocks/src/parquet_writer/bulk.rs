@@ -356,6 +356,17 @@ impl LeafColumnWriter<'_> {
         Ok(())
     }
 
+    /// Force a page boundary at the current position for this leaf. No-op when nothing is
+    /// buffered. The flushed page's `first_row_index` is recoverable from the file's offset index
+    /// after [`BulkBlockParquetWriter::finish`].
+    pub fn flush_page(&mut self) -> Result<()> {
+        match self {
+            LeafColumnWriter::ByteArray { writer, .. } => writer.flush_data_page()?,
+            LeafColumnWriter::Column { writer, .. } => writer.flush_data_page()?,
+        }
+        Ok(())
+    }
+
     /// Close this leaf, flushing its column chunk into the row group.
     pub fn close(self) -> Result<()> {
         match self {

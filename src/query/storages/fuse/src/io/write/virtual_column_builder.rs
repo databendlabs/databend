@@ -945,6 +945,7 @@ impl VirtualColumnBuilder {
         let SerializedParquet {
             payload,
             metadata: file_meta,
+            ..
         } = blocks_to_parquet_with_stats(
             virtual_block_schema.as_ref(),
             vec![virtual_block],

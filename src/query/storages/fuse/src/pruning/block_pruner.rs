@@ -107,7 +107,6 @@ impl BlockPruner {
                             prune_result,
                             block_meta.clone(),
                             block_meta.row_count,
-                            false,
                             true,
                         )
                         .await?;
@@ -240,7 +239,6 @@ impl BlockPruner {
                                 prune_result,
                                 block_meta,
                                 row_count,
-                                true,
                                 false,
                             )
                             .await
@@ -283,6 +281,7 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
+                        page_granule_range: prune_result.page_granule_range.clone(),
                         page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
@@ -313,7 +312,6 @@ impl BlockPruner {
         mut prune_result: BlockPruneResult,
         block_meta: Arc<BlockMeta>,
         row_count: u64,
-        apply_page_pruner: bool,
         limit_before_bloom: bool,
     ) -> Result<BlockPruneResult> {
         if !prune_result.keep {
@@ -324,10 +322,29 @@ impl BlockPruner {
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
-        let page_pruner = pruning_ctx.page_pruner.clone();
+        let sparse_page_index_pruner = pruning_ctx.sparse_page_index_pruner.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
+
+        // Sparse page index narrowing (parquet format, `index_granularity` set), run *before* the
+        // bloom filter: it is a cheap, precise cluster-key filter, so when its granule run is empty
+        // (no granule can satisfy the predicate) the whole block is dropped here and we skip the
+        // more expensive bloom-filter IO entirely. A non-empty run is stashed for the reader to
+        // fetch only those granules' byte ranges. Independent of the native-format page pruner.
+        if let Some(sparse_page_index_pruner) = sparse_page_index_pruner {
+            let range = pruning_cost
+                .measure_async(
+                    PruningCostKind::BlocksRange,
+                    sparse_page_index_pruner.select_granule_range(&block_meta),
+                )
+                .await;
+            if range.as_ref().is_some_and(|r| r.is_empty()) {
+                prune_result.keep = false;
+                return Ok(prune_result);
+            }
+            prune_result.page_granule_range = range;
+        }
 
         if limit_before_bloom {
             prune_result.keep = limit_pruner.within_limit(row_count);
@@ -366,12 +383,6 @@ impl BlockPruner {
             } else if !limit_before_bloom {
                 prune_result.keep = limit_pruner.within_limit(row_count);
             }
-        }
-
-        if prune_result.keep && apply_page_pruner {
-            let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-            prune_result.keep = keep;
-            prune_result.range = range;
         }
 
         if prune_result.keep {
@@ -452,7 +463,6 @@ impl BlockPruner {
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
-        let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let start = Instant::now();
 
@@ -491,26 +501,24 @@ impl BlockPruner {
                     continue;
                 }
 
-                let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-                if keep {
-                    result.push((
-                        BlockMetaIndex {
-                            segment_idx: segment_location.segment_idx,
-                            block_idx,
-                            range,
-                            page_size: block_meta.page_size() as usize,
-                            block_id: block_id_in_segment(block_num, block_idx),
-                            block_location: block_meta.as_ref().location.0.clone(),
-                            segment_location: segment_location.location.0.clone(),
-                            snapshot_location: segment_location.snapshot_loc.clone(),
-                            matched_rows: None,
-                            matched_scores: None,
-                            vector_scores: None,
-                            virtual_block_meta: None,
-                        },
-                        block_meta.clone(),
-                    ))
-                }
+                result.push((
+                    BlockMetaIndex {
+                        segment_idx: segment_location.segment_idx,
+                        block_idx,
+                        range: None,
+                        page_granule_range: None,
+                        page_size: block_meta.page_size() as usize,
+                        block_id: block_id_in_segment(block_num, block_idx),
+                        block_location: block_meta.as_ref().location.0.clone(),
+                        segment_location: segment_location.location.0.clone(),
+                        snapshot_location: segment_location.snapshot_loc.clone(),
+                        matched_rows: None,
+                        matched_scores: None,
+                        vector_scores: None,
+                        virtual_block_meta: None,
+                    },
+                    block_meta.clone(),
+                ))
             }
         }
 
@@ -535,6 +543,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
+    // the contiguous sparse-page-index granule run that survives the cluster-key predicate
+    page_granule_range: Option<Range<usize>>,
     // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search
     matched_rows: Option<Vec<usize>>,
@@ -551,6 +561,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
+            page_granule_range: None,
             matched_rows: None,
             matched_scores: None,
             virtual_block_meta: None,
@@ -563,6 +574,7 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
+            page_granule_range: block_meta_index.page_granule_range.clone(),
             matched_rows: block_meta_index.matched_rows.clone(),
             matched_scores: block_meta_index.matched_scores.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
@@ -571,6 +583,7 @@ impl BlockPruneResult {
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
+        block_meta_index.page_granule_range = self.page_granule_range;
         block_meta_index.matched_rows = self.matched_rows;
         block_meta_index.matched_scores = self.matched_scores;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;

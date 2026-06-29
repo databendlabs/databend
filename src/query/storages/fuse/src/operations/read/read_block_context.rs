@@ -37,6 +37,10 @@ pub struct ReadBlockContext {
     block_format: FuseParquetBlockFormat,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    /// Whether sparse-page-index byte-range narrowing may be applied. Disabled when the query
+    /// reads internal columns, virtual columns, or stream columns, or builds merge-into block
+    /// indexes — all of which depend on block-relative row positions that narrowing would shift.
+    allow_page_index_skip: bool,
 }
 
 impl ReadBlockContext {
@@ -47,6 +51,7 @@ impl ReadBlockContext {
         block_format: FuseParquetBlockFormat,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        allow_page_index_skip: bool,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             read_settings: ReadSettings::from_ctx(&ctx)?,
@@ -55,6 +60,7 @@ impl ReadBlockContext {
             block_format,
             index_reader,
             virtual_reader,
+            allow_page_index_skip,
         }))
     }
 
@@ -76,6 +82,15 @@ impl ReadBlockContext {
             .as_ref()
             .and_then(|source| source.ignore_column_ids.clone());
 
+        // Sparse-page-index narrowed read: when prune time selected a granule run and the query is
+        // eligible (no position-dependent columns) and no virtual columns are projected, fetch only
+        // the matching granules' byte ranges instead of the whole block.
+        if self.allow_page_index_skip && ignore_column_ids.is_none() {
+            if let Some(data) = self.try_read_data_by_page_index(fuse_part).await? {
+                return Ok(ParquetDataSource::Normal((data, virtual_source)));
+            }
+        }
+
         let data = self
             .block_format
             .read_data_by_merge_io(
@@ -88,6 +103,48 @@ impl ReadBlockContext {
             .await?;
 
         Ok(ParquetDataSource::Normal((data, virtual_source)))
+    }
+
+    /// Attempt a sparse-page-index narrowed read for `fuse_part`. Returns `None` when narrowing
+    /// does not apply (no granule range carried, or no sidecar index), so the caller falls back to
+    /// a full-block read. A failure to load/decode the sidecar degrades to `None` as well.
+    async fn try_read_data_by_page_index(
+        &self,
+        fuse_part: &FuseBlockPartInfo,
+    ) -> Result<Option<crate::io::BlockReadResult>> {
+        let Some(block_meta_index) = fuse_part.block_meta_index() else {
+            return Ok(None);
+        };
+        let Some(granule_range) = block_meta_index.page_granule_range.clone() else {
+            return Ok(None);
+        };
+        let Some(location) = fuse_part.page_index_location.as_ref() else {
+            return Ok(None);
+        };
+
+        let index = match crate::io::PageIndex::load(
+            self.block_read_ctx.operator(),
+            &location.0,
+            fuse_part.page_index_size,
+        )
+        .await
+        {
+            Ok(index) => index,
+            Err(e) => {
+                debug!(
+                    "[FUSE-READ] page index load failed for {}, reading whole block: {e}",
+                    fuse_part.location
+                );
+                return Ok(None);
+            }
+        };
+
+        let plan = index.read_plan_for_range(&granule_range, fuse_part.nums_rows);
+        let data = self
+            .block_read_ctx
+            .read_columns_data_by_page_index(&self.read_settings, &fuse_part.location, &plan)
+            .await?;
+        Ok(Some(data))
     }
 
     async fn read_agg_index_data(
@@ -132,6 +189,8 @@ impl ReadBlockContext {
 
         let part = FuseBlockPartInfo::create(
             location,
+            None,
+            0,
             None,
             0,
             None,

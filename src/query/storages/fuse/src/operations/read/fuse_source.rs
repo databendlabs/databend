@@ -93,6 +93,14 @@ pub fn build_fuse_source_pipeline(
         }
     };
 
+    // Sparse-page-index byte-range narrowing shifts block-relative row positions, so it is only
+    // safe when the query does not depend on those positions: no internal/stream columns, no
+    // virtual columns, and no merge-into block-index reservation.
+    let allow_page_index_skip = !plan.block_meta_options.query_internal_columns
+        && !plan.block_meta_options.update_stream_columns
+        && !plan.block_meta_options.reserve_block_index
+        && virtual_reader.as_ref().is_none();
+
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),
         storage_format,
@@ -100,6 +108,7 @@ pub fn build_fuse_source_pipeline(
         block_format,
         index_reader.clone(),
         virtual_reader.clone(),
+        allow_page_index_skip,
     )?;
 
     pipeline.add_transform(|input, output| {
