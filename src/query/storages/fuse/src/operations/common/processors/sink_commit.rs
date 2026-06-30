@@ -46,11 +46,13 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
 use log::error;
@@ -60,6 +62,7 @@ use opendal::Operator;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use crate::FuseTable;
+use crate::io::MetaWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
@@ -72,6 +75,7 @@ use crate::operations::VirtualSchemaMode;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
 use crate::statistics::TableStatsGenerator;
+use crate::statistics::stamp_table_statistics_with_snapshot_predecessor;
 
 enum State {
     None,
@@ -87,6 +91,7 @@ enum State {
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
+        table_statistics: Option<TableSnapshotStatistics>,
     },
     Abort(ErrorCode),
     Finish,
@@ -116,6 +121,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
     insert_hll: BlockHLL,
+    insert_top_n: BlockTopN,
     insert_rows: u64,
     enable_auto_analyze: bool,
 
@@ -181,6 +187,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             new_virtual_schema: None,
             new_virtual_schema_mode: VirtualSchemaMode::Merge,
             insert_hll: HashMap::new(),
+            insert_top_n: HashMap::new(),
             insert_rows: 0,
             start_time: Instant::now(),
             enable_auto_analyze,
@@ -298,9 +305,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
+            insert_rows,
             virtual_schema,
             virtual_schema_mode,
             hll,
+            top_n,
             ..
         } = meta;
 
@@ -308,17 +317,28 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let has_virtual_schema =
             virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
         let has_hll = !hll.is_empty();
+        let has_top_n = !top_n.is_empty();
+        let is_append_only_txn = self.is_append_only_txn();
+        let should_preserve_insert_rows =
+            has_hll || has_top_n || (has_new_segments && is_append_only_txn);
 
         self.new_segment_locs = new_segment_locs;
 
         self.new_virtual_schema = virtual_schema;
         self.new_virtual_schema_mode = virtual_schema_mode;
 
-        if has_hll {
+        if should_preserve_insert_rows {
             let binding = self.ctx.mutation_state().mutation_status();
             let status = binding.read().unwrap();
-            self.insert_rows = status.insert_rows + status.update_rows;
+            // CommitMeta::insert_rows is append row count only for append commits; rewrite
+            // mutations may carry rewritten block rows here.
+            self.insert_rows = if is_append_only_txn && insert_rows > 0 {
+                insert_rows
+            } else {
+                status.insert_rows + status.update_rows
+            };
             self.insert_hll = hll;
+            self.insert_top_n = top_n;
         }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
@@ -331,6 +351,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             has_new_segments,
             has_virtual_schema,
             has_hll,
+            has_top_n,
             self.allow_append_only_skip(),
         );
 
@@ -358,9 +379,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
         has_new_segments: bool,
         has_virtual_schema: bool,
         has_new_hll: bool,
+        has_new_top_n: bool,
         allow_append_only_skip: bool,
     ) -> bool {
-        if has_new_segments || has_virtual_schema || has_new_hll {
+        if has_new_segments || has_virtual_schema || has_new_hll || has_new_top_n {
             return false;
         }
 
@@ -389,6 +411,20 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .as_any()
             .downcast_ref::<AppendGenerator>()
             .is_some()
+    }
+
+    fn has_insert_top_n_input(&self) -> bool {
+        // Transaction commits may collapse intermediate snapshot lineage, so keep append TopN
+        // refresh to autocommit inserts until transaction stats invalidation is defined.
+        self.is_append_only_txn() && !self.ctx.txn_mgr().lock().is_active()
+    }
+
+    fn reuse_previous_table_stats(&self) -> bool {
+        !self
+            .snapshot_gen
+            .as_any()
+            .downcast_ref::<AppendGenerator>()
+            .is_some_and(|g| g.is_overwrite())
     }
 
     /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if nothing was
@@ -472,7 +508,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
-                table_stats_gen,
+                mut table_stats_gen,
                 cluster_key_meta,
                 table_info,
             } => {
@@ -504,6 +540,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 //    in this case, we only need standard conflict resolution.
                 // therefore, we can safely proceed.
 
+                let mut table_statistics = table_stats_gen.take_table_statistics();
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
                     cluster_key_meta,
@@ -514,10 +551,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
+                        stamp_table_statistics_with_snapshot_predecessor(
+                            &mut table_statistics,
+                            &snapshot,
+                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
+                            table_statistics,
                         };
                     }
                     Err(e) => {
@@ -605,7 +647,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         .fill_default_values(&schema, &previous)
                         .await?;
                     let table_stats_gen = fuse_table
-                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                        .generate_table_stats(
+                            &previous,
+                            &self.insert_hll,
+                            self.insert_rows,
+                            &self.insert_top_n,
+                            self.reuse_previous_table_stats(),
+                            self.has_insert_top_n_input(),
+                        )
                         .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
@@ -619,12 +668,21 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 data,
                 snapshot,
                 table_info,
+                table_statistics,
             } => {
                 snapshot.ensure_segments_unique()?;
                 let location = self
                     .location_gen
                     .gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 self.dal.write(&location, data).await?;
+                let table_statistics_location = snapshot.table_statistics_location();
+                if let (Some(table_statistics), Some(table_statistics_location)) =
+                    (&table_statistics, &table_statistics_location)
+                {
+                    table_statistics
+                        .write_meta(&self.dal, table_statistics_location)
+                        .await?;
+                }
                 let imperfect_count =
                     snapshot.summary.block_count - snapshot.summary.perfect_block_count;
 
@@ -781,7 +839,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let table_stats_gen = fuse_table
-                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                    .generate_table_stats(
+                        &previous,
+                        &self.insert_hll,
+                        self.insert_rows,
+                        &self.insert_top_n,
+                        self.reuse_previous_table_stats(),
+                        self.has_insert_top_n_input(),
+                    )
                     .await?;
 
                 // save current table info when commit to meta server

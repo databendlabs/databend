@@ -49,4 +49,5 @@ pub use reducers::reduce_block_statistics;
 pub use reducers::reduce_cluster_statistics;
 pub use spatial_stats::SpatialStatsBuilder;
 pub use table_statistics::TableStatsGenerator;
+pub(crate) use table_statistics::stamp_table_statistics_with_snapshot_predecessor;
 pub use traverse::traverse_values_dfs;

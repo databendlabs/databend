@@ -116,6 +116,8 @@ use crate::with_opaque_size;
 use crate::with_opaque_size_mapped;
 use crate::with_opaque_type;
 
+pub const LARGE_STRING_BYTES_THRESHOLD: usize = 256;
+
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: AccessType> {
     Scalar(T::Scalar),
@@ -1913,7 +1915,7 @@ impl Column {
         }
     }
 
-    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// Checks if the average length of a string column exceeds LARGE_STRING_BYTES_THRESHOLD bytes.
     /// If it does, the bloom index for the column will not be established.
     pub fn check_large_string(&self) -> bool {
         let (inner, len) = if let Column::Nullable(c) = self {
@@ -1923,7 +1925,7 @@ impl Column {
         };
         if let Column::String(v) = inner {
             let bytes_per_row = v.total_bytes_len() / len.max(1);
-            if bytes_per_row > 256 {
+            if bytes_per_row > LARGE_STRING_BYTES_THRESHOLD {
                 return true;
             }
         }

@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -211,7 +210,6 @@ struct SinkAnalyzeState {
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     top_n: Option<BlockTopN>,
-    dropped_top_n_columns: BTreeSet<ColumnId>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
     top_n_size: Option<usize>,
@@ -242,7 +240,6 @@ impl SinkAnalyzeState {
             unstats_rows: 0,
             ndv_states: Default::default(),
             top_n: top_n_size.map(|_| Default::default()),
-            dropped_top_n_columns: BTreeSet::new(),
             histograms: Default::default(),
             kll_histograms: Default::default(),
             top_n_size,
@@ -417,7 +414,7 @@ impl SinkAnalyzeState {
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         self.ndv_states.retain(|k, _| column_ids.contains(k));
         if let Some(top_n) = &mut self.top_n {
-            top_n.retain(|k, _| column_ids.contains(k) && !self.dropped_top_n_columns.contains(k));
+            top_n.retain(|k, _| column_ids.contains(k));
         }
 
         let mut new_snapshot = TableSnapshot::try_from_previous(
@@ -657,20 +654,10 @@ impl Processor for SinkAnalyzeState {
                                     .and_modify(|hll| hll.merge(column_hll))
                                     .or_insert_with(|| column_hll.clone());
                             }
-                            for column_id in meta.dropped_top_n_columns {
-                                self.dropped_top_n_columns.insert(column_id);
-                                if let Some(top_n) = &mut self.top_n {
-                                    top_n.remove(&column_id);
-                                }
-                            }
-                            if let Some(top_n_size) = self.top_n_size {
-                                let dropped_top_n_columns = &self.dropped_top_n_columns;
+                            if self.top_n_size.is_some() {
                                 match (&mut self.top_n, meta.top_n) {
-                                    (Some(top_n), Some(mut meta_top_n)) => {
-                                        meta_top_n.retain(|column_id, _| {
-                                            !dropped_top_n_columns.contains(column_id)
-                                        });
-                                        merge_column_top_n_mut(top_n, meta_top_n, top_n_size);
+                                    (Some(top_n), Some(meta_top_n)) => {
+                                        merge_column_top_n_mut(top_n, meta_top_n)?;
                                     }
                                     (_, None) => {
                                         self.top_n = None;

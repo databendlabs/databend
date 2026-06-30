@@ -317,7 +317,7 @@ async fn try_rebuild_req(
             merged_segments,
             latest_table.cluster_key_meta(),
             latest_table.cluster_type(),
-            latest_snapshot.table_statistics_location(),
+            None,
             table_meta_timestamps,
         )?;
         merged_snapshot.ensure_segments_unique()?;

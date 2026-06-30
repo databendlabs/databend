@@ -816,6 +816,7 @@ impl AsyncTransform for NgramIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
@@ -909,6 +910,7 @@ impl AsyncTransform for VectorIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
@@ -1014,6 +1016,7 @@ impl AsyncTransform for SpatialIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
