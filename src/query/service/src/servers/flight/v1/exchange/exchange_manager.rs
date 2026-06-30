@@ -196,13 +196,6 @@ impl DataExchangeManager {
         let inner = self.queries_coordinator.lock();
         let lock_wait = lock_start.elapsed();
 
-        debug!(
-            "Waited {:?} to acquire queries_coordinator lock at {}:{}",
-            lock_wait,
-            location.file(),
-            location.line()
-        );
-
         if lock_wait > QUERIES_COORDINATOR_LOCK_WAIT_WARN_THRESHOLD {
             warn!(
                 "Waited {:?} to acquire queries_coordinator lock at {}:{}",
