@@ -242,7 +242,7 @@ impl DataExchangeManager {
             for (query_id, query_coordinator) in queries_coordinator.iter() {
                 if let Some(info) = &query_coordinator.info {
                     if let Some(executor) = info.query_executor.clone() {
-                        executors.push((query_id, executor));
+                        executors.push((query_id.clone(), executor));
                     }
                 }
             }
