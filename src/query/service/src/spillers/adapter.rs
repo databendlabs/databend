@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -41,7 +40,7 @@ use crate::sessions::TableContextSpillProgress;
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
-    private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
+    private_spilled_files: Arc<RwLock<HashSet<Location>>>,
     /// 1 partition -> N partition files
     partition_location: HashMap<usize, Vec<(Location, usize, usize)>>,
 }
@@ -51,7 +50,7 @@ impl SpillAdapter for PartitionAdapter {
         self.private_spilled_files
             .write()
             .unwrap()
-            .insert(location.clone(), layout.clone());
+            .insert(location.clone());
 
         // Progress (SpillTotalStats) should reflect total spill volume,
         // including both local and remote spill files.
@@ -142,14 +141,11 @@ impl Spiller {
         self.adapter
             .add_spill_file(location.clone(), Layout::Parquet, data_size);
 
-        if let Some(v) = self.adapter.partition_location.get_mut(&partition) {
-            v.push((location, data_size, block_num));
-            return;
-        }
-
         self.adapter
             .partition_location
-            .insert(partition, vec![(location, data_size, block_num)]);
+            .entry(partition)
+            .or_default()
+            .push((location, data_size, block_num));
     }
 
     #[async_backtrace::framed]
@@ -172,14 +168,11 @@ impl Spiller {
 
         let location = self.spill(data).await?;
 
-        match self.adapter.partition_location.entry(partition_id) {
-            Entry::Vacant(v) => {
-                v.insert(vec![(location, 0, 0)]);
-            }
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().push((location, 0, 0));
-            }
-        };
+        self.adapter
+            .partition_location
+            .entry(partition_id)
+            .or_default()
+            .push((location, 0, 0));
 
         self.adapter
             .ctx
@@ -193,7 +186,7 @@ impl Spiller {
             .private_spilled_files
             .read()
             .unwrap()
-            .keys()
+            .iter()
             .cloned()
             .collect()
     }
