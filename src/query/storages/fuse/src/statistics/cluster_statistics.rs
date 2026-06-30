@@ -174,7 +174,10 @@ impl ClusterStatsGenerator {
 
         let mut block = data_block.clone();
 
-        if !self.cluster_key_index.is_empty() {
+        // For vector cluster keys, scalar keys after the vector key are aggregated from the
+        // full block because the block is sorted by the injected vector sort key, not by
+        // those scalar suffix keys.
+        if self.vector_operator.is_none() && !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
             block = block.take(indices.as_slice())?;
         }

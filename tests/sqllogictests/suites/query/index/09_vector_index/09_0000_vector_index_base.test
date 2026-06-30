@@ -16,6 +16,9 @@ CREATE TABLE t_vector_cluster_multi_distance(id Int, embedding Vector(8), VECTOR
 statement ok
 CREATE TABLE t_vector_cluster_single_distance(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) distance='cosine') Engine = Fuse CLUSTER BY(embedding)
 
+statement error
+DROP VECTOR INDEX idx ON t_vector_cluster_single_distance
+
 statement ok
 DROP TABLE t_vector_cluster_single_distance
 
