@@ -16,6 +16,8 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::ops::Deref;
+use std::ops::DerefMut;
+use std::panic::Location;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -44,6 +46,7 @@ use log::debug;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
+use parking_lot::ReentrantMutexGuard;
 use petgraph::Direction;
 use petgraph::prelude::EdgeRef;
 use tokio::sync::oneshot;
@@ -108,6 +111,28 @@ enum QueryExchange {
     },
 }
 
+type QueriesCoordinator = HashMap<String, QueryCoordinator>;
+
+const QUERIES_COORDINATOR_LOCK_WAIT_WARN_THRESHOLD: Duration = Duration::from_secs(1);
+
+struct QueriesCoordinatorGuard<'a> {
+    inner: ReentrantMutexGuard<'a, SyncUnsafeCell<QueriesCoordinator>>,
+}
+
+impl Deref for QueriesCoordinatorGuard<'_> {
+    type Target = QueriesCoordinator;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.deref().get() }
+    }
+}
+
+impl DerefMut for QueriesCoordinatorGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.inner.deref().get() }
+    }
+}
+
 async fn create_flight_client(
     address: String,
     use_current_rt: bool,
@@ -148,7 +173,7 @@ async fn create_flight_client(
 }
 
 pub struct DataExchangeManager {
-    queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
+    queries_coordinator: ReentrantMutex<SyncUnsafeCell<QueriesCoordinator>>,
 }
 
 impl DataExchangeManager {
@@ -164,10 +189,35 @@ impl DataExchangeManager {
         GlobalInstance::get()
     }
 
+    #[track_caller]
+    fn lock_queries_coordinator(&self) -> QueriesCoordinatorGuard<'_> {
+        let location = Location::caller();
+        let lock_start = Instant::now();
+        let inner = self.queries_coordinator.lock();
+        let lock_wait = lock_start.elapsed();
+
+        debug!(
+            "Waited {:?} to acquire queries_coordinator lock at {}:{}",
+            lock_wait,
+            location.file(),
+            location.line()
+        );
+
+        if lock_wait > QUERIES_COORDINATOR_LOCK_WAIT_WARN_THRESHOLD {
+            warn!(
+                "Waited {:?} to acquire queries_coordinator lock at {}:{}",
+                lock_wait,
+                location.file(),
+                location.line()
+            );
+        }
+
+        QueriesCoordinatorGuard { inner }
+    }
+
     pub fn get_running_query_graph_dump(&self, query_id: &str) -> Result<String> {
         let running_executor = {
-            let queries_coordinator_guard = self.queries_coordinator.lock();
-            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            let queries_coordinator = self.lock_queries_coordinator();
             let Some(coordinator) = queries_coordinator.get(query_id) else {
                 return Ok(format!("Unknown query {}", query_id));
             };
@@ -188,8 +238,7 @@ impl DataExchangeManager {
     pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         let mut executors = Vec::new();
         {
-            let queries_coordinator_guard = self.queries_coordinator.lock();
-            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            let queries_coordinator = self.lock_queries_coordinator();
             for (query_id, query_coordinator) in queries_coordinator.iter() {
                 if let Some(info) = &query_coordinator.info {
                     if let Some(executor) = info.query_executor.clone() {
@@ -210,8 +259,7 @@ impl DataExchangeManager {
     }
 
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         if let Some(coordinator) = queries_coordinator.get_mut(query_id) {
             if let Some(coordinator) = &coordinator.info {
@@ -415,8 +463,7 @@ impl DataExchangeManager {
                         }));
                 }
 
-                let queries_coordinator_guard = self.queries_coordinator.lock();
-                let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+                let mut queries_coordinator = self.lock_queries_coordinator();
 
                 match queries_coordinator.entry(env.query_id.clone()) {
                     Entry::Occupied(mut v) => {
@@ -449,8 +496,7 @@ impl DataExchangeManager {
 
     fn remove_if_leak_query(&self, query_id: String) {
         let leak_query_id = {
-            let queries_coordinator_guard = self.queries_coordinator.lock();
-            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            let queries_coordinator = self.lock_queries_coordinator();
 
             match queries_coordinator.get(&query_id) {
                 None => None,
@@ -539,8 +585,7 @@ impl DataExchangeManager {
     }
 
     pub fn set_ctx(&self, query_id: &str, ctx: Arc<QueryContext>) -> Result<()> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
@@ -561,8 +606,7 @@ impl DataExchangeManager {
     // Execute query in background
     #[fastrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::Internal(format!(
@@ -576,8 +620,7 @@ impl DataExchangeManager {
     // Create a pipeline based on query plan
     #[fastrace::trace]
     pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(&fragments.query_id) {
             None => Err(ErrorCode::Internal(format!(
@@ -594,8 +637,7 @@ impl DataExchangeManager {
         id: String,
         target: String,
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.entry(id) {
             Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
@@ -611,8 +653,7 @@ impl DataExchangeManager {
         query: String,
         channel_id: String,
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.entry(query) {
             Entry::Occupied(mut v) => v.get_mut().register_flight_channel_sender(channel_id),
@@ -638,8 +679,7 @@ impl DataExchangeManager {
             "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
             query_id, channel_id, num_threads
         );
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.entry(query_id.to_string()) {
             Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
@@ -658,8 +698,7 @@ impl DataExchangeManager {
         query_id: &str,
         channel_id: &str,
     ) -> Result<Arc<NetworkInboundChannelSet>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get(query_id) {
             None => Err(ErrorCode::Internal(format!(
@@ -685,8 +724,7 @@ impl DataExchangeManager {
         query_id: &str,
         channel_id: &str,
     ) -> Result<HashMap<String, PingPongExchange>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::Internal(format!(
@@ -701,8 +739,7 @@ impl DataExchangeManager {
     }
 
     pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
             query_coordinator.shutdown_query(cause);
@@ -711,21 +748,11 @@ impl DataExchangeManager {
 
     #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
-        let lock_start = Instant::now();
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let lock_wait = lock_start.elapsed();
-        if lock_wait > Duration::from_secs(1) {
-            warn!(
-                "Waited {:?} to acquire queries_coordinator lock in on_finished_query, query_id={}",
-                lock_wait, query_id
-            );
-        }
-
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
             // Drop mutex guard to avoid deadlock during shutdown,
-            drop(queries_coordinator_guard);
+            drop(queries_coordinator);
 
             query_coordinator.shutdown_query(cause);
             query_coordinator.on_finished();
@@ -788,8 +815,7 @@ impl DataExchangeManager {
     ) -> Result<PipelineBuildResult> {
         let query_id = ctx.get_id();
 
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
@@ -871,8 +897,7 @@ impl DataExchangeManager {
         &self,
         params: &ExchangeParams,
     ) -> Result<Vec<(String, FlightSender)>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(&params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
@@ -881,8 +906,7 @@ impl DataExchangeManager {
     }
 
     pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(&params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
@@ -898,8 +922,7 @@ impl DataExchangeManager {
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        let mut queries_coordinator = self.lock_queries_coordinator();
 
         match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
