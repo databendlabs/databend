@@ -229,7 +229,7 @@ impl Spiller {
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
         // Record statistics.
-        record_write_profile(&location, &instant, write_bytes);
+        record_write_profile(&location, instant.elapsed(), write_bytes);
 
         self.adapter
             .add_spill_file(location.clone(), layout, write_bytes);
@@ -273,7 +273,7 @@ impl Spiller {
         };
 
         // Record statistics.
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location, instant.elapsed(), data.len());
 
         // Deserialize partitioned data block.
         let mut partitioned_data = Vec::with_capacity(partitions.len());
@@ -307,7 +307,7 @@ impl Spiller {
             Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
         };
 
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location, instant.elapsed(), data.len());
 
         deserialize_block(layout, data)
     }

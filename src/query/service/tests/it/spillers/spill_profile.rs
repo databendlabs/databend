@@ -15,7 +15,7 @@
 //! Spill profile related tests: verify spill read/write metrics wiring to Profile.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::Duration;
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
@@ -48,8 +48,7 @@ fn test_spill_profile_write_local_and_remote() {
 
     {
         let _guard = ThreadTracker::tracking(payload_local);
-        let start = Instant::now();
-        record_write_profile(SpillTarget::Local, &start, 128);
+        record_write_profile(SpillTarget::Local, Duration::from_millis(1), 128);
     }
 
     assert_eq!(
@@ -68,8 +67,7 @@ fn test_spill_profile_write_local_and_remote() {
 
     {
         let _guard = ThreadTracker::tracking(payload_remote);
-        let start = Instant::now();
-        record_write_profile(SpillTarget::Remote, &start, 256);
+        record_write_profile(SpillTarget::Remote, Duration::from_millis(1), 256);
     }
 
     assert_eq!(
@@ -93,8 +91,7 @@ fn test_spill_profile_read_local_and_remote() {
 
     {
         let _guard = ThreadTracker::tracking(payload_local);
-        let start = Instant::now();
-        record_read_profile(SpillTarget::Local, &start, 64);
+        record_read_profile(SpillTarget::Local, Duration::from_millis(1), 64);
     }
 
     assert_eq!(
@@ -113,8 +110,7 @@ fn test_spill_profile_read_local_and_remote() {
 
     {
         let _guard = ThreadTracker::tracking(payload_remote);
-        let start = Instant::now();
-        record_read_profile(SpillTarget::Remote, &start, 512);
+        record_read_profile(SpillTarget::Remote, Duration::from_millis(1), 512);
     }
 
     assert_eq!(
