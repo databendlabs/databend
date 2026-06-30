@@ -510,6 +510,10 @@ impl Join {
         rel_expr: &RelExpr,
     ) -> Result<Option<(SkewHashInfo, SkewHashInfo)>> {
         let settings = ctx.get_settings();
+        if !settings.get_enable_experimental_skew_join()? {
+            return Ok(None);
+        }
+
         let node_count = ctx.get_cluster().nodes.len();
         let partition_count = ctx
             .get_cluster()

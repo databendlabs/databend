@@ -50,21 +50,28 @@ async fn test_topn_skew_join_enumerates_skew_hash_required_properties() -> Resul
     let children_required =
         rel_expr.compute_required_prop_children(ctx, &RequiredProperty::default())?;
 
-    assert_eq!(
-        children_required
-            .iter()
-            .filter(|props| is_normal_hash_required(props))
-            .count(),
-        1,
-        "join should enumerate exactly one normal hash required-property alternative"
+    assert_required_property_counts(&children_required, 1, 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_topn_skew_join_disabled_by_default_uses_normal_hash() -> Result<()> {
+    let ctx = setup_skew_join_context_with_default_skew_join_setting().await?;
+    let plan = optimize_skew_join_query(&ctx).await?;
+
+    let join_expr = find_join(plan_s_expr(&plan)).expect("optimized plan should contain a join");
+    let rel_expr = RelExpr::with_s_expr(join_expr);
+    let children_required =
+        rel_expr.compute_required_prop_children(ctx, &RequiredProperty::default())?;
+
+    assert_required_property_counts(&children_required, 1, 0);
+    assert!(
+        find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe).is_none(),
+        "skew join should be disabled by default and avoid probe-side skew exchange"
     );
-    assert_eq!(
-        children_required
-            .iter()
-            .filter(|props| is_skew_hash_required(props))
-            .count(),
-        1,
-        "join should enumerate exactly one skew hash required-property alternative"
+    assert!(
+        find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Build).is_none(),
+        "skew join should be disabled by default and avoid build-side skew exchange"
     );
     Ok(())
 }
@@ -119,6 +126,13 @@ async fn test_topn_skew_join_cost_prefers_skew_hash_by_margin() -> Result<()> {
 }
 
 async fn setup_skew_join_context() -> Result<Arc<LiteTableContext>> {
+    let ctx = setup_skew_join_context_with_default_skew_join_setting().await?;
+    ctx.get_settings()
+        .set_setting("enable_experimental_skew_join".to_string(), "1".to_string())?;
+    Ok(ctx)
+}
+
+async fn setup_skew_join_context_with_default_skew_join_setting() -> Result<Arc<LiteTableContext>> {
     let ctx = LiteTableContext::create().await?;
     ctx.configure_for_optimizer_case(true)?;
     ctx.set_table_warehouse_distribution(true);
@@ -230,6 +244,29 @@ fn is_normal_hash_required(props: &Vec<RequiredProperty>) -> bool {
             distribution: Distribution::GlobalHash(_),
         },
     ])
+}
+
+fn assert_required_property_counts(
+    children_required: &[Vec<RequiredProperty>],
+    normal_hash_count: usize,
+    skew_hash_count: usize,
+) {
+    assert_eq!(
+        children_required
+            .iter()
+            .filter(|props| is_normal_hash_required(props))
+            .count(),
+        normal_hash_count,
+        "unexpected normal hash required-property alternative count"
+    );
+    assert_eq!(
+        children_required
+            .iter()
+            .filter(|props| is_skew_hash_required(props))
+            .count(),
+        skew_hash_count,
+        "unexpected skew hash required-property alternative count"
+    );
 }
 
 fn is_skew_hash_required(props: &Vec<RequiredProperty>) -> bool {

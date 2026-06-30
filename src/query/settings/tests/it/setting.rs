@@ -110,6 +110,20 @@ async fn test_set_settings() {
         }
 
         {
+            assert!(!settings.get_enable_experimental_skew_join().unwrap());
+            settings
+                .set_setting("enable_experimental_skew_join".to_string(), "1".to_string())
+                .unwrap();
+            assert!(settings.get_enable_experimental_skew_join().unwrap());
+
+            let result =
+                settings.set_setting("enable_experimental_skew_join".to_string(), "2".to_string());
+            let expect =
+                "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
+
+        {
             assert!(!settings.get_enable_spatial_join().unwrap());
             assert_eq!(
                 settings.get_spatial_join_max_build_rows().unwrap(),

@@ -575,6 +575,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_skew_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental skew hash join optimization for TopN-detected hot keys. The setting is off by default.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_spatial_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables spatial join for supported inner spatial joins. The smaller side is indexed locally with an R-tree. The setting is off by default.",

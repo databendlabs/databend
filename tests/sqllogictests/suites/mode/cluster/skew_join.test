@@ -20,6 +20,9 @@ statement ok
 SET enforce_shuffle_join = 1
 
 statement ok
+SET enable_experimental_skew_join = 1
+
+statement ok
 SET optimizer_skip_list = ''
 
 statement ok

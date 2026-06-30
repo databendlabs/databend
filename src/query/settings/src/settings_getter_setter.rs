@@ -450,6 +450,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
     }
 
+    pub fn get_enable_experimental_skew_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_skew_join")? != 0)
+    }
+
     pub fn get_enable_spatial_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_spatial_join")? != 0)
     }
