@@ -47,6 +47,89 @@ EXPLAIN SELECT * FROM t_topn_on WHERE a = 1
 table: default.db_09_0053.t_topn_on<slt:ignore>estimated rows: 90.00
 
 statement ok
+CREATE TABLE t_topn_append_only(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_append_only
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+query T
+EXPLAIN SELECT * FROM t_topn_append_only WHERE a = 1
+----
+table: default.db_09_0053.t_topn_append_only<slt:ignore>estimated rows: 90.00
+
+query B
+SELECT snapshot:table_statistics_location::String IS NOT NULL FROM fuse_dump_snapshots('db_09_0053', 't_topn_append_only') LIMIT 1
+----
+1
+
+statement ok
+CREATE TABLE t_topn_append_accumulate(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_append_accumulate
+SELECT if(number < 60, 1, 2)::int FROM numbers(100)
+
+query I
+SELECT count(*) FROM t_topn_append_accumulate WHERE a = 1
+----
+60
+
+query T
+EXPLAIN SELECT * FROM t_topn_append_accumulate WHERE a = 1
+----
+table: default.db_09_0053.t_topn_append_accumulate<slt:ignore>estimated rows: 60.00
+
+statement ok
+INSERT INTO t_topn_append_accumulate
+SELECT 1::int FROM numbers(40)
+
+query I
+SELECT count(*) FROM t_topn_append_accumulate WHERE a = 1
+----
+100
+
+query T
+EXPLAIN SELECT * FROM t_topn_append_accumulate WHERE a = 1
+----
+table: default.db_09_0053.t_topn_append_accumulate<slt:ignore>estimated rows: 100.00
+
+query B
+SELECT count(DISTINCT snapshot:table_statistics_location::String) = 2
+FROM (SELECT snapshot FROM fuse_dump_snapshots('db_09_0053', 't_topn_append_accumulate') LIMIT 2)
+----
+1
+
+statement ok
+CREATE TABLE t_topn_large_string(s string) approx_distinct_columns = '' analyze_top_n_columns = 's' analyze_top_n_size = 1
+
+statement ok
+INSERT INTO t_topn_large_string
+SELECT if(number < 10, 'ok', repeat('x', 300)) FROM numbers(100)
+
+query I
+SELECT count(*) FROM t_topn_large_string WHERE s = 'ok'
+----
+10
+
+query T
+EXPLAIN SELECT * FROM t_topn_large_string WHERE s = 'ok'
+----
+table: default.db_09_0053.t_topn_large_string<slt:ignore>estimated rows: 10.00
+
+statement ok
+CREATE TABLE t_topn_large_string_only(s string) approx_distinct_columns = '' analyze_top_n_columns = 's' analyze_top_n_size = 1
+
+statement ok
+INSERT INTO t_topn_large_string_only
+SELECT repeat('x', 300 + (number % 2)::int) FROM numbers(100)
+
+query B
+SELECT snapshot:table_statistics_location::String IS NULL FROM fuse_dump_snapshots('db_09_0053', 't_topn_large_string_only') LIMIT 1
+----
+1
+
+statement ok
 CREATE TABLE t_topn_pending(a int, b int) approx_distinct_columns = ''
 
 statement ok
@@ -80,6 +163,9 @@ EXPLAIN SELECT * FROM t_topn_without_snapshot_stats WHERE a = 1
 table: default.db_09_0053.t_topn_without_snapshot_stats<slt:ignore>estimated rows: 90.00
 
 statement ok
+set enable_table_snapshot_stats = 1
+
+statement ok
 CREATE TABLE t_topn_after_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
 
 statement ok
@@ -96,7 +182,42 @@ SELECT 1::int FROM numbers(900)
 query T
 EXPLAIN SELECT * FROM t_topn_after_append WHERE a = 1
 ----
-table: default.db_09_0053.t_topn_after_append<slt:ignore>estimated rows: 500.00
+table: default.db_09_0053.t_topn_after_append<slt:ignore>estimated rows: 950.00
+
+statement ok
+CREATE TABLE t_topn_new_hot_after_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO t_topn_new_hot_after_append
+SELECT if(number < 60, 1, if(number < 70, 3, 2))::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_new_hot_after_append
+
+query T
+EXPLAIN SELECT * FROM t_topn_new_hot_after_append WHERE a = 3
+----
+table: default.db_09_0053.t_topn_new_hot_after_append<slt:ignore>estimated rows: 33.33
+
+statement ok
+INSERT INTO t_topn_new_hot_after_append
+SELECT 3::int FROM numbers(200)
+
+query I
+SELECT count(*) FROM t_topn_new_hot_after_append WHERE a = 3
+----
+210
+
+query T
+EXPLAIN SELECT * FROM t_topn_new_hot_after_append WHERE a = 3
+----
+table: default.db_09_0053.t_topn_new_hot_after_append<slt:ignore>estimated rows: 240.00
+
+query B
+SELECT count(DISTINCT snapshot:table_statistics_location::String) = 2
+FROM (SELECT snapshot FROM fuse_dump_snapshots('db_09_0053', 't_topn_new_hot_after_append') LIMIT 2)
+----
+1
 
 statement ok
 CREATE TABLE t_topn_after_update(id int, a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2

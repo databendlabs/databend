@@ -179,6 +179,7 @@ impl IPhysicalPlan for CommitSink {
                                         block_meta: Arc::unwrap_or_clone(block_meta),
                                         draft_virtual_block_meta: None,
                                         column_hlls: column_hlls.map(BlockHLLState::Serialized),
+                                        column_top_n: None,
                                     })
                                 })
                                 .collect::<Vec<Arc<ExtendedBlockMeta>>>();

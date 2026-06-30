@@ -38,6 +38,7 @@ use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -48,6 +49,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
 use log::debug;
@@ -93,6 +95,7 @@ pub struct TableMutationAggregator {
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
     hll: BlockHLL,
+    top_n: BlockTopN,
     write_segment_ctx: WriteSegmentCtx,
 
     start_time: Instant,
@@ -108,9 +111,9 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
         let task_num = mutation_logs.entries.len();
-        mutation_logs.entries.into_iter().for_each(|entry| {
-            self.accumulate_log_entry(entry);
-        });
+        for entry in mutation_logs.entries {
+            self.accumulate_log_entry(entry)?;
+        }
         if task_num > 0 {
             if self.finished_tasks == 0 {
                 self.ctx.set_status_info(&format!(
@@ -184,6 +187,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
+            std::mem::take(&mut self.top_n),
         );
         debug!("mutations {:?}", meta);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
@@ -253,6 +257,7 @@ impl TableMutationAggregator {
             removed_segment_indexes,
             removed_statistics,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
             write_segment_ctx,
             finished_tasks: 0,
             start_time: Instant::now(),
@@ -260,7 +265,16 @@ impl TableMutationAggregator {
         }
     }
 
-    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
+    fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
+        if let Some(top_n) = top_n
+            && !top_n.is_empty()
+        {
+            merge_column_top_n_mut(&mut self.top_n, top_n)?;
+        }
+        Ok(())
+    }
+
+    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) -> Result<()> {
         match log_entry {
             MutationLogEntry::ReplacedBlock { index, block_meta } => {
                 BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
@@ -278,6 +292,7 @@ impl TableMutationAggregator {
             }
             MutationLogEntry::AppendBlock { block_meta } => {
                 BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                self.accumulate_top_n(block_meta.column_top_n.clone())?;
                 self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
@@ -299,6 +314,7 @@ impl TableMutationAggregator {
                 format_version,
                 summary,
                 hll,
+                top_n,
             } => {
                 merge_statistics_mut(
                     &mut self.appended_statistics,
@@ -306,6 +322,7 @@ impl TableMutationAggregator {
                     self.write_segment_ctx.default_cluster_key,
                 );
                 merge_column_hll_mut(&mut self.hll, &hll);
+                self.accumulate_top_n(Some(top_n))?;
 
                 self.appended_segments
                     .push((segment_location, format_version));
@@ -346,6 +363,7 @@ impl TableMutationAggregator {
             }
             MutationLogEntry::DoNothing => (),
         }
+        Ok(())
     }
 
     async fn generate_append_segments(&mut self) -> Result<()> {

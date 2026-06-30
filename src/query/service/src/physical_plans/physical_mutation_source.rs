@@ -144,6 +144,7 @@ impl IPhysicalPlan for MutationSource {
                         virtual_schema: None,
                         virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
+                        top_n: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)

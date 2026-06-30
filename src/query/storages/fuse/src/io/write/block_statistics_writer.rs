@@ -20,6 +20,8 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::LARGE_STRING_BYTES_THRESHOLD;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -40,20 +42,18 @@ pub fn build_column_hlls(
 
 pub struct BlockStatsBuilder {
     builders: Vec<ColumnNDVBuilder>,
-    dropped_top_n: Vec<ColumnId>,
 }
 
 pub struct BlockStats {
     pub hll: BlockHLL,
     pub top_n: BlockTopN,
-    pub dropped_top_n: Vec<ColumnId>,
 }
 
 pub struct ColumnNDVBuilder {
     index: FieldIndex,
     field: TableField,
     pub hll: Option<ColumnNDVEstimator>,
-    pub top_n: Option<(ColumnTopN, usize)>,
+    pub top_n: Option<ColumnTopN>,
 }
 
 impl BlockStatsBuilder {
@@ -67,7 +67,7 @@ impl BlockStatsBuilder {
         for (index, field) in ndv_columns_map {
             let column_top_n = top_n
                 .and_then(|(columns, size)| columns.contains_key(index).then_some(size))
-                .map(|size| (ColumnTopN::default(), size));
+                .map(ColumnTopN::with_capacity);
             builders.push(ColumnNDVBuilder {
                 index: *index,
                 field: field.clone(),
@@ -85,45 +85,35 @@ impl BlockStatsBuilder {
                     index: *index,
                     field: field.clone(),
                     hll: None,
-                    top_n: Some((ColumnTopN::default(), top_n_size)),
+                    top_n: Some(ColumnTopN::with_capacity(top_n_size)),
                 });
             }
         }
 
-        BlockStatsBuilder {
-            builders,
-            dropped_top_n: vec![],
-        }
+        BlockStatsBuilder { builders }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
-        let mut keys_to_remove = vec![];
-        for (index, column_builder) in self.builders.iter_mut().enumerate() {
+        for column_builder in self.builders.iter_mut() {
             let entry = block.get_by_offset(column_builder.index);
             match entry {
                 BlockEntry::Const(s, _, num_rows) => {
                     if let Some(hll) = &mut column_builder.hll {
                         hll.update_scalar(&s.as_ref(), *num_rows as u64);
                     }
-                    if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
-                        top_n.add_with_size(*top_n_size, s.as_ref(), *num_rows as u64);
+                    if should_collect_top_n_scalar(&s.as_ref())
+                        && let Some(top_n) = &mut column_builder.top_n
+                    {
+                        top_n.add(s.as_ref(), *num_rows as u64);
                     }
                 }
                 BlockEntry::Column(col) => {
                     if col.check_large_string() {
-                        if column_builder.top_n.is_some() {
-                            let column_id = column_builder.field.column_id();
-                            if !self.dropped_top_n.contains(&column_id) {
-                                self.dropped_top_n.push(column_id);
-                            }
-                        }
-                        keys_to_remove.push(index);
-                        continue;
-                    }
-                    if let Some(hll) = &mut column_builder.hll {
+                        column_builder.hll = None;
+                    } else if let Some(hll) = &mut column_builder.hll {
                         hll.update_column(col);
                     }
-                    if let Some((top_n, top_n_size)) = &mut column_builder.top_n {
+                    if let Some(top_n) = &mut column_builder.top_n {
                         let mut row = 0;
                         while row < col.len() {
                             if let Some(scalar) = col.index(row) {
@@ -133,7 +123,9 @@ impl BlockStatsBuilder {
                                 {
                                     count += 1;
                                 }
-                                top_n.add_with_size(*top_n_size, scalar, count as u64);
+                                if should_collect_top_n_scalar(&scalar) {
+                                    top_n.add(scalar, count as u64);
+                                }
                                 row += count;
                             } else {
                                 row += 1;
@@ -144,11 +136,8 @@ impl BlockStatsBuilder {
             }
         }
 
-        // reverse sorting.
-        keys_to_remove.sort_by(|a, b| b.cmp(a));
-        for k in keys_to_remove {
-            self.builders.remove(k);
-        }
+        self.builders
+            .retain(|builder| builder.hll.is_some() || builder.top_n.is_some());
         Ok(())
     }
 
@@ -169,11 +158,8 @@ impl BlockStatsBuilder {
     }
 
     pub fn finalize_with_top_n(self) -> Result<Option<BlockStats>> {
-        let BlockStatsBuilder {
-            builders,
-            dropped_top_n,
-        } = self;
-        if builders.is_empty() && dropped_top_n.is_empty() {
+        let BlockStatsBuilder { builders } = self;
+        if builders.is_empty() {
             return Ok(None);
         }
 
@@ -184,22 +170,28 @@ impl BlockStatsBuilder {
             if let Some(hll) = column_builder.hll {
                 column_hlls.insert(column_id, hll.into_hll());
             }
-            if let Some((top_n, top_n_size)) = column_builder.top_n
+            if let Some(top_n) = column_builder.top_n
                 && !top_n.values.is_empty()
             {
-                column_top_n.insert(column_id, top_n.finish_with_size(top_n_size));
+                column_top_n.insert(column_id, top_n.finish());
             }
         }
 
-        if column_hlls.is_empty() && column_top_n.is_empty() && dropped_top_n.is_empty() {
+        if column_hlls.is_empty() && column_top_n.is_empty() {
             Ok(None)
         } else {
             Ok(Some(BlockStats {
                 hll: column_hlls,
                 top_n: column_top_n,
-                dropped_top_n,
             }))
         }
+    }
+}
+
+fn should_collect_top_n_scalar(scalar: &ScalarRef<'_>) -> bool {
+    match scalar {
+        ScalarRef::String(value) => value.len() <= LARGE_STRING_BYTES_THRESHOLD,
+        _ => true,
     }
 }
 
@@ -249,7 +241,7 @@ mod tests {
     }
 
     fn large_string_block() -> DataBlock {
-        let value = "x".repeat(257);
+        let value = "x".repeat(LARGE_STRING_BYTES_THRESHOLD + 1);
         DataBlock::new_from_columns(vec![StringType::from_data(vec![value])])
     }
 
@@ -314,17 +306,21 @@ mod tests {
     }
 
     #[test]
-    fn test_block_stats_builder_drops_top_n_after_large_string() -> Result<()> {
+    fn test_block_stats_builder_skips_large_string_top_n_value() -> Result<()> {
         let ndv_columns_map = empty_columns_map();
         let top_n_columns_map = string_columns_map();
-        let column_id = top_n_columns_map.get(&0).unwrap().column_id();
         let mut builder = BlockStatsBuilder::new(&ndv_columns_map, Some((&top_n_columns_map, 2)));
         builder.add_block(&small_string_block())?;
         builder.add_block(&large_string_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
-        assert!(stats.top_n.is_empty());
-        assert_eq!(stats.dropped_top_n, vec![column_id]);
+        let column_top_n = stats.top_n.values().next().unwrap();
+        assert_eq!(column_top_n.values.len(), 2);
+        assert!(
+            column_top_n.values.iter().all(|entry| {
+                matches!(&entry.scalar, Scalar::String(value) if value.len() <= LARGE_STRING_BYTES_THRESHOLD)
+            })
+        );
         Ok(())
     }
 }

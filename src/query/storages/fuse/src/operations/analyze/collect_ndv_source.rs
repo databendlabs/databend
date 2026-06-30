@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -36,7 +35,6 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ApproxDistinctColumns;
 use databend_common_statistics::KllSketch;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
@@ -87,16 +85,10 @@ struct SegmentWithHLL {
     block_indexes: Vec<usize>,
 }
 
-fn split_block_hll_top_n(
-    block_stats: Option<BlockStats>,
-) -> (Option<BlockHLL>, BlockTopN, Vec<ColumnId>) {
+fn split_block_hll_top_n(block_stats: Option<BlockStats>) -> (Option<BlockHLL>, BlockTopN) {
     match block_stats {
-        Some(stats) => (
-            (!stats.hll.is_empty()).then_some(stats.hll),
-            stats.top_n,
-            stats.dropped_top_n,
-        ),
-        None => (None, HashMap::new(), vec![]),
+        Some(stats) => ((!stats.hll.is_empty()).then_some(stats.hll), stats.top_n),
+        None => (None, HashMap::new()),
     }
 }
 
@@ -133,7 +125,6 @@ pub struct AnalyzeCollectNDVSource {
     io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     top_n: Option<BlockTopN>,
-    dropped_top_n_columns: BTreeSet<ColumnId>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
     row_count: u64,
     unstats_rows: u64,
@@ -205,7 +196,6 @@ impl AnalyzeCollectNDVSource {
             io_request_semaphore,
             column_hlls: HashMap::new(),
             top_n: (!top_n_columns_map.is_empty()).then(HashMap::new),
-            dropped_top_n_columns: BTreeSet::new(),
             kll_histograms: HashMap::new(),
             row_count: 0,
             segment_with_hll: None,
@@ -236,22 +226,6 @@ struct AnalyzeColumnProjection {
 
 type AnalyzeColumnFields = (Option<TableField>, Option<TableField>, Option<TableField>);
 
-fn top_n_column_fields_from_options(
-    table_schema: TableSchemaRef,
-    top_n_size: Option<usize>,
-    top_n_columns: Option<&str>,
-) -> Result<BTreeMap<FieldIndex, TableField>> {
-    let Some(_) = top_n_size else {
-        return Ok(BTreeMap::new());
-    };
-    let Some(columns) = top_n_columns else {
-        return Ok(BTreeMap::new());
-    };
-    columns
-        .parse::<ApproxDistinctColumns>()?
-        .distinct_column_fields(table_schema, RangeIndex::supported_table_type)
-}
-
 fn build_analyze_column_projection(
     table: &FuseTable,
     table_schema: TableSchemaRef,
@@ -262,8 +236,11 @@ fn build_analyze_column_projection(
     let ndv_columns_map = table
         .approx_distinct_cols
         .distinct_column_fields(table_schema.clone(), RangeIndex::supported_table_type)?;
-    let top_n_columns_map =
-        top_n_column_fields_from_options(table_schema.clone(), top_n_size, top_n_columns)?;
+    let top_n_columns_map = FuseTable::top_n_column_fields_from_options(
+        table_schema.clone(),
+        top_n_size,
+        top_n_columns,
+    )?;
     let mut analyze_columns: BTreeMap<FieldIndex, AnalyzeColumnFields> = BTreeMap::new();
     for (field_index, field) in ndv_columns_map {
         analyze_columns.insert(field_index, (Some(field), None, None));
@@ -359,9 +336,6 @@ impl Processor for AnalyzeCollectNDVSource {
                         self.unstats_rows,
                         std::mem::take(&mut self.column_hlls),
                         std::mem::take(&mut self.top_n),
-                        std::mem::take(&mut self.dropped_top_n_columns)
-                            .into_iter()
-                            .collect(),
                         std::mem::take(&mut self.kll_histograms),
                     ))));
                 self.state = State::Finish;
@@ -448,7 +422,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
                 let new_top_n = std::mem::take(&mut segment_with_hll.new_block_top_n);
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for ((new, mut top_n), idx) in new_hlls
+                for ((new, top_n), idx) in new_hlls
                     .into_iter()
                     .zip(new_top_n.into_iter())
                     .zip(new_indexes.into_iter())
@@ -462,12 +436,8 @@ impl Processor for AnalyzeCollectNDVSource {
                         }
                         segment_with_hll.raw_block_hlls[idx] = encode_column_hll(&column_hlls)?;
                     }
-                    if let (Some(block_top_n), Some(top_n_size)) =
-                        (&mut self.top_n, self.top_n_size)
-                    {
-                        let dropped_top_n_columns = &self.dropped_top_n_columns;
-                        top_n.retain(|column_id, _| !dropped_top_n_columns.contains(column_id));
-                        merge_column_top_n_mut(block_top_n, top_n, top_n_size);
+                    if let Some(block_top_n) = &mut self.top_n {
+                        merge_column_top_n_mut(block_top_n, top_n)?;
                     }
                 }
                 self.state = State::WriteMeta;
@@ -565,13 +535,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let mut new_hlls = Vec::with_capacity(block_stats.len());
                 let mut new_top_n = Vec::with_capacity(block_stats.len());
                 for (column_hlls, kll_histograms) in block_stats {
-                    let (hll, top_n, dropped_top_n) = split_block_hll_top_n(column_hlls);
-                    for column_id in dropped_top_n {
-                        self.dropped_top_n_columns.insert(column_id);
-                        if let Some(top_n) = &mut self.top_n {
-                            top_n.remove(&column_id);
-                        }
-                    }
+                    let (hll, top_n) = split_block_hll_top_n(column_hlls);
                     new_hlls.push(hll);
                     new_top_n.push(top_n);
                     for (column_id, sketch) in kll_histograms {
@@ -726,14 +690,12 @@ mod tests {
     fn split_block_hll_top_n_keeps_top_n_only_out_of_hll_slots() {
         let top_n = HashMap::from([(1, Default::default())]);
 
-        let (hll, top_n, dropped_top_n) = split_block_hll_top_n(Some(BlockStats {
+        let (hll, top_n) = split_block_hll_top_n(Some(BlockStats {
             hll: HashMap::new(),
             top_n,
-            dropped_top_n: vec![7],
         }));
 
         assert!(hll.is_none());
         assert_eq!(top_n.len(), 1);
-        assert_eq!(dropped_top_n, vec![7]);
     }
 }

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 
 #[derive(Clone, Default)]
@@ -26,6 +27,7 @@ pub struct TableStatsGenerator {
     row_count: u64,
     unstats_rows: u64,
     hll: BlockHLL,
+    table_statistics: Option<TableSnapshotStatistics>,
 }
 
 impl TableStatsGenerator {
@@ -35,6 +37,7 @@ impl TableStatsGenerator {
         row_count: u64,
         unstats_rows: u64,
         hll: BlockHLL,
+        table_statistics: Option<TableSnapshotStatistics>,
     ) -> Self {
         Self {
             prev_stats_meta,
@@ -42,11 +45,16 @@ impl TableStatsGenerator {
             row_count,
             unstats_rows,
             hll,
+            table_statistics,
         }
     }
 
     pub fn table_statistics_location(&self) -> Option<String> {
         self.prev_stats_location.clone()
+    }
+
+    pub fn take_table_statistics(&mut self) -> Option<TableSnapshotStatistics> {
+        self.table_statistics.take()
     }
 
     pub fn additional_stats_meta(self) -> Option<AdditionalStatsMeta> {

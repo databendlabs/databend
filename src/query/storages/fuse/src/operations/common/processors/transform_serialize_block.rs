@@ -157,6 +157,11 @@ impl TransformSerializeBlock {
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        let top_n = if matches!(kind, MutationKind::Insert) {
+            table.append_top_n_columns(source_schema.clone())?
+        } else {
+            None
+        };
         let ngram_args =
             FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
@@ -198,6 +203,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,
+            top_n,
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,

@@ -284,6 +284,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         histogram: None,
     })]);
     let top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(42)),
             count: 37,
@@ -311,6 +312,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "TopN equality estimates should compose with AND filters.",
     )?;
     let constrained_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 2,
         values: vec![
             ColumnTopNEntry {
                 scalar: Scalar::Number(NumberScalar::UInt64(1)),
@@ -347,6 +349,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "Approximate TopN frequencies should use the count upper bound for equality and the lower bound for inequality.",
     )?;
     let approximate_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(42)),
             count: 100,
@@ -380,6 +383,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         histogram: None,
     })]);
     let fallback_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(42)),
             count: 500,
@@ -413,6 +417,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         histogram: None,
     })]);
     let nullable_top_n = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(1)),
             count: 10,

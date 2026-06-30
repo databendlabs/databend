@@ -23,6 +23,7 @@ use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_storages_common_table_meta::meta::merge_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
@@ -242,6 +243,9 @@ impl TransformMergeCommitMeta {
                 ),
             };
 
+        let mut top_n = l.top_n;
+        merge_column_top_n_mut(&mut top_n, r.top_n)?;
+
         Ok(CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
@@ -258,6 +262,7 @@ impl TransformMergeCommitMeta {
             virtual_schema,
             virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
+            top_n,
         })
     }
 }
