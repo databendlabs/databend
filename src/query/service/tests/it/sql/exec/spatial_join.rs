@@ -82,8 +82,6 @@ async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()>
 
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_settings()
-        .set_setting("enable_join_runtime_filter".to_string(), "0".to_string())?;
     let db = fixture.default_db_name();
     prepare_spatial_join_tables(&fixture, &db).await?;
 
@@ -120,9 +118,6 @@ async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()>
         .await?;
     cluster_ctx
         .get_settings()
-        .set_setting("enable_join_runtime_filter".to_string(), "0".to_string())?;
-    cluster_ctx
-        .get_settings()
         .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
     let cluster_explain = run_query_pretty(cluster_ctx, &format!("EXPLAIN {join_sql}")).await?;
     assert!(
@@ -142,14 +137,71 @@ async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_spatial_join_dwithin_expands_bbox_candidates() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(2)?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.spatial_join_dwithin_left(id INT, geom GEOMETRY)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.spatial_join_dwithin_right(id INT, geom GEOMETRY)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {db}.spatial_join_dwithin_left VALUES \
+             (1, TO_GEOMETRY('POINT(0 0)'))"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {db}.spatial_join_dwithin_right VALUES \
+             (10, TO_GEOMETRY('POINT(1.5 0)')), \
+             (20, TO_GEOMETRY('POINT(5 0)'))"
+        ))
+        .await?;
+
+    let join_sql = format!(
+        "SELECT l.id, r.id \
+         FROM {db}.spatial_join_dwithin_left AS l \
+         JOIN {db}.spatial_join_dwithin_right AS r \
+         ON ST_DWithin(l.geom, r.geom, 2.0) \
+         ORDER BY l.id, r.id"
+    );
+
+    ctx.get_settings()
+        .set_setting("enable_spatial_join".to_string(), "0".to_string())?;
+    let main_result = run_query_pretty(ctx.clone(), &join_sql).await?;
+
+    ctx.get_settings()
+        .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
+    let spatial_result = run_query_pretty(ctx.clone(), &join_sql).await?;
+    assert_eq!(spatial_result, main_result);
+
+    let explain = run_query_pretty(ctx, &format!("EXPLAIN {join_sql}")).await?;
+    assert!(
+        explain.contains("SpatialJoin"),
+        "expected DWithin EXPLAIN to contain SpatialJoin, got:\n{explain}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_spatial_join_preserves_build_side_cache_join() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_settings()
-        .set_setting("enable_join_runtime_filter".to_string(), "0".to_string())?;
     ctx.get_settings()
         .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
     let db = fixture.default_db_name();
@@ -181,8 +233,6 @@ async fn test_spatial_join_falls_back_with_residual_predicate() -> anyhow::Resul
 
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_settings()
-        .set_setting("enable_join_runtime_filter".to_string(), "0".to_string())?;
     let db = fixture.default_db_name();
     prepare_spatial_join_tables(&fixture, &db).await?;
 

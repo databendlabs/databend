@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::F64;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -36,7 +37,14 @@ use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::plans::SpatialJoinCandidate;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SpatialJoinCandidate {
+    pub predicate: ScalarExpr,
+    pub left_geometry: ScalarExpr,
+    pub right_geometry: ScalarExpr,
+    pub distance: Option<F64>,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {

@@ -126,8 +126,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -135,6 +133,8 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
@@ -144,6 +144,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
@@ -1036,8 +1037,30 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        Ok(self.ctx.meta.update_dictionary(req).await?)
+    async fn get_dictionary_id(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        Ok(self
+            .ctx
+            .meta
+            .get_dictionary_id(&dict_ident)
+            .await
+            .map_err(meta_service_error)?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        Ok(self
+            .ctx
+            .meta
+            .update_dictionary_by_id(id_ident, dictionary_meta)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     #[async_backtrace::framed]
@@ -1070,7 +1093,12 @@ impl Catalog for MutableCatalog {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
-        Ok(self.ctx.meta.list_dictionaries(req).await?)
+        Ok(self
+            .ctx
+            .meta
+            .list_dictionaries(req)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     async fn set_table_lvt(

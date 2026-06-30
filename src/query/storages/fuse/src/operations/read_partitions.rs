@@ -1419,16 +1419,9 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.spatial_index_location.clone(),
-            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stats),
-            if spatial_stats.is_empty() {
-                None
-            } else {
-                Some(spatial_stats)
-            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -1484,16 +1477,9 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
-            meta.spatial_index_location.clone(),
-            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stat),
-            if spatial_stats.is_empty() {
-                None
-            } else {
-                Some(spatial_stats)
-            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),

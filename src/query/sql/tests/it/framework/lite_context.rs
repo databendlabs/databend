@@ -629,10 +629,6 @@ impl Catalog for DummyCatalog {
         unsupported("catalog::create_dictionary")
     }
 
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        unsupported("catalog::update_dictionary")
-    }
-
     async fn drop_dictionary(
         &self,
         _dict_ident: dictionary_name_ident::DictionaryNameIdent,
