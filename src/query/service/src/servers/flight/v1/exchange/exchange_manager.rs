@@ -12,61 +12,149 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::SyncUnsafeCell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::ops::Deref;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
+use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
+use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::spawn_blocking;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
+use fastrace::prelude::*;
+use log::debug;
 use log::warn;
 use parking_lot::Mutex;
+use parking_lot::ReentrantMutex;
+use petgraph::Direction;
+use petgraph::prelude::EdgeRef;
+use tokio::sync::oneshot;
 use tonic::Status;
 
+use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
-use super::query_handle::QueryExchangeRegistry;
-use super::query_handle::QueryHandle;
-use super::query_handle::QueryRuntime;
-use super::query_handle::create_flight_client;
+use super::exchange_params::GlobalExchangeParams;
+use super::exchange_params::MergeExchangeParams;
+use super::exchange_params::ShuffleExchangeParams;
+use super::exchange_sink::ExchangeSink;
+use super::exchange_transform::ExchangeTransform;
+use super::statistics_receiver::StatisticsReceiver;
+use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::attach_runtime_filter_logger;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::QueryFragmentsActions;
+use crate::servers::flight::DoExchangeParams;
 use crate::servers::flight::FlightClient;
+use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::keep_alive::build_keep_alive_config;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::actions::init_query_fragments;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::NetworkInboundSender;
 use crate::servers::flight::v1::network::PingPongExchange;
+use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
+use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 
-pub struct DataExchangeManager {
-    queries: QueriesCoordinator,
+enum QueryExchange {
+    Fragment {
+        channel: String,
+        exchange: FlightExchange,
+    },
+    Statistics {
+        source: String,
+        exchange: FlightExchange,
+    },
+    PingPong {
+        exchange_id: String,
+        target_id: String,
+        exchange: PingPongExchange,
+    },
 }
 
-pub(crate) struct QueriesCoordinator {
-    queries: Mutex<HashMap<String, Arc<QueryHandle>>>,
+async fn create_flight_client(
+    address: String,
+    use_current_rt: bool,
+    keep_alive: FlightKeepAliveParams,
+) -> Result<FlightClient> {
+    let config = GlobalConfig::instance();
+    let keep_alive_config = build_keep_alive_config(keep_alive);
+    let task = async move {
+        match config.tls_query_cli_enabled() {
+            true => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(
+                    address.to_owned(),
+                    None,
+                    Some(config.query.to_grpc_tls_config()),
+                    keep_alive_config,
+                )
+                .await?,
+            ))),
+            false => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(
+                    address.to_owned(),
+                    None,
+                    None,
+                    keep_alive_config,
+                )
+                .await?,
+            ))),
+        }
+    };
+    if use_current_rt {
+        task.await
+    } else {
+        GlobalIORuntime::instance()
+            .spawn(task)
+            .await
+            .expect("create client future must be joined successfully")
+    }
+}
+
+pub struct DataExchangeManager {
+    queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
         GlobalInstance::set(Arc::new(DataExchangeManager {
-            queries: QueriesCoordinator::create(),
+            queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
         }));
 
         Ok(())
@@ -77,33 +165,64 @@ impl DataExchangeManager {
     }
 
     pub fn get_running_query_graph_dump(&self, query_id: &str) -> Result<String> {
-        let Ok(handle) = self.queries.get_query(query_id) else {
-            return Ok(format!("Unknown query {}", query_id));
+        let running_executor = {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            let Some(coordinator) = queries_coordinator.get(query_id) else {
+                return Ok(format!("Unknown query {}", query_id));
+            };
+
+            let Some(info) = &coordinator.info else {
+                return Ok(format!("Unknown running query {}", query_id));
+            };
+
+            info.query_executor.clone()
         };
 
-        Ok(match handle.runtime.running_executor() {
+        Ok(match running_executor {
             None => format!("Unknown running query {}", query_id),
             Some(executor) => executor.get_inner().format_graph_nodes(),
         })
     }
 
     pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
-        self.queries
-            .handles()
+        let mut executors = Vec::new();
+        {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            for (query_id, query_coordinator) in queries_coordinator.iter() {
+                if let Some(info) = &query_coordinator.info {
+                    if let Some(executor) = info.query_executor.clone() {
+                        executors.push((query_id, executor));
+                    }
+                }
+            }
+        }
+        executors
             .into_iter()
-            .filter_map(|handle| {
-                handle.runtime.running_executor().map(|executor| {
-                    (
-                        handle.query_id.clone(),
-                        executor.get_inner().get_query_execution_stats(),
-                    )
-                })
+            .map(|(query_id, executor)| {
+                (
+                    query_id.clone(),
+                    executor.get_inner().get_query_execution_stats(),
+                )
             })
             .collect()
     }
 
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
-        self.queries.get_query(query_id)?.runtime.query_ctx()
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(coordinator) = queries_coordinator.get_mut(query_id) {
+            if let Some(coordinator) = &coordinator.info {
+                return Ok(coordinator.query_ctx.clone());
+            }
+        }
+
+        Err(ErrorCode::Internal(format!(
+            "Query {} not found in cluster.",
+            query_id
+        )))
     }
 
     #[async_backtrace::framed]
@@ -113,210 +232,239 @@ impl DataExchangeManager {
         env: &QueryEnv,
         ctx: Option<Arc<QueryContext>>,
     ) -> Result<()> {
-        let handle = self.queries.create_query(env.query_id.clone())?;
-        let remove_leak_query_worker = ctx.as_ref().map(|_| {
-            let query_id = env.query_id.clone();
-            GlobalIORuntime::instance().spawn(async move {
-                let _ = tokio::time::sleep(Duration::from_secs(180)).await;
-                DataExchangeManager::instance().remove_if_leak_query(query_id);
-            })
-        });
+        if env.perf_config.is_perf_active() {
+            if let Some(ctx) = ctx.as_ref() {
+                let mut perf_config = env.perf_config.clone();
+                // The coordinator already starts the profiler manually in ExplainPerfInterpreter.
+                // Suppress it here to avoid starting a second profiler on the same process.
+                if GlobalConfig::instance().query.node_id == env.request_server_id {
+                    perf_config.profiler_enabled = false;
+                }
+                ctx.set_perf_config(perf_config);
+            }
+        }
 
-        handle
-            .runtime
-            .init_env(env, ctx, &handle.exchanges, remove_leak_query_worker)
-            .await
-    }
+        let config = GlobalConfig::instance();
+        let with_cur_rt = env.create_rpc_clint_with_current_rt;
+        let settings = match ctx {
+            Some(ref ctx) => ctx.get_settings(),
+            None => env.settings.clone(),
+        };
+        let keep_alive = settings.get_flight_keep_alive_params()?;
 
-    #[async_backtrace::framed]
-    pub async fn create_client(
-        address: &str,
-        use_current_rt: bool,
-        keep_alive: FlightKeepAliveParams,
-    ) -> Result<FlightClient> {
-        create_flight_client(address.to_string(), use_current_rt, keep_alive).await
-    }
+        let mut request_exchanges = HashMap::new();
+        let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
 
-    pub fn set_ctx(&self, query_id: &str, ctx: Arc<QueryContext>) -> Result<()> {
-        let handle = self.queries.create_query(query_id.to_string())?;
-        handle.runtime.set_ctx(ctx, None)
-    }
+        for index in env.dataflow_diagram.node_indices() {
+            if env.dataflow_diagram[index].id == config.query.node_id {
+                let mut flight_exchanges: Vec<
+                    std::pin::Pin<
+                        Box<dyn std::future::Future<Output = Result<QueryExchange>> + Send>,
+                    >,
+                > = vec![];
 
-    #[fastrace::trace]
-    pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
-        let handle = self.queries.get_query(query_id)?;
-        handle.runtime.execute(&handle.exchanges)
-    }
+                // Process incoming edges: do_get for Fragment, skip ExchangeFragment
+                let incoming_edges = env
+                    .dataflow_diagram
+                    .edges_directed(index, Direction::Incoming);
 
-    #[fastrace::trace]
-    pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
-        let handle = self.queries.get_query(&fragments.query_id)?;
-        handle.runtime.prepare_fragments(fragments)?;
+                for edge in incoming_edges {
+                    let source = env.dataflow_diagram[edge.source()].clone();
+                    let target = env.dataflow_diagram[edge.target()].clone();
+                    let edge = edge.weight().clone();
+
+                    let query_id = env.query_id.clone();
+                    let address = source.flight_address.clone();
+
+                    let keep_alive_params = keep_alive;
+                    match edge {
+                        Edge::Fragment(channel) => {
+                            flight_exchanges.push(Box::pin(async move {
+                                let mut flight_client =
+                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
+                                        .await?;
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
+                                    channel: channel.clone(),
+                                    exchange: flight_client.do_get(&query_id, &channel).await?,
+                                })
+                            }));
+                        }
+                        Edge::Statistics => {
+                            flight_exchanges.push(Box::pin(async move {
+                                let mut flight_client =
+                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
+                                        .await?;
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::Statistics {
+                                    source: source.id.clone(),
+                                    exchange: flight_client
+                                        .request_server_exchange(&query_id, &target.id)
+                                        .await?,
+                                })
+                            }));
+                        }
+                        Edge::ExchangeFragment { .. } => {
+                            // Skip: remote sender will call do_exchange on us,
+                            // handled by handle_do_exchange → NetworkInboundSender
+                        }
+                    }
+                }
+
+                // Process outgoing edges: do_exchange for ExchangeFragment
+                let outgoing_edges = env
+                    .dataflow_diagram
+                    .edges_directed(index, Direction::Outgoing);
+
+                for edge in outgoing_edges {
+                    let target = env.dataflow_diagram[edge.target()].clone();
+                    let edge = edge.weight().clone();
+
+                    if let Edge::ExchangeFragment {
+                        exchange_id,
+                        channels,
+                    } = edge
+                    {
+                        let target_id = target.id.clone();
+                        let query_id = env.query_id.clone();
+                        let address = target.flight_address.clone();
+                        let keep_alive_params = keep_alive;
+                        let num_threads = channels.len();
+                        debug!(
+                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
+                            config.query.node_id, target_id, exchange_id, num_threads
+                        );
+
+                        flight_exchanges.push(Box::pin(async move {
+                            let (send_tx, response_stream) = {
+                                let mut flight_client =
+                                    create_flight_client(address, with_cur_rt, keep_alive_params)
+                                        .await?;
+
+                                let (send_tx, send_rx) = async_channel::bounded(1);
+                                let response_stream = flight_client
+                                    .do_exchange(send_rx, DoExchangeParams {
+                                        query_id,
+                                        num_threads,
+                                        exchange_id: exchange_id.clone(),
+                                    })
+                                    .await
+                                    .map_err(|e| {
+                                        ErrorCode::Internal(format!(
+                                            "PingPong connect failed: {}",
+                                            e
+                                        ))
+                                    })?;
+                                Ok::<_, ErrorCode>((send_tx, response_stream))
+                            }?;
+
+                            Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
+                                target_id,
+                                exchange_id,
+                                exchange: PingPongExchange::from_parts(
+                                    num_threads,
+                                    send_tx,
+                                    response_stream,
+                                ),
+                            })
+                        }));
+                    }
+                }
+
+                let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
+
+                let mut ping_pong_exchanges =
+                    HashMap::<String, HashMap<String, PingPongExchange>>::new();
+
+                for flight_exchange in flight_exchanges {
+                    match flight_exchange {
+                        QueryExchange::Fragment { channel, exchange } => {
+                            match targets_exchanges.entry(channel) {
+                                Entry::Occupied(mut v) => v.get_mut().push(exchange),
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![exchange]);
+                                }
+                            }
+                        }
+                        QueryExchange::Statistics { source, exchange } => {
+                            request_exchanges.insert(source, exchange);
+                        }
+                        QueryExchange::PingPong {
+                            exchange_id,
+                            exchange,
+                            target_id,
+                        } => {
+                            match ping_pong_exchanges.entry(exchange_id) {
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().insert(target_id, exchange);
+                                }
+                                Entry::Vacant(v) => {
+                                    v.insert(HashMap::from([(target_id, exchange)]));
+                                }
+                            };
+                        }
+                    };
+                }
+
+                let mut query_info = Self::create_info(ctx)?;
+
+                if let Some(query_info) = query_info.as_mut() {
+                    let query_id = env.query_id.clone();
+                    query_info.remove_leak_query_worker =
+                        Some(GlobalIORuntime::instance().spawn(async move {
+                            let _ = tokio::time::sleep(Duration::from_secs(180)).await;
+                            DataExchangeManager::instance().remove_if_leak_query(query_id);
+                        }));
+                }
+
+                let queries_coordinator_guard = self.queries_coordinator.lock();
+                let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+                match queries_coordinator.entry(env.query_id.clone()) {
+                    Entry::Occupied(mut v) => {
+                        let query_coordinator = v.get_mut();
+                        query_coordinator.info = query_info;
+                        query_coordinator.is_request_server =
+                            GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
+                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
+                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                    }
+                    Entry::Vacant(v) => {
+                        let query_coordinator = v.insert(QueryCoordinator::create());
+                        query_coordinator.info = query_info;
+                        query_coordinator.is_request_server =
+                            GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
+                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
+                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                    }
+                };
+
+                return Ok(());
+            }
+        }
+
+        // do nothing
         Ok(())
     }
 
-    #[fastrace::trace]
-    pub fn handle_statistics_exchange(
-        &self,
-        id: String,
-        target: String,
-    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
-        self.queries
-            .create_query(id)?
-            .exchanges
-            .add_statistics_exchange(target)
-    }
+    fn remove_if_leak_query(&self, query_id: String) {
+        let leak_query_id = {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-    #[fastrace::trace]
-    pub fn handle_exchange_fragment(
-        &self,
-        query: String,
-        channel_id: String,
-    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
-        self.queries
-            .create_query(query)?
-            .exchanges
-            .register_flight_channel_sender(channel_id)
-    }
-
-    #[fastrace::trace]
-    pub fn handle_do_exchange(
-        &self,
-        query_id: &str,
-        channel_id: &str,
-        num_threads: usize,
-    ) -> Result<NetworkInboundSender> {
-        self.queries
-            .create_query(query_id.to_string())?
-            .exchanges
-            .create_inbound_sender(channel_id, num_threads)
-    }
-
-    pub fn get_exchange_channel_set(
-        &self,
-        query_id: &str,
-        channel_id: &str,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
-        self.queries
-            .get_query(query_id)?
-            .exchanges
-            .get_exchange_channel_set(channel_id)
-    }
-
-    pub fn take_ping_pong_exchanges(
-        &self,
-        query_id: &str,
-        channel_id: &str,
-    ) -> Result<HashMap<String, PingPongExchange>> {
-        Ok(self
-            .queries
-            .get_query(query_id)?
-            .exchanges
-            .take_ping_pong_exchanges(channel_id))
-    }
-
-    pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) {
-        if let Ok(handle) = self.queries.get_query(query_id) {
-            handle.runtime.shutdown(cause.clone());
-        }
-    }
-
-    #[fastrace::trace]
-    pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
-        if let Some(handle) = self.queries.remove_query(query_id) {
-            handle.runtime.shutdown(cause.clone());
-        }
-    }
-
-    #[fastrace::trace]
-    pub async fn commit_actions(
-        &self,
-        ctx: Arc<QueryContext>,
-        actions: QueryFragmentsActions,
-    ) -> Result<PipelineBuildResult> {
-        let handle = self.queries.create_query(ctx.get_id())?;
-        let settings = ctx.get_settings();
-        let flight_params = FlightParams {
-            timeout: settings.get_flight_client_timeout()?,
-            retry_times: settings.get_flight_max_retry_times()?,
-            retry_interval: settings.get_flight_retry_interval()?,
-            keep_alive: settings.get_flight_keep_alive_params()?,
-        };
-        let mut root_fragment_ids = actions.get_root_fragment_ids()?;
-
-        let query_env = actions.get_query_env()?;
-        query_env.init(&ctx, flight_params).await?;
-
-        let cluster = ctx.get_cluster();
-        let mut query_fragments = actions.get_query_fragments()?;
-        let local_fragments = query_fragments.remove(
-            &databend_common_config::GlobalConfig::instance()
-                .query
-                .node_id,
-        );
-
-        let _: HashMap<String, ()> = cluster
-            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
-            .await?;
-
-        self.set_ctx(&ctx.get_id(), ctx.clone())?;
-        if let Some(query_fragments) = local_fragments {
-            init_query_fragments(query_fragments).await?;
-        }
-
-        let main_fragment_id = root_fragment_ids.pop().unwrap();
-        let build_res = handle.runtime.root_pipeline(
-            ctx,
-            &handle.exchanges,
-            main_fragment_id,
-            root_fragment_ids,
-        )?;
-
-        let prepared_query = actions.prepared_query()?;
-        let _: HashMap<String, ()> = cluster
-            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
-            .await?;
-
-        Ok(build_res)
-    }
-
-    pub fn get_flight_sender(
-        &self,
-        params: &ExchangeParams,
-    ) -> Result<Vec<(String, FlightSender)>> {
-        self.queries
-            .get_query(&params.get_query_id())?
-            .exchanges
-            .take_flight_sender(params)
-    }
-
-    pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
-        self.queries
-            .get_query(&params.get_query_id())?
-            .exchanges
-            .take_flight_receiver(params)
-    }
-
-    pub fn get_fragment_source(
-        &self,
-        query_id: &str,
-        fragment_id: usize,
-        injector: Arc<dyn ExchangeInjector>,
-    ) -> Result<PipelineBuildResult> {
-        let handle = self.queries.get_query(query_id)?;
-        let ctx = handle.runtime.query_ctx()?;
-        handle
-            .runtime
-            .subscribe_fragment(&ctx, fragment_id, injector)
-    }
-
-    pub(crate) fn remove_if_leak_query(&self, query_id: String) {
-        let should_remove = match self.queries.get_query(&query_id) {
-            Ok(handle) => !handle.runtime.is_started(),
-            Err(_) => false,
+            match queries_coordinator.get(&query_id) {
+                None => None,
+                Some(may_leak_query) => {
+                    let info = may_leak_query.info.as_ref().expect("expect query info");
+                    match info.started.load(Ordering::SeqCst) {
+                        true => None,
+                        false => Some(query_id),
+                    }
+                }
+            }
         };
 
-        if should_remove {
+        if let Some(query_id) = leak_query_id {
             warn!(
                 "Query {} cannot start command while in 180 seconds",
                 query_id
@@ -330,45 +478,921 @@ impl DataExchangeManager {
             );
         }
     }
-}
 
-impl QueriesCoordinator {
-    pub(crate) fn create() -> Self {
-        QueriesCoordinator {
-            queries: Mutex::new(HashMap::new()),
-        }
-    }
+    fn create_info(query_ctx: Option<Arc<QueryContext>>) -> Result<Option<QueryInfo>> {
+        match query_ctx {
+            None => Ok(None),
+            Some(query_ctx) => {
+                let query_id = query_ctx.get_id();
 
-    pub(crate) fn create_query(&self, query_id: String) -> Result<Arc<QueryHandle>> {
-        let mut queries = self.queries.lock();
-        match queries.entry(query_id.clone()) {
-            Entry::Occupied(v) => Ok(v.get().clone()),
-            Entry::Vacant(v) => {
-                let handle = Arc::new(QueryHandle {
-                    query_id,
-                    exchanges: QueryExchangeRegistry::create(),
-                    runtime: QueryRuntime::create(),
-                });
-                v.insert(handle.clone());
-                Ok(handle)
+                Ok(Some(QueryInfo {
+                    query_ctx,
+                    query_executor: None,
+                    query_id: query_id.clone(),
+                    started: AtomicBool::new(false),
+                    current_executor: GlobalConfig::instance().query.node_id.clone(),
+                    remove_leak_query_worker: None,
+                }))
             }
         }
     }
 
-    pub(crate) fn get_query(&self, query_id: &str) -> Result<Arc<QueryHandle>> {
-        self.queries.lock().get(query_id).cloned().ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "Query {} not found in queries coordinator.",
+    #[async_backtrace::framed]
+    pub async fn create_client(
+        address: &str,
+        use_current_rt: bool,
+        keep_alive: FlightKeepAliveParams,
+    ) -> Result<FlightClient> {
+        let config = GlobalConfig::instance();
+        let address = address.to_string();
+        let keep_alive_config = build_keep_alive_config(keep_alive);
+        let task = async move {
+            match config.tls_query_cli_enabled() {
+                true => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        Some(config.query.to_grpc_tls_config()),
+                        keep_alive_config,
+                    )
+                    .await?,
+                ))),
+                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        None,
+                        keep_alive_config,
+                    )
+                    .await?,
+                ))),
+            }
+        };
+        if use_current_rt {
+            task.await
+        } else {
+            GlobalIORuntime::instance()
+                .spawn(task)
+                .await
+                .expect("create client future must be joined successfully")
+        }
+    }
+
+    pub fn set_ctx(&self, query_id: &str, ctx: Arc<QueryContext>) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
                 query_id
-            ))
+            ))),
+            Some(coordinator) => {
+                if let Some(info) = coordinator.info.as_mut() {
+                    info.query_ctx = ctx;
+                    return Ok(());
+                }
+
+                coordinator.info = Self::create_info(Some(ctx))?;
+                Ok(())
+            }
+        }
+    }
+
+    // Execute query in background
+    #[fastrace::trace]
+    pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => coordinator.execute_pipeline(),
+        }
+    }
+
+    // Create a pipeline based on query plan
+    #[fastrace::trace]
+    pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(&fragments.query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                fragments.query_id
+            ))),
+            Some(query_coordinator) => query_coordinator.prepare_pipeline(fragments),
+        }
+    }
+
+    #[fastrace::trace]
+    pub fn handle_statistics_exchange(
+        &self,
+        id: String,
+        target: String,
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(id) {
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .add_statistics_exchange(target),
+        }
+    }
+
+    #[fastrace::trace]
+    pub fn handle_exchange_fragment(
+        &self,
+        query: String,
+        channel_id: String,
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query) {
+            Entry::Occupied(mut v) => v.get_mut().register_flight_channel_sender(channel_id),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .register_flight_channel_sender(channel_id),
+        }
+    }
+
+    /// Handle a do_exchange request from a remote node.
+    ///
+    /// Creates a `NetworkInboundSender` for this connection, bound to the
+    /// `NetworkInboundChannelSet` for the given channel_id. The caller (flight_service)
+    /// uses the sender to push incoming FlightData into per-tid queues.
+    #[fastrace::trace]
+    pub fn handle_do_exchange(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<NetworkInboundSender> {
+        debug!(
+            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
+            query_id, channel_id, num_threads
+        );
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query_id.to_string()) {
+            Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .create_inbound_sender(channel_id, num_threads),
+        }
+    }
+
+    /// Get the NetworkInboundReceivers for a given query and channel.
+    ///
+    /// Returns one `Arc<NetworkInboundReceiver>` per tid, for building
+    /// `ThreadChannelReader` processors in the pipeline.
+    pub fn get_exchange_channel_set(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => match coordinator.inbound_channel_sets.get(channel_id) {
+                None => Err(ErrorCode::Internal(format!(
+                    "NetworkInboundChannelSet not found for channel {}",
+                    channel_id
+                ))),
+                Some(channel_set) => Ok(channel_set.clone()),
+            },
+        }
+    }
+
+    /// Take the PingPongExchanges for a given query and channel.
+    ///
+    /// Returns the exchanges that were created during init_query_env.
+    /// The exchanges are removed from the coordinator (taken, not borrowed).
+    pub fn take_ping_pong_exchanges(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+    ) -> Result<HashMap<String, PingPongExchange>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => Ok(coordinator
+                .ping_pong_exchanges
+                .remove(channel_id)
+                .unwrap_or_default()),
+        }
+    }
+
+    pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
+            query_coordinator.shutdown_query(cause);
+        }
+    }
+
+    #[fastrace::trace]
+    pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        let lock_start = Instant::now();
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let lock_wait = lock_start.elapsed();
+        if lock_wait > Duration::from_secs(1) {
+            warn!(
+                "Waited {:?} to acquire queries_coordinator lock in on_finished_query, query_id={}",
+                lock_wait, query_id
+            );
+        }
+
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+            // Drop mutex guard to avoid deadlock during shutdown,
+            drop(queries_coordinator_guard);
+
+            query_coordinator.shutdown_query(cause);
+            query_coordinator.on_finished();
+        }
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn commit_actions(
+        &self,
+        ctx: Arc<QueryContext>,
+        actions: QueryFragmentsActions,
+    ) -> Result<PipelineBuildResult> {
+        let settings = ctx.get_settings();
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_flight_max_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+            keep_alive: settings.get_flight_keep_alive_params()?,
+        };
+        let mut root_fragment_ids = actions.get_root_fragment_ids()?;
+        let conf = GlobalConfig::instance();
+
+        // Initialize query env between cluster nodes
+        let query_env = actions.get_query_env()?;
+        query_env.init(&ctx, flight_params).await?;
+
+        // Submit distributed tasks to all nodes.
+        let cluster = ctx.get_cluster();
+        let mut query_fragments = actions.get_query_fragments()?;
+
+        let local_fragments = query_fragments.remove(&conf.query.node_id);
+
+        let _: HashMap<String, ()> = cluster
+            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
+            .await?;
+
+        self.set_ctx(&ctx.get_id(), ctx.clone())?;
+        if let Some(query_fragments) = local_fragments {
+            init_query_fragments(query_fragments).await?;
+        }
+
+        // Get local pipeline of local task
+        let main_fragment_id = root_fragment_ids.pop().unwrap();
+        let build_res = self.get_root_pipeline(ctx, main_fragment_id, root_fragment_ids)?;
+
+        let prepared_query = actions.prepared_query()?;
+        let _: HashMap<String, ()> = cluster
+            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
+            .await?;
+
+        Ok(build_res)
+    }
+
+    fn get_root_pipeline(
+        &self,
+        ctx: Arc<QueryContext>,
+        main_fragment_id: usize,
+        fragment_ids: Vec<usize>,
+    ) -> Result<PipelineBuildResult> {
+        let query_id = ctx.get_id();
+
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(&query_id) {
+            None => Err(ErrorCode::Internal("Query not exists.")),
+            Some(query_coordinator) => {
+                if !query_coordinator.flight_data_senders.is_empty() {
+                    unreachable!(
+                        "query_coordinator.fragment_senders is not empty: {:?}",
+                        query_coordinator
+                            .flight_data_senders
+                            .keys()
+                            .collect::<Vec<_>>()
+                    );
+                }
+
+                if !query_coordinator.flight_data_receivers.is_empty() {
+                    unreachable!(
+                        "query_coordinator.fragment_receivers is not empty: {:?}",
+                        query_coordinator
+                            .flight_data_receivers
+                            .keys()
+                            .collect::<Vec<_>>()
+                    );
+                }
+
+                let injector = DefaultExchangeInjector::create();
+                let mut build_res = query_coordinator.subscribe_fragment(
+                    &ctx,
+                    main_fragment_id,
+                    injector.clone(),
+                )?;
+
+                for fragment_id in fragment_ids {
+                    let sub_build_res = query_coordinator.subscribe_fragment(
+                        &ctx,
+                        fragment_id,
+                        injector.clone(),
+                    )?;
+                    build_res
+                        .sources_pipelines
+                        .push(sub_build_res.main_pipeline);
+                    build_res
+                        .sources_pipelines
+                        .extend(sub_build_res.sources_pipelines);
+                }
+
+                let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
+                let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
+
+                let statistics_receiver: Mutex<StatisticsReceiver> =
+                    Mutex::new(statistics_receiver);
+
+                // Interrupting the execution of finished callback if network error
+                build_res.main_pipeline.set_on_finished(basic_callback(
+                    move |info: &ExecutionInfo| {
+                        let query_id = ctx.get_id();
+                        let mut statistics_receiver = statistics_receiver.lock();
+
+                        statistics_receiver.shutdown(info.res.is_err());
+                        ctx.get_exchange_manager()
+                            .on_finished_query(&query_id, info.res.clone().err());
+                        statistics_receiver.wait_shutdown()
+                    },
+                ));
+
+                // Return if it‘s an error returned by another query node
+                build_res
+                    .main_pipeline
+                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                        Ok(_) => Ok(()),
+                        Err(error_code) => Err(error_code.clone()),
+                    });
+
+                Ok(build_res)
+            }
+        }
+    }
+
+    pub fn get_flight_sender(
+        &self,
+        params: &ExchangeParams,
+    ) -> Result<Vec<(String, FlightSender)>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(&params.get_query_id()) {
+            None => Err(ErrorCode::Internal("Query not exists.")),
+            Some(coordinator) => params.take_flight_sender(&mut coordinator.flight_data_senders),
+        }
+    }
+
+    pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(&params.get_query_id()) {
+            None => Err(ErrorCode::Internal("Query not exists.")),
+            Some(coordinator) => {
+                params.take_flight_receiver(&mut coordinator.flight_data_receivers)
+            }
+        }
+    }
+
+    pub fn get_fragment_source(
+        &self,
+        query_id: &str,
+        fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<PipelineBuildResult> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal("Query not exists.")),
+            Some(query_coordinator) => {
+                let query_ctx = query_coordinator
+                    .info
+                    .as_ref()
+                    .expect("QueryInfo is none")
+                    .query_ctx
+                    .clone();
+
+                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+            }
+        }
+    }
+}
+
+struct QueryInfo {
+    query_id: String,
+    started: AtomicBool,
+    current_executor: String,
+    query_ctx: Arc<QueryContext>,
+    remove_leak_query_worker: Option<JoinHandle<()>>,
+    query_executor: Option<Arc<PipelineCompleteExecutor>>,
+}
+
+pub(crate) struct QueryCoordinator {
+    info: Option<QueryInfo>,
+    fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
+    /// True when this node is the request server (coordinator) for the query.
+    /// The coordinator starts the profiler manually in ExplainPerfInterpreter,
+    /// so execute_pipeline() must not start a second one.
+    is_request_server: bool,
+
+    statistics_exchanges: HashMap<String, FlightExchange>,
+    flight_data_senders: HashMap<String, Vec<FlightSender>>,
+    flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
+    inbound_channel_sets: HashMap<String, Arc<NetworkInboundChannelSet>>,
+    ping_pong_exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+}
+
+impl QueryCoordinator {
+    pub fn create() -> QueryCoordinator {
+        QueryCoordinator {
+            info: None,
+            is_request_server: false,
+            flight_data_senders: HashMap::new(),
+            flight_data_receivers: HashMap::new(),
+            statistics_exchanges: HashMap::new(),
+            fragments_coordinator: HashMap::new(),
+            inbound_channel_sets: HashMap::new(),
+            ping_pong_exchanges: HashMap::new(),
+        }
+    }
+
+    pub fn add_statistics_exchange(
+        &mut self,
+        target: String,
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
+        let (tx, rx) = async_channel::bounded(8);
+        match self
+            .statistics_exchanges
+            .insert(target, FlightExchange::create_sender(tx))
+        {
+            None => Ok(rx),
+            Some(_) => Err(ErrorCode::Internal(
+                "statistics exchanges can only have one",
+            )),
+        }
+    }
+
+    pub fn add_statistics_exchanges(
+        &mut self,
+        exchanges: HashMap<String, FlightExchange>,
+    ) -> Result<()> {
+        for (source, exchange) in exchanges.into_iter() {
+            if self.statistics_exchanges.insert(source, exchange).is_some() {
+                return Err(ErrorCode::Internal(
+                    "Internal error, statistics exchange can only have one.",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn register_flight_channel_sender(
+        &mut self,
+        channel_id: String,
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
+        let (tx, rx) = async_channel::bounded(8);
+        match self.flight_data_senders.entry(channel_id) {
+            Entry::Occupied(mut v) => {
+                v.get_mut()
+                    .push(FlightExchange::create_sender(tx).convert_to_sender());
+            }
+            Entry::Vacant(v) => {
+                v.insert(vec![FlightExchange::create_sender(tx).convert_to_sender()]);
+            }
+        }
+
+        Ok(rx)
+    }
+
+    pub fn register_flight_channel_receiver(
+        &mut self,
+        channels: HashMap<String, Vec<FlightExchange>>,
+    ) -> Result<()> {
+        for (id, exchanges) in channels.into_iter() {
+            match self.flight_data_receivers.entry(id) {
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(
+                        exchanges
+                            .into_iter()
+                            .map(FlightExchange::convert_to_receiver),
+                    );
+                }
+                Entry::Vacant(v) => {
+                    v.insert(
+                        exchanges
+                            .into_iter()
+                            .map(FlightExchange::convert_to_receiver)
+                            .collect(),
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn register_ping_pong_exchanges(
+        &mut self,
+        exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+    ) {
+        for (channel, pps) in exchanges {
+            match self.ping_pong_exchanges.entry(channel) {
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(pps);
+                }
+                Entry::Vacant(v) => {
+                    v.insert(pps);
+                }
+            }
+        }
+    }
+
+    /// Create a NetworkInboundSender for a new do_exchange connection.
+    ///
+    /// The `num_threads` value is provided by the coordinator via DoExchangeParams.
+    fn create_inbound_sender(
+        &mut self,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<NetworkInboundSender> {
+        let channel_set = self
+            .inbound_channel_sets
+            .entry(channel_id.to_string())
+            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
+            .clone();
+
+        // TODO: get max_bytes_per_connection from query settings
+        let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
+
+        Ok(NetworkInboundSender::new(
+            &channel_set,
+            max_bytes_per_connection,
+        ))
+    }
+
+    pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {
+        let query_info = self.info.as_ref().expect("expect query info");
+        let query_context = query_info.query_ctx.clone();
+
+        for fragment in &fragments.fragments {
+            self.fragments_coordinator.insert(
+                fragment.fragment_id.to_owned(),
+                FragmentCoordinator::create(fragment),
+            );
+        }
+
+        for fragment in &fragments.fragments {
+            let fragment_id = fragment.fragment_id;
+            if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
+                coordinator.prepare_pipeline(query_context.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn subscribe_fragment(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<PipelineBuildResult> {
+        // Merge pipelines if exist locally pipeline
+        if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
+            let info = self.info.as_ref().expect("QueryInfo is none");
+            fragment_coordinator.prepare_pipeline(ctx.clone())?;
+
+            if fragment_coordinator.pipeline_build_res.is_none() {
+                return Err(ErrorCode::Internal(
+                    "Pipeline is none, maybe query fragment circular dependency.",
+                ));
+            }
+
+            if fragment_coordinator.data_exchange.is_none() {
+                // When the root fragment and the data has been send to the coordination node,
+                // we do not need to wait for the data of other nodes.
+                return Ok(fragment_coordinator.pipeline_build_res.unwrap());
+            }
+
+            let exchange_params = fragment_coordinator
+                .create_exchange_params(
+                    info,
+                    fragment_coordinator
+                        .pipeline_build_res
+                        .as_ref()
+                        .map(|x| x.exchange_injector.clone())
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                        })?,
+                )?
+                .unwrap();
+            let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
+
+            // Add exchange data transform.
+
+            ExchangeTransform::via(
+                ctx,
+                &exchange_params,
+                &mut build_res.main_pipeline,
+                injector,
+            )?;
+
+            return Ok(build_res);
+        }
+        Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+    }
+
+    pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
+        if let Some(query_info) = &mut self.info {
+            if let Some(query_executor) = &query_info.query_executor {
+                query_executor.finish(cause);
+            }
+
+            if let Some(worker) = query_info.remove_leak_query_worker.take() {
+                worker.abort();
+            }
+        }
+    }
+
+    pub fn on_finished(self) {
+        // Do something when query finished.
+    }
+
+    pub fn execute_pipeline(&mut self) -> Result<()> {
+        let info = self.info.as_mut().expect("Query info is None");
+
+        let perf_guard = {
+            let pc = info.query_ctx.get_perf_config();
+            if pc.profiler_enabled && !self.is_request_server {
+                Some(QueryPerf::start(pc.frequency)?)
+            } else {
+                None
+            }
+        };
+
+        if !info.started.swap(true, Ordering::SeqCst) {
+            if let Some(leak_worker) = info.remove_leak_query_worker.take() {
+                leak_worker.abort();
+            }
+        }
+
+        if self.fragments_coordinator.is_empty() {
+            // Empty fragments if it is a request server, because the pipelines may have been linked.
+            return Ok(());
+        }
+
+        let max_threads = info.query_ctx.get_settings().get_max_threads()?;
+        let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
+
+        let mut params = Vec::with_capacity(self.fragments_coordinator.len());
+        for coordinator in self.fragments_coordinator.values() {
+            params.push(
+                coordinator.create_exchange_params(
+                    info,
+                    coordinator
+                        .pipeline_build_res
+                        .as_ref()
+                        .map(|x| x.exchange_injector.clone())
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                        })?,
+                )?,
+            );
+        }
+
+        for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
+            if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
+                build_res.set_max_threads(max_threads as usize);
+
+                if build_res.main_pipeline.is_pulling_pipeline()? {
+                    let Some(params) = params else {
+                        return Err(ErrorCode::Internal(
+                            "pipeline is pulling pipeline, but exchange params is none",
+                        ));
+                    };
+                    // Add exchange data publisher.
+                    ExchangeSink::via(&info.query_ctx, &params, &mut build_res.main_pipeline)?;
+                } else if build_res.main_pipeline.is_complete_pipeline()? && params.is_some() {
+                    return Err(ErrorCode::Internal(
+                        "pipeline is complete pipeline, but exchange params is some",
+                    ));
+                };
+
+                if !build_res.main_pipeline.is_complete_pipeline()? {
+                    return Err(ErrorCode::Internal("Logical error, It's a bug"));
+                }
+
+                pipelines.push(build_res.main_pipeline);
+                pipelines.extend(build_res.sources_pipelines.into_iter());
+            }
+        }
+
+        let (finished_profiling_tx, finished_profiling_rx) = oneshot::channel();
+        if let Some(p) = pipelines.first_mut() {
+            p.set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                let profiling = info.profiling.clone();
+                let _ = finished_profiling_tx.send(profiling);
+                Ok(())
+            }));
+        };
+
+        let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
+        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+
+        assert!(self.flight_data_senders.is_empty() && self.flight_data_receivers.is_empty());
+        let info_mut = self.info.as_mut().expect("Query info is None");
+        info_mut.query_executor = Some(executor.clone());
+
+        let query_id = info_mut.query_id.clone();
+        let query_ctx = info_mut.query_ctx.clone();
+        query_ctx.set_executor(executor.get_inner())?;
+        let request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
+
+        if request_server_exchanges.len() != 1 {
+            return Err(ErrorCode::Internal(
+                "Request server must less than 1 if is not request server.",
+            ));
+        }
+
+        let ctx = query_ctx.clone();
+        let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
+        let mut statistics_sender = StatisticsSender::spawn(
+            &query_id,
+            ctx,
+            request_server_exchange,
+            executor.get_inner(),
+            perf_guard,
+            finished_profiling_rx,
+        );
+
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+        GlobalIORuntime::instance().spawn_named(
+            async move {
+                let error = executor.execute().await.err();
+                statistics_sender.shutdown(error.clone()).await;
+                let exchange_manager = query_ctx.get_exchange_manager();
+                if let Err(cause) = spawn_blocking(move || {
+                    exchange_manager.on_finished_query(&query_id, error);
+                })
+                .await
+                {
+                    warn!("on_finished_query cleanup task failed: {:?}", cause);
+                }
+            }
+            .in_span(span),
+            "Distributed-Executor",
+        );
+
+        Ok(())
+    }
+}
+
+struct FragmentCoordinator {
+    initialized: bool,
+    fragment_id: usize,
+    physical_plan: PhysicalPlan,
+    data_exchange: Option<DataExchange>,
+    pipeline_build_res: Option<PipelineBuildResult>,
+}
+
+impl FragmentCoordinator {
+    pub fn create(packet: &QueryFragment) -> Box<FragmentCoordinator> {
+        Box::new(FragmentCoordinator {
+            initialized: false,
+            physical_plan: packet.physical_plan.clone(),
+            fragment_id: packet.fragment_id,
+            data_exchange: packet.data_exchange.clone(),
+            pipeline_build_res: None,
         })
     }
 
-    pub(crate) fn remove_query(&self, query_id: &str) -> Option<Arc<QueryHandle>> {
-        self.queries.lock().remove(query_id)
+    pub fn create_exchange_params(
+        &self,
+        info: &QueryInfo,
+        exchange_injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<Option<ExchangeParams>> {
+        let Some(data_exchange) = &self.data_exchange else {
+            return Ok(None);
+        };
+        match data_exchange {
+            DataExchange::Merge(exchange) => {
+                Ok(Some(ExchangeParams::MergeExchange(MergeExchangeParams {
+                    exchange_injector: exchange_injector.clone(),
+                    schema: self.physical_plan.output_schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: info.query_id.to_string(),
+                    destination_id: exchange.destination_id.clone(),
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                    ignore_exchange: exchange.ignore_exchange,
+                    channel_id: exchange.channel_id.clone(),
+                })))
+            }
+            DataExchange::Broadcast(exchange) => Ok(Some(ExchangeParams::BroadcastExchange(
+                BroadcastExchangeParams {
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    schema: self.physical_plan.output_schema()?,
+                    exchange_id: exchange.id.clone(),
+                    destination_channels: exchange.destination_channels.to_owned(),
+                },
+            ))),
+            DataExchange::NodeToNodeExchange(exchange) => Ok(Some(
+                ExchangeParams::NodeShuffleExchange(ShuffleExchangeParams {
+                    exchange_injector: exchange_injector.clone(),
+                    schema: self.physical_plan.output_schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    destination_channels: exchange.destination_channels.clone(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                }),
+            )),
+            DataExchange::GlobalShuffleExchange(exchange) => Ok(Some(
+                ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    schema: self.physical_plan.output_schema()?,
+                    exchange_id: exchange.id.clone(),
+                    shuffle_keys: exchange.shuffle_keys.clone(),
+                    destination_channels: exchange.destination_channels.clone(),
+                }),
+            )),
+        }
     }
 
-    pub(crate) fn handles(&self) -> Vec<Arc<QueryHandle>> {
-        self.queries.lock().values().cloned().collect()
+    pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {
+        if !self.initialized {
+            self.initialized = true;
+
+            let pipeline_ctx = QueryContext::create_from(ctx.as_ref());
+
+            unsafe {
+                pipeline_ctx
+                    .get_settings()
+                    .unchecked_apply_changes(ctx.get_settings().changes());
+
+                drop(ctx);
+            }
+
+            let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx.get_function_context()?,
+                pipeline_ctx.get_settings(),
+                pipeline_ctx.clone(),
+            );
+
+            let mut res = pipeline_builder.finalize(&self.physical_plan)?;
+            attach_runtime_filter_logger(pipeline_ctx, &mut res.main_pipeline);
+
+            self.pipeline_build_res = Some(res);
+        }
+
+        Ok(())
     }
 }

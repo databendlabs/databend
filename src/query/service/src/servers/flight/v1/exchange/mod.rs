@@ -30,7 +30,6 @@ mod hash_send_sink;
 mod hash_send_source;
 mod hash_send_transform;
 mod outbound_send_channels;
-mod query_handle;
 mod statistics_receiver;
 mod statistics_sender;
 
