@@ -25,6 +25,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
@@ -35,6 +36,8 @@ use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 
 use crate::FuseTable;
 use crate::io::SegmentsIO;
@@ -60,6 +63,10 @@ impl TableMetaFunc for FuseBlockStatistics {
                 "spatial_statistics",
                 TableDataType::Nullable(Box::new(TableDataType::Variant)),
             ),
+            TableField::new(
+                "vector_statistics",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
         ])
     }
 
@@ -82,6 +89,7 @@ impl TableMetaFunc for FuseBlockStatistics {
         let mut column_names = Vec::with_capacity(estimated_rows);
         let mut statistics = Vec::with_capacity(estimated_rows);
         let mut spatial_statistics = Vec::with_capacity(estimated_rows);
+        let mut vector_statistics = Vec::with_capacity(estimated_rows);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
 
@@ -105,6 +113,10 @@ impl TableMetaFunc for FuseBlockStatistics {
                         .spatial_stats
                         .as_ref()
                         .map(|stats| stats.iter().collect::<BTreeMap<_, _>>());
+                    let vector_stats = block
+                        .vector_stats
+                        .as_ref()
+                        .map(|stats| stats.iter().collect::<BTreeMap<_, _>>());
 
                     for (column_id, column_stat) in col_stats {
                         let Ok(field) = schema.field_of_column_id(*column_id) else {
@@ -120,6 +132,7 @@ impl TableMetaFunc for FuseBlockStatistics {
                         );
                         statistics.push(Some(stat));
                         spatial_statistics.push(None);
+                        vector_statistics.push(None);
 
                         num_rows += 1;
                         if num_rows >= limit {
@@ -138,6 +151,31 @@ impl TableMetaFunc for FuseBlockStatistics {
                             statistics.push(None);
                             let stat = build_spatial_statistics_variant(spatial_stat, &func_ctx);
                             spatial_statistics.push(Some(stat));
+                            vector_statistics.push(None);
+
+                            num_rows += 1;
+                            if num_rows >= limit {
+                                break 'outer;
+                            }
+                        }
+                    }
+
+                    if let Some(vector_stats) = &vector_stats {
+                        for ((column_id, distance_type), vector_stat) in vector_stats {
+                            let Ok(field) = schema.field_of_column_id(*column_id) else {
+                                continue;
+                            };
+                            block_locations.push(block.location.0.clone());
+                            column_ids.push(*column_id as u64);
+                            column_names.push(field.name().to_string());
+                            statistics.push(None);
+                            spatial_statistics.push(None);
+                            let stat = build_vector_statistics_variant(
+                                *distance_type,
+                                vector_stat,
+                                &func_ctx,
+                            );
+                            vector_statistics.push(Some(stat));
 
                             num_rows += 1;
                             if num_rows >= limit {
@@ -155,6 +193,7 @@ impl TableMetaFunc for FuseBlockStatistics {
             StringType::from_data(column_names),
             VariantType::from_opt_data(statistics),
             VariantType::from_opt_data(spatial_statistics),
+            VariantType::from_opt_data(vector_statistics),
         ]))
     }
 }
@@ -228,6 +267,41 @@ fn build_spatial_statistics_variant(
             TableDataType::Boolean,
             TableDataType::Boolean,
             TableDataType::Boolean,
+        ],
+    };
+
+    build_variant(scalar, &data_type, func_ctx)
+}
+
+fn build_vector_statistics_variant(
+    distance_type: VectorDistanceType,
+    vector_stat: &VectorColumnStatistics,
+    func_ctx: &FunctionContext,
+) -> Vec<u8> {
+    let scalar = Scalar::Tuple(vec![
+        Scalar::String(distance_type.as_string()),
+        Scalar::Array(Float32Type::from_data(
+            vector_stat
+                .centroid
+                .iter()
+                .map(|value| value.0)
+                .collect::<Vec<_>>(),
+        )),
+        Scalar::Number(NumberScalar::Float32(vector_stat.radius)),
+        Scalar::Number(NumberScalar::UInt64(vector_stat.row_count)),
+    ]);
+    let data_type = TableDataType::Tuple {
+        fields_name: vec![
+            "distance_type".to_string(),
+            "centroid".to_string(),
+            "radius".to_string(),
+            "row_count".to_string(),
+        ],
+        fields_type: vec![
+            TableDataType::String,
+            TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::Float32))),
+            TableDataType::Number(NumberDataType::Float32),
+            TableDataType::Number(NumberDataType::UInt64),
         ],
     };
 

@@ -31,6 +31,8 @@ use uuid::Uuid;
 use crate::meta::ColumnStatistics;
 use crate::meta::SegmentStatistics;
 use crate::meta::SpatialStatistics;
+use crate::meta::VectorColumnStatistics;
+use crate::meta::VectorDistanceType;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
@@ -41,6 +43,8 @@ pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 pub type StatisticsOfSpatialColumns = HashMap<ColumnId, SpatialStatistics>;
+pub type StatisticsOfVectorColumns =
+    HashMap<(ColumnId, VectorDistanceType), VectorColumnStatistics>;
 pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type BlockTopN = HashMap<ColumnId, ColumnTopN>;
 pub type RawBlockHLL = Vec<u8>;

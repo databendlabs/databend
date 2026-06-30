@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -25,15 +26,60 @@ use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
 use databend_common_expression::TableSchema;
 use databend_common_expression::compare_scalars;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::eval_aggr;
+use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use log::warn;
+
+#[derive(Clone, Debug)]
+pub struct VectorClusterInfo {
+    pub key_index: usize,
+    pub column_id: ColumnId,
+    pub column_name: String,
+    pub dimension: usize,
+    pub distance_type: VectorDistanceType,
+}
+
+#[derive(Clone, Debug)]
+pub struct VectorClusterOperator {
+    pub info: VectorClusterInfo,
+    pub vector_column_input_offset: usize,
+    pub vector_cluster_id_offset: usize,
+}
+
+pub fn vector_cluster_info_from_column(
+    table_indexes: &BTreeMap<String, TableIndex>,
+    key_index: usize,
+    column_id: ColumnId,
+    column_name: &str,
+    dimension: usize,
+) -> Result<VectorClusterInfo> {
+    let distances = table_indexes
+        .values()
+        .filter(|index| {
+            index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
+        })
+        .map(|index| index.options.get("distance").map(String::as_str));
+
+    let distance_type = VectorDistanceType::from_index_options(column_name, distances)?;
+    Ok(VectorClusterInfo {
+        key_index,
+        column_id,
+        column_name: column_name.to_string(),
+        dimension,
+        distance_type,
+    })
+}
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -46,6 +92,7 @@ pub struct ClusterStatsGenerator {
     pub extra_key_num: usize,
     pub cluster_key_index: Vec<usize>,
     pub operators: Vec<BlockOperator>,
+    pub vector_operator: Option<VectorClusterOperator>,
     pub out_fields: Vec<DataField>,
     pub func_ctx: FunctionContext,
 }
@@ -60,6 +107,7 @@ impl ClusterStatsGenerator {
         level: i32,
         block_thresholds: BlockThresholds,
         operators: Vec<BlockOperator>,
+        vector_operator: Option<VectorClusterOperator>,
         out_fields: Vec<DataField>,
         func_ctx: FunctionContext,
     ) -> Self {
@@ -71,9 +119,31 @@ impl ClusterStatsGenerator {
             level,
             block_thresholds,
             operators,
+            vector_operator,
             out_fields,
             func_ctx,
         }
+    }
+
+    pub fn sort_descs(&self) -> Vec<SortColumnDescription> {
+        self.cluster_key_index
+            .iter()
+            .map(|offset| SortColumnDescription {
+                offset: *offset,
+                asc: true,
+                nulls_first: false,
+            })
+            .collect()
+    }
+
+    pub fn operator_extra_key_num(&self) -> usize {
+        self.operators
+            .iter()
+            .map(|op| match op {
+                BlockOperator::Map { exprs, .. } => exprs.len(),
+                BlockOperator::Project { .. } => 0,
+            })
+            .sum()
     }
 
     // This can be used in block append.
@@ -104,7 +174,10 @@ impl ClusterStatsGenerator {
 
         let mut block = data_block.clone();
 
-        if !self.cluster_key_index.is_empty() {
+        // For vector cluster keys, scalar keys after the vector key are aggregated from the
+        // full block because the block is sorted by the injected vector sort key, not by
+        // those scalar suffix keys.
+        if self.vector_operator.is_none() && !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
             block = block.take(indices.as_slice())?;
         }
@@ -126,20 +199,30 @@ impl ClusterStatsGenerator {
         if self.cluster_key_index.is_empty() {
             return Ok(None);
         }
-        let mut min = Vec::with_capacity(self.cluster_key_index.len());
-        let mut max = Vec::with_capacity(self.cluster_key_index.len());
+        let vector_cluster_id_offset = self.vector_cluster_id_offset();
+        let scalar_cluster_key_index = self.scalar_cluster_key_index(vector_cluster_id_offset);
+        let mut min = Vec::with_capacity(scalar_cluster_key_index.len());
+        let mut max = Vec::with_capacity(scalar_cluster_key_index.len());
 
-        for key in self.cluster_key_index.iter() {
-            let val = data_block.get_by_offset(*key);
-            let left = unsafe { val.index_unchecked(0) }.to_owned();
-            min.push(left);
+        let vector_key_position = vector_cluster_id_offset
+            .and_then(|offset| self.cluster_key_index.iter().position(|key| *key == offset))
+            .unwrap_or(self.cluster_key_index.len());
+        for (key_index, key) in scalar_cluster_key_index.iter().copied() {
+            if key_index < vector_key_position {
+                let val = data_block.get_by_offset(key);
+                let left = unsafe { val.index_unchecked(0) }.to_owned();
+                min.push(left);
 
-            // The maximum in cluster statistics neednot larger than the non-trimmed one.
-            // So we use trim_min directly.
-            let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
-            max.push(right);
+                // The maximum in cluster statistics neednot larger than the non-trimmed one.
+                // So we use trim_min directly.
+                let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
+                max.push(right);
+            } else {
+                let (left, right) = aggregate_cluster_key_min_max(data_block, key)?;
+                min.push(left);
+                max.push(right);
+            }
         }
-
         debug_assert!(
             min.iter()
                 .map(Scalar::as_ref)
@@ -148,7 +231,8 @@ impl ClusterStatsGenerator {
             "cluster statistics: min > max, data may not be sorted by cluster key"
         );
 
-        let level = if min == max
+        let level = if self.vector_operator.is_none()
+            && min == max
             && self.block_thresholds.check_large_enough(
                 data_block.num_rows(),
                 data_block.estimate_block_size(data_block.num_columns() - self.extra_key_num),
@@ -161,9 +245,9 @@ impl ClusterStatsGenerator {
         let pages = if let Some(max_page_size) = self.max_page_size {
             let mut values = Vec::with_capacity(data_block.num_rows() / max_page_size + 1);
             for start in (0..data_block.num_rows()).step_by(max_page_size) {
-                let mut tuple_values = Vec::with_capacity(self.cluster_key_index.len());
-                for key in self.cluster_key_index.iter() {
-                    let val = data_block.get_by_offset(*key);
+                let mut tuple_values = Vec::with_capacity(scalar_cluster_key_index.len());
+                for (_, key) in scalar_cluster_key_index.iter().copied() {
+                    let val = data_block.get_by_offset(key);
                     let left = unsafe { val.index_unchecked(start) };
                     tuple_values.push(left.to_owned());
                 }
@@ -181,6 +265,24 @@ impl ClusterStatsGenerator {
             level,
             pages,
         )))
+    }
+
+    fn vector_cluster_id_offset(&self) -> Option<usize> {
+        self.vector_operator
+            .as_ref()
+            .map(|vector_operator| vector_operator.vector_cluster_id_offset)
+    }
+
+    fn scalar_cluster_key_index(
+        &self,
+        vector_cluster_id_offset: Option<usize>,
+    ) -> Vec<(usize, usize)> {
+        self.cluster_key_index
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, key)| Some(*key) != vector_cluster_id_offset)
+            .collect()
     }
 }
 
@@ -210,6 +312,20 @@ pub fn sort_by_cluster_stats(
         }
         _ => Ordering::Equal,
     }
+}
+
+pub fn aggregate_cluster_key_min_max(
+    data_block: &DataBlock,
+    key: usize,
+) -> Result<(Scalar, Scalar)> {
+    let entry = data_block.get_by_offset(key).clone();
+    let entries = [entry];
+    let (min, _) = eval_aggr("min", vec![], &entries, data_block.num_rows(), vec![])?;
+    let (max, _) = eval_aggr("max", vec![], &entries, data_block.num_rows(), vec![])?;
+    Ok((
+        min.index(0).unwrap().to_owned(),
+        max.index(0).unwrap().to_owned(),
+    ))
 }
 
 #[derive(Clone, Copy, Default)]

@@ -70,9 +70,11 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -96,6 +98,7 @@ use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -932,7 +935,7 @@ impl Binder {
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_opt, schema.clone())
+                .analyze_cluster_keys(cluster_opt, schema.clone(), table_indexes.as_ref())
                 .await?;
             if !keys.is_empty() {
                 options.insert(
@@ -1374,7 +1377,13 @@ impl Binder {
                     .ctx
                     .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?;
-                let cluster_keys = self.analyze_cluster_keys(cluster_by, tbl.schema()).await?;
+                let cluster_keys = self
+                    .analyze_cluster_keys(
+                        cluster_by,
+                        tbl.schema(),
+                        Some(&tbl.get_table_info().meta.indexes),
+                    )
+                    .await?;
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
@@ -2315,6 +2324,7 @@ impl Binder {
         &mut self,
         cluster_opt: &ClusterOption,
         schema: TableSchemaRef,
+        table_indexes: Option<&BTreeMap<String, TableIndex>>,
     ) -> Result<Vec<String>> {
         let ClusterOption {
             cluster_type,
@@ -2367,6 +2377,7 @@ impl Binder {
             sql_dialect: self.dialect,
         };
         let mut cluster_keys = Vec::with_capacity(expr_len);
+        let mut vector_cluster_key_num = 0;
         for cluster_expr in cluster_exprs.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
@@ -2385,11 +2396,47 @@ impl Binder {
             }
 
             let data_type = expr.data_type();
-            if !Self::valid_cluster_key_type(data_type) {
+            let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
+            if !is_valid_type {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Unsupported data type '{}' for cluster by expression `{:#}`",
                     data_type, cluster_expr
                 )));
+            }
+            if is_vector_type {
+                if matches!(cluster_type, AstClusterType::Hilbert) {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "Unsupported data type '{}' for hilbert cluster by expression `{:#}`",
+                        data_type, cluster_expr
+                    )));
+                }
+                vector_cluster_key_num += 1;
+                if vector_cluster_key_num > 1 {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Only one vector column is supported in cluster by",
+                    ));
+                }
+
+                let Expr::ColumnRef(ColumnRef { id, .. }) = &expr else {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key only supports direct column reference",
+                    ));
+                };
+                let Ok(field) = schema.field_with_name(&id.column_name) else {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "Cluster by expression `{:#}` is invalid",
+                        cluster_expr
+                    )));
+                };
+                let distances = table_indexes
+                    .into_iter()
+                    .flat_map(|table_indexes| table_indexes.values())
+                    .filter(|index| {
+                        index.index_type == TableIndexType::Vector
+                            && index.column_ids.contains(&field.column_id())
+                    })
+                    .map(|index| index.options.get("distance").map(String::as_str));
+                VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 
             let mut cluster_expr = cluster_expr.clone();
@@ -2400,9 +2447,9 @@ impl Binder {
         Ok(cluster_keys)
     }
 
-    pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> bool {
+    pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> (bool, bool) {
         let inner_type = data_type.remove_nullable();
-        matches!(
+        let is_valid_type = matches!(
             inner_type,
             DataType::Number(_)
                 | DataType::String
@@ -2410,7 +2457,10 @@ impl Binder {
                 | DataType::Date
                 | DataType::Boolean
                 | DataType::Decimal(_)
-        )
+                | DataType::Vector(_)
+        );
+        let is_vector_type = matches!(inner_type, DataType::Vector(_));
+        (is_valid_type, is_vector_type)
     }
 
     fn is_column_not_null(&self) -> bool {

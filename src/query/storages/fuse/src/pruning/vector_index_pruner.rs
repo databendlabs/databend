@@ -51,6 +51,7 @@ use databend_storages_common_index::ScoredPointOffset;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use futures_util::future;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
@@ -79,6 +80,8 @@ pub struct VectorIndexPruner {
     _schema: TableSchemaRef,
     vector_index: VectorIndexInfo,
     vector_reader: VectorIndexReader,
+    query_values: Vec<f32>,
+    vector_distance_type: VectorDistanceType,
     vector_topn_param: Option<VectorTopNParam>,
 }
 
@@ -115,13 +118,14 @@ impl VectorIndexPruner {
 
         let query_values =
             unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
+        let vector_distance_type = distance_type.vector_distance_type();
 
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
             settings,
             distance_type,
             columns,
-            query_values,
+            query_values.clone(),
         );
 
         // If the filter only has the vector score column, we can filter the scores.
@@ -162,6 +166,8 @@ impl VectorIndexPruner {
             _schema: schema,
             vector_index,
             vector_reader,
+            query_values,
+            vector_distance_type,
             vector_topn_param,
         })
     }
@@ -201,7 +207,7 @@ impl VectorIndexPruner {
                     .measure_async(
                         PruningCostKind::BlocksVector,
                         self.vector_index_topn_prune(
-                            &param.filter_expr,
+                            param.filter_expr.as_ref(),
                             param.asc,
                             param.limit,
                             metas,
@@ -239,11 +245,25 @@ impl VectorIndexPruner {
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let candidates = self.vector_prune_candidates(metas)?;
+        let (candidates, stat_skipped_blocks) =
+            self.filter_candidates_by_topn_stats(candidates, limit);
+        if stat_skipped_blocks > 0 {
+            info!("Vector stat pruned {stat_skipped_blocks} blocks before hnsw topn");
+        }
+
+        let keep_metas = candidates
+            .into_iter()
+            .map(|candidate| (candidate.block_meta_index, candidate.block_meta))
+            .collect();
+
         let results = self
-            .process_vector_pruning_tasks(metas, move |vector_reader, row_count, location| {
-                let limit = limit;
-                async move { vector_reader.prune(limit, row_count, &location).await }
-            })
+            .process_vector_pruning_tasks(
+                keep_metas,
+                move |vector_reader, row_count, location| async move {
+                    vector_reader.prune(limit, row_count, &location).await
+                },
+            )
             .await?;
 
         let mut top_queue = FixedLengthPriorityQueue::new(limit);
@@ -283,11 +303,15 @@ impl VectorIndexPruner {
 
     async fn vector_index_topn_prune(
         &self,
-        filter_expr: &Option<Expr>,
+        filter_expr: Option<&Expr>,
         asc: bool,
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if metas.is_empty() {
+            return Ok(vec![]);
+        }
+
         let results = self
             .process_vector_pruning_tasks(
                 metas,
@@ -498,9 +522,132 @@ impl VectorIndexPruner {
 
         Ok(results)
     }
+
+    fn vector_prune_candidates(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<VectorPruneCandidate>> {
+        metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| {
+                let vector_stat = self.vector_stat_score_domain(block_meta.as_ref())?;
+                Ok(VectorPruneCandidate {
+                    block_meta_index,
+                    block_meta,
+                    score_domain: vector_stat.map(|(score_domain, _)| score_domain),
+                    vector_stat_row_count: vector_stat.map(|(_, row_count)| row_count),
+                })
+            })
+            .collect()
+    }
+
+    fn filter_candidates_by_topn_stats(
+        &self,
+        candidates: Vec<VectorPruneCandidate>,
+        limit: usize,
+    ) -> (Vec<VectorPruneCandidate>, usize) {
+        if limit == 0 {
+            let skipped_blocks = candidates.len();
+            return (Vec::new(), skipped_blocks);
+        }
+
+        // Build a safe threshold for ascending vector TopN.
+        //
+        // Each block vector stat gives a score interval [lower, upper] that
+        // contains every row score in that block. If the blocks with the
+        // smallest upper bounds already contain at least `limit` rows, then
+        // those rows are guaranteed to have scores <= the last selected upper
+        // bound. Any other block whose lower bound is greater than that
+        // threshold cannot contribute to ORDER BY score ASC LIMIT N.
+        //
+        // Example, LIMIT 10:
+        //   A: rows=6, [0.10, 0.20]
+        //   B: rows=4, [0.15, 0.30]
+        //   C: rows=8, [0.35, 0.50]
+        //   D: rows=8, [0.05, 0.80]
+        // A + B already provide 10 rows with scores <= 0.30, so C can be
+        // skipped because all its rows have scores > 0.30. D must be kept
+        // because it may contain rows with scores as low as 0.05.
+        let mut upper_bounds = candidates
+            .iter()
+            .filter_map(|candidate| {
+                let (_, upper_bound) = candidate.score_domain?;
+                let row_count = candidate.vector_stat_row_count?;
+                Some((upper_bound, row_count))
+            })
+            .collect::<Vec<_>>();
+        upper_bounds.sort_by(|left, right| left.0.partial_cmp(&right.0).unwrap_or(Ordering::Equal));
+
+        let target_rows = limit as u64;
+        let mut row_count = 0u64;
+        let mut threshold = None;
+        for (upper_bound, rows) in upper_bounds {
+            row_count = row_count.saturating_add(rows);
+            if row_count >= target_rows {
+                threshold = Some(upper_bound);
+                break;
+            }
+        }
+
+        let Some(threshold) = threshold else {
+            return (candidates, 0);
+        };
+
+        let mut skipped_blocks = 0usize;
+        let mut keep_candidates = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let Some(lower_bound) = candidate.score_lower_bound() else {
+                keep_candidates.push(candidate);
+                continue;
+            };
+
+            // There are already at least `limit` rows in blocks whose maximum
+            // possible score is not greater than `threshold`. A block whose
+            // minimum possible score is greater than that threshold cannot
+            // contribute rows to the ascending vector TopN result.
+            if lower_bound > threshold {
+                skipped_blocks += 1;
+                continue;
+            }
+
+            keep_candidates.push(candidate);
+        }
+
+        (keep_candidates, skipped_blocks)
+    }
+
+    fn vector_stat_score_domain(
+        &self,
+        block_meta: &BlockMeta,
+    ) -> Result<Option<((f32, f32), u64)>> {
+        let Some(vector_stats) = block_meta.vector_stats.as_ref() else {
+            return Ok(None);
+        };
+        let Some(vector_stat) =
+            vector_stats.get(&(self.vector_index.column_id, self.vector_distance_type))
+        else {
+            return Ok(None);
+        };
+
+        let score_domain =
+            vector_stat.distance_domain(&self.query_values, self.vector_distance_type)?;
+        Ok(Some((score_domain, vector_stat.row_count)))
+    }
 }
 
-// result of vector index block pruning
+struct VectorPruneCandidate {
+    block_meta_index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    score_domain: Option<(f32, f32)>,
+    vector_stat_row_count: Option<u64>,
+}
+
+impl VectorPruneCandidate {
+    fn score_lower_bound(&self) -> Option<f32> {
+        self.score_domain.map(|(lower_bound, _)| lower_bound)
+    }
+}
+
 struct VectorPruneResult {
     // the block index in segment
     block_idx: usize,

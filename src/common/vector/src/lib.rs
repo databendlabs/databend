@@ -14,6 +14,7 @@
 
 mod distance;
 
+pub use distance::angular_distance;
 pub use distance::cosine_distance;
 pub use distance::cosine_distance_64;
 pub use distance::inner_product;

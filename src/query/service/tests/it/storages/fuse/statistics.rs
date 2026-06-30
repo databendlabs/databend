@@ -35,6 +35,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_sql::ApproxDistinctColumns;
@@ -48,6 +49,8 @@ use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
+use databend_query::storages::fuse::statistics::VectorClusterInfo;
+use databend_query::storages::fuse::statistics::VectorClusterOperator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::test_kits::*;
@@ -57,6 +60,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::decode_column_hll;
@@ -532,6 +536,74 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() -> anyhow::Result<()>
+{
+    let blocks = DataBlock::new_from_columns(vec![
+        Int32Type::from_data(vec![1i32, 2, 3, 4]),
+        UInt64Type::from_data(vec![10u64, 20, 30, 40]),
+        Int32Type::from_data(vec![50i32, 1, 100, 60]),
+    ]);
+    let origin = Some(ClusterStatistics::new(
+        0,
+        vec![
+            Scalar::Number(NumberScalar::Int32(1)),
+            Scalar::Number(NumberScalar::Int32(1)),
+        ],
+        vec![
+            Scalar::Number(NumberScalar::Int32(4)),
+            Scalar::Number(NumberScalar::Int32(100)),
+        ],
+        0,
+        None,
+    ));
+
+    let block_compactor =
+        BlockThresholds::new(1_000_000, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000);
+    let stats_gen = ClusterStatsGenerator::new(
+        0,
+        vec![0, 1, 2],
+        0,
+        None,
+        0,
+        block_compactor,
+        vec![],
+        Some(VectorClusterOperator {
+            info: VectorClusterInfo {
+                key_index: 1,
+                column_id: 1,
+                column_name: "embedding".to_string(),
+                dimension: 2,
+                distance_type: VectorDistanceType::L2,
+            },
+            vector_column_input_offset: 1,
+            vector_cluster_id_offset: 1,
+        }),
+        vec![],
+        FunctionContext::default(),
+    );
+
+    let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
+    assert!(stats.is_some());
+    let stats = stats.unwrap();
+    assert_eq!(
+        &vec![
+            Scalar::Number(NumberScalar::Int32(1)),
+            Scalar::Number(NumberScalar::Int32(1))
+        ],
+        stats.min()
+    );
+    assert_eq!(
+        &vec![
+            Scalar::Number(NumberScalar::Int32(4)),
+            Scalar::Number(NumberScalar::Int32(100))
+        ],
+        stats.max()
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> anyhow::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = RowOrientedSegmentBuilder::default();
@@ -587,6 +659,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         vec![],
+        None,
         vec![],
         FunctionContext::default(),
     );
@@ -629,6 +702,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         operators,
+        None,
         vec![],
         FunctionContext::default(),
     );
@@ -647,6 +721,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         block_compactor,
         vec![],
+        None,
         vec![],
         FunctionContext::default(),
     );
