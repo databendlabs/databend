@@ -19,9 +19,11 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
 use crate::ColumnSet;
 use crate::Symbol;
+use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::JoinConditionColumns;
 use crate::optimizer::ir::JoinKeyStatUpdate;
@@ -36,10 +38,23 @@ use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::SkewHashInfo;
+use crate::plans::SkewHashRole;
 use crate::plans::SpatialJoinCandidate;
 use crate::plans::has_spatial_join_preconditions;
 use crate::plans::is_spatial_join_shape;
 use crate::plans::spatial_join_gate;
+
+// Spark AQE skew join classifies a shuffle partition as skewed only when it is
+// larger than the normal partition size by `skewedPartitionFactor` (default 5).
+// TopN stats are key-level, not shuffle-partition-level, so use the average
+// probe rows per partition as the local baseline for this planning-time check.
+const SKEW_JOIN_HOT_LOAD_FACTOR: f64 = 5.0;
+
+// Hive runtime skew join uses `hive.skewjoin.key` (default 100000 rows) as an
+// absolute per-key row threshold. Keep the same absolute floor so small tables
+// do not trigger skew hash just because one key is relatively larger.
+const SKEW_JOIN_MIN_HOT_KEY_ROWS: f64 = 100_000.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -276,6 +291,37 @@ fn single_used_column(expr: &ScalarExpr) -> Option<Symbol> {
     }
 }
 
+fn single_bound_column(expr: &ScalarExpr) -> Option<Symbol> {
+    match expr {
+        ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+        _ => None,
+    }
+}
+
+fn non_null_cardinality(cardinality: f64, column_stat: &ColumnStat) -> f64 {
+    (cardinality - column_stat.null_count.upper())
+        .max(0.0)
+        .min(cardinality)
+}
+
+fn topn_entry_bounds(
+    entry: &ColumnTopNEntry,
+    cardinality: f64,
+    column_stat: &ColumnStat,
+) -> Option<(f64, f64)> {
+    let non_null_cardinality = non_null_cardinality(cardinality, column_stat);
+    let upper_count = (entry.count as f64).min(non_null_cardinality);
+    let lower_count = (entry.count.saturating_sub(entry.error) as f64).min(upper_count);
+    if entry.error > 0
+        && let Some(ndv) = column_stat.ndv.expected
+        && ndv > 0.0
+        && lower_count <= non_null_cardinality / ndv
+    {
+        return None;
+    }
+    Some((lower_count, upper_count))
+}
+
 /// Join operator. We will choose hash join by default.
 /// In the case that using hash join, the right child
 /// is always the build side, and the left child is always
@@ -320,6 +366,166 @@ impl Default for Join {
 }
 
 impl Join {
+    /// Derive hot-key metadata from the join predicate and TopN statistics.
+    ///
+    /// This does not choose a physical exchange by itself. The result is used in
+    /// two places: required-property enumeration builds a `GlobalSkewHash`
+    /// alternative from it, and the cost model uses the same estimate to compare
+    /// normal hash shuffle against skew hash shuffle.
+    pub(crate) fn derive_topn_skew_join_info(
+        &self,
+        left_stat_info: &StatInfo,
+        right_stat_info: &StatInfo,
+        partition_count: usize,
+        max_bucket_count: usize,
+    ) -> Result<Option<(SkewHashInfo, SkewHashInfo)>> {
+        if !matches!(self.join_type, JoinType::Inner)
+            || self.equi_conditions.len() != 1
+            || self.single_to_inner.is_some()
+            || partition_count < 2
+            || max_bucket_count < 2
+        {
+            return Ok(None);
+        }
+
+        let condition = &self.equi_conditions[0];
+        if condition.is_null_equal || condition.left.data_type()? != condition.right.data_type()? {
+            return Ok(None);
+        }
+
+        let Some(left_column) = single_bound_column(&condition.left) else {
+            return Ok(None);
+        };
+        let Some(right_column) = single_bound_column(&condition.right) else {
+            return Ok(None);
+        };
+
+        let Some(left_topn) = left_stat_info.statistics.top_n.get(&left_column) else {
+            return Ok(None);
+        };
+        let Some(right_topn) = right_stat_info.statistics.top_n.get(&right_column) else {
+            return Ok(None);
+        };
+        let Some(left_column_stat) = left_stat_info.statistics.column_stats.get(&left_column)
+        else {
+            return Ok(None);
+        };
+        let Some(right_column_stat) = right_stat_info.statistics.column_stats.get(&right_column)
+        else {
+            return Ok(None);
+        };
+
+        let probe_cardinality = left_stat_info.cardinality.max(0.0);
+        let avg_partition_rows = probe_cardinality / (partition_count as f64);
+        // Mirror the mature runtime-skew knobs at planning time: Spark AQE uses
+        // a relative skew factor over normal partition size, while Hive uses
+        // `hive.skewjoin.key` as an absolute per-key row threshold.
+        let hot_key_threshold_rows =
+            (avg_partition_rows * SKEW_JOIN_HOT_LOAD_FACTOR).max(SKEW_JOIN_MIN_HOT_KEY_ROWS);
+
+        let mut hot_keys = Vec::new();
+        let mut probe_lower_rows = Vec::new();
+        let mut normal_penalty_rows = 0.0_f64;
+        let mut build_upper_rows = 0.0_f64;
+        let mut max_probe_lower_rows = 0.0_f64;
+
+        for entry in &left_topn.values {
+            let Some((probe_lower, _probe_upper)) =
+                topn_entry_bounds(entry, left_stat_info.cardinality, left_column_stat)
+            else {
+                continue;
+            };
+            if probe_lower <= hot_key_threshold_rows {
+                continue;
+            }
+
+            let Some(build_entry) = right_topn.get_entry(&entry.scalar) else {
+                continue;
+            };
+            let Some((_build_lower, build_upper)) =
+                topn_entry_bounds(build_entry, right_stat_info.cardinality, right_column_stat)
+            else {
+                continue;
+            };
+
+            hot_keys.push(entry.scalar.clone());
+            probe_lower_rows.push(probe_lower);
+            normal_penalty_rows += (probe_lower - hot_key_threshold_rows).max(0.0);
+            build_upper_rows += build_upper;
+            max_probe_lower_rows = max_probe_lower_rows.max(probe_lower);
+        }
+
+        if hot_keys.is_empty() {
+            return Ok(None);
+        }
+
+        // Similar to Spark AQE splitting a skewed shuffle partition by a target
+        // partition size, derive the number of salts from the same threshold
+        // used to classify the key. The threshold still uses the global shuffle
+        // partition count above because normal hash skew happens at thread
+        // partition granularity. The executable bucket count is capped by the
+        // number of destination nodes: the current hash join builds one shared
+        // table per node, so duplicating a hot build key into multiple local
+        // workers on the same node would produce duplicate matches.
+        let bucket_count = ((max_probe_lower_rows / hot_key_threshold_rows).ceil() as usize)
+            .max(2)
+            .min(partition_count)
+            .min(max_bucket_count);
+        // Spark/Hive provide threshold-based skew detection, not a planner cost
+        // formula. These penalty rows are Databend's optimizer-side proxy for
+        // straggler work above the same threshold.
+        let skew_penalty_rows = probe_lower_rows
+            .iter()
+            .map(|rows| ((rows / bucket_count as f64) - hot_key_threshold_rows).max(0.0))
+            .sum::<f64>();
+        let extra_build_rows = build_upper_rows * (bucket_count.saturating_sub(1) as f64);
+
+        let normal_skew_penalty_rows = normal_penalty_rows.ceil() as u64;
+        let skew_skew_penalty_rows = skew_penalty_rows.ceil() as u64;
+        let extra_build_rows = extra_build_rows.ceil() as u64;
+
+        Ok(Some((
+            SkewHashInfo {
+                role: SkewHashRole::Probe,
+                hot_keys: hot_keys.clone(),
+                bucket_count,
+                normal_skew_penalty_rows,
+                skew_skew_penalty_rows,
+                extra_build_rows,
+            },
+            SkewHashInfo {
+                role: SkewHashRole::Build,
+                hot_keys,
+                bucket_count,
+                normal_skew_penalty_rows,
+                skew_skew_penalty_rows,
+                extra_build_rows,
+            },
+        )))
+    }
+
+    fn derive_topn_skew_join_info_from_rel_expr(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+    ) -> Result<Option<(SkewHashInfo, SkewHashInfo)>> {
+        let settings = ctx.get_settings();
+        let node_count = ctx.get_cluster().nodes.len();
+        let partition_count = ctx
+            .get_cluster()
+            .nodes
+            .len()
+            .saturating_mul(settings.get_max_threads()? as usize);
+        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+        self.derive_topn_skew_join_info(
+            &left_stat_info,
+            &right_stat_info,
+            partition_count,
+            node_count,
+        )
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for condition in self.equi_conditions.iter() {
@@ -752,6 +958,12 @@ impl Operator for Join {
                 distribution: probe_prop.distribution.clone(),
             }),
 
+            (Distribution::GlobalSkewHash(_, _), Distribution::GlobalSkewHash(_, _)) => {
+                Ok(PhysicalProperty {
+                    distribution: probe_prop.distribution.clone(),
+                })
+            }
+
             // Otherwise use random distribution.
             _ => Ok(PhysicalProperty {
                 distribution: Distribution::Random,
@@ -856,22 +1068,34 @@ impl Operator for Join {
             }
         }
 
-        // Otherwise, use hash shuffle
-        if child_index == 0 {
-            let left_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(left_conditions);
-        } else {
-            let right_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(right_conditions);
+        let left_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect();
+        let right_conditions: Vec<_> = self
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect();
+
+        if let Some((probe_skew_info, build_skew_info)) =
+            self.derive_topn_skew_join_info_from_rel_expr(ctx, rel_expr)?
+        {
+            required.distribution = if child_index == 0 {
+                Distribution::GlobalSkewHash(left_conditions, probe_skew_info)
+            } else {
+                Distribution::GlobalSkewHash(right_conditions, build_skew_info)
+            };
+            return Ok(required);
         }
+
+        // Otherwise, use hash shuffle
+        required.distribution = if child_index == 0 {
+            Distribution::GlobalHash(left_conditions)
+        } else {
+            Distribution::GlobalHash(right_conditions)
+        };
 
         Ok(required)
     }
@@ -879,7 +1103,7 @@ impl Operator for Join {
     fn compute_required_prop_children(
         &self,
         ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
@@ -987,12 +1211,25 @@ impl Operator for Join {
             if !left_keys.is_empty() {
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(left_keys),
+                        distribution: Distribution::GlobalHash(left_keys.clone()),
                     },
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(right_keys),
+                        distribution: Distribution::GlobalHash(right_keys.clone()),
                     },
                 ]);
+
+                if let Some((probe_skew_info, build_skew_info)) =
+                    self.derive_topn_skew_join_info_from_rel_expr(ctx.clone(), rel_expr)?
+                {
+                    children_required.push(vec![
+                        RequiredProperty {
+                            distribution: Distribution::GlobalSkewHash(left_keys, probe_skew_info),
+                        },
+                        RequiredProperty {
+                            distribution: Distribution::GlobalSkewHash(right_keys, build_skew_info),
+                        },
+                    ]);
+                }
             }
         }
 
@@ -1051,6 +1288,7 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_statistics::Datum;
+    use databend_storages_common_table_meta::meta::ColumnTopN;
 
     use super::*;
     use crate::ColumnBindingBuilder;
@@ -1107,6 +1345,40 @@ mod tests {
                 ..Default::default()
             }),
         )
+    }
+
+    fn int32_scalar(value: i32) -> Scalar {
+        Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    fn topn_entry(value: i32, count: u64, error: u64) -> ColumnTopNEntry {
+        ColumnTopNEntry {
+            scalar: int32_scalar(value),
+            count,
+            error,
+        }
+    }
+
+    fn stat_info_with_topn(
+        column_index: usize,
+        cardinality: f64,
+        ndv: f64,
+        top_n: ColumnTopN,
+    ) -> StatInfo {
+        StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: HashMap::from([(Symbol::new(column_index), ColumnStat {
+                    min: Datum::Int(1),
+                    max: Datum::Int(10),
+                    ndv: NdvEstimate::exact(ndv),
+                    null_count: StatCount::exact(0),
+                    histogram: None,
+                })]),
+                top_n: HashMap::from([(Symbol::new(column_index), top_n)]),
+            },
+        }
     }
 
     fn apply_stats_condition(
@@ -1177,6 +1449,138 @@ mod tests {
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
+        Ok(())
+    }
+
+    #[test]
+    fn test_topn_skew_join_info_uses_lower_and_upper_bounds() -> Result<()> {
+        let join = Join {
+            equi_conditions: vec![JoinEquiCondition::new(
+                column(0, DataType::Number(NumberDataType::Int32)),
+                column(1, DataType::Number(NumberDataType::Int32)),
+                false,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let left_stat_info = stat_info_with_topn(0, 1_000_000.0, 10.0, ColumnTopN {
+            values: vec![topn_entry(1, 800_000, 50_000), topn_entry(2, 200_000, 0)],
+            min_index: None,
+        });
+        let right_stat_info = stat_info_with_topn(1, 1_000.0, 10.0, ColumnTopN {
+            values: vec![topn_entry(1, 20, 0), topn_entry(2, 10, 0)],
+            min_index: None,
+        });
+
+        let (probe_info, build_info) = join
+            .derive_topn_skew_join_info(&left_stat_info, &right_stat_info, 10, 10)?
+            .expect("skew info should be derived");
+
+        assert_eq!(probe_info.role, SkewHashRole::Probe);
+        assert_eq!(build_info.role, SkewHashRole::Build);
+        assert_eq!(probe_info.hot_keys, vec![int32_scalar(1)]);
+        assert_eq!(probe_info.bucket_count, 2);
+        assert_eq!(probe_info.normal_skew_penalty_rows, 250_000);
+        assert_eq!(probe_info.skew_skew_penalty_rows, 0);
+        assert_eq!(probe_info.extra_build_rows, 20);
+        assert_eq!(build_info.hot_keys, probe_info.hot_keys);
+        assert_eq!(build_info.extra_build_rows, probe_info.extra_build_rows);
+        Ok(())
+    }
+
+    #[test]
+    fn test_topn_skew_join_info_uses_thresholds_without_hot_key_cap() -> Result<()> {
+        let join = Join {
+            equi_conditions: vec![JoinEquiCondition::new(
+                column(0, DataType::Number(NumberDataType::Int32)),
+                column(1, DataType::Number(NumberDataType::Int32)),
+                false,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+
+        let mut probe_entries = vec![topn_entry(1, 500_000_000, 0)];
+        probe_entries.extend((2..=9).map(|value| topn_entry(value, 55_000_000, 0)));
+
+        let left_stat_info = stat_info_with_topn(0, 1_000_000_000.0, 10_000.0, ColumnTopN {
+            values: probe_entries,
+            min_index: None,
+        });
+        let right_stat_info = stat_info_with_topn(1, 10_000.0, 10_000.0, ColumnTopN {
+            values: (1..=9)
+                .map(|value| topn_entry(value, 1, 0))
+                .collect::<Vec<_>>(),
+            min_index: None,
+        });
+
+        let (probe_info, _) = join
+            .derive_topn_skew_join_info(&left_stat_info, &right_stat_info, 100, 100)?
+            .expect("skew info should be derived");
+
+        assert_eq!(
+            probe_info.hot_keys,
+            (1..=9).map(int32_scalar).collect::<Vec<_>>()
+        );
+        assert_eq!(probe_info.bucket_count, 10);
+        assert_eq!(probe_info.normal_skew_penalty_rows, 490_000_000);
+        assert_eq!(probe_info.skew_skew_penalty_rows, 0);
+        assert_eq!(probe_info.extra_build_rows, 81);
+        Ok(())
+    }
+
+    #[test]
+    fn test_topn_skew_join_info_skips_single_to_inner_join() -> Result<()> {
+        let join = Join {
+            equi_conditions: vec![JoinEquiCondition::new(
+                column(0, DataType::Number(NumberDataType::Int32)),
+                column(1, DataType::Number(NumberDataType::Int32)),
+                false,
+            )],
+            join_type: JoinType::Inner,
+            single_to_inner: Some(JoinType::RightSingle),
+            ..Default::default()
+        };
+        let left_stat_info = stat_info_with_topn(0, 1_000_000.0, 10.0, ColumnTopN {
+            values: vec![topn_entry(1, 800_000, 0)],
+            min_index: None,
+        });
+        let right_stat_info = stat_info_with_topn(1, 1_000.0, 10.0, ColumnTopN {
+            values: vec![topn_entry(1, 20, 0)],
+            min_index: None,
+        });
+
+        let skew_info =
+            join.derive_topn_skew_join_info(&left_stat_info, &right_stat_info, 10, 10)?;
+
+        assert!(skew_info.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_topn_skew_join_info_skips_uncertain_topn_entry() -> Result<()> {
+        let join = Join {
+            equi_conditions: vec![JoinEquiCondition::new(
+                column(0, DataType::Number(NumberDataType::Int32)),
+                column(1, DataType::Number(NumberDataType::Int32)),
+                false,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let left_stat_info = stat_info_with_topn(0, 10_000_000.0, 1.0, ColumnTopN {
+            values: vec![topn_entry(1, 6_500_000, 500_000)],
+            min_index: None,
+        });
+        let right_stat_info = stat_info_with_topn(1, 100.0, 1.0, ColumnTopN {
+            values: vec![topn_entry(1, 30, 0)],
+            min_index: None,
+        });
+
+        let skew_info =
+            join.derive_topn_skew_join_info(&left_stat_info, &right_stat_info, 10, 10)?;
+
+        assert!(skew_info.is_none());
         Ok(())
     }
 

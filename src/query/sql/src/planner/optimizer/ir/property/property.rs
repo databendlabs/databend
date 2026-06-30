@@ -20,6 +20,7 @@ use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::TopNSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::SkewHashInfo;
 use crate::plans::SortItem;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
@@ -98,6 +99,7 @@ pub enum Distribution {
     Broadcast,
     NodeToNodeHash(Vec<ScalarExpr>),
     GlobalHash(Vec<ScalarExpr>),
+    GlobalSkewHash(Vec<ScalarExpr>, SkewHashInfo),
 }
 
 impl Default for Distribution {
@@ -124,6 +126,10 @@ impl Distribution {
                 keys == other_keys
             }
             (Distribution::GlobalHash(_), Distribution::Broadcast) => true,
+            (
+                Distribution::GlobalSkewHash(keys, skew_info),
+                Distribution::GlobalSkewHash(other_keys, other_skew_info),
+            ) => keys == other_keys && skew_info == other_skew_info,
             _ => false,
         }
     }
@@ -151,6 +157,17 @@ impl Display for Distribution {
                     .map(|s| s.as_raw_expr().to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
+            ),
+            Distribution::GlobalSkewHash(keys, skew_info) => write!(
+                f,
+                "SkewHash(keys=[{}], hot_keys={}, buckets={}, role={:?})",
+                keys.iter()
+                    .map(|s| s.as_raw_expr().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                skew_info.hot_keys.len(),
+                skew_info.bucket_count,
+                skew_info.role,
             ),
         }
     }

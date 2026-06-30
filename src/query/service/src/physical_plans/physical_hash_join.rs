@@ -1404,6 +1404,7 @@ impl PhysicalPlanBuilder {
                 e,
                 databend_common_sql::plans::Exchange::NodeToNodeHash(_)
                     | databend_common_sql::plans::Exchange::GlobalHash(_)
+                    | databend_common_sql::plans::Exchange::GlobalSkewHash(_, _)
             )
         }) {
             Some(self.ctx.broadcast_registry().next_broadcast_id())

@@ -71,6 +71,17 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                         .collect::<Vec<_>>()
                         .join(",")
                 ),
+                Exchange::GlobalSkewHash(scalars, skew_info) => format!(
+                    "SkewHash(keys=[{}], hot_keys={}, buckets={}, role={:?})",
+                    scalars
+                        .iter()
+                        .map(|s| s.as_raw_expr().to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    skew_info.hot_keys.len(),
+                    skew_info.bucket_count,
+                    skew_info.role,
+                ),
                 Exchange::Broadcast => "Broadcast".to_string(),
                 Exchange::Merge => "Merge".to_string(),
                 Exchange::MergeSort => "MergeSort".to_string(),

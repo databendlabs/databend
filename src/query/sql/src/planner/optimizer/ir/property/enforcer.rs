@@ -76,6 +76,9 @@ impl Enforcer for DistributionEnforcer {
             Distribution::GlobalHash(hash_keys) => {
                 Ok(Exchange::GlobalHash(hash_keys.clone()).into())
             }
+            Distribution::GlobalSkewHash(hash_keys, skew_info) => {
+                Ok(Exchange::GlobalSkewHash(hash_keys.clone(), skew_info.clone()).into())
+            }
             Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
                 "Cannot enforce random or any distribution",
             )),
@@ -135,9 +138,11 @@ impl PropertyEnforcer {
                     Distribution::NodeToNodeHash(probe_keys),
                     Distribution::NodeToNodeHash(build_keys),
                 )
-                | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys)) => {
-                    Some((probe_keys, build_keys))
-                }
+                | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys))
+                | (
+                    Distribution::GlobalSkewHash(probe_keys, _),
+                    Distribution::GlobalSkewHash(build_keys, _),
+                ) => Some((probe_keys, build_keys)),
                 _ => None,
             };
 

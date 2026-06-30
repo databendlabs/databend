@@ -236,6 +236,7 @@ impl FragmentDeriveHandle {
                     destination_ids,
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
+                    skew_info: exchange_sink.skew_info.clone(),
                     allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
                 }))
             }
@@ -254,6 +255,7 @@ impl FragmentDeriveHandle {
                     destination_ids,
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
+                    skew_info: exchange_sink.skew_info.clone(),
                     allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
                 }))
             }
@@ -292,6 +294,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 schema: input_schema.clone(),
                 kind: exchange.kind.clone(),
                 keys: exchange.keys.clone(),
+                skew_info: exchange.skew_info.clone(),
 
                 query_id: self.query_id.clone(),
 

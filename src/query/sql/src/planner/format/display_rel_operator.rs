@@ -439,6 +439,7 @@ fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> F
         Exchange::MergeSort => "Exchange(MergeSort)",
         Exchange::NodeToNodeHash(_) => "Exchange(Hash)",
         Exchange::GlobalHash(_) => "Exchange(Hash)",
+        Exchange::GlobalSkewHash(_, _) => "Exchange(SkewHash)",
     };
 
     match op {
@@ -448,6 +449,17 @@ fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> F
                 keys.iter()
                     .map(|expr| format_scalar(id_humanizer, expr))
                     .join(", ")
+            ))])
+        }
+        Exchange::GlobalSkewHash(keys, skew_info) => {
+            FormatTreeNode::with_children(payload.to_string(), vec![FormatTreeNode::new(format!(
+                "Exchange(SkewHash): keys: [{}], hot_keys: {}, buckets: {}, role: {:?}",
+                keys.iter()
+                    .map(|expr| format_scalar(id_humanizer, expr))
+                    .join(", "),
+                skew_info.hot_keys.len(),
+                skew_info.bucket_count,
+                skew_info.role,
             ))])
         }
         _ => FormatTreeNode::with_children(payload.to_string(), vec![]),

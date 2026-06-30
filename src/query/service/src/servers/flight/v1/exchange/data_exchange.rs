@@ -14,6 +14,7 @@
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_expression::RemoteExpr;
+use databend_common_sql::plans::SkewHashInfo;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
@@ -85,6 +86,7 @@ pub struct NodeToNodeExchange {
     pub id: String,
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<RemoteExpr>,
+    pub skew_info: Option<SkewHashInfo>,
     pub destination_channels: Vec<(String, Vec<String>)>,
     pub allow_adjust_parallelism: bool,
 }

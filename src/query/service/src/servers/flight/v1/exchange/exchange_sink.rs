@@ -42,6 +42,7 @@ use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
+use crate::servers::flight::v1::scatter::SkewHashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
@@ -163,12 +164,22 @@ impl ExchangeSink {
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
 
-        let scatter = Arc::new(HashFlightScatter::try_create(
-            ctx.get_function_context()?,
-            params.shuffle_keys.clone(),
-            remote_outbound.len(),
-            local_pos,
-        )?);
+        let scatter = if let Some(skew_info) = params.skew_info.clone() {
+            Arc::new(SkewHashFlightScatter::try_create(
+                ctx.get_function_context()?,
+                params.shuffle_keys.clone(),
+                remote_outbound.len(),
+                &params.destination_channels,
+                skew_info,
+            )?)
+        } else {
+            Arc::new(HashFlightScatter::try_create(
+                ctx.get_function_context()?,
+                params.shuffle_keys.clone(),
+                remote_outbound.len(),
+                local_pos,
+            )?)
+        };
 
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..local_threads {

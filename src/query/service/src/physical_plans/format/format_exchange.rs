@@ -59,15 +59,26 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
                 ),
                 FragmentKind::Expansive => "Broadcast".to_string(),
                 FragmentKind::Merge => "Merge".to_string(),
-                FragmentKind::GlobalShuffle => format!(
-                    "Hash({})",
-                    self.inner
+                FragmentKind::GlobalShuffle => {
+                    let keys = self
+                        .inner
                         .keys
                         .iter()
-                        .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
+                        .map(|key| key.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                         .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                        .join(", ");
+                    if let Some(skew_info) = &self.inner.skew_info {
+                        format!(
+                            "SkewHash({}, hot_keys={}, buckets={}, role={:?})",
+                            keys,
+                            skew_info.hot_keys.len(),
+                            skew_info.bucket_count,
+                            skew_info.role,
+                        )
+                    } else {
+                        format!("Hash({})", keys)
+                    }
+                }
             })),
         ];
 

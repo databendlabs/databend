@@ -1360,6 +1360,7 @@ impl FragmentCoordinator {
                     schema: self.physical_plan.output_schema()?,
                     exchange_id: exchange.id.clone(),
                     shuffle_keys: exchange.shuffle_keys.clone(),
+                    skew_info: exchange.skew_info.clone(),
                     destination_channels: exchange.destination_channels.clone(),
                 }),
             )),
