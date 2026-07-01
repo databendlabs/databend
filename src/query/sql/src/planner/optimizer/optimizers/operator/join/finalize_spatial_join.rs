@@ -67,7 +67,6 @@ impl FinalizeSpatialJoinOptimizer {
             let right_prop = RelExpr::with_s_expr(result.right_child()).derive_relational_prop()?;
             let spatial_join =
                 spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
-                    .ok()
                     .map(Box::new);
 
             if join.spatial_join != spatial_join {

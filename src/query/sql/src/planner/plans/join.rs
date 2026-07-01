@@ -37,7 +37,9 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SpatialJoinCandidate;
+use crate::plans::has_spatial_join_preconditions;
 use crate::plans::is_spatial_join_shape;
+use crate::plans::spatial_join_gate;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -612,6 +614,30 @@ impl Join {
                 .iter()
                 .any(|expr| expr.has_subquery())
     }
+
+    fn spatial_join_candidate(&self, rel_expr: &RelExpr) -> Result<Option<SpatialJoinCandidate>> {
+        if !has_spatial_join_preconditions(self) {
+            return Ok(None);
+        }
+
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+        Ok(spatial_join_gate(
+            self,
+            &left_prop.output_columns,
+            &right_prop.output_columns,
+        ))
+    }
+
+    fn can_use_distributed_spatial_join(
+        &self,
+        ctx: &dyn TableContext,
+        rel_expr: &RelExpr,
+    ) -> Result<bool> {
+        Ok(ctx.get_settings().get_enable_spatial_join()?
+            && !ctx.get_cluster().is_empty()
+            && self.spatial_join_candidate(rel_expr)?.is_some())
+    }
 }
 
 impl Operator for Join {
@@ -698,10 +724,14 @@ impl Operator for Join {
             });
         }
 
+        let spatial_join_candidate = self.spatial_join_candidate(rel_expr)?;
+
         match (&probe_prop.distribution, &build_prop.distribution) {
-            (Distribution::Broadcast, _) if is_spatial_join_shape(self) => Ok(PhysicalProperty {
-                distribution: build_prop.distribution.clone(),
-            }),
+            (Distribution::Broadcast, _) if spatial_join_candidate.is_some() => {
+                Ok(PhysicalProperty {
+                    distribution: build_prop.distribution.clone(),
+                })
+            }
 
             // If any side of the join is Broadcast, pass through the other side.
             (_, Distribution::Broadcast) => Ok(PhysicalProperty {
@@ -744,17 +774,17 @@ impl Operator for Join {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
+        let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
         // Spatial join (Cascades fallback path on a concrete `SExpr`): there is
         // no cost-based enumeration here, so single-select by broadcasting the
         // smaller input. This matches the physical builder, which also prefers
         // the smaller side as the R-tree build side. If either side is already
         // Serial, fall back to a Serial spatial join.
-        if !ctx.get_cluster().is_empty() && is_spatial_join_shape(self) {
-            let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-            let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
-            if left_physical_prop.distribution == Distribution::Serial
-                || right_physical_prop.distribution == Distribution::Serial
+        if self.can_use_distributed_spatial_join(ctx.as_ref(), rel_expr)? {
+            if probe_physical_prop.distribution == Distribution::Serial
+                || build_physical_prop.distribution == Distribution::Serial
             {
                 required.distribution = Distribution::Serial;
                 return Ok(required);
@@ -775,26 +805,18 @@ impl Operator for Join {
             return Ok(required);
         }
 
-        let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-        let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
-
-        // if join/probe side is Serial, we use Serial distribution
+        // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
+            || (self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty())
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
             return Ok(required);
         }
 
-        // if this is a non-equi join, we use Serial distribution
-        if self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty() {
-            // TODO(leiysky): we can enforce redistribution here
-            required.distribution = Distribution::Serial;
-            return Ok(required);
-        }
-
         // Try to use broadcast join
+        let settings = ctx.get_settings();
         if !matches!(
             self.join_type,
             JoinType::Right
@@ -810,7 +832,6 @@ impl Operator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) {
-            let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
@@ -869,7 +890,17 @@ impl Operator for Join {
         // decide which side actually builds the R-tree, so we do not pick a
         // build side here, and we must not peek at child physical properties
         // (they are not available during Cascades exploration).
-        if !ctx.get_cluster().is_empty() && is_spatial_join_shape(self) {
+        //
+        // Use `is_spatial_join_shape` (shape-only check) instead of the full
+        // `can_use_distributed_spatial_join` because `derive_relational_prop_child`
+        // on an MExpr returns the current group's properties, not the child
+        // group's. Final column-side validation happens after Cascades in
+        // `FinalizeSpatialJoinOptimizer` which sets `join.spatial_join`; the
+        // physical builder only constructs a spatial join when that field is set.
+        if ctx.get_settings().get_enable_spatial_join()?
+            && !ctx.get_cluster().is_empty()
+            && is_spatial_join_shape(self)
+        {
             return Ok(vec![
                 vec![
                     RequiredProperty {
@@ -1029,9 +1060,9 @@ mod tests {
     use crate::plans::BoundColumnRef;
     use crate::plans::CastExpr;
     use crate::plans::ConstantExpr;
-    use crate::plans::DummyTableScan;
     use crate::plans::Exchange;
     use crate::plans::FunctionCall;
+    use crate::plans::Scan;
 
     fn column(index: usize, data_type: DataType) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1064,8 +1095,18 @@ mod tests {
         })
     }
 
-    fn exchanged_scan(exchange: Exchange) -> SExpr {
-        SExpr::create_unary(exchange, SExpr::create_leaf(DummyTableScan::new()))
+    fn column_set(indices: &[usize]) -> ColumnSet {
+        indices.iter().copied().map(Symbol::new).collect()
+    }
+
+    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> SExpr {
+        SExpr::create_unary(
+            exchange,
+            SExpr::create_leaf(Scan {
+                columns: column_set(columns),
+                ..Default::default()
+            }),
+        )
     }
 
     fn apply_stats_condition(
@@ -1101,16 +1142,41 @@ mod tests {
         };
         let s_expr = SExpr::create_binary(
             join,
-            exchanged_scan(Exchange::Broadcast),
-            exchanged_scan(Exchange::GlobalHash(vec![column(
-                2,
-                DataType::Number(NumberDataType::Int32),
-            )])),
+            exchanged_scan(Exchange::Broadcast, &[0]),
+            exchanged_scan(
+                Exchange::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]),
+                &[1, 2],
+            ),
         );
 
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, right_distribution);
+        Ok(())
+    }
+
+    #[test]
+    fn test_spatial_join_same_side_predicate_does_not_preserve_left_broadcast() -> Result<()> {
+        let join = Join {
+            non_equi_conditions: vec![function_call("st_intersects", vec![
+                column(0, DataType::Geometry),
+                column(1, DataType::Geometry),
+            ])],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_binary(
+            join,
+            exchanged_scan(Exchange::Broadcast, &[0, 1]),
+            exchanged_scan(
+                Exchange::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]),
+                &[2],
+            ),
+        );
+
+        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+
+        assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())
     }
 

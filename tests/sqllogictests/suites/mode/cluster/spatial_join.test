@@ -187,5 +187,80 @@ Exchange
 statement ok
 SET enforce_shuffle_join = 0
 
+# Same-side column scenario: both geometry arguments reference the same table.
+# This must NOT produce a spatial join plan because the spatial predicate does
+# not correlate rows from different sides of the join. The planner should fall
+# back to the regular non-spatial join path (verified by unit test
+# test_spatial_join_same_side_predicate_does_not_preserve_left_broadcast).
+statement ok
+CREATE TABLE dual_geom(id INT, geom1 GEOMETRY, geom2 GEOMETRY)
+
+statement ok
+INSERT INTO dual_geom VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))')),
+(2, TO_GEOMETRY('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'), TO_GEOMETRY('POLYGON((20 20, 20 25, 25 25, 25 20, 20 20))'))
+
+# Row 1: geom1 contains geom2 → ST_Intersects = true
+# Row 2: geom1 and geom2 are disjoint → ST_Intersects = false
+# So the cross join with the predicate on same-side columns should produce
+# 300 rows (all large_polygons paired with dual_geom row 1).
+query I
+SELECT count(*)
+FROM dual_geom AS d
+JOIN large_polygons AS l
+ON ST_Intersects(d.geom1, d.geom2)
+----
+300
+
+# Verify the plan does NOT use SpatialJoin/BroadcastSpatialJoin. Since the
+# predicate only references `dual_geom`, it can be pushed into that table scan
+# and the remaining join is a regular cross HashJoin. Broadcasting the filtered
+# small side here is the normal non-spatial join path.
+query T
+EXPLAIN SELECT d.id, l.id
+FROM dual_geom AS d
+JOIN large_polygons AS l
+ON ST_Intersects(d.geom1, d.geom2)
+----
+Exchange
+├── output columns: [l.id (#3), d.id (#0)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [l.id (#3), d.id (#0)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── keys is null equal: []
+    ├── filters: []
+    ├── estimated rows: <slt:ignore>
+    ├── Exchange(Build)
+    │   ├── output columns: [d.id (#0)]
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.test_cluster_spatial_join.dual_geom
+    │       ├── scan id: 0
+    │       ├── output columns: [id (#0)]
+    │       ├── read rows: 2
+    │       ├── read size: <slt:ignore>
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_true(st_intersects(dual_geom.geom1 (#1), dual_geom.geom2 (#2)))], limit: NONE]
+    │       └── estimated rows: <slt:ignore>
+    └── TableScan(Probe)
+        ├── table: default.test_cluster_spatial_join.large_polygons
+        ├── scan id: 1
+        ├── output columns: [id (#3)]
+        ├── read rows: 300
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 300.00
+
+statement ok
+DROP TABLE dual_geom
+
 statement ok
 DROP DATABASE test_cluster_spatial_join

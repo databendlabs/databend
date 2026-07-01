@@ -27,9 +27,10 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::Exchange as SqlExchange;
+use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -195,20 +196,24 @@ impl PhysicalPlanBuilder {
         let is_cluster = !self.ctx.get_cluster().is_empty();
         let mut is_broadcast = false;
         let build_side = if is_cluster {
-            let left_distribution = s_expr.left_child().get_data_distribution()?;
-            let right_distribution = s_expr.right_child().get_data_distribution()?;
-            let is_merge = |distribution: &Option<SqlExchange>| {
-                matches!(
-                    distribution,
-                    Some(SqlExchange::Merge | SqlExchange::MergeSort)
-                )
-            };
-            let is_serial_side = |distribution: &Option<SqlExchange>| {
-                distribution.is_none() || is_merge(distribution)
+            let left_exchange = s_expr.left_child().get_data_distribution()?;
+            let right_exchange = s_expr.right_child().get_data_distribution()?;
+            let left_distribution = RelExpr::with_s_expr(s_expr.left_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let right_distribution = RelExpr::with_s_expr(s_expr.right_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let is_merge = |distribution: &Option<Exchange>| {
+                matches!(distribution, Some(Exchange::Merge | Exchange::MergeSort))
             };
 
-            let left_is_broadcast = matches!(left_distribution, Some(SqlExchange::Broadcast));
-            let right_is_broadcast = matches!(right_distribution, Some(SqlExchange::Broadcast));
+            let left_is_broadcast = left_distribution == Distribution::Broadcast
+                && matches!(left_exchange, Some(Exchange::Broadcast));
+            let right_is_broadcast = right_distribution == Distribution::Broadcast
+                && matches!(right_exchange, Some(Exchange::Broadcast));
 
             if left_is_broadcast && right_is_broadcast {
                 return Ok(None);
@@ -220,7 +225,11 @@ impl PhysicalPlanBuilder {
             } else if right_is_broadcast {
                 is_broadcast = true;
                 SpatialBuildSide::Right
-            } else if is_serial_side(&left_distribution) && is_serial_side(&right_distribution) {
+            } else if left_distribution == Distribution::Serial
+                && right_distribution == Distribution::Serial
+                && is_merge(&left_exchange)
+                && is_merge(&right_exchange)
+            {
                 smaller_side
             } else {
                 return Ok(None);
