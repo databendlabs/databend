@@ -142,7 +142,7 @@ fn wait_probe_scheduled_for(
 /// (i.e. tasks owned by this runtime). Returns an empty-style placeholder
 /// when no matching task is found.
 fn dump_runtime_tasks(task_dump_marker: &str) -> String {
-    let (tasks, polling_tasks) = get_all_tasks(true);
+    let (tasks, polling_tasks) = get_all_tasks(false);
 
     let mut output = String::new();
     let mut matched = 0usize;
