@@ -9,8 +9,37 @@ export STORAGE_ALLOW_INSECURE=true
 TCPDUMP_WRAPPER_PID=""
 TCPDUMP_CHILD_PID=""
 TCPDUMP_DIR="./.databend/tcpdump"
+TCP_DIAG_DIR="./.databend/tcpdiag"
+
+collect_concurrent_tcp_diagnostics() {
+	local phase="$1"
+	mkdir -p "${TCP_DIAG_DIR}"
+
+	{
+		echo "timestamp_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+		echo "phase=${phase}"
+		echo "+ sysctl net.ipv4.tcp_abort_on_overflow net.core.somaxconn net.ipv4.tcp_max_syn_backlog"
+		sysctl net.ipv4.tcp_abort_on_overflow net.core.somaxconn net.ipv4.tcp_max_syn_backlog
+	} >"${TCP_DIAG_DIR}/sysctl-${phase}.txt" 2>&1 || true
+
+	{
+		echo "timestamp_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+		echo "phase=${phase}"
+		echo "+ sudo ss -ltnpi 'sport = :9091 or sport = :9092 or sport = :9093'"
+		sudo ss -ltnpi 'sport = :9091 or sport = :9092 or sport = :9093'
+	} >"${TCP_DIAG_DIR}/ss-listen-${phase}.txt" 2>&1 || true
+
+	{
+		echo "timestamp_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+		echo "phase=${phase}"
+		echo "+ netstat -s | egrep -i 'listen|overflow|reset|retrans'"
+		netstat -s | egrep -i 'listen|overflow|reset|retrans'
+	} >"${TCP_DIAG_DIR}/netstat-s-${phase}.txt" 2>&1 || true
+}
 
 stop_concurrent_tcpdump() {
+	collect_concurrent_tcp_diagnostics "stop"
+
 	if [ -n "${TCPDUMP_CHILD_PID}" ]; then
 		sudo kill -INT "${TCPDUMP_CHILD_PID}" 2>/dev/null || true
 	fi
@@ -28,6 +57,8 @@ stop_concurrent_tcpdump() {
 
 start_concurrent_tcpdump() {
 	mkdir -p "${TCPDUMP_DIR}"
+	trap stop_concurrent_tcpdump EXIT
+	collect_concurrent_tcp_diagnostics "start"
 
 	if ! command -v tcpdump >/dev/null 2>&1; then
 		echo "tcpdump is not installed; installing it for concurrent diagnostics"
@@ -47,7 +78,6 @@ start_concurrent_tcpdump() {
 	TCPDUMP_WRAPPER_PID=$!
 	sleep 1
 	TCPDUMP_CHILD_PID="$(pgrep -P "${TCPDUMP_WRAPPER_PID}" tcpdump | head -n 1 || true)"
-	trap stop_concurrent_tcpdump EXIT
 }
 
 echo "Starting Cluster databend-query"
