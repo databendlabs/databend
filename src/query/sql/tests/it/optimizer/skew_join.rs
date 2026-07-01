@@ -23,15 +23,22 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_sql::ColumnBindingBuilder;
+use databend_common_sql::Symbol;
+use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::Distribution;
+use databend_common_sql::optimizer::ir::PhysicalProperty;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RequiredProperty;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::SkewHashInfo;
 use databend_common_sql::plans::SkewHashRole;
 use databend_common_statistics::Datum;
@@ -125,6 +132,50 @@ async fn test_topn_skew_join_cost_prefers_skew_hash_by_margin() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_skew_hash_distribution_is_not_normal_hash_equivalent() {
+    let keys = vec![column_expr(0)];
+    let probe_skew_info = test_skew_hash_info(SkewHashRole::Probe);
+
+    let skew_required = RequiredProperty {
+        distribution: Distribution::GlobalSkewHash(keys.clone(), probe_skew_info.clone()),
+    };
+    let normal_physical = PhysicalProperty {
+        distribution: Distribution::GlobalHash(keys.clone()),
+    };
+    assert!(
+        !skew_required.satisfied_by(&normal_physical),
+        "normal hash shuffle must not satisfy skew hash distribution"
+    );
+
+    let normal_required = RequiredProperty {
+        distribution: Distribution::GlobalHash(keys.clone()),
+    };
+    let skew_physical = PhysicalProperty {
+        distribution: Distribution::GlobalSkewHash(keys.clone(), probe_skew_info.clone()),
+    };
+    assert!(
+        !normal_required.satisfied_by(&skew_physical),
+        "skew hash shuffle must not satisfy normal hash distribution"
+    );
+
+    let same_skew_physical = PhysicalProperty {
+        distribution: Distribution::GlobalSkewHash(keys.clone(), probe_skew_info.clone()),
+    };
+    assert!(
+        skew_required.satisfied_by(&same_skew_physical),
+        "identical skew hash distribution should satisfy the requirement"
+    );
+
+    let different_skew_physical = PhysicalProperty {
+        distribution: Distribution::GlobalSkewHash(keys, test_skew_hash_info(SkewHashRole::Build)),
+    };
+    assert!(
+        !skew_required.satisfied_by(&different_skew_physical),
+        "skew hash distributions with different skew info must not be equivalent"
+    );
+}
+
 async fn setup_skew_join_context() -> Result<Arc<LiteTableContext>> {
     let ctx = setup_skew_join_context_with_default_skew_join_setting().await?;
     ctx.get_settings()
@@ -198,6 +249,30 @@ fn register_table_with_hot_key(
 
 fn uint64_scalar(value: u64) -> Scalar {
     Scalar::Number(NumberScalar::UInt64(value))
+}
+
+fn column_expr(index: usize) -> ScalarExpr {
+    ScalarExpr::BoundColumnRef(BoundColumnRef {
+        span: None,
+        column: ColumnBindingBuilder::new(
+            format!("c{index}"),
+            Symbol::new(index),
+            Box::new(DataType::Number(NumberDataType::UInt64)),
+            Visibility::Visible,
+        )
+        .build(),
+    })
+}
+
+fn test_skew_hash_info(role: SkewHashRole) -> SkewHashInfo {
+    SkewHashInfo {
+        role,
+        hot_keys: vec![uint64_scalar(1)],
+        bucket_count: 2,
+        normal_skew_penalty_rows: 100,
+        skew_skew_penalty_rows: 10,
+        extra_build_rows: 1,
+    }
 }
 
 fn plan_s_expr(plan: &Plan) -> &SExpr {
