@@ -106,13 +106,10 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
-        let task_num = mutation_logs.entries.len();
+        self.processed_log_entries += mutation_logs.entries.len();
         mutation_logs.entries.into_iter().for_each(|entry| {
             self.accumulate_log_entry(entry);
         });
-        if task_num > 0 {
-            self.processed_log_entries += task_num;
-        }
         Ok(None)
     }
 
