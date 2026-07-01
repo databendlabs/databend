@@ -14,7 +14,8 @@
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
-use log::debug;
+use log::info;
+use log::warn;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::TableContextCluster;
@@ -30,10 +31,15 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     let _guard = ThreadTracker::tracking(tracking_payload);
 
-    debug!("start prepared query {}", id);
+    info!("start prepared query: query_id={}", id);
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
+        warn!(
+            "start prepared query failed: query_id={}, error={:?}",
+            id, cause
+        );
         DataExchangeManager::instance().on_finished_query(&id, Some(cause.clone()));
         return Err(cause);
     }
+    info!("start prepared query finished: query_id={}", id);
     Ok(())
 }

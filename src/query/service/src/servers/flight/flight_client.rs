@@ -30,6 +30,7 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::info;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
@@ -90,6 +91,7 @@ impl FlightClient {
         })?;
 
         drop(message);
+        let payload_bytes = body.len();
         let mut request =
             databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
                 body: body.into(),
@@ -102,10 +104,53 @@ impl FlightClient {
             AsciiMetadataValue::from_str(&secret).unwrap(),
         );
 
-        let response = self.inner.do_action(request).await?;
+        info!(
+            "flight client do_action send: path={}, timeout={}s, payload_bytes={}",
+            path, timeout, payload_bytes
+        );
+        let started = Instant::now();
+        let response = match self.inner.do_action(request).await {
+            Ok(response) => {
+                info!(
+                    "flight client do_action response headers: path={}, elapsed={:?}",
+                    path,
+                    started.elapsed()
+                );
+                response
+            }
+            Err(cause) => {
+                warn!(
+                    "flight client do_action transport failed: path={}, elapsed={:?}, error={:?}",
+                    path,
+                    started.elapsed(),
+                    cause
+                );
+                return Err(cause.into());
+            }
+        };
 
-        match response.into_inner().message().await? {
+        let mut stream = response.into_inner();
+        let message = match stream.message().await {
+            Ok(message) => message,
+            Err(cause) => {
+                warn!(
+                    "flight client do_action read failed: path={}, elapsed={:?}, error={:?}",
+                    path,
+                    started.elapsed(),
+                    cause
+                );
+                return Err(cause.into());
+            }
+        };
+
+        match message {
             Some(response) => {
+                info!(
+                    "flight client do_action finished: path={}, elapsed={:?}, response_bytes={}",
+                    path,
+                    started.elapsed(),
+                    response.body.len()
+                );
                 let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
                 deserializer.disable_recursion_limit();
                 let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
