@@ -14,6 +14,7 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
 use arrow_flight::flight_service_server::FlightServiceServer;
@@ -21,6 +22,11 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use socket2::Domain;
+use socket2::Protocol;
+use socket2::SockAddr;
+use socket2::Socket;
+use socket2::Type;
 use tokio::sync::Notify;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -35,6 +41,8 @@ pub struct FlightService {
     pub abort_notify: Arc<Notify>,
 }
 
+const FLIGHT_RPC_LISTEN_BACKLOG: i32 = 4096;
+
 impl FlightService {
     pub fn create(config: InnerConfig) -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
@@ -48,6 +56,21 @@ impl FlightService {
         async move {
             notified.notified().await;
         }
+    }
+
+    fn bind_tcp_incoming(addr: SocketAddr) -> std::io::Result<TcpIncoming> {
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+
+        #[cfg(not(windows))]
+        socket.set_reuse_address(true)?;
+
+        socket.bind(&SockAddr::from(addr))?;
+        socket.listen(FLIGHT_RPC_LISTEN_BACKLOG)?;
+
+        let listener: StdTcpListener = socket.into();
+        listener.set_nonblocking(true)?;
+
+        Ok(tokio::net::TcpListener::from_std(listener)?.into())
     }
 
     #[async_backtrace::framed]
@@ -78,7 +101,7 @@ impl FlightService {
             builder
         };
 
-        let incoming = TcpIncoming::bind(addr)
+        let incoming = Self::bind_tcp_incoming(addr)
             .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?
             .with_nodelay(Some(true))
             .with_keepalive(None);
