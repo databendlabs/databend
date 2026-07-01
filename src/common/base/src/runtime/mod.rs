@@ -71,6 +71,8 @@ pub use runtime::spawn_named;
 pub use runtime::try_block_on;
 pub use runtime::try_spawn_blocking;
 pub use runtime_tracker::CaptureLogSettings;
+pub use runtime_tracker::IoStats;
+pub use runtime_tracker::IoStatsSnapshot;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::ThreadTracker;
 pub use runtime_tracker::TrackingGuard;

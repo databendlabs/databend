@@ -17,6 +17,8 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::IoStatsSnapshot;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::table_context::TableContextPartitionStats;
@@ -28,6 +30,7 @@ use databend_common_storages_system::QueryLogElement;
 use log::error;
 use log::info;
 use serde_json;
+use serde_json::Value;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
@@ -91,6 +94,19 @@ fn pruning_stats_query_log_extra(part_stats: &HashMap<u32, PartStatistics>) -> R
             "blocks_bloom_index_read_cost_us": pruning_stats.blocks_bloom_index_read_cost,
         }
     }))?)
+}
+
+fn resource_usage_query_log(stats: IoStatsSnapshot) -> Value {
+    serde_json::json!({
+        "list_count": stats.list_count,
+        "list_duration_ms": stats.list_duration_ms,
+        "read_count": stats.read_count,
+        "read_bytes": stats.read_bytes,
+        "read_duration_ms": stats.read_duration_ms,
+        "write_count": stats.write_count,
+        "write_bytes": stats.write_bytes,
+        "write_duration_ms": stats.write_duration_ms,
+    })
 }
 
 impl InterpreterQueryLog {
@@ -269,6 +285,7 @@ impl InterpreterQueryLog {
             peek_memory_usage: HashMap::new(),
 
             session_id,
+            resource_usage: resource_usage_query_log(IoStatsSnapshot::default()),
         })
     }
 
@@ -385,6 +402,11 @@ impl InterpreterQueryLog {
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
         let extra = pruning_stats_query_log_extra(&ctx.get_pruned_partitions_stats())?;
+        let mut io_stats = ctx.get_io_stats();
+        if let Some(stats) = ThreadTracker::io_stats() {
+            io_stats.merge(&stats.snapshot());
+        }
+        let resource_usage = resource_usage_query_log(io_stats);
 
         Self::write_log(QueryLogElement {
             log_type,
@@ -451,12 +473,16 @@ impl InterpreterQueryLog {
             txn_id,
             peek_memory_usage,
             session_id,
+            resource_usage,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use databend_common_base::runtime::IoStats;
     use serde_json::Value;
 
     use super::*;
@@ -517,5 +543,41 @@ mod tests {
         let part_stats = HashMap::new();
 
         assert_eq!(pruning_stats_query_log_extra(&part_stats).unwrap(), "");
+    }
+
+    #[test]
+    fn resource_usage_query_log_formats_storage_metrics() {
+        let stats = IoStats::default();
+        stats.record_operation_duration("list", Duration::from_millis(7));
+        stats.record_operation_duration("read", Duration::from_millis(11));
+        stats.record_operation_duration("read", Duration::from_millis(13));
+        stats.record_operation_bytes("read", 17);
+        stats.record_operation_duration("write", Duration::from_millis(17));
+        stats.record_operation_bytes("write", 23);
+
+        let stats = resource_usage_query_log(stats.snapshot());
+
+        assert_eq!(stats["list_count"].as_u64(), Some(1));
+        assert_eq!(stats["list_duration_ms"].as_u64(), Some(7));
+        assert_eq!(stats["read_count"].as_u64(), Some(2));
+        assert_eq!(stats["read_bytes"].as_u64(), Some(17));
+        assert_eq!(stats["read_duration_ms"].as_u64(), Some(24));
+        assert_eq!(stats["write_count"].as_u64(), Some(1));
+        assert_eq!(stats["write_bytes"].as_u64(), Some(23));
+        assert_eq!(stats["write_duration_ms"].as_u64(), Some(17));
+    }
+
+    #[test]
+    fn resource_usage_query_log_formats_empty_storage_metrics() {
+        let stats = resource_usage_query_log(IoStatsSnapshot::default());
+
+        assert_eq!(stats["list_count"].as_u64(), Some(0));
+        assert_eq!(stats["list_duration_ms"].as_u64(), Some(0));
+        assert_eq!(stats["read_count"].as_u64(), Some(0));
+        assert_eq!(stats["read_bytes"].as_u64(), Some(0));
+        assert_eq!(stats["read_duration_ms"].as_u64(), Some(0));
+        assert_eq!(stats["write_count"].as_u64(), Some(0));
+        assert_eq!(stats["write_bytes"].as_u64(), Some(0));
+        assert_eq!(stats["write_duration_ms"].as_u64(), Some(0));
     }
 }
