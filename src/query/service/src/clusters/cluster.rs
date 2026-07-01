@@ -181,17 +181,10 @@ impl ClusterHelper for Cluster {
         let mut response = HashMap::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
-            let flight_address = node.flight_address.clone();
-
-            info!(
-                "cluster do_action start: path={}, target_node={}, target_addr={}, timeout={}s, retry_times={}",
-                path, id, flight_address, flight_params.timeout, flight_params.retry_times
-            );
-            let started = Instant::now();
 
             let do_action_with_retry = {
                 let config = GlobalConfig::instance();
-                let flight_address = flight_address.clone();
+                let flight_address = node.flight_address.clone();
                 let node_secret = node.secret.clone();
 
                 async move {
@@ -226,26 +219,7 @@ impl ClusterHelper for Cluster {
                 }
             };
 
-            let result = do_action_with_retry.await;
-            match &result {
-                Ok(_) => info!(
-                    "cluster do_action finished: path={}, target_node={}, target_addr={}, elapsed={:?}",
-                    path,
-                    id,
-                    flight_address,
-                    started.elapsed()
-                ),
-                Err(cause) => warn!(
-                    "cluster do_action failed: path={}, target_node={}, target_addr={}, elapsed={:?}, error={:?}",
-                    path,
-                    id,
-                    flight_address,
-                    started.elapsed(),
-                    cause
-                ),
-            }
-
-            response.insert(id, result?);
+            response.insert(id, do_action_with_retry.await?);
         }
 
         Ok(response)

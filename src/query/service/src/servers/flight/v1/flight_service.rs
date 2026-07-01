@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::pin::Pin;
-use std::time::Instant;
 
 use arrow_flight::Action;
 use arrow_flight::ActionType;
@@ -37,7 +36,6 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use log::debug;
-use log::info;
 use log::warn;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
@@ -259,44 +257,17 @@ impl FlightService for DatabendQueryFlightService {
         }
 
         let action = request.into_inner();
-        let action_type = action.r#type.clone();
-        info!(
-            "flight server do_action received: node={}, path={}, body_bytes={}",
-            config.query.node_id,
-            action_type,
-            action.body.len()
-        );
-        let started = Instant::now();
-
         match self
             .actions
             .do_action(&action.r#type, &action.body)
             .in_span(root)
             .await
         {
-            Err(cause) => {
-                warn!(
-                    "flight server do_action failed: node={}, path={}, elapsed={:?}, error={:?}",
-                    config.query.node_id,
-                    action_type,
-                    started.elapsed(),
-                    cause
-                );
-                Err(cause.into())
-            }
-            Ok(body) => {
-                info!(
-                    "flight server do_action finished: node={}, path={}, elapsed={:?}, response_bytes={}",
-                    config.query.node_id,
-                    action_type,
-                    started.elapsed(),
-                    body.len()
-                );
-                Ok(RawResponse::new(
-                    Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
-                        as FlightStream<FlightResult>,
-                ))
-            }
+            Err(cause) => Err(cause.into()),
+            Ok(body) => Ok(RawResponse::new(
+                Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
+                    as FlightStream<FlightResult>,
+            )),
         }
     }
 
