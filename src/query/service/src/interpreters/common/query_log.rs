@@ -420,7 +420,7 @@ impl InterpreterQueryLog {
         if let Some(stats) = ThreadTracker::io_stats() {
             io_stats.merge(&stats.snapshot());
         }
-        let resource_usage = resource_usage_query_log(io_stats, &query_profiles);
+        let resource_usage = resource_usage_query_log(io_stats, query_profiles);
 
         Self::write_log(QueryLogElement {
             log_type,
