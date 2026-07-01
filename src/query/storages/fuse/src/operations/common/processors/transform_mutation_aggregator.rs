@@ -95,8 +95,7 @@ pub struct TableMutationAggregator {
     hll: BlockHLL,
     write_segment_ctx: WriteSegmentCtx,
 
-    start_time: Instant,
-    finished_tasks: usize,
+    processed_log_entries: usize,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -112,27 +111,18 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             self.accumulate_log_entry(entry);
         });
         if task_num > 0 {
-            if self.finished_tasks == 0 {
-                self.ctx.set_status_info(&format!(
-                    "{}: writing block files, elapsed: {:?}",
-                    self.write_segment_ctx.kind,
-                    self.start_time.elapsed()
-                ));
-            }
-            self.finished_tasks += task_num;
+            self.processed_log_entries += task_num;
         }
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        self.generate_append_segments().await?;
         info!(
-            "{}: finished writing block files, tasks: {}, elapsed: {:?}",
-            self.write_segment_ctx.kind,
-            self.finished_tasks,
-            self.start_time.elapsed()
+            "{}: finished aggregating mutation logs, entries: {}",
+            self.write_segment_ctx.kind, self.processed_log_entries
         );
+        self.generate_append_segments().await?;
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
@@ -254,8 +244,7 @@ impl TableMutationAggregator {
             removed_statistics,
             hll: HashMap::new(),
             write_segment_ctx,
-            finished_tasks: 0,
-            start_time: Instant::now(),
+            processed_log_entries: 0,
             table_id: table.get_id(),
         }
     }

@@ -184,6 +184,7 @@ pub(crate) struct ReclusterTaskCandidate {
     // Empty means a rebuild-only repack candidate.
     selected_blocks: Vec<(usize, Vec<usize>)>,
     output_level: i32,
+    all_ordered: bool,
 }
 
 impl ReclusterTaskCandidate {
@@ -516,6 +517,7 @@ impl ReclusterMutator {
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
+                    all_ordered: false,
                 });
             } else {
                 return Ok(candidate_window);
@@ -707,6 +709,7 @@ impl ReclusterMutator {
                     total_bytes,
                     total_compressed,
                     level: candidate.output_level,
+                    all_ordered: candidate.all_ordered,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -852,11 +855,7 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            vec![ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&indices, blocks),
-                output_level: group.output_level(&indices, blocks),
-            }]
+            vec![Self::task_candidate(group, score, &indices, blocks)]
         } else {
             match self.vector_cluster_key() {
                 Some(vector_cluster_info) => self.fetch_vector_task_candidates(
@@ -884,6 +883,22 @@ impl ReclusterMutator {
         );
 
         Ok(candidates)
+    }
+
+    fn task_candidate(
+        group: ReclusterGroup,
+        score: CandidateScore,
+        task_indices: &[usize],
+        blocks: &[&ReclusterBlock],
+    ) -> ReclusterTaskCandidate {
+        ReclusterTaskCandidate {
+            score,
+            selected_blocks: Self::selected_blocks_by_segment(task_indices, blocks),
+            output_level: group.output_level(task_indices, blocks),
+            all_ordered: task_indices
+                .iter()
+                .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original)),
+        }
     }
 
     fn selected_blocks_by_segment(
@@ -1030,12 +1045,7 @@ impl ReclusterMutator {
                 max_depth: depth,
                 average_depth,
             };
-            let output_level = group.output_level(&task_indices, blocks);
-            candidates.push(ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                output_level,
-            });
+            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
         }
 
         debug!(
@@ -1805,12 +1815,7 @@ impl ReclusterMutator {
                 max_depth,
                 average_depth,
             };
-            let output_level = group.output_level(&task_indices, blocks);
-            candidates.push(ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                output_level,
-            });
+            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
         };
 
         let mut candidates = Vec::new();

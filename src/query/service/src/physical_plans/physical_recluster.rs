@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::LimitType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
@@ -38,6 +39,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -227,6 +229,8 @@ impl IPhysicalPlan for Recluster {
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
                 let sort_descs = cluster_stats_gen.sort_descs();
+                let skip_partial_sort =
+                    task.all_ordered && cluster_stats_gen.vector_operator.is_none();
 
                 // merge sort
                 let sort_pipeline_builder = SortPipelineBuilder::create(
@@ -237,8 +241,17 @@ impl IPhysicalPlan for Recluster {
                     settings.get_enable_fixed_rows_sort()?,
                 )?
                 .with_block_size_hit(rows_per_block);
-                sort_pipeline_builder
-                    .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
+                if !skip_partial_sort {
+                    let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
+                    builder.main_pipeline.add_transformer(move || {
+                        TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
+                    });
+                }
+                sort_pipeline_builder.build_merge_sort_pipeline(
+                    &mut builder.main_pipeline,
+                    false,
+                    false,
+                )?;
 
                 // Compact after merge sort. This ordered compactor keeps block growth bounded
                 // without requiring a hard post-sort size cap, since final serialized sizes are
