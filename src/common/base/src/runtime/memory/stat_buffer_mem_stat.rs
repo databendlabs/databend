@@ -162,10 +162,7 @@ impl MemStatBuffer {
 
         if mem_stat.id != self.cur_mem_stat_id {
             if Arc::strong_count(mem_stat) == 1 {
-                mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
-                self.global_mem_stat
-                    .used
-                    .fetch_add(memory_usage, Ordering::Relaxed);
+                let _ = mem_stat.record_memory::<false>(memory_usage, memory_usage);
                 return;
             }
 
@@ -374,7 +371,11 @@ mod tests {
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat = MemStat::create(String::from("test"));
+        let mem_stat = MemStat::create_child(
+            Some(String::from("test")),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
 
         buffer.dealloc(&mem_stat, 1);
         let _ = GlobalStatBuffer::current().flush::<false>(0);

@@ -28,12 +28,15 @@ use std::time::SystemTime;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
 use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -76,7 +79,8 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::executor::executor_worker_context::out_of_limit_error;
+use crate::pipelines::executor::memory_limit_diagnostics::log_memory_limit_diagnostics;
+use crate::pipelines::executor::memory_limit_diagnostics::out_of_limit_error;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 
@@ -90,6 +94,32 @@ enum State {
 struct EdgeInfo {
     input_index: usize,
     output_index: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlanNodeMemoryUsage {
+    pub identity: String,
+    pub current_bytes: usize,
+    pub peak_bytes: usize,
+}
+
+fn plan_node_memory_identity(profile: &Profile) -> String {
+    let mut identity = profile
+        .plan_name
+        .as_deref()
+        .unwrap_or("unknown")
+        .to_string();
+
+    if let Some(plan_id) = profile.plan_id {
+        identity.push_str(&format!(" [#{plan_id}]"));
+    }
+
+    if !profile.title.is_empty() {
+        identity.push(' ');
+        identity.push_str(profile.title.as_str());
+    }
+
+    identity
 }
 
 pub(crate) struct Node {
@@ -110,6 +140,7 @@ impl Node {
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
         time_series_profile: Option<Arc<TimeSeriesProfiles>>,
+        plan_mem_stat: Option<Arc<MemStat>>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -137,6 +168,10 @@ impl Node {
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
             tracking_payload.local_time_series_profile = time_series_profile;
+
+            if let Some(plan_mem_stat) = plan_mem_stat {
+                tracking_payload.mem_stat = Some(plan_mem_stat);
+            }
 
             tracking_payload
         };
@@ -212,10 +247,12 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        let mut plan_memory_stats = HashMap::new();
         Self::init_graph(
             &mut pipeline,
             &mut graph,
             &mut time_series_profile_builder,
+            &mut plan_memory_stats,
             perf_enabled,
         );
         let executor_stats = ExecutorStats::new();
@@ -256,11 +293,13 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        let mut plan_memory_stats = HashMap::new();
         for pipeline in &mut pipelines {
             Self::init_graph(
                 pipeline,
                 &mut graph,
                 &mut time_series_profile_builder,
+                &mut plan_memory_stats,
                 perf_enabled,
             );
         }
@@ -285,6 +324,7 @@ impl ExecutingGraph {
         pipeline: &mut Pipeline,
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
+        plan_memory_stats: &mut HashMap<u32, Arc<MemStat>>,
         perf_enabled: bool,
     ) {
         let offset = graph.node_count();
@@ -298,6 +338,23 @@ impl ExecutingGraph {
                     Some(time_series_profile_builder.register_time_series_profile(plan_id));
             }
 
+            let plan_mem_stat = node.scope.as_ref().and_then(|scope| {
+                let query_mem_stat = ThreadTracker::mem_stat()?;
+                let plan_id = scope.id;
+                Some(
+                    plan_memory_stats
+                        .entry(plan_id)
+                        .or_insert_with(|| {
+                            MemStat::create_child(
+                                None,
+                                0,
+                                ParentMemStat::Normal(query_mem_stat.clone()),
+                            )
+                        })
+                        .clone(),
+                )
+            });
+
             let graph_node_index = graph.add_node(Node::create(
                 pid,
                 node.scope.clone(),
@@ -305,6 +362,7 @@ impl ExecutingGraph {
                 &node.inputs,
                 &node.outputs,
                 time_series_profile,
+                plan_mem_stat,
             ));
 
             unsafe {
@@ -604,22 +662,22 @@ impl ScheduleQueue {
             workers_condvar.inc_active_async_worker();
             let graph = proc.graph;
             let node_index = proc.processor.id();
-            let tracking_payload = graph.get_node_tracking_payload(node_index);
+            let tracking_payload = graph.get_node_tracking_payload(node_index).clone();
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
+            let processor_task = ProcessorAsyncTask::create(
+                query_id,
+                wakeup_worker_id,
+                proc.processor.clone(),
+                Arc::new(ExecutorTasksQueue::QueryExecutorTasksQueue(global_queue)),
+                workers_condvar,
+                graph,
+                process_future,
+            );
             executor.async_runtime.spawn(
-                ProcessorAsyncTask::create(
-                    query_id,
-                    wakeup_worker_id,
-                    proc.processor.clone(),
-                    Arc::new(ExecutorTasksQueue::QueryExecutorTasksQueue(global_queue)),
-                    workers_condvar,
-                    graph,
-                    process_future,
-                )
-                .in_span(Span::enter_with_local_parent(std::any::type_name::<
-                    ProcessorAsyncTask,
-                >())),
+                tracking_payload.clone().tracking(processor_task).in_span(
+                    Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
+                ),
             );
         }
     }
@@ -707,22 +765,22 @@ impl ScheduleQueue {
             workers_condvar.inc_active_async_worker();
             let graph = proc.graph;
             let node_index = proc.processor.id();
-            let tracking_payload = graph.get_node_tracking_payload(node_index);
+            let tracking_payload = graph.get_node_tracking_payload(node_index).clone();
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
+            let processor_task = ProcessorAsyncTask::create(
+                query_id,
+                wakeup_worker_id,
+                proc.processor.clone(),
+                Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
+                workers_condvar,
+                graph,
+                process_future,
+            );
             executor.async_runtime.spawn(
-                ProcessorAsyncTask::create(
-                    query_id,
-                    wakeup_worker_id,
-                    proc.processor.clone(),
-                    Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
-                    workers_condvar,
-                    graph,
-                    process_future,
-                )
-                .in_span(Span::enter_with_local_parent(std::any::type_name::<
-                    ProcessorAsyncTask,
-                >())),
+                tracking_payload.clone().tracking(processor_task).in_span(
+                    Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
+                ),
             );
         }
     }
@@ -910,6 +968,9 @@ impl RunningGraph {
             return Ok(());
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
+        if let Err(cause) = &cause {
+            log_memory_limit_diagnostics(cause, "memory limit exceeded");
+        }
         self.0.finished_notify.notify_waiters();
         self.interrupt_running_nodes();
         let mut finished_error = self.0.finished_error.lock();
@@ -1067,6 +1128,50 @@ impl RunningGraph {
         } else {
             format!("{:?}", nodes_display)
         }
+    }
+
+    pub fn top_memory_plan_nodes(&self, limit: usize) -> Vec<PlanNodeMemoryUsage> {
+        let mut usages = HashMap::new();
+
+        for node_index in self.0.graph.node_indices() {
+            let node = &self.0.graph[node_index];
+            let Some(mem_stat) = node.tracking_payload.mem_stat.as_ref() else {
+                continue;
+            };
+            let Some(profile) = node.tracking_payload.profile.as_ref() else {
+                continue;
+            };
+            let Some(plan_id) = profile.plan_id else {
+                continue;
+            };
+
+            if let Entry::Vacant(entry) = usages.entry(plan_id) {
+                entry.insert(PlanNodeMemoryUsage {
+                    identity: plan_node_memory_identity(profile),
+                    current_bytes: mem_stat.get_memory_usage(),
+                    peak_bytes: std::cmp::max(0, mem_stat.get_peak_memory_usage()) as usize,
+                });
+            }
+        }
+
+        let mut usages = usages.into_iter().collect::<Vec<_>>();
+        usages.sort_by(|left, right| {
+            right
+                .1
+                .current_bytes
+                .cmp(&left.1.current_bytes)
+                .then(right.1.peak_bytes.cmp(&left.1.peak_bytes))
+                .then(left.0.cmp(&right.0))
+        });
+        usages
+            .into_iter()
+            .take(limit)
+            .map(|(_, usage)| usage)
+            .collect::<Vec<_>>()
+    }
+
+    pub fn format_top_memory_plan_nodes(&self, limit: usize) -> String {
+        format!("{:?}", self.top_memory_plan_nodes(limit))
     }
 
     /// Change the priority

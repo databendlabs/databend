@@ -22,6 +22,7 @@ use std::time::SystemTime;
 use databend_common_base::runtime::PerfCounters;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -37,11 +38,8 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::memory_limit_diagnostics::out_of_limit_error;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
-
-pub(super) fn out_of_limit_error(error: impl Debug) -> ErrorCode {
-    ErrorCode::MemoryExceedsLimit(format!("{error:?}"))
-}
 
 pub enum ExecutorTask {
     None,
@@ -229,21 +227,21 @@ impl ExecutorWorkerContext {
             let process_future = proc.processor.async_process();
             let graph = proc.graph;
             let node_index = proc.processor.id();
-            let tracking_payload = graph.get_node_tracking_payload(node_index);
+            let tracking_payload = graph.get_node_tracking_payload(node_index).clone();
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
+            let processor_task = ProcessorAsyncTask::create(
+                query_id,
+                wakeup_worker_id,
+                proc.processor.clone(),
+                Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
+                workers_condvar,
+                graph,
+                process_future,
+            );
             executor.async_runtime.spawn(
-                ProcessorAsyncTask::create(
-                    query_id,
-                    wakeup_worker_id,
-                    proc.processor.clone(),
-                    Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
-                    workers_condvar,
-                    graph,
-                    process_future,
-                )
-                .in_span(Span::enter_with_local_parent(std::any::type_name::<
-                    ProcessorAsyncTask,
-                >())),
+                tracking_payload.clone().tracking(processor_task).in_span(
+                    Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
+                ),
             );
         }
         Ok(None)
@@ -274,23 +272,5 @@ impl Debug for ExecutorTask {
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_base::runtime::OutOfLimit;
-    use databend_common_exception::ErrorCode;
-
-    use super::out_of_limit_error;
-
-    #[test]
-    fn test_out_of_limit_error_uses_memory_exceeds_limit() {
-        let err = out_of_limit_error(OutOfLimit::new(100, 50));
-
-        assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
-        assert_eq!(err.name(), "MemoryExceedsLimit");
-        assert!(err.message().contains("memory usage"));
-        assert!(err.message().contains("exceeds limit"));
     }
 }

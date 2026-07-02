@@ -25,8 +25,17 @@ fn mark_alloc_error_panic() {
     ALLOC_ERROR_PANIC.with(|flag| flag.set(true));
 }
 
+#[cfg(test)]
+pub(crate) fn mark_alloc_error_panic_for_test() {
+    mark_alloc_error_panic();
+}
+
 pub fn take_alloc_error_panic() -> bool {
     ALLOC_ERROR_PANIC.with(|flag| flag.replace(false))
+}
+
+pub fn is_alloc_error_panic() -> bool {
+    ALLOC_ERROR_PANIC.with(|flag| flag.get())
 }
 
 pub fn set_alloc_error_hook() {

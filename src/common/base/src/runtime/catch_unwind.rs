@@ -21,6 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::FutureExt;
 
+use crate::runtime::take_alloc_error_panic;
+
 pub struct CatchUnwindError;
 
 pub fn drop_guard<F: FnOnce() -> R, R>(f: F) -> R {
@@ -46,14 +48,31 @@ pub fn catch_unwind<F: FnOnce() -> R, R>(f: F) -> Result<R> {
     #[expect(clippy::disallowed_methods)]
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(res) => Ok(res),
-        Err(cause) => match cause.downcast_ref::<&'static str>() {
-            None => match cause.downcast_ref::<String>() {
-                None => Err(ErrorCode::UnwindError("Sorry, unknown panic message")),
-                Some(message) => Err(ErrorCode::UnwindError(message.to_string())),
-            },
-            Some(message) => Err(ErrorCode::UnwindError(message.to_string())),
-        },
+        Err(cause) => Err(panic_error_code(cause)),
     }
+}
+
+fn panic_error_code(cause: Box<dyn std::any::Any + Send>) -> ErrorCode {
+    let message = panic_message(cause);
+    if take_alloc_error_panic() && is_memory_limit_message(&message) {
+        return ErrorCode::MemoryExceedsLimit(message);
+    }
+
+    ErrorCode::UnwindError(message)
+}
+
+fn panic_message(cause: Box<dyn std::any::Any + Send>) -> String {
+    match cause.downcast_ref::<&'static str>() {
+        None => match cause.downcast_ref::<String>() {
+            None => "Sorry, unknown panic message".to_string(),
+            Some(message) => message.to_string(),
+        },
+        Some(message) => message.to_string(),
+    }
+}
+
+fn is_memory_limit_message(message: &str) -> bool {
+    message.contains("memory usage") && message.contains("exceeds limit")
 }
 
 pub struct CatchUnwindFuture<F: Future> {
@@ -77,5 +96,35 @@ impl<F: Future> Future for CatchUnwindFuture<F> {
             Ok(Poll::Ready(value)) => Poll::Ready(Ok(value)),
             Err(cause) => Poll::Ready(Err(cause.with_context("captured from unwind"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+
+    use crate::runtime::catch_unwind;
+    use crate::runtime::memory::mark_alloc_error_panic_for_test;
+
+    #[test]
+    fn test_alloc_memory_limit_panic_maps_to_memory_exceeds_limit() {
+        mark_alloc_error_panic_for_test();
+
+        let err = catch_unwind(|| panic!("memory usage 100 exceeds limit 50")).unwrap_err();
+
+        assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
+        assert_eq!(err.name(), "MemoryExceedsLimit");
+        assert!(err.message().contains("memory usage"));
+        assert!(err.message().contains("exceeds limit"));
+    }
+
+    #[test]
+    fn test_alloc_failure_panic_remains_unwind_error() {
+        mark_alloc_error_panic_for_test();
+
+        let err = catch_unwind(|| panic!("memory allocation of 1024 bytes failed")).unwrap_err();
+
+        assert_eq!(err.code(), ErrorCode::UNWIND_ERROR);
+        assert_eq!(err.name(), "UnwindError");
     }
 }
