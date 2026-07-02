@@ -522,21 +522,13 @@ impl FuseTable {
         insert_hll: &BlockHLL,
         insert_rows: u64,
         insert_top_n: &BlockTopN,
-        reuse_previous_stats: bool,
         refresh_top_n: bool,
     ) -> Result<TableStatsGenerator> {
-        let empty_snapshot = None;
-        let stats_snapshot = if reuse_previous_stats {
-            snapshot
-        } else {
-            &empty_snapshot
-        };
-        // Extract reusable base stats meta (row_count / hll, etc.) from snapshot.
-        // Overwrite commits build statistics from inserted rows only.
-        let summary = stats_snapshot.summary();
+        // Extract previous stats meta (row_count / hll, etc.) from snapshot.
+        let summary = snapshot.summary();
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
-        // Reusable table statistics file location (if any).
-        let mut prev_stats_location = stats_snapshot.table_statistics_location();
+        // Previous statistics file location (if any).
+        let mut prev_stats_location = snapshot.table_statistics_location();
         let top_n_column_ids = if refresh_top_n && insert_rows > 0 {
             self.append_top_n_columns(self.schema())?
                 .map(|(columns, _)| columns.values().map(|field| field.column_id()).collect())
@@ -559,43 +551,23 @@ impl FuseTable {
             ));
         }
 
-        if insert_hll.is_empty() {
-            let empty_hll = HashMap::new();
-            let table_statistics = self
-                .build_append_top_n_statistics(
-                    stats_snapshot,
-                    top_n_column_ids,
-                    &empty_hll,
-                    insert_top_n,
-                    table_row_count,
-                )
-                .await?;
-            if let Some(stats) = &table_statistics {
-                prev_stats_location = Some(self.new_table_statistics_location(stats)?);
-            }
-
-            return Ok(TableStatsGenerator::new(
-                prev_stats_meta.cloned(),
-                prev_stats_location,
-                0,
-                0,
-                HashMap::new(),
-                table_statistics,
-            ));
-        }
-
-        // Initialize a new HLL with inserted rows
         let mut new_hll = insert_hll.clone();
+        let next_stats_meta = if insert_hll.is_empty() {
+            prev_stats_meta.cloned()
+        } else {
+            None
+        };
         // Calculate updated row_count
-        let (hll_row_count, unstats_rows) = match prev_stats_meta {
+        let (hll_row_count, unstats_rows) = match (!insert_hll.is_empty(), prev_stats_meta) {
+            (false, _) => (0, 0),
             // Case 1: Previous stats exist and already contain HLL → merge directly
-            Some(v) if v.hll.is_some() => {
+            (true, Some(v)) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
                 (v.row_count + insert_rows, v.unstats_rows)
             }
             // Case 2: Previous meta has no HLL → need to load from stats file
-            _ => {
+            (true, _) => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
@@ -653,7 +625,7 @@ impl FuseTable {
 
         let table_statistics = if has_top_n_update {
             self.build_append_top_n_statistics(
-                stats_snapshot,
+                snapshot,
                 top_n_column_ids,
                 &new_hll,
                 insert_top_n,
@@ -668,7 +640,7 @@ impl FuseTable {
         }
 
         Ok(TableStatsGenerator::new(
-            None,
+            next_stats_meta,
             prev_stats_location,
             hll_row_count,
             unstats_rows,
@@ -701,28 +673,18 @@ impl FuseTable {
         } else {
             None
         };
-        let empty_top_n = HashMap::new();
-        let (mut top_n, append_top_n) = if let Some((previous, prev_stats)) = fresh_prev_stats {
-            let prev_top_n = (previous.summary.row_count != 0).then_some(PreviousTopN {
-                top_n: &prev_stats.top_n,
-                summary: &previous.summary,
-            });
-            build_append_top_n_merge_inputs(top_n_column_ids, prev_top_n, insert_top_n)
-        } else if let Some(previous) = snapshot.as_ref()
-            && previous.summary.row_count != 0
-        {
-            build_append_top_n_merge_inputs(
-                top_n_column_ids,
-                Some(PreviousTopN {
-                    top_n: &empty_top_n,
-                    summary: &previous.summary,
-                }),
-                insert_top_n,
-            )
-        } else {
-            build_append_top_n_merge_inputs(top_n_column_ids, None, insert_top_n)
-        };
 
+        let mut top_n = fresh_prev_stats
+            .map(|(_, stats)| stats.top_n.clone())
+            .unwrap_or_default();
+        top_n.retain(|column_id, _| top_n_column_ids.contains(column_id));
+
+        let append_top_n = append_top_n_merge_input(
+            &top_n_column_ids,
+            snapshot.as_ref().map(|snapshot| &snapshot.summary),
+            &top_n,
+            insert_top_n,
+        );
         merge_column_top_n_mut(&mut top_n, append_top_n)?;
         if top_n.is_empty() {
             return Ok(None);
@@ -753,58 +715,40 @@ impl FuseTable {
     }
 }
 
-#[derive(Clone, Copy)]
-struct PreviousTopN<'a> {
-    top_n: &'a BlockTopN,
-    summary: &'a Statistics,
-}
-
-impl PreviousTopN<'_> {
-    fn missing_error(&self, column_id: ColumnId) -> Option<u64> {
-        self.summary
-            .col_stats
-            .get(&column_id)
-            .map(|stats| self.summary.row_count.saturating_sub(stats.null_count))
-    }
-}
-
-fn build_append_top_n_merge_inputs(
-    top_n_column_ids: Vec<ColumnId>,
-    prev_top_n: Option<PreviousTopN<'_>>,
+fn append_top_n_merge_input(
+    column_ids: &[ColumnId],
+    previous_summary: Option<&Statistics>,
+    previous_top_n: &BlockTopN,
     insert_top_n: &BlockTopN,
-) -> (BlockTopN, BlockTopN) {
-    let mut top_n = HashMap::new();
+) -> BlockTopN {
+    let previous_summary = previous_summary.filter(|summary| summary.row_count != 0);
     let mut append_top_n = HashMap::new();
 
-    for column_id in top_n_column_ids {
-        match prev_top_n {
-            Some(prev_top_n) => {
-                let append_column_top_n = insert_top_n.get(&column_id).cloned();
-                if let Some(column_top_n) = prev_top_n.top_n.get(&column_id).cloned() {
-                    top_n.insert(column_id, column_top_n);
-                    if let Some(column_top_n) = append_column_top_n {
-                        append_top_n.insert(column_id, column_top_n);
-                    }
-                } else if let Some(mut column_top_n) = append_column_top_n {
-                    let Some(missing_error) = prev_top_n.missing_error(column_id) else {
-                        continue;
-                    };
-                    for entry in &mut column_top_n.values {
-                        entry.count = entry.count.saturating_add(missing_error);
-                        entry.error = entry.error.saturating_add(missing_error);
-                    }
-                    append_top_n.insert(column_id, column_top_n);
-                }
-            }
-            None => {
-                if let Some(column_top_n) = insert_top_n.get(&column_id).cloned() {
-                    append_top_n.insert(column_id, column_top_n);
-                }
-            }
+    for &column_id in column_ids {
+        let Some(column_top_n) = insert_top_n.get(&column_id).cloned() else {
+            continue;
+        };
+        if previous_top_n.contains_key(&column_id)
+            || column_has_no_previous_values(previous_summary, column_id)
+        {
+            append_top_n.insert(column_id, column_top_n);
         }
     }
 
-    (top_n, append_top_n)
+    append_top_n
+}
+
+fn column_has_no_previous_values(
+    previous_summary: Option<&Statistics>,
+    column_id: ColumnId,
+) -> bool {
+    let Some(summary) = previous_summary else {
+        return true;
+    };
+    summary
+        .col_stats
+        .get(&column_id)
+        .is_some_and(|stats| stats.null_count == summary.row_count)
 }
 
 pub(crate) fn is_fresh_table_snapshot_top_n(
