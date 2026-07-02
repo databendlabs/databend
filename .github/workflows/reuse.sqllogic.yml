@@ -262,6 +262,7 @@ jobs:
           - { dirs: "ydb", runner: "2c" }
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
+          - { dirs: "concurrent", runner: "2c", parallel: "30" }
           - { dirs: "cluster", runner: "2c" }
         handler:
           - "hybrid"
