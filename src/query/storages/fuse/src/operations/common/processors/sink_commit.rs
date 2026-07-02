@@ -300,6 +300,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             new_segment_locs,
             virtual_schema,
             virtual_schema_mode,
+            insert_rows,
             hll,
             ..
         } = meta;
@@ -315,9 +316,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_virtual_schema_mode = virtual_schema_mode;
 
         if has_hll {
-            let binding = self.ctx.mutation_state().mutation_status();
-            let status = binding.read().unwrap();
-            self.insert_rows = status.insert_rows + status.update_rows;
+            self.insert_rows = insert_rows;
             self.insert_hll = hll;
         }
 

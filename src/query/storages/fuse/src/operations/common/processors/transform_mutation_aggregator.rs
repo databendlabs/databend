@@ -92,6 +92,7 @@ pub struct TableMutationAggregator {
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
     hll: BlockHLL,
+    insert_rows: u64,
     write_segment_ctx: WriteSegmentCtx,
 
     start_time: Instant,
@@ -135,7 +136,6 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
-        let insert_rows = self.appended_statistics.row_count;
 
         let conflict_resolve_context = match self.write_segment_ctx.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
@@ -179,7 +179,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
-            insert_rows,
+            self.insert_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
@@ -252,6 +252,7 @@ impl TableMutationAggregator {
             removed_segment_indexes,
             removed_statistics,
             hll: HashMap::new(),
+            insert_rows: 0,
             write_segment_ctx,
             finished_tasks: 0,
             start_time: Instant::now(),
@@ -261,8 +262,15 @@ impl TableMutationAggregator {
 
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
-            MutationLogEntry::ReplacedBlock { index, block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+            MutationLogEntry::ReplacedBlock {
+                index,
+                block_meta,
+                insert_rows,
+            } => {
+                if insert_rows > 0 {
+                    self.insert_rows += insert_rows;
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
                 match self.extended_mutations.entry(index.segment_idx) {
                     Entry::Occupied(mut v) => {
                         v.get_mut().push_replaced(index.block_idx, block_meta);
@@ -275,8 +283,14 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::AppendBlock { block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+            MutationLogEntry::AppendBlock {
+                block_meta,
+                insert_rows,
+            } => {
+                if insert_rows > 0 {
+                    self.insert_rows += insert_rows;
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
                 self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
@@ -304,7 +318,10 @@ impl TableMutationAggregator {
                     &summary,
                     self.write_segment_ctx.default_cluster_key,
                 );
-                merge_column_hll_mut(&mut self.hll, &hll);
+                self.insert_rows += summary.row_count;
+                if !hll.is_empty() {
+                    merge_column_hll_mut(&mut self.hll, &hll);
+                }
 
                 self.appended_segments
                     .push((segment_location, format_version));
