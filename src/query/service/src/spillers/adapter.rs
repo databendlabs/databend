@@ -14,30 +14,24 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use std::ops::DerefMut;
-use std::ops::Range;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::Instant;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_base::base::dma_buffer_to_bytes;
-use databend_common_base::base::dma_read_file_range;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::SortSpiller;
 use databend_storages_common_cache::TempPath;
-use opendal::Buffer;
 use opendal::Operator;
 
 use super::Location;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
-use super::serialize::*;
+use super::serialize::Layout;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSpillProgress;
@@ -46,7 +40,7 @@ use crate::sessions::TableContextSpillProgress;
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
-    private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
+    private_spilled_files: Arc<RwLock<HashSet<Location>>>,
     /// 1 partition -> N partition files
     partition_location: HashMap<usize, Vec<(Location, usize, usize)>>,
 }
@@ -56,7 +50,7 @@ impl SpillAdapter for PartitionAdapter {
         self.private_spilled_files
             .write()
             .unwrap()
-            .insert(location.clone(), layout.clone());
+            .insert(location.clone());
 
         // Progress (SpillTotalStats) should reflect total spill volume,
         // including both local and remote spill files.
@@ -147,14 +141,11 @@ impl Spiller {
         self.adapter
             .add_spill_file(location.clone(), Layout::Parquet, data_size);
 
-        if let Some(v) = self.adapter.partition_location.get_mut(&partition) {
-            v.push((location, data_size, block_num));
-            return;
-        }
-
         self.adapter
             .partition_location
-            .insert(partition, vec![(location, data_size, block_num)]);
+            .entry(partition)
+            .or_default()
+            .push((location, data_size, block_num));
     }
 
     #[async_backtrace::framed]
@@ -177,14 +168,11 @@ impl Spiller {
 
         let location = self.spill(data).await?;
 
-        match self.adapter.partition_location.entry(partition_id) {
-            Entry::Vacant(v) => {
-                v.insert(vec![(location, 0, 0)]);
-            }
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().push((location, 0, 0));
-            }
-        };
+        self.adapter
+            .partition_location
+            .entry(partition_id)
+            .or_default()
+            .push((location, 0, 0));
 
         self.adapter
             .ctx
@@ -193,181 +181,15 @@ impl Spiller {
         Ok(())
     }
 
-    pub async fn spill_with_merged_partitions(
-        &mut self,
-        partitioned_data: Vec<(usize, Vec<DataBlock>)>,
-    ) -> Result<MergedPartition> {
-        // Serialize data block.
-        let mut encoder = self.block_encoder();
-        let mut partition_ids = Vec::new();
-        for (partition_id, data_blocks) in partitioned_data.into_iter() {
-            partition_ids.push(partition_id);
-            encoder.add_blocks(data_blocks)?;
-        }
-
-        let write_bytes = encoder.size();
-        let BlocksEncoder {
-            buf,
-            offsets,
-            columns_layout,
-            ..
-        } = encoder;
-
-        let layout = columns_layout.last().unwrap().clone();
-        let partitions = partition_ids
-            .into_iter()
-            .zip(
-                offsets
-                    .windows(2)
-                    .map(|x| x[0]..x[1])
-                    .zip(columns_layout.into_iter()),
-            )
-            .map(|(id, (range, layout))| (id, Chunk { range, layout }))
-            .collect();
-
-        // Spill data to storage.
-        let instant = Instant::now();
-        let location = self.write_encodes(write_bytes, buf).await?;
-        // Record statistics.
-        record_write_profile(&location, &instant, write_bytes);
-
-        self.adapter
-            .add_spill_file(location.clone(), layout, write_bytes);
-        Ok(MergedPartition {
-            location,
-            partitions,
-        })
-    }
-
-    pub async fn read_merged_partitions(
-        &self,
-        MergedPartition {
-            location,
-            partitions,
-        }: &MergedPartition,
-    ) -> Result<Vec<(usize, DataBlock)>> {
-        // Read spilled data from storage.
-        let instant = Instant::now();
-
-        let data = match (location, &self.local_operator) {
-            (Location::Local(path), None) => {
-                let file_size = path.size();
-                debug_assert_eq!(
-                    file_size,
-                    if let Some((_, Chunk { range, .. })) = partitions.last() {
-                        range.end
-                    } else {
-                        0
-                    }
-                );
-
-                let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
-                Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
-            }
-            (Location::Local(path), Some(local)) => {
-                local
-                    .read(path.file_name().unwrap().to_str().unwrap())
-                    .await?
-            }
-            (Location::Remote(loc), _) => self.operator.read(loc).await?,
-        };
-
-        // Record statistics.
-        record_read_profile(location, &instant, data.len());
-
-        // Deserialize partitioned data block.
-        let mut partitioned_data = Vec::with_capacity(partitions.len());
-        for (partition_id, Chunk { range, layout }) in partitions {
-            let block = deserialize_block(layout, data.slice(range.clone()))?;
-            partitioned_data.push((*partition_id, block));
-        }
-
-        Ok(partitioned_data)
-    }
-
-    pub async fn read_chunk(&self, location: &Location, chunk: &Chunk) -> Result<DataBlock> {
-        // Read spilled data from storage.
-        let instant = Instant::now();
-        let Chunk { range, layout } = chunk;
-        let data_range = range.start as u64..range.end as u64;
-
-        let data = match location {
-            Location::Local(path) => match &self.local_operator {
-                Some(local) => {
-                    local
-                        .read_with(path.file_name().unwrap().to_str().unwrap())
-                        .range(data_range)
-                        .await?
-                }
-                None => {
-                    let (buf, range) = dma_read_file_range(path, data_range).await?;
-                    Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
-                }
-            },
-            Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
-        };
-
-        record_read_profile(location, &instant, data.len());
-
-        deserialize_block(layout, data)
-    }
-
-    pub async fn spill_stream_aggregate_buffer(
-        &self,
-        location: Option<String>,
-        write_data: Vec<Vec<Vec<u8>>>,
-    ) -> Result<(String, usize)> {
-        let mut write_bytes = 0;
-        let location = location.unwrap_or_else(|| self.create_unique_location());
-
-        let mut writer = self
-            .operator
-            .writer_with(&location)
-            .chunk(8 * 1024 * 1024)
-            .await?;
-        for write_bucket_data in write_data.into_iter() {
-            for data in write_bucket_data.into_iter() {
-                write_bytes += data.len();
-                writer.write(data).await?;
-            }
-        }
-
-        writer.close().await?;
-        self.adapter.add_spill_file(
-            Location::Remote(location.clone()),
-            Layout::Aggregate,
-            write_bytes,
-        );
-        Ok((location, write_bytes))
-    }
-
-    pub fn add_aggregate_spill_file(&self, location: &str, size: usize) {
-        self.adapter.add_spill_file(
-            Location::Remote(location.to_string()),
-            Layout::Aggregate,
-            size,
-        );
-    }
-
     pub(crate) fn private_spilled_files(&self) -> Vec<Location> {
         self.adapter
             .private_spilled_files
             .read()
             .unwrap()
-            .keys()
+            .iter()
             .cloned()
             .collect()
     }
-}
-
-pub struct MergedPartition {
-    pub location: Location,
-    pub partitions: Vec<(usize, Chunk)>,
-}
-
-pub struct Chunk {
-    pub range: Range<usize>,
-    pub layout: Layout,
 }
 
 impl SpillAdapter for Arc<QueryContext> {

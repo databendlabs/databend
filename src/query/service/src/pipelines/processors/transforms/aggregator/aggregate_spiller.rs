@@ -56,11 +56,12 @@ struct PayloadWriter {
 impl PayloadWriter {
     fn try_create(prefix: &str, writer_pool_bytes: usize) -> Result<Self> {
         let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
         let spills_data_writer =
-            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes, target)?;
 
         Ok(PayloadWriter {
             path: file_path,
