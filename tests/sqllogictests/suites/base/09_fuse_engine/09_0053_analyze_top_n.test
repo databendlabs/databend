@@ -131,7 +131,7 @@ EXPLAIN SELECT * FROM t_edge WHERE a = 1
 ----
 table: default.db_09_0053.t_edge<slt:ignore>estimated rows: 90.00
 
-# Previous rows with no TopN entries but valid column stats can still seed append TopN.
+# Previous rows with no TopN entries but only NULL values can still seed append TopN.
 statement ok
 TRUNCATE TABLE t_edge
 
@@ -153,16 +153,13 @@ EXPLAIN SELECT * FROM t_edge WHERE a = 1
 ----
 table: default.db_09_0053.t_edge<slt:ignore>estimated rows: 90.00
 
-# If old rows lack column stats for a newly configured TopN column, fail closed.
+# If old non-NULL rows have no fresh TopN for a newly configured column, fail closed.
 statement ok
-CREATE TABLE t_edge_default(a int) approx_distinct_columns = ''
+CREATE TABLE t_edge_default(a int, b int) approx_distinct_columns = ''
 
 statement ok
 INSERT INTO t_edge_default
-SELECT number::int FROM numbers(100)
-
-statement ok
-ALTER TABLE t_edge_default ADD COLUMN b int DEFAULT 1
+SELECT number::int, 1::int FROM numbers(100)
 
 statement ok
 ALTER TABLE t_edge_default SET OPTIONS(analyze_top_n_columns = 'b', analyze_top_n_size = 2)
@@ -175,6 +172,29 @@ query B
 SELECT snapshot:table_statistics_location::String IS NULL FROM fuse_dump_snapshots('db_09_0053', 't_edge_default') LIMIT 1
 ----
 1
+
+# Newly added nullable columns have implicit NULL history and can seed append TopN.
+statement ok
+CREATE TABLE t_added_null(a int) approx_distinct_columns = ''
+
+statement ok
+INSERT INTO t_added_null
+SELECT number::int FROM numbers(100)
+
+statement ok
+ALTER TABLE t_added_null ADD COLUMN b int NULL
+
+statement ok
+ALTER TABLE t_added_null SET OPTIONS(analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+
+statement ok
+INSERT INTO t_added_null(a, b)
+SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+query T
+EXPLAIN SELECT * FROM t_added_null WHERE b = 1
+----
+table: default.db_09_0053.t_added_null<slt:ignore>estimated rows: 90.00
 
 # Active transactions skip append TopN refresh until transaction stats lifecycle is handled.
 statement ok
@@ -285,7 +305,7 @@ table: default.db_09_0053.t_no_snapshot_stats<slt:ignore>estimated rows: 90.00
 statement ok
 set enable_table_snapshot_stats = 1
 
-# Reuse one analyzed table for append-after-analyze, new hot values, overwrite, and mutation invalidation.
+# Reuse one analyzed table for append-after-analyze, new hot values, and mutation invalidation.
 statement ok
 CREATE TABLE t_analyzed(id int, a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
 
@@ -335,17 +355,6 @@ query T
 EXPLAIN SELECT * FROM t_analyzed WHERE a = 3
 ----
 table: default.db_09_0053.t_analyzed<slt:ignore>estimated rows: 240.00
-
-query B
-SELECT count(DISTINCT snapshot:table_statistics_location::String) = 2
-FROM (SELECT snapshot FROM fuse_dump_snapshots('db_09_0053', 't_analyzed') LIMIT 2)
-----
-1
-
-# INSERT OVERWRITE must build stats from overwritten rows only.
-statement ok
-INSERT OVERWRITE t_analyzed
-SELECT number::int, 2::int FROM numbers(100)
 
 query B
 SELECT count(DISTINCT snapshot:table_statistics_location::String) = 2

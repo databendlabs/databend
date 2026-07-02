@@ -411,17 +411,15 @@ async fn write_new_snapshot_and_build_table_meta(
 ) -> Result<(TableMeta, u64)> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
-    let reuse_previous_stats = !snapshot_generator.is_overwrite();
     // Match single-table commits: transaction commits may collapse intermediate snapshot
     // lineage, so skip append TopN refresh until transaction stats invalidation is defined.
-    let refresh_top_n = !txn_mgr.lock().is_active();
+    let refresh_top_n = !snapshot_generator.is_overwrite() && !txn_mgr.lock().is_active();
     let mut table_stats_gen = fuse_table
         .generate_table_stats(
             &previous,
             insert_hll,
             insert_rows,
             insert_top_n,
-            reuse_previous_stats,
             refresh_top_n,
         )
         .await?;

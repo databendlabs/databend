@@ -416,15 +416,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
     fn has_insert_top_n_input(&self) -> bool {
         // Transaction commits may collapse intermediate snapshot lineage, so keep append TopN
         // refresh to autocommit inserts until transaction stats invalidation is defined.
-        self.is_append_only_txn() && !self.ctx.txn_mgr().lock().is_active()
-    }
-
-    fn reuse_previous_table_stats(&self) -> bool {
-        !self
-            .snapshot_gen
+        self.snapshot_gen
             .as_any()
             .downcast_ref::<AppendGenerator>()
-            .is_some_and(|g| g.is_overwrite())
+            .is_some_and(|g| !g.is_overwrite())
+            && !self.ctx.txn_mgr().lock().is_active()
     }
 
     /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if nothing was
@@ -652,7 +648,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             &self.insert_hll,
                             self.insert_rows,
                             &self.insert_top_n,
-                            self.reuse_previous_table_stats(),
                             self.has_insert_top_n_input(),
                         )
                         .await?;
@@ -844,7 +839,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         &self.insert_hll,
                         self.insert_rows,
                         &self.insert_top_n,
-                        self.reuse_previous_table_stats(),
                         self.has_insert_top_n_input(),
                     )
                     .await?;
