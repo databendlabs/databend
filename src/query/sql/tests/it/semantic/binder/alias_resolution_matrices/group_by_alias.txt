@@ -362,7 +362,7 @@ Sort
 ├── sort keys: [col2 (#3) ASC NULLS LAST]
 ├── limit: [NONE]
 └── EvalScalar
-    ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+    ├── scalars: [t_str.col1 (#0) AS (#0), get(1)(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
     └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
         └── Aggregate(Initial)
             ├── group items: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
@@ -388,10 +388,10 @@ Sort
 └── EvalScalar
     ├── scalars: [t_str.col1 (#0) AS (#0), col3 (#3) AS (#4)]
     └── Aggregate(Initial)
-        ├── group items: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+        ├── group items: [t_str.col1 (#0) AS (#0), get(1)(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
         ├── aggregate functions: []
         └── EvalScalar
-            ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+            ├── scalars: [t_str.col1 (#0) AS (#0), get(1)(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
             └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
                 └── Scan
                     ├── table: default.t_str (#0)

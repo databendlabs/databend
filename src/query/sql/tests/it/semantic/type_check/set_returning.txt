@@ -2,7 +2,7 @@
 description: A single-output SRF should preserve the old get(unnest(...), 1) top-level extraction.
 sql: unnest([1, 2, 3])
 status: ok
-scalar: get(unnest([1, 2, 3]))
+scalar: get(1)(unnest([1, 2, 3]))
 type: UInt8 NULL
 
 === nested_set_returning_function_errors ===
