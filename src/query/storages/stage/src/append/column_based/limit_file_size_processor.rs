@@ -29,6 +29,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
 use super::block_batch::BlockBatch;
+use crate::append::file_size::resolve_file_size_options;
 use crate::append::partition::partition_from_block;
 
 struct PartitionBucket {
@@ -122,33 +123,19 @@ impl LimitFileSizeProcessor {
         max_threads: usize,
         options: &CopyIntoLocationOptions,
     ) -> Result<Option<usize>> {
-        let is_single = options.single;
-        let max_file_size = options.max_file_size;
-        // when serializing block to parquet, the memory may be doubled
-        let mem_limit = if mem_limit == 0 {
-            usize::MAX
-        } else {
-            mem_limit
-        };
-        let mem_limit = mem_limit / 2;
+        let (max_file_size, max_threads) =
+            resolve_file_size_options(mem_limit, max_threads, options);
         pipeline.try_resize(1)?;
-        let max_file_size = if is_single {
-            None
-        } else {
-            let max_file_size = if max_file_size == 0 {
-                64 * 1024 * 1024
-            } else {
-                max_file_size.min(mem_limit)
-            };
+        if let Some(max_file_size) = max_file_size {
             pipeline.add_transform(|input, output| {
                 LimitFileSizeProcessor::try_create(input, output, max_file_size)
             })?;
 
-            let max_threads = max_threads.min(mem_limit / max_file_size).max(1);
             pipeline.try_resize(max_threads)?;
-            Some(max_file_size)
-        };
-        Ok(max_file_size)
+            Ok(Some(max_file_size))
+        } else {
+            Ok(None)
+        }
     }
 }
 

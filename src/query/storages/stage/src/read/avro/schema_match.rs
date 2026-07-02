@@ -20,6 +20,8 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::i256;
 
+use crate::avro_utils::avro_tuple_field_names;
+
 type MatchResult<T> = Result<T, String>;
 
 #[derive(Debug, Clone)]
@@ -87,6 +89,9 @@ impl SchemaMatcher {
             (TableDataType::Array(dst), Schema::Array(src)) => Ok(MatchedSchema::Array(Box::new(
                 self.match_field(dst, &src.items)?,
             ))),
+            (TableDataType::Vector(vector_ty), Schema::Array(src)) => Ok(MatchedSchema::Array(
+                Box::new(self.match_field(&vector_ty.inner_data_type(), &src.items)?),
+            )),
             (
                 TableDataType::Tuple {
                     fields_name,
@@ -107,8 +112,18 @@ impl SchemaMatcher {
                 let multiplier = if diff > 0 { Some(i256::e(diff)) } else { None };
                 Ok(MatchedSchema::Decimal { multiplier })
             }
-            (TableDataType::Number(NumberDataType::Int32), Schema::Int)
-            | (TableDataType::Number(NumberDataType::UInt64), Schema::Int)
+            (
+                TableDataType::Number(
+                    NumberDataType::UInt8
+                    | NumberDataType::UInt16
+                    | NumberDataType::Int8
+                    | NumberDataType::Int16
+                    | NumberDataType::Int32,
+                ),
+                Schema::Int,
+            )
+            | (TableDataType::Number(NumberDataType::UInt32), Schema::Int | Schema::Long)
+            | (TableDataType::Number(NumberDataType::UInt64), Schema::Int | Schema::Long)
             | (TableDataType::Number(NumberDataType::Int64), Schema::Int | Schema::Long)
             | (TableDataType::Number(NumberDataType::Float32), Schema::Float)
             | (TableDataType::Number(NumberDataType::Float64), Schema::Float | Schema::Double)
@@ -144,7 +159,12 @@ impl SchemaMatcher {
     ) -> MatchResult<Vec<MatchedField>> {
         let mut matched_fields = vec![MatchedField::TypeDefault; fields_name.len()];
         let mut num_matched = 0;
-        for (c, name) in fields_name.iter().enumerate() {
+        let avro_fields_name = if level == 0 {
+            fields_name.to_vec()
+        } else {
+            avro_tuple_field_names(fields_name)
+        };
+        for (c, name) in avro_fields_name.iter().enumerate() {
             if let Some(pos) = src_schema.lookup.get(name) {
                 matched_fields[c] = MatchedField::Value(
                     self.match_field(&fields_type[c], &src_schema.fields[*pos].schema)?,

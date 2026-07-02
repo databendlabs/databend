@@ -31,6 +31,7 @@ use databend_common_expression::types::DecimalColumnBuilder;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::VectorColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
@@ -359,6 +360,7 @@ impl AvroDecoder {
             ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
             ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+            ColumnBuilder::Vector(c) => self.read_vector(c, value, matched_schema),
 
             // todo: Bitmap, Geometry, Geography
             _ => Err(Error::new_reason(format!(
@@ -502,10 +504,12 @@ impl AvroDecoder {
                 let months: u32 = d.months().into();
                 let days: u32 = d.days().into();
                 let millis: u32 = d.millis().into();
+                let months = i32::try_from(months).map_err(|_| Error::default())?;
+                let days = i32::try_from(days).map_err(|_| Error::default())?;
                 column.push(months_days_micros::new(
-                    months as i32,
-                    days as i32,
-                    (millis * 1000) as i64,
+                    months,
+                    days,
+                    <i64 as From<u32>>::from(millis) * 1000,
                 ));
                 Ok(())
             }
@@ -627,6 +631,51 @@ impl AvroDecoder {
             _ => Err(Error::default()),
         }
     }
+
+    fn read_vector(
+        &self,
+        column: &mut VectorColumnBuilder,
+        value: Value,
+        matched_schema: &MatchedSchema,
+    ) -> ReadFieldResult {
+        let Value::Array(vals) = value else {
+            return Err(Error::default());
+        };
+        if !matches!(matched_schema, MatchedSchema::Array(_)) {
+            return Err(Error::value_schema_not_match(
+                matched_schema,
+                &Value::Array(vals),
+            ));
+        }
+        if vals.len() != column.dimension() {
+            return Err(Error::new_reason(format!(
+                "vector dimension mismatch: expected {}, got {}",
+                column.dimension(),
+                vals.len()
+            )));
+        }
+
+        match column {
+            VectorColumnBuilder::Int8((values, _)) => {
+                for val in vals {
+                    match val {
+                        Value::Int(v) => self.read_number(values, v)?,
+                        Value::Long(v) => self.read_number(values, v)?,
+                        _ => return Err(Error::default()),
+                    }
+                }
+            }
+            VectorColumnBuilder::Float32((values, _)) => {
+                for val in vals {
+                    match val {
+                        Value::Float(v) => self.read_number(values, OrderedFloat::<f32>(v))?,
+                        _ => return Err(Error::default()),
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -635,10 +684,15 @@ mod test {
     use std::sync::Arc;
 
     use apache_avro::BigDecimal;
+    use apache_avro::Days;
     use apache_avro::Decimal;
+    use apache_avro::Duration;
+    use apache_avro::Millis;
+    use apache_avro::Months;
     use apache_avro::Schema;
     use apache_avro::Writer;
     use apache_avro::types::Value;
+    use databend_common_column::types::months_days_micros;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ScalarRef;
     use databend_common_expression::TableDataType;
@@ -648,8 +702,11 @@ mod test {
     use databend_common_expression::types::DecimalDataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::F32;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::VectorDataType;
+    use databend_common_expression::types::VectorScalarRef;
     use num_bigint::BigInt;
     use serde_json::json;
 
@@ -811,6 +868,76 @@ mod test {
 
         let value = make_value("123456");
         assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_duration() -> Result<(), String> {
+        let avro_schema = json!({
+            "type": {"type": "fixed", "name": "duration", "size": 12},
+            "logicalType": "duration",
+        });
+        let value = Value::Duration(Duration::new(
+            Months::new(1),
+            Days::new(2),
+            Millis::new(3000),
+        ));
+        let expected = ScalarRef::Interval(months_days_micros::new(1, 2, 3_000_000));
+        test_single_field(
+            TableDataType::Interval,
+            avro_schema.clone(),
+            value,
+            expected,
+        )
+        .unwrap();
+
+        let value = Value::Duration(Duration::new(
+            Months::new(i32::MAX as u32 + 1),
+            Days::new(0),
+            Millis::new(0),
+        ));
+        assert!(
+            test_single_field(
+                TableDataType::Interval,
+                avro_schema,
+                value,
+                ScalarRef::Interval(months_days_micros::new(0, 0, 0)),
+            )
+            .is_err()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector() -> Result<(), String> {
+        let avro_schema = json!({"type": "array", "items": "float"});
+        let value = Value::Array(vec![
+            Value::Float(1.5),
+            Value::Float(2.5),
+            Value::Float(3.5),
+        ]);
+        let expected_values = [F32::from(1.5), F32::from(2.5), F32::from(3.5)];
+        let expected = ScalarRef::Vector(VectorScalarRef::Float32(&expected_values));
+        test_single_field(
+            TableDataType::Vector(VectorDataType::Float32(3)),
+            avro_schema.clone(),
+            value,
+            expected,
+        )
+        .unwrap();
+
+        let value = Value::Array(vec![Value::Float(1.5), Value::Float(2.5)]);
+        assert!(
+            test_single_field(
+                TableDataType::Vector(VectorDataType::Float32(3)),
+                avro_schema,
+                value,
+                ScalarRef::Vector(VectorScalarRef::Float32(&expected_values)),
+            )
+            .is_err()
+        );
 
         Ok(())
     }
