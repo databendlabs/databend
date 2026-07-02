@@ -1,0 +1,74 @@
+statement ok
+DROP DATABASE IF EXISTS db_skew_join
+
+statement ok
+CREATE DATABASE db_skew_join
+
+statement ok
+USE db_skew_join
+
+statement ok
+SET max_threads = 8
+
+statement ok
+SET enable_analyze_histogram = 0
+
+statement ok
+SET enable_table_snapshot_stats = 1
+
+statement ok
+SET enforce_shuffle_join = 1
+
+statement ok
+SET enable_experimental_skew_join = 1
+
+statement ok
+SET optimizer_skip_list = ''
+
+statement ok
+CREATE TABLE skew_probe(k int not null) approx_distinct_columns = '' analyze_top_n_columns = 'k' analyze_top_n_size = 2
+
+statement ok
+CREATE TABLE skew_build(k int not null) approx_distinct_columns = '' analyze_top_n_columns = 'k' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO skew_probe
+SELECT if(number < 990000, 1, number - 989998)::int FROM numbers(1000000)
+
+statement ok
+INSERT INTO skew_build
+SELECT if(number < 2, 1, number)::int FROM numbers(3)
+
+statement ok
+ANALYZE TABLE skew_probe
+
+statement ok
+ANALYZE TABLE skew_build
+
+query T
+EXPLAIN SELECT * FROM skew_probe WHERE k = 1
+----
+table: default.db_skew_join.skew_probe<slt:ignore>estimated rows: 990000.00
+
+query T
+EXPLAIN SELECT * FROM skew_build WHERE k = 1
+----
+table: default.db_skew_join.skew_build<slt:ignore>estimated rows: 2.00
+
+query I
+SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+1980001
+
+query T
+EXPLAIN OPTIMIZED SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+<slt:ignore>Exchange(SkewHash): keys: [skew_build.k (#1)], hot_keys: 1, buckets: 3, role: Build<slt:ignore>Exchange(SkewHash): keys: [skew_probe.k (#0)], hot_keys: 1, buckets: 3, role: Probe<slt:ignore>
+
+query T
+EXPLAIN SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+<slt:ignore>exchange type: SkewHash(b.k (#1), hot_keys=1, buckets=3, role=Build)<slt:ignore>exchange type: SkewHash(p.k (#0), hot_keys=1, buckets=3, role=Probe)<slt:ignore>
+
+statement ok
+DROP DATABASE db_skew_join

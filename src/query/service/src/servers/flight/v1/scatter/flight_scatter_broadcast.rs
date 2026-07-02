@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
+use crate::servers::flight::v1::scatter::flight_scatter::FlightScatterState;
 
 pub struct BroadcastFlightScatter {
     scattered_size: usize,
@@ -32,7 +33,11 @@ impl FlightScatter for BroadcastFlightScatter {
         "Broadcast"
     }
 
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    fn execute(
+        &self,
+        data_block: DataBlock,
+        _state: &mut FlightScatterState,
+    ) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
         for _ in 0..self.scattered_size {
             data_blocks.push(data_block.clone());

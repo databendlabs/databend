@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
@@ -25,6 +26,22 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum SkewHashRole {
+    Probe,
+    Build,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct SkewHashInfo {
+    pub role: SkewHashRole,
+    pub hot_keys: Vec<Scalar>,
+    pub bucket_count: usize,
+    pub normal_skew_penalty_rows: u64,
+    pub skew_skew_penalty_rows: u64,
+    pub extra_build_rows: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
     Broadcast,
@@ -32,6 +49,7 @@ pub enum Exchange {
     MergeSort, // For distributed sort
     NodeToNodeHash(Vec<ScalarExpr>),
     GlobalHash(Vec<ScalarExpr>),
+    GlobalSkewHash(Vec<ScalarExpr>, SkewHashInfo),
 }
 
 impl Operator for Exchange {
@@ -41,9 +59,9 @@ impl Operator for Exchange {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         match self {
-            Exchange::NodeToNodeHash(hash_keys) | Exchange::GlobalHash(hash_keys) => {
-                Box::new(hash_keys.iter())
-            }
+            Exchange::NodeToNodeHash(hash_keys)
+            | Exchange::GlobalHash(hash_keys)
+            | Exchange::GlobalSkewHash(hash_keys, _) => Box::new(hash_keys.iter()),
             _ => Box::new(std::iter::empty()),
         }
     }
@@ -59,6 +77,9 @@ impl Operator for Exchange {
                     Distribution::NodeToNodeHash(hash_keys.clone())
                 }
                 Exchange::GlobalHash(hash_keys) => Distribution::GlobalHash(hash_keys.clone()),
+                Exchange::GlobalSkewHash(hash_keys, skew_info) => {
+                    Distribution::GlobalSkewHash(hash_keys.clone(), skew_info.clone())
+                }
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
             },

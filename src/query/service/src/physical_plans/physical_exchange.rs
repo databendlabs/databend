@@ -23,6 +23,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::SkewHashInfo;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ExchangeFormatter;
@@ -37,6 +38,7 @@ pub struct Exchange {
     pub input: PhysicalPlan,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
+    pub skew_info: Option<SkewHashInfo>,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
 }
@@ -86,6 +88,7 @@ impl IPhysicalPlan for Exchange {
             input: children.pop().unwrap(),
             kind: self.kind.clone(),
             keys: self.keys.clone(),
+            skew_info: self.skew_info.clone(),
             ignore_exchange: self.ignore_exchange,
             allow_adjust_parallelism: self.allow_adjust_parallelism,
         })
@@ -101,7 +104,8 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         if let databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)
-        | databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange
+        | databend_common_sql::plans::Exchange::GlobalHash(exprs)
+        | databend_common_sql::plans::Exchange::GlobalSkewHash(exprs, _) = exchange
         {
             for expr in exprs {
                 required.extend(expr.used_columns());
@@ -112,6 +116,7 @@ impl PhysicalPlanBuilder {
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let mut keys = vec![];
+        let mut skew_info = None;
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
             databend_common_sql::plans::Exchange::NodeToNodeHash(scalars) => {
@@ -134,6 +139,17 @@ impl PhysicalPlanBuilder {
                 }
                 FragmentKind::GlobalShuffle
             }
+            databend_common_sql::plans::Exchange::GlobalSkewHash(scalars, info) => {
+                for scalar in scalars {
+                    let expr = scalar
+                        .type_check(input_schema.as_ref())?
+                        .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
+                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    keys.push(expr.as_remote_expr());
+                }
+                skew_info = Some(info.clone());
+                FragmentKind::GlobalShuffle
+            }
             databend_common_sql::plans::Exchange::Broadcast => FragmentKind::Expansive,
             databend_common_sql::plans::Exchange::Merge => FragmentKind::Merge,
             databend_common_sql::plans::Exchange::MergeSort => {
@@ -145,6 +161,7 @@ impl PhysicalPlanBuilder {
             input,
             kind,
             keys,
+            skew_info,
             allow_adjust_parallelism,
             ignore_exchange: false,
             meta: PhysicalPlanMeta::new("Exchange"),

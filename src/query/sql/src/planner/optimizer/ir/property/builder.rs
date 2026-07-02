@@ -83,13 +83,21 @@ impl<'a> RelExpr<'a> {
                 rel_expr.derive_relational_prop()
             }
             RelExpr::MExpr { expr, memo } => {
-                Ok(memo.group(expr.group_index)?.relational_prop.clone())
+                let child_group = expr.children.get(index).ok_or_else(|| {
+                    ErrorCode::Internal(format!("Cannot find child group at index: {index}"))
+                })?;
+                Ok(memo.group(*child_group)?.relational_prop.clone())
             }
             RelExpr::OptContext {
                 expr,
                 memo,
                 children_best_props: _,
-            } => Ok(memo.group(expr.group_index)?.relational_prop.clone()),
+            } => {
+                let child_group = expr.children.get(index).ok_or_else(|| {
+                    ErrorCode::Internal(format!("Cannot find child group at index: {index}"))
+                })?;
+                Ok(memo.group(*child_group)?.relational_prop.clone())
+            }
         }
     }
 
@@ -115,9 +123,17 @@ impl<'a> RelExpr<'a> {
                 let rel_expr = RelExpr::with_s_expr(child);
                 rel_expr.derive_cardinality()
             }
-            RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
+            RelExpr::MExpr { expr, memo } => {
+                let child_group = expr.children.get(index).ok_or_else(|| {
+                    ErrorCode::Internal(format!("Cannot find child group at index: {index}"))
+                })?;
+                Ok(memo.group(*child_group)?.stat_info.clone())
+            }
             RelExpr::OptContext { expr, memo, .. } => {
-                Ok(memo.group(expr.group_index)?.stat_info.clone())
+                let child_group = expr.children.get(index).ok_or_else(|| {
+                    ErrorCode::Internal(format!("Cannot find child group at index: {index}"))
+                })?;
+                Ok(memo.group(*child_group)?.stat_info.clone())
             }
         }
     }

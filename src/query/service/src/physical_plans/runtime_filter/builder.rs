@@ -110,6 +110,7 @@ pub async fn build_runtime_filter(
             Exchange::Broadcast
                 | Exchange::NodeToNodeHash(_)
                 | Exchange::GlobalHash(_)
+                | Exchange::GlobalSkewHash(_, _)
                 | Exchange::Merge
         )
     }) {

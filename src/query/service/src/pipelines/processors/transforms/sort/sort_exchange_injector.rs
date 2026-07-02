@@ -28,6 +28,7 @@ use crate::servers::flight::v1::exchange::ExchangeSorting;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::scatter::FlightScatterState;
 use crate::sessions::QueryContext;
 
 pub struct SortInjector {}
@@ -94,7 +95,11 @@ impl FlightScatter for SortBoundScatter {
         "SortBound"
     }
 
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    fn execute(
+        &self,
+        data_block: DataBlock,
+        _state: &mut FlightScatterState,
+    ) -> Result<Vec<DataBlock>> {
         bound_scatter(data_block, self.partitions)
     }
 }
