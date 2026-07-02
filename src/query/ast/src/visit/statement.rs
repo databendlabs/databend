@@ -38,6 +38,7 @@ impl Walk for Statement {
                 try_walk!(query.walk(visitor));
             }
             Statement::ReportIssue(_)
+            | Statement::Unsupported { .. }
             | Statement::KillStmt { .. }
             | Statement::SetRole { .. }
             | Statement::SetSecondaryRoles { .. }
@@ -253,6 +254,7 @@ impl WalkMut for Statement {
                 try_walk!(query.walk_mut(visitor));
             }
             Statement::ReportIssue(_)
+            | Statement::Unsupported { .. }
             | Statement::KillStmt { .. }
             | Statement::SetRole { .. }
             | Statement::SetSecondaryRoles { .. }

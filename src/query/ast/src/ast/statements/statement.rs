@@ -43,6 +43,93 @@ use crate::ast::statements::workload::SetWorkloadGroupQuotasStmt;
 use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum UnsupportedType {
+    AnalyzeStatisticsOptions,
+    AlterUnsupportedOptions,
+    GenericExplainOptions,
+    HiveAlterStatement,
+    HiveAnalyze,
+    HiveCreateMaterializedView,
+    HiveCreateTableUnsupportedOptions,
+    HiveDescribeVariant,
+    HiveExplainLocks,
+    HiveExplainSyntax,
+    HiveInsertSyntax,
+    HiveLoadData,
+    HiveQuerySyntax,
+    HiveShowPartitions,
+    MySqlExplainFormat,
+    PostgreSqlAlterStatement,
+    PostgreSqlAnalyze,
+    PostgreSqlCreateStatement,
+    PostgreSqlCreateTableVariant,
+    PostgreSqlDropStatement,
+    PostgreSqlOperatorDdl,
+    PostgreSqlResetStatement,
+    PostgreSqlSetStatement,
+}
+
+impl Display for UnsupportedType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            UnsupportedType::AnalyzeStatisticsOptions => {
+                write!(f, "ANALYZE statistics options are not supported")
+            }
+            UnsupportedType::AlterUnsupportedOptions => {
+                write!(f, "ALTER statement contains unsupported options")
+            }
+            UnsupportedType::GenericExplainOptions => write!(f, "unsupported EXPLAIN options"),
+            UnsupportedType::HiveAlterStatement => {
+                write!(f, "Hive ALTER statement is not supported")
+            }
+            UnsupportedType::HiveAnalyze => write!(f, "Hive ANALYZE is not supported"),
+            UnsupportedType::HiveCreateMaterializedView => {
+                write!(f, "CREATE MATERIALIZED VIEW is not supported")
+            }
+            UnsupportedType::HiveCreateTableUnsupportedOptions => {
+                write!(f, "CREATE TABLE contains unsupported options")
+            }
+            UnsupportedType::HiveDescribeVariant => {
+                write!(f, "Hive DESCRIBE variant is not supported")
+            }
+            UnsupportedType::HiveExplainLocks => write!(f, "Hive EXPLAIN LOCKS is not supported"),
+            UnsupportedType::HiveExplainSyntax => {
+                write!(f, "Hive EXPLAIN syntax is not supported")
+            }
+            UnsupportedType::HiveInsertSyntax => write!(f, "Hive INSERT syntax is not supported"),
+            UnsupportedType::HiveLoadData => write!(f, "LOAD DATA is not supported"),
+            UnsupportedType::HiveQuerySyntax => write!(f, "Hive query syntax is not supported"),
+            UnsupportedType::HiveShowPartitions => write!(f, "SHOW PARTITIONS is not supported"),
+            UnsupportedType::MySqlExplainFormat => {
+                write!(f, "MySQL EXPLAIN FORMAT is not supported")
+            }
+            UnsupportedType::PostgreSqlAlterStatement => {
+                write!(f, "PostgreSQL ALTER statement is not supported")
+            }
+            UnsupportedType::PostgreSqlAnalyze => write!(f, "PostgreSQL ANALYZE is not supported"),
+            UnsupportedType::PostgreSqlCreateStatement => {
+                write!(f, "PostgreSQL CREATE statement is not supported")
+            }
+            UnsupportedType::PostgreSqlCreateTableVariant => {
+                write!(f, "PostgreSQL CREATE TABLE variant is not supported")
+            }
+            UnsupportedType::PostgreSqlDropStatement => {
+                write!(f, "PostgreSQL DROP statement is not supported")
+            }
+            UnsupportedType::PostgreSqlOperatorDdl => {
+                write!(f, "PostgreSQL OPERATOR DDL is not supported")
+            }
+            UnsupportedType::PostgreSqlResetStatement => {
+                write!(f, "PostgreSQL RESET statement is not supported")
+            }
+            UnsupportedType::PostgreSqlSetStatement => {
+                write!(f, "PostgreSQL SET statement is not supported")
+            }
+        }
+    }
+}
+
 // SQL statement
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -64,6 +151,10 @@ pub enum Statement {
         query: Box<Statement>,
     },
     ReportIssue(String),
+    Unsupported {
+        unsupported_type: UnsupportedType,
+        raw_sql: String,
+    },
 
     CopyIntoTable(CopyIntoTableStmt),
     CopyIntoLocation(CopyIntoLocationStmt),
@@ -691,6 +782,7 @@ impl Statement {
             | Statement::SetWorkloadQuotasGroup(..)
             | Statement::UnsetWorkloadQuotasGroup(..) => false,
             Statement::AlterRole(..) => false,
+            Statement::Unsupported { .. } => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -759,6 +851,7 @@ impl Display for Statement {
             Statement::ReportIssue(sql) => {
                 write!(f, "REPORT ISSUE {}", sql)?;
             }
+            Statement::Unsupported { raw_sql, .. } => write!(f, "{raw_sql}")?,
             Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {
                     write!(f, "SETTINGS (")?;

@@ -25,14 +25,34 @@ error:
 ---------- Input ----------
 CAST(col1 AS foo)
 ---------- Output ---------
-error: 
-  --> SQL:1:14
-  |
-1 | CAST(col1 AS foo)
-  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `STAGE_LOCATION`, <Ident>, <LiteralString>, `IDENTIFIER`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
-  | |             
-  | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
-  | while parsing expression
+CAST(col1 AS STRING)
+---------- AST ------------
+Cast {
+    span: Some(
+        0..17,
+    ),
+    expr: ColumnRef {
+        span: Some(
+            5..9,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        5..9,
+                    ),
+                    name: "col1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    target_type: String,
+    pg_style: false,
+}
 
 
 ---------- Input ----------
