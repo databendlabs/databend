@@ -118,11 +118,13 @@ pub enum FileParseError {
         decode_error: String,
         column_data: String,
     },
-    #[error("Missing value for column {column_index} ({column_name} {column_type})")]
+    #[error("Missing value for column {column_index} ({column_name} {column_type}). {advice}")]
     ColumnMissingError {
         column_index: usize,
         column_name: String,
         column_type: String,
+        #[serde(default)]
+        advice: String,
     },
     #[error(
         "Encountered an empty value for column {column_index} (`{column_name}` of type {column_type}), with the FILE_FORMAT option `EMPTY_FIELD_AS={empty_field_as}`. To resolve this, please consider {remedy}"
