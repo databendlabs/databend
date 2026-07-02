@@ -77,6 +77,7 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
+    pending_insert_rows: u64,
 }
 
 impl TransformSerializeBlock {
@@ -221,6 +222,7 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            pending_insert_rows: 0,
         })
     }
 
@@ -312,6 +314,7 @@ impl Processor for TransformSerializeBlock {
                         Ok(Event::NeedConsume)
                     } else {
                         // replace the old block
+                        self.pending_insert_rows = serialize_block.insert_rows;
                         self.state = State::NeedSerialize {
                             block: input_data,
                             stats_type: serialize_block.stats_type,
@@ -335,7 +338,14 @@ impl Processor for TransformSerializeBlock {
             self.output.push_data(Ok(data_block));
             Ok(Event::NeedConsume)
         } else {
-            // append block
+            // UPDATE carries exact affected rows in SerializeDataMeta::SerializeBlock.
+            // A no-meta UPDATE block may still contain unchanged rows.
+            self.pending_insert_rows =
+                if matches!(self.kind, MutationKind::Replace | MutationKind::MergeInto) {
+                    input_data.num_rows() as u64
+                } else {
+                    0
+                };
             self.state = State::NeedSerialize {
                 block: input_data,
                 stats_type: ClusterStatsGenType::Generally,
@@ -377,6 +387,7 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
+                let insert_rows = std::mem::take(&mut self.pending_insert_rows);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
                 let bytes = if let Some(draft_virtual_block_meta) =
@@ -401,6 +412,7 @@ impl Processor for TransformSerializeBlock {
                     Self::mutation_logs(MutationLogEntry::ReplacedBlock {
                         index,
                         block_meta: Arc::new(extended_block_meta),
+                        insert_rows,
                     })
                 } else {
                     // appending new data block
@@ -424,6 +436,7 @@ impl Processor for TransformSerializeBlock {
                         }
                         Self::mutation_logs(MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
+                            insert_rows,
                         })
                     }
                 };

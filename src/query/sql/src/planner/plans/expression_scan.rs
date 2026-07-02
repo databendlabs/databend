@@ -97,6 +97,7 @@ impl Operator for ExpressionScan {
                 precise_cardinality: None,
                 column_stats: Default::default(),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

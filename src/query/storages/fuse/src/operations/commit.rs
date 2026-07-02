@@ -551,6 +551,7 @@ impl FuseTable {
             ));
         }
 
+        // Initialize a new HLL with commit-local HLL.
         let mut new_hll = insert_hll.clone();
         let next_stats_meta = if insert_hll.is_empty() {
             prev_stats_meta.cloned()
@@ -594,7 +595,7 @@ impl FuseTable {
                         .ok()
                         .flatten();
                         if let Some(prev) = prev_snapshot {
-                            // Successfully loaded the previous snapshot → use its row_count + inserted rows
+                            // Successfully loaded the previous snapshot.
                             merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                             let prev_rows = prev.summary.row_count;
                             (
@@ -604,12 +605,12 @@ impl FuseTable {
                         } else {
                             // Could not load previous snapshot → old stats are invalid
                             // Drop prev_stats_location to mark stats as "reset",
-                            // and only use inserted rows as the new base.
+                            // and only use commit-local insert rows as the new base.
                             prev_stats_location = None;
                             (insert_rows, summary.row_count)
                         }
                     } else {
-                        // Normal case: accumulate old row_count + inserted rows
+                        // Normal case: accumulate old row_count + commit-local insert rows.
                         merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                         (
                             prev_stats.row_count + insert_rows,
@@ -617,7 +618,7 @@ impl FuseTable {
                         )
                     }
                 } else {
-                    // No previous stats available → start from inserted rows only
+                    // No previous stats available.
                     (insert_rows, summary.row_count)
                 }
             }
@@ -693,6 +694,9 @@ impl FuseTable {
         let histograms = fresh_prev_stats
             .map(|(_, stats)| stats.histograms.clone())
             .unwrap_or_default();
+        let count_min_sketch = fresh_prev_stats
+            .map(|(_, stats)| stats.count_min_sketch.clone())
+            .unwrap_or_default();
         let stats_hll = if hll.is_empty() {
             fresh_prev_stats
                 .map(|(_, stats)| stats.hll.clone())
@@ -708,6 +712,7 @@ impl FuseTable {
         Ok(Some(TableSnapshotStatistics::new(
             stats_hll,
             top_n,
+            count_min_sketch,
             histograms,
             stats_snapshot_id,
             row_count,

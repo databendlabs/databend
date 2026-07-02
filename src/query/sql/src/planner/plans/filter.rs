@@ -95,7 +95,8 @@ impl Operator for Filter {
             .unwrap_or_else(|| StatCardinality::estimate(stat_info.cardinality));
         let mut sb =
             SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality)
-                .with_top_n(stat_info.statistics.top_n.clone());
+                .with_top_n(stat_info.statistics.top_n.clone())
+                .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone());
         let cardinality = sb.apply(&self.predicates)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -109,6 +110,7 @@ impl Operator for Filter {
                 precise_cardinality: None,
                 column_stats,
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

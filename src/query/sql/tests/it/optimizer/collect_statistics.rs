@@ -27,10 +27,12 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 use databend_storages_common_table_meta::table::ChangeType;
 
+use crate::framework::FrequencyStatsMap;
 use crate::framework::LiteTableContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -47,7 +49,9 @@ async fn test_collect_statistics_skips_top_n_for_change_scan() -> Result<()> {
         }],
         min_index: None,
     };
-    ctx.register_table_with_stats_and_top_n(
+    let mut count_min_sketch = ColumnCountMinSketch::default();
+    count_min_sketch.add_with_count(Scalar::Number(NumberScalar::UInt64(1)).as_ref(), 90);
+    ctx.register_table_with_stats_and_frequency_stats(
         "default",
         "t",
         vec![TableField::new(
@@ -63,7 +67,10 @@ async fn test_collect_statistics_skips_top_n_for_change_scan() -> Result<()> {
         }),
         HashMap::new(),
         HashMap::new(),
-        HashMap::from([("a".to_string(), top_n)]),
+        FrequencyStatsMap {
+            top_n: HashMap::from([("a".to_string(), top_n)]),
+            count_min_sketch: HashMap::from([("a".to_string(), count_min_sketch)]),
+        },
         BTreeMap::new(),
     )?;
 
@@ -72,6 +79,7 @@ async fn test_collect_statistics_skips_top_n_for_change_scan() -> Result<()> {
         .await?;
     let normal_scan = find_scan(&normal_plan);
     assert!(!normal_scan.statistics.top_n.is_empty());
+    assert!(!normal_scan.statistics.count_min_sketch.is_empty());
 
     let change_plan = set_scan_change_type(
         ctx.bind_sql("select a from t").await?,
@@ -80,6 +88,7 @@ async fn test_collect_statistics_skips_top_n_for_change_scan() -> Result<()> {
     let change_plan = ctx.optimize_plan(change_plan).await?;
     let change_scan = find_scan(&change_plan);
     assert!(change_scan.statistics.top_n.is_empty());
+    assert!(change_scan.statistics.count_min_sketch.is_empty());
 
     Ok(())
 }

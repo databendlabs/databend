@@ -15,37 +15,121 @@ set enable_table_snapshot_stats = 1
 
 # Baseline: ANALYZE only uses TopN when analyze_top_n_size is enabled.
 statement ok
-CREATE TABLE t_analyze(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 0
+CREATE TABLE t_topn_off(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0
 
 statement ok
-INSERT INTO t_analyze
+CREATE TABLE t_frequency_columns_only(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a'
+
+statement ok
+CREATE TABLE t_cms_off(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0 analyze_count_min_sketch_error_rate = '0'
+
+statement ok
+CREATE TABLE t_topn_on(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+CREATE TABLE t_cms_on(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0 analyze_count_min_sketch_error_rate = '0.001'
+
+statement error
+CREATE TABLE t_cms_bad_error_rate(a int) analyze_frequency_columns = 'a' analyze_count_min_sketch_error_rate = '-0.1'
+
+statement ok
+INSERT INTO t_topn_off
 SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
-ANALYZE TABLE t_analyze
-
-query T
-EXPLAIN SELECT * FROM t_analyze WHERE a = 1
-----
-table: default.db_09_0053.t_analyze<slt:ignore>estimated rows: 9.09
+INSERT INTO t_frequency_columns_only
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
-ALTER TABLE t_analyze SET OPTIONS(analyze_top_n_size = 2)
+INSERT INTO t_cms_off
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
-ANALYZE TABLE t_analyze
+INSERT INTO t_topn_on
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+INSERT INTO t_cms_on
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+ANALYZE TABLE t_topn_off
+
+statement ok
+ANALYZE TABLE t_frequency_columns_only
+
+statement ok
+ANALYZE TABLE t_cms_off
+
+statement ok
+ANALYZE TABLE t_topn_on
+
+statement ok
+ANALYZE TABLE t_cms_on
 
 statement error
-ANALYZE TABLE t_analyze NOSCAN
+ANALYZE TABLE t_topn_on NOSCAN
+
+statement error
+ANALYZE TABLE t_cms_on NOSCAN
 
 query T
-EXPLAIN SELECT * FROM t_analyze WHERE a = 1
+EXPLAIN SELECT * FROM t_topn_off WHERE a = 1
 ----
-table: default.db_09_0053.t_analyze<slt:ignore>estimated rows: 90.00
+table: default.db_09_0053.t_topn_off<slt:ignore>estimated rows: 9.09
+
+query T
+EXPLAIN SELECT * FROM t_frequency_columns_only WHERE a = 1
+----
+table: default.db_09_0053.t_frequency_columns_only<slt:ignore>estimated rows: 9.09
+
+query T
+EXPLAIN SELECT * FROM t_cms_off WHERE a = 1
+----
+table: default.db_09_0053.t_cms_off<slt:ignore>estimated rows: 9.09
+
+query T
+EXPLAIN SELECT * FROM t_topn_on WHERE a = 1
+----
+table: default.db_09_0053.t_topn_on<slt:ignore>estimated rows: 90.00
+
+query T
+EXPLAIN SELECT * FROM t_cms_on WHERE a = 1
+----
+table: default.db_09_0053.t_cms_on<slt:ignore>estimated rows: 90.00
+
+statement ok
+CREATE TABLE t_cms_preserve_hll(a int) approx_distinct_columns = 'a'
+
+statement ok
+INSERT INTO t_cms_preserve_hll
+SELECT number::int FROM numbers(10)
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+query TI
+SELECT column_name, distinct_count FROM fuse_statistic('db_09_0053', 't_cms_preserve_hll')
+----
+a 10
+
+statement ok
+ALTER TABLE t_cms_preserve_hll SET OPTIONS(analyze_frequency_columns = 'a', analyze_top_n_size = 0, analyze_count_min_sketch_error_rate = '0.001')
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+query TI
+SELECT column_name, distinct_count FROM fuse_statistic('db_09_0053', 't_cms_preserve_hll')
+----
+a 10
 
 # Append path: first append creates table stats, later appends merge TopN.
 statement ok
-CREATE TABLE t_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_append(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_append
@@ -109,7 +193,7 @@ ALTER TABLE t_append SET OPTIONS(analyze_top_n_size = 2)
 
 # Edge cases that can reuse a single table because each phase starts with TRUNCATE.
 statement ok
-CREATE TABLE t_edge(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_edge(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 # Empty fresh stats after TRUNCATE + ANALYZE should behave like a cold start.
 statement ok
@@ -162,7 +246,7 @@ INSERT INTO t_edge_default
 SELECT number::int, 1::int FROM numbers(100)
 
 statement ok
-ALTER TABLE t_edge_default SET OPTIONS(analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+ALTER TABLE t_edge_default SET OPTIONS(analyze_frequency_columns = 'b', analyze_top_n_size = 2)
 
 statement ok
 INSERT INTO t_edge_default(a, b)
@@ -185,7 +269,7 @@ statement ok
 ALTER TABLE t_added_null ADD COLUMN b int NULL
 
 statement ok
-ALTER TABLE t_added_null SET OPTIONS(analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+ALTER TABLE t_added_null SET OPTIONS(analyze_frequency_columns = 'b', analyze_top_n_size = 2)
 
 statement ok
 INSERT INTO t_added_null(a, b)
@@ -198,7 +282,7 @@ table: default.db_09_0053.t_added_null<slt:ignore>estimated rows: 90.00
 
 # Active transactions skip append TopN refresh until transaction stats lifecycle is handled.
 statement ok
-CREATE TABLE t_txn(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_txn(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 begin transaction;
@@ -221,7 +305,7 @@ SELECT snapshot:table_statistics_location::String IS NULL FROM fuse_dump_snapsho
 
 # String TopN skips oversized values but preserves counted short values.
 statement ok
-CREATE TABLE t_string(s string) approx_distinct_columns = '' analyze_top_n_columns = 's' analyze_top_n_size = 1
+CREATE TABLE t_string(s string) approx_distinct_columns = '' analyze_frequency_columns = 's' analyze_top_n_size = 1
 
 statement ok
 INSERT INTO t_string
@@ -250,9 +334,9 @@ SELECT snapshot:table_statistics_location::String IS NULL FROM fuse_dump_snapsho
 ----
 1
 
-# TopN refresh should survive an HLL gap caused by skipped approx-distinct values.
+# TopN refresh should work when another stats column contains oversized strings.
 statement ok
-CREATE TABLE t_hll_gap(a string, b int) approx_distinct_columns = 'a' analyze_top_n_columns = 'b' analyze_top_n_size = 2
+CREATE TABLE t_hll_gap(a string, b int) approx_distinct_columns = 'a' analyze_frequency_columns = 'b' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_hll_gap
@@ -276,7 +360,7 @@ INSERT INTO t_pending
 SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
-ALTER TABLE t_pending SET OPTIONS(enable_auto_analyze = 1, analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+ALTER TABLE t_pending SET OPTIONS(enable_auto_analyze = 1, analyze_frequency_columns = 'b', analyze_top_n_size = 2)
 
 query T
 EXPLAIN SELECT * FROM t_pending WHERE b = 1
@@ -288,7 +372,7 @@ statement ok
 set enable_table_snapshot_stats = 0
 
 statement ok
-CREATE TABLE t_no_snapshot_stats(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_no_snapshot_stats(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_no_snapshot_stats
@@ -307,7 +391,7 @@ set enable_table_snapshot_stats = 1
 
 # Reuse one analyzed table for append-after-analyze, new hot values, and mutation invalidation.
 statement ok
-CREATE TABLE t_analyzed(id int, a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_analyzed(id int, a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 # Appending an existing TopN value after ANALYZE should add exact counts.
 statement ok
@@ -381,9 +465,9 @@ EXPLAIN SELECT * FROM t_analyzed WHERE a = 1
 ----
 table: default.db_09_0053.t_analyzed<slt:ignore>estimated rows: 9.09
 
-# Schema changes should keep analyze_top_n_columns aligned with renamed/dropped columns.
+# Schema changes should keep analyze_frequency_columns aligned with renamed/dropped columns.
 statement ok
-CREATE TABLE t_schema_change(a int, b int) approx_distinct_columns = '' analyze_top_n_columns = 'a,b' analyze_top_n_size = 2
+CREATE TABLE t_schema_change(a int, b int) approx_distinct_columns = '' analyze_frequency_columns = 'a,b' analyze_top_n_size = 2
 
 statement ok
 ALTER TABLE t_schema_change RENAME COLUMN a TO c
@@ -392,7 +476,7 @@ statement ok
 ALTER TABLE t_schema_change DROP COLUMN b
 
 query B
-SELECT lower(table_option) LIKE '%analyze_top_n_columns=''c''%'
+SELECT lower(table_option) LIKE '%analyze_frequency_columns=''c''%'
 FROM system.tables
 WHERE database = 'db_09_0053' AND name = 't_schema_change'
 ----

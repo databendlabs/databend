@@ -121,8 +121,49 @@ async fn test_spatial_join_matches_main_path_and_explain() -> anyhow::Result<()>
         .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
     let cluster_explain = run_query_pretty(cluster_ctx, &format!("EXPLAIN {join_sql}")).await?;
     assert!(
-        !cluster_explain.contains("SpatialJoin"),
-        "expected cluster plan to skip SpatialJoin, got:\n{cluster_explain}"
+        cluster_explain.contains("BroadcastSpatialJoin"),
+        "expected cluster plan to use BroadcastSpatialJoin, got:\n{cluster_explain}"
+    );
+    assert!(
+        cluster_explain.contains("exchange type: Broadcast"),
+        "expected BroadcastSpatialJoin build child to contain broadcast exchange, got:\n{cluster_explain}"
+    );
+
+    let cluster_ctx = fixture
+        .new_query_ctx_with_cluster(
+            ClusterDescriptor::new()
+                .with_node_info("node-a", "127.0.0.1:9090", "node-a", "node-a")
+                .with_node_info("node-b", "127.0.0.1:9091", "node-b", "node-b")
+                .with_local_id("node-a"),
+        )
+        .await?;
+    cluster_ctx
+        .get_settings()
+        .set_setting("enable_join_runtime_filter".to_string(), "0".to_string())?;
+    cluster_ctx
+        .get_settings()
+        .set_setting("enable_spatial_join".to_string(), "1".to_string())?;
+    let topn_join_sql = format!(
+        "SELECT l.id, r.id \
+         FROM {db}.spatial_join_left AS l \
+         JOIN (\
+             SELECT id, geom \
+             FROM {db}.spatial_join_right \
+             ORDER BY id \
+             LIMIT 2\
+         ) AS r \
+         ON ST_Intersects(l.geom, r.geom) \
+         ORDER BY l.id, r.id"
+    );
+    let topn_cluster_explain =
+        run_query_pretty(cluster_ctx, &format!("EXPLAIN {topn_join_sql}")).await?;
+    assert!(
+        topn_cluster_explain.contains("SpatialJoin"),
+        "expected top-N build side cluster plan to use SpatialJoin, got:\n{topn_cluster_explain}"
+    );
+    assert!(
+        !topn_cluster_explain.contains("BroadcastSpatialJoin"),
+        "expected top-N build side cluster plan to avoid BroadcastSpatialJoin, got:\n{topn_cluster_explain}"
     );
 
     ctx.get_settings()

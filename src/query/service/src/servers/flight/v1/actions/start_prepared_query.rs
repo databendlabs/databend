@@ -26,6 +26,9 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.io_stats = Some(std::sync::Arc::new(
+        databend_common_base::runtime::IoStats::default(),
+    ));
     tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     let _guard = ThreadTracker::tracking(tracking_payload);

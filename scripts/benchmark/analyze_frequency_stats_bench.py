@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Local benchmark for ANALYZE TABLE TopN statistics.
+Local benchmark for ANALYZE TABLE frequency statistics.
 
-The script creates a synthetic FUSE table with uniform and skewed columns,
-runs ANALYZE with TopN disabled/enabled, samples databend-query RSS while
-ANALYZE is running, and compares optimizer EXPLAIN cardinality estimates with
-exact counts by q-error.
+The script creates a synthetic FUSE table with uniform, single-hot skewed, and
+wide-hot columns, runs ANALYZE with TopN and count-min sketch disabled/enabled
+in isolation and together, samples databend-query RSS while ANALYZE is running,
+and compares optimizer EXPLAIN cardinality estimates with exact counts by
+q-error.
 
 It is intended for local experiments and is not part of the CI test suite.
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shlex
@@ -55,15 +57,16 @@ ESTIMATED_ROWS_RE = re.compile(r"estimated rows:\s*(?P<rows>[-+0-9.eE]+)")
 class VariantSpec:
     label: str
     collect_top_n: bool
+    collect_count_min_sketch: bool
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Compare ANALYZE TopN cost and optimizer estimate accuracy."
+        description="Compare ANALYZE frequency-stat cost and optimizer estimate accuracy."
     )
     parser.add_argument("--dsn", default=os.getenv("BENDSQL_DSN"), help="bendsql DSN")
     parser.add_argument("--bendsql", default=os.getenv("BENDSQL", "bendsql"))
-    parser.add_argument("--database", default="tmp_analyze_topn_bench")
+    parser.add_argument("--database", default="tmp_analyze_frequency_stats_bench")
     parser.add_argument("--table", default="t")
     parser.add_argument("--rows", type=int, default=5_000_000)
     parser.add_argument("--batch-rows", type=int, default=500_000)
@@ -74,17 +77,35 @@ def parse_args() -> argparse.Namespace:
         default=80,
         help="Percent of rows forced to skew_key = 0.",
     )
+    parser.add_argument(
+        "--wide-hot-values",
+        type=int,
+        default=200,
+        help=(
+            "Number of hot values in wide_hot_key. Half of the rows are spread "
+            "across these values, so TopN may not retain every hot value."
+        ),
+    )
     parser.add_argument("--max-threads", type=int, default=8)
     parser.add_argument(
         "--stat-columns",
-        default="uniform_key,skew_key",
-        help="Columns listed in analyze_top_n_columns for both benchmark variants.",
+        default="uniform_key,skew_key,wide_hot_key",
+        help="Columns listed in analyze_frequency_columns for every benchmark variant.",
     )
     parser.add_argument("--top-n-size", type=int, default=50)
     parser.add_argument(
+        "--cms-error-rate",
+        type=float,
+        default=0.001,
+        help=(
+            "Value for analyze_count_min_sketch_error_rate when CMS is enabled. "
+            "The option is set to 0 for variants without CMS."
+        ),
+    )
+    parser.add_argument(
         "--variants",
-        default="topn_off,topn_on",
-        help="Comma-separated variants to run: topn_off,topn_on.",
+        default="none,topn,cms,topn_cms",
+        help="Comma-separated variants to run: none,topn,cms,topn_cms.",
     )
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--sample-interval-sec", type=float, default=0.05)
@@ -148,6 +169,7 @@ def prepare_table(client: BendSQL, args: argparse.Namespace) -> None:
                 id UInt64,
                 uniform_key UInt64,
                 skew_key UInt64,
+                wide_hot_key UInt64,
                 payload String
             )
             """,
@@ -165,6 +187,11 @@ def prepare_table(client: BendSQL, args: argparse.Namespace) -> None:
                     IF(((number + {inserted}) % 100) < {args.skew_percent},
                         0,
                         (number + {inserted}) % {args.domain}) AS skew_key,
+                    IF(((number + {inserted}) % 2) = 0,
+                        ((number + {inserted}) DIV 2) % {args.wide_hot_values},
+                        {args.wide_hot_values}
+                            + (((number + {inserted}) DIV 2)
+                                % {args.domain - args.wide_hot_values})) AS wide_hot_key,
                     concat('payload_', to_string((number + {inserted}) % {args.domain})) AS payload
                 FROM numbers({batch_rows})
             """
@@ -184,7 +211,14 @@ def prepare_table(client: BendSQL, args: argparse.Namespace) -> None:
 
     run_sql(
         client,
-        f"SELECT count(), count(DISTINCT uniform_key), count(DISTINCT skew_key) FROM {table}",
+        f"""
+        SELECT
+            count(),
+            count(DISTINCT uniform_key),
+            count(DISTINCT skew_key),
+            count(DISTINCT wide_hot_key)
+        FROM {table}
+        """,
         "table cardinality",
     )
 
@@ -195,16 +229,48 @@ def parse_variants(variants: str) -> list[VariantSpec]:
         variant = item.strip()
         if not variant:
             continue
-        if variant == "topn_off":
-            specs.append(VariantSpec(label="topn_off", collect_top_n=False))
-        elif variant == "topn_on":
-            specs.append(VariantSpec(label="topn_on", collect_top_n=True))
+        if variant == "none":
+            specs.append(
+                VariantSpec(
+                    label="none",
+                    collect_top_n=False,
+                    collect_count_min_sketch=False,
+                )
+            )
+        elif variant == "topn":
+            specs.append(
+                VariantSpec(
+                    label="topn",
+                    collect_top_n=True,
+                    collect_count_min_sketch=False,
+                )
+            )
+        elif variant == "cms":
+            specs.append(
+                VariantSpec(
+                    label="cms",
+                    collect_top_n=False,
+                    collect_count_min_sketch=True,
+                )
+            )
+        elif variant == "topn_cms":
+            specs.append(
+                VariantSpec(
+                    label="topn_cms",
+                    collect_top_n=True,
+                    collect_count_min_sketch=True,
+                )
+            )
         else:
             raise ValueError(f"unsupported variant: {variant}")
     return specs
 
 
-def build_topn_probes(domain: int, skew_percent: int) -> list[Probe]:
+def build_frequency_stat_probes(
+    domain: int,
+    skew_percent: int,
+    wide_hot_values: int,
+) -> list[Probe]:
     domain = max(domain, 10)
     return [
         Probe("skew_key", "eq", 0),
@@ -213,6 +279,10 @@ def build_topn_probes(domain: int, skew_percent: int) -> list[Probe]:
         Probe("uniform_key", "eq", 0),
         Probe("uniform_key", "eq", domain // 2),
         Probe("uniform_key", "eq", domain - 1),
+        Probe("wide_hot_key", "eq", 0),
+        Probe("wide_hot_key", "eq", wide_hot_values // 2),
+        Probe("wide_hot_key", "eq", wide_hot_values - 1),
+        Probe("wide_hot_key", "eq", wide_hot_values),
     ]
 
 
@@ -237,13 +307,15 @@ def existing_skew_value(domain: int, skew_percent: int) -> int:
 
 def configure_variant(client: BendSQL, args: argparse.Namespace, spec: VariantSpec) -> None:
     top_n_size = args.top_n_size if spec.collect_top_n else 0
+    cms_error_rate = args.cms_error_rate if spec.collect_count_min_sketch else 0
     run_sql(
         client,
         f"""
         ALTER TABLE {fq_table(args.database, args.table)} SET OPTIONS (
             approx_distinct_columns = '',
-            analyze_top_n_columns = '{args.stat_columns}',
-            analyze_top_n_size = {top_n_size}
+            analyze_frequency_columns = '{args.stat_columns}',
+            analyze_top_n_size = {top_n_size},
+            analyze_count_min_sketch_error_rate = '{cms_error_rate}'
         )
         """,
         f"configure {spec.label}",
@@ -287,7 +359,9 @@ def start_query_process(
 
     log_dir = Path(args.query_log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"analyze_topn_{safe_label(label)}_{int(time.time() * 1000)}.log"
+    log_path = (
+        log_dir / f"analyze_frequency_stats_{safe_label(label)}_{int(time.time() * 1000)}.log"
+    )
     cmd = [args.query_bin, "-c", args.query_config]
     printable = " ".join(shlex.quote(part) for part in cmd)
     print(f"\n[start query {label}] {printable} > {log_path}", flush=True)
@@ -418,14 +492,28 @@ def evaluate_variant(
 
 
 def validate_args(args: argparse.Namespace, variants: list[VariantSpec]) -> None:
+    if not variants:
+        raise ValueError("--variants must list at least one variant")
     if args.rows <= 0 or args.batch_rows <= 0 or args.domain <= 0:
         raise ValueError("--rows, --batch-rows, and --domain must be greater than zero")
     if not 0 <= args.skew_percent <= 100:
         raise ValueError("--skew-percent must be between 0 and 100")
+    if args.wide_hot_values <= 0:
+        raise ValueError("--wide-hot-values must be greater than zero")
+    if args.wide_hot_values >= args.domain:
+        raise ValueError("--wide-hot-values must be smaller than --domain")
     if args.top_n_size < 0:
         raise ValueError("--top-n-size must be non-negative")
     if any(variant.collect_top_n for variant in variants) and args.top_n_size == 0:
-        raise ValueError("--top-n-size must be greater than zero when topn_on is used")
+        raise ValueError("--top-n-size must be greater than zero when a TopN variant is used")
+    if (
+        not math.isfinite(args.cms_error_rate)
+        or args.cms_error_rate < 0
+        or args.cms_error_rate > 1.0
+    ):
+        raise ValueError("--cms-error-rate must be finite and between 0 and 1")
+    if any(variant.collect_count_min_sketch for variant in variants) and args.cms_error_rate == 0:
+        raise ValueError("--cms-error-rate must be greater than zero when a CMS variant is used")
     if not args.stat_columns.strip():
         raise ValueError("--stat-columns must not be empty")
 
@@ -435,7 +523,11 @@ def main() -> None:
     variants = parse_variants(args.variants)
     validate_args(args, variants)
 
-    probes = build_topn_probes(args.domain, args.skew_percent)
+    probes = build_frequency_stat_probes(
+        args.domain,
+        args.skew_percent,
+        args.wide_hot_values,
+    )
     client = build_client(args)
     analyze_results: list[AnalyzeResult] = []
     accuracy_results: list[AccuracyResult] = []
@@ -496,10 +588,13 @@ def main() -> None:
             "batch_rows": args.batch_rows,
             "domain": args.domain,
             "skew_percent": args.skew_percent,
+            "wide_hot_values": args.wide_hot_values,
             "max_threads": args.max_threads,
             "stat_columns": args.stat_columns,
             "top_n_size": args.top_n_size,
+            "cms_error_rate": args.cms_error_rate,
             "variants": [spec.label for spec in variants],
+            "variant_specs": [asdict(spec) for spec in variants],
             "repeat": args.repeat,
             "run_mode": args.run_mode,
             "query_bin": args.query_bin if args.run_mode == "isolated-query" else None,
@@ -524,7 +619,11 @@ def main() -> None:
 
     if not args.keep:
         if args.run_mode == "sequential":
-            run_sql(client, f"DROP DATABASE IF EXISTS {quote_ident(args.database)}", "drop database")
+            run_sql(
+                client,
+                f"DROP DATABASE IF EXISTS {quote_ident(args.database)}",
+                "drop database",
+            )
         else:
 
             def cleanup(_: list[int]) -> None:

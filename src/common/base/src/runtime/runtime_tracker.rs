@@ -46,9 +46,12 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
 
 use concurrent_queue::ConcurrentQueue;
 use log::LevelFilter;
@@ -136,6 +139,7 @@ impl CaptureLogSettings {
 pub struct TrackingPayload {
     pub query_id: Option<String>,
     pub warehouse_id: Option<String>,
+    pub io_stats: Option<Arc<IoStats>>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
@@ -145,6 +149,112 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
+}
+
+#[derive(Debug, Default)]
+pub struct IoStats {
+    list_count: AtomicU64,
+    list_duration_ms: AtomicU64,
+    read_count: AtomicU64,
+    read_bytes: AtomicU64,
+    read_duration_ms: AtomicU64,
+    write_count: AtomicU64,
+    write_bytes: AtomicU64,
+    write_duration_ms: AtomicU64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct IoStatsSnapshot {
+    pub list_count: u64,
+    pub list_duration_ms: u64,
+    pub read_count: u64,
+    pub read_bytes: u64,
+    pub read_duration_ms: u64,
+    pub write_count: u64,
+    pub write_bytes: u64,
+    pub write_duration_ms: u64,
+}
+
+impl IoStatsSnapshot {
+    pub fn merge(&mut self, other: &IoStatsSnapshot) {
+        self.list_count += other.list_count;
+        self.list_duration_ms += other.list_duration_ms;
+        self.read_count += other.read_count;
+        self.read_bytes += other.read_bytes;
+        self.read_duration_ms += other.read_duration_ms;
+        self.write_count += other.write_count;
+        self.write_bytes += other.write_bytes;
+        self.write_duration_ms += other.write_duration_ms;
+    }
+}
+
+impl IoStats {
+    pub fn record_operation_duration(&self, operation: &str, duration: Duration) {
+        let duration_ms = duration.as_millis().min(u64::MAX as u128) as u64;
+        match operation {
+            "list" => {
+                self.list_count.fetch_add(1, Ordering::Relaxed);
+                self.list_duration_ms
+                    .fetch_add(duration_ms, Ordering::Relaxed);
+            }
+            "read" => {
+                self.read_count.fetch_add(1, Ordering::Relaxed);
+                self.read_duration_ms
+                    .fetch_add(duration_ms, Ordering::Relaxed);
+            }
+            "write" => {
+                self.write_count.fetch_add(1, Ordering::Relaxed);
+                self.write_duration_ms
+                    .fetch_add(duration_ms, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn record_operation_bytes(&self, operation: &str, bytes: u64) {
+        match operation {
+            "read" => {
+                self.read_bytes.fetch_add(bytes, Ordering::Relaxed);
+            }
+            "write" => {
+                self.write_bytes.fetch_add(bytes, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn snapshot(&self) -> IoStatsSnapshot {
+        IoStatsSnapshot {
+            list_count: self.list_count.load(Ordering::Relaxed),
+            list_duration_ms: self.list_duration_ms.load(Ordering::Relaxed),
+            read_count: self.read_count.load(Ordering::Relaxed),
+            read_bytes: self.read_bytes.load(Ordering::Relaxed),
+            read_duration_ms: self.read_duration_ms.load(Ordering::Relaxed),
+            write_count: self.write_count.load(Ordering::Relaxed),
+            write_bytes: self.write_bytes.load(Ordering::Relaxed),
+            write_duration_ms: self.write_duration_ms.load(Ordering::Relaxed),
+        }
+    }
+
+    pub fn merge_snapshot(&self, snapshot: &IoStatsSnapshot) {
+        self.list_count
+            .fetch_add(snapshot.list_count, Ordering::Relaxed);
+        self.list_duration_ms
+            .fetch_add(snapshot.list_duration_ms, Ordering::Relaxed);
+        self.read_count
+            .fetch_add(snapshot.read_count, Ordering::Relaxed);
+        self.read_bytes
+            .fetch_add(snapshot.read_bytes, Ordering::Relaxed);
+        self.read_duration_ms
+            .fetch_add(snapshot.read_duration_ms, Ordering::Relaxed);
+        self.write_count
+            .fetch_add(snapshot.write_count, Ordering::Relaxed);
+        self.write_bytes
+            .fetch_add(snapshot.write_bytes, Ordering::Relaxed);
+        self.write_duration_ms
+            .fetch_add(snapshot.write_duration_ms, Ordering::Relaxed);
+    }
 }
 
 /// Extension trait for wrapping a future with thread tracking context.
@@ -206,6 +316,7 @@ impl Clone for TrackingPayload {
         TrackingPayload {
             query_id: self.query_id.clone(),
             warehouse_id: self.warehouse_id.clone(),
+            io_stats: self.io_stats.clone(),
             profile: self.profile.clone(),
             mem_stat: self.mem_stat.clone(),
             metrics: self.metrics.clone(),
@@ -294,6 +405,7 @@ impl ThreadTracker {
                 mem_stat: None,
                 query_id: None,
                 warehouse_id: None,
+                io_stats: None,
                 capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
@@ -426,6 +538,15 @@ impl ThreadTracker {
             .unwrap_or(None)
     }
 
+    pub fn io_stats() -> Option<&'static Arc<IoStats>> {
+        TRACKER
+            .try_with(|tracker| {
+                let tracker = tracker.borrow();
+                unsafe { std::mem::transmute(tracker.payload.io_stats.as_ref()) }
+            })
+            .unwrap_or(None)
+    }
+
     pub fn capture_log_settings() -> Option<&'static Arc<CaptureLogSettings>> {
         TRACKER
             .try_with(|tracker| {
@@ -476,5 +597,53 @@ impl<T: Future> Future for UnlimitedFuture<T> {
 
         let this = self.project();
         this.inner.poll(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn io_stats_snapshot_and_merge() {
+        let stats = IoStats::default();
+        stats.record_operation_duration("list", Duration::from_millis(7));
+        stats.record_operation_duration("read", Duration::from_millis(11));
+        stats.record_operation_bytes("read", 11);
+        stats.record_operation_duration("write", Duration::from_millis(13));
+        stats.record_operation_bytes("write", 13);
+
+        assert_eq!(stats.snapshot(), IoStatsSnapshot {
+            list_count: 1,
+            list_duration_ms: 7,
+            read_count: 1,
+            read_bytes: 11,
+            read_duration_ms: 11,
+            write_count: 1,
+            write_bytes: 13,
+            write_duration_ms: 13,
+        });
+
+        stats.merge_snapshot(&IoStatsSnapshot {
+            list_count: 2,
+            list_duration_ms: 17,
+            read_count: 3,
+            read_bytes: 17,
+            read_duration_ms: 19,
+            write_count: 5,
+            write_bytes: 19,
+            write_duration_ms: 23,
+        });
+
+        assert_eq!(stats.snapshot(), IoStatsSnapshot {
+            list_count: 3,
+            list_duration_ms: 24,
+            read_count: 4,
+            read_bytes: 28,
+            read_duration_ms: 30,
+            write_count: 6,
+            write_bytes: 32,
+            write_duration_ms: 36,
+        });
     }
 }

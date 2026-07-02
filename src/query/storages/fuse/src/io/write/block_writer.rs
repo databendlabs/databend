@@ -190,7 +190,7 @@ impl BlockBuilder {
             .top_n
             .as_ref()
             .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
-        let mut block_stats_builder = BlockStatsBuilder::new(&self.ndv_columns_map, top_n);
+        let mut block_stats_builder = BlockStatsBuilder::new(&self.ndv_columns_map, top_n, None)?;
         block_stats_builder.add_block(&data_block)?;
         let block_stats = block_stats_builder.finalize_with_top_n()?;
         let (column_hlls, column_top_n) = if let Some(stats) = block_stats {

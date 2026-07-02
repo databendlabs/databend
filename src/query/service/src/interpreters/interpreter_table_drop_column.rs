@@ -26,7 +26,7 @@ use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
@@ -160,7 +160,7 @@ impl Interpreter for DropTableColumnInterpreter {
                 }
             }
         }
-        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_TOP_N_COLUMNS) {
+        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
             if let ApproxDistinctColumns::Specify(mut cols) =
                 value.parse::<ApproxDistinctColumns>()?
             {

@@ -98,7 +98,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -382,31 +382,15 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn top_n_column_fields_from_options(
-        table_schema: TableSchemaRef,
-        top_n_size: Option<usize>,
-        top_n_columns: Option<&str>,
-    ) -> Result<BTreeMap<FieldIndex, TableField>> {
-        let Some(_) = top_n_size else {
-            return Ok(BTreeMap::new());
-        };
-        let Some(columns) = top_n_columns else {
-            return Ok(BTreeMap::new());
-        };
-        columns
-            .parse::<ApproxDistinctColumns>()?
-            .distinct_column_fields(table_schema, RangeIndex::supported_table_type)
-    }
-
     fn append_top_n_column_fields_from_options(
         table_schema: TableSchemaRef,
         top_n_size: Option<usize>,
-        top_n_columns: Option<&str>,
+        frequency_columns: Option<&str>,
     ) -> Result<BTreeMap<FieldIndex, TableField>> {
         let Some(_) = top_n_size else {
             return Ok(BTreeMap::new());
         };
-        let Some(columns) = top_n_columns else {
+        let Some(columns) = frequency_columns else {
             return Ok(BTreeMap::new());
         };
         let source_schema = table_schema.remove_virtual_computed_fields();
@@ -442,15 +426,15 @@ impl FuseTable {
         source_schema: TableSchemaRef,
     ) -> Result<Option<(BTreeMap<FieldIndex, TableField>, usize)>> {
         let top_n_size = analyze_top_n_size_from_options(self.table_info.options())?;
-        let top_n_columns = self
+        let frequency_columns = self
             .table_info
             .options()
-            .get(OPT_KEY_ANALYZE_TOP_N_COLUMNS)
+            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
             .map(String::as_str);
         let top_n_columns_map = Self::append_top_n_column_fields_from_options(
             source_schema,
             top_n_size,
-            top_n_columns,
+            frequency_columns,
         )?;
         Ok(top_n_size
             .and_then(|size| (!top_n_columns_map.is_empty()).then_some((top_n_columns_map, size))))
@@ -1241,7 +1225,7 @@ impl Table for FuseTable {
                 .as_ref()
                 .map(|v| v.histograms.clone())
                 .unwrap_or_default();
-            let top_n = table_statistics
+            let aligned_table_statistics = table_statistics
                 .as_ref()
                 .filter(|v| v.row_count == snapshot.summary.row_count)
                 .filter(|v| {
@@ -1249,8 +1233,12 @@ impl Table for FuseTable {
                         .prev_snapshot_id
                         .as_ref()
                         .is_none_or(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
-                })
+                });
+            let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
+                .unwrap_or_default();
+            let count_min_sketch = aligned_table_statistics
+                .map(|v| v.count_min_sketch.clone())
                 .unwrap_or_default();
             let stats_row_count = additional_stats_meta
                 .map(|v| v.row_count)
@@ -1260,6 +1248,7 @@ impl Table for FuseTable {
                 stats,
                 histograms,
                 top_n,
+                count_min_sketch,
                 column_distinct_values,
                 stats_row_count,
                 snapshot.summary.row_count,

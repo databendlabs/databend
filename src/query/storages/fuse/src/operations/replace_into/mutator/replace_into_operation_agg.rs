@@ -584,6 +584,7 @@ impl AggregationContext {
                 block_idx: block_index,
             },
             block_meta: Arc::new(extended_block_meta),
+            insert_rows: 0,
         };
 
         Ok(Some(mutation))

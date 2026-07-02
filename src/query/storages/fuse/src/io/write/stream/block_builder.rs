@@ -228,7 +228,7 @@ impl StreamBlockBuilder {
             .top_n
             .as_ref()
             .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
-        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n);
+        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n, None)?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(

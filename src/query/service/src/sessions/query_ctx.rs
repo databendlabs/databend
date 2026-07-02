@@ -45,6 +45,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
@@ -491,6 +492,14 @@ impl QueryContext {
 
     pub fn get_data_metrics(&self) -> StorageMetrics {
         self.shared.get_data_metrics()
+    }
+
+    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
+        self.shared.merge_io_stats(stats);
+    }
+
+    pub fn get_io_stats(&self) -> IoStatsSnapshot {
+        self.shared.get_io_stats()
     }
 
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
@@ -973,4 +982,51 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::IoStatsSnapshot;
+
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn io_stats_merge() -> databend_common_exception::Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        ctx.merge_io_stats(&IoStatsSnapshot {
+            list_count: 1,
+            list_duration_ms: 2,
+            read_count: 2,
+            read_bytes: 3,
+            read_duration_ms: 4,
+            write_count: 4,
+            write_bytes: 5,
+            write_duration_ms: 6,
+        });
+        ctx.merge_io_stats(&IoStatsSnapshot {
+            list_count: 10,
+            list_duration_ms: 20,
+            read_count: 20,
+            read_bytes: 30,
+            read_duration_ms: 40,
+            write_count: 40,
+            write_bytes: 50,
+            write_duration_ms: 60,
+        });
+
+        assert_eq!(ctx.get_io_stats(), IoStatsSnapshot {
+            list_count: 11,
+            list_duration_ms: 22,
+            read_count: 22,
+            read_bytes: 33,
+            read_duration_ms: 44,
+            write_count: 44,
+            write_bytes: 55,
+            write_duration_ms: 66,
+        });
+
+        Ok(())
+    }
 }

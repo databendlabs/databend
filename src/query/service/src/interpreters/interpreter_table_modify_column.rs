@@ -61,7 +61,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
@@ -309,10 +309,10 @@ impl ModifyTableColumnInterpreter {
                 approx_distinct_cols = cols;
             }
         }
-        let mut analyze_top_n_cols = vec![];
-        if let Some(v) = table_info.options().get(OPT_KEY_ANALYZE_TOP_N_COLUMNS) {
+        let mut analyze_frequency_cols = vec![];
+        if let Some(v) = table_info.options().get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
             if let ApproxDistinctColumns::Specify(cols) = v.parse::<ApproxDistinctColumns>()? {
-                analyze_top_n_cols = cols;
+                analyze_frequency_cols = cols;
             }
         }
 
@@ -352,11 +352,13 @@ impl ModifyTableColumnInterpreter {
                             field.data_type
                         )));
                     }
-                    if analyze_top_n_cols.iter().any(|v| v.as_str() == field.name)
+                    if analyze_frequency_cols
+                        .iter()
+                        .any(|v| v.as_str() == field.name)
                         && !RangeIndex::supported_table_type(&field.data_type)
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
-                            "Unsupported data type '{}' for analyze top n columns",
+                            "Unsupported data type '{}' for analyze frequency columns",
                             field.data_type
                         )));
                     }
