@@ -86,7 +86,6 @@ use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
@@ -222,13 +221,11 @@ impl TaskService {
                 ..
             }) = task_message.warehouse_options()
             {
-                if warehouse
-                    != &self
-                        .create_context(None)
-                        .await?
-                        .get_cluster()
-                        .get_warehouse_id()?
-                {
+                let current_warehouse = ClusterDiscovery::instance()
+                    .single_node_cluster(&GlobalConfig::instance())
+                    .await?
+                    .get_warehouse_id()?;
+                if warehouse != &current_warehouse {
                     continue;
                 }
             }
