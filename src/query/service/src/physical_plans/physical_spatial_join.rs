@@ -27,8 +27,10 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -178,25 +180,69 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
-        // The spatial join don't support cluster mode for now.
-        if !self.ctx.get_cluster().is_empty() {
-            return Ok(None);
-        }
-
-        let left_cardinality = RelExpr::with_s_expr(s_expr.left_child())
+        let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
+        let left_card = RelExpr::with_s_expr(s_expr.left_child())
             .derive_cardinality()?
             .cardinality;
-        let right_cardinality = RelExpr::with_s_expr(s_expr.right_child())
+        let right_card = RelExpr::with_s_expr(s_expr.right_child())
             .derive_cardinality()?
             .cardinality;
-
-        let (build_side, build_rows) = if left_cardinality <= right_cardinality {
-            (SpatialBuildSide::Left, left_cardinality)
+        let smaller_side = if left_card < right_card {
+            SpatialBuildSide::Left
         } else {
-            (SpatialBuildSide::Right, right_cardinality)
+            SpatialBuildSide::Right
         };
 
-        if build_rows > self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64 {
+        let is_cluster = !self.ctx.get_cluster().is_empty();
+        let mut is_broadcast = false;
+        let build_side = if is_cluster {
+            let left_exchange = s_expr.left_child().get_data_distribution()?;
+            let right_exchange = s_expr.right_child().get_data_distribution()?;
+            let left_distribution = RelExpr::with_s_expr(s_expr.left_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let right_distribution = RelExpr::with_s_expr(s_expr.right_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let is_merge = |distribution: &Option<Exchange>| {
+                matches!(distribution, Some(Exchange::Merge | Exchange::MergeSort))
+            };
+
+            let left_is_broadcast = left_distribution == Distribution::Broadcast
+                && matches!(left_exchange, Some(Exchange::Broadcast));
+            let right_is_broadcast = right_distribution == Distribution::Broadcast
+                && matches!(right_exchange, Some(Exchange::Broadcast));
+
+            if left_is_broadcast && right_is_broadcast {
+                return Ok(None);
+            }
+
+            if left_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Left
+            } else if right_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Right
+            } else if left_distribution == Distribution::Serial
+                && right_distribution == Distribution::Serial
+                && is_merge(&left_exchange)
+                && is_merge(&right_exchange)
+            {
+                smaller_side
+            } else {
+                return Ok(None);
+            }
+        } else {
+            smaller_side
+        };
+
+        let build_card = match build_side {
+            SpatialBuildSide::Left => left_card,
+            SpatialBuildSide::Right => right_card,
+        };
+        if build_card > max_build_rows {
             return Ok(None);
         }
 
@@ -237,7 +283,11 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(Some(PhysicalPlan::new(PhysicalSpatialJoin {
-            meta: PhysicalPlanMeta::new("SpatialJoin"),
+            meta: PhysicalPlanMeta::new(if is_broadcast {
+                "BroadcastSpatialJoin"
+            } else {
+                "SpatialJoin"
+            }),
             probe,
             build,
             build_side,
