@@ -1,0 +1,4 @@
+databend-driver[local]>=0.34.0
+pandas>=2.0
+matplotlib>=3.7
+jupyter>=1.0
