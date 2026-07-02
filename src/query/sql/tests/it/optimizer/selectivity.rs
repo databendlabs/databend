@@ -424,6 +424,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "TopN equality estimates should take precedence when both TopN and Count-Min Sketch have a frequency for the scalar.",
     )?;
     let top_n_precedence = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(77)),
             count: 37,
@@ -461,6 +462,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         histogram: None,
     })]);
     let approximate_top_n_hit = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(199)),
             count: 20000,
