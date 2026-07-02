@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
@@ -161,10 +162,6 @@ async fn try_rebuild_req(
         "try_rebuild_req: update_failed_tbls={:?}",
         update_failed_tbls
     );
-    let insert_rows = {
-        let txn_mgr = ctx.txn_mgr();
-        txn_mgr.lock().multi_table_insert_rows()
-    };
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
         if table_meta.engine == "STREAM" {
@@ -222,19 +219,18 @@ async fn try_rebuild_req(
             })?
             .clone();
 
-        let s = merge_statistics(
-            new_snapshot.summary(),
-            &latest_snapshot.summary(),
-            default_cluster_key_id,
-        );
-        let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
+        let base_summary = base_snapshot.summary();
+        let new_summary = new_snapshot.summary();
+        let latest_summary = latest_snapshot.summary();
+        let s = merge_statistics(new_summary.clone(), &latest_summary, default_cluster_key_id);
+        let mut merged_summary = deduct_statistics(&s, &base_summary);
         let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
-        let insert_row = insert_rows.get(&tid).cloned().unwrap_or(0);
+        let stats_row_delta = insert_stats_row_delta(&base_summary, &new_summary);
         let new_hll = new_snapshot
             .as_ref()
             .and_then(|v| v.summary.additional_stats_meta.as_ref())
             .and_then(|m| m.hll.as_ref());
-        if insert_row > 0 && new_hll.is_some_and(|v| !v.is_empty()) {
+        if stats_row_delta > 0 && new_hll.is_some_and(|v| !v.is_empty()) {
             if let Some(ref mut latest_metas) = additional_stats_meta {
                 let new_hll = decode_column_hll(new_hll.unwrap())?.unwrap();
                 let latest_hll = latest_metas
@@ -247,7 +243,7 @@ async fn try_rebuild_req(
                 let merged = merge_column_hll(new_hll, latest_hll);
                 if !merged.is_empty() {
                     latest_metas.hll = Some(encode_column_hll(&merged)?);
-                    latest_metas.row_count += insert_row;
+                    latest_metas.row_count += stats_row_delta;
                 }
             }
         }
@@ -350,6 +346,25 @@ async fn try_rebuild_req(
     Ok(())
 }
 
+fn insert_stats_row_delta(base_summary: &Statistics, new_summary: &Statistics) -> u64 {
+    let inserted_rows = new_summary.row_count.saturating_sub(base_summary.row_count);
+    if inserted_rows == 0 {
+        return 0;
+    }
+
+    let Some(new_stats_meta) = new_summary.additional_stats_meta.as_ref() else {
+        return 0;
+    };
+
+    match base_summary.additional_stats_meta.as_ref() {
+        Some(base_stats_meta) => new_stats_meta
+            .row_count
+            .saturating_sub(base_stats_meta.row_count)
+            .min(inserted_rows),
+        None => new_stats_meta.row_count.min(inserted_rows),
+    }
+}
+
 fn retry_too_many_msg(
     retries: u32,
     start_time: Instant,
@@ -364,4 +379,62 @@ fn retry_too_many_msg(
             .map(|(tid, _, _)| tid)
             .collect::<Vec<_>>()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+
+    use super::*;
+
+    fn summary(row_count: u64, stats_row_count: Option<u64>) -> Statistics {
+        Statistics {
+            row_count,
+            additional_stats_meta: stats_row_count.map(|row_count| AdditionalStatsMeta {
+                row_count,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_insert_stats_row_delta_from_stats_meta() {
+        let base_summary = summary(100, Some(100));
+        let new_summary = summary(110, Some(110));
+
+        assert_eq!(insert_stats_row_delta(&base_summary, &new_summary), 10);
+    }
+
+    #[test]
+    fn test_insert_stats_row_delta_without_base_stats_meta() {
+        let base_summary = summary(100, None);
+        let new_summary = summary(110, Some(110));
+
+        assert_eq!(insert_stats_row_delta(&base_summary, &new_summary), 10);
+    }
+
+    #[test]
+    fn test_insert_stats_row_delta_without_new_stats_meta() {
+        let base_summary = summary(100, Some(100));
+        let new_summary = summary(110, None);
+
+        assert_eq!(insert_stats_row_delta(&base_summary, &new_summary), 0);
+    }
+
+    #[test]
+    fn test_insert_stats_row_delta_ignores_stats_refresh_without_insert() {
+        let base_summary = summary(100, Some(100));
+        let new_summary = summary(100, Some(130));
+
+        assert_eq!(insert_stats_row_delta(&base_summary, &new_summary), 0);
+    }
+
+    #[test]
+    fn test_insert_stats_row_delta_capped_by_inserted_rows() {
+        let base_summary = summary(100, Some(100));
+        let new_summary = summary(110, Some(130));
+
+        assert_eq!(insert_stats_row_delta(&base_summary, &new_summary), 10);
+    }
 }
