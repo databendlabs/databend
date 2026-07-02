@@ -74,7 +74,8 @@ impl CollectStatisticsOptimizer {
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
                 let mut top_n = HashMap::new();
-                let collect_top_n = scan.change_type.is_none();
+                let mut count_min_sketch = HashMap::new();
+                let collect_frequency_stats = scan.change_type.is_none();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -90,11 +91,17 @@ impl CollectStatisticsOptimizer {
                             let histogram =
                                 column_statistics_provider.histogram(*column_id as ColumnId);
                             histograms.insert(*column_index, histogram);
-                            if collect_top_n
+                            if collect_frequency_stats
                                 && let Some(column_top_n) =
                                     column_statistics_provider.top_n(*column_id as ColumnId)
                             {
                                 top_n.insert(*column_index, column_top_n);
+                            }
+                            if collect_frequency_stats
+                                && let Some(column_count_min_sketch) = column_statistics_provider
+                                    .count_min_sketch(*column_id as ColumnId)
+                            {
+                                count_min_sketch.insert(*column_index, column_count_min_sketch);
                             }
                         }
                     }
@@ -106,6 +113,7 @@ impl CollectStatisticsOptimizer {
                     column_stats,
                     histograms,
                     top_n,
+                    count_min_sketch,
                 });
                 let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
                 if let Some(sample) = &scan.sample {

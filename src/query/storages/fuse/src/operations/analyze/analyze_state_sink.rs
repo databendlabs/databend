@@ -51,6 +51,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -60,6 +61,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_count_min_sketch_mut;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use tokio::sync::Semaphore;
 
@@ -137,7 +139,8 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         histogram_info: AnalyzeHistogramInfo,
         top_n_size: Option<usize>,
-        top_n_columns: Option<String>,
+        frequency_columns: Option<String>,
+        count_min_sketch_error_rate: Option<f64>,
         no_scan: bool,
         retry_commit: bool,
     ) -> Result<()> {
@@ -147,10 +150,10 @@ impl FuseTable {
         }
         ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 
-        let (top_n_size, top_n_columns) = if no_scan {
-            (None, None)
+        let (top_n_size, frequency_columns, count_min_sketch_error_rate) = if no_scan {
+            (None, None, None)
         } else {
-            (top_n_size, top_n_columns)
+            (top_n_size, frequency_columns, count_min_sketch_error_rate)
         };
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
@@ -168,7 +171,8 @@ impl FuseTable {
                     no_scan,
                     collect_histogram_info,
                     top_n_size,
-                    top_n_columns.clone(),
+                    frequency_columns.clone(),
+                    count_min_sketch_error_rate,
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
@@ -183,6 +187,7 @@ impl FuseTable {
                 input,
                 sink_histogram_info.clone(),
                 top_n_size,
+                count_min_sketch_error_rate,
                 retry_commit,
             )
         })?;
@@ -211,6 +216,7 @@ struct SinkAnalyzeState {
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     top_n: Option<BlockTopN>,
+    count_min_sketch: Option<BlockCountMinSketch>,
     dropped_top_n_columns: BTreeSet<ColumnId>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     kll_histograms: HashMap<ColumnId, KllSketch>,
@@ -228,6 +234,7 @@ impl SinkAnalyzeState {
         input_port: Arc<InputPort>,
         histogram_info: SinkAnalyzeHistogramInfo,
         top_n_size: Option<usize>,
+        count_min_sketch_error_rate: Option<f64>,
         retry_commit: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
@@ -242,6 +249,7 @@ impl SinkAnalyzeState {
             unstats_rows: 0,
             ndv_states: Default::default(),
             top_n: top_n_size.map(|_| Default::default()),
+            count_min_sketch: count_min_sketch_error_rate.map(|_| Default::default()),
             dropped_top_n_columns: BTreeSet::new(),
             histograms: Default::default(),
             kll_histograms: Default::default(),
@@ -419,6 +427,9 @@ impl SinkAnalyzeState {
         if let Some(top_n) = &mut self.top_n {
             top_n.retain(|k, _| column_ids.contains(k) && !self.dropped_top_n_columns.contains(k));
         }
+        if let Some(count_min_sketch) = &mut self.count_min_sketch {
+            count_min_sketch.retain(|k, _| column_ids.contains(k));
+        }
 
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
@@ -436,9 +447,14 @@ impl SinkAnalyzeState {
         });
 
         let has_top_n = self.top_n.as_ref().is_some_and(|top_n| !top_n.is_empty());
+        let has_count_min_sketch = self
+            .count_min_sketch
+            .as_ref()
+            .is_some_and(|count_min_sketch| !count_min_sketch.is_empty());
         let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()?
             || self.histogram_info.collect_statistics()
             || has_top_n
+            || has_count_min_sketch
         {
             let histograms = self
                 .histograms
@@ -457,6 +473,7 @@ impl SinkAnalyzeState {
             let stats = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
                 self.top_n.clone().unwrap_or_default(),
+                self.count_min_sketch.clone().unwrap_or_default(),
                 histograms,
                 self.snapshot_id,
                 self.row_count,
@@ -663,8 +680,8 @@ impl Processor for SinkAnalyzeState {
                                     top_n.remove(&column_id);
                                 }
                             }
+                            let dropped_top_n_columns = &self.dropped_top_n_columns;
                             if let Some(top_n_size) = self.top_n_size {
-                                let dropped_top_n_columns = &self.dropped_top_n_columns;
                                 match (&mut self.top_n, meta.top_n) {
                                     (Some(top_n), Some(mut meta_top_n)) => {
                                         meta_top_n.retain(|column_id, _| {
@@ -677,6 +694,18 @@ impl Processor for SinkAnalyzeState {
                                     }
                                     (None, Some(_)) => {}
                                 }
+                            }
+                            match (&mut self.count_min_sketch, meta.count_min_sketch) {
+                                (Some(count_min_sketch), Some(meta_count_min_sketch)) => {
+                                    merge_column_count_min_sketch_mut(
+                                        count_min_sketch,
+                                        meta_count_min_sketch,
+                                    );
+                                }
+                                (_, None) => {
+                                    self.count_min_sketch = None;
+                                }
+                                (None, Some(_)) => {}
                             }
                             self.row_count += meta.row_count;
                         }

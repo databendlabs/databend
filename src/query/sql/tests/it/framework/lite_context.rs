@@ -113,6 +113,7 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -201,7 +202,12 @@ type TableKey = (String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
 type HistogramStatsMap = HashMap<String, Histogram>;
-type TopNStatsMap = HashMap<String, ColumnTopN>;
+
+#[derive(Default)]
+pub(crate) struct FrequencyStatsMap {
+    pub(crate) top_n: HashMap<String, ColumnTopN>,
+    pub(crate) count_min_sketch: HashMap<String, ColumnCountMinSketch>,
+}
 
 #[derive(Clone)]
 struct DummyCatalog {
@@ -252,6 +258,7 @@ struct FakeTable {
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
     histograms: HashMap<ColumnId, Histogram>,
     top_n: HashMap<ColumnId, ColumnTopN>,
+    count_min_sketch: HashMap<ColumnId, ColumnCountMinSketch>,
 }
 
 #[derive(Debug, Clone)]
@@ -259,6 +266,7 @@ struct FakeColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
     histograms: HashMap<ColumnId, Histogram>,
     top_n: HashMap<ColumnId, ColumnTopN>,
+    count_min_sketch: HashMap<ColumnId, ColumnCountMinSketch>,
     num_rows: Option<u64>,
 }
 
@@ -291,6 +299,10 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
 
     fn top_n(&self, column_id: ColumnId) -> Option<ColumnTopN> {
         self.top_n.get(&column_id).cloned()
+    }
+
+    fn count_min_sketch(&self, column_id: ColumnId) -> Option<ColumnCountMinSketch> {
+        self.count_min_sketch.get(&column_id).cloned()
     }
 }
 
@@ -342,6 +354,7 @@ impl Table for FakeTable {
             column_stats: self.column_stats.clone(),
             histograms: self.histograms.clone(),
             top_n: self.top_n.clone(),
+            count_min_sketch: self.count_min_sketch.clone(),
             num_rows: self.table_stats.and_then(|stats| stats.num_rows),
         }))
     }
@@ -754,10 +767,14 @@ impl LiteTableContext {
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
-        top_n: TopNStatsMap,
+        frequency_stats: FrequencyStatsMap,
         options: BTreeMap<String, String>,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
+        let FrequencyStatsMap {
+            top_n,
+            count_min_sketch,
+        } = frequency_stats;
         let column_stats = column_stats
             .into_iter()
             .map(|(name, stats)| {
@@ -782,6 +799,14 @@ impl LiteTableContext {
                 Ok((column_id, top_n))
             })
             .collect::<Result<HashMap<_, _>>>()?;
+        let count_min_sketch = count_min_sketch
+            .into_iter()
+            .map(|(name, count_min_sketch)| {
+                let index = schema.index_of(&name)?;
+                let column_id = schema.field(index).column_id();
+                Ok((column_id, count_min_sketch))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
 
         let warehouse_distribution = *self.warehouse_distribution.read();
         let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
@@ -804,6 +829,7 @@ impl LiteTableContext {
             column_stats,
             histograms,
             top_n,
+            count_min_sketch,
         }))
     }
 
@@ -950,20 +976,20 @@ impl LiteTableContext {
         histograms: HistogramStatsMap,
         options: BTreeMap<String, String>,
     ) -> Result<()> {
-        self.register_table_with_stats_and_top_n(
+        self.register_table_with_stats_and_frequency_stats(
             database,
             table_name,
             fields,
             table_stats,
             column_stats,
             histograms,
-            HashMap::new(),
+            FrequencyStatsMap::default(),
             options,
         )
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn register_table_with_stats_and_top_n(
+    pub fn register_table_with_stats_and_frequency_stats(
         self: &Arc<Self>,
         database: &str,
         table_name: &str,
@@ -971,7 +997,7 @@ impl LiteTableContext {
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
-        top_n: TopNStatsMap,
+        frequency_stats: FrequencyStatsMap,
         options: BTreeMap<String, String>,
     ) -> Result<()> {
         let table = self.build_fake_table(
@@ -981,7 +1007,7 @@ impl LiteTableContext {
             table_stats,
             column_stats,
             histograms,
-            top_n,
+            frequency_stats,
             options,
         )?;
         self.default_catalog.insert_table(database, table);

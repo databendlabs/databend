@@ -6813,6 +6813,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde_json",
+ "siphasher 0.3.11",
  "snap",
  "typetag",
  "uuid",

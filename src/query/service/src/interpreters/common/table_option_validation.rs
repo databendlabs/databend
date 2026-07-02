@@ -47,9 +47,10 @@ use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_SIZE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
@@ -72,6 +73,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+pub use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
 pub use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use log::error;
 
@@ -116,8 +118,9 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
-    r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
     r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+    r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
 
@@ -177,8 +180,9 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
-    r.insert(OPT_KEY_ANALYZE_TOP_N_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
     r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+    r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
 
@@ -308,11 +312,11 @@ pub fn is_valid_approx_distinct_columns(
     Ok(())
 }
 
-pub fn is_valid_analyze_top_n_columns(
+pub fn is_valid_analyze_frequency_columns(
     options: &BTreeMap<String, String>,
     schema: TableSchemaRef,
 ) -> databend_common_exception::Result<()> {
-    if let Some(value) = options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS) {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
         ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
     }
     Ok(())
@@ -356,6 +360,12 @@ pub fn is_valid_analyze_top_n_size(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
     analyze_top_n_size_from_options(options).map(|_| ())
+}
+
+pub fn is_valid_analyze_count_min_sketch_error_rate(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    analyze_count_min_sketch_error_rate_from_options(options).map(|_| ())
 }
 
 pub fn is_valid_change_tracking(

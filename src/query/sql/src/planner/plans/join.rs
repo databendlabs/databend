@@ -581,6 +581,7 @@ impl Join {
                 precise_cardinality: None,
                 column_stats,
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }
@@ -1192,6 +1193,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1203,6 +1205,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1242,6 +1245,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1253,6 +1257,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 2.3333333333333335, true);
         let condition = JoinEquiCondition::new(
@@ -1292,6 +1297,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1303,6 +1309,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1342,6 +1349,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1353,6 +1361,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1393,6 +1402,7 @@ mod tests {
                     histogram: None,
                 })]),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         });
         let right_stat_info = Arc::new(StatInfo {
@@ -1407,6 +1417,7 @@ mod tests {
                     histogram: None,
                 })]),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         });
         let join = Join {
@@ -1441,6 +1452,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1452,6 +1464,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1494,6 +1507,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let right_statistics = Statistics {
             precise_cardinality: None,
@@ -1505,6 +1519,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
