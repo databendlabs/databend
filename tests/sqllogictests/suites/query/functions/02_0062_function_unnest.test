@@ -472,6 +472,12 @@ select unnest(parse_json('[1,2,"a",[3,4]]'))
 "a"
 [3,4]
 
+query T
+select unnest(try_parse_json('[1,2]'))
+----
+1
+2
+
 query ?
 select unnest(parse_json('"a"'))
 ----
@@ -505,6 +511,19 @@ SELECT distinct unnest(split(coalesce(NULL, 'a,b'), ',')) AS c1
 ----
 a
 b
+
+query I
+select unnest(if(true, [1,2,3], null))
+----
+1
+2
+3
+
+statement error 1065
+select unnest(try_cast(1 as int))
+
+statement error 1065
+select unnest(try_cast('hello' as varchar))
 
 statement error 1065
 select unnest(first_value('aa') OVER (PARTITION BY 'bb'))
