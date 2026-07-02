@@ -484,6 +484,8 @@ pub enum TokenKind {
     BOTH,
     #[token("BRANCH", ignore(ascii_case))]
     BRANCH,
+    #[token("BUCKETS", ignore(ascii_case))]
+    BUCKETS,
     #[token("BY", ignore(ascii_case))]
     BY,
     #[token("BROTLI", ignore(ascii_case))]
@@ -506,16 +508,26 @@ pub enum TokenKind {
     CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
+    #[token("CHANGE", ignore(ascii_case))]
+    CHANGE,
     #[token("CHANGES", ignore(ascii_case))]
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CLUSTERED", ignore(ascii_case))]
+    CLUSTERED,
+    #[token("COLLATE", ignore(ascii_case))]
+    COLLATE,
+    #[token("COLLECTION", ignore(ascii_case))]
+    COLLECTION,
     #[token("COMMENT", ignore(ascii_case))]
     COMMENT,
     #[token("COMMENTS", ignore(ascii_case))]
     COMMENTS,
     #[token("COMPACT", ignore(ascii_case))]
     COMPACT,
+    #[token("COMPUTE", ignore(ascii_case))]
+    COMPUTE,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
     #[token("CONNECTIONS", ignore(ascii_case))]
@@ -530,6 +542,8 @@ pub enum TokenKind {
     CURSOR,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
+    #[token("CHARSET", ignore(ascii_case))]
+    CHARSET,
     #[token("CHECK", ignore(ascii_case))]
     CHECK,
     #[token("CLOSE", ignore(ascii_case))]
@@ -618,6 +632,8 @@ pub enum TokenKind {
     DECLARE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
+    #[token("DELIMITED", ignore(ascii_case))]
+    DELIMITED,
     #[token("DEFLATE", ignore(ascii_case))]
     DEFLATE,
     #[token("DELETE", ignore(ascii_case))]
@@ -666,8 +682,14 @@ pub enum TokenKind {
     DYNAMIC,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
+    #[token("EXTERNAL", ignore(ascii_case))]
+    EXTERNAL,
+    #[token("EXTENDED", ignore(ascii_case))]
+    EXTENDED,
     #[token("EXCLUDE", ignore(ascii_case))]
     EXCLUDE,
+    #[token("ESCAPED", ignore(ascii_case))]
+    ESCAPED,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
@@ -676,6 +698,8 @@ pub enum TokenKind {
     ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
+    #[token("ENFORCED", ignore(ascii_case))]
+    ENFORCED,
     #[token("ENCODING", ignore(ascii_case))]
     ENCODING,
     #[token("ENCODING_ERROR_MODE", ignore(ascii_case))]
@@ -688,6 +712,8 @@ pub enum TokenKind {
     ENGINE,
     #[token("ENGINES", ignore(ascii_case))]
     ENGINES,
+    #[token("ENUM", ignore(ascii_case))]
+    ENUM,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
     #[token("YEARWEEK", ignore(ascii_case))]
@@ -743,14 +769,22 @@ pub enum TokenKind {
     FLOAT,
     #[token("FLOAT32", ignore(ascii_case))]
     FLOAT32,
+    #[token("FLOAT4", ignore(ascii_case))]
+    FLOAT4,
     #[token("FLOAT64", ignore(ascii_case))]
     FLOAT64,
+    #[token("FLOAT8", ignore(ascii_case))]
+    FLOAT8,
     #[token("FOR", ignore(ascii_case))]
     FOR,
+    #[token("FOREIGN", ignore(ascii_case))]
+    FOREIGN,
     #[token("FORCE", ignore(ascii_case))]
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FORMATTED", ignore(ascii_case))]
+    FORMATTED,
     #[token("FOLLOWING", ignore(ascii_case))]
     FOLLOWING,
     #[token("FORMAT_NAME", ignore(ascii_case))]
@@ -835,6 +869,8 @@ pub enum TokenKind {
     INDEX,
     #[token("INFORMATION", ignore(ascii_case))]
     INFORMATION,
+    #[token("INPUTFORMAT", ignore(ascii_case))]
+    INPUTFORMAT,
     #[token("INITIALIZE", ignore(ascii_case))]
     INITIALIZE,
     #[token("INNER", ignore(ascii_case))]
@@ -849,6 +885,10 @@ pub enum TokenKind {
     INT32,
     #[token("INT64", ignore(ascii_case))]
     INT64,
+    #[token("INT2", ignore(ascii_case))]
+    INT2,
+    #[token("INT4", ignore(ascii_case))]
+    INT4,
     #[token("INT8", ignore(ascii_case))]
     INT8,
     #[token("INTEGER", ignore(ascii_case))]
@@ -875,6 +915,8 @@ pub enum TokenKind {
     ISOWEEK,
     #[token("ISOYEAR", ignore(ascii_case))]
     ISOYEAR,
+    #[token("ITEMS", ignore(ascii_case))]
+    ITEMS,
     #[token("JOIN", ignore(ascii_case))]
     JOIN,
     #[token("JSON", ignore(ascii_case))]
@@ -899,6 +941,10 @@ pub enum TokenKind {
     LATERAL,
     #[token("LINEAR", ignore(ascii_case))]
     LINEAR,
+    #[token("LINES", ignore(ascii_case))]
+    LINES,
+    #[token("LOCATION", ignore(ascii_case))]
+    LOCATION,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
@@ -926,10 +972,14 @@ pub enum TokenKind {
     LET,
     #[token("LIKE", ignore(ascii_case))]
     LIKE,
+    #[token("ILIKE", ignore(ascii_case))]
+    ILIKE,
     #[token("LIMIT", ignore(ascii_case))]
     LIMIT,
     #[token("LIST", ignore(ascii_case))]
     LIST,
+    #[token("LOAD", ignore(ascii_case))]
+    LOAD,
     #[token("LOW", ignore(ascii_case))]
     LOW,
     #[token("LZO", ignore(ascii_case))]
@@ -1018,6 +1068,8 @@ pub enum TokenKind {
     ON_SCHEDULE,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
+    #[token("OPERATOR", ignore(ascii_case))]
+    OPERATOR,
     #[token("OPTIONS", ignore(ascii_case))]
     OPTIONS,
     #[token("OR", ignore(ascii_case))]
@@ -1028,6 +1080,8 @@ pub enum TokenKind {
     ORDER,
     #[token("OUTPUT_HEADER", ignore(ascii_case))]
     OUTPUT_HEADER,
+    #[token("OUTPUTFORMAT", ignore(ascii_case))]
+    OUTPUTFORMAT,
     #[token("OUTER", ignore(ascii_case))]
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]
@@ -1038,6 +1092,10 @@ pub enum TokenKind {
     OVERWRITE,
     #[token("PARTITION", ignore(ascii_case))]
     PARTITION,
+    #[token("PARTITIONED", ignore(ascii_case))]
+    PARTITIONED,
+    #[token("PARTITIONS", ignore(ascii_case))]
+    PARTITIONS,
     #[token("PROPERTIES", ignore(ascii_case))]
     PROPERTIES,
     #[token("PARQUET", ignore(ascii_case))]
@@ -1118,14 +1176,20 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("REFERENCES", ignore(ascii_case))]
+    REFERENCES,
     #[token("REFRESH", ignore(ascii_case))]
     REFRESH,
+    #[token("RELY", ignore(ascii_case))]
+    RELY,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("RESET", ignore(ascii_case))]
+    RESET,
     #[token("RETURN_FAILED_ONLY", ignore(ascii_case))]
     RETURN_FAILED_ONLY,
     #[token("REVERSE", ignore(ascii_case))]
@@ -1144,6 +1208,10 @@ pub enum TokenKind {
     UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
+    #[token("SERDE", ignore(ascii_case))]
+    SERDE,
+    #[token("SERDEPROPERTIES", ignore(ascii_case))]
+    SERDEPROPERTIES,
     #[token("ROWS", ignore(ascii_case))]
     ROWS,
     #[token("ROW_TAG", ignore(ascii_case))]
@@ -1180,6 +1248,8 @@ pub enum TokenKind {
     RETURNS,
     #[token("RESULTSET", ignore(ascii_case))]
     RESULTSET,
+    #[token("RCFILE", ignore(ascii_case))]
+    RCFILE,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
@@ -1282,6 +1352,8 @@ pub enum TokenKind {
     SEQUENCE,
     #[token("SEQUENCES", ignore(ascii_case))]
     SEQUENCES,
+    #[token("SEQUENCEFILE", ignore(ascii_case))]
+    SEQUENCEFILE,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]
@@ -1294,10 +1366,14 @@ pub enum TokenKind {
     STATUS,
     #[token("STORED", ignore(ascii_case))]
     STORED,
+    #[token("SORTED", ignore(ascii_case))]
+    SORTED,
     #[token("STREAM", ignore(ascii_case))]
     STREAM,
     #[token("STREAMS", ignore(ascii_case))]
     STREAMS,
+    #[token("STRUCT", ignore(ascii_case))]
+    STRUCT,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -1330,6 +1406,8 @@ pub enum TokenKind {
     TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,
+    #[token("TEXTFILE", ignore(ascii_case))]
+    TEXTFILE,
     #[token("LONGTEXT", ignore(ascii_case))]
     LONGTEXT,
     #[token("MEDIUMTEXT", ignore(ascii_case))]
@@ -1342,6 +1420,8 @@ pub enum TokenKind {
     TENANTS,
     #[token("TENANT", ignore(ascii_case))]
     TENANT,
+    #[token("TERMINATED", ignore(ascii_case))]
+    TERMINATED,
     #[token("THEN", ignore(ascii_case))]
     THEN,
     #[token("THROW", ignore(ascii_case))]
@@ -1354,6 +1434,8 @@ pub enum TokenKind {
     TIMESTAMP,
     #[token("TIMESTAMP_TZ", ignore(ascii_case))]
     TIMESTAMP_TZ,
+    #[token("TIMESTAMPLOCALTZ", ignore(ascii_case))]
+    TIMESTAMPLOCALTZ,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
     TIMEZONE_HOUR,
     #[token("TIMEZONE_MINUTE", ignore(ascii_case))]
@@ -1370,6 +1452,8 @@ pub enum TokenKind {
     TRAILING,
     #[token("TRANSIENT", ignore(ascii_case))]
     TRANSIENT,
+    #[token("TRANSACTIONAL", ignore(ascii_case))]
+    TRANSACTIONAL,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
     #[token("TRIM_SPACE", ignore(ascii_case))]
@@ -1380,6 +1464,8 @@ pub enum TokenKind {
     TRUNCATE,
     #[token("TRY_CAST", ignore(ascii_case))]
     TRY_CAST,
+    #[token("TBLPROPERTIES", ignore(ascii_case))]
+    TBLPROPERTIES,
     #[token("TSV", ignore(ascii_case))]
     TSV,
     #[token("TUESDAY", ignore(ascii_case))]
@@ -1392,6 +1478,8 @@ pub enum TokenKind {
     UNBOUNDED,
     #[token("UNION", ignore(ascii_case))]
     UNION,
+    #[token("UNIONTYPE", ignore(ascii_case))]
+    UNIONTYPE,
     #[token("UINT16", ignore(ascii_case))]
     UINT16,
     #[token("UINT32", ignore(ascii_case))]

@@ -166,6 +166,13 @@ impl Binder {
         stmt: &Statement,
     ) -> Result<Plan> {
         let plan = match stmt {
+            Statement::Unsupported {
+                unsupported_type, ..
+            } => {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Unsupported SQL statement: {unsupported_type}"
+                )));
+            }
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 

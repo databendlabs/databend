@@ -3119,7 +3119,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists t_constraints (a int check (a > 0), b int, constraint b_nonzero check (b <> 0));
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS t_constraints (a Int32 CHECK (a > 0), b Int32, CONSTRAINT b_nonzero CHECK (b <> 0))
+CREATE TABLE IF NOT EXISTS t_constraints (a Int32 CHECK (a > 0), b Int32, constraint STRING CHECK (b <> 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -3201,6 +3201,55 @@ CreateTable(
                         comment: None,
                         stats_truncate_len: None,
                     },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                70..80,
+                            ),
+                            name: "constraint",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: String,
+                        expr: None,
+                        check: Some(
+                            BinaryOp {
+                                span: Some(
+                                    100..102,
+                                ),
+                                op: NotEq,
+                                left: ColumnRef {
+                                    span: Some(
+                                        98..99,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    98..99,
+                                                ),
+                                                name: "b",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        103..104,
+                                    ),
+                                    value: UInt64(
+                                        0,
+                                    ),
+                                },
+                            },
+                        ),
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
                 ],
                 opt_table_indexes: None,
                 opt_column_constraints: Some(
@@ -3243,21 +3292,8 @@ CreateTable(
                                 },
                             ),
                         },
-                    ],
-                ),
-                opt_table_constraints: Some(
-                    [
                         ConstraintDefinition {
-                            name: Some(
-                                Identifier {
-                                    span: Some(
-                                        81..90,
-                                    ),
-                                    name: "b_nonzero",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
+                            name: None,
                             constraint_type: Check(
                                 BinaryOp {
                                     span: Some(
@@ -3296,6 +3332,7 @@ CreateTable(
                         },
                     ],
                 ),
+                opt_table_constraints: None,
             },
         ),
         engine: None,

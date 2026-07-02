@@ -77,11 +77,15 @@ CREATE TABLE test_val(val INT)
 statement ok
 INSERT INTO test_val VALUES(1), (2), (3), (3), (2)
 
-statement error 1005
+query T
 SELECT STRING_AGG(DISTINCT val ORDER BY val DESC) from test_val
+----
+132
 
-statement error 1005
+query IT
 SELECT COUNT(NULL), STRING_AGG(DISTINCT val ORDER BY val ASC) from test_val
+----
+0 132
 
 
 statement ok

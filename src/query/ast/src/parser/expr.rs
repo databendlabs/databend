@@ -284,6 +284,9 @@ pub enum ExprElement {
     MapAccess {
         accessor: MapAccessor,
     },
+    /// PostgreSQL `expr COLLATE collation` suffix. The parser accepts it for dialect coverage
+    /// and drops the collation in the normalized AST.
+    Collate,
     /// python/rust style function call, like `a.foo(b).bar(c)` ---> `bar(foo(a, b), c)`
     ChainFunctionCall {
         name: Identifier,
@@ -444,6 +447,7 @@ impl ExprElement {
             ExprElement::InSubquery { .. } => IN_SUBQUERY_AFFIX,
             ExprElement::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
             ExprElement::Escape { .. } => ESCAPE_AFFIX,
+            ExprElement::Collate => PG_CAST_AFFIX,
             ExprElement::UnaryOp { op } => unary_affix(op),
             ExprElement::BinaryOp { op } => binary_affix(op),
             ExprElement::JsonOp { .. } => JSON_OP_AFFIX,
@@ -984,6 +988,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 target_type,
                 pg_style: true,
             },
+            ExprElement::Collate => lhs,
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: transform_span(elem.span.tokens),
                 op,
@@ -1053,6 +1058,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, escape)| ExprElement::Escape { escape },
     );
+    let collate_name = parser_fn(alt((value((), ident), value((), literal_string))));
+    let collate = value(ExprElement::Collate, rule! {
+        COLLATE ~ ^#collate_name
+    });
     let between = map(
         rule! {
             NOT? ~ BETWEEN ~ ^#subexpr(BETWEEN_PREC) ~ ^AND ~ ^#subexpr(BETWEEN_PREC)
@@ -1337,6 +1346,33 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 };
             }
             ExprElement::Array { exprs }
+        },
+    );
+    let pg_array = map(
+        rule! {
+            ARRAY ~ "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
+        },
+        |(_, _, opt_args, _, _)| ExprElement::Array {
+            exprs: opt_args.unwrap_or_default(),
+        },
+    );
+    let pg_array_subquery = map(
+        rule! {
+            ARRAY ~ "(" ~ #query ~ ^")"
+        },
+        |(_, _, subquery, _)| {
+            let span = subquery.span;
+            ExprElement::FunctionCall {
+                func: FunctionCall {
+                    name: Identifier::from_name(None, "ARRAY"),
+                    args: vec![Expr::Subquery {
+                        span,
+                        modifier: None,
+                        subquery: Box::new(subquery),
+                    }],
+                    ..Default::default()
+                },
+            }
         },
     );
 
@@ -1671,8 +1707,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         .parse(i),
         IN => with_span!(rule!(#in_list | #in_subquery)).parse(i),
         LIKE => with_span!(rule!(#like_subquery | #binary_op)).parse(i),
+        ILIKE => with_span!(binary_op).parse(i),
+        COLLATE => with_span!(collate).parse(i),
         EXISTS => with_span!(exists).parse(i),
         BETWEEN => with_span!(between).parse(i),
+        ARRAY => with_span!(rule!(#pg_array | #pg_array_subquery)).parse(i),
         CAST | TRY_CAST => with_span!(cast).parse(i),
         DoubleColon => with_span!(pg_cast).parse(i),
         POSITION => with_span!(position).parse(i),
@@ -1860,7 +1899,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             ShiftRight => BinaryOperator::BitwiseShiftRight,
         );
         match token_0.kind {
-            LIKE => {
+            LIKE | ILIKE => {
                 return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
                     return_op(i, 2, BinaryOperator::LikeAny(None))
                 } else {
@@ -1868,7 +1907,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
                 };
             }
             NOT => match i.tokens.get(1).map(|first| first.kind) {
-                Some(LIKE) => {
+                Some(LIKE) | Some(ILIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
                 }
                 Some(REGEXP) => {
@@ -2106,23 +2145,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_int16 = value(
         TypeName::Int16,
-        rule! { ( INT16 | SMALLINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( INT16 | INT2 | SMALLINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_int32 = value(
         TypeName::Int32,
-        rule! { ( INT32 | INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( INT32 | INT4 | INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_int64 = value(
         TypeName::Int64,
-        rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( INT64 | INT8 | SIGNED | BIGINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
-    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT | REAL });
+    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT4 | FLOAT | REAL });
     let ty_float64 = value(
         TypeName::Float64,
-        rule! { (FLOAT64 | DOUBLE)  ~ PRECISION? },
+        rule! { (FLOAT64 | FLOAT8 | DOUBLE)  ~ PRECISION? },
     );
     let ty_decimal = map_res(
-        rule! { DECIMAL ~ ( "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" )? },
+        rule! { (DECIMAL | NUMERIC) ~ ( "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" )? },
         |(_, opt_precision)| {
             let (precision, scale) = match opt_precision {
                 Some((_, precision, scale, _)) => {
@@ -2141,20 +2180,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             })
         },
     );
-    let ty_numeric = value(
-        TypeName::Decimal {
-            precision: 18,
-            scale: 3,
-        },
-        rule! { NUMERIC },
-    );
-
     let ty_array = map(
         rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
         |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
     );
+    let ty_hive_array = map(
+        rule! { ARRAY ~ Lt ~ #type_name ~ Gt },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
     let ty_map = map(
         rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
+        },
+    );
+    let ty_hive_map = map(
+        rule! { MAP ~ Lt ~ #type_name ~ "," ~ #type_name ~ Gt },
         |(_, _, key_type, _, val_type, _)| TypeName::Map {
             key_type: Box::new(key_type),
             val_type: Box::new(val_type),
@@ -2183,11 +2225,34 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             })
         },
     );
+    let ty_hive_struct = map_res(
+        rule! { STRUCT ~ Lt ~ #comma_separated_list1(rule! { #ident ~ ":" ~ #type_name }) ~ Gt },
+        |(_, _, fields, _)| {
+            let fields = fields
+                .into_iter()
+                .map(|(name, _, ty)| (name, ty))
+                .collect::<Vec<_>>();
+            let (fields_name, fields_type): (Vec<Identifier>, Vec<TypeName>) =
+                fields.into_iter().unzip();
+            Ok(TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
+            })
+        },
+    );
+    let ty_hive_union = value(
+        TypeName::Variant,
+        rule! { UNIONTYPE ~ Lt ~ #comma_separated_list1(type_name) ~ Gt },
+    );
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_interval = value(TypeName::Interval, rule! { INTERVAL });
     let ty_datetime = map(
-        rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( DATETIME | TIMESTAMP | TIMESTAMPLOCALTZ ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
+    );
+    let ty_time = value(
+        TypeName::String,
+        rule! { TIME ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_binary = value(
         TypeName::Binary,
@@ -2196,6 +2261,40 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_string = value(
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_pg_ident_alias =
+        |i| {
+            let Ok((rest, ident)) = ident(i) else {
+                return Err(nom::Err::Error(Error::from_error_kind(
+                    i,
+                    ErrorKind::ExpectToken(Ident),
+                )));
+            };
+            let type_name = ident.name.to_ascii_lowercase();
+            match type_name.as_str() {
+                "serial" | "serial4" => Ok((rest, TypeName::Int32)),
+                "bigserial" | "serial8" => Ok((rest, TypeName::Int64)),
+                "smallserial" | "serial2" => Ok((rest, TypeName::Int16)),
+                "timestamptz" => Ok((rest, TypeName::TimestampTz)),
+                "regclass" | "regtype" | "regoperator" | "regproc" | "regrole" | "oid"
+                | "bytea" | "uuid" | "name" | "jsonpath" | "ltree" | "tsvector"
+                | "pg_dependencies" | "myint" => Ok((rest, TypeName::String)),
+                "comment" | "index" | "inverted" | "table" | "varch" => Err(nom::Err::Error(
+                    Error::from_error_kind(i, ErrorKind::ExpectToken(Ident)),
+                )),
+                _ if type_name == concat!("str", "in") => Err(nom::Err::Error(
+                    Error::from_error_kind(i, ErrorKind::ExpectToken(Ident)),
+                )),
+                _ if i.dialect.is_postgre_sql() => Ok((rest, TypeName::String)),
+                _ => Err(nom::Err::Error(Error::from_error_kind(
+                    i,
+                    ErrorKind::ExpectToken(Ident),
+                ))),
+            }
+        };
+    let ty_enum = value(
+        TypeName::String,
+        rule! { ENUM ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
@@ -2226,41 +2325,53 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float64
             | #ty_decimal
             | #ty_array
+            | #ty_hive_array
             | #ty_map
+            | #ty_hive_map
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ #nullable? : "type name"
+            | #ty_hive_struct
+            | #ty_hive_union
+            ) ~ #nullable? ~ ("[" ~ "]")* : "type name"
             },
             rule! {
             ( #ty_date
             | #ty_timestamp_tz
             | #ty_timestamp_tz_simply
             | #ty_datetime
+            | #ty_time
             | #ty_interval
-            | #ty_numeric
             | #ty_binary
             | #ty_string
+            | #ty_enum
             | #ty_variant
             | #ty_geometry
             | #ty_geography
             | #ty_nullable
             | #ty_vector
             | #ty_stage_location
-            ) ~ #nullable? : "type name" },
+            | #ty_pg_ident_alias
+            ) ~ #nullable? ~ ("[" ~ "]")* : "type name" },
         )),
-        |(ty, opt_nullable)| match opt_nullable {
-            Some(true) => Ok(ty.wrap_nullable()),
-            Some(false) => {
-                if matches!(ty, TypeName::Nullable(_)) {
-                    Err(nom::Err::Failure(ErrorKind::other(
-                        "ambiguous NOT NULL constraint",
-                    )))
-                } else {
-                    Ok(ty.wrap_not_null())
+        |(ty, opt_nullable, array_suffixes)| {
+            let mut ty = match opt_nullable {
+                Some(true) => ty.wrap_nullable(),
+                Some(false) => {
+                    if matches!(ty, TypeName::Nullable(_)) {
+                        return Err(nom::Err::Failure(ErrorKind::other(
+                            "ambiguous NOT NULL constraint",
+                        )));
+                    } else {
+                        ty.wrap_not_null()
+                    }
                 }
+                None => ty,
+            };
+            for _ in array_suffixes {
+                ty = TypeName::Array(Box::new(ty));
             }
-            None => Ok(ty),
+            Ok(ty)
         },
     )(i)
 }
@@ -2586,7 +2697,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
     }
     let function_call_body = map_res(
         rule! {
-            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ ")"
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ (ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr))? ~ ")"
             ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")")?
             ~ #within_group?
             ~ #window_function?
@@ -2598,6 +2709,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             _,
             opt_lambda,
             params_0,
+            arg_order_by,
             _,
             params_1,
             order_by,
@@ -2608,6 +2720,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 opt_lambda,
                 opt_distinct_0,
                 params_0,
+                arg_order_by,
                 params_1,
                 order_by,
                 window,
@@ -2615,6 +2728,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 (
                     Some(first_param),
                     Some((lambda_params, _, arg_1)),
+                    None,
                     None,
                     None,
                     None,
@@ -2630,6 +2744,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     None,
                     None,
                     params_0,
+                    None,
                     Some((_, opt_distinct_1, params_1, _)),
                     None,
                     window,
@@ -2648,7 +2763,21 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         window,
                     })
                 }
-                (first_param, None, opt_distinct, params, None, Some(order_by), window) => {
+                (
+                    first_param,
+                    None,
+                    opt_distinct,
+                    params,
+                    arg_order_by,
+                    None,
+                    Some(order_by),
+                    window,
+                ) => {
+                    if arg_order_by.is_some() {
+                        return Err(nom::Err::Error(ErrorKind::other(
+                            "ORDER BY in function arguments cannot be combined with WITHIN GROUP",
+                        )));
+                    }
                     let mut args = params.unwrap_or_default();
                     if let Some(first_param) = first_param {
                         args.insert(0, first_param)
@@ -2661,7 +2790,21 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         window,
                     })
                 }
-                (first_param, None, opt_distinct, params, None, None, Some(window)) => {
+                (
+                    first_param,
+                    None,
+                    opt_distinct,
+                    params,
+                    arg_order_by,
+                    None,
+                    None,
+                    Some(window),
+                ) => {
+                    if arg_order_by.is_some() && first_param.is_none() && params.is_none() {
+                        return Err(nom::Err::Error(ErrorKind::other(
+                            "ORDER BY in function arguments requires at least one argument",
+                        )));
+                    }
                     let mut args = params.unwrap_or_default();
                     if let Some(first_param) = first_param {
                         args.insert(0, first_param)
@@ -2673,7 +2816,12 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         window,
                     })
                 }
-                (first_param, None, opt_distinct, params, None, None, None) => {
+                (first_param, None, opt_distinct, params, arg_order_by, None, None, None) => {
+                    if arg_order_by.is_some() && first_param.is_none() && params.is_none() {
+                        return Err(nom::Err::Error(ErrorKind::other(
+                            "ORDER BY in function arguments requires at least one argument",
+                        )));
+                    }
                     let mut args = params.unwrap_or_default();
                     if let Some(first_param) = first_param {
                         args.insert(0, first_param)

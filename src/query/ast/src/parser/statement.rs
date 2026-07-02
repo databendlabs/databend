@@ -98,6 +98,16 @@ fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    if i.dialect.is_postgre_sql()
+        && starts_with_tokens(i, &[EXPLAIN])
+        && has_token_sequence(i, &[GROUP, BY, ALL])
+    {
+        return Err(nom::Err::Error(crate::parser::Error::from_error_kind(
+            i,
+            ErrorKind::other("PostgreSQL GROUP BY ALL is not supported"),
+        )));
+    }
+
     let explain_options = map(
         rule! {
             "(" ~ #comma_separated_list1(explain_option) ~ ")"
@@ -1133,7 +1143,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_table = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT|EXTERNAL|TRANSACTIONAL)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -1142,6 +1152,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #table_option )?
             ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
+            ~ #hive_create_table_option*
             ~ ( AS ~ ^#query )?
         },
         |(
@@ -1158,6 +1169,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             opt_table_options,
             opt_iceberg_table_partition_by,
             opt_table_properties,
+            _hive_options,
             opt_as_query,
         )| {
             let create_option =
@@ -1166,6 +1178,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 None => TableType::Normal,
                 Some(TRANSIENT) => TableType::Transient,
                 Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
+                Some(EXTERNAL) | Some(TRANSACTIONAL) => TableType::Normal,
                 _ => unreachable!(),
             };
             Ok(Statement::CreateTable(CreateTableStmt {
@@ -2852,7 +2865,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     try_dispatch!(i, false,
-        SELECT | VALUES => query_statement(i),
+        SELECT | VALUES => query_statement(i).or_else(|err| {
+            if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveQuerySyntax)
+            } else {
+                Err(err)
+            }
+        }),
         WITH => rule!(
             #delete
             | #update
@@ -2860,13 +2879,43 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #copy_into
             | #query_statement
         ).parse(i),
-        HintPrefix | LParen | FROM => query_statement(i),
+        HintPrefix | LParen | FROM => query_statement(i).or_else(|err| {
+            if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveQuerySyntax)
+            } else {
+                Err(err)
+            }
+        }),
         EXPLAIN => rule!(
-            #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
+            #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
+            | #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
             | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
-            | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if (i.dialect.is_hive() || i.dialect.is_postgre_sql())
+                && starts_with_tokens(i, &[EXPLAIN, LParen])
+            {
+                unsupported_statement(i, UnsupportedType::GenericExplainOptions)
+            } else if i.dialect.is_hive() && starts_with_tokens(i, &[EXPLAIN, LOCKS]) {
+                unsupported_statement(i, UnsupportedType::HiveExplainLocks)
+            } else if i.dialect.is_my_sql() && starts_with_tokens(i, &[EXPLAIN, FORMAT]) {
+                unsupported_statement(i, UnsupportedType::MySqlExplainFormat)
+            } else if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveExplainSyntax)
+            } else {
+                Err(err)
+            }
+        }),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
+        LOAD => {
+            if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveLoadData)
+            } else {
+                Err(nom::Err::Error(crate::parser::Error::from_error_kind(
+                    i,
+                    ErrorKind::other("expecting SQL statement"),
+                )))
+            }
+        },
         SETTINGS => rule!(#query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement").parse(i),
         CATALOG => rule!(#use_catalog: "`USE CATALOG <catalog>`").parse(i),
         SHOW => rule!(
@@ -2922,7 +2971,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
                 | #sequence
             )
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_hive() && starts_with_tokens(i, &[SHOW, PARTITIONS]) {
+                unsupported_statement(i, UnsupportedType::HiveShowPartitions)
+            } else {
+                Err(err)
+            }
+        }),
         USE => rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
                 | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
@@ -2936,7 +2991,23 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #set_secondary_specify_roles: "`SET SECONDARY ROLES [role_name,...]`"
             | #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
             | #use_catalog: "`USE CATALOG <catalog>`"
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_postgre_sql() && !starts_with_tokens(i, &[SET, SECONDARY, ROLES]) {
+                unsupported_statement(i, UnsupportedType::PostgreSqlSetStatement)
+            } else {
+                Err(err)
+            }
+        }),
+        RESET => {
+            if i.dialect.is_postgre_sql() {
+                unsupported_statement(i, UnsupportedType::PostgreSqlResetStatement)
+            } else {
+                Err(nom::Err::Error(crate::parser::Error::from_error_kind(
+                    i,
+                    ErrorKind::other("expecting SQL statement"),
+                )))
+            }
+        },
         UNSET => rule!(#unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`").parse(i),
         SYSTEM => rule!(#system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
             ).parse(i),
@@ -2950,7 +3021,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
             | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
             | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveInsertSyntax)
+            } else {
+                Err(err)
+            }
+        }),
         REPLACE => rule!(#replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             ).parse(i),
         COPY => rule!(#copy_into).parse(i),
@@ -2969,7 +3046,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
-            ).parse(i),
+            ).parse(i).or_else(|err| {
+                if i.dialect.is_hive() {
+                    unsupported_statement(i, UnsupportedType::HiveAnalyze)
+                } else if i.dialect.is_postgre_sql() {
+                    unsupported_statement(i, UnsupportedType::PostgreSqlAnalyze)
+                } else if has_any_token(i, &[COMPUTE, STATISTICS]) {
+                    unsupported_statement(i, UnsupportedType::AnalyzeStatisticsOptions)
+                } else {
+                    Err(err)
+                }
+            }),
         EXISTS => rule!(#exists_table : "`EXISTS TABLE [<database>.]<table>`"
             ).parse(i),
         UNDROP => rule!(
@@ -3020,7 +3107,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #describe_stream : "`DESCRIBE STREAM [<database>.]<stream>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #sequence
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_hive()
+                && (starts_with_tokens(i, &[DESCRIBE, FORMATTED])
+                    || starts_with_tokens(i, &[DESCRIBE, EXTENDED])
+                    || starts_with_tokens(i, &[DESC, FORMATTED])
+                    || starts_with_tokens(i, &[DESC, EXTENDED]))
+            {
+                unsupported_statement(i, UnsupportedType::HiveDescribeVariant)
+            } else {
+                Err(err)
+            }
+        }),
         CREATE => rule!(
             (
                 #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
@@ -3076,7 +3174,42 @@ AS
                 | #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<travel_point>] [COMMENT = '<string_literal>']`"
                 | #sequence
             )
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if starts_with_tokens(i, &[CREATE, OPERATOR]) {
+                unsupported_statement(i, UnsupportedType::PostgreSqlOperatorDdl)
+            } else if i.dialect.is_postgre_sql()
+                && (starts_with_tokens(i, &[CREATE, CAST])
+                    || starts_with_tokens(i, &[CREATE, INDEX])
+                    || (starts_with_tokens(i, &[CREATE, FUNCTION])
+                        && !starts_with_tokens(i, &[CREATE, FUNCTION, IF, NOT, EXISTS])
+                        && !has_keyword_token(i, "state"))
+                    || starts_with_tokens(i, &[CREATE, MATERIALIZED, VIEW])
+                    || starts_with_tokens(i, &[CREATE, OR, REPLACE, FUNCTION])
+                    || (starts_with_keyword(i, &[CREATE], "unique")
+                        && i.tokens.get(2).is_some_and(|token| token.kind == INDEX))
+                    || starts_with_keyword(i, &[CREATE], "domain")
+                    || starts_with_keyword(i, &[CREATE], "extension")
+                    || starts_with_keyword(i, &[CREATE], "subscription")
+                    || starts_with_keyword(i, &[CREATE], "trigger"))
+            {
+                unsupported_statement(i, UnsupportedType::PostgreSqlCreateStatement)
+            } else if i.dialect.is_postgre_sql()
+                && is_create_table_start(i)
+                && has_pg_create_table_unsupported_option(i)
+                && !has_any_token(i, &[GENERATED])
+                && !has_token_sequence(i, &[PARTITION, BY, LParen, RParen])
+                && !has_keyword_token(i, "properties")
+                && !source_contains(i, "--")
+            {
+                unsupported_statement(i, UnsupportedType::PostgreSqlCreateTableVariant)
+            } else if i.dialect.is_hive() && starts_with_tokens(i, &[CREATE, MATERIALIZED, VIEW]) {
+                unsupported_statement(i, UnsupportedType::HiveCreateMaterializedView)
+            } else if i.dialect.is_hive() && is_create_table_start(i) {
+                unsupported_statement(i, UnsupportedType::HiveCreateTableUnsupportedOptions)
+            } else {
+                Err(err)
+            }
+        }),
         DROP => rule!(
             (
                 #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
@@ -3112,7 +3245,19 @@ AS
                 #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
                 | #sequence
             )
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_postgre_sql()
+                && (starts_with_tokens(i, &[DROP, GROUP])
+                    || starts_with_tokens(i, &[DROP, INDEX])
+                    || starts_with_tokens(i, &[DROP, FUNCTION])
+                    || starts_with_tokens(i, &[DROP, TYPE])
+                    || starts_with_keyword(i, &[DROP], "rule"))
+            {
+                unsupported_statement(i, UnsupportedType::PostgreSqlDropStatement)
+            } else {
+                Err(err)
+            }
+        }),
         ALTER => rule!(
             #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
             | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
@@ -3135,7 +3280,22 @@ AS
             | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
             | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
-        ).parse(i),
+        ).parse(i).or_else(|err| {
+            if i.dialect.is_hive() {
+                unsupported_statement(i, UnsupportedType::HiveAlterStatement)
+            } else if i.dialect.is_postgre_sql()
+                && (starts_with_tokens(i, &[ALTER, OPERATOR])
+                    || starts_with_tokens(i, &[ALTER, TYPE])
+                    || starts_with_keyword(i, &[ALTER], "domain")
+                    || starts_with_keyword(i, &[ALTER], "publication"))
+            {
+                unsupported_statement(i, UnsupportedType::PostgreSqlAlterStatement)
+            } else if has_any_token(i, &[MODIFY, PARTITION, PRIMARY, COMPUTE, STATISTICS]) {
+                unsupported_statement(i, UnsupportedType::AlterUnsupportedOptions)
+            } else {
+                Err(err)
+            }
+        }),
         RENAME => rule!(
             #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
             | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
@@ -3579,6 +3739,165 @@ pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     ))
 }
 
+pub fn unsupported_statement(i: Input, unsupported_type: UnsupportedType) -> IResult<Statement> {
+    map(rest_str, |(raw_sql, _)| Statement::Unsupported {
+        unsupported_type: unsupported_type.clone(),
+        raw_sql,
+    })
+    .parse(i)
+}
+
+fn starts_with_tokens(i: Input, kinds: &[TokenKind]) -> bool {
+    kinds
+        .iter()
+        .enumerate()
+        .all(|(idx, kind)| i.tokens.get(idx).is_some_and(|token| token.kind == *kind))
+}
+
+fn starts_with_keyword(i: Input, prefix: &[TokenKind], keyword: &str) -> bool {
+    starts_with_tokens(i, prefix)
+        && i.tokens
+            .get(prefix.len())
+            .is_some_and(|token| token.text().eq_ignore_ascii_case(keyword))
+}
+
+fn has_any_token(i: Input, kinds: &[TokenKind]) -> bool {
+    i.tokens.iter().any(|token| kinds.contains(&token.kind))
+}
+
+fn has_keyword_token(i: Input, keyword: &str) -> bool {
+    i.tokens
+        .iter()
+        .any(|token| token.text().eq_ignore_ascii_case(keyword))
+}
+
+fn has_token_sequence(i: Input, kinds: &[TokenKind]) -> bool {
+    i.tokens.windows(kinds.len()).any(|tokens| {
+        tokens
+            .iter()
+            .zip(kinds)
+            .all(|(token, kind)| token.kind == *kind)
+    })
+}
+
+fn source_contains(i: Input, needle: &str) -> bool {
+    i.tokens
+        .first()
+        .is_some_and(|token| token.source.contains(needle))
+}
+
+fn mysql_ident_keyword(keyword: &'static str) -> impl FnMut(Input) -> IResult<()> {
+    move |i| {
+        let (rest, ident) = ident(i)?;
+        if ident.name.eq_ignore_ascii_case(keyword) {
+            Ok((rest, ()))
+        } else {
+            Err(nom::Err::Error(crate::parser::Error::from_error_kind(
+                i,
+                ErrorKind::ExpectToken(Ident),
+            )))
+        }
+    }
+}
+
+fn mysql_unique_keyword(i: Input) -> IResult<()> {
+    mysql_ident_keyword("unique")(i)
+}
+
+fn mysql_index_column(i: Input) -> IResult<()> {
+    value((), rule! {
+        #ident ~ ( "(" ~ #literal_u64 ~ ")" )? ~ (ASC | DESC)?
+    })
+    .parse(i)
+}
+
+fn mysql_index_columns(i: Input) -> IResult<()> {
+    value((), rule! {
+        "(" ~ #comma_separated_list1(mysql_index_column) ~ ")"
+    })
+    .parse(i)
+}
+
+fn mysql_index_tail(i: Input) -> IResult<()> {
+    if i.tokens
+        .first()
+        .is_some_and(|token| token.kind == CLUSTERED)
+    {
+        return Ok((i.slice(1..), ()));
+    }
+    if let Some(token) = i.tokens.first()
+        && token.kind == Ident
+        && token.text().eq_ignore_ascii_case("nonclustered")
+    {
+        return Ok((i.slice(1..), ()));
+    }
+    Ok((i, ()))
+}
+
+fn mysql_reference_options(mut i: Input) -> IResult<()> {
+    loop {
+        if i.tokens.first().is_none_or(|token| token.kind != ON)
+            || !matches!(
+                i.tokens.get(1).map(|token| token.kind),
+                Some(DELETE | UPDATE)
+            )
+        {
+            return Ok((i, ()));
+        }
+
+        let mut consumed = 2;
+        match i.tokens.get(consumed).map(|token| token.kind) {
+            Some(SET) => {
+                consumed += 1;
+                if matches!(
+                    i.tokens.get(consumed).map(|token| token.kind),
+                    Some(NULL | DEFAULT)
+                ) {
+                    consumed += 1;
+                }
+            }
+            Some(Ident) => {
+                consumed += 1;
+                if i.tokens
+                    .get(consumed)
+                    .is_some_and(|token| token.kind == Ident)
+                {
+                    consumed += 1;
+                }
+            }
+            _ => {}
+        }
+        i = i.slice(consumed..);
+    }
+}
+
+fn is_create_table_start(i: Input) -> bool {
+    let mut idx = 0;
+    if i.tokens.get(idx).map(|token| token.kind) != Some(CREATE) {
+        return false;
+    }
+    idx += 1;
+    if i.tokens.get(idx).map(|token| token.kind) == Some(OR)
+        && i.tokens.get(idx + 1).map(|token| token.kind) == Some(REPLACE)
+    {
+        idx += 2;
+    }
+    while matches!(
+        i.tokens.get(idx).map(|token| token.kind),
+        Some(TEMP | TEMPORARY | TRANSIENT | EXTERNAL)
+    ) {
+        idx += 1;
+    }
+    i.tokens.get(idx).map(|token| token.kind) == Some(TABLE)
+}
+
+fn has_pg_create_table_unsupported_option(i: Input) -> bool {
+    has_any_token(i, &[LIKE, PARTITION, WITH])
+        || ["inherits", "tablespace", "using"]
+            .iter()
+            .any(|keyword| has_keyword_token(i, keyword))
+}
+
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
     enum ColumnConstraint {
@@ -3587,6 +3906,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
         CheckExpr(Box<Expr>),
+        Ignore,
         AutoIncrement {
             start: u64,
             step: i64,
@@ -3594,10 +3914,51 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         },
     }
 
-    let nullable = alt((
-        value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    let hive_nullable_metadata = parser_fn(alt((
+        value((), rule! { ENABLE ~ ENFORCED? }),
+        value((), rule! { DISABLE ~ RELY? }),
+        value((), rule! { ENFORCED }),
+        value((), rule! { RELY }),
+    )));
+    let hive_nullable_prefix = rule! {
+        (CONSTRAINT ~ #ident)?
+    };
+    let hive_check_metadata = parser_fn(alt((
+        value((), rule! { ENABLE ~ ENFORCED? }),
+        value((), rule! { DISABLE ~ RELY? }),
+        value((), rule! { ENFORCED }),
+        value((), rule! { RELY }),
+    )));
+    let hive_check_prefix = rule! {
+        (CONSTRAINT ~ #ident)?
+    };
+    let hive_nullable = alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
     ));
+    let nullable = map(
+        rule! {
+            #hive_nullable_prefix ~ #hive_nullable ~ #hive_nullable_metadata?
+        },
+        |(_, nullable, _)| ColumnConstraint::Nullable(nullable),
+    );
+    let unique_keyword = parser_fn(mysql_ident_keyword("unique"));
+    let inline_primary = value(ColumnConstraint::Ignore, rule! { PRIMARY ~ KEY });
+    let inline_unique = value(ColumnConstraint::Ignore, rule! { #unique_keyword ~ KEY? });
+    let inline_reference = value(ColumnConstraint::Ignore, rule! {
+        REFERENCES ~ #dot_separated_idents_1_to_3
+        ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+        ~ #mysql_reference_options
+    });
+    let inline_collate = value(ColumnConstraint::Ignore, rule! { COLLATE ~ #ident });
+    let inline_charset = value(ColumnConstraint::Ignore, rule! { CHARSET ~ #ident });
+    let ignored_column_constraint = parser_fn(alt((
+        inline_primary,
+        inline_unique,
+        inline_reference,
+        inline_collate,
+        inline_charset,
+    )));
     let identity_params = alt((
         map(
             rule! {
@@ -3634,9 +3995,9 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         ),
         map(
             rule! {
-                CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")"
+                #hive_check_prefix ~ CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ #hive_check_metadata?
             },
-            |(_, _, expr, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
+            |(_, _, _, expr, _, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
         ),
         map(
             rule! {
@@ -3677,7 +4038,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #expr )*
+            ~ ( #nullable | #expr | #ignored_column_constraint )*
             ~ ( #comment )?
             ~ ( #stats_truncate_len )?
             : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`"
@@ -3730,6 +4091,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
             ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
+            ColumnConstraint::Ignore => {}
             ColumnConstraint::AutoIncrement {
                 start,
                 step,
@@ -3775,12 +4137,19 @@ pub fn table_index_def(i: Input) -> IResult<TableIndexDefinition> {
 }
 
 pub fn constraint_def(i: Input) -> IResult<ConstraintDefinition> {
+    let hive_constraint_metadata = parser_fn(alt((
+        value((), rule! { ENABLE ~ ENFORCED? }),
+        value((), rule! { DISABLE ~ RELY? }),
+        value((), rule! { ENFORCED }),
+        value((), rule! { RELY }),
+    )));
     map_res(
         rule! {
             (CONSTRAINT ~ #ident)?
             ~ CHECK ~ ^"(" ~ ^#expr ~ ^")"
+            ~ #hive_constraint_metadata?
         },
-        |(opt_constraint_name, _, _, expr, _)| {
+        |(opt_constraint_name, _, _, expr, _, _)| {
             Ok(ConstraintDefinition {
                 name: opt_constraint_name.map(|(_, name)| name),
                 constraint_type: ConstraintType::Check(expr),
@@ -3789,11 +4158,35 @@ pub fn constraint_def(i: Input) -> IResult<ConstraintDefinition> {
     )(i)
 }
 
+pub fn ignored_table_constraint_def(i: Input) -> IResult<CreateDefinition> {
+    let primary = value(
+        CreateDefinition::Ignored,
+        rule! { PRIMARY ~ KEY ~ #ident? ~ #mysql_index_columns ~ #mysql_index_tail },
+    );
+    let unique = value(CreateDefinition::Ignored, rule! {
+        #mysql_unique_keyword ~ ( KEY | INDEX )? ~ #ident? ~ #mysql_index_columns ~ #mysql_index_tail
+    });
+    let key = value(
+        CreateDefinition::Ignored,
+        rule! { ( KEY | INDEX ) ~ #ident? ~ #mysql_index_columns ~ #mysql_index_tail },
+    );
+    let foreign = value(CreateDefinition::Ignored, rule! {
+        (CONSTRAINT ~ #ident)?
+        ~ FOREIGN ~ KEY ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+        ~ REFERENCES ~ #dot_separated_idents_1_to_3
+        ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+        ~ #mysql_reference_options
+    });
+
+    alt((primary, unique, key, foreign)).parse(i)
+}
+
 pub fn create_def(i: Input) -> IResult<CreateDefinition> {
     alt((
         map(rule! { #column_def }, CreateDefinition::Column),
         map(rule! { #table_index_def }, CreateDefinition::TableIndex),
         map(rule! { #constraint_def }, CreateDefinition::Constraint),
+        ignored_table_constraint_def,
     ))
     .parse(i)
 }
@@ -4473,6 +4866,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
                     CreateDefinition::Constraint(constraint) => {
                         table_constraints.push(constraint);
                     }
+                    CreateDefinition::Ignored => {}
                 }
             }
             let opt_table_indexes = if !table_indexes.is_empty() {
@@ -4905,6 +5299,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
+    let change_column = map(
+        rule! {
+            CHANGE ~ COLUMN? ~ #ident ~ #modify_column_type
+        },
+        |(_, _, _, column_def)| AlterTableAction::ModifyColumn {
+            action: ModifyColumnAction::SetDataType(vec![column_def]),
+        },
+    );
+
     let add_constraint = map(
         rule! {
             ADD ~ #constraint_def
@@ -5069,9 +5472,11 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #swap_with
             | #rename_column
             | #modify_table_comment
+            | #add_constraint
             | #add_column
             | #drop_column
             | #modify_column
+            | #change_column
             | #recluster_table
             | #revert_table
             | #set_table_options
@@ -5084,7 +5489,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #drop_all_row_access_polices
             | #drop_row_access_policy
             | #add_row_access_policy
-            | #add_constraint
     );
 
     alt((alter_table_action_primary, alter_table_action_secondary)).parse(i)
@@ -5672,6 +6076,86 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     .parse(i)
 }
 
+pub fn hive_create_table_option(i: Input) -> IResult<()> {
+    let hive_partition_column = rule! {
+        #ident ~ #type_name? ~ (COMMENT ~ #literal_string)?
+    };
+    let hive_partitioned_by = value((), rule! {
+        PARTITIONED ~ BY ~ "(" ~ #comma_separated_list1(hive_partition_column) ~ ")"
+    });
+    let hive_file_format = rule! {
+        ORC | PARQUET | AVRO | TEXTFILE | TEXT | CSV | JSON | SEQUENCEFILE | RCFILE
+    };
+    let hive_stored_as_file = value((), rule! {
+        STORED ~ AS ~ #hive_file_format
+    });
+    let hive_stored_as_io = value((), rule! {
+        STORED ~ AS ~ INPUTFORMAT ~ #literal_string ~ OUTPUTFORMAT ~ #literal_string
+    });
+    let hive_ident_to_string = map(ident, |ident| ident.name);
+    let hive_property_key = rule! {
+        #literal_string | #hive_ident_to_string
+    };
+    let hive_property_value = rule! {
+        #literal_string | #option_to_string
+    };
+    let hive_serde_property = rule! {
+        #hive_property_key ~ "=" ~ #hive_property_value
+    };
+    let hive_ident_to_string = map(ident, |ident| ident.name);
+    let hive_property_key = rule! {
+        #literal_string | #hive_ident_to_string
+    };
+    let hive_property_value = rule! {
+        #literal_string | #option_to_string
+    };
+    let hive_table_property = rule! {
+        #hive_property_key ~ "=" ~ #hive_property_value
+    };
+    let hive_row_format_serde = value((), rule! {
+        ROW ~ FORMAT ~ SERDE ~ #literal_string
+        ~ (WITH ~ SERDEPROPERTIES ~ "(" ~ #comma_separated_list0(hive_serde_property) ~ ")")?
+    });
+    let hive_row_format_delimited = value((), rule! {
+        ROW ~ FORMAT ~ DELIMITED
+        ~ (FIELDS ~ TERMINATED ~ BY ~ #literal_string)?
+        ~ (COLLECTION ~ ITEMS ~ TERMINATED ~ BY ~ #literal_string)?
+        ~ (MAP ~ KEYS ~ TERMINATED ~ BY ~ #literal_string)?
+        ~ (LINES ~ TERMINATED ~ BY ~ #literal_string)?
+        ~ (ESCAPED ~ BY ~ #literal_string)?
+    });
+    let hive_sorted_column = rule! {
+        #ident ~ (ASC | DESC)?
+    };
+    let hive_clustered_by = value((), rule! {
+        CLUSTERED ~ BY ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+        ~ (SORTED ~ BY ~ "(" ~ #comma_separated_list1(hive_sorted_column) ~ ")")?
+        ~ INTO ~ #literal_u64 ~ BUCKETS
+    });
+    let hive_tblproperties = value((), rule! {
+        TBLPROPERTIES ~ "(" ~ #comma_separated_list0(hive_table_property) ~ ")"
+    });
+    let hive_location = value((), rule! {
+        LOCATION ~ #literal_string
+    });
+    let hive_comment = value((), rule! {
+        COMMENT ~ #literal_string
+    });
+
+    rule!(
+        #hive_partitioned_by
+        | #hive_stored_as_io
+        | #hive_stored_as_file
+        | #hive_row_format_serde
+        | #hive_row_format_delimited
+        | #hive_clustered_by
+        | #hive_tblproperties
+        | #hive_location
+        | #hive_comment
+    )
+    .parse(i)
+}
+
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     let option = map(
         rule! {
@@ -5982,6 +6466,13 @@ pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
 }
 
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
+    if has_any_token(i, &[STATE]) && has_any_token(i, &[HANDLER]) {
+        return Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::other("UDAF HANDLER is not supported"),
+        )));
+    }
+
     enum ReturnBody {
         Scalar(TypeName),
         Table(Vec<(Identifier, TypeName)>),

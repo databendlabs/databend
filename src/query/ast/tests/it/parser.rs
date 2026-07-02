@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::UnsupportedType;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -1362,6 +1364,107 @@ fn test_statement_error() {
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.1).unwrap();
+    }
+}
+
+#[test]
+fn test_unsupported_external_dialect_statement() {
+    let cases = [
+        (
+            "LOAD DATA LOCAL INPATH '../../data/files/load_data_job_acid' INTO TABLE orc_test_txn",
+            Dialect::Hive,
+            UnsupportedType::HiveLoadData,
+        ),
+        (
+            "EXPLAIN LOCKS CREATE TABLE x (a int)",
+            Dialect::Hive,
+            UnsupportedType::HiveExplainLocks,
+        ),
+        (
+            "CREATE MATERIALIZED VIEW mv STORED AS ORC AS SELECT 1",
+            Dialect::Hive,
+            UnsupportedType::HiveCreateMaterializedView,
+        ),
+    ];
+
+    for (sql, dialect, expected_type) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, dialect).unwrap();
+        assert!(
+            matches!(
+                &stmt,
+                Statement::Unsupported { unsupported_type, raw_sql }
+                    if unsupported_type == &expected_type && raw_sql == sql
+            ),
+            "{sql}"
+        );
+
+        let formatted = stmt.to_string();
+        let tokens = tokenize_sql(&formatted).unwrap();
+        let (reparsed, _) = parse_sql(&tokens, dialect).unwrap();
+        assert_eq!(stmt, reparsed);
+    }
+}
+
+#[test]
+fn test_hive_create_table_storage_options() {
+    let cases = [
+        "CREATE EXTERNAL TABLE io_test_text_1 (a int, b int) STORED AS textfile",
+        "CREATE TABLE io_test_acid_part (a int, b int) PARTITIONED BY (c int) STORED AS ORC TBLPROPERTIES('transactional'='true')",
+        "CREATE TABLE bloomTest(msisdn STRING, imsi VARCHAR(20), imei BIGINT, cell_id BIGINT) ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.orc.OrcSerde' STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat' OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat'",
+        "CREATE TABLE transactions (id int, value string) CLUSTERED BY (id) INTO 5 BUCKETS STORED AS ORC",
+        "CREATE TABLE alltypes (m1 map<string, string>, l1 array<int>, st1 struct<c1:int, c2:string>) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' COLLECTION ITEMS TERMINATED BY ',' MAP KEYS TERMINATED BY ':' STORED AS TEXTFILE",
+        "CREATE TABLE tab_part (key int, value string) PARTITIONED BY(ds STRING) CLUSTERED BY (key) SORTED BY (key DESC) INTO 4 BUCKETS STORED AS SEQUENCEFILE",
+        "CREATE TABLE comment_test (id int) COMMENT 'hive table' ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe' STORED AS TEXTFILE",
+        "CREATE TABLE constraint_test (id int CONSTRAINT id_nn NOT NULL ENFORCED, c int CHECK (c > 0) ENABLE) STORED AS ORC",
+        "CREATE TABLE complex_types (u uniontype<int,double>, ts timestamplocaltz) STORED AS PARQUET",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::Hive).unwrap();
+        assert!(!matches!(stmt, Statement::Unsupported { .. }), "{sql}");
+
+        let formatted = stmt.to_string();
+        let tokens = tokenize_sql(&formatted).unwrap();
+        parse_sql(&tokens, Dialect::Hive).unwrap();
+    }
+}
+
+#[test]
+fn test_change_column_statement() {
+    let sql = "ALTER TABLE stats_nonpart CHANGE COLUMN key key2 int";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::Hive).unwrap();
+    assert!(!matches!(stmt, Statement::Unsupported { .. }));
+
+    let formatted = stmt.to_string();
+    assert_eq!(
+        formatted,
+        "ALTER TABLE stats_nonpart MODIFY COLUMN key2 Int32"
+    );
+
+    let tokens = tokenize_sql(&formatted).unwrap();
+    let (reparsed, _) = parse_sql(&tokens, Dialect::Hive).unwrap();
+    assert_eq!(formatted, reparsed.to_string());
+}
+
+#[test]
+fn test_postgres_array_and_cast_forms() {
+    let cases = [
+        "SELECT ARRAY['hello', 'world']",
+        "SELECT avg(b)::numeric(10,3) AS avg_value FROM aggtest",
+        "SELECT float8_accum('{4,140,2900}'::float8[], 100)",
+        "SELECT 1::int4, 2::int2, 3::int8, 1.0::float4, 2.0::float8",
+        "SELECT ARRAY(SELECT 1)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let formatted = stmt.to_string();
+        let tokens = tokenize_sql(&formatted).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     }
 }
 

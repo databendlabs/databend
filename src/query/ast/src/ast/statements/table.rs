@@ -1148,6 +1148,7 @@ pub enum CreateDefinition {
     Column(ColumnDefinition),
     TableIndex(TableIndexDefinition),
     Constraint(ConstraintDefinition),
+    Ignored,
 }
 
 impl Display for CreateDefinition {
@@ -1162,6 +1163,7 @@ impl Display for CreateDefinition {
             CreateDefinition::Constraint(constraint_def) => {
                 write!(f, "{}", constraint_def)?;
             }
+            CreateDefinition::Ignored => {}
         }
         Ok(())
     }
