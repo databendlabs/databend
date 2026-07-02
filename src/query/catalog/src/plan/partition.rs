@@ -438,6 +438,9 @@ pub struct ReclusterTask {
     pub total_bytes: usize,
     pub total_compressed: usize,
     pub level: i32,
+    // All input blocks in this task are already ordered by the current cluster key.
+    #[serde(default)]
+    pub all_ordered: bool,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);

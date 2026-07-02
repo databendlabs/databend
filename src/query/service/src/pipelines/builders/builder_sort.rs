@@ -93,6 +93,10 @@ impl SortPipelineBuilder {
         self
     }
 
+    pub fn sort_column_desc(&self) -> Arc<[SortColumnDescription]> {
+        self.key_desc.sort_column_desc()
+    }
+
     pub fn build_full_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
@@ -102,7 +106,7 @@ impl SortPipelineBuilder {
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.key_desc.sort_column_desc(),
+                self.sort_column_desc(),
             )
         });
 
@@ -217,7 +221,7 @@ impl SortPipelineBuilder {
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.key_desc.sort_column_desc(),
+                self.sort_column_desc(),
             )
         });
 
