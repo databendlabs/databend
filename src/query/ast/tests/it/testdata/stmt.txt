@@ -5354,6 +5354,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -5388,6 +5389,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5415,6 +5417,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5442,6 +5445,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [
             SQLProperty {
@@ -5476,6 +5480,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5608,6 +5613,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -21287,6 +21293,76 @@ Grant(
 
 
 ---------- Input ----------
+GRANT USAGE ON DATABASE db1 TO SHARE share1;
+---------- Output ---------
+GRANT USAGE ON DATABASE db1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    24..27,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                37..43,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1;
+---------- Output ---------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        22..25,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    26..28,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                38..44,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 GRANT CREATE MASKING POLICY ON *.* TO USER a;
 ---------- Output ---------
 GRANT CREATE MASKING POLICY ON  *.* TO USER 'a'@'%'
@@ -21651,6 +21727,76 @@ Revoke(
         principal: Role(
             "role1",
         ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1;
+---------- Output ---------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                40..46,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;
+---------- Output ---------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        23..26,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    27..29,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                41..47,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 

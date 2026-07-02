@@ -12,29 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-pub mod database;
-mod dictionary;
-mod dynamic_table;
-pub(crate) mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod row_access_policy;
-mod sequence;
-mod share;
-mod stage;
-mod stream;
-pub mod table;
-mod tag;
-mod task;
-mod view;
-mod warehouse;
-mod worker;
-mod workload;
+mod shared_database;
+mod shared_table;
+
+pub use shared_database::SharedDatabase;
+pub use shared_table::SharedTable;

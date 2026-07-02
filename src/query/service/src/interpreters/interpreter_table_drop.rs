@@ -29,6 +29,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
+use crate::databases::SharedTable;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -101,6 +102,9 @@ impl Interpreter for DropTableInterpreter {
                 &self.plan.database,
                 &self.plan.table
             )));
+        }
+        if tbl.as_any().is::<SharedTable>() {
+            tbl.check_mutable()?;
         }
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 

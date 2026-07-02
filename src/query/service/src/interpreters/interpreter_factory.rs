@@ -351,6 +351,9 @@ impl InterpreterFactory {
             Plan::CreateDatabase(create_database) => Ok(Arc::new(
                 CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())?,
             )),
+            Plan::CreateDatabaseFromShare(create_database) => Ok(Arc::new(
+                CreateDatabaseFromShareInterpreter::try_create(ctx, *create_database.clone())?,
+            )),
             Plan::DropDatabase(drop_database) => Ok(Arc::new(DropDatabaseInterpreter::try_create(
                 ctx,
                 *drop_database.clone(),
@@ -363,6 +366,34 @@ impl InterpreterFactory {
             Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
             )),
+            Plan::CreateShare(plan) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DropShare(plan) => Ok(Arc::new(DropShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::AlterShare(plan) => Ok(Arc::new(AlterShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::GrantShare(plan) => Ok(Arc::new(GrantShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::RevokeShare(plan) => Ok(Arc::new(RevokeShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::ShowShares(plan) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DescShare(plan) => Ok(Arc::new(DescShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
 
             // Tables
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(

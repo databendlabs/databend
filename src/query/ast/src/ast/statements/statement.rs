@@ -180,6 +180,15 @@ pub enum Statement {
         database: Identifier,
     },
 
+    // Shares
+    CreateShare(CreateShareStmt),
+    DropShare(DropShareStmt),
+    AlterShare(AlterShareStmt),
+    GrantShare(GrantShareStmt),
+    RevokeShare(RevokeShareStmt),
+    ShowShares(ShowSharesStmt),
+    DescShare(DescShareStmt),
+
     // Tables
     ShowTables(ShowTablesStmt),
     ShowCreateTable(ShowCreateTableStmt),
@@ -535,6 +544,8 @@ impl Statement {
             | Statement::ShowDatabases(..)
             | Statement::ShowDropDatabases(..)
             | Statement::ShowCreateDatabase(..)
+            | Statement::ShowShares(..)
+            | Statement::DescShare(..)
             | Statement::UseDatabase { .. }
             | Statement::ShowTables(..)
             | Statement::ShowCreateTable(..)
@@ -602,6 +613,11 @@ impl Statement {
             | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
+            | Statement::CreateShare(..)
+            | Statement::DropShare(..)
+            | Statement::AlterShare(..)
+            | Statement::GrantShare(..)
+            | Statement::RevokeShare(..)
             | Statement::CreateTable(..)
             | Statement::CreateView(..)
             | Statement::CreateIndex(..)
@@ -901,6 +917,13 @@ impl Display for Statement {
             Statement::UndropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
+            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterShare(stmt) => write!(f, "{stmt}")?,
+            Statement::GrantShare(stmt) => write!(f, "{stmt}")?,
+            Statement::RevokeShare(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
+            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
