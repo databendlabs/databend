@@ -156,10 +156,13 @@ mod tests {
     use std::any::Any;
 
     use databend_common_catalog::table::Table;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_meta_app::schema::CatalogInfo;
     use databend_common_meta_app::schema::DatabaseType;
     use databend_common_meta_app::schema::TableIdent;
@@ -167,10 +170,22 @@ mod tests {
     use databend_common_meta_app::schema::TableMeta;
 
     use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Symbol;
+    use crate::Visibility;
     use crate::planner::metadata::Metadata;
+    use crate::plans::Aggregate;
+    use crate::plans::AggregateFunction;
+    use crate::plans::AggregateMode;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+    use crate::plans::EvalScalar;
+    use crate::plans::FunctionCall;
     use crate::plans::Join;
     use crate::plans::JoinType;
     use crate::plans::RelOperator;
+    use crate::plans::ScalarExpr;
+    use crate::plans::ScalarItem;
     use crate::plans::Scan;
 
     #[derive(Debug)]
@@ -240,6 +255,62 @@ mod tests {
         })))
     }
 
+    fn column_expr(metadata: &Metadata, table_index: usize) -> ScalarExpr {
+        let column = metadata.columns_by_table_index(table_index)[0].clone();
+        BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                column.name(),
+                column.index(),
+                Box::new(column.data_type()),
+                Visibility::Visible,
+            )
+            .table_index(Some(table_index))
+            .build(),
+        }
+        .into()
+    }
+
+    fn max_aggregate_expr(
+        metadata: &Metadata,
+        table_index: usize,
+        output_index: Symbol,
+        with_group_by: bool,
+    ) -> SExpr {
+        let group_items = if with_group_by {
+            vec![ScalarItem {
+                scalar: column_expr(metadata, table_index),
+                index: Symbol::new(output_index.as_usize() + 1),
+            }]
+        } else {
+            vec![]
+        };
+
+        SExpr::create_unary(
+            Arc::new(RelOperator::Aggregate(Aggregate {
+                mode: AggregateMode::Initial,
+                group_items,
+                aggregate_functions: vec![ScalarItem {
+                    scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                        span: None,
+                        func_name: "max".to_string(),
+                        distinct: false,
+                        params: vec![],
+                        args: vec![column_expr(metadata, table_index)],
+                        return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                        sort_descs: vec![],
+                        display_name: "max(a)".to_string(),
+                    }),
+                    index: output_index,
+                }],
+                from_distinct: false,
+                rank_limit: None,
+                grouping_sets: None,
+            })),
+            Arc::new(scan_expr(metadata, table_index)),
+        )
+    }
+
     fn cross_join_expr(left: SExpr, right: SExpr) -> SExpr {
         SExpr::create_binary(
             Arc::new(RelOperator::Join(Join {
@@ -248,6 +319,35 @@ mod tests {
             })),
             Arc::new(left),
             Arc::new(right),
+        )
+    }
+
+    fn eval_scalar_expr(
+        metadata: &Metadata,
+        input: SExpr,
+        table_index: usize,
+        output_index: Symbol,
+        value: u64,
+    ) -> SExpr {
+        SExpr::create_unary(
+            Arc::new(RelOperator::EvalScalar(EvalScalar {
+                items: vec![ScalarItem {
+                    scalar: ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "plus".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            column_expr(metadata, table_index),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: Scalar::Number(NumberScalar::UInt64(value)),
+                            }),
+                        ],
+                    }),
+                    index: output_index,
+                }],
+            })),
+            Arc::new(input),
         )
     }
 
@@ -312,5 +412,87 @@ mod tests {
                 .iter()
                 .all(|cte| matches!(cte.child(0).unwrap().plan(), RelOperator::Scan(_)))
         );
+    }
+
+    #[test]
+    fn test_analyze_common_subexpression_matches_identical_aggregates() {
+        let mut metadata = Metadata::default();
+        let t1 = fake_fuse_table(1, "t1");
+
+        let t1_left = add_table(&mut metadata, t1.clone());
+        let t1_right = add_table(&mut metadata, t1);
+
+        let left = max_aggregate_expr(&metadata, t1_left, Symbol::new(10), false);
+        let right = max_aggregate_expr(&metadata, t1_right, Symbol::new(11), false);
+        let root = cross_join_expr(left, right);
+
+        let (replacements, materialized_ctes) =
+            analyze_common_subexpression(&root, &mut metadata).unwrap();
+
+        assert_eq!(replacements.len(), 2);
+        assert_eq!(materialized_ctes.len(), 1);
+        assert!(matches!(
+            materialized_ctes[0].child(0).unwrap().plan(),
+            RelOperator::Aggregate(_)
+        ));
+    }
+
+    #[test]
+    fn test_analyze_common_subexpression_matches_identical_group_aggregates() {
+        let mut metadata = Metadata::default();
+        let t1 = fake_fuse_table(1, "t1");
+
+        let t1_left = add_table(&mut metadata, t1.clone());
+        let t1_right = add_table(&mut metadata, t1);
+
+        let left = max_aggregate_expr(&metadata, t1_left, Symbol::new(10), true);
+        let right = max_aggregate_expr(&metadata, t1_right, Symbol::new(12), true);
+        let root = cross_join_expr(left, right);
+
+        let (replacements, materialized_ctes) =
+            analyze_common_subexpression(&root, &mut metadata).unwrap();
+
+        assert_eq!(replacements.len(), 2);
+        assert_eq!(materialized_ctes.len(), 1);
+        assert!(matches!(
+            materialized_ctes[0].child(0).unwrap().plan(),
+            RelOperator::Aggregate(_)
+        ));
+    }
+
+    #[test]
+    fn test_analyze_common_subexpression_does_not_materialize_eval_scalar_subtree() {
+        let mut metadata = Metadata::default();
+        let t1 = fake_fuse_table(1, "t1");
+        let t2 = fake_fuse_table(2, "t2");
+
+        let t1_left = add_table(&mut metadata, t1.clone());
+        let t2_left = add_table(&mut metadata, t2.clone());
+        let t1_right = add_table(&mut metadata, t1);
+        let t2_right = add_table(&mut metadata, t2);
+
+        let left_input =
+            cross_join_expr(scan_expr(&metadata, t1_left), scan_expr(&metadata, t2_left));
+        let right_input = cross_join_expr(
+            scan_expr(&metadata, t1_right),
+            scan_expr(&metadata, t2_right),
+        );
+        let left = eval_scalar_expr(&metadata, left_input, t1_left, Symbol::new(20), 1);
+        let right = eval_scalar_expr(&metadata, right_input, t1_right, Symbol::new(21), 2);
+        let root = cross_join_expr(left, right);
+
+        let (_replacements, materialized_ctes) =
+            analyze_common_subexpression(&root, &mut metadata).unwrap();
+
+        assert!(
+            materialized_ctes
+                .iter()
+                .all(|cte| !contains_eval_scalar(cte.child(0).unwrap()))
+        );
+    }
+
+    fn contains_eval_scalar(expr: &SExpr) -> bool {
+        matches!(expr.plan(), RelOperator::EvalScalar(_))
+            || expr.children().any(contains_eval_scalar)
     }
 }
