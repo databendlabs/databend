@@ -48,6 +48,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -55,6 +56,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -83,6 +85,7 @@ use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexType;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -95,6 +98,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -108,6 +112,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
@@ -375,6 +380,64 @@ impl FuseTable {
                 .map(|(&k, &v)| (k, v as usize))
                 .collect(),
         }
+    }
+
+    fn append_top_n_column_fields_from_options(
+        table_schema: TableSchemaRef,
+        top_n_size: Option<usize>,
+        frequency_columns: Option<&str>,
+    ) -> Result<BTreeMap<FieldIndex, TableField>> {
+        let Some(_) = top_n_size else {
+            return Ok(BTreeMap::new());
+        };
+        let Some(columns) = frequency_columns else {
+            return Ok(BTreeMap::new());
+        };
+        let source_schema = table_schema.remove_virtual_computed_fields();
+        let mut fields_map = BTreeMap::new();
+
+        match columns.parse::<ApproxDistinctColumns>()? {
+            ApproxDistinctColumns::All => {
+                for (i, field) in source_schema.fields.into_iter().enumerate() {
+                    if RangeIndex::supported_table_type(field.data_type()) {
+                        fields_map.insert(i, field);
+                    }
+                }
+            }
+            ApproxDistinctColumns::Specify(cols) => {
+                for col in cols {
+                    let Ok(field_index) = source_schema.index_of(&col) else {
+                        continue;
+                    };
+                    let field = source_schema.fields[field_index].clone();
+                    if RangeIndex::supported_table_type(field.data_type()) {
+                        fields_map.insert(field_index, field);
+                    }
+                }
+            }
+            ApproxDistinctColumns::None => {}
+        }
+
+        Ok(fields_map)
+    }
+
+    pub(crate) fn append_top_n_columns(
+        &self,
+        source_schema: TableSchemaRef,
+    ) -> Result<Option<(BTreeMap<FieldIndex, TableField>, usize)>> {
+        let top_n_size = analyze_top_n_size_from_options(self.table_info.options())?;
+        let frequency_columns = self
+            .table_info
+            .options()
+            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+            .map(String::as_str);
+        let top_n_columns_map = Self::append_top_n_column_fields_from_options(
+            source_schema,
+            top_n_size,
+            frequency_columns,
+        )?;
+        Ok(top_n_size
+            .and_then(|size| (!top_n_columns_map.is_empty()).then_some((top_n_columns_map, size))))
     }
 
     pub fn enable_virtual_column(&self) -> bool {
@@ -1169,7 +1232,7 @@ impl Table for FuseTable {
                     snapshot
                         .prev_snapshot_id
                         .as_ref()
-                        .is_some_and(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
+                        .is_none_or(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
                 });
             let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
@@ -1526,12 +1589,19 @@ fn allow_credential_chain_for_s3(storage_params: StorageParams) -> StorageParams
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_meta_app::schema::DatabaseType;
     use databend_common_meta_app::schema::TableIdent;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::storage::StorageParams;
 
+    use super::FuseTable;
     use super::allow_credential_chain_for_s3;
     use super::is_system_history_table;
 
@@ -1580,5 +1650,23 @@ mod tests {
         let sp = StorageParams::Memory;
         let result = allow_credential_chain_for_s3(sp.clone());
         assert_eq!(result, sp);
+    }
+
+    #[test]
+    fn test_append_top_n_columns_tolerates_stale_options() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("nested", TableDataType::Variant),
+        ]));
+
+        let fields = FuseTable::append_top_n_column_fields_from_options(
+            schema,
+            Some(3),
+            Some("a, dropped, nested"),
+        )
+        .unwrap();
+
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields.values().next().unwrap().name(), "a");
     }
 }

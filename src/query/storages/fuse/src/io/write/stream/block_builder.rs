@@ -224,7 +224,11 @@ impl StreamBlockBuilder {
             properties.source_schema.clone(),
             true,
         );
-        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None, None)?;
+        let top_n = properties
+            .top_n
+            .as_ref()
+            .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
+        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n, None)?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -323,7 +327,15 @@ impl StreamBlockBuilder {
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
-        let column_hlls = self.block_stats_builder.finalize()?;
+        let block_stats = self.block_stats_builder.finalize_with_top_n()?;
+        let (column_hlls, column_top_n) = if let Some(stats) = block_stats {
+            (
+                (!stats.hll.is_empty()).then_some(stats.hll),
+                (!stats.top_n.is_empty()).then_some(stats.top_n),
+            )
+        } else {
+            (None, None)
+        };
         if let Some(hlls) = &column_hlls {
             for (key, val) in hlls {
                 if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
@@ -435,6 +447,7 @@ impl StreamBlockBuilder {
             vector_index_state,
             spatial_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
+            column_top_n,
         };
         Ok(serialized)
     }
@@ -453,6 +466,7 @@ pub struct StreamBlockProperties {
     distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+    top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
@@ -497,6 +511,11 @@ impl StreamBlockProperties {
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        let top_n = if matches!(kind, MutationKind::Insert) {
+            table.append_top_n_columns(source_schema.clone())?
+        } else {
+            None
+        };
         let bloom_ndv_columns = bloom_columns_map
             .values()
             .chain(ndv_columns_map.values())
@@ -544,6 +563,7 @@ impl StreamBlockProperties {
             table_meta_timestamps,
             table_indexes,
             ndv_columns_map,
+            top_n,
         }))
     }
 }

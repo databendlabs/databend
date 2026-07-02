@@ -49,6 +49,7 @@ use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
@@ -59,9 +60,9 @@ use opendal::Buffer;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
+use crate::io::BlockStatsBuilder;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::build_column_hlls;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::SpatialIndexBuilder;
@@ -132,6 +133,7 @@ pub struct BlockSerialization {
     pub vector_index_state: Option<VectorIndexState>,
     pub spatial_index_state: Option<SpatialIndexState>,
     pub column_hlls: Option<BlockHLLState>,
+    pub column_top_n: Option<BlockTopN>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -148,6 +150,7 @@ pub struct BlockBuilder {
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
     pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
@@ -183,7 +186,21 @@ impl BlockBuilder {
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
 
-        let column_hlls = build_column_hlls(&data_block, &self.ndv_columns_map)?;
+        let top_n = self
+            .top_n
+            .as_ref()
+            .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
+        let mut block_stats_builder = BlockStatsBuilder::new(&self.ndv_columns_map, top_n, None)?;
+        block_stats_builder.add_block(&data_block)?;
+        let block_stats = block_stats_builder.finalize_with_top_n()?;
+        let (column_hlls, column_top_n) = if let Some(stats) = block_stats {
+            (
+                (!stats.hll.is_empty()).then_some(stats.hll),
+                (!stats.top_n.is_empty()).then_some(stats.top_n),
+            )
+        } else {
+            (None, None)
+        };
         if let Some(hlls) = &column_hlls {
             for (key, val) in hlls {
                 if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
@@ -308,6 +325,7 @@ impl BlockBuilder {
             vector_index_state,
             spatial_index_state,
             column_hlls,
+            column_top_n,
         };
         Ok(serialized)
     }
@@ -322,6 +340,7 @@ impl BlockWriter {
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
         let column_hlls = serialized.column_hlls;
+        let column_top_n = serialized.column_top_n;
         let block_location = block_meta.location.0.clone();
 
         let extended_block_meta =
@@ -332,12 +351,14 @@ impl BlockWriter {
                         virtual_column_state.draft_virtual_block_meta.clone(),
                     ),
                     column_hlls,
+                    column_top_n,
                 }
             } else {
                 ExtendedBlockMeta {
                     block_meta,
                     draft_virtual_block_meta: None,
                     column_hlls,
+                    column_top_n,
                 }
             };
 

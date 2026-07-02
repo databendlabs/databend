@@ -483,7 +483,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let new_count_min_sketch =
                     std::mem::take(&mut segment_with_hll.new_block_count_min_sketch);
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for (((new, mut top_n), count_min_sketch), idx) in new_hlls
+                for (((new, top_n), count_min_sketch), idx) in new_hlls
                     .into_iter()
                     .zip(new_top_n.into_iter())
                     .zip(new_count_min_sketch.into_iter())
@@ -498,12 +498,8 @@ impl Processor for AnalyzeCollectNDVSource {
                         }
                         segment_with_hll.raw_block_hlls[idx] = encode_column_hll(&column_hlls)?;
                     }
-                    if let (Some(block_top_n), Some(top_n_size)) =
-                        (&mut self.top_n, self.top_n_size)
-                    {
-                        let dropped_top_n_columns = &self.dropped_top_n_columns;
-                        top_n.retain(|column_id, _| !dropped_top_n_columns.contains(column_id));
-                        merge_column_top_n_mut(block_top_n, top_n, top_n_size);
+                    if let Some(block_top_n) = &mut self.top_n {
+                        merge_column_top_n_mut(block_top_n, top_n)?;
                     }
                     if let Some(block_count_min_sketch) = &mut self.count_min_sketch {
                         merge_column_count_min_sketch_mut(block_count_min_sketch, count_min_sketch);

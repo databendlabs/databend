@@ -41,6 +41,7 @@ async fn test_collect_statistics_skips_top_n_for_change_scan() -> Result<()> {
     ctx.configure_for_optimizer_case(true)?;
 
     let top_n = ColumnTopN {
+        capacity: 1,
         values: vec![ColumnTopNEntry {
             scalar: Scalar::Number(NumberScalar::UInt64(1)),
             count: 90,

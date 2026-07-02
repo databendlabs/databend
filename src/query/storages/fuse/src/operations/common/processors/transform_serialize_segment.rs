@@ -31,6 +31,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -38,6 +39,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use log::info;
 use opendal::Operator;
 
@@ -60,11 +62,13 @@ enum State<B: SegmentBuilder> {
         segment: B::Segment,
 
         stats: Option<(String, Vec<u8>, BlockHLL)>,
+        top_n: BlockTopN,
     },
     PreCommitSegment {
         location: String,
         segment: B::Segment,
         hll: BlockHLL,
+        top_n: BlockTopN,
     },
     Finished,
 }
@@ -75,6 +79,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     segment_builder: B,
     virtual_column_accumulator: Option<VirtualColumnAccumulator>,
     hll_accumulator: ColumnHLLAccumulator,
+    top_n: BlockTopN,
     state: State<B>,
 
     input: Arc<InputPort>,
@@ -116,6 +121,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             segment_builder,
             virtual_column_accumulator,
             hll_accumulator: ColumnHLLAccumulator::default(),
+            top_n: HashMap::new(),
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
@@ -261,6 +267,9 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             if let Some(hll) = extended_block_meta.column_hlls {
                 self.hll_accumulator.add_hll(hll)?;
             }
+            if let Some(top_n) = extended_block_meta.column_top_n {
+                merge_column_top_n_mut(&mut self.top_n, top_n)?;
+            }
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
@@ -291,6 +300,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     });
                     stats = Some((segment_stats_location, stats_data, stats_summary));
                 }
+                let top_n = std::mem::take(&mut self.top_n);
 
                 let segment_info = self.segment_builder.build(
                     self.thresholds,
@@ -303,12 +313,14 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     location,
                     segment: segment_info,
                     stats,
+                    top_n,
                 }
             }
             State::PreCommitSegment {
                 location,
                 segment,
                 hll,
+                top_n,
             } => {
                 let format_version = SegmentInfo::VERSION;
 
@@ -320,6 +332,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         format_version,
                         summary: segment.summary().clone(),
                         hll,
+                        top_n,
                     }],
                 };
 
@@ -341,6 +354,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 location,
                 segment,
                 stats,
+                top_n,
             } => {
                 self.data_accessor.write(&location, data).await?;
                 let mut hll = HashMap::new();
@@ -354,6 +368,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     location,
                     segment,
                     hll,
+                    top_n,
                 };
             }
             _state => {

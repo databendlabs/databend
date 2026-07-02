@@ -24,6 +24,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -42,6 +43,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -52,6 +54,7 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -518,35 +521,54 @@ impl FuseTable {
         snapshot: &Option<Arc<TableSnapshot>>,
         insert_hll: &BlockHLL,
         insert_rows: u64,
+        insert_top_n: &BlockTopN,
+        refresh_top_n: bool,
     ) -> Result<TableStatsGenerator> {
-        // Extract previous stats meta (row_count / hll, etc.) from snapshot
+        // Extract previous stats meta (row_count / hll, etc.) from snapshot.
         let summary = snapshot.summary();
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
-        // Previous statistics file location (if any)
+        // Previous statistics file location (if any).
         let mut prev_stats_location = snapshot.table_statistics_location();
-        // If no rows are covered by commit-local HLL, just reuse previous statistics.
-        if insert_rows == 0 || insert_hll.is_empty() {
+        let top_n_column_ids = if refresh_top_n && insert_rows > 0 {
+            self.append_top_n_columns(self.schema())?
+                .map(|(columns, _)| columns.values().map(|field| field.column_id()).collect())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let has_top_n_update = !top_n_column_ids.is_empty();
+        let table_row_count = summary.row_count.saturating_add(insert_rows);
+
+        // If no new rows/statistics are inserted, just reuse previous statistics.
+        if insert_rows == 0 || (insert_hll.is_empty() && !has_top_n_update) {
             return Ok(TableStatsGenerator::new(
                 prev_stats_meta.cloned(),
                 prev_stats_location,
                 0,
                 0,
                 HashMap::new(),
+                None,
             ));
         }
 
         // Initialize a new HLL with commit-local HLL.
         let mut new_hll = insert_hll.clone();
+        let next_stats_meta = if insert_hll.is_empty() {
+            prev_stats_meta.cloned()
+        } else {
+            None
+        };
         // Calculate updated row_count
-        let (row_count, unstats_rows) = match prev_stats_meta {
+        let (hll_row_count, unstats_rows) = match (!insert_hll.is_empty(), prev_stats_meta) {
+            (false, _) => (0, 0),
             // Case 1: Previous stats exist and already contain HLL → merge directly
-            Some(v) if v.hll.is_some() => {
+            (true, Some(v)) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
                 (v.row_count + insert_rows, v.unstats_rows)
             }
             // Case 2: Previous meta has no HLL → need to load from stats file
-            _ => {
+            (true, _) => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
@@ -602,12 +624,145 @@ impl FuseTable {
             }
         };
 
+        let table_statistics = if has_top_n_update {
+            self.build_append_top_n_statistics(
+                snapshot,
+                top_n_column_ids,
+                &new_hll,
+                insert_top_n,
+                table_row_count,
+            )
+            .await?
+        } else {
+            None
+        };
+        if let Some(stats) = &table_statistics {
+            prev_stats_location = Some(self.new_table_statistics_location(stats)?);
+        }
+
         Ok(TableStatsGenerator::new(
-            None,
+            next_stats_meta,
             prev_stats_location,
-            row_count,
+            hll_row_count,
             unstats_rows,
             new_hll,
+            table_statistics,
         ))
     }
+
+    fn new_table_statistics_location(&self, stats: &TableSnapshotStatistics) -> Result<String> {
+        self.meta_location_generator
+            .snapshot_statistics_location_from_uuid(&SnapshotId::now_v7(), stats.format_version())
+    }
+
+    async fn build_append_top_n_statistics(
+        &self,
+        snapshot: &Option<Arc<TableSnapshot>>,
+        top_n_column_ids: Vec<ColumnId>,
+        hll: &BlockHLL,
+        insert_top_n: &BlockTopN,
+        row_count: u64,
+    ) -> Result<Option<TableSnapshotStatistics>> {
+        let prev_table_stats = self
+            .read_table_snapshot_statistics(snapshot.as_ref())
+            .await?;
+        let fresh_prev_stats = if let (Some(previous), Some(prev_stats)) =
+            (snapshot.as_ref(), prev_table_stats.as_ref())
+            && is_fresh_table_snapshot_top_n(previous, prev_stats)
+        {
+            Some((previous, prev_stats.as_ref()))
+        } else {
+            None
+        };
+
+        let mut top_n = fresh_prev_stats
+            .map(|(_, stats)| stats.top_n.clone())
+            .unwrap_or_default();
+        top_n.retain(|column_id, _| top_n_column_ids.contains(column_id));
+
+        let append_top_n = append_top_n_merge_input(
+            &top_n_column_ids,
+            snapshot.as_ref().map(|snapshot| &snapshot.summary),
+            &top_n,
+            insert_top_n,
+        );
+        merge_column_top_n_mut(&mut top_n, append_top_n)?;
+        if top_n.is_empty() {
+            return Ok(None);
+        }
+
+        let histograms = fresh_prev_stats
+            .map(|(_, stats)| stats.histograms.clone())
+            .unwrap_or_default();
+        let count_min_sketch = fresh_prev_stats
+            .map(|(_, stats)| stats.count_min_sketch.clone())
+            .unwrap_or_default();
+        let stats_hll = if hll.is_empty() {
+            fresh_prev_stats
+                .map(|(_, stats)| stats.hll.clone())
+                .unwrap_or_default()
+        } else {
+            hll.clone()
+        };
+        let stats_snapshot_id = snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.snapshot_id)
+            .unwrap_or_else(SnapshotId::nil);
+
+        Ok(Some(TableSnapshotStatistics::new(
+            stats_hll,
+            top_n,
+            count_min_sketch,
+            histograms,
+            stats_snapshot_id,
+            row_count,
+        )))
+    }
+}
+
+fn append_top_n_merge_input(
+    column_ids: &[ColumnId],
+    previous_summary: Option<&Statistics>,
+    previous_top_n: &BlockTopN,
+    insert_top_n: &BlockTopN,
+) -> BlockTopN {
+    let previous_summary = previous_summary.filter(|summary| summary.row_count != 0);
+    let mut append_top_n = HashMap::new();
+
+    for &column_id in column_ids {
+        let Some(column_top_n) = insert_top_n.get(&column_id).cloned() else {
+            continue;
+        };
+        if previous_top_n.contains_key(&column_id)
+            || column_has_no_previous_values(previous_summary, column_id)
+        {
+            append_top_n.insert(column_id, column_top_n);
+        }
+    }
+
+    append_top_n
+}
+
+fn column_has_no_previous_values(
+    previous_summary: Option<&Statistics>,
+    column_id: ColumnId,
+) -> bool {
+    let Some(summary) = previous_summary else {
+        return true;
+    };
+    summary
+        .col_stats
+        .get(&column_id)
+        .is_none_or(|stats| stats.null_count == summary.row_count)
+}
+
+pub(crate) fn is_fresh_table_snapshot_top_n(
+    snapshot: &TableSnapshot,
+    stats: &TableSnapshotStatistics,
+) -> bool {
+    stats.row_count == snapshot.summary.row_count
+        && snapshot
+            .prev_snapshot_id
+            .as_ref()
+            .is_none_or(|(snapshot_id, _)| *snapshot_id == stats.snapshot_id)
 }
