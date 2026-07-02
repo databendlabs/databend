@@ -32,6 +32,8 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
 use crate::pipelines::processors::transforms::memory::right_join_semi::SemiRightHashJoinStream;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -99,7 +101,7 @@ impl Join for AntiRightHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<true>()
+        self.basic_hash_join.final_build::<SCAN_MAP_MATCHED>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
@@ -205,7 +207,7 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
                 assume(idx < scan_map.len());
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
-                if scan_map[idx] == 0 {
+                if scan_map[idx] == SCAN_ROW_UNMATCHED {
                     self.scan_idx.push(RowPtr {
                         chunk_index: chunk_idx as _,
                         row_index: idx as _,
