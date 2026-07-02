@@ -200,6 +200,10 @@ impl StatisticsReceiver {
                 ctx.set_nodes_perf_counters(source_target.to_string(), counters);
                 Ok(false)
             }
+            Ok(Some(DataPacket::IoStats(stats))) => {
+                ctx.merge_io_stats(&stats);
+                Ok(false)
+            }
         }
     }
 
