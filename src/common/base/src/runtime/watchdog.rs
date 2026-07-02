@@ -29,6 +29,9 @@ const RUNTIME_WATCHDOG_PROBE_INTERVAL: Duration = Duration::from_secs(10);
 
 /// If a probe task is not scheduled within this duration, the runtime is
 /// considered unhealthy and its tasks are dumped to the log.
+#[cfg(debug_assertions)]
+const RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD: Duration = Duration::from_secs(1);
+#[cfg(not(debug_assertions))]
 const RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD: Duration = Duration::from_secs(3);
 
 pub(super) enum WatchdogEvent {

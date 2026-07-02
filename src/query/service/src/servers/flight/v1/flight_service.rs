@@ -35,6 +35,8 @@ use databend_common_exception::ErrorCode;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
+use log::debug;
+use log::warn;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tonic::Request;
@@ -154,6 +156,7 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
+        let node_id = GlobalConfig::instance().query.node_id.clone();
         let sender = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_id,
@@ -162,22 +165,75 @@ impl FlightService for DatabendQueryFlightService {
 
         let mut stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
+        let query_id = params.query_id;
+        let exchange_id = params.exchange_id;
+        let num_threads = params.num_threads;
+
+        debug!(
+            "do_exchange accepted: node={}, query_id={}, exchange_id={}, num_threads={}",
+            node_id, query_id, exchange_id, num_threads
+        );
 
         GlobalIORuntime::instance().spawn(async move {
+            let mut received_flight_data = 0;
+            let mut close_reason = "request stream ended";
+
             while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
+                let flight_data = match result {
+                    Ok(flight_data) => flight_data,
+                    Err(cause) => {
+                        close_reason = "request stream error";
+                        warn!(
+                            "do_exchange request stream error: node={}, query_id={}, exchange_id={}, num_threads={}, received_flight_data={}, cause={:?}",
+                            node_id,
+                            query_id,
+                            exchange_id,
+                            num_threads,
+                            received_flight_data,
+                            cause
+                        );
+                        break;
+                    }
                 };
 
+                received_flight_data += 1;
                 if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
+                    close_reason = "inbound receiver closed";
+                    warn!(
+                        "do_exchange inbound receiver closed: node={}, query_id={}, exchange_id={}, num_threads={}, received_flight_data={}",
+                        node_id,
+                        query_id,
+                        exchange_id,
+                        num_threads,
+                        received_flight_data
+                    );
+                    break;
                 }
 
                 // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
+                if let Err(cause) = tx.try_send(Ok(FlightData::default())) {
+                    close_reason = "response channel closed";
+                    warn!(
+                        "do_exchange response channel closed: node={}, query_id={}, exchange_id={}, num_threads={}, received_flight_data={}, cause={:?}",
+                        node_id,
+                        query_id,
+                        exchange_id,
+                        num_threads,
+                        received_flight_data,
+                        cause
+                    );
                     break;
                 }
             }
+            debug!(
+                "do_exchange task exit: node={}, query_id={}, exchange_id={}, num_threads={}, received_flight_data={}, reason={}",
+                node_id,
+                query_id,
+                exchange_id,
+                num_threads,
+                received_flight_data,
+                close_reason
+            );
             // sender is dropped here → closes sub-queues, notifies processors
         });
 
