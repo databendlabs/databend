@@ -753,7 +753,7 @@ fn column_has_no_previous_values(
     summary
         .col_stats
         .get(&column_id)
-        .is_none_or(|stats| stats.null_count == summary.row_count)
+        .is_some_and(|stats| stats.null_count == summary.row_count)
 }
 
 pub(crate) fn is_fresh_table_snapshot_top_n(

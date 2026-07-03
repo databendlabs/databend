@@ -305,6 +305,29 @@ EXPLAIN SELECT * FROM t_added_null WHERE b = 1
 ----
 table: default.db_09_0053.t_added_null<slt:ignore>estimated rows: 90.00
 
+# Newly added non-NULL default columns have implicit history and should fail closed.
+statement ok
+CREATE TABLE t_added_default(a int) approx_distinct_columns = ''
+
+statement ok
+INSERT INTO t_added_default
+SELECT number::int FROM numbers(100)
+
+statement ok
+ALTER TABLE t_added_default ADD COLUMN b int NOT NULL DEFAULT 1
+
+statement ok
+ALTER TABLE t_added_default SET OPTIONS(analyze_frequency_columns = 'b', analyze_top_n_size = 2)
+
+statement ok
+INSERT INTO t_added_default(a, b)
+SELECT number::int, 1::int FROM numbers(10)
+
+query B
+SELECT snapshot:table_statistics_location::String IS NULL FROM fuse_dump_snapshots('db_09_0053', 't_added_default') LIMIT 1
+----
+1
+
 # Active transactions skip append TopN refresh until transaction stats lifecycle is handled.
 statement ok
 CREATE TABLE t_txn(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
