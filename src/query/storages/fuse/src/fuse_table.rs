@@ -360,15 +360,16 @@ impl FuseTable {
             .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
             .and_then(|v| v.parse::<usize>().ok());
 
-        // The sparse page index maps cluster-key granules to page byte ranges, so it only applies
-        // to clustered tables; ignore the option otherwise.
-        let index_granularity = self.cluster_key_id().and_then(|_| {
-            self.table_info
-                .options()
-                .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
-                .and_then(|v| v.parse::<usize>().ok())
-                .filter(|&g| g > 0)
-        });
+        // `index_granularity` drives the page-boundary layout (a page starts on every granule row),
+        // which is independent of clustering: any table can have page offsets recorded. Only the
+        // per-granule min/max *statistics* (built elsewhere on the sorted write path) need a cluster
+        // key. So honor the option regardless of whether a cluster key exists.
+        let index_granularity = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_INDEX_GRANULARITY)
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|&g| g > 0);
 
         WriteSettings {
             storage_format: self.storage_format,
@@ -904,12 +905,9 @@ impl FuseTable {
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && (self
+            && self
                 .cluster_type()
-                .is_none_or(|v| matches!(v, ClusterType::Hilbert))
-                // Linear tables with `index_granularity` need the stream path too: it is the only
-                // writer that flushes pages on granule boundaries and emits the sparse page index.
-                || self.sparse_page_index_enabled()))
+                .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
     }
 
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {

@@ -546,7 +546,7 @@ impl AggregationContext {
                 Column::filter(&UInt64Type::from_data(row_ids), &bitmap).wrap_nullable(None);
             new_block.add_column(row_num);
 
-            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0, 0)?;
             new_block = stream_ctx.apply(new_block, &stream_meta)?;
         }
 

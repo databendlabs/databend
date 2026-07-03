@@ -93,13 +93,14 @@ pub fn build_fuse_source_pipeline(
         }
     };
 
-    // Sparse-page-index byte-range narrowing shifts block-relative row positions, so it is only
-    // safe when the query does not depend on those positions: no internal/stream columns, no
-    // virtual columns, and no merge-into block-index reservation.
-    let allow_page_index_skip = !plan.block_meta_options.query_internal_columns
-        && !plan.block_meta_options.update_stream_columns
-        && !plan.block_meta_options.reserve_block_index
-        && virtual_reader.as_ref().is_none();
+    // Sparse-page-index byte-range narrowing shifts block-relative row positions. Position-
+    // dependent columns stay correct because a narrowed sub-run carries its `block_row_offset`
+    // (see `BlockReadResult`/`BlockReadPlan.start_row`), which the deserializer adds back when it
+    // builds `_row_id`/`_base_row_id` offsets and `_origin_block_row_num`; merge-into's reserved
+    // block index is block-level (whole-block deletes), so it is unaffected. Virtual columns are
+    // the exception: they live in a separate sidecar read as a whole and aligned row-for-row with
+    // the main block, so narrowing would misalign them — disable narrowing only in that case.
+    let allow_page_index_skip = virtual_reader.as_ref().is_none();
 
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),

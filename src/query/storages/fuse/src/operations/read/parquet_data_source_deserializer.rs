@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -57,7 +58,9 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    /// Decoded blocks awaiting emission. A plain read enqueues one block; a sparse-page-index
+    /// narrowed read enqueues one block per `max_block_size`-bounded sub-run.
+    output_data: VecDeque<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
@@ -117,7 +120,7 @@ impl DeserializeDataTransform {
             block_reader,
             input,
             output,
-            output_data: None,
+            output_data: VecDeque::new(),
             src_schema,
             output_schema,
             parts: vec![],
@@ -153,7 +156,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -209,12 +212,10 @@ impl Processor for DeserializeDataTransform {
                         block.memory_size(),
                     );
 
-                    self.output_data = Some(block);
+                    self.output_data.push_back(block);
                 }
-                ParquetDataSource::Normal((data, virtual_data)) => {
+                ParquetDataSource::Normal((results, virtual_data)) => {
                     let start = Instant::now();
-                    let num_rows_override = data.num_rows_override();
-                    let columns_chunks = data.columns_chunks()?;
                     let part = FuseBlockPartInfo::from_part(&part)?;
 
                     if self.read_state.is_none() {
@@ -226,19 +227,88 @@ impl Processor for DeserializeDataTransform {
                         )?);
                     }
 
-                    let num_rows = num_rows_override.unwrap_or(part.nums_rows);
-                    let (mut data_block, row_selection, bitmap_selection) = self
-                        .read_state
-                        .as_ref()
-                        .unwrap()
-                        .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
+                    // A narrowed read produces several sub-run results; a plain read has exactly
+                    // one. Virtual columns only ever accompany a single result (narrowing is
+                    // disabled whenever a virtual reader is present), so `virtual_data` is consumed
+                    // by the first (and only) block in that case.
+                    let mut virtual_data = virtual_data;
+                    for data in results {
+                        let num_rows_override = data.num_rows_override();
+                        let block_row_offset = data.block_row_offset();
+                        let columns_chunks = data.columns_chunks()?;
 
-                    if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader.deserialize_virtual_columns(
+                        let num_rows = num_rows_override.unwrap_or(part.nums_rows);
+                        let (mut data_block, row_selection, bitmap_selection) = self
+                            .read_state
+                            .as_ref()
+                            .unwrap()
+                            .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
+
+                        if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                            data_block = virtual_reader.deserialize_virtual_columns(
+                                data_block,
+                                virtual_data.take(),
+                                row_selection.as_ref().map(|s| s.selection.clone()),
+                            )?;
+                        }
+
+                        let progress_values = ProgressValues {
+                            rows: data_block.num_rows(),
+                            bytes: data_block.memory_size(),
+                        };
+                        self.scan_progress.incr(&progress_values);
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::ScanBytes,
+                            data_block.memory_size(),
+                        );
+
+                        let mut data_block =
+                            data_block.resort(&self.src_schema, &self.output_schema)?;
+
+                        // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+                        // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
+                        //
+                        // `offsets` carries each surviving row's *block-relative* position so
+                        // position-dependent internal columns (`_row_id`, `_base_row_id`, …) number
+                        // rows correctly. A sparse-page-index narrowed sub-run starts at
+                        // `block_row_offset`, so that base is added to every position:
+                        //  - with a prewhere filter: surviving sub-block-local bits, shifted by base;
+                        //  - no filter but narrowed (base > 0): the full contiguous run `base..base+n`;
+                        //  - no filter, full-block read (base == 0): `None`, so the reader falls back
+                        //    to `0..num_rows` exactly as before (narrowing stays transparent).
+                        let offsets = if self.block_meta_options.query_internal_columns {
+                            let base = block_row_offset as u64;
+                            match bitmap_selection.as_ref() {
+                                Some(bitmap) => Some(
+                                    RoaringTreemap::from_sorted_iter(
+                                        (0..bitmap.len())
+                                            .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                            .map(|i| i as u64 + base),
+                                    )
+                                    .unwrap(),
+                                ),
+                                None if base > 0 => Some(
+                                    RoaringTreemap::from_sorted_iter(
+                                        (0..data_block.num_rows() as u64).map(|i| i + base),
+                                    )
+                                    .unwrap(),
+                                ),
+                                None => None,
+                            }
+                        } else {
+                            None
+                        };
+
+                        data_block = add_data_block_meta(
                             data_block,
-                            virtual_data,
-                            row_selection.as_ref().map(|s| s.selection.clone()),
+                            part,
+                            offsets,
+                            self.base_block_ids.clone(),
+                            &self.block_meta_options,
+                            block_row_offset,
                         )?;
+
+                        self.output_data.push_back(data_block);
                     }
 
                     // Perf.
@@ -247,44 +317,6 @@ impl Processor for DeserializeDataTransform {
                             start.elapsed().as_millis() as u64
                         );
                     }
-
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        data_block.memory_size(),
-                    );
-
-                    let mut data_block =
-                        data_block.resort(&self.src_schema, &self.output_schema)?;
-
-                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_meta_options.query_internal_columns {
-                        bitmap_selection.as_ref().map(|bitmap| {
-                            RoaringTreemap::from_sorted_iter(
-                                (0..bitmap.len())
-                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                    .map(|i| i as u64),
-                            )
-                            .unwrap()
-                        })
-                    } else {
-                        None
-                    };
-
-                    data_block = add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?;
-
-                    self.output_data = Some(data_block);
                 }
             }
         }

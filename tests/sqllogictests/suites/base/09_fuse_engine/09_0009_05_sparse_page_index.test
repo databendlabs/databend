@@ -72,6 +72,29 @@ SELECT count(*) FROM spi_t WHERE (a >= 100 AND a < 200) OR (a >= 9000 AND a < 91
 ----
 200
 
+# Narrowed read split into <= max_block_size sub-blocks: with a tiny max_block_size the surviving
+# granule run is read as many row-bounded DataBlocks instead of one. Results must stay correct.
+statement ok
+SET max_block_size = 128
+
+query I
+SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+query III
+SELECT count(*), min(a), max(a) FROM spi_t WHERE a >= 500 AND a < 3000
+----
+2500 500 2999
+
+query IT
+SELECT * FROM spi_t WHERE a = 4242
+----
+4242 v4242
+
+statement ok
+UNSET max_block_size
+
 # After reclustering, results must remain correct.
 statement ok
 ALTER TABLE spi_t RECLUSTER FINAL
@@ -126,6 +149,142 @@ query I
 SELECT count(*) FROM spi_t WHERE a >= 1234 AND a <= 5678
 ----
 4445
+
+# Internal columns under sparse-page-index narrowing: a cluster-key predicate narrows the read to a
+# granule sub-run whose first row is at block position `base > 0`. `_row_id` / `_base_row_id` encode
+# the block-relative position, so they must still match what a full (unnarrowed) scan assigns to the
+# same row. A fresh single-block, cluster-ordered table keeps positions deterministic.
+statement ok
+CREATE TABLE spi_row(a int, b string) CLUSTER BY (a) index_granularity = 100
+
+statement ok
+INSERT INTO spi_row SELECT number, concat('v', to_string(number)) FROM numbers(5000)
+
+# Every narrowed `_row_id` (cluster-key predicate) must appear in the full-scan `_row_id` set.
+# Intersection size == number of matching rows proves the base offset was applied.
+query I
+SELECT count(*) FROM (
+  SELECT _row_id FROM spi_row WHERE a >= 2000 AND a < 2500
+  INTERSECT
+  SELECT _row_id FROM spi_row
+)
+----
+500
+
+# Same, but forcing sub-run splitting so the base offset varies per emitted block.
+statement ok
+SET max_block_size = 64
+
+query I
+SELECT count(*) FROM (
+  SELECT _row_id FROM spi_row WHERE a >= 2000 AND a < 2500
+  INTERSECT
+  SELECT _row_id FROM spi_row
+)
+----
+500
+
+# `_base_row_id` (string form) must likewise agree across narrowed and full reads.
+query I
+SELECT count(*) FROM (
+  SELECT _base_row_id FROM spi_row WHERE a >= 100 AND a < 900
+  INTERSECT
+  SELECT _base_row_id FROM spi_row
+)
+----
+800
+
+statement ok
+UNSET max_block_size
+
+statement ok
+DROP TABLE spi_row
+
+# Regression: a min-only sparse index is only sound when granules do not overlap. Writing rows in
+# an order that would put a large value inside an early granule (e.g. [1,500,3,4] at granularity 2)
+# must NOT drop rows. The clustered write path sorts before serializing, so `a = 500` still finds
+# its row; the per-granule overlap guard additionally prevents emitting a corrupt index.
+statement ok
+CREATE TABLE spi_overlap(a int) CLUSTER BY (a) index_granularity = 2
+
+statement ok
+INSERT INTO spi_overlap VALUES (1),(500),(3),(4)
+
+query I
+SELECT count(*) FROM spi_overlap WHERE a = 500
+----
+1
+
+query I
+SELECT count(*) FROM spi_overlap WHERE a = 3
+----
+1
+
+query I
+SELECT count(*) FROM spi_overlap WHERE a = 4
+----
+1
+
+query I
+SELECT count(*) FROM spi_overlap WHERE a = 1
+----
+1
+
+query I
+SELECT count(*) FROM spi_overlap WHERE a >= 5 AND a <= 499
+----
+0
+
+query I
+SELECT count(*) FROM spi_overlap
+----
+4
+
+statement ok
+DROP TABLE spi_overlap
+
+# A table with `index_granularity` but no cluster key: the writer records page offsets (offset-only
+# index, no min/max), so reads stream the block page-wise but never prune. Results must be correct
+# for any predicate, and a tiny max_block_size must still emit correct row-bounded sub-blocks.
+statement ok
+CREATE TABLE spi_nocluster(a int, b string) index_granularity = 100
+
+statement ok
+INSERT INTO spi_nocluster SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+
+query IT
+SELECT * FROM spi_nocluster WHERE a = 4242
+----
+4242 v4242
+
+query II
+SELECT count(*), sum(a) FROM spi_nocluster
+----
+10000 49995000
+
+query I
+SELECT count(*) FROM spi_nocluster WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+statement ok
+SET max_block_size = 128
+
+query I
+SELECT count(*) FROM spi_nocluster WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+query IT
+SELECT * FROM spi_nocluster WHERE a = 4242
+----
+4242 v4242
+
+statement ok
+UNSET max_block_size
+
+statement ok
+DROP TABLE spi_nocluster
 
 statement ok
 DROP DATABASE db_09_0009_05

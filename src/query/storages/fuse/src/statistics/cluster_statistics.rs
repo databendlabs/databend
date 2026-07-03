@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -29,6 +30,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::compare_scalars;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::eval_aggr;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -74,6 +76,74 @@ impl ClusterStatsGenerator {
             out_fields,
             func_ctx,
         }
+    }
+
+    pub fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
+    pub fn cluster_key_index(&self) -> &[usize] {
+        &self.cluster_key_index
+    }
+
+    /// Per-granule cluster-key min tuples suitable for a sparse page index, or `None` when the block
+    /// cannot be soundly indexed. `block` must be the block handed to the serializer *before* the
+    /// extra key columns are popped, so the cluster-key columns are still present.
+    ///
+    /// Returns `Some(mins)` (one `Scalar::Tuple` per `granule_rows`-sized granule) only when the
+    /// granules are non-overlapping: `max(granule i) <= min(granule i+1)` for every adjacent pair.
+    /// Sparse-index pruning uses `mins[i+1]` as granule `i`'s upper bound, which is only correct
+    /// under that condition. Append / recluster hand a cluster-sorted block (always passes), but
+    /// compact / merge can concatenate sorted blocks into an unsorted one; those return `None` so
+    /// the caller emits an offset-only index (no pruning) instead of a corrupt one.
+    pub fn granule_mins(&self, block: &DataBlock, granule_rows: usize) -> Result<Option<Vec<Scalar>>> {
+        debug_assert!(granule_rows > 0);
+        if self.cluster_key_index.is_empty() {
+            return Ok(None);
+        }
+        let num_rows = block.num_rows();
+        if num_rows == 0 {
+            return Ok(None);
+        }
+
+        // Re-apply the cluster-key operators so expression cluster keys (e.g. `CLUSTER BY (a+1)`)
+        // have their computed columns present again — the serializer pops them before this runs.
+        // For simple column cluster keys `operators` is empty and this is a cheap clone.
+        let evaluated = self
+            .operators
+            .iter()
+            .try_fold(block.clone(), |input, op| op.execute(&self.func_ctx, input))?;
+        let tuple_col = Column::Tuple(
+            self.cluster_key_index
+                .iter()
+                .map(|&i| evaluated.get_by_offset(i).to_column())
+                .collect(),
+        );
+
+        let num_granules = num_rows.div_ceil(granule_rows);
+        let mut mins = Vec::with_capacity(num_granules);
+        let mut prev_max: Option<Scalar> = None;
+        let mut start = 0;
+        while start < num_rows {
+            let end = (start + granule_rows).min(num_rows);
+            let slice = tuple_col.slice(start..end);
+            let entries = [slice.into()];
+            let (min, _) = eval_aggr("min", vec![], &entries, end - start, vec![])?;
+            let (max, _) = eval_aggr("max", vec![], &entries, end - start, vec![])?;
+            let min = min.index(0).unwrap().to_owned();
+            let max = max.index(0).unwrap().to_owned();
+
+            // Overlap check: this granule's min must not precede the previous granule's max.
+            if let Some(prev_max) = &prev_max {
+                if prev_max.as_ref().cmp(&min.as_ref()).is_gt() {
+                    return Ok(None);
+                }
+            }
+            prev_max = Some(max);
+            mins.push(min);
+            start = end;
+        }
+        Ok(Some(mins))
     }
 
     // This can be used in block append.

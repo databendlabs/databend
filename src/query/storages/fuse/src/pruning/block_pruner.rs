@@ -281,7 +281,7 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
-                        page_granule_range: prune_result.page_granule_range.clone(),
+                        page_granule_ranges: prune_result.page_granule_ranges.clone(),
                         page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
@@ -328,22 +328,25 @@ impl BlockPruner {
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
 
         // Sparse page index narrowing (parquet format, `index_granularity` set), run *before* the
-        // bloom filter: it is a cheap, precise cluster-key filter, so when its granule run is empty
+        // bloom filter: it is a cheap, precise cluster-key filter, so when its survivor set is empty
         // (no granule can satisfy the predicate) the whole block is dropped here and we skip the
-        // more expensive bloom-filter IO entirely. A non-empty run is stashed for the reader to
-        // fetch only those granules' byte ranges. Independent of the native-format page pruner.
+        // more expensive bloom-filter IO entirely. A non-empty survivor set is stashed for the
+        // reader to fetch only those granules' byte ranges. Independent of the native-format page
+        // pruner.
         if let Some(sparse_page_index_pruner) = sparse_page_index_pruner {
-            let range = pruning_cost
+            let ranges = pruning_cost
                 .measure_async(
                     PruningCostKind::BlocksRange,
-                    sparse_page_index_pruner.select_granule_range(&block_meta),
+                    sparse_page_index_pruner.select_granule_ranges(&block_meta),
                 )
                 .await;
-            if range.as_ref().is_some_and(|r| r.is_empty()) {
+            // `Some(empty)` = the index applied and pruned every granule -> drop the block.
+            // `Some(non-empty)` = survivors to narrow the read. `None` = index not applicable.
+            if ranges.as_ref().is_some_and(|r| r.is_empty()) {
                 prune_result.keep = false;
                 return Ok(prune_result);
             }
-            prune_result.page_granule_range = range;
+            prune_result.page_granule_ranges = ranges;
         }
 
         if limit_before_bloom {
@@ -506,7 +509,7 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx,
                         range: None,
-                        page_granule_range: None,
+                        page_granule_ranges: None,
                         page_size: block_meta.page_size() as usize,
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_meta.as_ref().location.0.clone(),
@@ -543,8 +546,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
-    // the contiguous sparse-page-index granule run that survives the cluster-key predicate
-    page_granule_range: Option<Range<usize>>,
+    // the surviving sparse-page-index granule runs (maximally coalesced) for the cluster-key predicate
+    page_granule_ranges: Option<Vec<Range<usize>>>,
     // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search
     matched_rows: Option<Vec<usize>>,
@@ -561,7 +564,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
-            page_granule_range: None,
+            page_granule_ranges: None,
             matched_rows: None,
             matched_scores: None,
             virtual_block_meta: None,
@@ -574,7 +577,7 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
-            page_granule_range: block_meta_index.page_granule_range.clone(),
+            page_granule_ranges: block_meta_index.page_granule_ranges.clone(),
             matched_rows: block_meta_index.matched_rows.clone(),
             matched_scores: block_meta_index.matched_scores.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
@@ -583,7 +586,7 @@ impl BlockPruneResult {
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
-        block_meta_index.page_granule_range = self.page_granule_range;
+        block_meta_index.page_granule_ranges = self.page_granule_ranges;
         block_meta_index.matched_rows = self.matched_rows;
         block_meta_index.matched_scores = self.matched_scores;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;

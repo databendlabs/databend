@@ -61,18 +61,6 @@ pub fn blocks_to_parquet(
     )
 }
 
-/// Serialize blocks while optionally tuning dictionary behavior via NDV statistics.
-///
-/// * `table_schema` - Logical schema used to build Arrow batches.
-/// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
-/// * `compression` - Compression algorithm specified by table-level settings.
-/// * `enable_dictionary` - Enables dictionary encoding globally before per-column overrides.
-/// * `metadata` - Additional user metadata embedded into the Parquet footer.
-/// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
-///   before ArrowWriter instantiation disables further changes.
-///
-/// Returns the serialized parquet bytes together with the file metadata; the caller owns the
-/// buffer directly (no intermediate copy into a borrowed buffer).
 pub fn blocks_to_parquet_with_stats(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
@@ -105,6 +93,60 @@ pub fn blocks_to_parquet_with_stats(
     // page-bounded chunks internally, so no pre-splitting is needed here.
     let mut writer = BlockParquetWriter::new(arrow_schema, props);
     writer.write_blocks(blocks)?;
+    writer.finish()
+}
+
+/// Serialize a single block to parquet while forcing a page boundary on every `granule_rows` row,
+/// and capture the per-leaf page layout (absolute byte offsets) needed to build the sparse page
+/// index. The block must already be in its final row order (the caller sorts / clusters upstream);
+/// this function does not reorder rows.
+///
+/// Unlike [`blocks_to_parquet_with_stats`], the returned `page_layout` is always `Some`: a page
+/// starts on each granule boundary (via explicit `flush_page`), so the index writer can map a
+/// granule to its first data page. `data_page_rows` is pinned to `granule_rows` so auto-splits also
+/// align to granule boundaries, minimizing residue.
+pub fn block_to_parquet_with_page_layout(
+    table_schema: &TableSchema,
+    block: DataBlock,
+    compression: TableCompression,
+    enable_dictionary: bool,
+    metadata: Option<Vec<KeyValue>>,
+    column_stats: Option<&StatisticsOfColumns>,
+    granule_rows: usize,
+) -> Result<SerializedParquet> {
+    assert!(granule_rows > 0, "granule_rows must be positive");
+    let num_rows = block.num_rows();
+    let arrow_schema = Arc::new(table_schema.into());
+
+    let props = Arc::new(build_parquet_writer_properties(
+        compression,
+        enable_dictionary,
+        column_stats,
+        metadata,
+        num_rows,
+        table_schema,
+        // Force auto-split pages to also cut on granule boundaries so the explicit flushes below
+        // leave minimal residue and the sparse index pages line up with granules.
+        Some(granule_rows),
+        None,
+    ));
+
+    let mut writer = BlockParquetWriter::new(arrow_schema, props);
+    writer.enable_page_layout();
+
+    // Write the block one granule slice at a time, flushing a page on each boundary so every leaf
+    // column has a page starting exactly on the granule's first row. The trailing partial granule
+    // (if any) is left buffered; `finish` flushes it into a final page that still starts on the
+    // last granule boundary.
+    let mut offset = 0;
+    while offset < num_rows {
+        let take = granule_rows.min(num_rows - offset);
+        writer.write_block(block.slice(offset..offset + take))?;
+        offset += take;
+        if offset < num_rows {
+            writer.flush_page()?;
+        }
+    }
     writer.finish()
 }
 

@@ -85,11 +85,17 @@ pub struct ColumnPageMeta {
 /// describe the sparse index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageIndexMeta {
-    pub cluster_key_id: u32,
+    /// The cluster key this block's granule mins are sorted by. `None` for an offset-only index
+    /// (a table without a cluster key): page byte offsets are recorded for streaming reads, but no
+    /// per-granule min/max, so pruning cannot narrow — every granule survives.
+    #[serde(default)]
+    pub cluster_key_id: Option<u32>,
     pub granule_rows: u32,
     pub num_granules: u32,
     /// Cluster-key element types, in tuple order. Drives how the `m{i}` granule-min columns are
-    /// built (write) and decoded back into `Scalar::Tuple` elements (read).
+    /// built (write) and decoded back into `Scalar::Tuple` elements (read). Empty for an
+    /// offset-only index (no `m{i}` columns are written).
+    #[serde(default)]
     pub cluster_key_types: Vec<DataType>,
     /// Indexed leaf columns, in the same order as the `g_{column_id}` columns appear.
     pub columns: Vec<ColumnPageMeta>,
@@ -105,14 +111,20 @@ pub struct PageIndexState {
 /// Builds the sparse page index for one block from the writer's captured page layout plus the
 /// per-granule cluster-key mins, and serializes it to the columnar parquet index file.
 pub struct PageIndexBuilder {
-    cluster_key_id: u32,
+    /// `Some` when the table has a cluster key (per-granule mins are recorded for pruning); `None`
+    /// for an offset-only index (page byte offsets only, for streaming reads).
+    cluster_key_id: Option<u32>,
     granule_rows: usize,
     /// Leaf column ids in parquet leaf order — `page_layout[i]` describes `leaf_column_ids[i]`.
     leaf_column_ids: Vec<ColumnId>,
 }
 
 impl PageIndexBuilder {
-    pub fn new(cluster_key_id: u32, granule_rows: usize, leaf_column_ids: Vec<ColumnId>) -> Self {
+    pub fn new(
+        cluster_key_id: Option<u32>,
+        granule_rows: usize,
+        leaf_column_ids: Vec<ColumnId>,
+    ) -> Self {
         Self {
             cluster_key_id,
             granule_rows,
@@ -123,7 +135,8 @@ impl PageIndexBuilder {
     /// Assemble and serialize the index file.
     ///
     /// * `page_layout` — per-leaf page layout (absolute offsets), in parquet leaf order.
-    /// * `granule_mins` — cluster-key min Scalar (a tuple) at the start of each granule.
+    /// * `granule_mins` — cluster-key min Scalar (a tuple) at the start of each granule. Empty for
+    ///   an offset-only index (no cluster key); `num_granules` is then taken from `page_layout`.
     /// * `location` — pre-generated index file location.
     pub fn build(
         &self,
@@ -131,12 +144,6 @@ impl PageIndexBuilder {
         granule_mins: &[Scalar],
         location: Location,
     ) -> Result<PageIndexState> {
-        let num_granules = granule_mins.len();
-        if num_granules == 0 {
-            return Err(ErrorCode::Internal(
-                "page index build called with zero granules",
-            ));
-        }
         if page_layout.len() != self.leaf_column_ids.len() {
             return Err(ErrorCode::Internal(format!(
                 "page index: layout leaves {} != leaf column ids {}",
@@ -145,8 +152,30 @@ impl PageIndexBuilder {
             )));
         }
 
-        // Granule mins are cluster-key tuples; split them into one native column per element.
-        let (cluster_key_types, min_columns) = build_min_columns(granule_mins)?;
+        // Offset-only indexes carry no mins; the granule count then comes from the page layout
+        // (a page starts on every granule boundary, so page count == granule count).
+        let has_mins = !granule_mins.is_empty();
+        let num_granules = if has_mins {
+            granule_mins.len()
+        } else {
+            page_layout
+                .first()
+                .map(|leaf| leaf.data_pages.len())
+                .unwrap_or(0)
+        };
+        if num_granules == 0 {
+            return Err(ErrorCode::Internal(
+                "page index build called with zero granules",
+            ));
+        }
+
+        // Granule mins are cluster-key tuples; split them into one native column per element. An
+        // offset-only index skips this entirely (no `m{i}` columns, empty `cluster_key_types`).
+        let (cluster_key_types, min_columns) = if has_mins {
+            build_min_columns(granule_mins)?
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
         // Per-leaf offset columns + footer scalars.
         let mut offset_columns: Vec<Vec<u64>> = Vec::with_capacity(page_layout.len());
@@ -356,7 +385,9 @@ impl PageIndex {
             })?;
 
         // Per-element granule-min columns `m{i}`, decoded with their stored types and zipped back
-        // into one tuple Scalar per granule.
+        // into one tuple Scalar per granule. An offset-only index has no `m{i}` columns (empty
+        // `cluster_key_types`), so `granule_mins` stays empty — the read path reads that as "every
+        // granule survives, no pruning".
         let mut min_element_cols: Vec<Column> = Vec::with_capacity(meta.cluster_key_types.len());
         for (i, ty) in meta.cluster_key_types.iter().enumerate() {
             let name = format!("{PAGE_INDEX_MIN_COL_PREFIX}{i}");
@@ -370,7 +401,11 @@ impl PageIndex {
             })?;
             min_element_cols.push(col);
         }
-        let granule_mins = zip_granule_mins(&min_element_cols, meta.num_granules as usize);
+        let granule_mins = if min_element_cols.is_empty() {
+            Vec::new()
+        } else {
+            zip_granule_mins(&min_element_cols, meta.num_granules as usize)
+        };
 
         // One UInt64 offset column per indexed leaf, keyed `g_{column_id}`.
         let mut offsets = Vec::with_capacity(meta.columns.len());
@@ -434,50 +469,26 @@ pub struct ColumnReadPlan {
 pub struct BlockReadPlan {
     pub columns: Vec<ColumnReadPlan>,
     pub num_rows: usize,
+    pub start_row: usize,
 }
 
 impl PageIndex {
-    /// Build a narrowed read plan from the granule range `[range.start, range.end)` carried in
-    /// `BlockMetaIndex.page_granule_range` (computed at prune time). `block_rows` is the block's
-    /// total row count. An empty range means every granule was pruned: returns a plan with zero
-    /// rows and zero-length data ranges so the reader fetches nothing.
-    ///
-    /// The range is bounded by num_granules at prune time, so all granule indices are in bounds.
-    pub fn read_plan_for_range(
-        &self,
-        range: &std::ops::Range<usize>,
-        block_rows: usize,
-    ) -> BlockReadPlan {
-        if range.start >= range.end {
-            // Whole block excluded by the predicate.
-            let columns = self
-                .meta
-                .columns
-                .iter()
-                .map(|col| ColumnReadPlan {
-                    column_id: col.column_id,
-                    dict_range: None,
-                    data_range: 0..0,
-                })
-                .collect();
-            return BlockReadPlan {
-                columns,
-                num_rows: 0,
-            };
-        }
-
+    /// Build a narrowed read plan for a single contiguous granule sub-run `[s, e)` (`s < e`, both
+    /// in bounds). `block_rows` bounds the last granule's row count. Each column yields its dict
+    /// page range (if any) plus the contiguous data-page range covering exactly `[s, e)`.
+    fn plan_for_sub_run(&self, s: usize, e: usize, block_rows: usize) -> BlockReadPlan {
         let granule_rows = self.meta.granule_rows as usize;
-        // Rows covered by the run: full granules, with the block's tail bounding the last one.
-        let run_start_row = range.start * granule_rows;
-        let run_end_row = (range.end * granule_rows).min(block_rows);
+        // Rows covered by the sub-run: full granules, with the block's tail bounding the last one.
+        let run_start_row = s * granule_rows;
+        let run_end_row = (e * granule_rows).min(block_rows);
         let num_rows = run_end_row.saturating_sub(run_start_row);
 
         let mut columns = Vec::with_capacity(self.meta.columns.len());
         for (col_idx, col) in self.meta.columns.iter().enumerate() {
             let offs = &self.offsets[col_idx];
-            let data_start = offs[range.start];
-            let data_end = if range.end < offs.len() {
-                offs[range.end]
+            let data_start = offs[s];
+            let data_end = if e < offs.len() {
+                offs[e]
             } else {
                 col.chunk_end
             };
@@ -487,7 +498,68 @@ impl PageIndex {
                 data_range: data_start..data_end,
             });
         }
-        BlockReadPlan { columns, num_rows }
+        BlockReadPlan {
+            columns,
+            num_rows,
+            start_row: run_start_row,
+        }
+    }
+
+    /// A zero-row plan (empty data ranges) so the reader fetches nothing. Used when every granule
+    /// was pruned.
+    fn empty_plan(&self) -> BlockReadPlan {
+        let columns = self
+            .meta
+            .columns
+            .iter()
+            .map(|col| ColumnReadPlan {
+                column_id: col.column_id,
+                dict_range: None,
+                data_range: 0..0,
+            })
+            .collect();
+        BlockReadPlan {
+            columns,
+            num_rows: 0,
+            start_row: 0,
+        }
+    }
+
+    /// Build one read plan per sub-run, splitting each surviving granule run so that no plan covers
+    /// more than `max_block_rows` rows. This keeps every decoded `DataBlock` bounded by
+    /// `max_block_size` and lets each sub-run's byte ranges go to `merge_io_read` independently
+    /// (instead of fusing the whole run into one giant read).
+    ///
+    /// `ranges` are the maximally-coalesced, ascending, in-bounds granule runs from
+    /// `BlockMetaIndex.page_granule_ranges`. `block_rows` is the block's total row count.
+    ///
+    /// Splitting is at granule granularity: a sub-run holds `max(1, max_block_rows / granule_rows)`
+    /// granules (at least one, even if a single granule already exceeds `max_block_rows` — we cannot
+    /// split below a granule). Empty input (every granule pruned) yields a single zero-row plan.
+    pub fn read_plans_for_ranges(
+        &self,
+        ranges: &[std::ops::Range<usize>],
+        block_rows: usize,
+        max_block_rows: usize,
+    ) -> Vec<BlockReadPlan> {
+        if ranges.is_empty() {
+            return vec![self.empty_plan()];
+        }
+
+        let granule_rows = self.meta.granule_rows as usize;
+        let granules_per_plan = (max_block_rows / granule_rows.max(1)).max(1);
+
+        let mut plans = Vec::new();
+
+        for range in ranges {
+            let mut s = range.start;
+            while s < range.end {
+                let e = (s + granules_per_plan).min(range.end);
+                plans.push(self.plan_for_sub_run(s, e, block_rows));
+                s = e;
+            }
+        }
+        plans
     }
 }
 
@@ -536,6 +608,9 @@ fn decode_bool_column(array: &dyn arrow_array::Array) -> Result<Vec<bool>> {
 }
 
 #[cfg(test)]
+// Tests pass single-element range slices (e.g. `&[1..3]`) to `read_plans_for_ranges` on purpose;
+// the API takes a slice of granule runs.
+#[allow(clippy::single_range_in_vec_init)]
 mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_blocks::DataPageOffset;
@@ -573,7 +648,7 @@ mod tests {
             Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(200))]),
         ];
 
-        let builder = PageIndexBuilder::new(42, granule_rows, vec![7, 9]);
+        let builder = PageIndexBuilder::new(Some(42), granule_rows, vec![7, 9]);
         let state = builder
             .build(
                 &page_layout,
@@ -586,7 +661,7 @@ mod tests {
         let index = PageIndex::decode(&bytes).unwrap();
 
         assert_eq!(index.meta.num_granules, 3);
-        assert_eq!(index.meta.cluster_key_id, 42);
+        assert_eq!(index.meta.cluster_key_id, Some(42));
         assert_eq!(index.meta.granule_rows, 100);
         assert_eq!(index.granule_mins, granule_mins);
         assert_eq!(index.meta.columns[0].column_id, 7);
@@ -602,7 +677,10 @@ mod tests {
 
         // Read plan for the contiguous granule run [1, 3) over 250 block rows (last granule
         // partial: rows 200..250). Each column yields dict (if any) + one contiguous data range.
-        let plan = index.read_plan_for_range(&(1..3), 250);
+        // A large max_block_rows means no sub-run split: exactly one plan.
+        let plans = index.read_plans_for_ranges(&[1..3], 250, usize::MAX);
+        assert_eq!(plans.len(), 1);
+        let plan = &plans[0];
         assert_eq!(plan.num_rows, 150); // rows 100..250
         assert_eq!(plan.columns.len(), 2);
         // Column 7: no dict; data covers granule 1 start (260) to chunk_end (1000).
@@ -615,15 +693,102 @@ mod tests {
         assert_eq!(plan.columns[1].data_range, 600..2000);
 
         // Read plan for a middle-only run [0, 1): data bounded above by the next granule offset.
-        let plan = index.read_plan_for_range(&(0..1), 250);
-        assert_eq!(plan.num_rows, 100);
-        assert_eq!(plan.columns[0].data_range, 100..260);
-        assert_eq!(plan.columns[1].data_range, 50..600);
+        let plans = index.read_plans_for_ranges(&[0..1], 250, usize::MAX);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].num_rows, 100);
+        assert_eq!(plans[0].columns[0].data_range, 100..260);
+        assert_eq!(plans[0].columns[1].data_range, 50..600);
 
-        // Empty range -> zero rows, zero-length data ranges (whole block excluded).
-        let plan = index.read_plan_for_range(&(0..0), 250);
-        assert_eq!(plan.num_rows, 0);
-        assert_eq!(plan.columns[0].data_range, 0..0);
+        // Empty input -> a single zero-row plan (whole block excluded).
+        let plans = index.read_plans_for_ranges(&[], 250, usize::MAX);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].num_rows, 0);
+        assert_eq!(plans[0].columns[0].data_range, 0..0);
+    }
+
+    // `read_plans_for_ranges` splits each surviving granule run so no plan exceeds `max_block_rows`
+    // rows, over multiple disjoint runs, with the block tail bounding the last granule.
+    #[test]
+    fn test_read_plans_for_ranges() {
+        let granule_rows = 100;
+        // 5 granules. Column 7 (no dict): a page starts on every granule boundary row 0/100/.../400.
+        let leaf_a = layout(None, 1000, &[
+            (0, 100),
+            (100, 300),
+            (200, 500),
+            (300, 700),
+            (400, 900),
+        ]);
+        // Column 9 (dict [10,40)): pages on the same granule boundaries.
+        let leaf_b = layout(Some((10, 40)), 2000, &[
+            (0, 50),
+            (100, 400),
+            (200, 800),
+            (300, 1200),
+            (400, 1600),
+        ]);
+        let page_layout = vec![leaf_a, leaf_b];
+        let granule_mins: Vec<Scalar> = (0..5)
+            .map(|g| Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(g * 100))]))
+            .collect();
+
+        let builder = PageIndexBuilder::new(Some(1), granule_rows, vec![7, 9]);
+        let state = builder
+            .build(
+                &page_layout,
+                &granule_mins,
+                ("page_index/split.parquet".to_string(), 0),
+            )
+            .unwrap();
+        let bytes: Vec<u8> = state.data.to_bytes().to_vec();
+        let index = PageIndex::decode(&bytes).unwrap();
+        // Column 7 offsets: 100/300/500/700/900; column 9: 50/400/800/1200/1600. block_rows=450
+        // (last granule holds only 50 rows).
+        let block_rows = 450;
+
+        // Full block, max_block_rows=250 -> 2 granules per plan -> sub-runs [0,2),[2,4),[4,5).
+        let plans = index.read_plans_for_ranges(&[0..5], block_rows, 250);
+        assert_eq!(plans.len(), 3);
+        // [0,2): rows 0..200; col7 data 100..500, col9 dict 10..50 + data 50..800.
+        assert_eq!(plans[0].num_rows, 200);
+        assert_eq!(plans[0].start_row, 0);
+        assert_eq!(plans[0].columns[0].data_range, 100..500);
+        assert_eq!(plans[0].columns[1].dict_range, Some(10..50));
+        assert_eq!(plans[0].columns[1].data_range, 50..800);
+        // [2,4): rows 200..400; col7 data 500..900, col9 data 800..1600.
+        assert_eq!(plans[1].num_rows, 200);
+        assert_eq!(plans[1].start_row, 200);
+        assert_eq!(plans[1].columns[0].data_range, 500..900);
+        assert_eq!(plans[1].columns[1].data_range, 800..1600);
+        // [4,5): tail granule, only 50 rows (block_rows=450); data bounded by chunk_end.
+        assert_eq!(plans[2].num_rows, 50);
+        assert_eq!(plans[2].start_row, 400);
+        assert_eq!(plans[2].columns[0].data_range, 900..1000); // col7 chunk_end
+        assert_eq!(plans[2].columns[1].data_range, 1600..2000); // col9 chunk_end
+
+        // Two disjoint runs [0,1) and [3,5); max_block_rows large -> one plan per run (no split).
+        let plans = index.read_plans_for_ranges(&[0..1, 3..5], block_rows, 100_000);
+        assert_eq!(plans.len(), 2);
+        assert_eq!(plans[0].num_rows, 100);
+        assert_eq!(plans[0].start_row, 0);
+        assert_eq!(plans[0].columns[0].data_range, 100..300);
+        // [3,5): rows 300..450 (tail); col7 data 700..1000 (chunk_end).
+        assert_eq!(plans[1].num_rows, 150);
+        assert_eq!(plans[1].start_row, 300);
+        assert_eq!(plans[1].columns[0].data_range, 700..1000);
+
+        // A single granule larger than max_block_rows still yields exactly one plan (cannot split
+        // below granule granularity).
+        let plans = index.read_plans_for_ranges(&[1..2], block_rows, 10);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].num_rows, 100);
+        assert_eq!(plans[0].columns[0].data_range, 300..500);
+
+        // Empty input (every granule pruned) -> a single zero-row plan.
+        let plans = index.read_plans_for_ranges(&[], block_rows, 250);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].num_rows, 0);
+        assert_eq!(plans[0].columns[0].data_range, 0..0);
     }
 
     // Multi-element cluster key (Int64, String) with a NULL min element: the granule mins must
@@ -642,7 +807,7 @@ mod tests {
             Scalar::Tuple(vec![s_int(2), Scalar::Null]),
         ];
 
-        let builder = PageIndexBuilder::new(7, granule_rows, vec![5]);
+        let builder = PageIndexBuilder::new(Some(7), granule_rows, vec![5]);
         let state = builder
             .build(
                 &page_layout,

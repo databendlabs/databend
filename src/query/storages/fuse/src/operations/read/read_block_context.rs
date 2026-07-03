@@ -37,9 +37,8 @@ pub struct ReadBlockContext {
     block_format: FuseParquetBlockFormat,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-    /// Whether sparse-page-index byte-range narrowing may be applied. Disabled when the query
-    /// reads internal columns, virtual columns, or stream columns, or builds merge-into block
-    /// indexes — all of which depend on block-relative row positions that narrowing would shift.
+
+    max_block_size: usize,
     allow_page_index_skip: bool,
 }
 
@@ -61,6 +60,7 @@ impl ReadBlockContext {
             index_reader,
             virtual_reader,
             allow_page_index_skip,
+            max_block_size: ctx.get_settings().get_max_block_size()? as usize,
         }))
     }
 
@@ -102,20 +102,23 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(ParquetDataSource::Normal((data, virtual_source)))
+        Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
     }
 
     /// Attempt a sparse-page-index narrowed read for `fuse_part`. Returns `None` when narrowing
-    /// does not apply (no granule range carried, or no sidecar index), so the caller falls back to
+    /// does not apply (no granule ranges carried, or no sidecar index), so the caller falls back to
     /// a full-block read. A failure to load/decode the sidecar degrades to `None` as well.
+    ///
+    /// On success, returns one `BlockReadResult` per `max_block_size`-bounded sub-run so the
+    /// deserializer emits several row-bounded `DataBlock`s instead of one oversized block.
     async fn try_read_data_by_page_index(
         &self,
         fuse_part: &FuseBlockPartInfo,
-    ) -> Result<Option<crate::io::BlockReadResult>> {
+    ) -> Result<Option<Vec<crate::io::BlockReadResult>>> {
         let Some(block_meta_index) = fuse_part.block_meta_index() else {
             return Ok(None);
         };
-        let Some(granule_range) = block_meta_index.page_granule_range.clone() else {
+        let Some(granule_ranges) = block_meta_index.page_granule_ranges.clone() else {
             return Ok(None);
         };
         let Some(location) = fuse_part.page_index_location.as_ref() else {
@@ -139,12 +142,17 @@ impl ReadBlockContext {
             }
         };
 
-        let plan = index.read_plan_for_range(&granule_range, fuse_part.nums_rows);
-        let data = self
-            .block_read_ctx
-            .read_columns_data_by_page_index(&self.read_settings, &fuse_part.location, &plan)
-            .await?;
-        Ok(Some(data))
+        let plans =
+            index.read_plans_for_ranges(&granule_ranges, fuse_part.nums_rows, self.max_block_size);
+        let mut results = Vec::with_capacity(plans.len());
+        for plan in &plans {
+            let data = self
+                .block_read_ctx
+                .read_columns_data_by_page_index(&self.read_settings, &fuse_part.location, plan)
+                .await?;
+            results.push(data);
+        }
+        Ok(Some(results))
     }
 
     async fn read_agg_index_data(

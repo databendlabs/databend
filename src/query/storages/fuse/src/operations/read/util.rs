@@ -45,6 +45,7 @@ pub(crate) fn add_data_block_meta(
     offsets: Option<RoaringTreemap>,
     base_block_ids: Option<Scalar>,
     block_meta_options: &BlockMetaOptions,
+    block_row_offset: usize,
 ) -> Result<DataBlock> {
     // for merge into target build
     let mut meta: Option<BlockMetaInfoPtr> =
@@ -60,7 +61,7 @@ pub(crate) fn add_data_block_meta(
 
     if block_meta_options.update_stream_columns {
         // Fill `BlockMetaInfoPtr` if update stream columns
-        let stream_meta = gen_mutation_stream_meta(meta, &fuse_part.location)?;
+        let stream_meta = gen_mutation_stream_meta(meta, &fuse_part.location, block_row_offset)?;
         meta = Some(Box::new(stream_meta));
     }
 

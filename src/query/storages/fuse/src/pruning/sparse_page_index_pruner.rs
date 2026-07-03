@@ -30,11 +30,12 @@ use crate::io::PageIndex;
 
 /// Prune-time evaluator for the sparse page index. For a clustered table with a cluster-key
 /// predicate, it loads each block's sidecar page index, decodes the per-granule cluster-key mins,
-/// and narrows them to the contiguous granule run `[start, end)` that may satisfy the predicate.
+/// and narrows them to the surviving granule runs (maximally-coalesced `[start, end)`) that may
+/// satisfy the predicate.
 ///
-/// The selected run is stashed in `BlockMetaIndex.page_granule_range` and consumed at read time to
-/// fetch only the matching granules' byte ranges. Reuses the battle-tested predicate evaluator in
-/// [`PageIndexEvaluator`] (the same one the legacy inline-`pages` path uses).
+/// The selected runs are stashed in `BlockMetaIndex.page_granule_ranges` and consumed at read time
+/// to fetch only the matching granules' byte ranges. Reuses the battle-tested predicate evaluator
+/// in [`PageIndexEvaluator`] (the same one the legacy inline-`pages` path uses).
 pub struct SparsePageIndexPruner {
     evaluator: PageIndexEvaluator,
     dal: Operator,
@@ -94,15 +95,16 @@ impl SparsePageIndexPruner {
         })))
     }
 
-    /// Select the granule run to read for `block_meta`. Returns:
-    /// - `Ok(Some(range))`: read only granules `[range.start, range.end)`.
-    /// - `Ok(None)`: no narrowing (read the whole block) — e.g. the block has no sidecar index,
-    ///   or every granule may match.
+    /// Select the surviving granule runs to read for `block_meta`. Returns:
+    /// - `Ok(Some(ranges))`: the page index applied. `ranges` is the maximally-coalesced set of
+    ///   surviving granule runs (an explicit set, so a later index can intersect against it):
+    ///   `vec![0..N]` = all granules survive; `vec![]` = every granule pruned (drop the block);
+    ///   `vec![r0, r1, ...]` = only these granules survive.
+    /// - `Ok(None)`: the page index does not apply (no sidecar index, or a cluster-key-id mismatch)
+    ///   — read the whole block.
     ///
-    /// `keep = false` blocks are already filtered by the range/page pruner before this runs, so a
-    /// fully-pruned result is treated conservatively as "no narrowing" rather than dropping the
-    /// block here. A corrupt or unreadable index also degrades to `None` so queries never fail.
-    pub async fn select_granule_range(&self, block_meta: &BlockMeta) -> Option<Range<usize>> {
+    /// A corrupt or unreadable index also degrades to `None` so queries never fail.
+    pub async fn select_granule_ranges(&self, block_meta: &BlockMeta) -> Option<Vec<Range<usize>>> {
         let location = block_meta.page_index_location.as_ref()?;
         let cluster_stats = block_meta.cluster_stats.as_ref()?;
 
@@ -110,7 +112,7 @@ impl SparsePageIndexPruner {
             .try_select(block_meta, &location.0, cluster_stats.cluster_key_id)
             .await
         {
-            Ok(range) => range,
+            Ok(ranges) => ranges,
             Err(e) => {
                 log::warn!(
                     "[FUSE-PRUNER] sparse page index pruning failed for {}, reading whole block: {e}",
@@ -126,7 +128,7 @@ impl SparsePageIndexPruner {
         block_meta: &BlockMeta,
         location: &str,
         block_cluster_key_id: u32,
-    ) -> Result<Option<Range<usize>>> {
+    ) -> Result<Option<Vec<Range<usize>>>> {
         // The block was written/clustered under `block_cluster_key_id`. If the table's current
         // cluster key differs (an `ALTER TABLE ... CLUSTER BY` bumped the seq and this block has
         // not been reclustered yet), the granule mins are sorted by the *old* key and have the old
@@ -138,23 +140,27 @@ impl SparsePageIndexPruner {
         let size = block_meta.page_index_size.unwrap_or(0);
         let index = PageIndex::load(&self.dal, location, size).await?;
 
+        // An offset-only index (no cluster key / no per-granule mins) cannot prune: every granule
+        // survives, but the read still goes page-wise. Return the full survivor set so the read path
+        // uses the page layout instead of falling back to a whole-block read.
+        if index.granule_mins.is_empty() {
+            let num_granules = index.meta.num_granules as usize;
+            #[allow(clippy::single_range_in_vec_init)]
+            return Ok(Some(vec![0..num_granules]));
+        }
+
         // Defensive: the index's own recorded id must also match the block's. They are written
         // together so this should always hold, but a mismatch means a stale/foreign index file.
-        if index.meta.cluster_key_id != block_cluster_key_id {
+        if index.meta.cluster_key_id != Some(block_cluster_key_id) {
             return Ok(None);
         }
 
         let cluster_stats = block_meta.cluster_stats.as_ref().unwrap();
         let block_max = Scalar::Tuple(cluster_stats.max().clone());
 
-        let (keep, range) = self
-            .evaluator
-            .apply_with_mins(&index.granule_mins, &block_max)?;
-        if !keep {
-            // Predicate excludes every granule. The block survived earlier pruning on coarser
-            // stats; narrow to an empty leading range so the reader skips all data pages.
-            return Ok(Some(0..0));
-        }
-        Ok(range)
+        // The evaluator returns the surviving granule runs directly: `vec![]` means every granule
+        // was pruned (the reader drops the block), a non-empty vec is the survivor set.
+        let ranges = self.evaluator.apply(&index.granule_mins, &block_max)?;
+        Ok(Some(ranges))
     }
 }

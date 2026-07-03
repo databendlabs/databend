@@ -77,20 +77,10 @@ impl PageIndex {
                 .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
     }
 
-    /// Narrow a sorted list of per-granule cluster-key min tuples (`min_values`) plus the block's
-    /// cluster-key max (`max_value`) to the contiguous run of granules `[start, end)` that may
-    /// satisfy the predicate. Returns `(keep, range)`: `keep=false` means the whole block is
-    /// pruned; `range=None` with `keep=true` means no narrowing (read everything).
-    ///
-    /// The sparse sidecar page index supplies its decoded granule mins here.
-    pub fn apply_with_mins(
-        &self,
-        min_values: &[Scalar],
-        max_value: &Scalar,
-    ) -> Result<(bool, Option<Range<usize>>)> {
+    pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
         let pages = min_values.len();
         if pages == 0 {
-            return Ok((true, None));
+            return Ok(vec![]);
         }
         let mut start = 0;
         let mut end = pages - 1;
@@ -123,15 +113,10 @@ impl PageIndex {
             end -= 1;
         }
 
-        // no page is pruned
-        if start + pages == end + 1 {
-            return Ok((true, None));
-        }
-
-        if start > end {
-            Ok((false, None))
-        } else {
-            Ok((true, Some(start..end + 1)))
+        #[allow(clippy::single_range_in_vec_init)]
+        match start > end {
+            true => Ok(vec![]),
+            false => Ok(vec![start..end + 1]),
         }
     }
 

@@ -45,6 +45,7 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_num
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
+use databend_storages_common_blocks::block_to_parquet_with_page_layout;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -64,6 +65,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::PageIndexBuilder;
 use crate::io::write::PageIndexState;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
@@ -247,12 +249,55 @@ impl BlockBuilder {
         )?;
 
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
-        let (col_metas, buffer) = serialize_block_with_column_stats(
-            &self.write_settings,
-            &self.source_schema,
-            Some(&col_stats),
-            data_block,
-        )?;
+
+        // Sparse page index: when `index_granularity` is set, serialize with page boundaries on
+        // every granule and capture the page layout. A cluster-sorted, non-overlapping block also
+        // yields per-granule mins (enabling pruning); otherwise the index is offset-only (page-wise
+        // streaming reads, no pruning). Tables without `index_granularity` take the plain path.
+        let (col_metas, buffer, page_index_state) = match self.write_settings.index_granularity {
+            Some(granule_rows) => {
+                let granule_mins = self
+                    .cluster_stats_gen
+                    .granule_mins(&data_block, granule_rows)?;
+                let serialized = block_to_parquet_with_page_layout(
+                    &self.source_schema,
+                    data_block,
+                    self.write_settings.table_compression,
+                    self.write_settings.enable_parquet_dictionary,
+                    None,
+                    Some(&col_stats),
+                    granule_rows,
+                )?;
+                let col_metas = column_parquet_metas(&serialized.metadata, &self.source_schema)?;
+                let buffer = Buffer::from(serialized.payload);
+                let page_index_state = match serialized.page_layout {
+                    Some(page_layout) => {
+                        // `granule_mins` present ⇒ prunable index (records cluster_key_id + mins);
+                        // absent ⇒ offset-only index (no cluster key / overlapping granules).
+                        let (cluster_key_id, mins) = match granule_mins {
+                            Some(mins) => (Some(self.cluster_stats_gen.cluster_key_id()), mins),
+                            None => (None, Vec::new()),
+                        };
+                        let leaf_column_ids = self.source_schema.to_leaf_column_ids();
+                        let builder =
+                            PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
+                        let location = self.meta_locations.block_page_index_location();
+                        Some(builder.build(&page_layout, &mins, location)?)
+                    }
+                    None => None,
+                };
+                (col_metas, buffer, page_index_state)
+            }
+            None => {
+                let (col_metas, buffer) = serialize_block_with_column_stats(
+                    &self.write_settings,
+                    &self.source_schema,
+                    Some(&col_stats),
+                    data_block,
+                )?;
+                (col_metas, buffer, None)
+            }
+        };
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
             let size = inverted_index_states.iter().map(|v| v.size).sum();
@@ -282,8 +327,8 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
-            page_index_location: None,
-            page_index_size: None,
+            page_index_location: page_index_state.as_ref().map(|s| s.location.clone()),
+            page_index_size: page_index_state.as_ref().map(|s| s.size),
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -307,7 +352,7 @@ impl BlockBuilder {
             virtual_column_state,
             vector_index_state,
             spatial_index_state,
-            page_index_state: None,
+            page_index_state,
             column_hlls,
         };
         Ok(serialized)

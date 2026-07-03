@@ -144,6 +144,7 @@ impl BlockReadContext {
         Ok(BlockReadResult::create_with_num_rows(
             narrowed,
             plan.num_rows,
+            plan.start_row,
         ))
     }
 }

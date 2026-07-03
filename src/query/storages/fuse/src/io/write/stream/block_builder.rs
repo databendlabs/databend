@@ -66,7 +66,6 @@ use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::PageIndexBuilder;
 use crate::io::write::stream::ColumnStatisticsState;
-use crate::io::write::stream::GranuleMinState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
@@ -221,9 +220,6 @@ pub struct StreamBlockBuilder {
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
-    /// Tracks per-granule cluster-key mins when `index_granularity` is set on a clustered table.
-    /// `None` otherwise, so the page index is built only for eligible tables.
-    granule_min_state: Option<GranuleMinState>,
 
     row_count: usize,
     block_size: usize,
@@ -275,13 +271,6 @@ impl StreamBlockBuilder {
             &properties.distinct_columns,
             &properties.write_settings.col_stats_truncate_lens,
         );
-        // Activate granule-min tracking only when `index_granularity` is set; GranuleMinState
-        // additionally checks that the table has a (non-Hilbert) cluster key.
-        let granule_min_state = properties
-            .write_settings
-            .index_granularity
-            .map(|g| GranuleMinState::new(properties.cluster_stats_builder.clone(), g))
-            .filter(|s| s.is_active());
         Ok(StreamBlockBuilder {
             properties,
             block_writer,
@@ -295,7 +284,6 @@ impl StreamBlockBuilder {
             block_size: 0,
             column_stats_state,
             cluster_stats_state,
-            granule_min_state,
         })
     }
 
@@ -339,9 +327,6 @@ impl StreamBlockBuilder {
         if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
             spatial_index_builder.add_block(&block)?;
         }
-        if let Some(ref mut granule_min_state) = self.granule_min_state {
-            granule_min_state.add_block(&block)?;
-        }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size(block.num_columns());
 
@@ -355,7 +340,7 @@ impl StreamBlockBuilder {
         }
 
         match self.properties.write_settings.index_granularity {
-            Some(granule_rows) if self.granule_min_state.is_some() => {
+            Some(granule_rows) => {
                 // Split writes at granule boundaries, forcing a page flush on each so every leaf
                 // column has a page starting exactly on the granule's first row. The trailing
                 // partial granule (if any) is left buffered; the writer's close flushes it into a
@@ -467,30 +452,27 @@ impl StreamBlockBuilder {
             page_layout,
         } = self.block_writer.finish(&self.properties.source_schema)?;
 
-        // Build the sparse page index from the captured page layout + per-granule cluster-key
-        // mins. Both are present together iff index_granularity is set on a clustered table.
-        //
-        // The index is only emitted when the granule mins are non-decreasing. Sparse-index pruning
-        // treats `mins[i+1]` as granule `i`'s upper bound, which is only valid when the block is
-        // genuinely cluster-sorted. Freshly-inserted blocks are not sorted (databend clusters
-        // lazily via RECLUSTER), so emitting an index for them would corrupt pruning. Skipping
-        // emission here is safe: the read path falls back to full-block reads when no index exists,
-        // and a later recluster (which sorts) produces the index.
-        let page_index_state = match (self.granule_min_state.take(), page_layout) {
-            (Some(granule_min_state), Some(page_layout)) if granule_min_state.is_monotonic() => {
-                let granule_mins = granule_min_state.finalize();
+        // The stream writer builds an *offset-only* page index: page byte offsets at each granule
+        // boundary, but no per-granule min/max. It writes freshly-inserted (unsorted) blocks and
+        // Hilbert-clustered blocks, neither of which is linearly sorted, so recording mins here
+        // would corrupt pruning (which treats `mins[i+1]` as granule `i`'s upper bound — only valid
+        // for a cluster-sorted block). The per-granule min/max index is built instead on the sorted
+        // write path (`BlockBuilder`, used by recluster and linear-clustered inserts). An
+        // offset-only index still lets the read path stream a block in `max_block_size` chunks; it
+        // just never narrows (every granule survives).
+        let page_index_state = match page_layout {
+            Some(page_layout) => {
                 let granule_rows = self
                     .properties
                     .write_settings
                     .index_granularity
-                    .expect("index_granularity set when granule_min_state is active");
-                let cluster_key_id = self.properties.cluster_stats_builder.cluster_key_id();
+                    .expect("index_granularity set when page_layout was captured");
                 let leaf_column_ids = self.properties.source_schema.to_leaf_column_ids();
-                let builder = PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
+                let builder = PageIndexBuilder::new(None, granule_rows, leaf_column_ids);
                 let location = self.properties.meta_locations.block_page_index_location();
-                Some(builder.build(&page_layout, &granule_mins, location)?)
+                Some(builder.build(&page_layout, &[], location)?)
             }
-            _ => None,
+            None => None,
         };
         let page_index_size = page_index_state.as_ref().map(|s| s.size);
         let page_index_location = page_index_state.as_ref().map(|s| s.location.clone());

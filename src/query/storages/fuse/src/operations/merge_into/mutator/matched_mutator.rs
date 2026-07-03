@@ -396,7 +396,7 @@ impl AggregationContext {
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
         if self.stream_ctx.is_some() {
-            let row_num = build_origin_block_row_num(origin_num_rows);
+            let row_num = build_origin_block_row_num(0, origin_num_rows);
             origin_data_block.add_entry(row_num);
         }
 
@@ -423,7 +423,7 @@ impl AggregationContext {
         }
 
         if let Some(stream_ctx) = &self.stream_ctx {
-            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0, 0)?;
             res_block = stream_ctx.apply(res_block, &stream_meta)?;
         }
 

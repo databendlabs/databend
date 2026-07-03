@@ -41,6 +41,7 @@ pub struct BlockReadResult {
     /// rows those granules contain (fewer than the block's total). `None` for a full-block read.
     /// The deserializer uses this to size the decoded batch and the prewhere filter bitmap.
     num_rows_override: Option<usize>,
+    block_row_offset: usize,
 }
 
 impl BlockReadResult {
@@ -54,24 +55,31 @@ impl BlockReadResult {
             cached_column_data,
             cached_column_array,
             num_rows_override: None,
+            block_row_offset: 0,
         }
     }
 
     pub fn create_with_num_rows(
         merge_io_result: MergeIOReadResult,
         num_rows: usize,
+        block_row_offset: usize,
     ) -> BlockReadResult {
         BlockReadResult {
             merge_io_result,
             cached_column_data: vec![],
             cached_column_array: vec![],
             num_rows_override: Some(num_rows),
+            block_row_offset,
         }
     }
 
     /// Number of rows the narrowed read covers, when sparse-page-index skipping applied.
     pub fn num_rows_override(&self) -> Option<usize> {
         self.num_rows_override
+    }
+
+    pub fn block_row_offset(&self) -> usize {
+        self.block_row_offset
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {

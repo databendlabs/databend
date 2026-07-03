@@ -86,14 +86,13 @@ fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>
     let stats = stats.as_ref().unwrap();
     let mins = stats.pages.clone().unwrap();
     let max = Scalar::Tuple(stats.max().clone());
-    match index.apply_with_mins(&mins, &max) {
+    match index.apply(&mins, &max) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
 
-        Ok((keep, range)) => {
-            writeln!(file, "keep      : {keep}").unwrap();
-            writeln!(file, "range     : {range:?}").unwrap();
+        Ok(ranges) => {
+            writeln!(file, "ranges    : {ranges:?}").unwrap();
         }
     };
     writeln!(file).unwrap();
