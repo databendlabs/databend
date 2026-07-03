@@ -45,6 +45,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
@@ -336,6 +337,15 @@ impl StreamTable {
             StreamStatus::MayHaveData
         };
         Ok(status)
+    }
+
+    #[fastrace::trace]
+    pub async fn stream_backlog(&self, ctx: Arc<dyn TableContext>) -> Result<StreamBacklog> {
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .stream_backlog(ctx, &self.mode(), &self.snapshot_loc(), self.offset()?)
+            .await
     }
 }
 

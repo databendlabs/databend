@@ -84,6 +84,10 @@ impl AdminService {
                 get(super::v1::stream_status::stream_status_local_handler),
             )
             .at(
+                "/v1/stream_backlog",
+                get(super::v1::stream_backlog::stream_backlog_local_handler),
+            )
+            .at(
                 "/v1/settings",
                 get(super::v1::settings::list_settings_local),
             )
@@ -134,6 +138,10 @@ impl AdminService {
                 .at(
                     "v1/tenants/:tenant/stream_status",
                     get(super::v1::stream_status::stream_status_handler),
+                )
+                .at(
+                    "/v1/tenants/:tenant/stream_backlog",
+                    get(super::v1::stream_backlog::stream_backlog_handler),
                 )
                 .at(
                     "/v1/tenants/:tenant/settings",
