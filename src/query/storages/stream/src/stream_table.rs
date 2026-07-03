@@ -58,11 +58,6 @@ use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
-pub enum StreamStatus {
-    MayHaveData,
-    NoData,
-}
-
 pub struct StreamTable {
     info: TableInfo,
     max_batch_size: Option<u64>,
@@ -455,4 +450,35 @@ impl Table for StreamTable {
             )
             .await
     }
+}
+
+pub enum StreamStatus {
+    MayHaveData,
+    NoData,
+}
+
+pub(crate) fn extract_fully_qualified_stream_name(
+    ctx: &dyn TableContext,
+    target: &str,
+) -> Result<(String, String, String)> {
+    let stream_name_vec: Vec<&str> = target.split('.').collect();
+    let (catalog, database, stream) = match stream_name_vec.as_slice() {
+        [stream] => (
+            ctx.get_current_catalog(),
+            ctx.get_current_database(),
+            (*stream).to_owned(),
+        ),
+        [db, stream] => (
+            ctx.get_current_catalog(),
+            (*db).to_owned(),
+            (*stream).to_owned(),
+        ),
+        [cat, db, stream] => ((*cat).to_owned(), (*db).to_owned(), (*stream).to_owned()),
+        _ => {
+            return Err(ErrorCode::BadArguments(
+                "Invalid stream name. Use the format '[catalog.][database.]stream'",
+            ));
+        }
+    };
+    Ok((catalog, database, stream))
 }

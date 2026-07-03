@@ -36,6 +36,7 @@ use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
+use databend_common_storages_stream::stream_backlog_table_func::StreamBacklogTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_meta_client::types::MetaId;
 #[cfg(feature = "task-support")]
@@ -441,6 +442,10 @@ impl TableFunctionFactory {
         creators.insert(
             "copy_history".to_string(),
             (next_id(), Arc::new(CopyHistoryTable::create)),
+        );
+        creators.insert(
+            "stream_backlog".to_string(),
+            (next_id(), Arc::new(StreamBacklogTable::create)),
         );
 
         TableFunctionFactory {
