@@ -691,11 +691,10 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let histograms = fresh_prev_stats
-            .map(|(_, stats)| stats.histograms.clone())
-            .unwrap_or_default();
-        // Append commits only refresh TopN here. Count-Min sketches would be stale unless
-        // merged with the appended rows, so drop them from the refreshed table stats.
+        // Append commits only refresh TopN here. Histograms and Count-Min sketches would
+        // be stale unless merged with the appended rows, so drop them from the refreshed
+        // table stats.
+        let histograms = HashMap::new();
         let count_min_sketch = HashMap::new();
         let stats_hll = if hll.is_empty() {
             fresh_prev_stats
