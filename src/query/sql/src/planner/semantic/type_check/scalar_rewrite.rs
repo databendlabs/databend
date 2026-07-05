@@ -155,6 +155,9 @@ pub(super) fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
         BinaryOperator::Like(_)
             | BinaryOperator::NotLike(_)
             | BinaryOperator::LikeAny(_)
+            | BinaryOperator::ILike(_)
+            | BinaryOperator::NotILike(_)
+            | BinaryOperator::ILikeAny(_)
             | BinaryOperator::Regexp
             | BinaryOperator::RLike
             | BinaryOperator::NotRegexp
@@ -191,6 +194,8 @@ pub(super) fn binary_op_core_function(op: &BinaryOperator) -> Option<&'static st
         BinaryOperator::Xor => "xor",
         BinaryOperator::LikeAny(_) => "like_any",
         BinaryOperator::Like(_) => "like",
+        BinaryOperator::ILike(_) => "ilike",
+        BinaryOperator::ILikeAny(_) => "ilike_any",
         BinaryOperator::Regexp => "regexp",
         BinaryOperator::RLike => "rlike",
         BinaryOperator::BitwiseOr => "bit_or",
@@ -202,6 +207,7 @@ pub(super) fn binary_op_core_function(op: &BinaryOperator) -> Option<&'static st
         BinaryOperator::L1Distance => "l1_distance",
         BinaryOperator::L2Distance => "l2_distance",
         BinaryOperator::NotLike(_)
+        | BinaryOperator::NotILike(_)
         | BinaryOperator::NotRegexp
         | BinaryOperator::NotRLike
         | BinaryOperator::SoundsLike => return None,
@@ -214,6 +220,9 @@ pub(super) fn like_op_core_function(op: &BinaryOperator) -> Option<&'static str>
         BinaryOperator::Like(_) => Some("like"),
         BinaryOperator::NotLike(_) => Some("notlike"),
         BinaryOperator::LikeAny(_) => Some("like_any"),
+        BinaryOperator::ILike(_) => Some("ilike"),
+        BinaryOperator::NotILike(_) => Some("notilike"),
+        BinaryOperator::ILikeAny(_) => Some("ilike_any"),
         BinaryOperator::Regexp => Some("regexp"),
         BinaryOperator::RLike => Some("rlike"),
         BinaryOperator::NotRegexp => Some("notregexp"),

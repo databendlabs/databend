@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check::convert_escape_pattern;
 use smallvec::smallvec;
 
+use super::CoreExpr;
 use super::CoreExprArena;
 use super::CoreExprId;
 use super::scalar_rewrite::binary_op_core_function;
@@ -38,9 +39,13 @@ impl<'a> CoreExprArena<'a> {
         right: &'a Expr,
     ) -> Result<CoreExprId> {
         match op {
-            BinaryOperator::NotLike(_) | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+            BinaryOperator::NotLike(_)
+            | BinaryOperator::NotILike(_)
+            | BinaryOperator::NotRegexp
+            | BinaryOperator::NotRLike => {
                 let positive_op = match op {
                     BinaryOperator::NotLike(escape) => BinaryOperator::Like(escape.clone()),
+                    BinaryOperator::NotILike(escape) => BinaryOperator::ILike(escape.clone()),
                     BinaryOperator::NotRegexp => BinaryOperator::Regexp,
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
@@ -69,6 +74,12 @@ impl<'a> CoreExprArena<'a> {
             }
             BinaryOperator::LikeAny(escape) => {
                 self.lower_like_escape_expr(span, "like_any", left, right, escape.as_ref())
+            }
+            BinaryOperator::ILike(escape) => {
+                self.lower_ilike_escape_expr(span, left, right, escape.as_ref())
+            }
+            BinaryOperator::ILikeAny(escape) => {
+                self.lower_ilike_any_escape_expr(span, left, right, escape.as_ref())
             }
             BinaryOperator::Regexp => {
                 self.lower_like_escape_expr(span, "regexp", left, right, None)
@@ -182,6 +193,64 @@ impl<'a> CoreExprArena<'a> {
             arguments.push(self.literal(span, Literal::String(escape.clone())));
         }
         Ok(self.call(span, func_name, arguments))
+    }
+
+    fn lower_ilike_escape_expr(
+        &mut self,
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        escape: Option<&String>,
+    ) -> Result<CoreExprId> {
+        let left = self.lower_ast_expr(left)?;
+        let left = self.call(span, "lower", smallvec![left]);
+        let right = self.lower_ast_expr(right)?;
+        let right = self.call(span, "lower", smallvec![right]);
+        let mut arguments = smallvec![left, right];
+        if let Some(escape) = escape {
+            arguments.push(self.literal(span, Literal::String(escape.to_lowercase())));
+        }
+        Ok(self.call(span, "like", arguments))
+    }
+
+    fn lower_ilike_any_escape_expr(
+        &mut self,
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        escape: Option<&String>,
+    ) -> Result<CoreExprId> {
+        if matches!(right, Expr::Subquery { .. }) {
+            return Err(
+                ErrorCode::SemanticError("ILIKE ANY with subquery is not supported yet")
+                    .set_span(span),
+            );
+        }
+
+        let left = self.lower_ast_expr(left)?;
+        let left = self.call(span, "lower", smallvec![left]);
+        let right = match right {
+            Expr::Tuple { span, exprs } => {
+                let exprs = exprs
+                    .iter()
+                    .map(|expr| {
+                        let expr = self.lower_ast_expr(expr)?;
+                        Ok(self.call(*span, "lower", smallvec![expr]))
+                    })
+                    .collect::<Result<_>>()?;
+                self.alloc(CoreExpr::Tuple { span: *span, exprs })
+            }
+            right => {
+                let right = self.lower_ast_expr(right)?;
+                self.call(span, "lower", smallvec![right])
+            }
+        };
+
+        let mut arguments = smallvec![left, right];
+        if let Some(escape) = escape {
+            arguments.push(self.literal(span, Literal::String(escape.to_lowercase())));
+        }
+        Ok(self.call(span, "like_any", arguments))
     }
 }
 
