@@ -1,0 +1,30 @@
+# Test: bloom runtime filter must resolve the physical column name, not an alias.
+#
+# t_probe has col_a (values 100..404) and col_b (values 1..20).
+# Subquery aliases col_b AS col_a, then joins with t_build(col_a = 1,2,3).
+# Bug: RF resolves "col_a" to the physical col_a (100..404) instead of
+# the aliased source col_b (1..20), bloom rejects all rows → returns 0.
+# Expected: 3
+
+statement ok
+CREATE OR REPLACE TABLE t_probe(col_a INT NOT NULL, col_b INT NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_build(col_a INT NOT NULL);
+
+statement ok
+INSERT INTO t_probe VALUES (100,1),(101,2),(102,3),(103,4),(104,5),(200,6),(201,7),(202,8),(203,9),(204,10),(300,11),(301,12),(302,13),(303,14),(304,15),(400,16),(401,17),(402,18),(403,19),(404,20);
+
+statement ok
+INSERT INTO t_build VALUES (1),(2),(3);
+
+query I
+SELECT count() FROM t_build AS b INNER JOIN (SELECT col_b AS col_a FROM t_probe) AS p ON b.col_a = p.col_a;
+----
+3
+
+statement ok
+DROP TABLE t_probe;
+
+statement ok
+DROP TABLE t_build;
