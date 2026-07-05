@@ -749,12 +749,20 @@ impl PhysicalPlanBuilder {
                             // (looked up by column_id) rather than the binding's
                             // context name, which can be an alias that collides
                             // with another column in the same table.
+                            // For nested/path columns (path_indices is Some),
+                            // use base_col.column_name (the stable path like "obj:x")
+                            // since field_of_column_id would return the parent field.
                             let entry = metadata.column(col.index);
                             if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                                let table = metadata.table(base_col.table_index);
-                                let schema = table.table().schema();
-                                if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
-                                    return Ok(field.name().clone());
+                                if base_col.path_indices.is_none() {
+                                    let table = metadata.table(base_col.table_index);
+                                    let schema = table.table().schema();
+                                    if let Ok(field) = schema.field_of_column_id(base_col.column_id)
+                                    {
+                                        return Ok(field.name().clone());
+                                    }
+                                } else {
+                                    return Ok(base_col.column_name.clone());
                                 }
                             }
                             Ok(col.column_name.clone())
