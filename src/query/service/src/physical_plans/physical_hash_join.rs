@@ -751,11 +751,17 @@ impl PhysicalPlanBuilder {
                             // with another column in the same table.
                             let entry = metadata.column(col.index);
                             if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                                let table = metadata.table(base_col.table_index);
-                                let schema = table.table().schema();
-                                if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
-                                    return Ok(field.name().clone());
+                                if base_col.path_indices.is_none() {
+                                    let table = metadata.table(base_col.table_index);
+                                    let schema = table.table().schema_with_stream();
+                                    if let Ok(field) = schema.field_of_column_id(base_col.column_id)
+                                    {
+                                        return Ok(field.name().clone());
+                                    }
                                 }
+                                // For nested/path columns, or when schema lookup
+                                // fails, use the stable metadata-level column name.
+                                return Ok(base_col.column_name.clone());
                             }
                             Ok(col.column_name.clone())
                         })?,

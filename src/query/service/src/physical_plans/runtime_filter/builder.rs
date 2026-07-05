@@ -288,11 +288,14 @@ fn scalar_to_remote_expr(
             .project_column_ref(|col| {
                 let entry = md.column(col.index);
                 if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                    let table = md.table(base_col.table_index);
-                    let schema = table.table().schema();
-                    if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
-                        return Ok(field.name().clone());
+                    if base_col.path_indices.is_none() {
+                        let table = md.table(base_col.table_index);
+                        let schema = table.table().schema_with_stream();
+                        if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
+                            return Ok(field.name().clone());
+                        }
                     }
+                    return Ok(base_col.column_name.clone());
                 }
                 Ok(col.column_name.clone())
             })?

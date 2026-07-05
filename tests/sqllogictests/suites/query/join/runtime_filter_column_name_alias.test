@@ -28,3 +28,63 @@ DROP TABLE t_probe;
 
 statement ok
 DROP TABLE t_build;
+
+# Test: runtime filter on a tuple inner field must still work correctly.
+# The path_indices guard should not break nested column RF behavior.
+# t_nested has a Tuple column with named field "key". We join on t:key.
+# Expected: 3 matches.
+
+statement ok
+CREATE OR REPLACE TABLE t_nested(id INT NOT NULL, t TUPLE(key INT, name VARCHAR) NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_lookup(key INT NOT NULL);
+
+statement ok
+INSERT INTO t_nested VALUES (1,(10,'a')),(2,(20,'b')),(3,(30,'c')),(4,(40,'d')),(5,(50,'e')),(6,(60,'f')),(7,(70,'g')),(8,(80,'h')),(9,(90,'i')),(10,(100,'j'));
+
+statement ok
+INSERT INTO t_lookup VALUES (10),(20),(30);
+
+query I
+SELECT count() FROM t_lookup AS b INNER JOIN t_nested AS p ON b.key = p.t:key;
+----
+3
+
+statement ok
+DROP TABLE t_nested;
+
+statement ok
+DROP TABLE t_lookup;
+
+# Test: tuple inner field aliased to collide with a top-level column.
+#
+# t_data has both a top-level "key" (values 100..109) and a tuple field
+# t:key (values 1..10). Subquery aliases t:key AS key, which collides
+# with the physical top-level "key" column.
+# Bug scenario: RF resolves "key" to the physical top-level column
+# (100..109) instead of the tuple leaf t:key (1..10), bloom rejects all.
+# Expected: 3
+
+statement ok
+CREATE OR REPLACE TABLE t_data(key INT NOT NULL, t TUPLE(key INT, name VARCHAR) NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_dim(key INT NOT NULL);
+
+statement ok
+INSERT INTO t_data VALUES (100,(1,'a')),(101,(2,'b')),(102,(3,'c')),(103,(4,'d')),(104,(5,'e')),(105,(6,'f')),(106,(7,'g')),(107,(8,'h')),(108,(9,'i')),(109,(10,'j'));
+
+statement ok
+INSERT INTO t_dim VALUES (1),(2),(3);
+
+query I
+SELECT count() FROM t_dim AS d INNER JOIN (SELECT t:key AS key FROM t_data) AS p ON d.key = p.key;
+----
+3
+
+statement ok
+DROP TABLE t_data;
+
+statement ok
+DROP TABLE t_dim;
