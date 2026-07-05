@@ -2331,7 +2331,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 _ if type_name == concat!("str", "in") => Err(nom::Err::Error(
                     Error::from_error_kind(i, ErrorKind::ExpectToken(Ident)),
                 )),
-                _ if i.dialect.is_postgre_sql() => Ok((rest, TypeName::String)),
                 _ => Err(nom::Err::Error(Error::from_error_kind(
                     i,
                     ErrorKind::ExpectToken(Ident),
