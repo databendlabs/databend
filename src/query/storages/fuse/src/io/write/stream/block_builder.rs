@@ -263,7 +263,7 @@ impl StreamBlockBuilder {
             properties.source_schema.clone(),
             true,
         );
-        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None);
+        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None, None)?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -420,15 +420,20 @@ impl StreamBlockBuilder {
             } else {
                 None
             };
-        let vector_index_state =
-            if let Some(ref mut vector_index_builder) = self.vector_index_builder {
-                let vector_index_location =
-                    self.properties.meta_locations.block_vector_index_location();
-                let vector_index_state = vector_index_builder.finalize(&vector_index_location)?;
-                Some(vector_index_state)
-            } else {
-                None
-            };
+        let (vector_index_state, vector_stats) = if let Some(ref mut vector_index_builder) =
+            self.vector_index_builder
+        {
+            let vector_index_location =
+                self.properties.meta_locations.block_vector_index_location();
+            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
+            (
+                vector_index_state.index_state,
+                vector_index_state.vector_stats,
+            )
+        } else {
+            (None, None)
+        };
+
         let vector_index_size = vector_index_state.as_ref().map(|v| v.size);
         let vector_index_location = vector_index_state.as_ref().map(|v| v.location.clone());
 
@@ -510,6 +515,7 @@ impl StreamBlockBuilder {
             spatial_stats,
             page_index_location,
             page_index_size,
+            vector_stats,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: bloom_index_state
                 .as_ref()

@@ -304,7 +304,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         // Clean up unused CTEs
         .add(CleanupUnusedCTEOptimizer)
         // Finalize derived join annotations after all logical rewrites.
-        .add(FinalizeSpatialJoinOptimizer::new());
+        .add(FinalizeSpatialJoinOptimizer::new(opt_ctx.clone()));
 
     // 17. Execute the pipeline
     let s_expr = pipeline.execute().await?;

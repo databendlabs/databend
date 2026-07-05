@@ -20,6 +20,8 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+
+use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
@@ -40,8 +42,9 @@ pub const OPT_KEY_ENABLE_SCHEMA_EVOLUTION: &str = "enable_schema_evolution";
 pub const OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM: &str = "analyze_histogram_algorithm";
 pub const OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR: &str =
     "analyze_histogram_kll_relative_error";
-pub const OPT_KEY_ANALYZE_TOP_N_COLUMNS: &str = "analyze_top_n_columns";
+pub const OPT_KEY_ANALYZE_FREQUENCY_COLUMNS: &str = "analyze_frequency_columns";
 pub const OPT_KEY_ANALYZE_TOP_N_SIZE: &str = "analyze_top_n_size";
+pub const OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE: &str = "analyze_count_min_sketch_error_rate";
 pub const MAX_ANALYZE_TOP_N_SIZE: usize = 10_000;
 
 // Attached table options.
@@ -124,6 +127,24 @@ pub fn analyze_top_n_size_from_options(
     Ok((top_n_size > 0).then_some(top_n_size))
 }
 
+pub fn analyze_count_min_sketch_error_rate_from_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<Option<f64>> {
+    let Some(value) = options.get(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE) else {
+        return Ok(None);
+    };
+    let error_rate = value.parse::<f64>().map_err(|_| {
+        ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE} must be a floating-point number, got: {value}"
+        ))
+    })?;
+    if error_rate == 0.0 {
+        return Ok(None);
+    }
+    ColumnCountMinSketch::width_for_error_rate(error_rate)?;
+    Ok(Some(error_rate))
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy, FrozenAPI)]
 pub enum ClusterType {
     Linear = 0,
@@ -179,5 +200,44 @@ mod tests {
             "invalid".to_string(),
         );
         assert!(analyze_top_n_size_from_options(&options).is_err());
+    }
+
+    #[test]
+    fn test_analyze_count_min_sketch_error_rate_from_options() {
+        let mut options = BTreeMap::new();
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            None
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "0".to_string(),
+        );
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            None
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "0.01".to_string(),
+        );
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            Some(0.01)
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "-0.1".to_string(),
+        );
+        assert!(analyze_count_min_sketch_error_rate_from_options(&options).is_err());
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(analyze_count_min_sketch_error_rate_from_options(&options).is_err());
     }
 }

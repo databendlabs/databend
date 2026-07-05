@@ -107,6 +107,7 @@ pub struct SpatialJoinState {
     predicates: Vec<RemoteExpr>,
     output_projection: BTreeSet<usize>,
     build_side: SpatialBuildSide,
+    search_distance: Option<f64>,
     output_compact_rows: usize,
     local_build_blocks: Mutex<Vec<DataBlock>>,
     build_data: OnceLock<SpatialJoinBuildData>,
@@ -124,6 +125,7 @@ impl SpatialJoinState {
         predicates: Vec<RemoteExpr>,
         output_projection: Vec<usize>,
         build_side: SpatialBuildSide,
+        search_distance: Option<f64>,
         output_compact_rows: usize,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -133,6 +135,7 @@ impl SpatialJoinState {
             predicates,
             output_projection: output_projection.into_iter().collect(),
             build_side,
+            search_distance,
             output_compact_rows: output_compact_rows.max(1),
             local_build_blocks: Mutex::new(Vec::new()),
             build_data: OnceLock::new(),
@@ -210,6 +213,15 @@ impl SpatialJoinState {
             match bbox {
                 Some(b) => {
                     let (min_x, min_y, max_x, max_y) = b.corners();
+                    let (min_x, min_y, max_x, max_y) = match self.search_distance {
+                        Some(distance) => (
+                            min_x - distance,
+                            min_y - distance,
+                            max_x + distance,
+                            max_y + distance,
+                        ),
+                        None => (min_x, min_y, max_x, max_y),
+                    };
                     builder.add(min_x, min_y, max_x, max_y);
                 }
                 None => {
@@ -565,6 +577,7 @@ mod tests {
             vec![],
             vec![0, 1],
             SpatialBuildSide::Right,
+            None,
             8192,
         );
         state.build_attach();
@@ -618,6 +631,7 @@ mod tests {
             vec![],
             vec![0, 1],
             SpatialBuildSide::Right,
+            None,
             8192,
         );
         state.build_attach();
@@ -693,6 +707,7 @@ mod tests {
             vec![st_intersects.as_remote_expr()],
             vec![0, 1],
             SpatialBuildSide::Right,
+            None,
             8192,
         );
         state.build_attach();
@@ -738,6 +753,7 @@ mod tests {
             vec![],
             vec![0, 1],
             SpatialBuildSide::Right,
+            None,
             8192,
         );
         state.build_attach();
@@ -776,6 +792,7 @@ mod tests {
             vec![],
             vec![0, 1],
             SpatialBuildSide::Right,
+            None,
             8192,
         );
         state.build_attach();
@@ -813,6 +830,7 @@ mod tests {
             vec![],
             vec![0, 1],
             SpatialBuildSide::Left,
+            None,
             8192,
         );
         state.build_attach();

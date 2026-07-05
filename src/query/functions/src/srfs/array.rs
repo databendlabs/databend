@@ -41,7 +41,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             [
                 ty @ (DataType::Null
                 | DataType::EmptyArray
-                | DataType::Nullable(_)
+                | DataType::Nullable(box DataType::Null)
+                | DataType::Nullable(box DataType::EmptyArray)
+                | DataType::Nullable(box DataType::Array(_))
+                | DataType::Nullable(box DataType::Variant)
                 | DataType::Array(_)
                 | DataType::Variant),
             ] => Some(build_unnest(ty, Box::new(|ty| ty))),
@@ -62,20 +65,21 @@ fn build_unnest(
     wrap_type: Box<dyn Fn(DataType) -> DataType>,
 ) -> Arc<Function> {
     match arg_type {
-        DataType::Null | DataType::EmptyArray | DataType::Nullable(box DataType::EmptyArray) => {
-            Arc::new(Function {
-                signature: FunctionSignature {
-                    name: "unnest".to_string(),
-                    args_type: vec![wrap_type(arg_type.clone())],
-                    return_type: DataType::Tuple(vec![DataType::Null]),
-                },
-                eval: FunctionEval::SRF {
-                    eval: Box::new(|_, ctx, _| {
-                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
-                    }),
-                },
-            })
-        }
+        DataType::Null
+        | DataType::EmptyArray
+        | DataType::Nullable(box DataType::Null)
+        | DataType::Nullable(box DataType::EmptyArray) => Arc::new(Function {
+            signature: FunctionSignature {
+                name: "unnest".to_string(),
+                args_type: vec![wrap_type(arg_type.clone())],
+                return_type: DataType::Tuple(vec![DataType::Null]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|_, ctx, _| {
+                    vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
+                }),
+            },
+        }),
         DataType::Array(ty) => build_unnest(
             ty,
             Box::new(move |ty| wrap_type(DataType::Array(Box::new(ty)))),

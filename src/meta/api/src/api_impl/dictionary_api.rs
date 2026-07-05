@@ -14,7 +14,6 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::KeyExistsBuilder;
-use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::schema::CreateDictionaryReply;
@@ -23,15 +22,15 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use fastrace::func_name;
@@ -108,21 +107,26 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn update_dictionary(
+    async fn get_dictionary_id(
         &self,
-        req: UpdateDictionaryReq,
-    ) -> Result<UpdateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "DictionaryApi: {}", func_name!());
+        name_ident: &DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>, MetaError> {
+        debug!(dict_ident :? =(name_ident); "DictionaryApi: {}", func_name!());
 
-        let res = self
-            .update_id_value(&req.dictionary_ident, req.dictionary_meta)
-            .await?;
+        self.get_pb(name_ident).await
+    }
 
-        if let Some((id, _meta)) = res {
-            Ok(UpdateDictionaryReply { dictionary_id: *id })
-        } else {
-            Err(AppError::from(req.dictionary_ident.unknown_error(func_name!())).into())
-        }
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>, MetaError> {
+        debug!(id_ident :? =(&id_ident); "DictionaryApi: {}", func_name!());
+
+        NameIdValueApi::<DictionaryNameIdent, _>::update_by_id(self, id_ident, dictionary_meta)
+            .await
     }
 
     #[logcall::logcall]
@@ -154,7 +158,7 @@ where
     async fn list_dictionaries(
         &self,
         req: ListDictionaryReq,
-    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError> {
+    ) -> Result<Vec<(String, DictionaryMeta)>, MetaError> {
         debug!(req :? =(&req); "DictionaryApi: {}", func_name!());
 
         let dictionary_ident = DictionaryNameIdent::new(

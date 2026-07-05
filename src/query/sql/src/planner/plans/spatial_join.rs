@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_expression::types::F64;
+use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
+use unicase::Ascii;
 
 use crate::ColumnSet;
+use crate::optimizer::ir::Side;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -24,78 +27,67 @@ pub struct SpatialJoinCandidate {
     pub predicate: ScalarExpr,
     pub left_geometry: ScalarExpr,
     pub right_geometry: ScalarExpr,
-    pub residual_predicates: Vec<ScalarExpr>,
+    pub distance: Option<F64>,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SpatialJoinRejectReason {
-    UnsupportedJoinType(JoinType),
-    NoSpatialPredicate,
-    MultipleSpatialPredicates,
-    InvalidSpatialPredicateArguments,
-    NonDeterministicArgument,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SpatialJoinArgumentSide {
-    Left,
-    Right,
-}
-
-pub type SpatialJoinGateResult = Result<SpatialJoinCandidate, SpatialJoinRejectReason>;
 
 pub fn spatial_join_gate(
     join: &Join,
     left_output_columns: &ColumnSet,
     right_output_columns: &ColumnSet,
-) -> SpatialJoinGateResult {
-    if join.join_type != JoinType::Inner {
-        return Err(SpatialJoinRejectReason::UnsupportedJoinType(join.join_type));
+) -> Option<SpatialJoinCandidate> {
+    if !has_spatial_join_preconditions(join) {
+        return None;
     }
 
-    let mut spatial_predicate = None;
-    let mut residual_predicates = Vec::new();
+    extract_spatial_join_candidate(
+        &join.non_equi_conditions[0],
+        left_output_columns,
+        right_output_columns,
+    )
+}
 
-    for predicate in &join.non_equi_conditions {
-        if is_spatial_predicate(predicate) {
-            if spatial_predicate.is_some() {
-                return Err(SpatialJoinRejectReason::MultipleSpatialPredicates);
-            }
+pub fn has_spatial_join_preconditions(join: &Join) -> bool {
+    join.join_type == JoinType::Inner
+        && join.equi_conditions.is_empty()
+        && join.non_equi_conditions.len() == 1
+        && join.build_side_cache_info.is_none()
+        && join.single_to_inner.is_none()
+}
 
-            match extract_spatial_join_candidate(
-                predicate,
-                left_output_columns,
-                right_output_columns,
-            ) {
-                Ok(predicate) => spatial_predicate = Some(predicate),
-                Err(reason) => return Err(reason),
-            }
-        } else {
-            residual_predicates.push(predicate.clone());
-        }
-    }
-
-    match spatial_predicate {
-        Some(mut candidate) => {
-            candidate.residual_predicates = residual_predicates;
-            Ok(candidate)
-        }
-        None => Err(SpatialJoinRejectReason::NoSpatialPredicate),
-    }
+/// Whether the join shape qualifies as a spatial join without inspecting child
+/// output columns. Use this in contexts where child relational properties are
+/// unavailable (e.g., Cascades enumeration via MExpr).
+pub fn is_spatial_join_shape(join: &Join) -> bool {
+    has_spatial_join_preconditions(join) && is_spatial_predicate(&join.non_equi_conditions[0])
 }
 
 fn extract_spatial_join_candidate(
     predicate: &ScalarExpr,
     left_output_columns: &ColumnSet,
     right_output_columns: &ColumnSet,
-) -> SpatialJoinGateResult {
+) -> Option<SpatialJoinCandidate> {
     let ScalarExpr::FunctionCall(function) = predicate else {
-        return Err(SpatialJoinRejectReason::NoSpatialPredicate);
+        return None;
     };
 
-    if function.arguments.len() != 2 {
-        return Err(SpatialJoinRejectReason::InvalidSpatialPredicateArguments);
+    if !is_spatial_predicate(predicate) {
+        return None;
     }
+
+    if !function.arguments.iter().all(ScalarExpr::is_deterministic) {
+        return None;
+    }
+
+    let distance = match function.arguments.get(2) {
+        Some(ScalarExpr::ConstantExpr(constant))
+        | Some(ScalarExpr::TypedConstantExpr(constant, _)) => constant
+            .value
+            .to_distance_threshold()
+            .map(F64::from)
+            .map(Some)?,
+        Some(_) => return None,
+        None => None,
+    };
 
     let first_side = spatial_argument_side(
         &function.arguments[0],
@@ -108,31 +100,21 @@ fn extract_spatial_join_candidate(
         right_output_columns,
     );
 
-    // The physical operator only uses the geometries to feed the bbox prefilter
-    // and re-runs the original `predicate` for the exact test, so we just need to
-    // know which geometry comes from which side; the predicate kind is irrelevant.
     let (left_geometry, right_geometry) = match (first_side, second_side) {
-        (Some(SpatialJoinArgumentSide::Left), Some(SpatialJoinArgumentSide::Right)) => {
+        (Some(Side::Left), Some(Side::Right)) => {
             (function.arguments[0].clone(), function.arguments[1].clone())
         }
-        (Some(SpatialJoinArgumentSide::Right), Some(SpatialJoinArgumentSide::Left)) => {
+        (Some(Side::Right), Some(Side::Left)) => {
             (function.arguments[1].clone(), function.arguments[0].clone())
         }
-        _ => return Err(SpatialJoinRejectReason::InvalidSpatialPredicateArguments),
+        _ => return None,
     };
 
-    // The bbox prefilter evaluates the geometry expressions separately from the
-    // predicate verification. Non-deterministic expressions could produce different
-    // values across evaluations, causing the prefilter to incorrectly drop pairs.
-    if !is_scalar_deterministic(&left_geometry) || !is_scalar_deterministic(&right_geometry) {
-        return Err(SpatialJoinRejectReason::NonDeterministicArgument);
-    }
-
-    Ok(SpatialJoinCandidate {
+    Some(SpatialJoinCandidate {
         predicate: predicate.clone(),
         left_geometry,
         right_geometry,
-        residual_predicates: Vec::new(),
+        distance,
     })
 }
 
@@ -141,17 +123,15 @@ fn is_spatial_predicate(predicate: &ScalarExpr) -> bool {
         return false;
     };
 
-    matches!(
-        function.func_name.to_ascii_lowercase().as_str(),
-        "st_intersects" | "st_within" | "st_contains" | "st_covers" | "st_coveredby"
-    )
+    let func_name = function.func_name.as_ref();
+    SPATIAL_INDEX_FUNCTIONS.contains(&(Ascii::new(func_name), function.arguments.len()))
 }
 
 fn spatial_argument_side(
     argument: &ScalarExpr,
     left_output_columns: &ColumnSet,
     right_output_columns: &ColumnSet,
-) -> Option<SpatialJoinArgumentSide> {
+) -> Option<Side> {
     let used_columns = argument.used_columns();
     if used_columns.is_empty() {
         return None;
@@ -165,27 +145,9 @@ fn spatial_argument_side(
         uses_only(left_output_columns, right_output_columns),
         uses_only(right_output_columns, left_output_columns),
     ) {
-        (true, false) => Some(SpatialJoinArgumentSide::Left),
-        (false, true) => Some(SpatialJoinArgumentSide::Right),
+        (true, false) => Some(Side::Left),
+        (false, true) => Some(Side::Right),
         _ => None,
-    }
-}
-
-fn is_scalar_deterministic(expr: &ScalarExpr) -> bool {
-    match expr {
-        ScalarExpr::BoundColumnRef(_)
-        | ScalarExpr::ConstantExpr(_)
-        | ScalarExpr::TypedConstantExpr(_, _) => true,
-        ScalarExpr::FunctionCall(func) => {
-            if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func.func_name) {
-                if property.non_deterministic {
-                    return false;
-                }
-            }
-            func.arguments.iter().all(is_scalar_deterministic)
-        }
-        ScalarExpr::CastExpr(cast) => is_scalar_deterministic(&cast.argument),
-        _ => false,
     }
 }
 
@@ -203,6 +165,7 @@ mod tests {
     use crate::plans::BoundColumnRef;
     use crate::plans::ConstantExpr;
     use crate::plans::FunctionCall;
+    use crate::plans::JoinType;
 
     fn column(index: usize, data_type: DataType) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -246,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_spatial_join_gate_accepts_spatial_predicate_with_residual() {
+    fn test_spatial_join_gate_rejects_residual_predicate() {
         let spatial_predicate = function_call("st_intersects", vec![
             column(0, DataType::Geometry),
             column(2, DataType::Geometry),
@@ -255,18 +218,12 @@ mod tests {
             column(1, DataType::Number(NumberDataType::Int32)),
             column(3, DataType::Number(NumberDataType::Int32)),
         ]);
-        let join = spatial_join(vec![spatial_predicate.clone(), residual_predicate.clone()]);
+        let join = spatial_join(vec![spatial_predicate, residual_predicate]);
 
-        let gate = spatial_join_gate(&join, &column_set(&[0, 1]), &column_set(&[2, 3]));
-        match gate {
-            Ok(candidate) => {
-                assert_eq!(candidate.predicate, spatial_predicate);
-                assert_eq!(candidate.left_geometry, column(0, DataType::Geometry));
-                assert_eq!(candidate.right_geometry, column(2, DataType::Geometry));
-                assert_eq!(candidate.residual_predicates, vec![residual_predicate]);
-            }
-            other => panic!("unexpected spatial join gate result: {other:?}"),
-        }
+        assert_eq!(
+            spatial_join_gate(&join, &column_set(&[0, 1]), &column_set(&[2, 3])),
+            None
+        );
     }
 
     #[test]
@@ -278,71 +235,60 @@ mod tests {
 
         let gate = spatial_join_gate(&join, &column_set(&[0]), &column_set(&[2]));
         match gate {
-            Ok(candidate) => {
+            Some(candidate) => {
                 assert_eq!(candidate.left_geometry, column(0, DataType::Geometry));
                 assert_eq!(candidate.right_geometry, column(2, DataType::Geometry));
             }
             other => panic!("unexpected spatial join gate result: {other:?}"),
         }
-
-        let join = spatial_join(vec![function_call("st_covers", vec![
-            column(2, DataType::Geometry),
-            column(0, DataType::Geometry),
-        ])]);
-
-        let candidate = spatial_join_gate(&join, &column_set(&[0]), &column_set(&[2]))
-            .expect("reversed spatial predicate should be accepted");
-        assert_eq!(candidate.left_geometry, column(0, DataType::Geometry));
-        assert_eq!(candidate.right_geometry, column(2, DataType::Geometry));
     }
 
     #[test]
     fn test_spatial_join_gate_accepts_all_spatial_index_predicates() {
-        for function_name in [
-            "st_intersects",
-            "st_within",
-            "st_contains",
-            "st_covers",
-            "st_coveredby",
-        ] {
-            let join = spatial_join(vec![function_call(function_name, vec![
-                column(0, DataType::Geometry),
-                column(1, DataType::Geometry),
-            ])]);
+        for (function_name, arg_count) in SPATIAL_INDEX_FUNCTIONS {
+            let function_name = function_name.into_inner();
+            let mut arguments = vec![column(0, DataType::Geometry), column(1, DataType::Geometry)];
+            if arg_count == 3 {
+                arguments.push(constant_i32(10));
+            }
 
-            spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1]))
-                .unwrap_or_else(|_| panic!("{function_name} should be accepted"));
+            let join = spatial_join(vec![function_call(function_name, arguments)]);
+
+            let candidate = spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1]))
+                .unwrap_or_else(|| panic!("{function_name} should be accepted"));
+            assert_eq!(candidate.distance.is_some(), arg_count == 3);
         }
     }
 
     #[test]
-    fn test_spatial_join_gate_treats_dwithin_as_residual() {
-        let join = spatial_join(vec![function_call("st_dwithin", vec![
+    fn test_spatial_join_gate_accepts_dwithin_with_constant_distance() {
+        let predicate = function_call("st_dwithin", vec![
             column(0, DataType::Geometry),
             column(1, DataType::Geometry),
             constant_i32(10),
+        ]);
+        let join = spatial_join(vec![predicate.clone()]);
+
+        let candidate = spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1]))
+            .expect("DWithin should be accepted");
+        assert_eq!(candidate.predicate, predicate);
+        assert_eq!(candidate.left_geometry, column(0, DataType::Geometry));
+        assert_eq!(candidate.right_geometry, column(1, DataType::Geometry));
+        assert_eq!(candidate.distance, Some(F64::from(10.0)));
+    }
+
+    #[test]
+    fn test_spatial_join_gate_rejects_dwithin_with_non_constant_distance() {
+        let join = spatial_join(vec![function_call("st_dwithin", vec![
+            column(0, DataType::Geometry),
+            column(1, DataType::Geometry),
+            column(2, DataType::Number(NumberDataType::Int32)),
         ])]);
 
         assert_eq!(
-            spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1])),
-            Err(SpatialJoinRejectReason::NoSpatialPredicate)
+            spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1, 2])),
+            None
         );
-
-        let join = spatial_join(vec![
-            function_call("st_intersects", vec![
-                column(0, DataType::Geometry),
-                column(1, DataType::Geometry),
-            ]),
-            function_call("st_dwithin", vec![
-                column(0, DataType::Geometry),
-                column(1, DataType::Geometry),
-                constant_i32(10),
-            ]),
-        ]);
-
-        let candidate = spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1]))
-            .expect("spatial predicate with a DWithin residual should be accepted");
-        assert_eq!(candidate.residual_predicates.len(), 1);
     }
 
     #[test]
@@ -354,7 +300,7 @@ mod tests {
         left_join.join_type = JoinType::Left;
         assert_eq!(
             spatial_join_gate(&left_join, &column_set(&[0]), &column_set(&[1])),
-            Err(SpatialJoinRejectReason::UnsupportedJoinType(JoinType::Left))
+            None
         );
 
         let same_side_join = spatial_join(vec![function_call("st_intersects", vec![
@@ -363,7 +309,7 @@ mod tests {
         ])]);
         assert_eq!(
             spatial_join_gate(&same_side_join, &column_set(&[0, 1]), &column_set(&[2])),
-            Err(SpatialJoinRejectReason::InvalidSpatialPredicateArguments)
+            None
         );
 
         let multi_spatial_join = spatial_join(vec![
@@ -382,7 +328,7 @@ mod tests {
                 &column_set(&[0, 1]),
                 &column_set(&[2, 3])
             ),
-            Err(SpatialJoinRejectReason::MultipleSpatialPredicates)
+            None
         );
     }
 }

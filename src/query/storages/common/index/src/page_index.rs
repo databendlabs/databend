@@ -31,6 +31,7 @@ use databend_common_expression::expr::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use super::eliminate_cast::*;
@@ -41,6 +42,7 @@ pub struct PageIndex {
     expr: Expr<String>,
     column_refs: HashMap<String, DataType>,
     func_ctx: FunctionContext,
+    cluster_key_id: u32,
 
     // index of the cluster key inside the schema
     cluster_key_fields: Vec<DataField>,
@@ -49,6 +51,7 @@ pub struct PageIndex {
 impl PageIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
+        cluster_key_id: u32,
         cluster_keys: Vec<String>,
         expr: &Expr<String>,
         schema: TableSchemaRef,
@@ -63,25 +66,53 @@ impl PageIndex {
             column_refs: expr.column_refs(),
             expr: expr.clone(),
             cluster_key_fields,
+            cluster_key_id,
             func_ctx,
         })
     }
 
-    /// Whether the filter expression references at least one cluster-key column. If not, the
-    /// sparse page index cannot narrow anything, so the pruner can skip loading the sidecar.
-    pub fn touches_cluster_key(&self) -> bool {
-        !self.cluster_key_fields.is_empty()
-            && self
+    pub fn try_apply_const(&self) -> Result<bool> {
+        // if the exprs did not contains the first cluster key, we should return true
+        if self.cluster_key_fields.is_empty()
+            || !self
                 .column_refs
-                .keys()
-                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
+                .iter()
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c.0))
+        {
+            return Ok(true);
+        }
+
+        // Only return false, which means to skip this block, when the expression is folded to a constant false.
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
-    pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
-        let pages = min_values.len();
-        if pages == 0 {
-            return Ok(vec![]);
+    #[fastrace::trace]
+    pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
+        let Some(stats) = stats else {
+            return Ok((true, None));
+        };
+        let min_values: Vec<Scalar> = match stats.pages {
+            Some(ref pages) => pages.clone(),
+            None => return Ok((true, None)),
+        };
+
+        let max_value = Scalar::Tuple(stats.max().clone());
+
+        if self.cluster_key_id != stats.cluster_key_id {
+            return Ok((true, None));
         }
+
+        if min_values.is_empty() {
+            return Ok((true, None));
+        }
+
+        let pages = min_values.len();
         let mut start = 0;
         let mut end = pages - 1;
 
@@ -90,7 +121,7 @@ impl PageIndex {
             let max_value = if start + 1 < pages {
                 &min_values[start + 1]
             } else {
-                max_value
+                &max_value
             };
 
             if self.eval_single_page(min_value, max_value)? {
@@ -104,7 +135,7 @@ impl PageIndex {
             let max_value = if end + 1 < pages {
                 &min_values[end + 1]
             } else {
-                max_value
+                &max_value
             };
 
             if self.eval_single_page(min_value, max_value)? {
@@ -113,10 +144,15 @@ impl PageIndex {
             end -= 1;
         }
 
-        #[allow(clippy::single_range_in_vec_init)]
-        match start > end {
-            true => Ok(vec![]),
-            false => Ok(vec![start..end + 1]),
+        // no page is pruned
+        if start + pages == end + 1 {
+            return Ok((true, None));
+        }
+
+        if start > end {
+            Ok((false, None))
+        } else {
+            Ok((true, Some(start..end + 1)))
         }
     }
 

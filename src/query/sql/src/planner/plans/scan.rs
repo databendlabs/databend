@@ -29,6 +29,7 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
 
@@ -38,6 +39,7 @@ use crate::IndexType;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::CountMinSketchSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
@@ -94,6 +96,7 @@ pub struct Statistics {
     pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
+    pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -149,6 +152,13 @@ impl Scan {
             .filter(|(col, _)| columns.contains(*col))
             .map(|(col, top_n)| (*col, top_n.clone()))
             .collect();
+        let count_min_sketch = self
+            .statistics
+            .count_min_sketch
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, count_min_sketch)| (*col, count_min_sketch.clone()))
+            .collect();
 
         Scan {
             table_index: self.table_index,
@@ -162,6 +172,7 @@ impl Scan {
                 column_stats,
                 histograms,
                 top_n,
+                count_min_sketch,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -392,6 +403,8 @@ impl Operator for Scan {
             }
         }
         let mut output_top_n: TopNSet = self.statistics.top_n.clone();
+        let mut output_count_min_sketch: CountMinSketchSet =
+            self.statistics.count_min_sketch.clone();
 
         let precise_cardinality = self
             .statistics
@@ -406,7 +419,8 @@ impl Operator for Scan {
                     column_stats,
                     StatCardinality::exact(precise_cardinality),
                 )
-                .with_top_n(std::mem::take(&mut output_top_n));
+                .with_top_n(std::mem::take(&mut output_top_n))
+                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
                 let cardinality = sb.apply(&prewhere.predicates)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -423,6 +437,7 @@ impl Operator for Scan {
         };
         if self.sample.is_some() {
             output_top_n.clear();
+            output_count_min_sketch.clear();
         }
 
         // SECURITY: When row access policy is active, apply selectivity from
@@ -437,6 +452,7 @@ impl Operator for Scan {
                         .unwrap_or_else(|| StatCardinality::estimate(cardinality));
                     SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
+                        .with_count_min_sketch(output_count_min_sketch)
                         .apply(preds)?
                 }
                 _ => cardinality,
@@ -447,6 +463,7 @@ impl Operator for Scan {
                     precise_cardinality: None,
                     column_stats: Default::default(),
                     top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -457,6 +474,7 @@ impl Operator for Scan {
                 precise_cardinality,
                 column_stats,
                 top_n: output_top_n,
+                count_min_sketch: output_count_min_sketch,
             },
         }))
     }

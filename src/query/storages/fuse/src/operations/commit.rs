@@ -524,7 +524,7 @@ impl FuseTable {
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
         // Previous statistics file location (if any)
         let mut prev_stats_location = snapshot.table_statistics_location();
-        // If no new rows are inserted, or HLL is empty, just reuse previous statistics
+        // If no rows are covered by commit-local HLL, just reuse previous statistics.
         if insert_rows == 0 || insert_hll.is_empty() {
             return Ok(TableStatsGenerator::new(
                 prev_stats_meta.cloned(),
@@ -535,7 +535,7 @@ impl FuseTable {
             ));
         }
 
-        // Initialize a new HLL with inserted rows
+        // Initialize a new HLL with commit-local HLL.
         let mut new_hll = insert_hll.clone();
         // Calculate updated row_count
         let (row_count, unstats_rows) = match prev_stats_meta {
@@ -573,7 +573,7 @@ impl FuseTable {
                         .ok()
                         .flatten();
                         if let Some(prev) = prev_snapshot {
-                            // Successfully loaded the previous snapshot → use its row_count + inserted rows
+                            // Successfully loaded the previous snapshot.
                             merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                             let prev_rows = prev.summary.row_count;
                             (
@@ -583,12 +583,12 @@ impl FuseTable {
                         } else {
                             // Could not load previous snapshot → old stats are invalid
                             // Drop prev_stats_location to mark stats as "reset",
-                            // and only use inserted rows as the new base.
+                            // and only use commit-local insert rows as the new base.
                             prev_stats_location = None;
                             (insert_rows, summary.row_count)
                         }
                     } else {
-                        // Normal case: accumulate old row_count + inserted rows
+                        // Normal case: accumulate old row_count + commit-local insert rows.
                         merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                         (
                             prev_stats.row_count + insert_rows,
@@ -596,7 +596,7 @@ impl FuseTable {
                         )
                     }
                 } else {
-                    // No previous stats available → start from inserted rows only
+                    // No previous stats available.
                     (insert_rows, summary.row_count)
                 }
             }

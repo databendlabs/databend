@@ -29,6 +29,8 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::IoStats;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
@@ -164,6 +166,8 @@ pub struct QueryContextShared {
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
+    pub(super) io_stats: Arc<IoStats>,
+
     pub(super) broadcast_registry: BroadcastRegistry,
 
     // QueryPerf configuration (profiler + hw counters)
@@ -246,6 +250,7 @@ impl QueryContextShared {
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
+            io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -377,6 +382,14 @@ impl QueryContextShared {
         let metrics: Vec<Arc<StorageMetrics>> =
             tables.iter().filter_map(|v| v.get_data_metrics()).collect();
         StorageMetrics::merge(&metrics)
+    }
+
+    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
+        self.io_stats.merge_snapshot(stats);
+    }
+
+    pub fn get_io_stats(&self) -> IoStatsSnapshot {
+        self.io_stats.snapshot()
     }
 
     pub fn get_tenant(&self) -> Tenant {

@@ -284,12 +284,9 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         bloom_filter_index_size,
                         None,
                         0,
-                        None,
-                        0,
                         row_count,
                         columns_meta,
                         Some(columns_stat),
-                        None,
                         compression,
                         None, // TODO(Sky): sort_min_max
                         Some(block_meta_index),

@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::DynTransformBuilder;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::AsyncTransformer;
 use databend_common_pipeline_transforms::Transformer;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -41,6 +42,7 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
+use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ChunkAppendDataFormatter;
@@ -677,6 +679,9 @@ impl IPhysicalPlan for ChunkAppendData {
         let mut eval_cluster_key_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(self.target_tables.len());
         let mut eval_cluster_key_num = 0;
+        let mut vector_cluster_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(self.target_tables.len());
+        let mut vector_cluster_num = 0;
         let mut sort_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(self.target_tables.len());
         let mut sort_num = 0;
@@ -697,7 +702,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 builder.ctx.clone(),
                 0,
                 block_thresholds,
-                Some(schema),
+                schema,
             )?;
             let operators = cluster_stats_gen.operators.clone();
             if !operators.is_empty() {
@@ -716,16 +721,27 @@ impl IPhysicalPlan for ChunkAppendData {
             } else {
                 eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
-            let cluster_keys = &cluster_stats_gen.cluster_key_index;
-            if !cluster_keys.is_empty() {
-                let sort_desc: Vec<SortColumnDescription> = cluster_keys
-                    .iter()
-                    .map(|index| SortColumnDescription {
-                        offset: *index,
-                        asc: true,
-                        nulls_first: false,
-                    })
-                    .collect();
+            if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+                let rows_per_block = block_thresholds.max_rows_per_block;
+                vector_cluster_builders.push(Box::new(move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformVectorCluster::new(
+                            vector_operator.vector_column_input_offset,
+                            vector_operator.info.dimension,
+                            vector_operator.info.distance_type,
+                            rows_per_block,
+                        ),
+                    )))
+                }));
+                vector_cluster_num += 1;
+            } else {
+                vector_cluster_builders.push(Box::new(builder.dummy_transform_builder()));
+            }
+
+            let sort_desc: Vec<SortColumnDescription> = cluster_stats_gen.sort_descs();
+            if !sort_desc.is_empty() {
                 let sort_desc: Arc<[_]> = sort_desc.into();
                 sort_builders.push(Box::new(
                     move |transform_input_port, transform_output_port| {
@@ -761,6 +777,12 @@ impl IPhysicalPlan for ChunkAppendData {
             builder
                 .main_pipeline
                 .add_transforms_by_chunk(eval_cluster_key_builders)?;
+        }
+
+        if vector_cluster_num > 0 {
+            builder
+                .main_pipeline
+                .add_transforms_by_chunk(vector_cluster_builders)?;
         }
 
         if sort_num > 0 {

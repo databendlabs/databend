@@ -31,8 +31,6 @@ use databend_common_io::ewkb_to_bbox;
 use geo::Rect;
 use unicase::Ascii;
 
-use crate::scalar_to_distance_threshold;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpatialPredicateOp {
     Contains,
@@ -202,7 +200,7 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
             "st_intersects" => SpatialPredicateOp::Intersects,
             "st_dwithin" => {
                 let Some(distance) = Self::extract_constant_arg(&args[2])
-                    .and_then(|scalar| scalar_to_distance_threshold(&scalar))
+                    .and_then(|scalar| scalar.to_distance_threshold())
                 else {
                     return Self::visit_function_call(call, self);
                 };

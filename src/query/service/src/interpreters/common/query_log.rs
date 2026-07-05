@@ -17,17 +17,22 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::IoStatsSnapshot;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_storages_system::LogType;
 use databend_common_storages_system::QueryLogElement;
 use log::error;
 use log::info;
 use serde_json;
+use serde_json::Value;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
@@ -91,6 +96,30 @@ fn pruning_stats_query_log_extra(part_stats: &HashMap<u32, PartStatistics>) -> R
             "blocks_bloom_index_read_cost_us": pruning_stats.blocks_bloom_index_read_cost,
         }
     }))?)
+}
+
+fn profile_stat_ms(profiles: &[PlanProfile], name: ProfileStatisticsName) -> u64 {
+    let nanos: u128 = profiles
+        .iter()
+        .map(|profile| profile.statistics[name.clone() as usize] as u128)
+        .sum();
+
+    (nanos / 1_000_000).min(u64::MAX as u128) as u64
+}
+
+fn resource_usage_query_log(stats: IoStatsSnapshot, profiles: &[PlanProfile]) -> Value {
+    serde_json::json!({
+        "list_count": stats.list_count,
+        "list_duration_ms": stats.list_duration_ms,
+        "read_count": stats.read_count,
+        "read_bytes": stats.read_bytes,
+        "read_duration_ms": stats.read_duration_ms,
+        "write_count": stats.write_count,
+        "write_bytes": stats.write_bytes,
+        "write_duration_ms": stats.write_duration_ms,
+        "cpu_time_ms": profile_stat_ms(profiles, ProfileStatisticsName::CpuTime),
+        "wait_time_ms": profile_stat_ms(profiles, ProfileStatisticsName::WaitTime),
+    })
 }
 
 impl InterpreterQueryLog {
@@ -269,6 +298,7 @@ impl InterpreterQueryLog {
             peek_memory_usage: HashMap::new(),
 
             session_id,
+            resource_usage: resource_usage_query_log(IoStatsSnapshot::default(), &[]),
         })
     }
 
@@ -277,6 +307,7 @@ impl InterpreterQueryLog {
         now: SystemTime,
         err: Option<ErrorCode<C>>,
         has_profiles: bool,
+        query_profiles: &[PlanProfile],
     ) -> Result<()> {
         ctx.set_finish_time(now);
         let cluster = ctx.get_cluster();
@@ -385,6 +416,11 @@ impl InterpreterQueryLog {
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
         let extra = pruning_stats_query_log_extra(&ctx.get_pruned_partitions_stats())?;
+        let mut io_stats = ctx.get_io_stats();
+        if let Some(stats) = ThreadTracker::io_stats() {
+            io_stats.merge(&stats.snapshot());
+        }
+        let resource_usage = resource_usage_query_log(io_stats, query_profiles);
 
         Self::write_log(QueryLogElement {
             log_type,
@@ -451,15 +487,39 @@ impl InterpreterQueryLog {
             txn_id,
             peek_memory_usage,
             session_id,
+            resource_usage,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use databend_common_base::runtime::IoStats;
+    use databend_common_base::runtime::profile::ProfileLabel;
     use serde_json::Value;
 
     use super::*;
+
+    fn plan_profile_with_times(cpu_time_ns: usize, wait_time_ns: usize) -> PlanProfile {
+        let mut statistics = [0; std::mem::variant_count::<ProfileStatisticsName>()];
+        statistics[ProfileStatisticsName::CpuTime as usize] = cpu_time_ns;
+        statistics[ProfileStatisticsName::WaitTime as usize] = wait_time_ns;
+
+        PlanProfile {
+            id: None,
+            name: None,
+            parent_id: None,
+            title: Arc::new(String::new()),
+            labels: Arc::new(Vec::<ProfileLabel>::new()),
+            statistics,
+            metrics: BTreeMap::new(),
+            errors: vec![],
+        }
+    }
 
     #[test]
     fn pruning_stats_query_log_extra_formats_io_costs() {
@@ -517,5 +577,50 @@ mod tests {
         let part_stats = HashMap::new();
 
         assert_eq!(pruning_stats_query_log_extra(&part_stats).unwrap(), "");
+    }
+
+    #[test]
+    fn resource_usage_query_log_formats_storage_metrics() {
+        let stats = IoStats::default();
+        stats.record_operation_duration("list", Duration::from_millis(7));
+        stats.record_operation_duration("read", Duration::from_millis(11));
+        stats.record_operation_duration("read", Duration::from_millis(13));
+        stats.record_operation_bytes("read", 17);
+        stats.record_operation_duration("write", Duration::from_millis(17));
+        stats.record_operation_bytes("write", 23);
+
+        let profiles = vec![
+            plan_profile_with_times(1_100_000, 2_300_000),
+            plan_profile_with_times(3_400_000, 4_500_000),
+        ];
+
+        let stats = resource_usage_query_log(stats.snapshot(), &profiles);
+
+        assert_eq!(stats["list_count"].as_u64(), Some(1));
+        assert_eq!(stats["list_duration_ms"].as_u64(), Some(7));
+        assert_eq!(stats["read_count"].as_u64(), Some(2));
+        assert_eq!(stats["read_bytes"].as_u64(), Some(17));
+        assert_eq!(stats["read_duration_ms"].as_u64(), Some(24));
+        assert_eq!(stats["write_count"].as_u64(), Some(1));
+        assert_eq!(stats["write_bytes"].as_u64(), Some(23));
+        assert_eq!(stats["write_duration_ms"].as_u64(), Some(17));
+        assert_eq!(stats["cpu_time_ms"].as_u64(), Some(4));
+        assert_eq!(stats["wait_time_ms"].as_u64(), Some(6));
+    }
+
+    #[test]
+    fn resource_usage_query_log_formats_empty_storage_metrics() {
+        let stats = resource_usage_query_log(IoStatsSnapshot::default(), &[]);
+
+        assert_eq!(stats["list_count"].as_u64(), Some(0));
+        assert_eq!(stats["list_duration_ms"].as_u64(), Some(0));
+        assert_eq!(stats["read_count"].as_u64(), Some(0));
+        assert_eq!(stats["read_bytes"].as_u64(), Some(0));
+        assert_eq!(stats["read_duration_ms"].as_u64(), Some(0));
+        assert_eq!(stats["write_count"].as_u64(), Some(0));
+        assert_eq!(stats["write_bytes"].as_u64(), Some(0));
+        assert_eq!(stats["write_duration_ms"].as_u64(), Some(0));
+        assert_eq!(stats["cpu_time_ms"].as_u64(), Some(0));
+        assert_eq!(stats["wait_time_ms"].as_u64(), Some(0));
     }
 }

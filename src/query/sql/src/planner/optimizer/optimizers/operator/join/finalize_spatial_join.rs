@@ -17,20 +17,32 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
 use crate::plans::spatial_join_gate;
 
 /// Finalize derived spatial join annotations after logical rewrites have settled.
-pub struct FinalizeSpatialJoinOptimizer {}
+pub struct FinalizeSpatialJoinOptimizer {
+    ctx: Arc<OptimizerContext>,
+}
 
 impl FinalizeSpatialJoinOptimizer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
+        Self { ctx }
     }
 
     pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        if !self
+            .ctx
+            .get_table_ctx()
+            .get_settings()
+            .get_enable_spatial_join()?
+        {
+            return Ok(s_expr.clone());
+        }
+
         Self::finalize_spatial_join(s_expr)
     }
 
@@ -55,7 +67,6 @@ impl FinalizeSpatialJoinOptimizer {
             let right_prop = RelExpr::with_s_expr(result.right_child()).derive_relational_prop()?;
             let spatial_join =
                 spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
-                    .ok()
                     .map(Box::new);
 
             if join.spatial_join != spatial_join {
@@ -69,12 +80,6 @@ impl FinalizeSpatialJoinOptimizer {
     }
 }
 
-impl Default for FinalizeSpatialJoinOptimizer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait::async_trait]
 impl Optimizer for FinalizeSpatialJoinOptimizer {
     fn name(&self) -> String {
@@ -83,110 +88,5 @@ impl Optimizer for FinalizeSpatialJoinOptimizer {
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use databend_common_expression::types::DataType;
-
-    use super::*;
-    use crate::ColumnBindingBuilder;
-    use crate::ColumnSet;
-    use crate::Symbol;
-    use crate::Visibility;
-    use crate::plans::BoundColumnRef;
-    use crate::plans::FunctionCall;
-    use crate::plans::Join;
-    use crate::plans::JoinType;
-    use crate::plans::ScalarExpr;
-    use crate::plans::Scan;
-
-    fn column(index: usize, data_type: DataType) -> ScalarExpr {
-        ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: ColumnBindingBuilder::new(
-                format!("c{index}"),
-                Symbol::new(index),
-                Box::new(data_type),
-                Visibility::Visible,
-            )
-            .build(),
-        })
-    }
-
-    fn function_call(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: func_name.to_string(),
-            params: vec![],
-            arguments,
-        })
-    }
-
-    fn scan(indices: &[usize]) -> Arc<SExpr> {
-        let columns: ColumnSet = indices.iter().copied().map(Symbol::new).collect();
-        Arc::new(SExpr::create_leaf(Arc::new(RelOperator::Scan(Scan {
-            columns,
-            ..Default::default()
-        }))))
-    }
-
-    fn join_expr(join: Join) -> SExpr {
-        SExpr::create_binary(Arc::new(RelOperator::Join(join)), scan(&[0]), scan(&[1]))
-    }
-
-    #[test]
-    fn test_finalize_spatial_join_sets_candidate() -> Result<()> {
-        let spatial_predicate = function_call("st_intersects", vec![
-            column(0, DataType::Geometry),
-            column(1, DataType::Geometry),
-        ]);
-        let join = Join {
-            join_type: JoinType::Inner,
-            non_equi_conditions: vec![spatial_predicate.clone()],
-            ..Default::default()
-        };
-
-        let result = FinalizeSpatialJoinOptimizer::new().optimize_sync(&join_expr(join))?;
-        let RelOperator::Join(join) = result.plan() else {
-            unreachable!()
-        };
-        let candidate = join.spatial_join.as_ref().expect("spatial candidate");
-        assert_eq!(candidate.predicate, spatial_predicate);
-        assert_eq!(candidate.left_geometry, column(0, DataType::Geometry));
-        assert_eq!(candidate.right_geometry, column(1, DataType::Geometry));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_finalize_spatial_join_clears_stale_candidate() -> Result<()> {
-        let spatial_predicate = function_call("st_intersects", vec![
-            column(0, DataType::Geometry),
-            column(1, DataType::Geometry),
-        ]);
-        let mut join = Join {
-            join_type: JoinType::Inner,
-            non_equi_conditions: vec![spatial_predicate.clone()],
-            ..Default::default()
-        };
-        let mut optimizer = FinalizeSpatialJoinOptimizer::new();
-        let result = optimizer.optimize_sync(&join_expr(join.clone()))?;
-        let RelOperator::Join(finalized_join) = result.plan() else {
-            unreachable!()
-        };
-        join.spatial_join = finalized_join.spatial_join.clone();
-        join.join_type = JoinType::Left;
-
-        let result = optimizer.optimize_sync(&join_expr(join))?;
-        let RelOperator::Join(join) = result.plan() else {
-            unreachable!()
-        };
-        assert!(join.spatial_join.is_none());
-
-        Ok(())
     }
 }

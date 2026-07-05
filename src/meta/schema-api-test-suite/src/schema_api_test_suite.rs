@@ -144,13 +144,13 @@ use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
@@ -8283,12 +8283,13 @@ impl SchemaApiTestSuite {
         );
         let dict3 = DictionaryIdentity::new(db_id, dict_name3.to_string());
         let dict_ident3 = DictionaryNameIdent::new(dict_tenant.clone(), dict3.clone());
+        let dictionary_meta_mysql = dictionary_meta("mysql");
 
         {
             info!("--- create dictionary");
             let req = CreateDictionaryReq {
                 dictionary_ident: dict_ident1.clone(),
-                dictionary_meta: dictionary_meta("mysql"),
+                dictionary_meta: dictionary_meta_mysql.clone(),
             };
             let res = mt.create_dictionary(req).await;
             assert!(res.is_ok());
@@ -8342,13 +8343,21 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- update dictionary");
-            let req = UpdateDictionaryReq {
-                dictionary_ident: dict_ident1.clone(),
-                dictionary_meta: dictionary_meta("postgresql"),
-            };
-            let res = mt.update_dictionary(req).await;
-            assert!(res.is_ok());
+            info!("--- get dictionary id and update dictionary by id");
+            let seq_id = mt.get_dictionary_id(&dict_ident1).await?;
+            assert!(seq_id.is_some());
+            let seq_id = seq_id.unwrap();
+            assert_eq!(*seq_id.data, dict_id);
+
+            let id_ident = seq_id.data.into_t_ident(dict_ident1.tenant());
+            let dictionary_meta_postgresql = dictionary_meta("postgresql");
+            let transition = mt
+                .update_dictionary_by_id(id_ident, dictionary_meta_postgresql.clone())
+                .await?;
+            let (prev, result) = transition.unwrap();
+            assert_eq!(prev.data, dictionary_meta_mysql);
+            assert_eq!(result.data, dictionary_meta_postgresql);
+            assert!(result.seq > prev.seq);
 
             let req = dict_ident1.clone();
             let res = mt.get_dictionary(req).await?;
@@ -8359,17 +8368,20 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- update unknown dictionary");
-            let req = UpdateDictionaryReq {
-                dictionary_ident: dict_ident2.clone(),
-                dictionary_meta: dictionary_meta("postgresql"),
-            };
-            let res = mt.update_dictionary(req).await;
-            assert!(res.is_err());
-            let status = res.err().unwrap();
-            let err_code = ErrorCode::from(status);
+            info!("--- get unknown dictionary id");
+            let seq_id = mt.get_dictionary_id(&dict_ident2).await?;
+            assert!(seq_id.is_none());
+        }
 
-            assert_eq!(ErrorCode::UNKNOWN_DICTIONARY, err_code.code());
+        {
+            info!("--- update unknown dictionary id");
+            let id_ident = DictionaryId::new(u64::MAX).into_t_ident(dict_ident1.tenant());
+            let transition = mt
+                .update_dictionary_by_id(id_ident, dictionary_meta("postgresql"))
+                .await?;
+            assert!(!transition.is_changed());
+            assert!(transition.prev.is_none());
+            assert!(transition.result.is_none());
         }
 
         {

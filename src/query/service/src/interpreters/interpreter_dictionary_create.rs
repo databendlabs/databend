@@ -19,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_sql::plans::CreateDictionaryPlan;
 
@@ -78,11 +77,25 @@ impl Interpreter for CreateDictionaryInterpreter {
                         return Ok(PipelineBuildResult::create());
                     }
                     CreateOption::CreateOrReplace => {
-                        let req = UpdateDictionaryReq {
-                            dictionary_meta: dictionary_meta.clone(),
-                            dictionary_ident: dictionary_ident.clone(),
+                        let Some(seq_id) = catalog.get_dictionary_id(dictionary_ident).await?
+                        else {
+                            return Err(ErrorCode::UnknownDictionary(format!(
+                                "Dictionary {} does not exist",
+                                self.plan.dictionary,
+                            )));
                         };
-                        let _reply = catalog.update_dictionary(req).await?;
+
+                        let id_ident = seq_id.data.into_t_ident(tenant);
+                        let transition = catalog
+                            .update_dictionary_by_id(id_ident, dictionary_meta.clone())
+                            .await?;
+                        if !transition.is_changed() {
+                            return Err(ErrorCode::UnknownDictionary(format!(
+                                "Dictionary {} does not exist",
+                                self.plan.dictionary,
+                            )));
+                        }
+
                         return Ok(PipelineBuildResult::create());
                     }
                 }

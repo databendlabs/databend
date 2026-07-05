@@ -476,6 +476,7 @@ pub fn analyze_cluster_keys(
     };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(exprs.len());
+    let mut vector_cluster_key_num = 0;
     for ast in ast_exprs {
         let (scalar, _) = *type_checker.resolve(&ast)?;
         if scalar.used_columns().len() != 1 || !scalar.evaluable() {
@@ -494,11 +495,20 @@ pub fn analyze_cluster_keys(
         }
 
         let data_type = expr.data_type();
-        if !Binder::valid_cluster_key_type(data_type) {
+        let (is_valid_type, is_vector_type) = Binder::valid_cluster_key_type(data_type);
+        if !is_valid_type {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Unsupported data type '{}' for cluster by expression `{:#}`",
                 data_type, ast
             )));
+        }
+        if is_vector_type {
+            vector_cluster_key_num += 1;
+            if vector_cluster_key_num > 1 {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Only one vector column is supported in cluster by",
+                ));
+            }
         }
 
         exprs.push(expr);

@@ -165,8 +165,9 @@ impl IPhysicalPlan for Mutation {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
+        let input_schema = DataSchema::from(table.schema_with_stream()).into();
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));

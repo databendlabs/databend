@@ -164,6 +164,7 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
+    #[recursive::recursive]
     pub fn partial_run(
         &self,
         expr: &Expr,
@@ -2169,6 +2170,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    #[recursive::recursive]
     pub fn get_select_child(
         &self,
         expr: &Expr,

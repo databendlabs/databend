@@ -14,13 +14,33 @@ statement ok
 set enable_table_snapshot_stats = 1
 
 statement ok
-CREATE TABLE t_topn_off(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 0
+CREATE TABLE t_topn_off(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0
 
 statement ok
-CREATE TABLE t_topn_on(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_frequency_columns_only(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a'
+
+statement ok
+CREATE TABLE t_cms_off(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0 analyze_count_min_sketch_error_rate = '0'
+
+statement ok
+CREATE TABLE t_topn_on(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
+
+statement ok
+CREATE TABLE t_cms_on(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 0 analyze_count_min_sketch_error_rate = '0.001'
+
+statement error
+CREATE TABLE t_cms_bad_error_rate(a int) analyze_frequency_columns = 'a' analyze_count_min_sketch_error_rate = '-0.1'
 
 statement ok
 INSERT INTO t_topn_off
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+INSERT INTO t_frequency_columns_only
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
+INSERT INTO t_cms_off
 SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
@@ -28,13 +48,29 @@ INSERT INTO t_topn_on
 SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
+INSERT INTO t_cms_on
+SELECT if(number < 90, 1, number - 88)::int FROM numbers(100)
+
+statement ok
 ANALYZE TABLE t_topn_off
+
+statement ok
+ANALYZE TABLE t_frequency_columns_only
+
+statement ok
+ANALYZE TABLE t_cms_off
 
 statement ok
 ANALYZE TABLE t_topn_on
 
+statement ok
+ANALYZE TABLE t_cms_on
+
 statement error
 ANALYZE TABLE t_topn_on NOSCAN
+
+statement error
+ANALYZE TABLE t_cms_on NOSCAN
 
 query T
 EXPLAIN SELECT * FROM t_topn_off WHERE a = 1
@@ -42,9 +78,53 @@ EXPLAIN SELECT * FROM t_topn_off WHERE a = 1
 table: default.db_09_0053.t_topn_off<slt:ignore>estimated rows: 9.09
 
 query T
+EXPLAIN SELECT * FROM t_frequency_columns_only WHERE a = 1
+----
+table: default.db_09_0053.t_frequency_columns_only<slt:ignore>estimated rows: 9.09
+
+query T
+EXPLAIN SELECT * FROM t_cms_off WHERE a = 1
+----
+table: default.db_09_0053.t_cms_off<slt:ignore>estimated rows: 9.09
+
+query T
 EXPLAIN SELECT * FROM t_topn_on WHERE a = 1
 ----
 table: default.db_09_0053.t_topn_on<slt:ignore>estimated rows: 90.00
+
+query T
+EXPLAIN SELECT * FROM t_cms_on WHERE a = 1
+----
+table: default.db_09_0053.t_cms_on<slt:ignore>estimated rows: 90.00
+
+statement ok
+CREATE TABLE t_cms_preserve_hll(a int) approx_distinct_columns = 'a'
+
+statement ok
+INSERT INTO t_cms_preserve_hll
+SELECT number::int FROM numbers(10)
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+query TI
+SELECT column_name, distinct_count FROM fuse_statistic('db_09_0053', 't_cms_preserve_hll')
+----
+a 10
+
+statement ok
+ALTER TABLE t_cms_preserve_hll SET OPTIONS(analyze_frequency_columns = 'a', analyze_top_n_size = 0, analyze_count_min_sketch_error_rate = '0.001')
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+statement ok
+ANALYZE TABLE t_cms_preserve_hll
+
+query TI
+SELECT column_name, distinct_count FROM fuse_statistic('db_09_0053', 't_cms_preserve_hll')
+----
+a 10
 
 statement ok
 CREATE TABLE t_topn_pending(a int, b int) approx_distinct_columns = ''
@@ -54,7 +134,7 @@ INSERT INTO t_topn_pending
 SELECT number::int, if(number < 90, 1, number - 88)::int FROM numbers(100)
 
 statement ok
-ALTER TABLE t_topn_pending SET OPTIONS(enable_auto_analyze = 1, analyze_top_n_columns = 'b', analyze_top_n_size = 2)
+ALTER TABLE t_topn_pending SET OPTIONS(enable_auto_analyze = 1, analyze_frequency_columns = 'b', analyze_top_n_size = 2)
 
 query T
 EXPLAIN SELECT * FROM t_topn_pending WHERE b = 1
@@ -65,7 +145,7 @@ statement ok
 set enable_table_snapshot_stats = 0
 
 statement ok
-CREATE TABLE t_topn_without_snapshot_stats(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_topn_without_snapshot_stats(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_topn_without_snapshot_stats
@@ -80,7 +160,7 @@ EXPLAIN SELECT * FROM t_topn_without_snapshot_stats WHERE a = 1
 table: default.db_09_0053.t_topn_without_snapshot_stats<slt:ignore>estimated rows: 90.00
 
 statement ok
-CREATE TABLE t_topn_after_append(a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_topn_after_append(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_topn_after_append
@@ -99,7 +179,7 @@ EXPLAIN SELECT * FROM t_topn_after_append WHERE a = 1
 table: default.db_09_0053.t_topn_after_append<slt:ignore>estimated rows: 500.00
 
 statement ok
-CREATE TABLE t_topn_after_update(id int, a int) approx_distinct_columns = '' analyze_top_n_columns = 'a' analyze_top_n_size = 2
+CREATE TABLE t_topn_after_update(id int, a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO t_topn_after_update

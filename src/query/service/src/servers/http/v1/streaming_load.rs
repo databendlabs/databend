@@ -97,6 +97,9 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.io_stats = Some(std::sync::Arc::new(
+        databend_common_base::runtime::IoStats::default(),
+    ));
     tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 
@@ -114,6 +117,9 @@ pub async fn streaming_load_handler(
     let query_mem_stat = MemStat::create(ctx.query_id.clone());
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(ctx.query_id.clone());
+    tracking_payload.io_stats = Some(std::sync::Arc::new(
+        databend_common_base::runtime::IoStats::default(),
+    ));
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
 
     let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);

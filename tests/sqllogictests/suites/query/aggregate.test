@@ -69,6 +69,23 @@ SELECT SUM(agg0) FROM (
 ----
 4.0
 
+query TR
+WITH user_income AS (
+  SELECT CAST(number % 2 AS STRING) AS user_id,
+         SUM(number::FLOAT64) AS total_entry_fee,
+         SUM(number::FLOAT64) + 1 AS total_actual_reward
+  FROM numbers(5)
+  GROUP BY user_id
+)
+SELECT user_id,
+       total_actual_reward - total_entry_fee AS total_user_income
+FROM user_income
+WHERE total_user_income < 10
+ORDER BY user_id
+----
+0 1.0
+1 1.0
+
 query TT
 select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
 ----

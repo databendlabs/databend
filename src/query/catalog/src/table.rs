@@ -41,6 +41,7 @@ use databend_common_statistics::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -608,6 +609,11 @@ pub trait ColumnStatisticsProvider: Send {
 
     // return top-N frequency stats if any
     fn top_n(&self, _column_id: ColumnId) -> Option<ColumnTopN> {
+        None
+    }
+
+    // return count-min sketch frequency stats if any
+    fn count_min_sketch(&self, _column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         None
     }
 }

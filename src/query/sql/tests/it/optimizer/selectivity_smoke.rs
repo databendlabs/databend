@@ -33,6 +33,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::number::F32;
+use databend_common_expression::types::number::F64 as ExprF64;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::ColumnBindingBuilder;
@@ -144,6 +145,33 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
     assert!((estimated_rows - 50.0).abs() < f64::EPSILON);
     assert_eq!(stat.min, Datum::UInt(101));
     assert_eq!(stat.max, Datum::UInt(1000));
+}
+
+#[test]
+fn float_full_domain_arithmetic_selectivity_is_not_empty() {
+    let column = column_expr("a", 0, DataType::Number(NumberDataType::Float64));
+    let expr = comparison_expr(
+        "lt",
+        function_expr("minus", vec![
+            function_expr("plus", vec![
+                column.clone(),
+                constant_expr(Scalar::Number(NumberScalar::Float64(ExprF64::from(1.0)))),
+            ]),
+            column,
+        ]),
+        constant_expr(Scalar::Number(NumberScalar::Float64(ExprF64::from(10.0)))),
+    );
+
+    let mut estimator =
+        SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(10.0));
+    let estimated_rows = estimator
+        .apply(&[expr])
+        .expect("float arithmetic comparison should estimate");
+
+    assert!(
+        estimated_rows > 0.0,
+        "full Float64 domain arithmetic is not proof of an empty result"
+    );
 }
 
 #[test]

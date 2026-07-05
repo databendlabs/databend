@@ -36,6 +36,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
+use databend_common_sql::optimizer::ir::CountMinSketchSet;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::optimizer::ir::TopNSet;
 use databend_common_sql::plans::BoundColumnRef;
@@ -49,6 +50,7 @@ use databend_common_statistics::F64;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
@@ -84,7 +86,15 @@ fn run_case_with_predicates(
             raw_expr_to_scalar(&raw_expr, columns)
         })
         .collect::<Vec<_>>();
-    run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality, None)
+    run_scalar_case_with_predicates(
+        file,
+        expr_texts,
+        &exprs,
+        column_stats,
+        cardinality,
+        None,
+        None,
+    )
 }
 
 fn run_scalar_case_with_predicates(
@@ -94,14 +104,19 @@ fn run_scalar_case_with_predicates(
     column_stats: ColumnStatSet,
     cardinality: StatCardinality,
     top_n: Option<TopNSet>,
+    count_min_sketch: Option<CountMinSketchSet>,
 ) -> Result<()> {
     writeln!(file, "expr          : {}", expr_texts.join(", "))?;
 
     let in_stats = column_stats_to_string(&column_stats);
     let in_top_n = top_n.as_ref().map(top_n_to_string);
+    let in_count_min_sketch = count_min_sketch.as_ref().map(count_min_sketch_to_string);
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
     if let Some(top_n) = top_n {
         estimator = estimator.with_top_n(top_n);
+    }
+    if let Some(count_min_sketch) = count_min_sketch {
+        estimator = estimator.with_count_min_sketch(count_min_sketch);
     }
     let estimated_rows = estimator.apply(predicates)?;
     let out_stats = estimator.into_column_stats();
@@ -115,6 +130,9 @@ fn run_scalar_case_with_predicates(
     writeln!(file, "in stats      :\n{in_stats}")?;
     if let Some(in_top_n) = in_top_n {
         writeln!(file, "in topn       :\n{in_top_n}")?;
+    }
+    if let Some(in_count_min_sketch) = in_count_min_sketch {
+        writeln!(file, "in cms        :\n{in_count_min_sketch}")?;
     }
     writeln!(
         file,
@@ -156,6 +174,16 @@ fn top_n_to_string(top_n: &TopNSet) -> String {
                 )
             })
         })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn count_min_sketch_to_string(count_min_sketch: &CountMinSketchSet) -> String {
+    let mut keys = count_min_sketch.keys().copied().collect::<Vec<_>>();
+    keys.sort();
+
+    keys.iter()
+        .map(|i| format!("{i} present"))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -302,8 +330,159 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
             Some(top_n.clone()),
+            None,
         )?;
     }
+
+    write_case_title(
+        &mut file,
+        "count_min_sketch_equality_cache",
+        "Equality predicates should use Count-Min Sketch estimates when the value is clearly above the NDV fallback.",
+    )?;
+    let count_min_sketch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(999),
+        ndv: NdvEstimate::exact(100.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let mut column_count_min_sketch = ColumnCountMinSketch::new(4096, 4);
+    column_count_min_sketch.add_with_count(Scalar::Number(NumberScalar::UInt64(77)).as_ref(), 42);
+    let count_min_sketch =
+        CountMinSketchSet::from_iter([(Symbol::new(0), column_count_min_sketch)]);
+    for expr in ["id = 77", "id != 77"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            count_min_sketch_stats.clone(),
+            StatCardinality::estimate(1000.0),
+            None,
+            Some(count_min_sketch.clone()),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "count_min_sketch_equality_cache_fallback",
+        "Count-Min Sketch estimates should fall back when the value is not clearly above the NDV fallback.",
+    )?;
+    let mut coarse_count_min_sketch = ColumnCountMinSketch::new(64, 4);
+    coarse_count_min_sketch.add_with_count(Scalar::Number(NumberScalar::UInt64(77)).as_ref(), 42);
+    let coarse_count_min_sketch =
+        CountMinSketchSet::from_iter([(Symbol::new(0), coarse_count_min_sketch)]);
+    for expr in ["id = 77", "id != 77"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            count_min_sketch_stats.clone(),
+            StatCardinality::estimate(1000.0),
+            None,
+            Some(coarse_count_min_sketch.clone()),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "count_min_sketch_hot_value_with_coarse_error",
+        "Count-Min Sketch estimates should still be used when the error bound is coarse but the value is clearly hot.",
+    )?;
+    let hot_count_min_sketch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9999),
+        ndv: NdvEstimate::exact(2001.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let mut hot_count_min_sketch = ColumnCountMinSketch::new(2000, 4);
+    hot_count_min_sketch.add_with_count(Scalar::Number(NumberScalar::UInt64(0)).as_ref(), 160000);
+    let hot_count_min_sketch =
+        CountMinSketchSet::from_iter([(Symbol::new(0), hot_count_min_sketch)]);
+    for expr in ["id = 0", "id != 0"] {
+        let raw_expr = parse_raw_expr(expr, top_n_columns, &BUILTIN_FUNCTIONS);
+        let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+        run_scalar_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[predicate],
+            hot_count_min_sketch_stats.clone(),
+            StatCardinality::estimate(200000.0),
+            None,
+            Some(hot_count_min_sketch.clone()),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "topn_precedes_count_min_sketch",
+        "TopN equality estimates should take precedence when both TopN and Count-Min Sketch have a frequency for the scalar.",
+    )?;
+    let top_n_precedence = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(77)),
+            count: 37,
+            error: 0,
+        }],
+        min_index: None,
+    })]);
+    let mut conflicting_count_min_sketch = ColumnCountMinSketch::new(4096, 4);
+    conflicting_count_min_sketch
+        .add_with_count(Scalar::Number(NumberScalar::UInt64(77)).as_ref(), 80);
+    let conflicting_count_min_sketch =
+        CountMinSketchSet::from_iter([(Symbol::new(0), conflicting_count_min_sketch)]);
+    let raw_expr = parse_raw_expr("id = 77", top_n_columns, &BUILTIN_FUNCTIONS);
+    let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+    run_scalar_case_with_predicates(
+        &mut file,
+        &["id = 77"],
+        &[predicate],
+        count_min_sketch_stats.clone(),
+        StatCardinality::estimate(1000.0),
+        Some(top_n_precedence),
+        Some(conflicting_count_min_sketch),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "count_min_sketch_precedes_approximate_topn",
+        "Count-Min Sketch should be used when an approximate TopN hit is looser than the CMS estimate.",
+    )?;
+    let wide_hot_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(99999),
+        ndv: NdvEstimate::exact(100000.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    let approximate_top_n_hit = TopNSet::from_iter([(Symbol::new(0), ColumnTopN {
+        values: vec![ColumnTopNEntry {
+            scalar: Scalar::Number(NumberScalar::UInt64(199)),
+            count: 20000,
+            error: 17500,
+        }],
+        min_index: None,
+    })]);
+    let mut tighter_count_min_sketch = ColumnCountMinSketch::new(4096, 4);
+    tighter_count_min_sketch
+        .add_with_count(Scalar::Number(NumberScalar::UInt64(199)).as_ref(), 2500);
+    let tighter_count_min_sketch =
+        CountMinSketchSet::from_iter([(Symbol::new(0), tighter_count_min_sketch)]);
+    let raw_expr = parse_raw_expr("id = 199", top_n_columns, &BUILTIN_FUNCTIONS);
+    let predicate = raw_expr_to_scalar(&raw_expr, top_n_columns);
+    run_scalar_case_with_predicates(
+        &mut file,
+        &["id = 199"],
+        &[predicate],
+        wide_hot_stats,
+        StatCardinality::estimate(1000000.0),
+        Some(approximate_top_n_hit),
+        Some(tighter_count_min_sketch),
+    )?;
 
     write_case_title(
         &mut file,
@@ -338,6 +517,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
             Some(constrained_top_n.clone()),
+            None,
         )?;
     }
 
@@ -364,6 +544,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
             Some(approximate_top_n.clone()),
+            None,
         )?;
     }
 
@@ -397,6 +578,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             fallback_top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
             Some(fallback_top_n.clone()),
+            None,
         )?;
     }
 
@@ -431,6 +613,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             nullable_top_n_stats.clone(),
             StatCardinality::estimate(100.0),
             Some(nullable_top_n.clone()),
+            None,
         )?;
     }
 
@@ -537,6 +720,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         &[typed_number_predicate],
         number_stats.clone(),
         StatCardinality::estimate(100.0),
+        None,
         None,
     )?;
     let decimal_size = DecimalSize::new(10, 2).unwrap();
@@ -798,6 +982,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         float_histogram_stats.clone(),
         StatCardinality::estimate(200.0),
         None,
+        None,
     )?;
     run_scalar_case_with_predicates(
         &mut file,
@@ -805,6 +990,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[float_gte_15, float_lte_19],
         float_histogram_stats,
         StatCardinality::estimate(200.0),
+        None,
         None,
     )?;
 

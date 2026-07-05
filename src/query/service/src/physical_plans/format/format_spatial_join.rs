@@ -70,7 +70,7 @@ impl<'a> PhysicalFormat for SpatialJoinFormatter<'a> {
         node_children.push(probe_child);
 
         Ok(FormatTreeNode::with_children(
-            "SpatialJoin".to_string(),
+            self.inner.get_name(),
             node_children,
         ))
     }
@@ -86,7 +86,7 @@ impl<'a> PhysicalFormat for SpatialJoinFormatter<'a> {
         ];
 
         Ok(FormatTreeNode::with_children(
-            "SpatialJoin".to_string(),
+            self.inner.get_name(),
             children,
         ))
     }
@@ -103,7 +103,7 @@ impl<'a> PhysicalFormat for SpatialJoinFormatter<'a> {
         children.push(probe_child);
 
         Ok(FormatTreeNode::with_children(
-            "SpatialJoin".to_string(),
+            self.inner.get_name(),
             children,
         ))
     }

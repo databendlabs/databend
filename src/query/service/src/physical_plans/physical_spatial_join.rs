@@ -27,9 +27,10 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::Join;
+use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -52,6 +53,7 @@ pub struct PhysicalSpatialJoin {
     pub build_side: SpatialBuildSide,
     pub build_geometry: RemoteExpr,
     pub probe_geometry: RemoteExpr,
+    pub search_distance: Option<f64>,
     pub predicates: Vec<RemoteExpr>,
     pub output_projection: Vec<usize>,
     pub output_schema: DataSchemaRef,
@@ -112,6 +114,7 @@ impl IPhysicalPlan for PhysicalSpatialJoin {
             build_side: self.build_side,
             build_geometry: self.build_geometry.clone(),
             probe_geometry: self.probe_geometry.clone(),
+            search_distance: self.search_distance,
             predicates: self.predicates.clone(),
             output_projection: self.output_projection.clone(),
             output_schema: self.output_schema.clone(),
@@ -127,6 +130,7 @@ impl IPhysicalPlan for PhysicalSpatialJoin {
             self.predicates.clone(),
             self.output_projection.clone(),
             self.build_side,
+            self.search_distance,
             max_block_size,
         );
 
@@ -168,58 +172,77 @@ impl PhysicalSpatialJoin {
 }
 
 impl PhysicalPlanBuilder {
-    /// Whether the join's *shape* is one the spatial join path supports. This
-    /// only inspects the join/candidate structure; row/byte-size admission is
-    /// handled separately in `try_build_spatial_join`.
-    fn is_spatial_join_eligible(&self, join: &Join, candidate: &SpatialJoinCandidate) -> bool {
-        // The spatial join is node-local, takes no equi key, and cannot
-        // serve the single-to-inner rewrite.
-        if !self.ctx.get_cluster().is_empty()
-            || join.single_to_inner.is_some()
-            || !join.equi_conditions.is_empty()
-        {
-            return false;
-        }
-        // CacheScan on the build side depends on state registered by the hash join path.
-        if join.build_side_cache_info.is_some() {
-            return false;
-        }
-        // Residual predicates can short-circuit throwing spatial predicates in
-        // the fallback path. Keep those joins out of the spatial path until it
-        // can preserve that evaluation order.
-        if !candidate.residual_predicates.is_empty() {
-            return false;
-        }
-        true
-    }
-
     pub async fn try_build_spatial_join(
         &mut self,
-        join: &Join,
         candidate: SpatialJoinCandidate,
         s_expr: &SExpr,
         required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
-        if !self.is_spatial_join_eligible(join, &candidate) {
-            return Ok(None);
-        }
-
-        let left_cardinality = RelExpr::with_s_expr(s_expr.left_child())
+        let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
+        let left_card = RelExpr::with_s_expr(s_expr.left_child())
             .derive_cardinality()?
             .cardinality;
-        let right_cardinality = RelExpr::with_s_expr(s_expr.right_child())
+        let right_card = RelExpr::with_s_expr(s_expr.right_child())
             .derive_cardinality()?
             .cardinality;
-
-        let (build_side, build_rows) = if left_cardinality <= right_cardinality {
-            (SpatialBuildSide::Left, left_cardinality)
+        let smaller_side = if left_card < right_card {
+            SpatialBuildSide::Left
         } else {
-            (SpatialBuildSide::Right, right_cardinality)
+            SpatialBuildSide::Right
         };
 
-        if build_rows > self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64 {
+        let is_cluster = !self.ctx.get_cluster().is_empty();
+        let mut is_broadcast = false;
+        let build_side = if is_cluster {
+            let left_exchange = s_expr.left_child().get_data_distribution()?;
+            let right_exchange = s_expr.right_child().get_data_distribution()?;
+            let left_distribution = RelExpr::with_s_expr(s_expr.left_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let right_distribution = RelExpr::with_s_expr(s_expr.right_child())
+                .derive_physical_prop()?
+                .distribution
+                .clone();
+            let is_merge = |distribution: &Option<Exchange>| {
+                matches!(distribution, Some(Exchange::Merge | Exchange::MergeSort))
+            };
+
+            let left_is_broadcast = left_distribution == Distribution::Broadcast
+                && matches!(left_exchange, Some(Exchange::Broadcast));
+            let right_is_broadcast = right_distribution == Distribution::Broadcast
+                && matches!(right_exchange, Some(Exchange::Broadcast));
+
+            if left_is_broadcast && right_is_broadcast {
+                return Ok(None);
+            }
+
+            if left_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Left
+            } else if right_is_broadcast {
+                is_broadcast = true;
+                SpatialBuildSide::Right
+            } else if left_distribution == Distribution::Serial
+                && right_distribution == Distribution::Serial
+                && is_merge(&left_exchange)
+                && is_merge(&right_exchange)
+            {
+                smaller_side
+            } else {
+                return Ok(None);
+            }
+        } else {
+            smaller_side
+        };
+
+        let build_card = match build_side {
+            SpatialBuildSide::Left => left_card,
+            SpatialBuildSide::Right => right_card,
+        };
+        if build_card > max_build_rows {
             return Ok(None);
         }
 
@@ -237,10 +260,10 @@ impl PhysicalPlanBuilder {
             left_user_columns,
             right_user_columns,
         );
-        let predicates = spatial_join_predicates(&candidate)
-            .into_iter()
+        let predicates = std::iter::once(candidate.predicate.clone())
             .map(|predicate| remote_expr_for_schema(&predicate, &merged_schema, &self.func_ctx))
             .collect::<Result<Vec<_>>>()?;
+        let search_distance = candidate.distance.map(|distance| distance.into_inner());
         let mut required = required;
         {
             let metadata = self.metadata.read();
@@ -260,12 +283,17 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(Some(PhysicalPlan::new(PhysicalSpatialJoin {
-            meta: PhysicalPlanMeta::new("SpatialJoin"),
+            meta: PhysicalPlanMeta::new(if is_broadcast {
+                "BroadcastSpatialJoin"
+            } else {
+                "SpatialJoin"
+            }),
             probe,
             build,
             build_side,
             build_geometry,
             probe_geometry,
+            search_distance,
             predicates,
             output_projection,
             output_schema,
@@ -301,12 +329,6 @@ fn merged_user_schema(
             .cloned(),
     );
     DataSchemaRefExt::create(fields)
-}
-
-fn spatial_join_predicates(candidate: &SpatialJoinCandidate) -> Vec<ScalarExpr> {
-    std::iter::once(candidate.predicate.clone())
-        .chain(candidate.residual_predicates.iter().cloned())
-        .collect()
 }
 
 fn spatial_output_projection_and_schema(

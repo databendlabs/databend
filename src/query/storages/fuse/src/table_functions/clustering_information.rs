@@ -46,6 +46,7 @@ use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::BlockOverlapDepth;
 use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
@@ -224,7 +225,11 @@ impl<'a> ClusteringInformationImpl<'a> {
         let snapshot = snapshot.unwrap();
 
         let schema = self.table.schema();
-        let cluster_key_types = exprs
+        let scalar_exprs = exprs
+            .into_iter()
+            .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+            .collect::<Vec<_>>();
+        let scalar_cluster_key_types = scalar_exprs
             .iter()
             .map(|v| {
                 let data_type = v.data_type();
@@ -235,7 +240,7 @@ impl<'a> ClusteringInformationImpl<'a> {
                 }
             })
             .collect::<Vec<_>>();
-        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&exprs, schema.as_ref());
+        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_exprs, schema.as_ref());
 
         let mut ranges = Vec::with_capacity(snapshot.summary.block_count as usize);
         let mut constant_block_count = 0;
@@ -269,7 +274,11 @@ impl<'a> ClusteringInformationImpl<'a> {
         }
         drop(snapshot);
 
-        let stats = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        let stats = if scalar_cluster_key_types.is_empty() {
+            vec![BlockOverlapDepth::default(); ranges.len()]
+        } else {
+            calculate_block_overlap_depths(&ranges, &scalar_cluster_key_types)?
+        };
         if stats.is_empty() {
             return Ok(ClusteringInformationResponse {
                 cluster_key,

@@ -206,6 +206,9 @@ impl GlobalHistoryLog {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
