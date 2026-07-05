@@ -80,12 +80,12 @@ INSERT INTO test_val VALUES(1), (2), (3), (3), (2)
 query T
 SELECT STRING_AGG(DISTINCT val ORDER BY val DESC) from test_val
 ----
-321
+132
 
 query IT
 SELECT COUNT(NULL), STRING_AGG(DISTINCT val ORDER BY val ASC) from test_val
 ----
-0 123
+0 132
 
 
 statement ok
