@@ -52,7 +52,10 @@ fn test_multi_table_insert_parse_error() {
 fn test_like_escape_display_escapes_escape_literal() {
     for sql in [
         r#"SELECT 'a' LIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE 'A' ESCAPE '''';"#,
+        r#"SELECT 'a' NOT ILIKE 'A' ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE ANY ('A', 'B') ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';"#,
     ] {
         test_stmt_display(sql);

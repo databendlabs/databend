@@ -33,6 +33,13 @@ status: ok
 scalar: string_agg(text, '|')
 type: String NULL
 
+=== aggregate_argument_order_by_preserves_sort_desc ===
+description: ORDER BY inside aggregate arguments should resolve aggregate sort descriptors.
+sql: string_agg(DISTINCT text ORDER BY number DESC NULLS LAST)
+status: ok
+scalar: string_agg(DISTINCT text) WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
+type: String NULL
+
 === listagg_within_group_preserves_sort_desc ===
 description: WITHIN GROUP should resolve aggregate sort descriptors at type-check time.
 sql: listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)

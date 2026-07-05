@@ -408,6 +408,9 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Like(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::LikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotLike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
@@ -961,6 +964,39 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     right,
                     is_not: true,
                     escape,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(Some(escape)),
+                    left,
+                    right,
                 },
                 Expr::BinaryOp {
                     span,
@@ -1899,16 +1935,26 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             ShiftRight => BinaryOperator::BitwiseShiftRight,
         );
         match token_0.kind {
-            LIKE | ILIKE => {
+            LIKE => {
                 return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
                     return_op(i, 2, BinaryOperator::LikeAny(None))
                 } else {
                     return_op(i, 1, BinaryOperator::Like(None))
                 };
             }
+            ILIKE => {
+                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
+                    return_op(i, 2, BinaryOperator::ILikeAny(None))
+                } else {
+                    return_op(i, 1, BinaryOperator::ILike(None))
+                };
+            }
             NOT => match i.tokens.get(1).map(|first| first.kind) {
-                Some(LIKE) | Some(ILIKE) => {
+                Some(LIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
+                }
+                Some(ILIKE) => {
+                    return return_op(i, 2, BinaryOperator::NotILike(None));
                 }
                 Some(REGEXP) => {
                     return return_op(i, 2, BinaryOperator::NotRegexp);
@@ -2671,6 +2717,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         Simple {
             distinct: bool,
             args: Vec<Expr>,
+            order_by: Vec<OrderByExpr>,
         },
         Lambda {
             arg: Expr,
@@ -2680,6 +2727,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         Window {
             distinct: bool,
             args: Vec<Expr>,
+            order_by: Vec<OrderByExpr>,
             window: WindowDesc,
         },
         WithInGroupWindow {
@@ -2813,6 +2861,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     Ok(FunctionCallSuffix::Window {
                         distinct: opt_distinct.is_some(),
                         args,
+                        order_by: arg_order_by
+                            .map(|(_, _, order_by)| order_by)
+                            .unwrap_or_default(),
                         window,
                     })
                 }
@@ -2830,6 +2881,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     Ok(FunctionCallSuffix::Simple {
                         distinct: opt_distinct.is_some(),
                         args,
+                        order_by: arg_order_by
+                            .map(|(_, _, order_by)| order_by)
+                            .unwrap_or_default(),
                     })
                 }
                 _ => Err(nom::Err::Error(ErrorKind::other(
@@ -2845,13 +2899,17 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             ~ #function_call_body : "`function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
         ),
         |(name, suffix)| match suffix {
-            FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
+            FunctionCallSuffix::Simple {
+                distinct,
+                args,
+                order_by,
+            } => ExprElement::FunctionCall {
                 func: FunctionCall {
                     distinct,
                     name,
                     args,
                     params: vec![],
-                    order_by: vec![],
+                    order_by,
                     window: None,
                     lambda: None,
                 },
@@ -2870,6 +2928,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             FunctionCallSuffix::Window {
                 distinct,
                 args,
+                order_by,
                 window,
             } => ExprElement::FunctionCall {
                 func: FunctionCall {
@@ -2877,7 +2936,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     name,
                     args,
                     params: vec![],
-                    order_by: vec![],
+                    order_by,
                     window: Some(window),
                     lambda: None,
                 },

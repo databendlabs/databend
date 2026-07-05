@@ -34,6 +34,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "string_agg(text, '|')",
         },
         SqlTestCase {
+            name: "aggregate_argument_order_by_preserves_sort_desc",
+            description: "ORDER BY inside aggregate arguments should resolve aggregate sort descriptors.",
+            setup_sqls: &[],
+            sql: "string_agg(DISTINCT text ORDER BY number DESC NULLS LAST)",
+        },
+        SqlTestCase {
             name: "listagg_within_group_preserves_sort_desc",
             description: "WITHIN GROUP should resolve aggregate sort descriptors at type-check time.",
             setup_sqls: &[],

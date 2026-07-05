@@ -705,6 +705,9 @@ impl Display for Expr {
                     write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
                     write_expr(right, Some(affix), false, f)?;
+                    if let Some(escape) = op.escape() {
+                        write!(f, " ESCAPE {}", QuotedString(escape, '\''))?;
+                    }
                 }
                 Expr::JsonOp {
                     op, left, right, ..
@@ -1568,6 +1571,9 @@ pub enum BinaryOperator {
     Like(Option<String>),
     NotLike(Option<String>),
     LikeAny(Option<String>),
+    ILike(Option<String>),
+    NotILike(Option<String>),
+    ILikeAny(Option<String>),
     Regexp,
     RLike,
     NotRegexp,
@@ -1613,10 +1619,24 @@ impl BinaryOperator {
             BinaryOperator::L2Distance => "l2_distance".to_string(),
             BinaryOperator::LikeAny(_) => "like_any".to_string(),
             BinaryOperator::Like(_) => "like".to_string(),
+            BinaryOperator::ILike(_) => "ilike".to_string(),
+            BinaryOperator::ILikeAny(_) => "ilike_any".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
             }
+        }
+    }
+
+    fn escape(&self) -> Option<&str> {
+        match self {
+            BinaryOperator::Like(escape)
+            | BinaryOperator::NotLike(escape)
+            | BinaryOperator::LikeAny(escape)
+            | BinaryOperator::ILike(escape)
+            | BinaryOperator::NotILike(escape)
+            | BinaryOperator::ILikeAny(escape) => escape.as_deref(),
+            _ => None,
         }
     }
 }
@@ -1684,8 +1704,17 @@ impl Display for BinaryOperator {
             BinaryOperator::LikeAny(_) => {
                 write!(f, "LIKE ANY")
             }
+            BinaryOperator::ILike(_) => {
+                write!(f, "ILIKE")
+            }
+            BinaryOperator::ILikeAny(_) => {
+                write!(f, "ILIKE ANY")
+            }
             BinaryOperator::NotLike(_) => {
                 write!(f, "NOT LIKE")
+            }
+            BinaryOperator::NotILike(_) => {
+                write!(f, "NOT ILIKE")
             }
             BinaryOperator::Regexp => {
                 write!(f, "REGEXP")
