@@ -77,7 +77,6 @@ impl ClusterStatisticsBuilder {
             operators: cluster_stats_gen.operators,
         }))
     }
-
 }
 
 pub struct ClusterStatisticsState {
@@ -184,4 +183,3 @@ impl ClusterStatisticsState {
         ))
     }
 }
-

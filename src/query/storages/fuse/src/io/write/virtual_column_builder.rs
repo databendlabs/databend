@@ -53,7 +53,7 @@ use databend_common_hashtable::StackHashMap;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::block_to_parquet;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnIdMap;
@@ -946,15 +946,16 @@ impl VirtualColumnBuilder {
             payload,
             metadata: file_meta,
             ..
-        } = blocks_to_parquet_with_stats(
+        } = block_to_parquet(
             virtual_block_schema.as_ref(),
-            vec![virtual_block],
+            virtual_block,
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
             metadata,
             Some(&columns_statistics),
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
+            usize::MAX,
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(

@@ -31,7 +31,6 @@ use databend_common_expression::expr::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use super::eliminate_cast::*;
@@ -42,7 +41,6 @@ pub struct PageIndex {
     expr: Expr<String>,
     column_refs: HashMap<String, DataType>,
     func_ctx: FunctionContext,
-    cluster_key_id: u32,
 
     // index of the cluster key inside the schema
     cluster_key_fields: Vec<DataField>,
@@ -51,7 +49,6 @@ pub struct PageIndex {
 impl PageIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
-        cluster_key_id: u32,
         cluster_keys: Vec<String>,
         expr: &Expr<String>,
         schema: TableSchemaRef,
@@ -66,7 +63,6 @@ impl PageIndex {
             column_refs: expr.column_refs(),
             expr: expr.clone(),
             cluster_key_fields,
-            cluster_key_id,
             func_ctx,
         })
     }
@@ -92,39 +88,34 @@ impl PageIndex {
         ))
     }
 
-    #[fastrace::trace]
-    pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
-        let Some(stats) = stats else {
-            return Ok((true, None));
-        };
-        let min_values: Vec<Scalar> = match stats.pages {
-            Some(ref pages) => pages.clone(),
-            None => return Ok((true, None)),
-        };
+    /// Returns `true` when the filter expression references at least one cluster-key column.
+    pub fn touches_cluster_key(&self) -> bool {
+        !self.cluster_key_fields.is_empty()
+            && self
+                .column_refs
+                .keys()
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
+    }
 
-        let max_value = Scalar::Tuple(stats.max().clone());
-
-        if self.cluster_key_id != stats.cluster_key_id {
-            return Ok((true, None));
-        }
-
-        if min_values.is_empty() {
-            return Ok((true, None));
-        }
-
+    /// Apply the page index with explicitly provided granule mins and block max.
+    /// Used by the sparse page index pruner which loads mins from a sidecar file.
+    pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
         let pages = min_values.len();
+        if pages == 0 {
+            return Ok(vec![]);
+        }
         let mut start = 0;
         let mut end = pages - 1;
 
         while start <= end {
             let min_value = &min_values[start];
-            let max_value = if start + 1 < pages {
+            let upper = if start + 1 < pages {
                 &min_values[start + 1]
             } else {
-                &max_value
+                max_value
             };
 
-            if self.eval_single_page(min_value, max_value)? {
+            if self.eval_single_page(min_value, upper)? {
                 break;
             }
             start += 1;
@@ -132,27 +123,22 @@ impl PageIndex {
 
         while end >= start {
             let min_value = &min_values[end];
-            let max_value = if end + 1 < pages {
+            let upper = if end + 1 < pages {
                 &min_values[end + 1]
             } else {
-                &max_value
+                max_value
             };
 
-            if self.eval_single_page(min_value, max_value)? {
+            if self.eval_single_page(min_value, upper)? {
                 break;
             }
             end -= 1;
         }
 
-        // no page is pruned
-        if start + pages == end + 1 {
-            return Ok((true, None));
-        }
-
-        if start > end {
-            Ok((false, None))
-        } else {
-            Ok((true, Some(start..end + 1)))
+        #[allow(clippy::single_range_in_vec_init)]
+        match start > end {
+            true => Ok(vec![]),
+            false => Ok(vec![start..end + 1]),
         }
     }
 

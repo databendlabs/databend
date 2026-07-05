@@ -130,10 +130,6 @@ impl ClusterStatsGenerator {
         self.cluster_key_id
     }
 
-    pub fn cluster_key_index(&self) -> &[usize] {
-        &self.cluster_key_index
-    }
-
     /// Per-granule cluster-key min tuples suitable for a sparse page index, or `None` when the block
     /// cannot be soundly indexed. `block` must be the block handed to the serializer *before* the
     /// extra key columns are popped, so the cluster-key columns are still present.
@@ -144,7 +140,11 @@ impl ClusterStatsGenerator {
     /// under that condition. Append / recluster hand a cluster-sorted block (always passes), but
     /// compact / merge can concatenate sorted blocks into an unsorted one; those return `None` so
     /// the caller emits an offset-only index (no pruning) instead of a corrupt one.
-    pub fn granule_mins(&self, block: &DataBlock, granule_rows: usize) -> Result<Option<Vec<Scalar>>> {
+    pub fn granule_mins(
+        &self,
+        block: &DataBlock,
+        granule_rows: usize,
+    ) -> Result<Option<Vec<Scalar>>> {
         debug_assert!(granule_rows > 0);
         if self.cluster_key_index.is_empty() {
             return Ok(None);

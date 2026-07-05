@@ -45,8 +45,7 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_num
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::block_to_parquet_with_page_layout;
-use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::block_to_parquet;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -95,17 +94,19 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
+            // `granule_rows = usize::MAX`: no page-boundary forcing, byte-for-byte the plain path.
             let SerializedParquet {
                 payload, metadata, ..
-            } = blocks_to_parquet_with_stats(
+            } = block_to_parquet(
                 &schema,
-                vec![block],
+                block,
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
                 None,
                 column_stats,
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
+                usize::MAX,
             )?;
             let meta = column_parquet_metas(&metadata, &schema)?;
             Ok((meta, Buffer::from(payload)))
@@ -184,6 +185,7 @@ impl BlockBuilder {
             self.bloom_columns_map.clone(),
             &self.ngram_args,
         )?;
+
         let mut column_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
@@ -255,54 +257,44 @@ impl BlockBuilder {
 
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
 
-        // Sparse page index: when `index_granularity` is set, serialize with page boundaries on
-        // every granule and capture the page layout. A cluster-sorted, non-overlapping block also
-        // yields per-granule mins (enabling pruning); otherwise the index is offset-only (page-wise
-        // streaming reads, no pruning). Tables without `index_granularity` take the plain path.
-        let (col_metas, buffer, page_index_state) = match self.write_settings.index_granularity {
-            Some(granule_rows) => {
-                let granule_mins = self
-                    .cluster_stats_gen
-                    .granule_mins(&data_block, granule_rows)?;
-                let serialized = block_to_parquet_with_page_layout(
-                    &self.source_schema,
-                    data_block,
-                    self.write_settings.table_compression,
-                    self.write_settings.enable_parquet_dictionary,
-                    None,
-                    Some(&col_stats),
-                    granule_rows,
-                )?;
-                let col_metas = column_parquet_metas(&serialized.metadata, &self.source_schema)?;
-                let buffer = Buffer::from(serialized.payload);
-                let page_index_state = match serialized.page_layout {
-                    Some(page_layout) => {
-                        // `granule_mins` present ⇒ prunable index (records cluster_key_id + mins);
-                        // absent ⇒ offset-only index (no cluster key / overlapping granules).
-                        let (cluster_key_id, mins) = match granule_mins {
-                            Some(mins) => (Some(self.cluster_stats_gen.cluster_key_id()), mins),
-                            None => (None, Vec::new()),
-                        };
-                        let leaf_column_ids = self.source_schema.to_leaf_column_ids();
-                        let builder =
-                            PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
-                        let location = self.meta_locations.block_page_index_location();
-                        Some(builder.build(&page_layout, &mins, location)?)
-                    }
-                    None => None,
-                };
-                (col_metas, buffer, page_index_state)
-            }
-            None => {
-                let (col_metas, buffer) = serialize_block_with_column_stats(
-                    &self.write_settings,
-                    &self.source_schema,
-                    Some(&col_stats),
-                    data_block,
-                )?;
-                (col_metas, buffer, None)
-            }
+        // Sparse page index: decode `index_granularity` once. `Some(g)` records the page layout and
+        // (for a cluster-sorted, non-overlapping block) per-granule mins; `None` maps to a
+        // "granule = whole block" serialization (`usize::MAX`) that captures no page layout. The
+        // per-granule mins must be computed before `data_block` is moved into the serializer.
+        let (granule_rows, granule_mins) = match self.write_settings.index_granularity {
+            Some(g) => (g, self.cluster_stats_gen.granule_mins(&data_block, g)?),
+            None => (usize::MAX, None),
         };
+
+        let serialized = block_to_parquet(
+            &self.source_schema,
+            data_block,
+            self.write_settings.table_compression,
+            self.write_settings.enable_parquet_dictionary,
+            None,
+            Some(&col_stats),
+            self.write_settings.data_page_rows,
+            self.write_settings.data_page_bytes,
+            granule_rows,
+        )?;
+
+        let col_metas = column_parquet_metas(&serialized.metadata, &self.source_schema)?;
+        let buffer = Buffer::from(serialized.payload);
+
+        let page_index_state = match serialized.page_layout {
+            Some(page_layout) => {
+                let (cluster_key_id, mins) = match granule_mins {
+                    Some(mins) => (Some(self.cluster_stats_gen.cluster_key_id()), mins),
+                    None => (None, Vec::new()),
+                };
+                let leaf_column_ids = self.source_schema.to_leaf_column_ids();
+                let builder = PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
+                let location = self.meta_locations.block_page_index_location();
+                Some(builder.build(&page_layout, &mins, location)?)
+            }
+            None => None,
+        };
+
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
             let size = inverted_index_states.iter().map(|v| v.size).sum();
@@ -310,6 +302,7 @@ impl BlockBuilder {
         } else {
             None
         };
+
         let block_meta = BlockMeta {
             row_count,
             block_size,
