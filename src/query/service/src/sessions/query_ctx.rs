@@ -403,6 +403,14 @@ impl QueryContext {
         Ok(())
     }
 
+    pub fn set_current_catalog_unchecked(&self, catalog_name: String) {
+        self.shared.set_current_catalog(catalog_name);
+    }
+
+    pub fn set_current_database_unchecked(&self, database_name: String) {
+        self.shared.set_current_database(database_name);
+    }
+
     #[async_backtrace::framed]
     pub async fn set_current_database(
         &self,

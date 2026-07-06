@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -57,6 +59,8 @@ impl Interpreter for DropTableClusterKeyInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        check_not_materialized_view(table.as_ref(), &plan.database)?;
 
         if table.cluster_key_meta().is_none() {
             return Ok(PipelineBuildResult::create());

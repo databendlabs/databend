@@ -219,6 +219,13 @@ pub enum Statement {
     ShowViews(ShowViewsStmt),
     DescribeView(DescribeViewStmt),
 
+    // Materialized Views
+    CreateMaterializedView(CreateMaterializedViewStmt),
+    DropMaterializedView(DropMaterializedViewStmt),
+    RefreshMaterializedView(RefreshMaterializedViewStmt),
+    ShowCreateMaterializedView(ShowCreateMaterializedViewStmt),
+    ShowMaterializedViews(ShowMaterializedViewsStmt),
+
     // Streams
     CreateStream(CreateStreamStmt),
     DropStream(DropStreamStmt),
@@ -554,6 +561,8 @@ impl Statement {
             | Statement::ShowColumns(..)
             | Statement::ShowViews(..)
             | Statement::DescribeView(..)
+            | Statement::ShowMaterializedViews(..)
+            | Statement::ShowCreateMaterializedView(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
             | Statement::RefreshIndex(..)
@@ -619,6 +628,9 @@ impl Statement {
             | Statement::DropDatabase(..)
             | Statement::DropTable(..)
             | Statement::DropView(..)
+            | Statement::DropMaterializedView(..)
+            | Statement::CreateMaterializedView(..)
+            | Statement::RefreshMaterializedView(..)
             | Statement::DropIndex(..)
             | Statement::DropSequence(..)
             | Statement::DropDictionary(..)
@@ -932,6 +944,11 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowMaterializedViews(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,

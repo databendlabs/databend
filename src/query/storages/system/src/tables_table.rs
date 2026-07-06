@@ -61,6 +61,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::has_table_name_grants;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use futures::StreamExt;
 use futures::stream;
@@ -1073,6 +1074,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 if v.engine().to_uppercase() == "VIEW" {
                     "VIEW".to_string()
+                } else if v.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+                    "MATERIALIZED VIEW".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }

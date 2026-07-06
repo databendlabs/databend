@@ -17,12 +17,14 @@ use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
 use crate::sessions::QueryContext;
@@ -86,6 +88,8 @@ impl Interpreter for TruncateTableInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        check_not_materialized_view(table.as_ref(), &self.plan.database)?;
 
         if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
             let warehouse = self.ctx.get_warehouse_cluster().await?;

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -59,6 +60,10 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_QUERY;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_QUERY_CATALOG;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_QUERY_DATABASE;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -197,6 +202,9 @@ impl CreateTableInterpreter {
         let tenant = self.ctx.get_tenant();
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+
+        self.check_replace_type_conflict(catalog.as_ref(), &tenant)
+            .await?;
 
         let mut req = self.build_request(None)?;
 
@@ -339,6 +347,10 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+
+        self.check_replace_type_conflict(catalog.as_ref(), &self.plan.tenant)
+            .await?;
+
         let mut stat = None;
         if !GlobalConfig::instance().query.common.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
@@ -397,6 +409,38 @@ impl CreateTableInterpreter {
         }
 
         Ok(PipelineBuildResult::create())
+    }
+
+    async fn check_replace_type_conflict(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+    ) -> Result<()> {
+        if self.plan.create_option != CreateOption::CreateOrReplace {
+            return Ok(());
+        }
+
+        if let Ok(existing) = catalog
+            .get_table(tenant, &self.plan.database, &self.plan.table)
+            .await
+        {
+            let is_existing_mv = existing.options().contains_key(OPT_KEY_MATERIALIZED_VIEW);
+            let is_new_mv = self.plan.options.contains_key(OPT_KEY_MATERIALIZED_VIEW);
+            if is_existing_mv && !is_new_mv {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW` first",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+            if !is_existing_mv && is_new_mv {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} already exists as a non-materialized-view object, drop it first",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.
@@ -507,7 +551,9 @@ impl CreateTableInterpreter {
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key, &self.plan.engine) {
+            if !is_valid_create_opt(&key, &self.plan.engine)
+                && !is_internal_materialized_view_opt(&table_meta.options, &key)
+            {
                 let msg = format!(
                     "table option {key} is invalid for create table statement with engine {}",
                     self.plan.engine
@@ -582,4 +628,18 @@ pub fn is_valid_column(name: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+fn is_internal_materialized_view_opt(
+    options: &std::collections::BTreeMap<String, String>,
+    key: &str,
+) -> bool {
+    options.contains_key(OPT_KEY_MATERIALIZED_VIEW)
+        && matches!(
+            key,
+            OPT_KEY_MATERIALIZED_VIEW
+                | OPT_KEY_MATERIALIZED_VIEW_QUERY
+                | OPT_KEY_MATERIALIZED_VIEW_QUERY_CATALOG
+                | OPT_KEY_MATERIALIZED_VIEW_QUERY_DATABASE
+        )
 }
