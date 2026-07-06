@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::SwapTablePlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -60,6 +61,8 @@ impl Interpreter for SwapTableInterpreter {
         if origin_table.is_temp() || target_table.is_temp() {
             return Err(ErrorCode::AlterTableError("Can not swap temp table"));
         }
+        check_not_materialized_view(origin_table.as_ref(), &db_name)?;
+        check_not_materialized_view(target_table.as_ref(), &db_name)?;
         let _resp = catalog
             .swap_table(SwapTableReq {
                 if_exists: self.plan.if_exists,

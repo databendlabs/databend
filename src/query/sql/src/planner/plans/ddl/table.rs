@@ -449,6 +449,7 @@ pub struct ShowCreateTablePlan {
     /// The table schema
     pub schema: DataSchemaRef,
     pub with_quoted_ident: bool,
+    pub require_materialized_view: bool,
 }
 
 impl ShowCreateTablePlan {
