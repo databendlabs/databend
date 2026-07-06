@@ -483,6 +483,7 @@ impl TaskService {
                         .map_err(meta_service_error)?
                     {
                         self.clean_task_afters(&task_name).await?;
+                        self.cancel_open_task_runs(&task_name).await?;
                     }
                     task_mgr
                         .accept(&TaskMessageIdent::new(
@@ -782,6 +783,32 @@ WHERE ta.task_name = {task_name}
             &format!(
                 "DELETE FROM system_task.task_after WHERE next_task = {}",
                 Self::sql_string_literal(task_name)
+            ),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn cancel_open_task_runs(&self, task_name: &str) -> Result<()> {
+        let task_name = Self::sql_string_literal(task_name);
+        let error_message =
+            Self::sql_string_literal("task was dropped while execution status was still open");
+
+        self.execute_sql(
+            None,
+            &format!(
+                "UPDATE system_task.task_run \
+                SET state = 'CANCELLED', \
+                    completed_at = {}, \
+                    error_code = 0, \
+                    error_message = {} \
+                WHERE task_name = {} \
+                    AND state = 'EXECUTING' \
+                    AND completed_at IS NULL;",
+                Utc::now().timestamp(),
+                error_message,
+                task_name
             ),
         )
         .await?;
