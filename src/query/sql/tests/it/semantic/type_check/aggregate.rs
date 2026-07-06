@@ -1,3 +1,5 @@
+use databend_common_expression::types::NumberScalar;
+
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -177,6 +179,21 @@ async fn test_aggregate_filter_uses_if_combinator() -> Result<()> {
     };
     assert_eq!(agg.func_name, "count_if");
     assert_eq!(agg.args.len(), 2);
+
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(ExprContext::Unknown);
+    let (scalar, _) = resolve_type_check_sql(
+        "histogram(number, 2) FILTER (WHERE flag)",
+        adapter,
+        &mut bind_context,
+    )?;
+    let ScalarExpr::AggregateFunction(agg) = scalar else {
+        panic!("expected aggregate function");
+    };
+    assert_eq!(agg.func_name, "histogram_if");
+    assert_eq!(agg.args.len(), 3);
+    assert_eq!(agg.params, vec![Scalar::Number(NumberScalar::UInt64(2))]);
 
     Ok(())
 }

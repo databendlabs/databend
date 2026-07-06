@@ -366,6 +366,13 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
+        if func.filter.is_some() && !self.aggregate_function_factory.contains(&func_name) {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
         self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
         self.ensure_window_function_call(
             span,

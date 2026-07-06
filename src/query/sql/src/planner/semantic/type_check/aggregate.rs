@@ -391,8 +391,9 @@ where A: TypeCheckAdapter
         };
 
         // Convert the num_buckets of histogram to params
-        let params = if func_name.eq_ignore_ascii_case("histogram")
-            && arguments.len() == 2
+        let expected_histogram_args = if base_func_name == func_name { 2 } else { 3 };
+        let params = if base_func_name.eq_ignore_ascii_case("histogram")
+            && arguments.len() == expected_histogram_args
             && params.is_empty()
         {
             let max_num_buckets: u64 = check_number(
