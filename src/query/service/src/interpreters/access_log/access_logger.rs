@@ -52,8 +52,12 @@ impl AccessLogger {
         }
     }
 
-    #[recursive::recursive]
     pub fn log(&mut self, plan: &Plan) {
+        self.visit(plan);
+    }
+
+    #[recursive::recursive]
+    fn visit(&mut self, plan: &Plan) {
         match plan {
             // DQL Operations
             Plan::Query { metadata, .. } => {
@@ -96,10 +100,10 @@ impl AccessLogger {
                 // Log the base objects accessed by the replace operation's select part
                 match &plan.source {
                     InsertInputSource::SelectPlan(inner) => {
-                        self.log(inner);
+                        self.visit(inner);
                     }
                     InsertInputSource::Stage(inner) => {
-                        self.log(inner);
+                        self.visit(inner);
                     }
                     _ => {}
                 }
@@ -208,7 +212,23 @@ impl AccessLogger {
                 // consider `create table xx as select * from another_table`
                 // if the plan has a select statement, we log access operations
                 if let Some(inner) = &plan.as_select {
-                    self.log(inner)
+                    self.visit(inner)
+                }
+            }
+            Plan::CreateMaterializedView(plan) => {
+                let table_plan = &plan.table_plan;
+                let object_name = format!(
+                    "{}.{}.{}",
+                    table_plan.catalog, table_plan.database, table_plan.table
+                );
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type: DDLOperationType::Create,
+                    ..Default::default()
+                });
+                if let Some(inner) = &table_plan.as_select {
+                    self.visit(inner)
                 }
             }
             Plan::SetOptions(plan) => {
@@ -413,6 +433,28 @@ impl AccessLogger {
                 self.log_tag_object_modify(&plan.object);
             }
 
+            Plan::DropMaterializedView(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.view_name);
+                let operation_type = DDLOperationType::Drop;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
+            }
+
+            Plan::RefreshMaterializedView(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.view_name);
+                let modified_object = AccessObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    columns: None,
+                    stage_type: None,
+                };
+                self.entry.objects_modified.push(modified_object);
+            }
+
             _ => {}
         }
     }
@@ -485,11 +527,11 @@ impl AccessLogger {
         // Log the base objects accessed by the insert operation's select part
         match &plan.source {
             InsertInputSource::SelectPlan(plan) => {
-                self.log(plan);
+                self.visit(plan);
             }
             InsertInputSource::Values(_) => {}
             InsertInputSource::Stage(plan) => {
-                self.log(plan);
+                self.visit(plan);
             }
             InsertInputSource::StreamingLoad { .. } => {}
         }
@@ -499,7 +541,7 @@ impl AccessLogger {
         let modified_objects = extract_metadata_ref(&plan.meta_data);
         self.entry.objects_modified.extend(modified_objects);
         // Log the base objects accessed by the insert operation's select part
-        self.log(&plan.input_source)
+        self.visit(&plan.input_source)
     }
 
     fn log_copy_into_table(&mut self, plan: &CopyIntoTablePlan) {
@@ -524,7 +566,7 @@ impl AccessLogger {
 
         // Log the base objects accessed by the copy operation's source part
         if let Some(inner) = &plan.query {
-            self.log(inner)
+            self.visit(inner)
         }
     }
 
@@ -543,7 +585,7 @@ impl AccessLogger {
         self.entry.objects_modified.push(modified_object);
 
         // Log the base objects accessed by the copy operation's source part
-        self.log(&plan.from);
+        self.visit(&plan.from);
     }
 
     /// Serialize the access log entry to JSON and output it

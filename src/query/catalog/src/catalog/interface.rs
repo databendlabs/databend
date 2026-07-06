@@ -81,6 +81,10 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVId;
+use databend_common_meta_app::schema::MVMeta;
+use databend_common_meta_app::schema::MVMetaIdent;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -92,6 +96,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableTag;
@@ -264,6 +269,26 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
+
+    /// Get independent materialized-view metadata by MV id.
+    async fn get_mv_meta(&self, _tenant: &Tenant, _mv_id: MVId) -> Result<Option<SeqV<MVMeta>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_mv_meta' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    /// Get the immutable materialized-view definition by MV id.
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: MVId,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_mv_definition' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -440,6 +465,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
 
+    async fn drop_materialized_view(&self, _ident: &MVMetaIdent) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_materialized_view' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
     async fn undrop_table(&self, req: UndropTableReq) -> Result<()>;
 
     async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<()> {
@@ -448,6 +480,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         unimplemented!("TODO")
+    }
+
+    async fn commit_materialized_view(
+        &self,
+        _ident: &MVMetaIdent,
+        _expected_prev_mv_id: Option<MVId>,
+        _orphan_ident: &TableIdHistoryIdent,
+        _mv_meta: &MVMeta,
+        _definition: &MVDefinition,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'commit_materialized_view' not implemented for catalog {}",
+            self.name()
+        )))
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;

@@ -23,6 +23,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -60,6 +61,8 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        check_not_materialized_view(table.as_ref(), &plan.database)?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));

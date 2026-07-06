@@ -673,10 +673,14 @@ impl QueryEntry {
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
-            | Plan::TruncateTable(_) => {
+            | Plan::TruncateTable(_)
+            | Plan::RefreshMaterializedView(_) => {
                 return true;
             }
             Plan::CreateTable(v) if v.as_select.is_some() => {
+                return true;
+            }
+            Plan::CreateMaterializedView(_) => {
                 return true;
             }
             Plan::DropTable(v) if v.all => {

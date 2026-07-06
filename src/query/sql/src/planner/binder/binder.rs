@@ -349,6 +349,21 @@ impl Binder {
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
             Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
             Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
+            Statement::CreateMaterializedView(stmt) => {
+                self.bind_create_materialized_view(stmt).await?
+            }
+            Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
+            Statement::RefreshMaterializedView(stmt) => {
+                self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowCreateMaterializedView(stmt) => {
+                self.bind_show_create_materialized_view(bind_context, stmt)
+                    .await?
+            }
+            Statement::ShowMaterializedViews(stmt) => {
+                self.bind_show_materialized_views(bind_context, stmt)
+                    .await?
+            }
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,

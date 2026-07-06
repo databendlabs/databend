@@ -192,6 +192,10 @@ mod task {
     pub(crate) use interpreter_task_execute::ExecuteTaskInterpreter;
     pub(crate) use interpreter_tasks_show::ShowTasksInterpreter;
 }
+mod interpreter_materialized_view_create;
+mod interpreter_materialized_view_drop;
+mod interpreter_materialized_view_refresh;
+mod interpreter_materialized_view_show_create;
 mod interpreter_show_public_keys;
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
@@ -252,6 +256,10 @@ pub use interpreter_index_refresh::RefreshIndexInterpreter;
 pub use interpreter_insert::InsertInterpreter;
 pub use interpreter_insert_multi_table::InsertMultiTableInterpreter;
 pub use interpreter_kill::KillInterpreter;
+pub use interpreter_materialized_view_create::CreateMaterializedViewInterpreter;
+pub use interpreter_materialized_view_drop::DropMaterializedViewInterpreter;
+pub use interpreter_materialized_view_refresh::RefreshMaterializedViewInterpreter;
+pub use interpreter_materialized_view_show_create::ShowCreateMaterializedViewInterpreter;
 pub use interpreter_metrics::InterpreterMetrics;
 pub use interpreter_mutation::MutationInterpreter;
 pub use interpreter_network_policies_show::ShowNetworkPoliciesInterpreter;

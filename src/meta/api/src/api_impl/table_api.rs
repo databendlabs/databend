@@ -88,6 +88,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::value_id::ValueId;
@@ -117,7 +118,7 @@ use seq_marked::SeqValue;
 use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
-use super::garbage_collection_api::get_history_tables_for_gc;
+use super::garbage_collection_api::get_tables_for_gc;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
 use super::schema_api::get_db_by_id_or_err;
@@ -398,7 +399,11 @@ where
                         // a new TableIdList
                         TableIdList::new(),
                         // save last table id and check when commit table meta
-                        tb_id_list.data.id_list.last().copied(),
+                        if is_materialized_view_engine(&req.table_meta.engine) {
+                            (seq_table_id.seq > 0).then_some(seq_table_id.data)
+                        } else {
+                            tb_id_list.data.id_list.last().copied()
+                        },
                         // seq MUST be 0
                         0,
                     )
@@ -1869,8 +1874,9 @@ where
                 };
 
                 let capacity = the_limit - vacuum_tables.len();
-                let table_nivs = get_history_tables_for_gc(
+                let table_nivs = get_tables_for_gc(
                     self,
+                    &req.tenant,
                     table_drop_time_range,
                     db_info.database_id.db_id,
                     capacity,
@@ -1916,9 +1922,10 @@ where
         let (seq_db_id, _db_meta) = res?;
 
         let database_id = seq_db_id.data;
-        let table_nivs = get_history_tables_for_gc(
+        let table_nivs = get_tables_for_gc(
             self,
-            drop_time_range.clone(),
+            &req.tenant,
+            drop_time_range,
             database_id.db_id,
             the_limit,
             false,

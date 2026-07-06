@@ -26,6 +26,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::Constraint;
+use databend_common_meta_app::schema::is_fuse_backed_engine;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
@@ -129,10 +131,17 @@ impl Interpreter for InsertInterpreter {
                 .await?
         };
 
+        if self.plan.table_info.is_none() && is_materialized_view_engine(table.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot insert into materialized view `{}`.`{}`",
+                self.plan.database, self.plan.table
+            )));
+        }
+
         let mut table_constraints = Vec::new();
         // check mutability
         table.check_mutable()?;
-        let table_meta_timestamps = if table.engine() == "FUSE" {
+        let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
             let fuse_table =
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
 

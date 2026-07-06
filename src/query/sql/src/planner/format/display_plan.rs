@@ -76,7 +76,9 @@ impl Plan {
 
             // Tables
             Plan::CreateTable(create_table) => format_create_table(create_table, options),
+            Plan::CreateMaterializedView(plan) => format_create_table(&plan.table_plan, options),
             Plan::ShowCreateTable(_) => Ok("ShowCreateTable".to_string()),
+            Plan::ShowCreateMaterializedView(_) => Ok("ShowCreateMaterializedView".to_string()),
             Plan::DropTable(_) => Ok("DropTable".to_string()),
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
             Plan::DescribeTable(_) => Ok("DescribeTable".to_string()),
@@ -120,6 +122,8 @@ impl Plan {
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
             Plan::DescribeView(_) => Ok("DescribeView".to_string()),
+            Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
+            Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),

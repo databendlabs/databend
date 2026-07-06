@@ -29,12 +29,22 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVId;
+use databend_common_meta_app::schema::MVMetaIdent;
+use databend_common_meta_app::schema::MVSourceIndex;
+use databend_common_meta_app::schema::MVSourceIndexIdent;
+use databend_common_meta_app::schema::MarkedDeletedMVId;
+use databend_common_meta_app::schema::MarkedDeletedMVIdent;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
@@ -641,6 +651,197 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
     assert!(v.is_none());
     let v = meta.get_pb(&sequence_storage_ident_2).await?;
     assert!(v.is_none());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_materialized_view() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let endpoints = meta.inner().endpoints.clone();
+
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = endpoints;
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_dropped_mv";
+    let source_name = "source";
+    let mv_name = "mv";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db_name}.{source_name} as select number from numbers(3)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create materialized view {db_name}.{mv_name} as \
+             select number from {db_name}.{source_name}"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let source_table = catalog.get_table(&tenant, db_name, source_name).await?;
+    let mv_table = catalog.get_table(&tenant, db_name, mv_name).await?;
+    let db_id = catalog
+        .get_database(&tenant, db_name)
+        .await?
+        .get_db_info()
+        .database_id
+        .db_id;
+    let mv_table_id = mv_table.get_id();
+    let mv_id = MVId::new(mv_table_id);
+
+    let mv_meta_ident = MVMetaIdent::new_generic(&tenant, mv_id);
+    let definition_ident = MVDefinitionIdent::new_generic(&tenant, mv_id);
+    let source_index_ident =
+        MVSourceIndexIdent::new_generic(&tenant, MVSourceIndex::new(source_table.get_id(), mv_id));
+    let tombstone_ident =
+        MarkedDeletedMVIdent::new_generic(&tenant, MarkedDeletedMVId::new(db_id, mv_id));
+    let table_id_ident = TableId::new(mv_table_id);
+    let table_id_to_name = TableIdToName {
+        table_id: mv_table_id,
+    };
+
+    assert!(meta.get_pb(&mv_meta_ident).await?.is_some());
+    assert!(meta.get_pb(&definition_ident).await?.is_some());
+    assert!(meta.get_pb(&source_index_ident).await?.is_some());
+    assert!(meta.get_pb(&tombstone_ident).await?.is_none());
+
+    let fuse_table = FuseTable::try_from_table(mv_table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    let storage_prefix = format!(
+        "{}/",
+        FuseTable::parse_storage_prefix_from_table_info(mv_table.get_table_info())?
+    );
+    assert!(
+        !operator
+            .list_with(&storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "materialized view must have physical data before it is dropped"
+    );
+
+    fixture
+        .execute_command(&format!("drop materialized view {db_name}.{mv_name}"))
+        .await?;
+
+    assert!(meta.get_pb(&mv_meta_ident).await?.is_none());
+    assert!(meta.get_pb(&definition_ident).await?.is_none());
+    assert!(meta.get_pb(&source_index_ident).await?.is_none());
+    assert!(meta.get_pb(&tombstone_ident).await?.is_some());
+    assert!(meta.get_pb(&table_id_to_name).await?.is_some());
+    assert!(
+        meta.get_pb(&table_id_ident)
+            .await?
+            .is_some_and(|table_meta| table_meta.data.drop_on.is_some())
+    );
+    assert!(
+        !operator
+            .list_with(&storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "dropping a materialized view must leave its data for vacuum"
+    );
+
+    fixture
+        .execute_command(&format!("vacuum drop table from {db_name}"))
+        .await?;
+
+    assert!(meta.get_pb(&table_id_ident).await?.is_none());
+    assert!(meta.get_pb(&table_id_to_name).await?.is_none());
+    assert!(meta.get_pb(&tombstone_ident).await?.is_none());
+    assert!(meta.get_pb(&mv_meta_ident).await?.is_none());
+    assert!(meta.get_pb(&definition_ident).await?.is_none());
+    assert!(meta.get_pb(&source_index_ident).await?.is_none());
+    assert!(
+        operator
+            .list_with(&storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "vacuum must remove materialized view physical data"
+    );
+
+    let live_mv_name = "live_mv";
+    fixture
+        .execute_command(&format!(
+            "create materialized view {db_name}.{live_mv_name} as \
+             select number from {db_name}.{source_name}"
+        ))
+        .await?;
+    let live_mv_table = catalog.get_table(&tenant, db_name, live_mv_name).await?;
+    let live_mv_table_id = live_mv_table.get_id();
+    let live_mv_id = MVId::new(live_mv_table_id);
+    let live_mv_meta_ident = MVMetaIdent::new_generic(&tenant, live_mv_id);
+    let live_definition_ident = MVDefinitionIdent::new_generic(&tenant, live_mv_id);
+    let live_source_index_ident = MVSourceIndexIdent::new_generic(
+        &tenant,
+        MVSourceIndex::new(source_table.get_id(), live_mv_id),
+    );
+    let live_tombstone_ident =
+        MarkedDeletedMVIdent::new_generic(&tenant, MarkedDeletedMVId::new(db_id, live_mv_id));
+    let live_table_id_ident = TableId::new(live_mv_table_id);
+    let live_table_id_to_name = TableIdToName {
+        table_id: live_mv_table_id,
+    };
+    let live_name_mapping = DBIdTableName::new(db_id, live_mv_name);
+    let live_fuse_table = FuseTable::try_from_table(live_mv_table.as_ref())?;
+    let live_operator = live_fuse_table.get_operator();
+    let live_storage_prefix = format!(
+        "{}/",
+        FuseTable::parse_storage_prefix_from_table_info(live_mv_table.get_table_info())?
+    );
+
+    fixture
+        .execute_command(&format!("drop database {db_name}"))
+        .await?;
+
+    assert!(meta.get_pb(&live_mv_meta_ident).await?.is_some());
+    assert!(meta.get_pb(&live_definition_ident).await?.is_some());
+    assert!(meta.get_pb(&live_source_index_ident).await?.is_some());
+    assert!(meta.get_pb(&live_tombstone_ident).await?.is_none());
+    assert!(meta.get_pb(&live_name_mapping).await?.is_some());
+    assert!(
+        meta.get_pb(&live_table_id_ident)
+            .await?
+            .is_some_and(|table_meta| table_meta.data.drop_on.is_none())
+    );
+    assert!(
+        !live_operator
+            .list_with(&live_storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "dropping a database must leave live materialized view data for vacuum"
+    );
+
+    fixture.execute_command("vacuum drop table").await?;
+
+    assert!(meta.get_pb(&live_table_id_ident).await?.is_none());
+    assert!(meta.get_pb(&live_table_id_to_name).await?.is_none());
+    assert!(meta.get_pb(&live_name_mapping).await?.is_none());
+    assert!(meta.get_pb(&live_mv_meta_ident).await?.is_none());
+    assert!(meta.get_pb(&live_definition_ident).await?.is_none());
+    assert!(meta.get_pb(&live_source_index_ident).await?.is_none());
+    assert!(
+        live_operator
+            .list_with(&live_storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "vacuum must remove live materialized view data from a dropped database"
+    );
 
     Ok(())
 }

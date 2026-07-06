@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use databend_common_meta_app::schema::is_fuse_backed_engine;
+
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::optimizer::ir::SExpr;
@@ -111,7 +113,7 @@ fn scan_signature(scan: &Scan, metadata: &Metadata) -> Option<IndexType> {
 
     let table_entry = metadata.table(scan.table_index);
     let table = table_entry.table();
-    if table.engine() != "FUSE" {
+    if !is_fuse_backed_engine(table.engine()) {
         return None;
     }
 

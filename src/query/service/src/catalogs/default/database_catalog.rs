@@ -88,6 +88,10 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVId;
+use databend_common_meta_app::schema::MVMeta;
+use databend_common_meta_app::schema::MVMetaIdent;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -99,6 +103,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableTag;
@@ -308,6 +313,18 @@ impl Catalog for DatabaseCatalog {
         } else {
             self.mutable_catalog.get_table_meta_by_id(table_id).await
         }
+    }
+
+    async fn get_mv_meta(&self, tenant: &Tenant, mv_id: MVId) -> Result<Option<SeqV<MVMeta>>> {
+        self.mutable_catalog.get_mv_meta(tenant, mv_id).await
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: MVId,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.mutable_catalog.get_mv_definition(tenant, mv_id).await
     }
 
     #[async_backtrace::framed]
@@ -575,6 +592,10 @@ impl Catalog for DatabaseCatalog {
         Ok(res)
     }
 
+    async fn drop_materialized_view(&self, ident: &MVMetaIdent) -> Result<()> {
+        self.mutable_catalog.drop_materialized_view(ident).await
+    }
+
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         info!("Undrop table from req:{:?}", req);
@@ -621,6 +642,25 @@ impl Catalog for DatabaseCatalog {
         info!("commit_table_meta from req:{:?}", req);
 
         self.mutable_catalog.commit_table_meta(req).await
+    }
+
+    async fn commit_materialized_view(
+        &self,
+        ident: &MVMetaIdent,
+        expected_prev_mv_id: Option<MVId>,
+        orphan_ident: &TableIdHistoryIdent,
+        mv_meta: &MVMeta,
+        definition: &MVDefinition,
+    ) -> Result<()> {
+        self.mutable_catalog
+            .commit_materialized_view(
+                ident,
+                expected_prev_mv_id,
+                orphan_ident,
+                mv_meta,
+                definition,
+            )
+            .await
     }
 
     #[async_backtrace::framed]

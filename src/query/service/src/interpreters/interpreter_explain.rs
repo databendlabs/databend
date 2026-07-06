@@ -139,6 +139,26 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
+                Plan::CreateMaterializedView(plan) => match &plan.table_plan.as_select {
+                    Some(box Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        formatted_ast,
+                        ..
+                    }) => {
+                        let mut res =
+                            vec![DataBlock::new_from_columns(vec![StringType::from_data(
+                                vec!["CreateMaterializedViewAsSelect:", ""],
+                            )])];
+                        res.extend(
+                            self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                .await?,
+                        );
+                        vec![DataBlock::concat(&res)?]
+                    }
+                    _ => self.explain_plan(&self.plan)?,
+                },
                 Plan::InsertMultiTable(plan) => {
                     let physical_plan = InsertMultiTableInterpreter::try_create_static(
                         self.ctx.clone(),

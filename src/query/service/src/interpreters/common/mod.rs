@@ -15,6 +15,7 @@
 mod column;
 mod finish_hook;
 mod grant;
+mod materialized_view;
 mod metrics;
 mod notification;
 mod query_log;
@@ -30,11 +31,13 @@ pub use column::*;
 pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
 pub use log::*;
+pub use materialized_view::check_not_materialized_view;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;
 pub use stream::query_build_update_stream_req;
 pub use table::check_referenced_computed_columns;
+pub use table::revoke_table_ownership;
 pub use util::check_deduplicate_label;
 pub use worker::get_worker_client_config;
 

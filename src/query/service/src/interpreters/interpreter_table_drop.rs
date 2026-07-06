@@ -17,16 +17,13 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
@@ -102,6 +99,12 @@ impl Interpreter for DropTableInterpreter {
                 &self.plan.table
             )));
         }
+        if is_materialized_view_engine(tbl.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
+                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+            )));
+        }
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
         // Although even if data is in READ_ONLY mode,
@@ -139,15 +142,13 @@ impl Interpreter for DropTableInterpreter {
             // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
             // but the table still exists, in the interval maybe some unexpected things will happen.
             // drop the ownership
-            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-            let owner_object = OwnershipObject::Table {
-                catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().database_id.db_id,
+            crate::interpreters::common::revoke_table_ownership(
+                &self.plan.tenant,
+                &self.plan.catalog,
+                db.get_db_info().database_id.db_id,
                 table_id,
-            };
-
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            )
+            .await?;
         }
 
         let mut build_res = PipelineBuildResult::create();

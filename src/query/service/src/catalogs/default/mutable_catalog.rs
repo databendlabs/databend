@@ -31,6 +31,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -40,6 +41,7 @@ use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -105,6 +107,11 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVId;
+use databend_common_meta_app::schema::MVMeta;
+use databend_common_meta_app::schema::MVMetaIdent;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -116,6 +123,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -557,6 +565,26 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn get_mv_meta(&self, tenant: &Tenant, mv_id: MVId) -> Result<Option<SeqV<MVMeta>>> {
+        self.ctx
+            .meta
+            .get_mv_meta(&MVMetaIdent::new_generic(tenant, mv_id))
+            .await
+            .map_err(meta_service_error)
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: MVId,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.ctx
+            .meta
+            .get_mv_definition(&MVDefinitionIdent::new_generic(tenant, mv_id))
+            .await
+            .map_err(meta_service_error)
+    }
+
     async fn mget_table_names_by_ids(
         &self,
         _tenant: &Tenant,
@@ -780,6 +808,14 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn drop_materialized_view(&self, ident: &MVMetaIdent) -> Result<()> {
+        self.ctx
+            .meta
+            .drop_materialized_view(ident)
+            .await?
+            .map_err(|err| ErrorCode::UnknownMaterializedView(err.message()))
+    }
+
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let db = self
@@ -798,6 +834,27 @@ impl Catalog for MutableCatalog {
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.commit_table_meta(req).await
+    }
+
+    async fn commit_materialized_view(
+        &self,
+        ident: &MVMetaIdent,
+        expected_prev_mv_id: Option<MVId>,
+        orphan_ident: &TableIdHistoryIdent,
+        mv_meta: &MVMeta,
+        definition: &MVDefinition,
+    ) -> Result<()> {
+        self.ctx
+            .meta
+            .commit_materialized_view(
+                ident,
+                expected_prev_mv_id,
+                orphan_ident,
+                mv_meta,
+                definition,
+            )
+            .await?
+            .map_err(|err| ErrorCode::MaterializedViewAlreadyExists(err.message()))
     }
 
     #[async_backtrace::framed]

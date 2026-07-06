@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::is_fuse_backed_engine;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
@@ -39,8 +40,6 @@ use crate::FuseTable;
 use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
-
-const FUSE_ENGINE: &str = "FUSE";
 
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
@@ -100,7 +99,7 @@ async fn compute_table_segments_diffs(
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
-        if engine != FUSE_ENGINE {
+        if !is_fuse_backed_engine(engine) {
             log::info!(
                 "Skipping segments diff pre-compute for table {} with engine {}",
                 tid,

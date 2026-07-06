@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::rename_column_in_cluster_key;
 use crate::interpreters::common::rename_column_in_comma_separated_ident;
@@ -75,6 +76,8 @@ impl Interpreter for RenameTableColumnInterpreter {
 
         // check mutability
         table.check_mutable()?;
+
+        check_not_materialized_view(table.as_ref(), &self.plan.database)?;
 
         let table_info = table.get_table_info();
         let engine = table.engine();

@@ -190,7 +190,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     let opt_key = opt_key.as_ref().to_lowercase();
     let opt_key = opt_key.as_str();
     match engine {
-        Engine::Fuse => CREATE_FUSE_OPTIONS.contains(opt_key),
+        Engine::Fuse | Engine::MaterializedView => CREATE_FUSE_OPTIONS.contains(opt_key),
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),

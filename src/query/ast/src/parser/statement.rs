@@ -1605,6 +1605,96 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_materialized_view = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ MATERIALIZED ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ AS ~ #query
+        },
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            (catalog, database, view),
+            opt_cluster_by,
+            _,
+            origin_query,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateMaterializedView(
+                CreateMaterializedViewStmt {
+                    create_option,
+                    catalog,
+                    database,
+                    view,
+                    cluster_by: opt_cluster_by.map(|(_, _, typ, _, exprs, _)| ClusterOption {
+                        cluster_type: typ.unwrap_or(ClusterType::Linear),
+                        cluster_exprs: exprs,
+                    }),
+                    origin_query: Box::new(origin_query),
+                },
+            ))
+        },
+    );
+    let drop_materialized_view = map(
+        rule! {
+            DROP ~ MATERIALIZED ~ VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, (catalog, database, view))| {
+            Statement::DropMaterializedView(DropMaterializedViewStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let refresh_materialized_view = map(
+        rule! {
+            REFRESH ~ MATERIALIZED ~ VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, view))| {
+            Statement::RefreshMaterializedView(RefreshMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let show_create_materialized_view = map(
+        rule! {
+            SHOW ~ CREATE ~ MATERIALIZED ~ VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, view))| {
+            Statement::ShowCreateMaterializedView(ShowCreateMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let show_materialized_views = map(
+        rule! {
+            SHOW ~ MATERIALIZED ~ VIEWS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, _, _, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowMaterializedViews(ShowMaterializedViewsStmt {
+                catalog,
+                database,
+                limit,
+            })
+        },
+    );
+
     let create_index = map_res(
         rule! {
             CREATE
@@ -2905,6 +2995,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
                 | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
                 | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
+                | #show_materialized_views : "`SHOW MATERIALIZED VIEWS [FROM [<catalog>.]<database>] [<show_limit>]`"
+                | #show_create_materialized_view : "`SHOW CREATE MATERIALIZED VIEW [<database>.]<view>`"
                 | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             )
             | (
@@ -2979,7 +3071,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             ).parse(i),
         REFRESH => rule!(
-            #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -3041,6 +3134,7 @@ AS
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [CLUSTER BY [LINEAR|HILBERT](...)] AS SELECT ...`"
                 | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
@@ -3089,6 +3183,7 @@ AS
                 | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
                 | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
+                | #drop_materialized_view : "`DROP MATERIALIZED VIEW [IF EXISTS] [<database>.]<view>`"
                 | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
                 | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             )

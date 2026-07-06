@@ -517,6 +517,20 @@ impl InterpreterFactory {
                 *describe_view.clone(),
             )?)),
 
+            // Materialized Views
+            Plan::CreateMaterializedView(plan) => Ok(Arc::new(
+                CreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
+            Plan::ShowCreateMaterializedView(plan) => Ok(Arc::new(
+                ShowCreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
+            Plan::DropMaterializedView(plan) => Ok(Arc::new(
+                DropMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
+            Plan::RefreshMaterializedView(plan) => Ok(Arc::new(
+                RefreshMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
+
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
                 ctx,

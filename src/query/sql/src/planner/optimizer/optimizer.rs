@@ -222,6 +222,15 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             Ok(Plan::CreateTable(plan))
         }
 
+        Plan::CreateMaterializedView(mut plan) => {
+            if let Some(p) = &plan.table_plan.as_select {
+                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                plan.table_plan.as_select = Some(Box::new(optimized_plan));
+            }
+
+            Ok(Plan::CreateMaterializedView(plan))
+        }
+
         Plan::Set(mut plan) => {
             if let SetScalarsOrQuery::Query(q) = plan.values {
                 let optimized_plan = optimize(opt_ctx.clone(), *q.clone()).await?;

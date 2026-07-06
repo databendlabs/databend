@@ -99,6 +99,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -176,8 +177,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
-
-const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
@@ -548,7 +547,10 @@ impl Binder {
         }
     }
 
-    async fn as_query_plan(&mut self, query: &Query) -> Result<Plan> {
+    pub(in crate::planner::binder) async fn as_query_plan(
+        &mut self,
+        query: &Query,
+    ) -> Result<Plan> {
         let stmt = Statement::Query(Box::new(query.clone()));
         let mut bind_context = BindContext::new();
         self.bind_statement(&mut bind_context, &stmt).await
@@ -584,58 +586,52 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        if engine == Engine::MaterializedView {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+            ));
+        }
         let stage_resolver = StageResolver::from_table_context(
             self.ctx.clone(),
             UserApiProvider::instance(),
             GlobalConfig::instance().storage.allow_insecure,
         )?;
 
-        // Construct a UriLocation from database defaults if table doesn't have explicit location
-        let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
-            && matches!(engine, Engine::Fuse)
-        {
+        let mut storage_params = if let Some(uri) = uri_location {
+            if !matches!(engine, Engine::Fuse) {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Incorrect CREATE query: CREATE TABLE with external location is only supported for FUSE engine, but got {:?} for {:?}",
+                    engine, uri
+                )));
+            }
+            let mut uri = UriLocation {
+                protocol: uri.protocol.clone(),
+                name: uri.name.clone(),
+                path: uri.path.clone(),
+                connection: uri.connection.clone(),
+            };
+            let sp = stage_resolver
+                .resolve_storage_params_from_uri(
+                    &mut uri,
+                    "when create TABLE with external location",
+                )
+                .await?;
+            let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
+            check_operator(&op, &sp).await?;
+            verify_external_location_privileges(op).await?;
+            Some(sp)
+        } else if matches!(engine, Engine::Fuse) {
             if let Ok(database_info) = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await
             {
-                // Extract database-level default connection options
-                let default_connection_name =
-                    database_info.options().get(DEFAULT_STORAGE_CONNECTION);
-                let default_path = database_info.options().get(DEFAULT_STORAGE_PATH);
-
-                // If both database defaults exist, construct UriLocation
-                if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
-                {
-                    // Get the connection object to access its storage_params
-                    match stage_resolver.resolve_connection(connection_name).await {
-                        Ok(connection) => {
-                            // Construct UriLocation using the database defaults
-                            match UriLocation::from_uri(path.clone(), connection.storage_params) {
-                                Ok(uri) => Some(uri),
-                                Err(e) => {
-                                    return Err(ErrorCode::BadArguments(format!(
-                                        "Failed to parse database default storage path '{}': {}",
-                                        path, e
-                                    )));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            return Err(ErrorCode::BadArguments(format!(
-                                "Database default connection '{}' does not exist: {}",
-                                connection_name, e
-                            )));
-                        }
-                    }
-                } else {
-                    None
-                }
+                self.resolve_database_default_storage_params(database_info.as_ref())
+                    .await?
             } else {
                 None
             }
         } else {
-            // Use the provided uri_location by cloning it
-            uri_location.clone()
+            None
         };
 
         if catalog.support_partition() != (engine == Engine::Iceberg) {
@@ -649,7 +645,6 @@ impl Binder {
         }
 
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
-        // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -679,38 +674,6 @@ impl Binder {
                 .map(|p| p.to_string())
                 .collect::<Vec<String>>()
         });
-
-        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
-            (Some(uri), Engine::Fuse) => {
-                let mut uri = UriLocation {
-                    protocol: uri.protocol.clone(),
-                    name: uri.name.clone(),
-                    path: uri.path.clone(),
-                    connection: uri.connection.clone(),
-                };
-                let sp = stage_resolver
-                    .resolve_storage_params_from_uri(
-                        &mut uri,
-                        "when create TABLE with external location",
-                    )
-                    .await?;
-
-                // create a temporary op to check if params is correct
-                let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
-                check_operator(&op, &sp).await?;
-
-                // Verify essential privileges.
-                // The permission check might fail for reasons other than the permissions themselves,
-                // such as network communication issues.
-                verify_external_location_privileges(op).await?;
-                Some(sp)
-            }
-            (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
-                "Incorrect CREATE query: CREATE TABLE with external location is only supported for FUSE engine, but got {:?} for {:?}",
-                engine, uri
-            )))?,
-            _ => None,
-        };
 
         match table_type {
             TableType::Normal => {}
@@ -876,50 +839,7 @@ impl Binder {
             let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
 
-            let config = GlobalConfig::instance();
-            let is_blocking_fs = matches!(
-                storage_params.as_ref().unwrap_or(&config.storage.params),
-                StorageParams::Fs(_)
-            );
-
-            // we should persist the storage format and compression type instead of using the default value in fuse table
-            if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-                let default_storage_format =
-                    match config.query.common.default_storage_format.as_str() {
-                        "" | "auto" | "native" => "parquet",
-                        _ => config.query.common.default_storage_format.as_str(),
-                    };
-                options.insert(
-                    OPT_KEY_STORAGE_FORMAT.to_owned(),
-                    default_storage_format.to_owned(),
-                );
-            }
-
-            if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
-                let default_compression = match config.query.common.default_compression.as_str() {
-                    "" | "auto" => {
-                        if is_blocking_fs {
-                            "lz4"
-                        } else {
-                            "zstd"
-                        }
-                    }
-                    _ => config.query.common.default_compression.as_str(),
-                };
-                options.insert(
-                    OPT_KEY_TABLE_COMPRESSION.to_owned(),
-                    default_compression.to_owned(),
-                );
-            } else {
-                // validate the compression type
-                let _: TableCompression = options
-                    .get(OPT_KEY_TABLE_COMPRESSION)
-                    .ok_or_else(|| {
-                        ErrorCode::BadArguments("Table compression type is not specified")
-                    })?
-                    .as_str()
-                    .try_into()?;
-            }
+            apply_fuse_storage_defaults(&mut options, storage_params.as_ref())?;
         } else if table_indexes.is_some() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create index",
@@ -943,7 +863,7 @@ impl Binder {
                     cluster_opt.cluster_type.to_string().to_lowercase(),
                 );
                 options
-                    .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
@@ -2463,17 +2383,117 @@ impl Binder {
         (is_valid_type, is_vector_type)
     }
 
-    fn is_column_not_null(&self) -> bool {
+    pub(in crate::planner::binder) fn is_column_not_null(&self) -> bool {
         !self
             .ctx
             .get_settings()
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
     }
+
+    pub(in crate::planner::binder) async fn resolve_database_default_storage_params(
+        &self,
+        database_info: &dyn databend_common_catalog::database::Database,
+    ) -> Result<Option<StorageParams>> {
+        let default_connection_name = database_info.options().get(DEFAULT_STORAGE_CONNECTION);
+        let default_path = database_info.options().get(DEFAULT_STORAGE_PATH);
+
+        let (connection_name, path) = match (default_connection_name, default_path) {
+            (Some(c), Some(p)) => (c.clone(), p.clone()),
+            _ => return Ok(None),
+        };
+
+        let stage_resolver = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?;
+
+        let connection = stage_resolver
+            .resolve_connection(&connection_name)
+            .await
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Database default connection '{}' does not exist: {}",
+                    connection_name, e
+                ))
+            })?;
+
+        let uri = UriLocation::from_uri(path.clone(), connection.storage_params).map_err(|e| {
+            ErrorCode::BadArguments(format!(
+                "Failed to parse database default storage path '{}': {}",
+                path, e
+            ))
+        })?;
+
+        let mut uri = UriLocation {
+            protocol: uri.protocol,
+            name: uri.name,
+            path: uri.path,
+            connection: uri.connection,
+        };
+
+        let sp = stage_resolver
+            .resolve_storage_params_from_uri(&mut uri, "when resolving database default storage")
+            .await?;
+
+        let op = init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?;
+        check_operator(&op, &sp).await?;
+        verify_external_location_privileges(op).await?;
+
+        Ok(Some(sp))
+    }
 }
 
 const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
 const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
+
+pub(in crate::planner::binder) fn apply_fuse_storage_defaults(
+    options: &mut BTreeMap<String, String>,
+    storage_params: Option<&StorageParams>,
+) -> Result<()> {
+    let config = GlobalConfig::instance();
+    let is_blocking_fs = matches!(
+        storage_params.unwrap_or(&config.storage.params),
+        StorageParams::Fs(_)
+    );
+
+    if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
+        let default_storage_format = match config.query.common.default_storage_format.as_str() {
+            "" | "auto" | "native" => "parquet",
+            _ => config.query.common.default_storage_format.as_str(),
+        };
+        options.insert(
+            OPT_KEY_STORAGE_FORMAT.to_owned(),
+            default_storage_format.to_owned(),
+        );
+    }
+
+    if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
+        let default_compression = match config.query.common.default_compression.as_str() {
+            "" | "auto" => {
+                if is_blocking_fs {
+                    "lz4"
+                } else {
+                    "zstd"
+                }
+            }
+            _ => config.query.common.default_compression.as_str(),
+        };
+        options.insert(
+            OPT_KEY_TABLE_COMPRESSION.to_owned(),
+            default_compression.to_owned(),
+        );
+    } else {
+        let _: TableCompression = options
+            .get(OPT_KEY_TABLE_COMPRESSION)
+            .ok_or_else(|| ErrorCode::BadArguments("Table compression type is not specified"))?
+            .as_str()
+            .try_into()?;
+    }
+
+    Ok(())
+}
 
 // verify that essential privileges has granted for accessing external location
 //

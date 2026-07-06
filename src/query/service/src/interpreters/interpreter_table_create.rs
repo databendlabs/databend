@@ -16,8 +16,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,7 +30,6 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -38,6 +37,8 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::is_fuse_backed_engine;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
@@ -129,6 +130,17 @@ impl Interpreter for CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.validate_create().await?;
+
+        match &self.plan.as_select {
+            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
+            None => self.create_table().await,
+        }
+    }
+}
+
+impl CreateTableInterpreter {
+    pub(crate) async fn validate_create(&self) -> Result<()> {
         let tenant = &self.plan.tenant;
 
         let has_computed_column = self
@@ -179,16 +191,59 @@ impl Interpreter for CreateTableInterpreter {
             }
         }
 
-        match &self.plan.as_select {
-            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
-            None => self.create_table().await,
-        }
+        Ok(())
     }
-}
-
-impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
+        let (mut pipeline, table_commit) = self.prepare_table_as_select(select_plan).await?;
+        let Some((catalog, table_req)) = table_commit else {
+            return Ok(pipeline);
+        };
+
+        if !self.plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            self.process_ownership(&self.plan.tenant, table_req.db_id, table_req.table_id)
+                .await?;
+        }
+
+        let ctx = self.ctx.clone();
+        let qualified_table_name = format!(
+            "{}.{}",
+            table_req.name_ident.db_name, table_req.name_ident.table_name
+        );
+        let table_id = table_req.table_id;
+        pipeline
+            .main_pipeline
+            .lift_on_finished(move |info: &ExecutionInfo| {
+                info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
+
+                if info.res.is_ok() {
+                    info!(
+                        "create_table_as_select {} success, commit table meta data by table id {}",
+                        qualified_table_name, table_id
+                    );
+                    GlobalIORuntime::instance()
+                        .block_on(catalog.commit_table_meta(table_req))
+                        .map_err(|e| {
+                            info!("create {} as select failed. {:?}", qualified_table_name, e);
+                            e
+                        })?;
+                    info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
+                }
+
+                Ok(())
+            });
+
+        Ok(pipeline)
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn prepare_table_as_select(
+        &self,
+        select_plan: Box<Plan>,
+    ) -> Result<(
+        PipelineBuildResult,
+        Option<(Arc<dyn Catalog>, CommitTableMetaReq)>,
+    )> {
         assert!(
             !self.plan.options.contains_key(OPT_KEY_STORAGE_PREFIX),
             "There should be no ATTACH TABLE AS SELECT plan"
@@ -198,15 +253,29 @@ impl CreateTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
+        self.check_replace_type_conflict(catalog.as_ref(), &tenant)
+            .await?;
+
         let mut req = self.build_request(None)?;
 
         // create a dropped table first.
         req.as_dropped = true;
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
-        let reply = catalog.create_table(req.clone()).await?;
+        let reply = catalog.create_table(req.clone()).await.map_err(|e| {
+            if e.code() == ErrorCode::TABLE_ALREADY_EXISTS
+                && is_materialized_view_engine(&self.plan.engine.to_string())
+            {
+                ErrorCode::MaterializedViewAlreadyExists(format!(
+                    "Materialized view '{}' already exists",
+                    self.plan.table
+                ))
+            } else {
+                e
+            }
+        })?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
-            return Ok(PipelineBuildResult::create());
+            return Ok((PipelineBuildResult::create(), None));
         }
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
@@ -219,10 +288,6 @@ impl CreateTableInterpreter {
             .table_id_seq
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
-
-        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            self.process_ownership(&tenant, reply).await?;
-        }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
         // we use the definitions to create the table schema. It may happen that the "AS SELECT" query's schema doesn't
@@ -256,9 +321,6 @@ impl CreateTableInterpreter {
             .execute2()
             .await?;
 
-        let db_name = self.plan.database.clone();
-        let table_name = self.plan.table.clone();
-
         let query_ctx = self.ctx.clone();
         pipeline
             .main_pipeline
@@ -268,55 +330,24 @@ impl CreateTableInterpreter {
                 hook_disk_temp_dir(&query_ctx)?;
                 Ok(())
             }));
-        // Add a callback to restore table visibility upon successful insert pipeline completion.
-        // As there might be previous on_finish callbacks(e.g. refresh/compact/re-cluster hooks) which
-        // depend on the table being visible, this callback is added at the beginning of the on_finish
-        // callback list.
-        //
-        // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
-        let ctx = self.ctx.clone();
-        pipeline
-            .main_pipeline
-            .lift_on_finished(move |info: &ExecutionInfo| {
-                info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
-                let qualified_table_name = format!("{}.{}", db_name, table_name);
+        let table_req = CommitTableMetaReq {
+            name_ident: TableNameIdent {
+                tenant,
+                db_name: self.plan.database.clone(),
+                table_name: self.plan.table.clone(),
+            },
+            db_id,
+            table_id,
+            prev_table_id,
+            orphan_table_name,
+        };
 
-                if info.res.is_ok() {
-                    info!(
-                        "create_table_as_select {} success, commit table meta data by table id {}",
-                        qualified_table_name, table_id
-                    );
-                    let fut = async move {
-                        let req = CommitTableMetaReq {
-                            name_ident: TableNameIdent {
-                                tenant,
-                                db_name,
-                                table_name,
-                            },
-                            db_id,
-                            table_id,
-                            prev_table_id,
-                            orphan_table_name,
-                        };
-                        catalog.commit_table_meta(req).await
-                    };
-
-                    GlobalIORuntime::instance().block_on(fut).map_err(|e| {
-                        info!("create {} as select failed. {:?}", qualified_table_name, e);
-                        e
-                    })?;
-                    info!("{:?}", ctx.session_state()?.temp_tbl_mgr);
-                }
-
-                Ok(())
-            });
-
-        Ok(pipeline)
+        Ok((pipeline, Some((catalog, table_req))))
     }
 
     // revoke ownership handling is now integrated into the create_table transaction
-    async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
+    async fn process_ownership(&self, tenant: &Tenant, db_id: u64, table_id: u64) -> Result<()> {
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
         let role_api = UserApiProvider::instance().role_api(tenant);
@@ -325,8 +356,8 @@ impl CreateTableInterpreter {
                 .grant_ownership(
                     &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
-                        db_id: reply.db_id,
-                        table_id: reply.table_id,
+                        db_id,
+                        table_id,
                     },
                     &current_role.name,
                 )
@@ -339,6 +370,10 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+
+        self.check_replace_type_conflict(catalog.as_ref(), &self.plan.tenant)
+            .await?;
+
         let mut stat = None;
         if !GlobalConfig::instance().query.common.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
@@ -393,10 +428,48 @@ impl CreateTableInterpreter {
         // iceberg table do not need to generate ownership.
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
             let tenant = self.ctx.get_tenant();
-            self.process_ownership(&tenant, reply).await?;
+            self.process_ownership(&tenant, reply.db_id, reply.table_id)
+                .await?;
         }
 
         Ok(PipelineBuildResult::create())
+    }
+
+    async fn check_replace_type_conflict(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+    ) -> Result<()> {
+        if self.plan.create_option != CreateOption::CreateOrReplace {
+            return Ok(());
+        }
+
+        let existing = match catalog
+            .get_table(tenant, &self.plan.database, &self.plan.table)
+            .await
+        {
+            Ok(table) => Some(table),
+            Err(e) if e.code() == ErrorCode::UNKNOWN_TABLE => None,
+            Err(e) => return Err(e),
+        };
+        if let Some(existing) = existing {
+            let is_existing_mv = is_materialized_view_engine(existing.engine());
+            let is_new_mv = is_materialized_view_engine(&self.plan.engine.to_string());
+            if is_existing_mv && !is_new_mv {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW` first",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+            if !is_existing_mv && is_new_mv {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} already exists as a non-materialized-view object, drop it first",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.
@@ -427,7 +500,7 @@ impl CreateTableInterpreter {
             .collect();
         let mut options = self.plan.options.clone();
 
-        if self.plan.engine == Engine::Fuse {
+        if is_fuse_backed_engine(&self.plan.engine.to_string()) {
             let settings = self.ctx.get_settings();
             // change default to 1 when all query server is ready to processing it.
             if settings.get_copy_dedup_full_path_by_default()? {
