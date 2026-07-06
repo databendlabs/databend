@@ -1,0 +1,10 @@
+=== SELECT on MV requires privilege ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'test_mv_priv' for user 'mv_user'@'%' with roles [mv_role,public]
+a	1
+b	1
+=== REFRESH MV requires INSERT+DELETE on MV and SELECT on source ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Insert] is required on 'default'.'default'.'test_mv_priv' for user 'mv_user'@'%' with roles [mv_role,public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_priv_src' for user 'mv_user'@'%' with roles [mv_role,public]
+=== DROP MV requires DROP privilege ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'default'.'test_mv_priv' for user 'mv_user'@'%' with roles [mv_role,public]
+=== Cleanup ===

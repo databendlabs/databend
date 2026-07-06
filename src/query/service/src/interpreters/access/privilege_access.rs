@@ -384,6 +384,26 @@ impl PrivilegeAccess {
         if_exists: bool,
         disable_table_info_refresh: bool,
     ) -> Result<()> {
+        self.validate_table_access_inner(
+            catalog_name,
+            db_name,
+            table_name,
+            privilege,
+            if_exists,
+            disable_table_info_refresh,
+        )
+        .await
+    }
+
+    async fn validate_table_access_inner(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+        privilege: UserPrivilegeType,
+        if_exists: bool,
+        disable_table_info_refresh: bool,
+    ) -> Result<()> {
         // skip checking the privilege on system tables.
         if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
             || db_name == "information_schema")
@@ -498,6 +518,54 @@ impl PrivilegeAccess {
                     Err(error)
                 };
             }
+        }
+
+        Ok(())
+    }
+
+    async fn validate_query_source_table_access(&self, plan: &Plan) -> Result<()> {
+        let Plan::Query { metadata, .. } = plan else {
+            return Ok(());
+        };
+
+        let metadata = metadata.read().clone();
+        for table in metadata.tables() {
+            if table.is_source_of_stage() {
+                match table.table().get_data_source_info() {
+                    DataSourceInfo::StageSource(stage_info) => {
+                        self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read)
+                            .await?;
+                    }
+                    DataSourceInfo::ParquetSource(stage_info) => {
+                        self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read)
+                            .await?;
+                    }
+                    DataSourceInfo::ORCSource(stage_info) => {
+                        self.validate_stage_access(
+                            &stage_info.stage_table_info.stage_info,
+                            UserPrivilegeType::Read,
+                        )
+                        .await?;
+                    }
+                    DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
+                }
+                continue;
+            }
+
+            if table.is_source_of_view() || table.table().is_temp() {
+                continue;
+            }
+
+            let catalog_name = table.catalog();
+            self.validate_table_access(
+                catalog_name,
+                table.database(),
+                table.name(),
+                UserPrivilegeType::Select,
+                false,
+                false,
+            )
+            .await?;
         }
 
         Ok(())
@@ -1259,7 +1327,6 @@ impl AccessChecker for PrivilegeAccess {
 
         match plan {
             Plan::Query {
-                metadata,
                 rewrite_kind,
                 s_expr,
                 ..
@@ -1356,34 +1423,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
 
-                let metadata = metadata.read().clone();
-
-                for table in metadata.tables() {
-                    if enable_experimental_rbac_check && table.is_source_of_stage() {
-                        match table.table().get_data_source_info() {
-                            DataSourceInfo::StageSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::ParquetSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::ORCSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
-                            DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
-                        }
-                    }
-                    if table.is_source_of_view() || table.table().is_temp() {
-                        continue;
-                    }
-
-                    let catalog_name = table.catalog();
-                    // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
-                    // this is no means to check table `system.read_parquet(s3)` privilege
-                    if !table.is_source_of_stage() {
-                        self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false, false).await?
-                    }
-                }
+                self.validate_query_source_table_access(plan).await?;
             }
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
@@ -1804,6 +1844,17 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DescribeView(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
+            }
+            Plan::DropMaterializedView(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Drop, plan.if_exists, true).await?
+            }
+            Plan::RefreshMaterializedView(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Insert, false, false).await?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Delete, false, false).await?;
+                let select_plan = crate::interpreters::common::plan_materialized_view_query(
+                    &self.ctx, &plan.catalog, &plan.database, &plan.view_name
+                ).await?;
+                self.check(ctx, &select_plan).await?
             }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?
