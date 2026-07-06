@@ -181,12 +181,33 @@ fn test_skew_hash_distribution_is_not_normal_hash_equivalent() {
         "identical skew hash distribution should satisfy the requirement"
     );
 
+    let different_key_physical = PhysicalProperty {
+        distribution: Distribution::GlobalSkewHash(vec![column_expr(1)], probe_skew_info.clone()),
+    };
+    assert!(
+        !skew_required.satisfied_by(&different_key_physical),
+        "skew hash distributions with different keys must not be equivalent"
+    );
+
     let different_skew_physical = PhysicalProperty {
-        distribution: Distribution::GlobalSkewHash(keys, test_skew_hash_info(SkewHashRole::Build)),
+        distribution: Distribution::GlobalSkewHash(
+            keys.clone(),
+            test_skew_hash_info(SkewHashRole::Build),
+        ),
     };
     assert!(
         !skew_required.satisfied_by(&different_skew_physical),
-        "skew hash distributions with different skew info must not be equivalent"
+        "skew hash distributions with different roles must not be equivalent"
+    );
+
+    let mut different_hot_key_info = test_skew_hash_info(SkewHashRole::Probe);
+    different_hot_key_info.hot_keys = vec![uint64_scalar(2)];
+    let different_hot_key_physical = PhysicalProperty {
+        distribution: Distribution::GlobalSkewHash(keys, different_hot_key_info),
+    };
+    assert!(
+        !skew_required.satisfied_by(&different_hot_key_physical),
+        "skew hash distributions with different hot keys must not be equivalent"
     );
 }
 

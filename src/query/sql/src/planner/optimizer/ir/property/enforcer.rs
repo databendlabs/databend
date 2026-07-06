@@ -29,6 +29,8 @@ use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::SkewHashInfo;
+use crate::plans::SkewHashRole;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -130,21 +132,10 @@ impl PropertyEnforcer {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
 
-            let keys: Option<(&mut Vec<ScalarExpr>, &mut Vec<ScalarExpr>)> = match (
+            let keys = join_distribution_keys(
                 &mut probe_required_property[0].distribution,
                 &mut build_required_property[0].distribution,
-            ) {
-                (
-                    Distribution::NodeToNodeHash(probe_keys),
-                    Distribution::NodeToNodeHash(build_keys),
-                )
-                | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys))
-                | (
-                    Distribution::GlobalSkewHash(probe_keys, _),
-                    Distribution::GlobalSkewHash(build_keys, _),
-                ) => Some((probe_keys, build_keys)),
-                _ => None,
-            };
+            );
 
             if let Some((probe_keys, build_keys)) = keys {
                 let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
@@ -223,5 +214,115 @@ impl PropertyEnforcer {
         let result = SExpr::create_unary(Arc::new(exchange_op), Arc::new(s_expr.clone()));
 
         Ok(result)
+    }
+}
+
+fn join_distribution_keys<'a>(
+    probe_distribution: &'a mut Distribution,
+    build_distribution: &'a mut Distribution,
+) -> Option<(&'a mut Vec<ScalarExpr>, &'a mut Vec<ScalarExpr>)> {
+    match (probe_distribution, build_distribution) {
+        (Distribution::NodeToNodeHash(probe_keys), Distribution::NodeToNodeHash(build_keys))
+        | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys)) => {
+            Some((probe_keys, build_keys))
+        }
+        (
+            Distribution::GlobalSkewHash(probe_keys, probe_info),
+            Distribution::GlobalSkewHash(build_keys, build_info),
+        ) if compatible_skew_hash_pair(probe_info, build_info) => Some((probe_keys, build_keys)),
+        _ => None,
+    }
+}
+
+fn compatible_skew_hash_pair(probe_info: &SkewHashInfo, build_info: &SkewHashInfo) -> bool {
+    probe_info.role == SkewHashRole::Probe
+        && build_info.role == SkewHashRole::Build
+        && probe_info.hot_keys == build_info.hot_keys
+        && probe_info.bucket_count == build_info.bucket_count
+        && probe_info.normal_skew_penalty_rows == build_info.normal_skew_penalty_rows
+        && probe_info.skew_skew_penalty_rows == build_info.skew_skew_penalty_rows
+        && probe_info.extra_build_rows == build_info.extra_build_rows
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+    use crate::plans::ConstantExpr;
+
+    #[test]
+    fn test_join_distribution_keys_matches_compatible_skew_hash_pair() {
+        let probe_key = uint64_expr(10);
+        let build_key = uint64_expr(20);
+        let mut probe_distribution = Distribution::GlobalSkewHash(
+            vec![probe_key.clone()],
+            test_skew_hash_info(SkewHashRole::Probe),
+        );
+        let mut build_distribution = Distribution::GlobalSkewHash(
+            vec![build_key.clone()],
+            test_skew_hash_info(SkewHashRole::Build),
+        );
+
+        let (probe_keys, build_keys) =
+            join_distribution_keys(&mut probe_distribution, &mut build_distribution)
+                .expect("compatible skew hash pair should expose join keys");
+
+        assert_eq!(probe_keys.as_slice(), &[probe_key]);
+        assert_eq!(build_keys.as_slice(), &[build_key]);
+    }
+
+    #[test]
+    fn test_join_distribution_keys_rejects_incompatible_skew_hash_pair() {
+        let mut probe_distribution = Distribution::GlobalSkewHash(
+            vec![uint64_expr(10)],
+            test_skew_hash_info(SkewHashRole::Probe),
+        );
+        let mut different_hot_key_info = test_skew_hash_info(SkewHashRole::Build);
+        different_hot_key_info.hot_keys = vec![uint64_scalar(2)];
+        let mut different_hot_key_build_distribution =
+            Distribution::GlobalSkewHash(vec![uint64_expr(20)], different_hot_key_info);
+        assert!(
+            join_distribution_keys(
+                &mut probe_distribution,
+                &mut different_hot_key_build_distribution,
+            )
+            .is_none(),
+            "skew hash pairs with different hot keys should not expose join keys"
+        );
+
+        let mut wrong_role_build_distribution = Distribution::GlobalSkewHash(
+            vec![uint64_expr(20)],
+            test_skew_hash_info(SkewHashRole::Probe),
+        );
+        assert!(
+            join_distribution_keys(&mut probe_distribution, &mut wrong_role_build_distribution)
+                .is_none(),
+            "skew hash pairs with incompatible roles should not expose join keys"
+        );
+    }
+
+    fn test_skew_hash_info(role: SkewHashRole) -> SkewHashInfo {
+        SkewHashInfo {
+            role,
+            hot_keys: vec![uint64_scalar(1)],
+            bucket_count: 2,
+            normal_skew_penalty_rows: 100,
+            skew_skew_penalty_rows: 10,
+            extra_build_rows: 1,
+        }
+    }
+
+    fn uint64_expr(value: u64) -> ScalarExpr {
+        ConstantExpr {
+            span: None,
+            value: uint64_scalar(value),
+        }
+        .into()
+    }
+
+    fn uint64_scalar(value: u64) -> Scalar {
+        Scalar::Number(NumberScalar::UInt64(value))
     }
 }
