@@ -23,6 +23,7 @@ use databend_common_sql::plans::UnsetOptionsPlan;
 use databend_meta_client::types::MatchSeq;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -57,6 +58,7 @@ impl Interpreter for UnsetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        check_not_materialized_view(table.as_ref(), database)?;
 
         // check mutability
         table.check_mutable()?;

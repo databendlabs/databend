@@ -65,6 +65,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
@@ -774,6 +775,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .await?;
 
         table.check_mutable()?;
+
+        check_not_materialized_view(table.as_ref(), db_name)?;
 
         let table_info = table.get_table_info();
         let engine = table.engine();

@@ -25,6 +25,7 @@ use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::util::check_view_circular_dependency;
@@ -114,6 +115,20 @@ impl Interpreter for CreateViewInterpreter {
             )
         };
         options.insert(QUERY.to_string(), subquery);
+
+        if self.plan.create_option.is_overriding() {
+            if let Ok(existing) = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.view_name)
+                .await
+            {
+                if existing.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW` first",
+                        &self.plan.database, &self.plan.view_name
+                    )));
+                }
+            }
+        }
 
         let plan = CreateTableReq {
             create_option: self.plan.create_option,
