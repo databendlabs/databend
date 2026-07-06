@@ -37,8 +37,6 @@ pub struct SkewHashInfo {
     pub role: SkewHashRole,
     pub hot_keys: Vec<Scalar>,
     pub bucket_count: usize,
-    pub normal_skew_penalty_rows: u64,
-    pub skew_skew_penalty_rows: u64,
     pub extra_build_rows: u64,
 }
 

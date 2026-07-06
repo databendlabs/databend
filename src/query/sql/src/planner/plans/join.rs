@@ -368,10 +368,9 @@ impl Default for Join {
 impl Join {
     /// Derive hot-key metadata from the join predicate and TopN statistics.
     ///
-    /// This does not choose a physical exchange by itself. The result is used in
-    /// two places: required-property enumeration builds a `GlobalSkewHash`
-    /// alternative from it, and the cost model uses the same estimate to compare
-    /// normal hash shuffle against skew hash shuffle.
+    /// This does not choose a physical exchange by itself. Required-property
+    /// enumeration uses the result as a threshold-based signal to build a
+    /// `GlobalSkewHash` alternative.
     pub(crate) fn derive_topn_skew_join_info(
         &self,
         left_stat_info: &StatInfo,
@@ -424,8 +423,6 @@ impl Join {
             (avg_partition_rows * SKEW_JOIN_HOT_LOAD_FACTOR).max(SKEW_JOIN_MIN_HOT_KEY_ROWS);
 
         let mut hot_keys = Vec::new();
-        let mut probe_lower_rows = Vec::new();
-        let mut normal_penalty_rows = 0.0_f64;
         let mut build_upper_rows = 0.0_f64;
         let mut max_probe_lower_rows = 0.0_f64;
 
@@ -449,8 +446,6 @@ impl Join {
             };
 
             hot_keys.push(entry.scalar.clone());
-            probe_lower_rows.push(probe_lower);
-            normal_penalty_rows += (probe_lower - hot_key_threshold_rows).max(0.0);
             build_upper_rows += build_upper;
             max_probe_lower_rows = max_probe_lower_rows.max(probe_lower);
         }
@@ -471,17 +466,7 @@ impl Join {
             .max(2)
             .min(partition_count)
             .min(max_bucket_count);
-        // Spark/Hive provide threshold-based skew detection, not a planner cost
-        // formula. These penalty rows are Databend's optimizer-side proxy for
-        // straggler work above the same threshold.
-        let skew_penalty_rows = probe_lower_rows
-            .iter()
-            .map(|rows| ((rows / bucket_count as f64) - hot_key_threshold_rows).max(0.0))
-            .sum::<f64>();
         let extra_build_rows = build_upper_rows * (bucket_count.saturating_sub(1) as f64);
-
-        let normal_skew_penalty_rows = normal_penalty_rows.ceil() as u64;
-        let skew_skew_penalty_rows = skew_penalty_rows.ceil() as u64;
         let extra_build_rows = extra_build_rows.ceil() as u64;
 
         Ok(Some((
@@ -489,16 +474,12 @@ impl Join {
                 role: SkewHashRole::Probe,
                 hot_keys: hot_keys.clone(),
                 bucket_count,
-                normal_skew_penalty_rows,
-                skew_skew_penalty_rows,
                 extra_build_rows,
             },
             SkewHashInfo {
                 role: SkewHashRole::Build,
                 hot_keys,
                 bucket_count,
-                normal_skew_penalty_rows,
-                skew_skew_penalty_rows,
                 extra_build_rows,
             },
         )))
@@ -1237,7 +1218,9 @@ impl Operator for Join {
                         ]
                     });
 
-                if !force_skew_join || skew_required.is_none() {
+                if let Some(skew_required) = skew_required {
+                    children_required.push(skew_required);
+                } else {
                     children_required.push(vec![
                         RequiredProperty {
                             distribution: Distribution::GlobalHash(left_keys),
@@ -1246,10 +1229,6 @@ impl Operator for Join {
                             distribution: Distribution::GlobalHash(right_keys),
                         },
                     ]);
-                }
-
-                if let Some(skew_required) = skew_required {
-                    children_required.push(skew_required);
                 }
             }
         }
@@ -1502,8 +1481,6 @@ mod tests {
         assert_eq!(build_info.role, SkewHashRole::Build);
         assert_eq!(probe_info.hot_keys, vec![int32_scalar(1)]);
         assert_eq!(probe_info.bucket_count, 2);
-        assert_eq!(probe_info.normal_skew_penalty_rows, 250_000);
-        assert_eq!(probe_info.skew_skew_penalty_rows, 0);
         assert_eq!(probe_info.extra_build_rows, 20);
         assert_eq!(build_info.hot_keys, probe_info.hot_keys);
         assert_eq!(build_info.extra_build_rows, probe_info.extra_build_rows);
@@ -1545,8 +1522,6 @@ mod tests {
             (1..=9).map(int32_scalar).collect::<Vec<_>>()
         );
         assert_eq!(probe_info.bucket_count, 10);
-        assert_eq!(probe_info.normal_skew_penalty_rows, 490_000_000);
-        assert_eq!(probe_info.skew_skew_penalty_rows, 0);
         assert_eq!(probe_info.extra_build_rows, 81);
         Ok(())
     }

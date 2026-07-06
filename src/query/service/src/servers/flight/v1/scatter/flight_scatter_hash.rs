@@ -545,8 +545,6 @@ mod tests {
                 role: SkewHashRole::Probe,
                 hot_keys: vec![uint64_scalar(1)],
                 bucket_count: 2,
-                normal_skew_penalty_rows: 0,
-                skew_skew_penalty_rows: 0,
                 extra_build_rows: 0,
             },
         }

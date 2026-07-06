@@ -48,7 +48,7 @@ use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 use crate::framework::LiteTableContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_topn_skew_join_enumerates_skew_hash_required_properties() -> Result<()> {
+async fn test_topn_skew_join_uses_only_skew_hash_required_properties() -> Result<()> {
     let ctx = setup_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
 
@@ -57,7 +57,7 @@ async fn test_topn_skew_join_enumerates_skew_hash_required_properties() -> Resul
     let children_required =
         rel_expr.compute_required_prop_children(ctx, &RequiredProperty::default())?;
 
-    assert_required_property_counts(&children_required, 1, 1);
+    assert_required_property_counts(&children_required, 0, 1);
     Ok(())
 }
 
@@ -85,7 +85,7 @@ async fn test_topn_skew_join_disabled_by_default_uses_normal_hash() -> Result<()
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_topn_skew_join_uses_skew_hash_exchange() -> Result<()> {
-    let ctx = setup_force_skew_join_context().await?;
+    let ctx = setup_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
 
     let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe)
@@ -113,36 +113,15 @@ async fn test_topn_force_skew_join_uses_only_skew_hash_required_properties() -> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_topn_skew_join_cost_prefers_skew_hash_by_margin() -> Result<()> {
+async fn test_topn_skew_join_uses_threshold_derived_skew_info() -> Result<()> {
     let ctx = setup_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
     let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe)
         .expect("optimized plan should contain probe-side skew hash exchange");
 
-    // The common hash-join base cost and the non-duplicated exchange cost are
-    // identical for normal hash and skew hash. The discriminating terms are:
-    // - normal hash: probe-side straggler penalty;
-    // - skew hash: residual straggler penalty plus build-side replication.
-    let compute_per_row = 1.0;
-    let settings = ctx.get_settings();
-    let hash_table_per_row = settings.get_cost_factor_hash_table_per_row()? as f64;
-    let network_per_row = settings.get_cost_factor_network_per_row()? as f64;
-
-    let normal_hash_extra_cost = probe_info.normal_skew_penalty_rows as f64 * compute_per_row;
-    let skew_hash_extra_cost = probe_info.skew_skew_penalty_rows as f64 * compute_per_row
-        + probe_info.extra_build_rows as f64
-            * (network_per_row + compute_per_row + hash_table_per_row);
-
     assert_eq!(probe_info.hot_keys.len(), 1);
     assert_eq!(probe_info.bucket_count, 3);
-    assert_eq!(probe_info.normal_skew_penalty_rows, 781_667);
-    assert_eq!(probe_info.skew_skew_penalty_rows, 121_667);
     assert_eq!(probe_info.extra_build_rows, 2);
-    assert!(
-        normal_hash_extra_cost > skew_hash_extra_cost * 5.0,
-        "skew hash should be much cheaper for this synthetic hot-key case: \
-         normal_extra={normal_hash_extra_cost}, skew_extra={skew_hash_extra_cost}"
-    );
     Ok(())
 }
 
@@ -311,8 +290,6 @@ fn test_skew_hash_info(role: SkewHashRole) -> SkewHashInfo {
         role,
         hot_keys: vec![uint64_scalar(1)],
         bucket_count: 2,
-        normal_skew_penalty_rows: 100,
-        skew_skew_penalty_rows: 10,
         extra_build_rows: 1,
     }
 }

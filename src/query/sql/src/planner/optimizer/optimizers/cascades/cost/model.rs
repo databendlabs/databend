@@ -37,7 +37,6 @@ pub struct DefaultCostModel {
     hash_table_per_row: f64,
     aggregate_per_row: f64,
     network_per_row: f64,
-    enable_skew_join: bool,
 
     /// The number of peers in the cluster to
     /// exchange data with.
@@ -64,14 +63,11 @@ impl DefaultCostModel {
         let hash_table_per_row = settings.get_cost_factor_hash_table_per_row()? as f64;
         let aggregate_per_row = settings.get_cost_factor_aggregate_per_row()? as f64;
         let network_per_row = settings.get_cost_factor_network_per_row()? as f64;
-        let enable_skew_join =
-            settings.get_enable_experimental_skew_join()? || settings.get_force_skew_join()?;
         Ok(DefaultCostModel {
             compute_per_row: 1.0,
             hash_table_per_row,
             aggregate_per_row,
             network_per_row,
-            enable_skew_join,
             cluster_peers: 1,
             degree_of_parallelism: 8,
         })
@@ -144,57 +140,20 @@ impl DefaultCostModel {
         let probe_card = probe_group.stat_info.cardinality;
 
         let mut cost = build_card * self.hash_table_per_row + probe_card * self.compute_per_row;
-        let partition_count = self
-            .cluster_peers
-            .saturating_mul(self.degree_of_parallelism);
-
-        // Base hash join cost assumes rows are evenly distributed after shuffle.
-        // Spark/Hive provide threshold-based skew detection, not a planner cost
-        // formula. The TopN-derived skew penalty is Databend's optimizer-side
-        // proxy for straggler work above that threshold. The current alternative
-        // is determined by `children_required_props`, then charged accordingly:
-        // - normal hash keeps all rows for the hot key on one partition, so charge
-        //   the excess probe work as a skew penalty;
-        // - skew hash spreads hot probe rows across salted partitions, so the
-        //   residual penalty is lower, but build rows for the same hot key must be
-        //   replicated and inserted into extra hash tables.
-        if self.enable_skew_join
-            && let Some((probe_skew_info, _)) = plan.derive_topn_skew_join_info(
-                &probe_group.stat_info,
-                &build_group.stat_info,
-                partition_count,
-                self.cluster_peers,
-            )?
-        {
-            let is_skew_hash = children_required_props.len() == 2
-                && children_required_props
-                    .iter()
-                    .all(|prop| matches!(&prop.distribution, Distribution::GlobalSkewHash(_, _)));
-            let is_hash_shuffle = children_required_props.len() == 2
-                && children_required_props.iter().all(|prop| {
-                    matches!(
-                        &prop.distribution,
-                        Distribution::NodeToNodeHash(_) | Distribution::GlobalHash(_)
-                    )
-                });
-            let penalty_rows = if is_skew_hash {
-                Some(probe_skew_info.skew_skew_penalty_rows)
-            } else if is_hash_shuffle {
-                Some(probe_skew_info.normal_skew_penalty_rows)
-            } else {
-                None
-            };
-            if let Some(penalty_rows) = penalty_rows {
-                cost += penalty_rows as f64 * self.compute_per_row;
+        let extra_skew_build_rows = children_required_props.iter().find_map(|prop| {
+            if let Distribution::GlobalSkewHash(_, skew_info) = &prop.distribution
+                && matches!(skew_info.role, crate::plans::SkewHashRole::Build)
+            {
+                return Some(skew_info.extra_build_rows);
             }
-            if is_skew_hash {
-                // The exchange operator accounts for sending duplicated build rows.
-                // The join operator still needs to account for inserting those
-                // duplicated rows into per-partition build hash tables.
-                cost += probe_skew_info.extra_build_rows as f64 * self.hash_table_per_row;
-            }
+            None
+        });
+        if let Some(extra_skew_build_rows) = extra_skew_build_rows {
+            // The exchange operator accounts for sending duplicated build rows.
+            // The join operator still needs to account for inserting those
+            // duplicated rows into per-partition build hash tables.
+            cost += extra_skew_build_rows as f64 * self.hash_table_per_row;
         }
-
         if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
             // Due to implementation reasons, right semi join is more expensive than left semi join
             // So if join type is right anti or right semi, cost needs multiply three (an approximate value)

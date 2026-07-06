@@ -239,8 +239,6 @@ fn compatible_skew_hash_pair(probe_info: &SkewHashInfo, build_info: &SkewHashInf
         && build_info.role == SkewHashRole::Build
         && probe_info.hot_keys == build_info.hot_keys
         && probe_info.bucket_count == build_info.bucket_count
-        && probe_info.normal_skew_penalty_rows == build_info.normal_skew_penalty_rows
-        && probe_info.skew_skew_penalty_rows == build_info.skew_skew_penalty_rows
         && probe_info.extra_build_rows == build_info.extra_build_rows
 }
 
@@ -308,8 +306,6 @@ mod tests {
             role,
             hot_keys: vec![uint64_scalar(1)],
             bucket_count: 2,
-            normal_skew_penalty_rows: 100,
-            skew_skew_penalty_rows: 10,
             extra_build_rows: 1,
         }
     }
