@@ -146,6 +146,7 @@ impl DistinctToGroupBy {
                                     }],
                                     params: vec![],
                                     order_by: vec![],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },

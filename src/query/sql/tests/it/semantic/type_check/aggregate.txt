@@ -33,6 +33,27 @@ status: ok
 scalar: string_agg(text, '|')
 type: String NULL
 
+=== aggregate_argument_order_by_preserves_sort_desc ===
+description: ORDER BY inside aggregate arguments should resolve aggregate sort descriptors.
+sql: string_agg(text, '|' ORDER BY number DESC NULLS LAST)
+status: ok
+scalar: string_agg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
+type: String NULL
+
+=== aggregate_filter_lowers_to_if_combinator ===
+description: Aggregate FILTER should lower to the existing _if aggregate combinator.
+sql: sum(number) FILTER (WHERE flag)
+status: ok
+scalar: sum(number) FILTER ( WHERE flag )
+type: Int64 NULL
+
+=== count_star_filter_lowers_to_count_if ===
+description: COUNT(*) FILTER should add a constant count argument before the filter predicate.
+sql: count(*) FILTER (WHERE flag)
+status: ok
+scalar: COUNT(*) FILTER ( WHERE flag )
+type: UInt64
+
 === listagg_within_group_preserves_sort_desc ===
 description: WITHIN GROUP should resolve aggregate sort descriptors at type-check time.
 sql: listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)
@@ -74,6 +95,20 @@ sql: abs(number) WITHIN GROUP (ORDER BY number)
 status: error
 code: 1065
 message: only aggregate functions allowed in within group syntax
+
+=== non_aggregate_function_rejects_filter ===
+description: FILTER syntax should return a clear semantic error for non-aggregate functions.
+sql: abs(number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is only supported for aggregate functions
+
+=== distinct_aggregate_filter_reports_unsupported ===
+description: Parser accepts DISTINCT aggregate FILTER, but execution semantics are not wired yet.
+sql: sum(DISTINCT number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: DISTINCT aggregate FILTER is not supported
 
 === aggregate_parameter_must_be_constant ===
 description: Parameterized aggregate arguments should be constant before aggregate resolution.

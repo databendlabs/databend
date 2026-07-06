@@ -322,9 +322,17 @@ impl<'a> CoreExprArena<'a> {
                 results,
                 else_result.as_deref(),
             )?,
-            expr @ Expr::CountAll { span, window, .. } => {
-                self.lower_count_all_expr(format!("{expr:#}"), *span, window.as_ref())?
-            }
+            expr @ Expr::CountAll {
+                span,
+                filter,
+                window,
+                ..
+            } => self.lower_count_all_expr(
+                format!("{expr:#}"),
+                *span,
+                filter.as_deref(),
+                window.as_ref(),
+            )?,
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
