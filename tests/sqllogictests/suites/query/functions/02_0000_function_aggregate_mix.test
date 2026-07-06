@@ -466,11 +466,21 @@ select array_agg(x) within group (order by x desc) from t3;
 ----
 [3,2,1,0]
 
+query T
+select listagg(s, '|') within group (order by x desc) filter (where b) from t3;
+----
+abc|xyz
+
 # PostgreSQL aggregate syntax compatibility.
 query T
 select string_agg(s, '|' order by x desc) from t3;
 ----
 abc|def|xyz
+
+query T
+select string_agg(s, '|' order by x desc) filter (where b) from t3;
+----
+abc|xyz
 
 query T
 select string_agg(s, '|' order by z desc nulls first) from t3;
@@ -486,6 +496,11 @@ query I
 select sum(x) filter (where b) from t3;
 ----
 3
+
+query R
+select avg(x) filter (where b) from t3;
+----
+1.5
 
 query I
 select count(*) filter (where b) from t3;
@@ -507,6 +522,9 @@ select abs(x) filter (where b) from t3
 
 statement error (?s)1065.*DISTINCT aggregate FILTER is not supported
 select sum(distinct x) filter (where b) from t3
+
+statement error (?s)1065.*DISTINCT aggregate FILTER is not supported
+select count(distinct x) filter (where b) from t3
 
 statement error (?s)1065.*only aggregate functions allowed in within group syntax
 select percentile_cont(0.5) within group (order by x) from t3

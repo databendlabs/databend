@@ -54,11 +54,12 @@ impl AggregateRewriter {
                         distinct,
                         name,
                         args,
+                        filter,
                         window,
                         ..
                     },
                 ..
-            } if !*distinct && args.len() == 1 && window.is_none() => {
+            } if !*distinct && args.len() == 1 && filter.is_none() && window.is_none() => {
                 match name.name.to_ascii_lowercase().to_lowercase().as_str() {
                     "sum" => self.rewrite_sum(args),
                     "avg" => Some(self.rewrite_avg(args)),

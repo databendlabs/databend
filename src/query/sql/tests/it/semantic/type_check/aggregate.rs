@@ -40,6 +40,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "string_agg(text, '|' ORDER BY number DESC NULLS LAST)",
         },
         SqlTestCase {
+            name: "ordered_aggregate_filter_uses_base_name_for_validation",
+            description: "FILTER should not make ordered aggregate validation check the internal _if combinator name.",
+            setup_sqls: &[],
+            sql: "string_agg(text, '|' ORDER BY number DESC NULLS LAST) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "aggregate_filter_lowers_to_if_combinator",
             description: "Aggregate FILTER should lower to the existing _if aggregate combinator.",
             setup_sqls: &[],

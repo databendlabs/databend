@@ -47,6 +47,10 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
+fn aggregate_base_name(func_name: &str) -> &str {
+    func_name.strip_suffix("_if").unwrap_or(func_name)
+}
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn try_lower_aggregate_function(
         &mut self,
@@ -127,7 +131,8 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         has_order_by: bool,
     ) -> Result<()> {
-        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name)) {
+        let base_func_name = aggregate_base_name(func_name);
+        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(base_func_name)) {
             return Err(ErrorCode::SemanticError(
                 "only aggregate functions allowed in within group syntax",
             )
@@ -221,7 +226,9 @@ where A: TypeCheckAdapter
         order_by: &CoreOrderByExprs,
         in_window_call: bool,
     ) -> Result<(AggregateFunction, DataType)> {
-        if !order_by.is_empty() && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name))
+        let base_func_name = aggregate_base_name(func_name);
+        if !order_by.is_empty()
+            && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(base_func_name))
         {
             return Err(ErrorCode::SemanticError(
                 "only aggregate functions allowed in within group syntax",
@@ -353,20 +360,22 @@ where A: TypeCheckAdapter
         remove_count_args: bool,
     ) -> Result<(AggregateFunction, DataType)> {
         // Convert the delimiter of string_agg to params
-        let params = if (func_name.eq_ignore_ascii_case("string_agg")
-            || func_name.eq_ignore_ascii_case("listagg")
-            || func_name.eq_ignore_ascii_case("group_concat"))
-            && arguments.len() == 2
+        let base_func_name = aggregate_base_name(func_name);
+        let expected_string_agg_args = if base_func_name == func_name { 2 } else { 3 };
+        let params = if (base_func_name.eq_ignore_ascii_case("string_agg")
+            || base_func_name.eq_ignore_ascii_case("listagg")
+            || base_func_name.eq_ignore_ascii_case("group_concat"))
+            && arguments.len() == expected_string_agg_args
             && params.is_empty()
         {
             let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
             if arg_types[1] != DataType::String || delimiter_value.is_err() {
                 return Err(ErrorCode::SemanticError(format!(
-                    "The delimiter of `{func_name}` must be a constant string"
+                    "The delimiter of `{base_func_name}` must be a constant string"
                 )));
             }
-            let _ = arguments.pop();
-            let _ = arg_types.pop();
+            arguments.remove(1);
+            arg_types.remove(1);
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {
