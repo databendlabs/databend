@@ -41,6 +41,14 @@ impl<'a> std::ops::Deref for Input<'a> {
 }
 
 impl<'a> Input<'a> {
+    #[inline]
+    pub fn advance(&self, count: usize) -> Self {
+        Input {
+            tokens: &self.tokens[count.min(self.tokens.len())..],
+            ..*self
+        }
+    }
+
     pub fn slice<R>(&self, range: R) -> Self
     where R: RangeBounds<usize> {
         let len = self.tokens.len();

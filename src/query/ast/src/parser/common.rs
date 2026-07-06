@@ -55,7 +55,7 @@ pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {
-        Some(token) => Ok((i.slice(1..), token)),
+        Some(token) => Ok((i.advance(1), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectText(text),
@@ -65,7 +65,7 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.kind == kind) {
-        Some(token) => Ok((i.slice(1..), token)),
+        Some(token) => Ok((i.advance(1), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectToken(kind),
@@ -75,7 +75,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 
 pub fn any_token(i: Input<'_>) -> IResult<'_, &Token<'_>> {
     match i.tokens.first().filter(|token| token.kind != EOI) {
-        Some(token) => Ok((i.slice(1..), token)),
+        Some(token) => Ok((i.advance(1), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::other("expected any token but reached the end"),
@@ -229,7 +229,7 @@ fn non_reserved_keyword(
         .first()
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
-        Some(token) => Ok((i.slice(1..), token)),
+        Some(token) => Ok((i.advance(1), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectToken(Ident),
