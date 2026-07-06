@@ -208,7 +208,7 @@ impl TaskService {
     }
 
     async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) -> Result<()> {
-        let mut scheduled_tasks: HashMap<String, CancellationToken> = HashMap::new();
+        let mut scheduled_tasks: HashMap<String, (u64, CancellationToken)> = HashMap::new();
         let task_mgr = UserApiProvider::instance().task_api(tenant);
 
         let mut steam = self.subscribe().await?;
@@ -238,7 +238,7 @@ impl TaskService {
                     debug_assert!(task.schedule_options.is_some());
                     if let Some(schedule_options) = &task.schedule_options {
                         // clean old task if alter
-                        if let Some(token) = scheduled_tasks.remove(&task.task_name) {
+                        if let Some((_, token)) = scheduled_tasks.remove(&task.task_name) {
                             token.cancel();
                         }
                         match task.status {
@@ -248,6 +248,7 @@ impl TaskService {
 
                         let token = CancellationToken::new();
                         let child_token = token.child_token();
+                        let task_id = task.task_id;
                         let task_name = task.task_name.to_string();
                         let task_name_clone = task_name.clone();
                         let task_service = TaskService::instance();
@@ -354,7 +355,7 @@ impl TaskService {
                                     });
                             }
                         }
-                        let _ = scheduled_tasks.insert(task_name_clone, token);
+                        let _ = scheduled_tasks.insert(task_name_clone, (task_id, token));
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
@@ -473,25 +474,44 @@ impl TaskService {
                         }
                     });
                 }
-                TaskMessage::DeleteTask(task_name, _) => {
-                    if let Some(token) = scheduled_tasks.remove(&task_name) {
-                        token.cancel();
+                TaskMessage::DeleteTask(task_name, _, task_id) => {
+                    if task_id.is_none_or(|task_id| {
+                        scheduled_tasks
+                            .get(&task_name)
+                            .is_some_and(|(scheduled_task_id, _)| *scheduled_task_id == task_id)
+                    }) {
+                        if let Some((_, token)) = scheduled_tasks.remove(&task_name) {
+                            token.cancel();
+                        }
                     }
+                    let should_clean_name_scoped_state = match task_id {
+                        Some(task_id) => task_mgr
+                            .describe_task(&task_name)
+                            .await??
+                            .is_none_or(|task| task.task_id == task_id),
+                        None => true,
+                    };
                     if task_mgr
                         .accept(&task_key)
                         .await
                         .map_err(meta_service_error)?
                     {
-                        self.clean_task_afters(&task_name).await?;
-                        self.cancel_open_task_runs(&task_name).await?;
+                        if should_clean_name_scoped_state {
+                            self.clean_task_afters(&task_name).await?;
+                        }
+                        if let Some(task_id) = task_id {
+                            self.cancel_open_task_runs(&task_name, task_id).await?;
+                        }
                     }
-                    task_mgr
-                        .accept(&TaskMessageIdent::new(
-                            tenant,
-                            TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
-                        ))
-                        .await
-                        .map_err(meta_service_error)?;
+                    if should_clean_name_scoped_state {
+                        task_mgr
+                            .accept(&TaskMessageIdent::new(
+                                tenant,
+                                TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
+                            ))
+                            .await
+                            .map_err(meta_service_error)?;
+                    }
                 }
                 TaskMessage::AfterTask(task) => {
                     if !task_mgr
@@ -790,7 +810,7 @@ WHERE ta.task_name = {task_name}
         Ok(())
     }
 
-    async fn cancel_open_task_runs(&self, task_name: &str) -> Result<()> {
+    async fn cancel_open_task_runs(&self, task_name: &str, task_id: u64) -> Result<()> {
         let task_name = Self::sql_string_literal(task_name);
         let error_message =
             Self::sql_string_literal("task was dropped while execution status was still open");
@@ -804,11 +824,13 @@ WHERE ta.task_name = {task_name}
                     error_code = 0, \
                     error_message = {} \
                 WHERE task_name = {} \
+                    AND task_id = {} \
                     AND state = 'EXECUTING' \
                     AND completed_at IS NULL;",
                 Utc::now().timestamp(),
                 error_message,
-                task_name
+                task_name,
+                task_id
             ),
         )
         .await?;

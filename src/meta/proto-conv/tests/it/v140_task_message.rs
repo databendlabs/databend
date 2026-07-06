@@ -136,7 +136,11 @@ fn test_decode_v140_task_message() -> anyhow::Result<()> {
         ];
         let want_delete = || {
             let task = want_task();
-            mt::TaskMessage::DeleteTask(task.task_name, task.warehouse_options)
+            mt::TaskMessage::DeleteTask(task.task_name, task.warehouse_options, Some(task.task_id))
+        };
+        let want_old_delete = || {
+            let task = want_task();
+            mt::TaskMessage::DeleteTask(task.task_name, task.warehouse_options, None)
         };
 
         common::test_pb_from_to(func_name!(), want_delete())?;
@@ -144,7 +148,7 @@ fn test_decode_v140_task_message() -> anyhow::Result<()> {
             func_name!(),
             task_message_delete_v140.as_slice(),
             140,
-            want_delete(),
+            want_old_delete(),
         )?;
     }
 

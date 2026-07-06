@@ -208,6 +208,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (176, "2026-05-25: Add: task.proto/Task.script_sql"),
     (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats"),
     (178, "2026-06-22: Add: config.proto StorageConfig variants for StorageParams::{Azblob,Ftp,Http,Ipfs,Memory}"),
+    (179, "2026-07-06: Add: task.proto/TaskMessage.DeleteTask.task_id"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

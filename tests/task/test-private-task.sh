@@ -346,7 +346,15 @@ fi
 response=$(query_sql_with_auth "root:" "CREATE TASK drop_cancel_task AS SELECT 1")
 check_response_error "$response"
 
-response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (910000, 'drop_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 910000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'drop_cancel_task'")
+check_response_error "$response"
+drop_cancel_task_id=$(echo "$response" | jq -r '.data[0][0]')
+other_drop_cancel_task_id=$((drop_cancel_task_id + 1000000))
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${drop_cancel_task_id}, 'drop_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 910000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${other_drop_cancel_task_id}, 'drop_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 910001, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
 check_response_error "$response"
 
 response=$(query_sql_with_auth "root:" "DROP TASK drop_cancel_task")
@@ -354,7 +362,7 @@ check_response_error "$response"
 
 actual=0
 for _ in {1..10}; do
-    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'drop_cancel_task' AND state = 'CANCELLED' AND completed_at IS NOT NULL")
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'drop_cancel_task' AND task_id = ${drop_cancel_task_id} AND state = 'CANCELLED' AND completed_at IS NOT NULL")
     check_response_error "$response"
     actual=$(echo "$response" | jq -r '.data[0][0]')
     if [ "$actual" = "1" ]; then
@@ -370,6 +378,20 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'drop_cancel_task' AND task_id = ${other_drop_cancel_task_id} AND state = 'EXECUTING' AND completed_at IS NULL")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "1" ]; then
+    echo "✅ Dropping a task does not cancel open runs from a different task generation"
+else
+    echo "❌ Expected DROP TASK to preserve open runs from a different task generation"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'CANCELLED', completed_at = now() WHERE task_name = 'drop_cancel_task' AND task_id = ${other_drop_cancel_task_id}")
+check_response_error "$response"
 
 response=$(query_sql_with_auth "root:" "CREATE TASK drop_cancel_task AS SELECT 1")
 check_response_error "$response"
