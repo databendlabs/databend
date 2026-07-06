@@ -45,6 +45,7 @@ use databend_common_statistics::Datum;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
+use crate::framework::FrequencyStatsMap;
 use crate::framework::LiteTableContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -234,7 +235,7 @@ fn register_table_with_hot_key(
     rows: u64,
     hot_count: u64,
 ) -> Result<()> {
-    ctx.register_table_with_stats_and_top_n(
+    ctx.register_table_with_stats_and_frequency_stats(
         "default",
         table_name,
         vec![TableField::new(
@@ -256,14 +257,17 @@ fn register_table_with_hot_key(
             in_memory_size: rows * 8,
         })]),
         HashMap::new(),
-        HashMap::from([("k".to_string(), ColumnTopN {
-            values: vec![ColumnTopNEntry {
-                scalar: uint64_scalar(1),
-                count: hot_count,
-                error: 0,
-            }],
-            min_index: None,
-        })]),
+        FrequencyStatsMap {
+            top_n: HashMap::from([("k".to_string(), ColumnTopN {
+                values: vec![ColumnTopNEntry {
+                    scalar: uint64_scalar(1),
+                    count: hot_count,
+                    error: 0,
+                }],
+                min_index: None,
+            })]),
+            ..Default::default()
+        },
         BTreeMap::new(),
     )
 }
