@@ -484,19 +484,24 @@ impl TaskService {
                             token.cancel();
                         }
                     }
-                    let should_clean_name_scoped_state = match task_id {
-                        Some(task_id) => task_mgr
-                            .describe_task(&task_name)
-                            .await??
-                            .is_none_or(|task| task.task_id == task_id),
-                        None => true,
+                    let current_task = match task_id {
+                        Some(_) => task_mgr.describe_task(&task_name).await??,
+                        None => None,
                     };
+                    let should_clean_name_scoped_state = task_id.is_none()
+                        || current_task
+                            .as_ref()
+                            .is_none_or(|task| Some(task.task_id) == task_id);
+                    let should_clean_task_afters = should_clean_name_scoped_state
+                        || current_task
+                            .as_ref()
+                            .is_some_and(|task| task.after.is_empty());
                     if task_mgr
                         .accept(&task_key)
                         .await
                         .map_err(meta_service_error)?
                     {
-                        if should_clean_name_scoped_state {
+                        if should_clean_task_afters {
                             self.clean_task_afters(&task_name).await?;
                         }
                         if let Some(task_id) = task_id {
