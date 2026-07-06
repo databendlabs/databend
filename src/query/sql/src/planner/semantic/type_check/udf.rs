@@ -111,6 +111,19 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         }
 
+        if !func.order_by.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        if func.filter.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
         let args = func
             .args
             .iter()

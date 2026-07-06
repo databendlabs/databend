@@ -811,6 +811,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 args,
                 params,
                 order_by,
+                filter: None,
                 window,
                 lambda,
             },

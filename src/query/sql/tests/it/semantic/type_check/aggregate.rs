@@ -34,6 +34,24 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "string_agg(text, '|')",
         },
         SqlTestCase {
+            name: "aggregate_argument_order_by_preserves_sort_desc",
+            description: "ORDER BY inside aggregate arguments should resolve aggregate sort descriptors.",
+            setup_sqls: &[],
+            sql: "string_agg(text, '|' ORDER BY number DESC NULLS LAST)",
+        },
+        SqlTestCase {
+            name: "aggregate_filter_lowers_to_if_combinator",
+            description: "Aggregate FILTER should lower to the existing _if aggregate combinator.",
+            setup_sqls: &[],
+            sql: "sum(number) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
+            name: "count_star_filter_lowers_to_count_if",
+            description: "COUNT(*) FILTER should add a constant count argument before the filter predicate.",
+            setup_sqls: &[],
+            sql: "count(*) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "listagg_within_group_preserves_sort_desc",
             description: "WITHIN GROUP should resolve aggregate sort descriptors at type-check time.",
             setup_sqls: &[],
@@ -70,6 +88,18 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "abs(number) WITHIN GROUP (ORDER BY number)",
         },
         SqlTestCase {
+            name: "non_aggregate_function_rejects_filter",
+            description: "FILTER syntax should return a clear semantic error for non-aggregate functions.",
+            setup_sqls: &[],
+            sql: "abs(number) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
+            name: "distinct_aggregate_filter_reports_unsupported",
+            description: "Parser accepts DISTINCT aggregate FILTER, but execution semantics are not wired yet.",
+            setup_sqls: &[],
+            sql: "sum(DISTINCT number) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "aggregate_parameter_must_be_constant",
             description: "Parameterized aggregate arguments should be constant before aggregate resolution.",
             setup_sqls: &[],
@@ -103,6 +133,38 @@ async fn test_aggregate_window_error_restores_type_checker_state() -> Result<()>
     let tokens = tokenize_sql("lag(number, 1) OVER (ORDER BY number)")?;
     let expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
     let _ = type_checker.resolve(&expr)?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_aggregate_filter_uses_if_combinator() -> Result<()> {
+    init_testing_globals();
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(ExprContext::Unknown);
+
+    let (scalar, _) = resolve_type_check_sql(
+        "sum(number) FILTER (WHERE flag)",
+        adapter,
+        &mut bind_context,
+    )?;
+    let ScalarExpr::AggregateFunction(agg) = scalar else {
+        panic!("expected aggregate function");
+    };
+    assert_eq!(agg.func_name, "sum_if");
+    assert_eq!(agg.args.len(), 2);
+
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(ExprContext::Unknown);
+    let (scalar, _) =
+        resolve_type_check_sql("count(*) FILTER (WHERE flag)", adapter, &mut bind_context)?;
+    let ScalarExpr::AggregateFunction(agg) = scalar else {
+        panic!("expected aggregate function");
+    };
+    assert_eq!(agg.func_name, "count_if");
+    assert_eq!(agg.args.len(), 2);
 
     Ok(())
 }

@@ -108,6 +108,13 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         };
 
+        if func.filter.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
         let Some(window) = func.window.as_ref() else {
             return Err(ErrorCode::SemanticError(format!(
                 "window function {func_name} can only be used in window clause"

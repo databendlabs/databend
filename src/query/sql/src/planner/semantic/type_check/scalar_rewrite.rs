@@ -159,6 +159,7 @@ pub(super) fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
             | BinaryOperator::NotILike(_)
             | BinaryOperator::ILikeAny(_)
             | BinaryOperator::Regexp
+            | BinaryOperator::PgRegexpMatch
             | BinaryOperator::RLike
             | BinaryOperator::NotRegexp
             | BinaryOperator::NotRLike
@@ -197,6 +198,7 @@ pub(super) fn binary_op_core_function(op: &BinaryOperator) -> Option<&'static st
         BinaryOperator::ILike(_) => "ilike",
         BinaryOperator::ILikeAny(_) => "ilike_any",
         BinaryOperator::Regexp => "regexp",
+        BinaryOperator::PgRegexpMatch => "regexp",
         BinaryOperator::RLike => "rlike",
         BinaryOperator::BitwiseOr => "bit_or",
         BinaryOperator::BitwiseAnd => "bit_and",
@@ -224,6 +226,7 @@ pub(super) fn like_op_core_function(op: &BinaryOperator) -> Option<&'static str>
         BinaryOperator::NotILike(_) => Some("notilike"),
         BinaryOperator::ILikeAny(_) => Some("ilike_any"),
         BinaryOperator::Regexp => Some("regexp"),
+        BinaryOperator::PgRegexpMatch => Some("regexp"),
         BinaryOperator::RLike => Some("rlike"),
         BinaryOperator::NotRegexp => Some("notregexp"),
         BinaryOperator::NotRLike => Some("notrlike"),

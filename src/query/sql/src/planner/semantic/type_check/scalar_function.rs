@@ -87,10 +87,18 @@ impl<'a> CoreExprArena<'a> {
             args,
             params,
             order_by,
+            filter,
             window,
             lambda,
             ..
         } = func;
+
+        if filter.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
 
         if !*distinct
             && params.is_empty()

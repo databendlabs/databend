@@ -64,19 +64,32 @@ impl<'a> CoreExprArena<'a> {
             args,
             params,
             order_by,
+            filter,
             window,
             ..
         } = func;
         let display_name = format!("{original_expr:#}");
-        let func_name = func_name.to_string();
-        let remove_count_args = func_name.eq_ignore_ascii_case("count")
+        let mut func_name = func_name.to_string();
+        let remove_count_args = filter.is_none()
+            && func_name.eq_ignore_ascii_case("count")
             && !*distinct
             && args
                 .iter()
                 .all(|expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null));
         let params = self.lower_function_params(params)?;
-        let args = self.lower_expr_args(args)?;
+        let mut args = self.lower_expr_args(args)?;
         let order_by = self.lower_order_by_exprs(order_by)?;
+
+        if let Some(filter) = filter {
+            if *distinct {
+                return Err(
+                    ErrorCode::SemanticError("DISTINCT aggregate FILTER is not supported")
+                        .set_span(span),
+                );
+            }
+            args.push(self.lower_ast_expr(filter)?);
+            func_name = format!("{func_name}_if");
+        }
 
         Ok(Some(if let Some(window) = window {
             let window = super::window::CoreWindowDesc {
@@ -127,8 +140,48 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         display_name: String,
         span: Span,
+        filter: Option<&'a Expr>,
         window: Option<&'a Window>,
     ) -> Result<CoreExprId> {
+        if let Some(filter) = filter {
+            let mut args = SmallVec::new();
+            let one = self.alloc(CoreExpr::Literal {
+                span,
+                value: Scalar::Number(NumberScalar::UInt64(1)),
+            });
+            args.push(one);
+            args.push(self.lower_ast_expr(filter)?);
+
+            return Ok(if let Some(window) = window {
+                let window = super::window::CoreWindowDesc {
+                    ignore_nulls: None,
+                    window: self.lower_window(window)?,
+                };
+                self.alloc(CoreExpr::AggregateWindowFunction {
+                    display_name,
+                    span,
+                    func_name: "count_if".to_string(),
+                    distinct: false,
+                    params: SmallVec::new(),
+                    args,
+                    remove_count_args: false,
+                    order_by: SmallVec::new(),
+                    window,
+                })
+            } else {
+                self.alloc(CoreExpr::AggregateFunction {
+                    display_name,
+                    span,
+                    func_name: "count_if".to_string(),
+                    distinct: false,
+                    params: SmallVec::new(),
+                    args,
+                    remove_count_args: false,
+                    order_by: SmallVec::new(),
+                })
+            });
+        }
+
         if let Some(window) = window {
             let window = self.lower_window(window)?;
             Ok(self.alloc(CoreExpr::CountAllWindowFunction {
