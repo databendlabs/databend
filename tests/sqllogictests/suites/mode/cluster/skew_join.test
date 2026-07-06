@@ -26,10 +26,10 @@ statement ok
 SET optimizer_skip_list = ''
 
 statement ok
-CREATE TABLE skew_probe(k int not null) approx_distinct_columns = '' analyze_top_n_columns = 'k' analyze_top_n_size = 2
+CREATE TABLE skew_probe(k int not null) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 2
 
 statement ok
-CREATE TABLE skew_build(k int not null) approx_distinct_columns = '' analyze_top_n_columns = 'k' analyze_top_n_size = 2
+CREATE TABLE skew_build(k int not null) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 2
 
 statement ok
 INSERT INTO skew_probe
