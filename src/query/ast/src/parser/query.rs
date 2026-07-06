@@ -28,6 +28,7 @@ use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
 use crate::parser::expr::*;
+use crate::parser::fast_path;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::stage::file_location;
@@ -38,6 +39,13 @@ use crate::parser::statement::top_n;
 use crate::parser::token::*;
 
 pub fn query(i: Input) -> IResult<Query> {
+    if !i.backtrace.is_enabled()
+        && i.tokens.first().is_some_and(|token| token.kind == SELECT)
+        && let Some((rest, query)) = fast_path::query(i)?
+    {
+        return Ok((rest, query));
+    }
+
     context(
         "`SELECT ...`",
         map(set_operation, |set_expr| set_expr.into_query()),

@@ -3186,17 +3186,23 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
     .parse(i)
 }
 
-fn simple_function_call_fast_path(
+pub(crate) fn simple_function_call_fast_path(
     i: Input,
 ) -> std::result::Result<Option<(Input, FunctionCall)>, nom::Err<Error>> {
-    let Ok((after_name, name)) = function_name(i) else {
+    let Some(name_token) = i.tokens.first().filter(|token| token.kind == Ident) else {
         return Ok(None);
     };
-    if after_name.tokens.first().map(|token| token.kind) != Some(LParen) {
+    if i.tokens.get(1).map(|token| token.kind) != Some(LParen) {
         return Ok(None);
     }
+    let name = Identifier {
+        span: Some(name_token.span),
+        name: name_token.text().to_string(),
+        quote: None,
+        ident_type: IdentifierType::None,
+    };
 
-    let mut rest = after_name.advance(1);
+    let mut rest = i.advance(2);
     let mut args = Vec::new();
     if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
         loop {

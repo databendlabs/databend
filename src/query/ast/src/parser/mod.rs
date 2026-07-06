@@ -37,6 +37,7 @@ pub mod dynamic_table;
 mod error;
 mod error_suggestion;
 pub mod expr;
+mod fast_path;
 mod input;
 #[allow(clippy::module_inception)]
 mod parser;

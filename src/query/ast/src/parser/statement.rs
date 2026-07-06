@@ -34,6 +34,7 @@ use crate::parser::data_mask::data_mask_policy;
 use crate::parser::dynamic_table::dynamic_table;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
+use crate::parser::fast_path;
 use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::stage::*;
@@ -98,6 +99,12 @@ fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    if !i.backtrace.is_enabled()
+        && let Some((rest, stmt)) = fast_path::statement(i)?
+    {
+        return Ok((rest, stmt));
+    }
+
     try_dispatch!(i, false,
         SELECT | VALUES | HintPrefix | LParen | FROM => query_statement(i),
         INSERT => rule!(
