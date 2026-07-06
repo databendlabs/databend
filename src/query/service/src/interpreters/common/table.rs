@@ -18,9 +18,31 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchemaRef;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::parse_computed_expr;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::sessions::TableContext;
+
+pub async fn revoke_table_ownership(
+    tenant: &Tenant,
+    catalog_name: &str,
+    db_id: u64,
+    table_id: u64,
+) -> Result<()> {
+    let role_api = UserApiProvider::instance().role_api(tenant);
+    let owner_object = OwnershipObject::Table {
+        catalog_name: catalog_name.to_string(),
+        db_id,
+        table_id,
+    };
+    role_api.revoke_ownership(&owner_object).await?;
+    RoleCacheManager::instance().invalidate_cache(tenant);
+    Ok(())
+}
 
 pub fn check_referenced_computed_columns(
     ctx: Arc<dyn TableContext>,

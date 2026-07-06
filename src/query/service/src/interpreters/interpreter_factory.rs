@@ -154,7 +154,7 @@ impl InterpreterFactory {
             }
         })?;
         let mut access_logger = AccessLogger::create(ctx.clone());
-        access_logger.log(plan);
+        access_logger.log(&ctx, plan).await;
         access_logger.output();
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
@@ -516,6 +516,14 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+
+            // Materialized Views
+            Plan::DropMaterializedView(plan) => Ok(Arc::new(
+                DropMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
+            Plan::RefreshMaterializedView(plan) => Ok(Arc::new(
+                RefreshMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
