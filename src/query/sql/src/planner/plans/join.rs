@@ -510,7 +510,7 @@ impl Join {
         rel_expr: &RelExpr,
     ) -> Result<Option<(SkewHashInfo, SkewHashInfo)>> {
         let settings = ctx.get_settings();
-        if !settings.get_enable_experimental_skew_join()? {
+        if !settings.get_enable_experimental_skew_join()? && !settings.get_force_skew_join()? {
             return Ok(None);
         }
 
@@ -1033,6 +1033,7 @@ impl Operator for Join {
 
         // Try to use broadcast join
         let settings = ctx.get_settings();
+        let force_skew_join = settings.get_force_skew_join()?;
         if !matches!(
             self.join_type,
             JoinType::Right
@@ -1059,6 +1060,7 @@ impl Operator for Join {
                 1000.0
             };
             if !settings.get_enforce_shuffle_join()?
+                && !force_skew_join
                 && (right_stat_info.cardinality * broadcast_join_threshold
                     < left_stat_info.cardinality
                     || settings.get_enforce_broadcast_join()?)
@@ -1199,7 +1201,10 @@ impl Operator for Join {
         }
 
         let settings = ctx.get_settings();
-        if !matches!(self.join_type, JoinType::Cross) && !settings.get_enforce_broadcast_join()? {
+        let force_skew_join = settings.get_force_skew_join()?;
+        if !matches!(self.join_type, JoinType::Cross)
+            && (!settings.get_enforce_broadcast_join()? || force_skew_join)
+        {
             // (Hash, Hash) – use full equi-join key set to avoid single-column hash shuffle
             let left_keys: Vec<_> = self
                 .equi_conditions
@@ -1213,26 +1218,38 @@ impl Operator for Join {
                 .collect();
 
             if !left_keys.is_empty() {
-                children_required.push(vec![
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(left_keys.clone()),
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(right_keys.clone()),
-                    },
-                ]);
+                let skew_required = self
+                    .derive_topn_skew_join_info_from_rel_expr(ctx.clone(), rel_expr)?
+                    .map(|(probe_skew_info, build_skew_info)| {
+                        vec![
+                            RequiredProperty {
+                                distribution: Distribution::GlobalSkewHash(
+                                    left_keys.clone(),
+                                    probe_skew_info,
+                                ),
+                            },
+                            RequiredProperty {
+                                distribution: Distribution::GlobalSkewHash(
+                                    right_keys.clone(),
+                                    build_skew_info,
+                                ),
+                            },
+                        ]
+                    });
 
-                if let Some((probe_skew_info, build_skew_info)) =
-                    self.derive_topn_skew_join_info_from_rel_expr(ctx.clone(), rel_expr)?
-                {
+                if !force_skew_join || skew_required.is_none() {
                     children_required.push(vec![
                         RequiredProperty {
-                            distribution: Distribution::GlobalSkewHash(left_keys, probe_skew_info),
+                            distribution: Distribution::GlobalHash(left_keys),
                         },
                         RequiredProperty {
-                            distribution: Distribution::GlobalSkewHash(right_keys, build_skew_info),
+                            distribution: Distribution::GlobalHash(right_keys),
                         },
                     ]);
+                }
+
+                if let Some(skew_required) = skew_required {
+                    children_required.push(skew_required);
                 }
             }
         }
@@ -1253,6 +1270,7 @@ impl Operator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) && !settings.get_enforce_shuffle_join()?
+            && !force_skew_join
         {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;

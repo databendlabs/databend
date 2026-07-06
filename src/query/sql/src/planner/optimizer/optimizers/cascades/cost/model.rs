@@ -64,7 +64,8 @@ impl DefaultCostModel {
         let hash_table_per_row = settings.get_cost_factor_hash_table_per_row()? as f64;
         let aggregate_per_row = settings.get_cost_factor_aggregate_per_row()? as f64;
         let network_per_row = settings.get_cost_factor_network_per_row()? as f64;
-        let enable_skew_join = settings.get_enable_experimental_skew_join()?;
+        let enable_skew_join =
+            settings.get_enable_experimental_skew_join()? || settings.get_force_skew_join()?;
         Ok(DefaultCostModel {
             compute_per_row: 1.0,
             hash_table_per_row,

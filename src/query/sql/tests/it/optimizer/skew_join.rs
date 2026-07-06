@@ -85,7 +85,7 @@ async fn test_topn_skew_join_disabled_by_default_uses_normal_hash() -> Result<()
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_topn_skew_join_uses_skew_hash_exchange() -> Result<()> {
-    let ctx = setup_skew_join_context().await?;
+    let ctx = setup_force_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
 
     let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe)
@@ -95,6 +95,20 @@ async fn test_topn_skew_join_uses_skew_hash_exchange() -> Result<()> {
 
     assert_eq!(probe_info.role, SkewHashRole::Probe);
     assert_eq!(build_info.role, SkewHashRole::Build);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_topn_force_skew_join_uses_only_skew_hash_required_properties() -> Result<()> {
+    let ctx = setup_force_skew_join_context().await?;
+    let plan = optimize_skew_join_query(&ctx).await?;
+
+    let join_expr = find_join(plan_s_expr(&plan)).expect("optimized plan should contain a join");
+    let rel_expr = RelExpr::with_s_expr(join_expr);
+    let children_required =
+        rel_expr.compute_required_prop_children(ctx, &RequiredProperty::default())?;
+
+    assert_required_property_counts(&children_required, 0, 1);
     Ok(())
 }
 
@@ -180,6 +194,13 @@ async fn setup_skew_join_context() -> Result<Arc<LiteTableContext>> {
     let ctx = setup_skew_join_context_with_default_skew_join_setting().await?;
     ctx.get_settings()
         .set_setting("enable_experimental_skew_join".to_string(), "1".to_string())?;
+    Ok(ctx)
+}
+
+async fn setup_force_skew_join_context() -> Result<Arc<LiteTableContext>> {
+    let ctx = setup_skew_join_context_with_default_skew_join_setting().await?;
+    ctx.get_settings()
+        .set_setting("force_skew_join".to_string(), "1".to_string())?;
     Ok(ctx)
 }
 
