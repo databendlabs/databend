@@ -117,6 +117,13 @@ status: error
 code: 1065
 message: DISTINCT aggregate FILTER is not supported
 
+=== distinct_aggregate_order_by_reports_unsupported ===
+description: Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.
+sql: string_agg(DISTINCT text ORDER BY number)
+status: error
+code: 1005
+message: DISTINCT aggregate ORDER BY is not supported
+
 === aggregate_parameter_must_be_constant ===
 description: Parameterized aggregate arguments should be constant before aggregate resolution.
 sql: quantile_cont(number)(number)

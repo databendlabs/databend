@@ -74,6 +74,14 @@ impl<'a> CoreExprArena<'a> {
         } = func;
         let display_name = format!("{original_expr:#}");
         let mut func_name = func_name.to_string();
+
+        if *distinct && !order_by.is_empty() {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
+        }
+
         let remove_count_args = filter.is_none()
             && func_name.eq_ignore_ascii_case("count")
             && !*distinct

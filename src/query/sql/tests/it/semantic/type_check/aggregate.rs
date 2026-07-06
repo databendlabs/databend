@@ -106,6 +106,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "sum(DISTINCT number) FILTER (WHERE flag)",
         },
         SqlTestCase {
+            name: "distinct_aggregate_order_by_reports_unsupported",
+            description: "Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.",
+            setup_sqls: &[],
+            sql: "string_agg(DISTINCT text ORDER BY number)",
+        },
+        SqlTestCase {
             name: "aggregate_parameter_must_be_constant",
             description: "Parameterized aggregate arguments should be constant before aggregate resolution.",
             setup_sqls: &[],
