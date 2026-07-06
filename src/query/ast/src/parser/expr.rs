@@ -53,6 +53,13 @@ pub fn values(i: Input) -> IResult<Vec<Expr>> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
+        if min_precedence == 0
+            && !i.backtrace.is_enabled()
+            && let Some((rest, expr)) = simple_expr_fast_path(i)?
+        {
+            return Ok((rest, expr));
+        }
+
         let higher_prec_expr_element = |i| {
             expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
                 Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
@@ -134,6 +141,139 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
         run_pratt_parser(ExprParser, expr_elements, rest, i)
     }
+}
+
+fn simple_expr_fast_path(i: Input) -> std::result::Result<Option<(Input, Expr)>, nom::Err<Error>> {
+    let Some(token) = i.tokens.first() else {
+        return Ok(None);
+    };
+    if !i
+        .tokens
+        .get(1)
+        .is_some_and(|token| is_simple_expr_boundary(token.kind))
+    {
+        return Ok(None);
+    }
+
+    let span = Some(token.span);
+    let expr = match token.kind {
+        Ident => Expr::ColumnRef {
+            span,
+            column: ColumnRef {
+                database: None,
+                table: None,
+                column: ColumnID::Name(Identifier {
+                    span,
+                    name: token.text().to_string(),
+                    quote: None,
+                    ident_type: IdentifierType::None,
+                }),
+            },
+        },
+        ColumnPosition => {
+            let name = token.text().to_string();
+            let pos = name[1..]
+                .parse::<usize>()
+                .map_err(|e| nom::Err::Failure(Error::from_error_kind(i, e.into())))?;
+            if pos == 0 {
+                return Err(nom::Err::Failure(Error::from_error_kind(
+                    i,
+                    ErrorKind::other("column position must be greater than 0"),
+                )));
+            }
+            Expr::ColumnRef {
+                span,
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Position(crate::ast::ColumnPosition { pos, name, span }),
+                },
+            }
+        }
+        LiteralString
+            if token
+                .text()
+                .chars()
+                .next()
+                .is_some_and(|quote| i.dialect.is_string_quote(quote)) =>
+        {
+            let quote::QuotedString(s, _) = token.text().parse().map_err(|_| {
+                nom::Err::Failure(Error::from_error_kind(
+                    i,
+                    ErrorKind::other("invalid escape or unicode"),
+                ))
+            })?;
+            Expr::Literal {
+                span,
+                value: Literal::String(s),
+            }
+        }
+        LiteralCodeString => {
+            let content = &token.text()[2..token.text().len() - 2];
+            Expr::Literal {
+                span,
+                value: Literal::String(unindent::unindent(content).trim().to_string()),
+            }
+        }
+        LiteralInteger => Expr::Literal {
+            span,
+            value: parse_uint(token.text(), 10)
+                .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?,
+        },
+        LiteralFloat if !token.text().starts_with('.') => Expr::Literal {
+            span,
+            value: parse_float(token.text())
+                .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?,
+        },
+        MySQLLiteralHex => Expr::Literal {
+            span,
+            value: parse_uint(&token.text()[2..], 16)
+                .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?,
+        },
+        PGLiteralHex => Expr::Literal {
+            span,
+            value: parse_binary(token.text())
+                .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?,
+        },
+        TRUE | FALSE => Expr::Literal {
+            span,
+            value: Literal::Boolean(token.kind == TRUE),
+        },
+        NULL => Expr::Literal {
+            span,
+            value: Literal::Null,
+        },
+        _ => return Ok(None),
+    };
+
+    Ok(Some((i.advance(1), expr)))
+}
+
+fn is_simple_expr_boundary(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        EOI | Comma
+            | RParen
+            | RBracket
+            | FROM
+            | WHERE
+            | GROUP
+            | HAVING
+            | ORDER
+            | LIMIT
+            | OFFSET
+            | QUALIFY
+            | WINDOW
+            | UNION
+            | EXCEPT
+            | INTERSECT
+            | THEN
+            | ELSE
+            | END
+            | WHEN
+            | AS
+            | Ident
+    )
 }
 
 /// A 'flattened' AST of expressions.
@@ -1063,6 +1203,26 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 return Ok((i.advance(1), WithSpan {
                     span: i.slice(..1),
                     elem,
+                }));
+            }
+            COUNT
+                if matches!(
+                    (
+                        i.tokens.get(1).map(|token| token.kind),
+                        i.tokens.get(2).map(|token| token.kind),
+                        i.tokens.get(3).map(|token| token.kind),
+                        i.tokens.get(4).map(|token| token.kind),
+                    ),
+                    (Some(LParen), Some(Multiply), Some(RParen), Some(kind))
+                        if kind != OVER
+                ) =>
+            {
+                return Ok((i.advance(4), WithSpan {
+                    span: i.slice(..4),
+                    elem: ExprElement::CountAll {
+                        qualified: vec![Indirection::Star(Some(i.tokens[2].span))],
+                        window: None,
+                    },
                 }));
             }
             Ident if i.tokens.get(1).map(|token| token.kind) != Some(LParen) => {
@@ -2259,6 +2419,12 @@ pub fn nullable(i: Input) -> IResult<bool> {
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
+    if !i.backtrace.is_enabled()
+        && let Some((rest, ty)) = simple_type_name_fast_path(i)
+    {
+        return Ok((rest, ty));
+    }
+
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(TypeName::UInt8, rule! { (
             #map(rule! { UINT8 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
@@ -2443,6 +2609,67 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             None => Ok(ty),
         },
     )(i)
+}
+
+fn simple_type_name_fast_path(i: Input) -> Option<(Input, TypeName)> {
+    let token = i.tokens.first()?;
+    let (rest, ty) = match token.kind {
+        BOOLEAN | BOOL => (i.advance(1), TypeName::Boolean),
+        INT8 | TINYINT => (consume_optional_type_width(i.advance(1)), TypeName::Int8),
+        INT16 | SMALLINT => (consume_optional_type_width(i.advance(1)), TypeName::Int16),
+        INT32 | INT | INTEGER => (consume_optional_type_width(i.advance(1)), TypeName::Int32),
+        INT64 | SIGNED | BIGINT => (consume_optional_type_width(i.advance(1)), TypeName::Int64),
+        FLOAT32 | FLOAT | REAL => (i.advance(1), TypeName::Float32),
+        FLOAT64 | DOUBLE => {
+            let rest = if i.tokens.get(1).is_some_and(|token| token.kind == PRECISION) {
+                i.advance(2)
+            } else {
+                i.advance(1)
+            };
+            (rest, TypeName::Float64)
+        }
+        STRING | VARCHAR | CHAR | CHARACTER | TEXT => {
+            (consume_optional_type_width(i.advance(1)), TypeName::String)
+        }
+        DATE => (i.advance(1), TypeName::Date),
+        DATETIME | TIMESTAMP => (
+            consume_optional_type_width(i.advance(1)),
+            TypeName::Timestamp,
+        ),
+        BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB | TINYBLOB | BLOB => {
+            (consume_optional_type_width(i.advance(1)), TypeName::Binary)
+        }
+        _ => return None,
+    };
+
+    if !rest
+        .tokens
+        .first()
+        .is_some_and(|token| is_simple_type_name_boundary(token.kind))
+    {
+        return None;
+    }
+
+    Some((rest, ty))
+}
+
+fn consume_optional_type_width(i: Input) -> Input {
+    if matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+            i.tokens.get(2).map(|token| token.kind)
+        ),
+        (Some(LParen), Some(LiteralInteger), Some(RParen))
+    ) {
+        i.advance(3)
+    } else {
+        i
+    }
+}
+
+fn is_simple_type_name_boundary(kind: TokenKind) -> bool {
+    matches!(kind, EOI | Comma | RParen)
 }
 
 pub fn weekday(i: Input) -> IResult<Weekday> {
@@ -2736,6 +2963,14 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
 }
 
 pub fn function_call(i: Input) -> IResult<ExprElement> {
+    if !i.backtrace.is_enabled()
+        && let Some((rest, function_call)) = simple_function_call_fast_path(i)?
+    {
+        return Ok((rest, ExprElement::FunctionCall {
+            func: function_call,
+        }));
+    }
+
     enum FunctionCallSuffix {
         Simple {
             distinct: bool,
@@ -2947,7 +3182,55 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 },
             },
         },
-    ).parse(i)
+    )
+    .parse(i)
+}
+
+fn simple_function_call_fast_path(
+    i: Input,
+) -> std::result::Result<Option<(Input, FunctionCall)>, nom::Err<Error>> {
+    let Ok((after_name, name)) = function_name(i) else {
+        return Ok(None);
+    };
+    if after_name.tokens.first().map(|token| token.kind) != Some(LParen) {
+        return Ok(None);
+    }
+
+    let mut rest = after_name.advance(1);
+    let mut args = Vec::new();
+    if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
+        loop {
+            let Some((next, arg)) = simple_expr_fast_path(rest)? else {
+                return Ok(None);
+            };
+            args.push(arg);
+            rest = next;
+            match rest.tokens.first().map(|token| token.kind) {
+                Some(Comma) => rest = rest.advance(1),
+                Some(RParen) => break,
+                _ => return Ok(None),
+            }
+        }
+    }
+
+    rest = rest.advance(1);
+    if !rest
+        .tokens
+        .first()
+        .is_some_and(|token| is_simple_expr_boundary(token.kind))
+    {
+        return Ok(None);
+    }
+
+    Ok(Some((rest, FunctionCall {
+        distinct: false,
+        name,
+        args,
+        params: vec![],
+        order_by: vec![],
+        window: None,
+        lambda: None,
+    })))
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {

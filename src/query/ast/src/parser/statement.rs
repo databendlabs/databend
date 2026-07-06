@@ -98,6 +98,17 @@ fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    try_dispatch!(i, false,
+        SELECT | VALUES | HintPrefix | LParen | FROM => query_statement(i),
+        INSERT => rule!(
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
+        ).parse(i),
+        REPLACE => rule!(#replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            ).parse(i),
+    );
+
     let explain_options = map(
         rule! {
             "(" ~ #comma_separated_list1(explain_option) ~ ")"

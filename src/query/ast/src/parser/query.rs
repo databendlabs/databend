@@ -46,7 +46,19 @@ pub fn query(i: Input) -> IResult<Query> {
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    let (rest, mut set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    if set_operation_elements.len() == 1 {
+        let elem = set_operation_elements.pop().unwrap();
+        if matches!(
+            &elem.elem,
+            SetOperationElement::Group(_)
+                | SetOperationElement::SelectStmt { .. }
+                | SetOperationElement::Values(_)
+        ) {
+            return Ok((rest, set_operation_primary(elem)));
+        }
+        set_operation_elements.push(elem);
+    }
     run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
@@ -85,6 +97,12 @@ pub enum SetOperationElement {
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
+    try_dispatch!(i, false,
+        SELECT => map(consumed(select_stmt_element), |(span, elem)| WithSpan { span, elem }).parse(i),
+        ORDER => map(consumed(order_by_element), |(span, elem)| WithSpan { span, elem }).parse(i),
+        LIMIT => map(consumed(limit_element), |(span, elem)| WithSpan { span, elem }).parse(i),
+    );
+
     let with = map(with, SetOperationElement::With);
     let set_operator = map(
         rule! {
@@ -235,7 +253,118 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     .parse(i)
 }
 
+fn select_stmt_element(i: Input) -> IResult<SetOperationElement> {
+    map_res(
+        rule! {
+            ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ SELECT ~ #hint? ~ DISTINCT? ~ #top_n? ~ ^#comma_separated_list1(select_target)
+            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ ( WHERE ~ ^#expr )?
+            ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
+            ~ ( HAVING ~ ^#expr )?
+            ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+            ~ ( QUALIFY ~ ^#expr )?
+        },
+        |(
+            opt_from_block_first,
+            _select,
+            opt_hints,
+            opt_distinct,
+            opt_top_n,
+            select_list,
+            opt_from_block_second,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+            opt_window_block,
+            opt_qualify_block,
+        )| {
+            if opt_from_block_first.is_some() && opt_from_block_second.is_some() {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "duplicated FROM clause",
+                )));
+            }
+
+            Ok(SetOperationElement::SelectStmt {
+                hints: opt_hints,
+                distinct: opt_distinct.is_some(),
+                top_n: opt_top_n,
+                select_list,
+                from: opt_from_block_first
+                    .or(opt_from_block_second)
+                    .map(|(_, table_refs)| table_refs)
+                    .unwrap_or_default(),
+                selection: opt_where_block.map(|(_, selection)| selection),
+                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
+                having: opt_having_block.map(|(_, having)| having),
+                window_list: opt_window_block.map(|(_, windows)| windows),
+                qualify: opt_qualify_block.map(|(_, qualify)| qualify),
+            })
+        },
+    )
+    .parse(i)
+}
+
+fn order_by_element(i: Input) -> IResult<SetOperationElement> {
+    map(
+        rule! {
+            ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr)
+        },
+        |(_, _, order_by)| SetOperationElement::OrderBy { order_by },
+    )
+    .parse(i)
+}
+
+fn limit_element(i: Input) -> IResult<SetOperationElement> {
+    map(
+        rule! {
+            LIMIT ~ ^#comma_separated_list1(expr)
+        },
+        |(_, limit)| SetOperationElement::Limit { limit },
+    )
+    .parse(i)
+}
+
 struct SetOperationParser;
+
+fn set_operation_primary(input: WithSpan<SetOperationElement>) -> SetExpr {
+    match input.elem {
+        SetOperationElement::Group(expr) => {
+            let mut query = expr.into_query();
+            query.span = transform_span(input.span.tokens);
+            SetExpr::Query(Box::new(query))
+        }
+        SetOperationElement::SelectStmt {
+            hints,
+            distinct,
+            top_n,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        } => SetExpr::Select(Box::new(SelectStmt {
+            span: transform_span(input.span.tokens),
+            hints,
+            top_n,
+            distinct,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        })),
+        SetOperationElement::Values(values) => SetExpr::Values {
+            span: transform_span(input.span.tokens),
+            values,
+        },
+        _ => unreachable!(),
+    }
+}
 
 impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     for SetOperationParser
@@ -268,43 +397,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => {
-                let mut query = expr.into_query();
-                query.span = transform_span(input.span.tokens);
-                SetExpr::Query(Box::new(query))
-            }
-            SetOperationElement::SelectStmt {
-                hints,
-                distinct,
-                top_n,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.tokens),
-                hints,
-                top_n,
-                distinct,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            })),
-            SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.tokens),
-                values,
-            },
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
+        Ok(set_operation_primary(input))
     }
 
     fn infix(
@@ -790,8 +883,61 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    if !i.backtrace.is_enabled()
+        && let Ok((rest, table)) = table_ref(i)
+        && rest
+            .tokens
+            .first()
+            .is_some_and(|token| is_simple_table_reference_boundary(token.kind))
+    {
+        let consumed = i.tokens.len() - rest.tokens.len();
+        return Ok((rest, TableReference::Table {
+            span: transform_span(&i.tokens[..consumed]),
+            table,
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        }));
+    }
+
+    let (rest, mut table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    if table_reference_elements.len() == 1 {
+        let elem = table_reference_elements.pop().unwrap();
+        if matches!(
+            &elem.elem,
+            TableReferenceElement::Group(_)
+                | TableReferenceElement::Table { .. }
+                | TableReferenceElement::TableFunction { .. }
+                | TableReferenceElement::Subquery { .. }
+                | TableReferenceElement::Stage { .. }
+        ) {
+            return Ok((rest, table_reference_primary(elem)));
+        }
+        table_reference_elements.push(elem);
+    }
     run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
+}
+
+fn is_simple_table_reference_boundary(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        EOI | Comma
+            | RParen
+            | WHERE
+            | GROUP
+            | HAVING
+            | ORDER
+            | LIMIT
+            | OFFSET
+            | QUALIFY
+            | WINDOW
+            | UNION
+            | EXCEPT
+            | INTERSECT
+    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1066,6 +1212,89 @@ fn get_table_sample(
 
 struct TableReferenceParser;
 
+fn table_reference_primary(input: WithSpan<TableReferenceElement>) -> TableReference {
+    match input.elem {
+        TableReferenceElement::Group(table_ref) => table_ref,
+        TableReferenceElement::Table {
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        } => TableReference::Table {
+            span: transform_span(input.span.tokens),
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        },
+        TableReferenceElement::TableFunction {
+            lateral,
+            name,
+            params,
+            alias,
+            sample,
+        } => {
+            let normal_params = params
+                .iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Normal(p) => Some(p.clone()),
+                    _ => None,
+                })
+                .collect();
+            let named_params = params
+                .into_iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Named { name, value } => Some((name, value)),
+                    _ => None,
+                })
+                .collect();
+            TableReference::TableFunction {
+                span: transform_span(input.span.tokens),
+                lateral,
+                name,
+                params: normal_params,
+                named_params,
+                alias,
+                sample,
+            }
+        }
+        TableReferenceElement::Subquery {
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        } => TableReference::Subquery {
+            span: transform_span(input.span.tokens),
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        },
+        TableReferenceElement::Stage {
+            location,
+            options,
+            alias,
+        } => {
+            let options = SelectStageOptions::from(options);
+            TableReference::Location {
+                span: transform_span(input.span.tokens),
+                location,
+                options,
+                alias,
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
 impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     for TableReferenceParser
 {
@@ -1083,87 +1312,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let table_ref = match input.elem {
-            TableReferenceElement::Group(table_ref) => table_ref,
-            TableReferenceElement::Table {
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            } => TableReference::Table {
-                span: transform_span(input.span.tokens),
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            },
-            TableReferenceElement::TableFunction {
-                lateral,
-                name,
-                params,
-                alias,
-                sample,
-            } => {
-                let normal_params = params
-                    .iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Normal(p) => Some(p.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                let named_params = params
-                    .into_iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Named { name, value } => Some((name, value)),
-                        _ => None,
-                    })
-                    .collect();
-                TableReference::TableFunction {
-                    span: transform_span(input.span.tokens),
-                    lateral,
-                    name,
-                    params: normal_params,
-                    named_params,
-                    alias,
-                    sample,
-                }
-            }
-            TableReferenceElement::Subquery {
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            } => TableReference::Subquery {
-                span: transform_span(input.span.tokens),
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            },
-            TableReferenceElement::Stage {
-                location,
-                options,
-                alias,
-            } => {
-                let options = SelectStageOptions::from(options);
-                TableReference::Location {
-                    span: transform_span(input.span.tokens),
-                    location,
-                    options,
-                    alias,
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(table_ref)
+        Ok(table_reference_primary(input))
     }
 
     fn infix(
