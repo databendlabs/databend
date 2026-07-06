@@ -63,12 +63,12 @@ SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
 query T
 EXPLAIN OPTIMIZED SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
 ----
-<slt:ignore>Exchange(SkewHash): keys: [skew_build.k (#1)], hot_keys: 1, buckets: 3, role: Build<slt:ignore>Exchange(SkewHash): keys: [skew_probe.k (#0)], hot_keys: 1, buckets: 3, role: Probe<slt:ignore>
+<slt:ignore>Exchange(SkewHash): keys: [skew_build.k (#1)], hot_keys: 1, buckets: 3, policy: Broadcast<slt:ignore>Exchange(SkewHash): keys: [skew_probe.k (#0)], hot_keys: 1, buckets: 3, policy: Random<slt:ignore>
 
 query T
 EXPLAIN SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
 ----
-<slt:ignore>exchange type: SkewHash(b.k (#1), hot_keys=1, buckets=3, role=Build)<slt:ignore>exchange type: SkewHash(p.k (#0), hot_keys=1, buckets=3, role=Probe)<slt:ignore>
+<slt:ignore>exchange type: SkewHash(b.k (#1), hot_keys=1, buckets=3, policy=Broadcast)<slt:ignore>exchange type: SkewHash(p.k (#0), hot_keys=1, buckets=3, policy=Random)<slt:ignore>
 
 statement ok
 DROP DATABASE db_skew_join

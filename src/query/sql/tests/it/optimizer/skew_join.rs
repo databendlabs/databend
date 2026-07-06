@@ -40,7 +40,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::SkewHashInfo;
-use databend_common_sql::plans::SkewHashRole;
+use databend_common_sql::plans::SkewKeysPolicy;
 use databend_common_statistics::Datum;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
@@ -73,11 +73,11 @@ async fn test_topn_skew_join_disabled_by_default_uses_normal_hash() -> Result<()
 
     assert_required_property_counts(&children_required, 1, 0);
     assert!(
-        find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe).is_none(),
+        find_skew_hash_info(plan_s_expr(&plan), SkewKeysPolicy::Random).is_none(),
         "skew join should be disabled by default and avoid probe-side skew exchange"
     );
     assert!(
-        find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Build).is_none(),
+        find_skew_hash_info(plan_s_expr(&plan), SkewKeysPolicy::Broadcast).is_none(),
         "skew join should be disabled by default and avoid build-side skew exchange"
     );
     Ok(())
@@ -88,13 +88,13 @@ async fn test_topn_skew_join_uses_skew_hash_exchange() -> Result<()> {
     let ctx = setup_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
 
-    let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe)
+    let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewKeysPolicy::Random)
         .expect("optimized plan should use probe-side skew hash exchange");
-    let build_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Build)
+    let build_info = find_skew_hash_info(plan_s_expr(&plan), SkewKeysPolicy::Broadcast)
         .expect("optimized plan should use build-side skew hash exchange");
 
-    assert_eq!(probe_info.role, SkewHashRole::Probe);
-    assert_eq!(build_info.role, SkewHashRole::Build);
+    assert_eq!(probe_info.policy, SkewKeysPolicy::Random);
+    assert_eq!(build_info.policy, SkewKeysPolicy::Broadcast);
     Ok(())
 }
 
@@ -116,7 +116,7 @@ async fn test_topn_force_skew_join_uses_only_skew_hash_required_properties() -> 
 async fn test_topn_skew_join_uses_threshold_derived_skew_info() -> Result<()> {
     let ctx = setup_skew_join_context().await?;
     let plan = optimize_skew_join_query(&ctx).await?;
-    let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewHashRole::Probe)
+    let probe_info = find_skew_hash_info(plan_s_expr(&plan), SkewKeysPolicy::Random)
         .expect("optimized plan should contain probe-side skew hash exchange");
 
     assert_eq!(probe_info.hot_keys.len(), 1);
@@ -128,7 +128,7 @@ async fn test_topn_skew_join_uses_threshold_derived_skew_info() -> Result<()> {
 #[test]
 fn test_skew_hash_distribution_is_not_normal_hash_equivalent() {
     let keys = vec![column_expr(0)];
-    let probe_skew_info = test_skew_hash_info(SkewHashRole::Probe);
+    let probe_skew_info = test_skew_hash_info(SkewKeysPolicy::Random);
 
     let skew_required = RequiredProperty {
         distribution: Distribution::GlobalSkewHash(keys.clone(), probe_skew_info.clone()),
@@ -171,15 +171,15 @@ fn test_skew_hash_distribution_is_not_normal_hash_equivalent() {
     let different_skew_physical = PhysicalProperty {
         distribution: Distribution::GlobalSkewHash(
             keys.clone(),
-            test_skew_hash_info(SkewHashRole::Build),
+            test_skew_hash_info(SkewKeysPolicy::Broadcast),
         ),
     };
     assert!(
         !skew_required.satisfied_by(&different_skew_physical),
-        "skew hash distributions with different roles must not be equivalent"
+        "skew hash distributions with different policies must not be equivalent"
     );
 
-    let mut different_hot_key_info = test_skew_hash_info(SkewHashRole::Probe);
+    let mut different_hot_key_info = test_skew_hash_info(SkewKeysPolicy::Random);
     different_hot_key_info.hot_keys = vec![uint64_scalar(2)];
     let different_hot_key_physical = PhysicalProperty {
         distribution: Distribution::GlobalSkewHash(keys, different_hot_key_info),
@@ -285,9 +285,9 @@ fn column_expr(index: usize) -> ScalarExpr {
     })
 }
 
-fn test_skew_hash_info(role: SkewHashRole) -> SkewHashInfo {
+fn test_skew_hash_info(policy: SkewKeysPolicy) -> SkewHashInfo {
     SkewHashInfo {
-        role,
+        policy,
         hot_keys: vec![uint64_scalar(1)],
         bucket_count: 2,
         extra_build_rows: 1,
@@ -314,15 +314,15 @@ fn find_join(s_expr: &SExpr) -> Option<&SExpr> {
     None
 }
 
-fn find_skew_hash_info(s_expr: &SExpr, role: SkewHashRole) -> Option<&SkewHashInfo> {
+fn find_skew_hash_info(s_expr: &SExpr, policy: SkewKeysPolicy) -> Option<&SkewHashInfo> {
     if let RelOperator::Exchange(Exchange::GlobalSkewHash(_, skew_info)) = s_expr.plan()
-        && skew_info.role == role
+        && skew_info.policy == policy
     {
         return Some(skew_info);
     }
 
     for child in s_expr.children() {
-        if let Some(skew_info) = find_skew_hash_info(child, role) {
+        if let Some(skew_info) = find_skew_hash_info(child, policy) {
             return Some(skew_info);
         }
     }
@@ -373,6 +373,6 @@ fn is_skew_hash_required(props: &Vec<RequiredProperty>) -> bool {
             RequiredProperty {
                 distribution: Distribution::GlobalSkewHash(_, build_info),
             },
-        ] if probe_info.role == SkewHashRole::Probe && build_info.role == SkewHashRole::Build
+        ] if probe_info.policy == SkewKeysPolicy::Random && build_info.policy == SkewKeysPolicy::Broadcast
     )
 }

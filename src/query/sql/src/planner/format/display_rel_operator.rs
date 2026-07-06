@@ -453,13 +453,13 @@ fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> F
         }
         Exchange::GlobalSkewHash(keys, skew_info) => {
             FormatTreeNode::with_children(payload.to_string(), vec![FormatTreeNode::new(format!(
-                "Exchange(SkewHash): keys: [{}], hot_keys: {}, buckets: {}, role: {:?}",
+                "Exchange(SkewHash): keys: [{}], hot_keys: {}, buckets: {}, policy: {:?}",
                 keys.iter()
                     .map(|expr| format_scalar(id_humanizer, expr))
                     .join(", "),
                 skew_info.hot_keys.len(),
                 skew_info.bucket_count,
-                skew_info.role,
+                skew_info.policy,
             ))])
         }
         _ => FormatTreeNode::with_children(payload.to_string(), vec![]),

@@ -69,11 +69,11 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
                         .join(", ");
                     if let Some(skew_info) = &self.inner.skew_info {
                         format!(
-                            "SkewHash({}, hot_keys={}, buckets={}, role={:?})",
+                            "SkewHash({}, hot_keys={}, buckets={}, policy={:?})",
                             keys,
                             skew_info.hot_keys.len(),
                             skew_info.bucket_count,
-                            skew_info.role,
+                            skew_info.policy,
                         )
                     } else {
                         format!("Hash({})", keys)

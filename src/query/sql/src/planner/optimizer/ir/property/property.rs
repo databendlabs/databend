@@ -160,14 +160,14 @@ impl Display for Distribution {
             ),
             Distribution::GlobalSkewHash(keys, skew_info) => write!(
                 f,
-                "SkewHash(keys=[{}], hot_keys={}, buckets={}, role={:?})",
+                "SkewHash(keys=[{}], hot_keys={}, buckets={}, policy={:?})",
                 keys.iter()
                     .map(|s| s.as_raw_expr().to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
                 skew_info.hot_keys.len(),
                 skew_info.bucket_count,
-                skew_info.role,
+                skew_info.policy,
             ),
         }
     }

@@ -142,7 +142,7 @@ impl DefaultCostModel {
         let mut cost = build_card * self.hash_table_per_row + probe_card * self.compute_per_row;
         let extra_skew_build_rows = children_required_props.iter().find_map(|prop| {
             if let Distribution::GlobalSkewHash(_, skew_info) = &prop.distribution
-                && matches!(skew_info.role, crate::plans::SkewHashRole::Build)
+                && matches!(skew_info.policy, crate::plans::SkewKeysPolicy::Broadcast)
             {
                 return Some(skew_info.extra_build_rows);
             }
@@ -197,11 +197,12 @@ impl DefaultCostModel {
                     + group.stat_info.cardinality * self.compute_per_row
             }
             Exchange::GlobalSkewHash(_, skew_info) => {
-                let extra_rows = if matches!(skew_info.role, crate::plans::SkewHashRole::Build) {
-                    skew_info.extra_build_rows as f64
-                } else {
-                    0.0
-                };
+                let extra_rows =
+                    if matches!(skew_info.policy, crate::plans::SkewKeysPolicy::Broadcast) {
+                        skew_info.extra_build_rows as f64
+                    } else {
+                        0.0
+                    };
                 // Only the build side physically duplicates hot-key rows for skew hash.
                 // Charge both network transfer and exchange-side hashing for the
                 // cardinality that will actually be sent.

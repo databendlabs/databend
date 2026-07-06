@@ -37,7 +37,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::SkewHashInfo;
-use databend_common_sql::plans::SkewHashRole;
+use databend_common_sql::plans::SkewKeysPolicy;
 use rand::Rng;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
@@ -359,12 +359,12 @@ impl FlightScatter for SkewHashFlightScatter {
         let hashes = evaluator.run(&self.hash_expr)?;
         let hashes = get_hash_values(hashes, rows, 0)?;
 
-        match self.skew_info.role {
-            SkewHashRole::Probe => {
+        match self.skew_info.policy {
+            SkewKeysPolicy::Random => {
                 let indices = self.probe_indices(&key_values, &hashes, rows);
                 DataBlock::scatter(&data_block, &indices, self.scatter_size)
             }
-            SkewHashRole::Build => self.build_blocks(&data_block, &key_values, &hashes, rows),
+            SkewKeysPolicy::Broadcast => self.build_blocks(&data_block, &key_values, &hashes, rows),
         }
     }
 
@@ -379,12 +379,12 @@ impl FlightScatter for SkewHashFlightScatter {
         let hashes = evaluator.run(&self.hash_expr)?;
         let hashes = get_hash_values(hashes, rows, 0)?;
 
-        match self.skew_info.role {
-            SkewHashRole::Probe => {
+        match self.skew_info.policy {
+            SkewKeysPolicy::Random => {
                 let indices = self.probe_indices(&key_values, &hashes, rows);
                 Ok(partition_stream.partition(indices, data_block, true))
             }
-            SkewHashRole::Build => Ok(self
+            SkewKeysPolicy::Broadcast => Ok(self
                 .build_blocks(&data_block, &key_values, &hashes, rows)?
                 .into_iter()
                 .enumerate()
@@ -542,7 +542,7 @@ mod tests {
             scatter_size: 4,
             node_partitions: vec![(0, 1), (1, 1), (2, 1), (3, 1)],
             skew_info: SkewHashInfo {
-                role: SkewHashRole::Probe,
+                policy: SkewKeysPolicy::Random,
                 hot_keys: vec![uint64_scalar(1)],
                 bucket_count: 2,
                 extra_build_rows: 0,

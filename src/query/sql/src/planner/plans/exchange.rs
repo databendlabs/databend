@@ -27,14 +27,14 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum SkewHashRole {
-    Probe,
-    Build,
+pub enum SkewKeysPolicy {
+    Random,
+    Broadcast,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SkewHashInfo {
-    pub role: SkewHashRole,
+    pub policy: SkewKeysPolicy,
     pub hot_keys: Vec<Scalar>,
     pub bucket_count: usize,
     pub extra_build_rows: u64,

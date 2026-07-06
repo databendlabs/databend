@@ -30,7 +30,7 @@ use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SkewHashInfo;
-use crate::plans::SkewHashRole;
+use crate::plans::SkewKeysPolicy;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -235,8 +235,8 @@ fn join_distribution_keys<'a>(
 }
 
 fn compatible_skew_hash_pair(probe_info: &SkewHashInfo, build_info: &SkewHashInfo) -> bool {
-    probe_info.role == SkewHashRole::Probe
-        && build_info.role == SkewHashRole::Build
+    probe_info.policy == SkewKeysPolicy::Random
+        && build_info.policy == SkewKeysPolicy::Broadcast
         && probe_info.hot_keys == build_info.hot_keys
         && probe_info.bucket_count == build_info.bucket_count
         && probe_info.extra_build_rows == build_info.extra_build_rows
@@ -256,11 +256,11 @@ mod tests {
         let build_key = uint64_expr(20);
         let mut probe_distribution = Distribution::GlobalSkewHash(
             vec![probe_key.clone()],
-            test_skew_hash_info(SkewHashRole::Probe),
+            test_skew_hash_info(SkewKeysPolicy::Random),
         );
         let mut build_distribution = Distribution::GlobalSkewHash(
             vec![build_key.clone()],
-            test_skew_hash_info(SkewHashRole::Build),
+            test_skew_hash_info(SkewKeysPolicy::Broadcast),
         );
 
         let (probe_keys, build_keys) =
@@ -275,9 +275,9 @@ mod tests {
     fn test_join_distribution_keys_rejects_incompatible_skew_hash_pair() {
         let mut probe_distribution = Distribution::GlobalSkewHash(
             vec![uint64_expr(10)],
-            test_skew_hash_info(SkewHashRole::Probe),
+            test_skew_hash_info(SkewKeysPolicy::Random),
         );
-        let mut different_hot_key_info = test_skew_hash_info(SkewHashRole::Build);
+        let mut different_hot_key_info = test_skew_hash_info(SkewKeysPolicy::Broadcast);
         different_hot_key_info.hot_keys = vec![uint64_scalar(2)];
         let mut different_hot_key_build_distribution =
             Distribution::GlobalSkewHash(vec![uint64_expr(20)], different_hot_key_info);
@@ -290,20 +290,23 @@ mod tests {
             "skew hash pairs with different hot keys should not expose join keys"
         );
 
-        let mut wrong_role_build_distribution = Distribution::GlobalSkewHash(
+        let mut wrong_policy_build_distribution = Distribution::GlobalSkewHash(
             vec![uint64_expr(20)],
-            test_skew_hash_info(SkewHashRole::Probe),
+            test_skew_hash_info(SkewKeysPolicy::Random),
         );
         assert!(
-            join_distribution_keys(&mut probe_distribution, &mut wrong_role_build_distribution)
-                .is_none(),
-            "skew hash pairs with incompatible roles should not expose join keys"
+            join_distribution_keys(
+                &mut probe_distribution,
+                &mut wrong_policy_build_distribution
+            )
+            .is_none(),
+            "skew hash pairs with incompatible policies should not expose join keys"
         );
     }
 
-    fn test_skew_hash_info(role: SkewHashRole) -> SkewHashInfo {
+    fn test_skew_hash_info(policy: SkewKeysPolicy) -> SkewHashInfo {
         SkewHashInfo {
-            role,
+            policy,
             hot_keys: vec![uint64_scalar(1)],
             bucket_count: 2,
             extra_build_rows: 1,

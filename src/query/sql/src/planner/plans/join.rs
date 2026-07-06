@@ -39,7 +39,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SkewHashInfo;
-use crate::plans::SkewHashRole;
+use crate::plans::SkewKeysPolicy;
 use crate::plans::SpatialJoinCandidate;
 use crate::plans::has_spatial_join_preconditions;
 use crate::plans::is_spatial_join_shape;
@@ -471,13 +471,13 @@ impl Join {
 
         Ok(Some((
             SkewHashInfo {
-                role: SkewHashRole::Probe,
+                policy: SkewKeysPolicy::Random,
                 hot_keys: hot_keys.clone(),
                 bucket_count,
                 extra_build_rows,
             },
             SkewHashInfo {
-                role: SkewHashRole::Build,
+                policy: SkewKeysPolicy::Broadcast,
                 hot_keys,
                 bucket_count,
                 extra_build_rows,
@@ -1378,6 +1378,7 @@ mod tests {
                     histogram: None,
                 })]),
                 top_n: HashMap::from([(Symbol::new(column_index), top_n)]),
+                ..Default::default()
             },
         }
     }
@@ -1477,8 +1478,8 @@ mod tests {
             .derive_topn_skew_join_info(&left_stat_info, &right_stat_info, 10, 10)?
             .expect("skew info should be derived");
 
-        assert_eq!(probe_info.role, SkewHashRole::Probe);
-        assert_eq!(build_info.role, SkewHashRole::Build);
+        assert_eq!(probe_info.policy, SkewKeysPolicy::Random);
+        assert_eq!(build_info.policy, SkewKeysPolicy::Broadcast);
         assert_eq!(probe_info.hot_keys, vec![int32_scalar(1)]);
         assert_eq!(probe_info.bucket_count, 2);
         assert_eq!(probe_info.extra_build_rows, 20);

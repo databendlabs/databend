@@ -72,7 +72,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                         .join(",")
                 ),
                 Exchange::GlobalSkewHash(scalars, skew_info) => format!(
-                    "SkewHash(keys=[{}], hot_keys={}, buckets={}, role={:?})",
+                    "SkewHash(keys=[{}], hot_keys={}, buckets={}, policy={:?})",
                     scalars
                         .iter()
                         .map(|s| s.as_raw_expr().to_string())
@@ -80,7 +80,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                         .join(","),
                     skew_info.hot_keys.len(),
                     skew_info.bucket_count,
-                    skew_info.role,
+                    skew_info.policy,
                 ),
                 Exchange::Broadcast => "Broadcast".to_string(),
                 Exchange::Merge => "Merge".to_string(),
