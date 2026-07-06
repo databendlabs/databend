@@ -39,6 +39,7 @@ use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
@@ -91,6 +92,13 @@ impl Interpreter for AddTableColumnInterpreter {
             .await?;
         // check mutability
         tbl.check_mutable()?;
+
+        if tbl.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot alter materialized view `{}`.`{}`",
+                db_name, tbl_name
+            )));
+        }
 
         let mut table_info = tbl.get_table_info().clone();
         let engine = table_info.engine();

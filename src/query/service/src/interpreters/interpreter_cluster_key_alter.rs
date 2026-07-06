@@ -16,11 +16,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use super::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
@@ -60,6 +62,13 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot alter materialized view `{}`.`{}`",
+                plan.database, plan.table
+            )));
+        }
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));

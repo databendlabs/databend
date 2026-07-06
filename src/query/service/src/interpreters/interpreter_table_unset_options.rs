@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::plans::UnsetOptionsPlan;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
@@ -57,6 +58,12 @@ impl Interpreter for UnsetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW",
+                database, table_name
+            )));
+        }
 
         // check mutability
         table.check_mutable()?;

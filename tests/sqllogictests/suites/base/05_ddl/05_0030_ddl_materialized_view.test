@@ -1,0 +1,501 @@
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv2
+
+statement ok
+DROP TABLE IF EXISTS mv_base_t
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS mv_dst_db.cross_mv
+
+statement ok
+DROP TABLE IF EXISTS mv_src_db.t
+
+statement ok
+DROP TABLE IF EXISTS mv_dst_db.t
+
+statement ok
+DROP DATABASE IF EXISTS mv_src_db
+
+statement ok
+DROP DATABASE IF EXISTS mv_dst_db
+
+statement ok
+CREATE TABLE mv_base_t (id INT, val VARCHAR, amount DECIMAL(10,2))
+
+statement ok
+INSERT INTO mv_base_t VALUES (1, 'a', 10.5), (2, 'b', 20.0), (3, 'a', 30.5), (4, 'b', 40.0)
+
+# CREATE MATERIALIZED VIEW
+statement ok
+CREATE MATERIALIZED VIEW test_mv AS SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val
+
+# Query the MV like a regular table
+query TR
+SELECT * FROM test_mv ORDER BY val
+----
+a 41.00
+b 60.00
+
+# IF NOT EXISTS
+statement ok
+CREATE MATERIALIZED VIEW IF NOT EXISTS test_mv AS SELECT 1
+
+# Error: already exists
+statement error 2302
+CREATE MATERIALIZED VIEW test_mv AS SELECT 1
+
+# CREATE OR REPLACE MATERIALIZED VIEW
+statement ok
+CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+
+query TI
+SELECT * FROM test_mv ORDER BY val
+----
+a 2
+b 2
+
+# CREATE OR REPLACE TABLE cannot replace an MV
+statement error 1302
+CREATE OR REPLACE TABLE test_mv (x INT)
+
+# CREATE OR REPLACE MATERIALIZED VIEW cannot replace a regular table
+statement error 1302
+CREATE OR REPLACE MATERIALIZED VIEW mv_base_t AS SELECT 1 AS id
+
+# Replace back to original definition for subsequent tests
+statement ok
+CREATE OR REPLACE MATERIALIZED VIEW test_mv AS SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val
+
+# SHOW CREATE MATERIALIZED VIEW
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv
+----
+test_mv CREATE MATERIALIZED VIEW `default`.`test_mv` AS SELECT val, SUM(amount) AS total FROM default.default.mv_base_t GROUP BY val
+
+# SHOW CREATE TABLE on MV outputs MV DDL
+query TT
+SHOW CREATE TABLE test_mv
+----
+test_mv CREATE MATERIALIZED VIEW `default`.`test_mv` AS SELECT val, SUM(amount) AS total FROM default.default.mv_base_t GROUP BY val
+
+# SHOW CREATE MATERIALIZED VIEW rejects base tables
+statement error
+SHOW CREATE MATERIALIZED VIEW mv_base_t
+
+# SHOW MATERIALIZED VIEWS (just check name column)
+query T
+SELECT name FROM system.tables WHERE database = 'default' AND table_type = 'MATERIALIZED VIEW' ORDER BY name
+----
+test_mv
+
+# SHOW TABLES does not include materialized views
+query I
+SELECT count(*) FROM system.tables WHERE database = 'default' AND name = 'test_mv' AND table_type = 'BASE TABLE'
+----
+0
+
+statement ok
+SHOW MATERIALIZED VIEWS FROM default.default LIKE 'test_mv'
+
+# User DML on MV is allowed
+statement ok
+INSERT INTO test_mv VALUES ('c', 100.0)
+
+query TR
+SELECT * FROM test_mv WHERE val = 'c'
+----
+c 100.00
+
+# REFRESH restores to query definition
+statement ok
+INSERT INTO mv_base_t VALUES (5, 'c', 50.0)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv
+
+query TR
+SELECT * FROM test_mv ORDER BY val
+----
+a 41.00
+b 60.00
+c 50.00
+
+# Protected options: user cannot set MV options via CREATE TABLE
+statement error 1301
+CREATE TABLE fake_mv (x INT) materialized_view = 'true'
+
+# Protected options: user cannot set MV options via ALTER TABLE
+statement error 1301
+ALTER TABLE test_mv SET OPTIONS (materialized_view_query = 'SELECT 1')
+
+statement error
+ALTER TABLE test_mv SET OPTIONS (block_per_segment = 10)
+
+statement error
+ALTER TABLE test_mv UNSET OPTIONS (block_per_segment)
+
+statement error
+ALTER VIEW test_mv AS SELECT 1
+
+statement error
+ALTER TABLE test_mv RENAME TO test_mv_renamed
+
+statement error
+ALTER TABLE test_mv SWAP WITH mv_base_t
+
+# ALTER TABLE schema changes are blocked on materialized views
+statement error 1302
+ALTER TABLE test_mv ADD COLUMN new_col INT
+
+statement error 1302
+ALTER TABLE test_mv DROP COLUMN val
+
+statement error 1302
+ALTER TABLE test_mv RENAME COLUMN val TO value
+
+# TRUNCATE is blocked on materialized views
+statement error 1302
+TRUNCATE TABLE test_mv
+
+# ALTER CLUSTER KEY is blocked on materialized views
+statement error 1302
+ALTER TABLE test_mv CLUSTER BY (total)
+
+statement error 1302
+ALTER TABLE test_mv DROP CLUSTER KEY
+
+# Invalid cluster keys are rejected before table metadata is stored
+statement error
+CREATE MATERIALIZED VIEW test_mv_bad_cluster CLUSTER BY (missing_col) AS SELECT val FROM mv_base_t
+
+# CREATE MATERIALIZED VIEW with CLUSTER BY
+statement ok
+CREATE MATERIALIZED VIEW test_mv2 CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+
+query TI
+SELECT * FROM test_mv2 ORDER BY val
+----
+a 2
+b 2
+c 1
+
+# SHOW CREATE MATERIALIZED VIEW with CLUSTER BY
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv2
+----
+test_mv2 CREATE MATERIALIZED VIEW `default`.`test_mv2` CLUSTER BY (val) AS SELECT val, COUNT(*) AS cnt FROM default.default.mv_base_t GROUP BY val
+
+# Cross-database refresh uses the saved source context and restores the caller database
+statement ok
+CREATE DATABASE mv_src_db
+
+statement ok
+CREATE DATABASE mv_dst_db
+
+statement ok
+CREATE TABLE mv_src_db.t (id INT)
+
+statement ok
+CREATE TABLE mv_dst_db.t (id INT)
+
+statement ok
+INSERT INTO mv_src_db.t VALUES (1), (2)
+
+statement ok
+INSERT INTO mv_dst_db.t VALUES (100)
+
+statement ok
+USE mv_src_db
+
+statement ok
+CREATE MATERIALIZED VIEW mv_dst_db.cross_mv AS SELECT * FROM t
+
+query I
+SELECT * FROM mv_dst_db.cross_mv ORDER BY id
+----
+1
+2
+
+statement ok
+INSERT INTO mv_src_db.t VALUES (3)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
+
+query I
+SELECT * FROM mv_dst_db.cross_mv ORDER BY id
+----
+1
+2
+3
+
+query T
+SELECT current_database()
+----
+mv_src_db
+
+# SHOW CREATE on cross-database MV outputs fully-qualified table names
+query TT
+SHOW CREATE MATERIALIZED VIEW mv_dst_db.cross_mv
+----
+cross_mv CREATE MATERIALIZED VIEW `mv_dst_db`.`cross_mv` AS SELECT * FROM default.mv_src_db.t
+
+statement ok
+USE default
+
+# CTE in materialized view: top-level WITH
+statement ok
+CREATE MATERIALIZED VIEW test_mv_cte AS WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c
+
+query TR
+SELECT * FROM test_mv_cte ORDER BY val
+----
+a 41.00
+b 60.00
+c 50.00
+
+# SHOW CREATE should NOT qualify the CTE consumer (no default.c)
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_cte
+----
+test_mv_cte CREATE MATERIALIZED VIEW `default`.`test_mv_cte` AS WITH c AS (SELECT val, SUM(amount) AS total FROM default.default.mv_base_t GROUP BY val) SELECT * FROM c
+
+# REFRESH should succeed (proves stored SQL does not reference default.c)
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_cte
+
+query TR
+SELECT * FROM test_mv_cte ORDER BY val
+----
+a 41.00
+b 60.00
+c 50.00
+
+# CTE in materialized view: nested CTE inside subquery
+statement ok
+CREATE MATERIALIZED VIEW test_mv_nested_cte AS SELECT * FROM (WITH c AS (SELECT val, SUM(amount) AS total FROM mv_base_t GROUP BY val) SELECT * FROM c) s
+
+query TR
+SELECT * FROM test_mv_nested_cte ORDER BY val
+----
+a 41.00
+b 60.00
+c 50.00
+
+# SHOW CREATE should NOT qualify the inner CTE consumer either
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_nested_cte
+----
+test_mv_nested_cte CREATE MATERIALIZED VIEW `default`.`test_mv_nested_cte` AS SELECT * FROM (WITH c AS (SELECT val, SUM(amount) AS total FROM default.default.mv_base_t GROUP BY val) SELECT * FROM c) AS s
+
+# REFRESH nested CTE MV should succeed
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_nested_cte
+
+query TR
+SELECT * FROM test_mv_nested_cte ORDER BY val
+----
+a 41.00
+b 60.00
+c 50.00
+
+# Cleanup
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv_cte
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv_nested_cte
+
+# MV over temporary table is allowed and refresh uses normal name resolution
+statement ok
+CREATE TEMPORARY TABLE mv_temp_src (id INT)
+
+statement ok
+INSERT INTO mv_temp_src VALUES (1)
+
+statement ok
+CREATE MATERIALIZED VIEW test_mv_temp AS SELECT * FROM mv_temp_src
+
+query I
+SELECT id FROM test_mv_temp
+----
+1
+
+statement ok
+INSERT INTO mv_temp_src VALUES (2)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_temp
+
+query I
+SELECT id FROM test_mv_temp ORDER BY id
+----
+1
+2
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv_temp
+
+statement ok
+DROP TABLE IF EXISTS mv_temp_src
+
+# REFRESH MV follows normal temp-table shadowing for sources
+statement ok
+CREATE TABLE mv_shadow_src (id INT)
+
+statement ok
+INSERT INTO mv_shadow_src VALUES (1)
+
+statement ok
+CREATE MATERIALIZED VIEW mv_shadow AS SELECT * FROM mv_shadow_src
+
+query I
+SELECT id FROM mv_shadow
+----
+1
+
+statement ok
+CREATE TEMPORARY TABLE mv_shadow_src (id INT)
+
+statement ok
+INSERT INTO mv_shadow_src VALUES (99)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_shadow
+
+query I
+SELECT id FROM mv_shadow
+----
+99
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS mv_shadow
+
+statement ok
+DROP TABLE IF EXISTS mv_shadow_src
+
+statement ok
+DROP TABLE IF EXISTS mv_shadow_src
+
+# REFRESH/SHOW/DROP MV follow normal temp-table shadowing for targets
+statement ok
+CREATE TABLE mv_target_shadow_src (id INT)
+
+statement ok
+INSERT INTO mv_target_shadow_src VALUES (1)
+
+statement ok
+CREATE MATERIALIZED VIEW mv_target_shadow AS SELECT * FROM mv_target_shadow_src
+
+statement ok
+CREATE TEMPORARY TABLE mv_target_shadow (id INT)
+
+statement ok
+INSERT INTO mv_target_shadow VALUES (99)
+
+statement ok
+INSERT INTO mv_target_shadow_src VALUES (2)
+
+statement error 1302
+REFRESH MATERIALIZED VIEW mv_target_shadow
+
+statement error 1302
+SHOW CREATE MATERIALIZED VIEW mv_target_shadow
+
+statement ok
+DROP TABLE mv_target_shadow
+
+query I
+SELECT id FROM mv_target_shadow ORDER BY id
+----
+1
+2
+
+statement ok
+CREATE TEMPORARY TABLE mv_target_shadow (id INT)
+
+statement error 1302
+DROP MATERIALIZED VIEW mv_target_shadow
+
+statement ok
+DROP TABLE IF EXISTS mv_target_shadow
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS mv_target_shadow
+
+statement ok
+DROP TABLE IF EXISTS mv_target_shadow_src
+
+# DROP TABLE cannot drop materialized views
+statement error
+DROP TABLE test_mv
+
+# DROP MATERIALIZED VIEW
+statement ok
+DROP MATERIALIZED VIEW test_mv
+
+statement error 1025
+SELECT * FROM test_mv
+
+# DROP MATERIALIZED VIEW IF EXISTS (no error)
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv
+
+# DROP MATERIALIZED VIEW on non-MV table should error
+statement error 1302
+DROP MATERIALIZED VIEW mv_base_t
+
+# CREATE MATERIALIZED VIEW with CLUSTER BY HILBERT
+statement ok
+CREATE MATERIALIZED VIEW test_mv_hilbert CLUSTER BY HILBERT (val, cnt) AS SELECT val, COUNT(*) AS cnt FROM mv_base_t GROUP BY val
+
+query TT
+SHOW CREATE MATERIALIZED VIEW test_mv_hilbert
+----
+test_mv_hilbert CREATE MATERIALIZED VIEW `default`.`test_mv_hilbert` CLUSTER BY HILBERT (val, cnt) AS SELECT val, COUNT(*) AS cnt FROM default.default.mv_base_t GROUP BY val
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv_hilbert
+
+# SHOW CREATE MATERIALIZED VIEW escapes quoted identifiers
+statement ok
+CREATE DATABASE IF NOT EXISTS `mv``quoted``db`
+
+statement ok
+CREATE MATERIALIZED VIEW `mv``quoted``db`.`mv``quoted` AS SELECT 1 AS id
+
+query TT
+SHOW CREATE MATERIALIZED VIEW `mv``quoted``db`.`mv``quoted`
+----
+mv`quoted CREATE MATERIALIZED VIEW `mv``quoted``db`.`mv``quoted` AS SELECT 1 AS id
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS `mv``quoted``db`.`mv``quoted`
+
+statement ok
+DROP DATABASE IF EXISTS `mv``quoted``db`
+
+# SHOW MATERIALIZED VIEWS column/format verification via system.tables
+query TTTT
+SELECT name, database, engine, table_type FROM system.tables WHERE database = 'default' AND table_type = 'MATERIALIZED VIEW' AND name = 'test_mv2'
+----
+test_mv2 default FUSE MATERIALIZED VIEW
+
+# Cleanup
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS test_mv2
+
+statement ok
+DROP MATERIALIZED VIEW IF EXISTS mv_dst_db.cross_mv
+
+statement ok
+DROP DATABASE IF EXISTS mv_src_db
+
+statement ok
+DROP DATABASE IF EXISTS mv_dst_db
+
+statement ok
+DROP TABLE IF EXISTS mv_base_t

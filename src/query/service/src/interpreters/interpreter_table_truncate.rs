@@ -17,8 +17,10 @@ use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
@@ -86,6 +88,13 @@ impl Interpreter for TruncateTableInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot truncate materialized view `{}`.`{}`",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
         if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
             let warehouse = self.ctx.get_warehouse_cluster().await?;

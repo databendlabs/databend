@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::SwapTablePlan;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -59,6 +60,17 @@ impl Interpreter for SwapTableInterpreter {
             .await?;
         if origin_table.is_temp() || target_table.is_temp() {
             return Err(ErrorCode::AlterTableError("Can not swap temp table"));
+        }
+        if origin_table
+            .options()
+            .contains_key(OPT_KEY_MATERIALIZED_VIEW)
+            || target_table
+                .options()
+                .contains_key(OPT_KEY_MATERIALIZED_VIEW)
+        {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "SWAP TABLE does not support MATERIALIZED VIEW",
+            ));
         }
         let _resp = catalog
             .swap_table(SwapTableReq {

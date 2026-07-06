@@ -22,6 +22,7 @@ use databend_common_sql::Planner;
 use databend_common_sql::plans::AlterViewPlan;
 use databend_common_sql::plans::Plan;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::util::check_view_circular_dependency;
@@ -57,6 +58,13 @@ impl Interpreter for AlterViewInterpreter {
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await
         {
+            if tbl.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW",
+                    self.plan.database, self.plan.view_name
+                )));
+            }
+
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
 

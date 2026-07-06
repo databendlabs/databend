@@ -48,10 +48,12 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
@@ -126,6 +128,16 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
+
+        for key in self.plan.set_options.keys() {
+            if is_reserved_opt_key(key) {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option '{}' is reserved and cannot be modified",
+                    key
+                )));
+            }
+        }
+
         if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -170,6 +182,12 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW",
+                database, table_name
+            )));
+        }
 
         let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {

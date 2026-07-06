@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::RenameTablePlan;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,6 +53,25 @@ impl Interpreter for RenameTableInterpreter {
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let table = match catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.table)
+            .await
+        {
+            Ok(table) => table,
+            Err(error) => {
+                if error.code() == ErrorCode::UNKNOWN_TABLE && self.plan.if_exists {
+                    return Ok(PipelineBuildResult::create());
+                }
+                return Err(error);
+            }
+        };
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW",
+                self.plan.database, self.plan.table
+            )));
+        }
+
         let _resp = catalog
             .rename_table(RenameTableReq {
                 if_exists: self.plan.if_exists,

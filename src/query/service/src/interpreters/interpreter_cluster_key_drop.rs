@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use super::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
@@ -57,6 +59,13 @@ impl Interpreter for DropTableClusterKeyInterpreter {
             .await?;
         // check mutability
         table.check_mutable()?;
+
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot alter materialized view `{}`.`{}`",
+                plan.database, plan.table
+            )));
+        }
 
         if table.cluster_key_meta().is_none() {
             return Ok(PipelineBuildResult::create());

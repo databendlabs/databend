@@ -25,6 +25,7 @@ use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -75,6 +76,13 @@ impl Interpreter for RenameTableColumnInterpreter {
 
         // check mutability
         table.check_mutable()?;
+
+        if table.options().contains_key(OPT_KEY_MATERIALIZED_VIEW) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Cannot alter materialized view `{}`.`{}`",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
         let table_info = table.get_table_info();
         let engine = table.engine();
