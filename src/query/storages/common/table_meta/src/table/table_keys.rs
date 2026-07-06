@@ -72,7 +72,14 @@ pub const OPT_KEY_RANDOM_MIN_STRING_LEN: &str = "min_string_len";
 pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
 pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
+// Materialized view options.
+pub const OPT_KEY_MATERIALIZED_VIEW: &str = "materialized_view";
+pub const OPT_KEY_MATERIALIZED_VIEW_QUERY: &str = "materialized_view_query";
+pub const OPT_KEY_MATERIALIZED_VIEW_QUERY_CATALOG: &str = "materialized_view_query_catalog";
+pub const OPT_KEY_MATERIALIZED_VIEW_QUERY_DATABASE: &str = "materialized_view_query_database";
+
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
@@ -85,6 +92,10 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY_CATALOG);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY_DATABASE);
     r
 });
 
@@ -97,6 +108,10 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY_CATALOG);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_QUERY_DATABASE);
     r
 });
 

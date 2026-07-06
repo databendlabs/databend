@@ -45,6 +45,7 @@ use log::info;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::interpreters::common::QueryFinishHooks;
+use crate::interpreters::common::check_not_materialized_view;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
@@ -91,6 +92,8 @@ impl Interpreter for AddTableColumnInterpreter {
             .await?;
         // check mutability
         tbl.check_mutable()?;
+
+        check_not_materialized_view(tbl.as_ref(), db_name)?;
 
         let mut table_info = tbl.get_table_info().clone();
         let engine = table_info.engine();
