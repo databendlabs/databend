@@ -1036,6 +1036,146 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 #[allow(unreachable_code)]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
+    if let Some(token) = i.tokens.first() {
+        match token.kind {
+            ColumnPosition => {
+                let name = token.text().to_string();
+                let pos = name[1..]
+                    .parse::<usize>()
+                    .map_err(|e| nom::Err::Failure(Error::from_error_kind(i, e.into())))?;
+                if pos == 0 {
+                    return Err(nom::Err::Failure(Error::from_error_kind(
+                        i,
+                        ErrorKind::other("column position must be greater than 0"),
+                    )));
+                }
+                let elem = ExprElement::ColumnRef {
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Position(crate::ast::ColumnPosition {
+                            pos,
+                            name,
+                            span: Some(token.span),
+                        }),
+                    },
+                };
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem,
+                }));
+            }
+            Ident if i.tokens.get(1).map(|token| token.kind) != Some(LParen) => {
+                let ident = Identifier {
+                    span: Some(token.span),
+                    name: token.text().to_string(),
+                    quote: None,
+                    ident_type: IdentifierType::None,
+                };
+                let elem = ExprElement::ColumnRef {
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(ident),
+                    },
+                };
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem,
+                }));
+            }
+            IdentVariable => {
+                let elem = ExprElement::VariableAccess(token.text()[1..].to_string());
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem,
+                }));
+            }
+            LiteralString => {
+                if token
+                    .text()
+                    .chars()
+                    .next()
+                    .filter(|quote| i.dialect.is_string_quote(*quote))
+                    .is_some()
+                {
+                    let quote::QuotedString(s, _) = token.text().parse().map_err(|_| {
+                        nom::Err::Failure(Error::from_error_kind(
+                            i,
+                            ErrorKind::other("invalid escape or unicode"),
+                        ))
+                    })?;
+
+                    return Ok((i.advance(1), WithSpan {
+                        span: i.slice(..1),
+                        elem: ExprElement::Literal {
+                            value: Literal::String(s),
+                        },
+                    }));
+                }
+            }
+            LiteralCodeString => {
+                let content = &token.text()[2..token.text().len() - 2];
+                let trimmed = unindent::unindent(content).trim().to_string();
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal {
+                        value: Literal::String(trimmed),
+                    },
+                }));
+            }
+            LiteralInteger => {
+                let value = parse_uint(token.text(), 10)
+                    .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?;
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal { value },
+                }));
+            }
+            LiteralFloat if !token.text().starts_with('.') => {
+                let value = parse_float(token.text())
+                    .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?;
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal { value },
+                }));
+            }
+            MySQLLiteralHex => {
+                let value = parse_uint(&token.text()[2..], 16)
+                    .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?;
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal { value },
+                }));
+            }
+            PGLiteralHex => {
+                let value = parse_binary(token.text())
+                    .map_err(|err| nom::Err::Failure(Error::from_error_kind(i, err)))?;
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal { value },
+                }));
+            }
+            TRUE | FALSE => {
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal {
+                        value: Literal::Boolean(token.kind == TRUE),
+                    },
+                }));
+            }
+            NULL => {
+                return Ok((i.advance(1), WithSpan {
+                    span: i.slice(..1),
+                    elem: ExprElement::Literal {
+                        value: Literal::Null,
+                    },
+                }));
+            }
+            _ => {}
+        }
+    }
+
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
             database: None,
@@ -1672,13 +1812,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             })
         },
     );
-    let column_position = map(column_position, |column| ExprElement::ColumnRef {
-        column: ColumnRef {
-            database: None,
-            table: None,
-            column,
-        },
-    });
     let column_row = map(column_row, |column| ExprElement::ColumnRef {
         column: ColumnRef {
             database: None,
@@ -1693,10 +1826,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             column,
         },
     });
-
-    if i.tokens.first().map(|token| token.kind) == Some(ColumnPosition) {
-        return with_span!(column_position).parse(i);
-    }
 
     try_dispatch!(i, true,
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),

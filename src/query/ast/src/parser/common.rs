@@ -681,7 +681,7 @@ pub(crate) trait IterProvider<'a> {
     type Item;
     type Iter: Iterator<Item = Self::Item> + ExactSizeIterator;
 
-    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter;
+    fn create_iter(self, span: Option<Rc<RefCell<Option<Input<'a>>>>>) -> Self::Iter;
 }
 
 impl<'a, T> IterProvider<'a> for Vec<WithSpan<'a, T>>
@@ -690,18 +690,18 @@ where T: Clone
     type Item = WithSpan<'a, T>;
     type Iter = ErrorSpan<'a, T, std::vec::IntoIter<WithSpan<'a, T>>>;
 
-    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter {
+    fn create_iter(self, span: Option<Rc<RefCell<Option<Input<'a>>>>>) -> Self::Iter {
         ErrorSpan::new(self.into_iter(), span)
     }
 }
 
 pub(crate) struct ErrorSpan<'a, T, I: Iterator<Item = WithSpan<'a, T>>> {
     iter: I,
-    span: Rc<RefCell<Option<Input<'a>>>>,
+    span: Option<Rc<RefCell<Option<Input<'a>>>>>,
 }
 
 impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ErrorSpan<'a, T, I> {
-    fn new(iter: I, span: Rc<RefCell<Option<Input<'a>>>>) -> Self {
+    fn new(iter: I, span: Option<Rc<RefCell<Option<Input<'a>>>>>) -> Self {
         Self { iter, span }
     }
 }
@@ -710,9 +710,11 @@ impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> Iterator for ErrorSpan<'a, T, I
     type Item = WithSpan<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .inspect(|item| *self.span.borrow_mut() = Some(item.span))
+        let item = self.iter.next();
+        if let (Some(span), Some(item)) = (&self.span, &item) {
+            *span.borrow_mut() = Some(item.span);
+        }
+        item
     }
 }
 
@@ -730,7 +732,10 @@ where
     I: Iterator<Item = P::Input> + ExactSizeIterator,
     T: IterProvider<'a, Item = P::Input, Iter = I>,
 {
-    let span = Rc::new(RefCell::new(None));
+    let span = input
+        .backtrace
+        .is_enabled()
+        .then(|| Rc::new(RefCell::new(None)));
     let mut iter = parsers.create_iter(span.clone()).peekable();
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
@@ -741,26 +746,34 @@ where
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::other("expecting an operand"),
                 PrattError::UnexpectedNilfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
+                    if let Some(span) = &span {
+                        *span.borrow_mut() = Some(i.span);
+                    }
                     ErrorKind::other("unable to parse the element")
                 }
                 PrattError::UnexpectedPrefix(i) => {
-                    *span.borrow_mut() = Some(i.span);
+                    if let Some(span) = &span {
+                        *span.borrow_mut() = Some(i.span);
+                    }
                     ErrorKind::other("unable to parse the prefix operator")
                 }
                 PrattError::UnexpectedInfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
+                    if let Some(span) = &span {
+                        *span.borrow_mut() = Some(i.span);
+                    }
                     ErrorKind::other("missing lhs or rhs for the binary operator")
                 }
                 PrattError::UnexpectedPostfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
+                    if let Some(span) = &span {
+                        *span.borrow_mut() = Some(i.span);
+                    }
                     ErrorKind::other("unable to parse the postfix operator")
                 }
                 PrattError::UserError(err) => ErrorKind::other(err),
             };
 
             let span = span
-                .take()
+                .and_then(|span| span.take())
                 // It's safe to slice one more token because input must contain EOI.
                 .unwrap_or_else(|| rest.slice(..1));
 
