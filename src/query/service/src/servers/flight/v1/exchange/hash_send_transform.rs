@@ -33,7 +33,6 @@ use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::FlightScatterState;
 
 pub struct HashSendTransform {
     id: NodeIndex,
@@ -41,7 +40,6 @@ pub struct HashSendTransform {
     output: Arc<OutputPort>,
     local_pos: usize,
     scatter: Arc<Box<dyn FlightScatter>>,
-    scatter_state: FlightScatterState,
     partition_stream: BlockPartitionStream,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
@@ -64,7 +62,6 @@ impl HashSendTransform {
         let channels = OutboundSendChannels::create(channels);
         let processor = ProcessorPtr::create(Box::new(Self {
             scatter,
-            scatter_state: FlightScatterState::with_seed(worker_id as u64),
             channels,
             local_pos,
             input: input.clone(),
@@ -121,11 +118,9 @@ impl Processor for HashSendTransform {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
-            let ready_blocks = self.scatter.scatter_block(
-                data_block,
-                &mut self.partition_stream,
-                &mut self.scatter_state,
-            )?;
+            let ready_blocks = self
+                .scatter
+                .scatter_block(data_block, &mut self.partition_stream)?;
             let mut active_downstream = false;
             let mut futures = Vec::new();
 

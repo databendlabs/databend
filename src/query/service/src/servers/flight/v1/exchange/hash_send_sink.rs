@@ -32,13 +32,11 @@ use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::FlightScatterState;
 
 pub struct HashSendSink {
     id: NodeIndex,
     input: Arc<InputPort>,
     scatter: Arc<Box<dyn FlightScatter>>,
-    scatter_state: FlightScatterState,
     partition_stream: BlockPartitionStream,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
@@ -59,7 +57,6 @@ impl HashSendSink {
         let channels = OutboundSendChannels::create(channels);
         let processor = ProcessorPtr::create(Box::new(Self {
             scatter,
-            scatter_state: FlightScatterState::with_seed(worker_id as u64),
             channels,
             input: input.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
@@ -105,11 +102,9 @@ impl Processor for HashSendSink {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
-            let ready_blocks = self.scatter.scatter_block(
-                data_block,
-                &mut self.partition_stream,
-                &mut self.scatter_state,
-            )?;
+            let ready_blocks = self
+                .scatter
+                .scatter_block(data_block, &mut self.partition_stream)?;
             let mut futures = Vec::new();
 
             for (partition_id, block) in ready_blocks {

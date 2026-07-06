@@ -16,34 +16,10 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 
-#[derive(Default)]
-pub struct FlightScatterState {
-    // Processor-local offset used to rotate hot probe rows across skew buckets.
-    skew_probe_salt_offset: u64,
-}
-
-impl FlightScatterState {
-    pub fn with_seed(seed: u64) -> Self {
-        Self {
-            skew_probe_salt_offset: seed,
-        }
-    }
-
-    pub fn next_skew_probe_salt(&mut self, bucket_count: usize) -> usize {
-        let salt = self.skew_probe_salt_offset % bucket_count as u64;
-        self.skew_probe_salt_offset += 1;
-        salt as usize
-    }
-}
-
 pub trait FlightScatter: Sync + Send {
     fn name(&self) -> &'static str;
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>>;
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
 
     /// Scatter a block into destination blocks. Index-based scatter keeps using
     /// BlockPartitionStream batching; block-level scatter is used when rows may
@@ -52,13 +28,8 @@ pub trait FlightScatter: Sync + Send {
         &self,
         data_block: DataBlock,
         partition_stream: &mut BlockPartitionStream,
-        state: &mut FlightScatterState,
     ) -> Result<Vec<(usize, DataBlock)>> {
         let _ = partition_stream;
-        Ok(self
-            .execute(data_block, state)?
-            .into_iter()
-            .enumerate()
-            .collect())
+        Ok(self.execute(data_block)?.into_iter().enumerate().collect())
     }
 }

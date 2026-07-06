@@ -23,11 +23,9 @@ use databend_common_pipeline_transforms::processors::Transformer;
 
 use super::exchange_transform_shuffle::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::FlightScatterState;
 
 pub struct ScatterTransform {
     scatter: Arc<Box<dyn FlightScatter>>,
-    scatter_state: FlightScatterState,
 }
 
 impl ScatterTransform {
@@ -38,7 +36,6 @@ impl ScatterTransform {
     ) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(input, output, ScatterTransform {
             scatter,
-            scatter_state: FlightScatterState::default(),
         }))
     }
 }
@@ -47,7 +44,7 @@ impl Transform for ScatterTransform {
     const NAME: &'static str = "ScatterTransform";
 
     fn transform(&mut self, data: DataBlock) -> databend_common_exception::Result<DataBlock> {
-        let blocks = self.scatter.execute(data, &mut self.scatter_state)?;
+        let blocks = self.scatter.execute(data)?;
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
             blocks,
         )))

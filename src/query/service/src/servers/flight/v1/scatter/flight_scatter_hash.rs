@@ -38,9 +38,9 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::SkewHashInfo;
 use databend_common_sql::plans::SkewHashRole;
+use rand::Rng;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::flight_scatter::FlightScatterState;
 
 #[derive(Clone)]
 pub struct HashFlightScatter {
@@ -198,13 +198,13 @@ impl SkewHashFlightScatter {
         key_values: &Value<AnyType>,
         hashes: &Buffer<u64>,
         rows: usize,
-        state: &mut FlightScatterState,
     ) -> Vec<u64> {
+        let mut rng = rand::thread_rng();
         (0..rows)
             .map(|row| {
                 let hash = hashes[row];
                 if self.is_hot_key(key_values, row) {
-                    let salt = state.next_skew_probe_salt(self.skew_info.bucket_count);
+                    let salt = rng.gen_range(0..self.skew_info.bucket_count);
                     self.skew_partition(hash, salt)
                 } else {
                     self.normal_partition(hash)
@@ -296,11 +296,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
         "OneHashKey"
     }
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        _state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let indices = self.partition_indices(&data_block)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
@@ -317,7 +313,6 @@ impl FlightScatter for OneHashKeyFlightScatter {
         &self,
         data_block: DataBlock,
         partition_stream: &mut BlockPartitionStream,
-        _state: &mut FlightScatterState,
     ) -> Result<Vec<(usize, DataBlock)>> {
         let indices = self.partition_indices(&data_block)?;
         Ok(partition_stream.partition(indices, data_block, true))
@@ -329,11 +324,7 @@ impl FlightScatter for HashFlightScatter {
         "Hash"
     }
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        _state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let indices = self.partition_indices(&data_block)?;
         let block_meta = data_block.get_meta();
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
@@ -350,7 +341,6 @@ impl FlightScatter for HashFlightScatter {
         &self,
         data_block: DataBlock,
         partition_stream: &mut BlockPartitionStream,
-        _state: &mut FlightScatterState,
     ) -> Result<Vec<(usize, DataBlock)>> {
         let indices = self.partition_indices(&data_block)?;
         Ok(partition_stream.partition(indices, data_block, true))
@@ -362,11 +352,7 @@ impl FlightScatter for SkewHashFlightScatter {
         "SkewHash"
     }
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let rows = data_block.num_rows();
         let key_values = evaluator.run(&self.key_expr)?;
@@ -375,7 +361,7 @@ impl FlightScatter for SkewHashFlightScatter {
 
         match self.skew_info.role {
             SkewHashRole::Probe => {
-                let indices = self.probe_indices(&key_values, &hashes, rows, state);
+                let indices = self.probe_indices(&key_values, &hashes, rows);
                 DataBlock::scatter(&data_block, &indices, self.scatter_size)
             }
             SkewHashRole::Build => self.build_blocks(&data_block, &key_values, &hashes, rows),
@@ -386,7 +372,6 @@ impl FlightScatter for SkewHashFlightScatter {
         &self,
         data_block: DataBlock,
         partition_stream: &mut BlockPartitionStream,
-        state: &mut FlightScatterState,
     ) -> Result<Vec<(usize, DataBlock)>> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let rows = data_block.num_rows();
@@ -396,7 +381,7 @@ impl FlightScatter for SkewHashFlightScatter {
 
         match self.skew_info.role {
             SkewHashRole::Probe => {
-                let indices = self.probe_indices(&key_values, &hashes, rows, state);
+                let indices = self.probe_indices(&key_values, &hashes, rows);
                 Ok(partition_stream.partition(indices, data_block, true))
             }
             SkewHashRole::Build => Ok(self
@@ -559,7 +544,7 @@ mod tests {
             skew_info: SkewHashInfo {
                 role: SkewHashRole::Probe,
                 hot_keys: vec![uint64_scalar(1)],
-                bucket_count: 4,
+                bucket_count: 2,
                 normal_skew_penalty_rows: 0,
                 skew_skew_penalty_rows: 0,
                 extra_build_rows: 0,
@@ -568,22 +553,19 @@ mod tests {
     }
 
     #[test]
-    fn test_skew_hash_probe_salt_rotates_across_scatter_blocks() -> Result<()> {
+    fn test_skew_hash_probe_random_salt_stays_in_skew_bucket_range() -> Result<()> {
         let scatter = skew_probe_scatter();
-        let mut state = FlightScatterState::default();
         let mut partition_stream = BlockPartitionStream::create(1, 0, 4);
-        let mut partition_ids = Vec::new();
 
-        for value in 0..4 {
+        for value in 0..16 {
             let ready_blocks =
-                scatter.scatter_block(one_row_block(value), &mut partition_stream, &mut state)?;
+                scatter.scatter_block(one_row_block(value), &mut partition_stream)?;
 
             assert_eq!(ready_blocks.len(), 1);
             assert_eq!(ready_blocks[0].1.num_rows(), 1);
-            partition_ids.push(ready_blocks[0].0);
+            assert!(ready_blocks[0].0 < 2);
         }
 
-        assert_eq!(partition_ids, vec![0, 1, 2, 3]);
         Ok(())
     }
 }

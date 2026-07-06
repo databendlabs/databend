@@ -34,7 +34,6 @@ use crate::pipelines::processors::transforms::aggregator::PartitionItem;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::FlightScatterState;
 
 pub trait LocalScatter: Sync + Send {
     fn name(&self) -> &'static str;
@@ -279,11 +278,7 @@ impl FlightScatter for AggregateRowScatter {
         "RowHash"
     }
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        _state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         self.scatter(data_block)
     }
 }
@@ -439,11 +434,7 @@ impl FlightScatter for AggregateBucketScatter {
         "Bucket"
     }
 
-    fn execute(
-        &self,
-        data_block: DataBlock,
-        _state: &mut FlightScatterState,
-    ) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         self.scatter(data_block, false)
     }
 }
