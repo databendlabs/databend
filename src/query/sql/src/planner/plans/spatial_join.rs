@@ -196,6 +196,13 @@ mod tests {
         })
     }
 
+    fn constant_f64(value: f64) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Number(NumberScalar::Float64(F64::from(value))),
+        })
+    }
+
     fn column_set(indices: &[usize]) -> ColumnSet {
         indices.iter().copied().map(Symbol::new).collect()
     }
@@ -289,6 +296,23 @@ mod tests {
             spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1, 2])),
             None
         );
+    }
+
+    #[test]
+    fn test_spatial_join_gate_rejects_dwithin_with_invalid_constant_distance() {
+        for distance in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let join = spatial_join(vec![function_call("st_dwithin", vec![
+                column(0, DataType::Geometry),
+                column(1, DataType::Geometry),
+                constant_f64(distance),
+            ])]);
+
+            assert_eq!(
+                spatial_join_gate(&join, &column_set(&[0]), &column_set(&[1])),
+                None,
+                "distance {distance:?} must stay on the main join path"
+            );
+        }
     }
 
     #[test]

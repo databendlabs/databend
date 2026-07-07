@@ -405,6 +405,9 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Like(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::LikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotLike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
@@ -969,7 +972,44 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     right,
                     escape,
                 },
-                _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(Some(escape)),
+                    left,
+                    right,
+                },
+                _ => {
+                    return Err(
+                        "escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr",
+                    );
+                }
             },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: transform_span(elem.span.tokens),
@@ -1671,6 +1711,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         .parse(i),
         IN => with_span!(rule!(#in_list | #in_subquery)).parse(i),
         LIKE => with_span!(rule!(#like_subquery | #binary_op)).parse(i),
+        ILIKE => with_span!(binary_op).parse(i),
         EXISTS => with_span!(exists).parse(i),
         BETWEEN => with_span!(between).parse(i),
         CAST | TRY_CAST => with_span!(cast).parse(i),
@@ -1867,9 +1908,19 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
                     return_op(i, 1, BinaryOperator::Like(None))
                 };
             }
+            ILIKE => {
+                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
+                    return_op(i, 2, BinaryOperator::ILikeAny(None))
+                } else {
+                    return_op(i, 1, BinaryOperator::ILike(None))
+                };
+            }
             NOT => match i.tokens.get(1).map(|first| first.kind) {
                 Some(LIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
+                }
+                Some(ILIKE) => {
+                    return return_op(i, 2, BinaryOperator::NotILike(None));
                 }
                 Some(REGEXP) => {
                     return return_op(i, 2, BinaryOperator::NotRegexp);

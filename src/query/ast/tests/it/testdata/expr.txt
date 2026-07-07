@@ -3024,6 +3024,94 @@ LikeWithEscape {
 
 
 ---------- Input ----------
+a ilike '%1$%1%' escape '$'
+---------- Output ---------
+a ILIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..7,
+    ),
+    op: ILike(
+        Some(
+            "$",
+        ),
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            8..16,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
+}
+
+
+---------- Input ----------
+a not ilike '%1$%1%' escape '$'
+---------- Output ---------
+a NOT ILIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..11,
+    ),
+    op: NotILike(
+        Some(
+            "$",
+        ),
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            12..20,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
+}
+
+
+---------- Input ----------
 '中文'::text not in ('a', 'b')
 ---------- Output ---------
 '中文'::STRING NOT IN('a', 'b')
@@ -3998,6 +4086,114 @@ LikeAnyWithEscape {
         ],
     },
     escape: "$",
+}
+
+
+---------- Input ----------
+'中文'::text ILIKE ANY ('a', 'b')
+---------- Output ---------
+'中文'::STRING ILIKE ANY ('a', 'b')
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..24,
+    ),
+    op: ILikeAny(
+        None,
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            25..35,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    26..29,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    31..34,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+'中文'::text ILIKE ANY ('a', 'b') ESCAPE '$'
+---------- Output ---------
+'中文'::STRING ILIKE ANY ('a', 'b') ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..24,
+    ),
+    op: ILikeAny(
+        Some(
+            "$",
+        ),
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            25..35,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    26..29,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    31..34,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
 }
 
 
