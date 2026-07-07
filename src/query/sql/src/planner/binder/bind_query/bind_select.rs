@@ -518,9 +518,23 @@ impl SelectRewriter {
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
-                func: FunctionCall { name, args, .. },
+                func:
+                    FunctionCall {
+                        name,
+                        args,
+                        filter,
+                        ..
+                    },
                 ..
-            } => Ok((name, args)),
+            } => {
+                if filter.is_some() {
+                    return Err(ErrorCode::Unimplemented(
+                        "PIVOT aggregate FILTER is not supported yet",
+                    )
+                    .set_span(expr.span()));
+                }
+                Ok((name, args))
+            }
             _ => {
                 Err(ErrorCode::SyntaxException("Aggregate function is required")
                     .set_span(expr.span()))
