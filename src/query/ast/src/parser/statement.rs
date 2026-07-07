@@ -3172,6 +3172,13 @@ AS
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
+    if !i.backtrace.is_enabled()
+        && let Some((rest, stmt)) = fast_path::statement(i)?
+        && let Some((rest, format)) = fast_path::statement_format_tail(rest)
+    {
+        return Ok((rest, StatementWithFormat { stmt, format }));
+    }
+
     map(
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI

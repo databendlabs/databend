@@ -28,6 +28,7 @@ use crate::parser::common::transform_span;
 use crate::parser::error::display_parser_error;
 use crate::parser::expr::expr;
 use crate::parser::expr::values;
+use crate::parser::fast_path;
 use crate::parser::input::Dialect;
 use crate::parser::input::Input;
 use crate::parser::input::ParseMode;
@@ -40,7 +41,7 @@ use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
-    let mut tokens = Vec::with_capacity((sql.len() / 8).clamp(4, 256));
+    let mut tokens = Vec::with_capacity((sql.len() / 4).clamp(4, 256));
     for token in Tokenizer::new(sql) {
         tokens.push(token?);
     }
@@ -50,6 +51,21 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
 /// Parse a SQL string into `Statement`s.
 #[fastrace::trace]
 pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
+    if tokens.len() <= 64 || fast_path::should_try_statement(tokens) {
+        let backtrace = Backtrace::disabled();
+        let input = Input {
+            tokens,
+            dialect,
+            mode: ParseMode::Default,
+            backtrace: &backtrace,
+        };
+        if let Ok(Some((rest, stmt))) = fast_path::statement(input)
+            && let Some((_rest, format)) = fast_path::statement_format_tail(rest)
+        {
+            return Ok((stmt, format));
+        }
+    }
+
     let stmt = run_parser(tokens, dialect, ParseMode::Default, false, statement)?;
 
     #[cfg(debug_assertions)]

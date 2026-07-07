@@ -41,6 +41,7 @@ use crate::parser::token::*;
 pub fn query(i: Input) -> IResult<Query> {
     if !i.backtrace.is_enabled()
         && i.tokens.first().is_some_and(|token| token.kind == SELECT)
+        && fast_path::should_try_select_query(i.tokens)
         && let Some((rest, query)) = fast_path::query(i)?
     {
         return Ok((rest, query));
@@ -892,6 +893,10 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
     if !i.backtrace.is_enabled()
+        && !i
+            .tokens
+            .first()
+            .is_some_and(|token| token.kind == LiteralAtString)
         && let Ok((rest, table)) = table_ref(i)
         && rest
             .tokens

@@ -17,13 +17,36 @@ use std::collections::BTreeMap;
 use crate::Span;
 use crate::ast::*;
 use crate::parser::Error;
-use crate::parser::ErrorKind;
 use crate::parser::common::transform_span;
 use crate::parser::expr::parse_float;
+use crate::parser::expr::parse_simple_string_literal;
 use crate::parser::expr::parse_uint;
+use crate::parser::expr::simple_expr_fast_path;
 use crate::parser::expr::simple_function_call_fast_path;
+use crate::parser::expr::subexpr;
 use crate::parser::input::Input;
 use crate::parser::token::*;
+
+pub(crate) fn should_try_statement(tokens: &[Token]) -> bool {
+    match tokens.first().map(|token| token.kind) {
+        Some(SELECT) => should_try_select_query(tokens),
+        Some(ALTER | CALL | CREATE | DELETE | DROP | INSERT | SET | SHOW | UPDATE) => true,
+        _ => false,
+    }
+}
+
+pub(crate) fn should_try_select_query(tokens: &[Token]) -> bool {
+    let mut previous_from = false;
+    for token in tokens {
+        match token.kind {
+            UNION | EXCEPT | INTERSECT => return false,
+            LParen if previous_from => return false,
+            FROM => previous_from = true,
+            _ => previous_from = false,
+        }
+    }
+    true
+}
 
 pub(crate) fn query(i: Input) -> std::result::Result<Option<(Input, Query)>, nom::Err<Error>> {
     if let Some((rest, query)) = select_from_query(i)? {
@@ -39,6 +62,18 @@ fn select_from_query(i: Input) -> std::result::Result<Option<(Input, Query)>, no
         None => return Ok(None),
     };
     rest = next;
+    if matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        let consumed = i.tokens.len() - rest.tokens.len();
+        let query_span = transform_span(&i.tokens[..consumed]);
+        return Ok(Some((
+            rest,
+            build_simple_select_query(query_span, select_list, vec![], None, vec![], vec![]),
+        )));
+    }
+
     if rest.tokens.first().map(|token| token.kind) != Some(FROM) {
         return Ok(None);
     }
@@ -50,7 +85,7 @@ fn select_from_query(i: Input) -> std::result::Result<Option<(Input, Query)>, no
 
     let mut selection = None;
     if rest.tokens.first().map(|token| token.kind) == Some(WHERE) {
-        let (next, expr) = match simple_where_is_null(rest.advance(1)) {
+        let (next, expr) = match simple_where_expr(rest.advance(1)) {
             Some(res) => res,
             None => return Ok(None),
         };
@@ -106,6 +141,37 @@ fn select_from_query(i: Input) -> std::result::Result<Option<(Input, Query)>, no
     )))
 }
 
+fn build_simple_select_query(
+    span: Span,
+    select_list: Vec<SelectTarget>,
+    from: Vec<TableReference>,
+    selection: Option<Expr>,
+    order_by: Vec<OrderByExpr>,
+    limit: Vec<Expr>,
+) -> Query {
+    Query {
+        span,
+        with: None,
+        body: SetExpr::Select(Box::new(SelectStmt {
+            span,
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list,
+            from,
+            selection,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        })),
+        order_by,
+        limit,
+        offset: None,
+        ignore_result: false,
+    }
+}
+
 fn select_function_query(i: Input) -> std::result::Result<Option<(Input, Query)>, nom::Err<Error>> {
     let func_start = i.advance(1);
     let Some((rest, func)) = simple_function_call_fast_path(func_start)? else {
@@ -151,42 +217,25 @@ fn select_function_query(i: Input) -> std::result::Result<Option<(Input, Query)>
     })))
 }
 
-fn build_simple_select_query(
-    span: Span,
-    select_list: Vec<SelectTarget>,
-    from: Vec<TableReference>,
-    selection: Option<Expr>,
-    order_by: Vec<OrderByExpr>,
-    limit: Vec<Expr>,
-) -> Query {
-    Query {
-        span,
-        with: None,
-        body: SetExpr::Select(Box::new(SelectStmt {
-            span,
-            hints: None,
-            distinct: false,
-            top_n: None,
-            select_list,
-            from,
-            selection,
-            group_by: None,
-            having: None,
-            window_list: None,
-            qualify: None,
-        })),
-        order_by,
-        limit,
-        offset: None,
-        ignore_result: false,
-    }
-}
-
 fn simple_select_targets(
     i: Input,
 ) -> std::result::Result<Option<(Input, Vec<SelectTarget>)>, nom::Err<Error>> {
-    let mut rest = i;
-    let mut targets = Vec::new();
+    let Some((mut rest, first_target)) = simple_select_target(i)? else {
+        return Ok(None);
+    };
+    if matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(FROM | EOI | SemiColon | FORMAT)
+    ) {
+        return Ok(Some((rest, vec![first_target])));
+    }
+    if rest.tokens.first().map(|token| token.kind) != Some(Comma) {
+        return Ok(None);
+    }
+
+    let mut targets = Vec::with_capacity(2);
+    targets.push(first_target);
+    rest = rest.advance(1);
     loop {
         let Some((next, target)) = simple_select_target(rest)? else {
             return Ok(None);
@@ -195,7 +244,7 @@ fn simple_select_targets(
         rest = next;
         match rest.tokens.first().map(|token| token.kind) {
             Some(Comma) => rest = rest.advance(1),
-            Some(FROM) => return Ok(Some((rest, targets))),
+            Some(FROM | EOI | SemiColon | FORMAT) => return Ok(Some((rest, targets))),
             _ => return Ok(None),
         }
     }
@@ -211,28 +260,245 @@ fn simple_select_target(
         })));
     }
 
+    if i.tokens.first().is_some_and(|token| token.kind == COUNT)
+        && i.tokens.get(1).is_some_and(|token| token.kind == LParen)
+        && let Some((rest, expr)) = simple_count_expr_fast_path(i)?
+    {
+        let (rest, alias) = simple_select_alias(rest);
+        return Ok(Some((rest, SelectTarget::AliasedExpr {
+            expr: Box::new(expr),
+            alias,
+        })));
+    }
+
     if i.tokens.first().is_some_and(|token| token.kind == Ident)
         && i.tokens.get(1).is_some_and(|token| token.kind == LParen)
         && let Some((rest, func)) = simple_function_call_fast_path(i)?
     {
         let consumed = i.tokens.len() - rest.tokens.len();
         let span = transform_span(&i.tokens[..consumed]);
+        let (rest, alias) = simple_select_alias(rest);
         return Ok(Some((rest, SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall { span, func }),
-            alias: None,
+            alias,
         })));
     }
 
-    Ok(simple_column_expr(i).map(|(rest, expr)| {
-        (rest, SelectTarget::AliasedExpr {
+    if maybe_simple_binary_select_expr(i)
+        && let Some((rest, expr)) = simple_binary_select_expr(i)?
+    {
+        let (rest, alias) = simple_select_alias(rest);
+        return Ok(Some((rest, SelectTarget::AliasedExpr {
             expr: Box::new(expr),
-            alias: None,
-        })
-    }))
+            alias,
+        })));
+    }
+
+    if let Some((rest, expr)) = simple_column_expr(i) {
+        let (rest, alias) = simple_select_alias(rest);
+        return Ok(Some((rest, SelectTarget::AliasedExpr {
+            expr: Box::new(expr),
+            alias,
+        })));
+    }
+
+    if let Some((rest, expr)) = simple_expr_fast_path(i)? {
+        let (rest, alias) = simple_select_alias(rest);
+        return Ok(Some((rest, SelectTarget::AliasedExpr {
+            expr: Box::new(expr),
+            alias,
+        })));
+    }
+
+    let Ok((rest, expr)) = subexpr(0)(i) else {
+        return Ok(None);
+    };
+    let (rest, alias) = simple_select_alias(rest);
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(Comma | FROM | EOI | SemiColon | FORMAT)
+    ) {
+        return Ok(None);
+    }
+    Ok(Some((rest, SelectTarget::AliasedExpr {
+        expr: Box::new(expr),
+        alias,
+    })))
+}
+
+fn maybe_simple_binary_select_expr(i: Input) -> bool {
+    matches!(
+        i.tokens.get(1).map(|token| token.kind),
+        Some(Plus | Minus | Multiply | Divide | IntDiv | Modulo)
+    ) || matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+            i.tokens.get(2).map(|token| token.kind),
+            i.tokens.get(3).map(|token| token.kind),
+        ),
+        (
+            Some(Ident),
+            Some(Dot),
+            Some(Ident),
+            Some(Plus | Minus | Multiply | Divide | IntDiv | Modulo)
+        )
+    ) || matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+            i.tokens.get(2).map(|token| token.kind),
+            i.tokens.get(3).map(|token| token.kind),
+            i.tokens.get(4).map(|token| token.kind),
+            i.tokens.get(5).map(|token| token.kind),
+        ),
+        (
+            Some(Ident),
+            Some(Dot),
+            Some(Ident),
+            Some(Dot),
+            Some(Ident),
+            Some(Plus | Minus | Multiply | Divide | IntDiv | Modulo)
+        )
+    )
+}
+
+fn simple_binary_select_expr(
+    i: Input,
+) -> std::result::Result<Option<(Input, Expr)>, nom::Err<Error>> {
+    let Some((rest, left)) = simple_column_expr(i).or_else(|| simple_literal_expr(i)) else {
+        return Ok(None);
+    };
+    let Some(token) = rest.tokens.first() else {
+        return Ok(None);
+    };
+    let op = match token.kind {
+        Plus => BinaryOperator::Plus,
+        Minus => BinaryOperator::Minus,
+        Multiply => BinaryOperator::Multiply,
+        Divide => BinaryOperator::Divide,
+        IntDiv => BinaryOperator::IntDiv,
+        Modulo => BinaryOperator::Modulo,
+        _ => return Ok(None),
+    };
+    let Some((rest, right)) = simple_expr_fast_path(rest.advance(1))? else {
+        return Ok(None);
+    };
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(Comma | FROM | EOI | SemiColon | FORMAT | AS | Ident)
+    ) {
+        return Ok(None);
+    }
+
+    Ok(Some((rest, Expr::BinaryOp {
+        span: Some(token.span),
+        op,
+        left: Box::new(left),
+        right: Box::new(right),
+    })))
+}
+
+fn simple_count_expr_fast_path(
+    i: Input,
+) -> std::result::Result<Option<(Input, Expr)>, nom::Err<Error>> {
+    let Some(count_token) = i.tokens.first().filter(|token| token.kind == COUNT) else {
+        return Ok(None);
+    };
+    if i.tokens.get(1).map(|token| token.kind) != Some(LParen) {
+        return Ok(None);
+    }
+
+    if let Some(star) = i.tokens.get(2).filter(|token| token.kind == Multiply) {
+        let rest = i.advance(3);
+        if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
+            return Ok(None);
+        }
+        let rest = rest.advance(1);
+        if !matches!(
+            rest.tokens.first().map(|token| token.kind),
+            Some(Comma | FROM | EOI | SemiColon | FORMAT | AS | Ident)
+        ) {
+            return Ok(None);
+        }
+        return Ok(Some((rest, Expr::CountAll {
+            span: transform_span(&i.tokens[..4]),
+            qualified: vec![Indirection::Star(Some(star.span))],
+            window: None,
+        })));
+    }
+
+    let name = Identifier {
+        span: Some(count_token.span),
+        name: count_token.text().to_string(),
+        quote: None,
+        ident_type: IdentifierType::None,
+    };
+    let mut rest = i.advance(2);
+    let mut args = Vec::with_capacity(1);
+    if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
+        loop {
+            let Some((next, arg)) = simple_expr_fast_path(rest)? else {
+                return Ok(None);
+            };
+            args.push(arg);
+            rest = next;
+            match rest.tokens.first().map(|token| token.kind) {
+                Some(Comma) => rest = rest.advance(1),
+                Some(RParen) => break,
+                _ => return Ok(None),
+            }
+        }
+    }
+
+    rest = rest.advance(1);
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(Comma | FROM | EOI | SemiColon | FORMAT | AS | Ident)
+    ) {
+        return Ok(None);
+    }
+    let consumed = i.tokens.len() - rest.tokens.len();
+    Ok(Some((rest, Expr::FunctionCall {
+        span: transform_span(&i.tokens[..consumed]),
+        func: FunctionCall {
+            distinct: false,
+            name,
+            args,
+            params: vec![],
+            order_by: vec![],
+            window: None,
+            lambda: None,
+        },
+    })))
+}
+
+fn simple_select_alias(i: Input) -> (Input, Option<Identifier>) {
+    if i.tokens.first().map(|token| token.kind) == Some(AS) {
+        if let Some((rest, alias)) = simple_identifier(i.advance(1)) {
+            return (rest, Some(alias));
+        }
+        return (i, None);
+    }
+
+    match i.tokens.first().map(|token| token.kind) {
+        Some(Ident) => {
+            let Some((rest, alias)) = simple_identifier(i) else {
+                return (i, None);
+            };
+            (rest, Some(alias))
+        }
+        _ => (i, None),
+    }
 }
 
 fn simple_table_reference(i: Input) -> Option<(Input, TableReference)> {
+    if let Some((rest, table)) = simple_table_function_reference(i) {
+        return Some((rest, table));
+    }
+
     let (rest, table) = simple_table_ref(i)?;
+    let (rest, alias) = simple_table_alias(rest)?;
     if !matches!(
         rest.tokens.first().map(|token| token.kind),
         Some(EOI | SemiColon | FORMAT | WHERE | ORDER | LIMIT)
@@ -243,13 +509,85 @@ fn simple_table_reference(i: Input) -> Option<(Input, TableReference)> {
     Some((rest, TableReference::Table {
         span: transform_span(&i.tokens[..consumed]),
         table,
-        alias: None,
+        alias,
         temporal: None,
         with_options: None,
         pivot: None,
         unpivot: None,
         sample: None,
     }))
+}
+
+fn simple_table_function_reference(i: Input) -> Option<(Input, TableReference)> {
+    if !matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(Ident), Some(LParen))
+    ) {
+        return None;
+    }
+
+    let (rest, func) = simple_function_call_fast_path(i).ok()??;
+    let (rest, alias) = simple_table_alias(rest)?;
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT | WHERE | ORDER | LIMIT)
+    ) {
+        return None;
+    }
+
+    let consumed = i.tokens.len() - rest.tokens.len();
+    Some((rest, TableReference::TableFunction {
+        span: transform_span(&i.tokens[..consumed]),
+        lateral: false,
+        name: func.name,
+        params: func.args,
+        named_params: vec![],
+        alias,
+        sample: None,
+    }))
+}
+
+fn simple_table_alias(i: Input) -> Option<(Input, Option<TableAlias>)> {
+    let mut rest = i;
+    if rest.tokens.first().map(|token| token.kind) == Some(AS) {
+        rest = rest.advance(1);
+    }
+
+    let Some((next, name)) = simple_identifier(rest) else {
+        return Some((i, None));
+    };
+    rest = next;
+
+    let mut columns = Vec::new();
+    if rest.tokens.first().map(|token| token.kind) == Some(LParen) {
+        columns = Vec::with_capacity(4);
+        rest = rest.advance(1);
+        loop {
+            let (next, column) = simple_identifier(rest)?;
+            columns.push(column);
+            rest = next;
+            match rest.tokens.first().map(|token| token.kind) {
+                Some(Comma) => rest = rest.advance(1),
+                Some(RParen) => {
+                    rest = rest.advance(1);
+                    break;
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    Some((
+        rest,
+        Some(TableAlias {
+            name,
+            columns,
+            keep_database_name: false,
+        }),
+    ))
 }
 
 fn simple_table_ref(i: Input) -> Option<(Input, TableRef)> {
@@ -324,29 +662,63 @@ fn simple_limit(i: Input) -> Option<(Input, Expr)> {
     })
 }
 
-fn simple_where_is_null(i: Input) -> Option<(Input, Expr)> {
+fn simple_where_expr(i: Input) -> Option<(Input, Expr)> {
     let start = i;
     let (mut rest, expr) = simple_column_expr(i)?;
-    let not = match (
+
+    let token = rest.tokens.first()?;
+    if let Some(not) = match (
         rest.tokens.first().map(|token| token.kind),
         rest.tokens.get(1).map(|token| token.kind),
         rest.tokens.get(2).map(|token| token.kind),
     ) {
         (Some(IS), Some(NULL), _) => {
             rest = rest.advance(2);
-            false
+            Some(false)
         }
         (Some(IS), Some(NOT), Some(NULL)) => {
             rest = rest.advance(3);
-            true
+            Some(true)
         }
+        _ => None,
+    } {
+        let consumed = start.tokens.len() - rest.tokens.len();
+        return Some((rest, Expr::IsNull {
+            span: transform_span(&start.tokens[..consumed]),
+            expr: Box::new(expr),
+            not,
+        }));
+    }
+
+    let (op, value_start) = match (
+        rest.tokens.first().map(|token| token.kind),
+        rest.tokens.get(1).map(|token| token.kind),
+    ) {
+        (Some(LIKE), _) => (BinaryOperator::Like(None), rest.advance(1)),
+        (Some(ILIKE), _) => (BinaryOperator::ILike(None), rest.advance(1)),
+        (Some(NOT), Some(LIKE)) => (BinaryOperator::NotLike(None), rest.advance(2)),
+        (Some(NOT), Some(ILIKE)) => (BinaryOperator::NotILike(None), rest.advance(2)),
+        (Some(Eq | DoubleEq), _) => (BinaryOperator::Eq, rest.advance(1)),
+        (Some(NotEq), _) => (BinaryOperator::NotEq, rest.advance(1)),
+        (Some(Lt), _) => (BinaryOperator::Lt, rest.advance(1)),
+        (Some(Gt), _) => (BinaryOperator::Gt, rest.advance(1)),
+        (Some(Lte), _) => (BinaryOperator::Lte, rest.advance(1)),
+        (Some(Gte), _) => (BinaryOperator::Gte, rest.advance(1)),
         _ => return None,
     };
-    let consumed = start.tokens.len() - rest.tokens.len();
-    Some((rest, Expr::IsNull {
-        span: transform_span(&start.tokens[..consumed]),
-        expr: Box::new(expr),
-        not,
+    let (rest, right) = simple_expr_fast_path(value_start).ok()??;
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(ORDER | LIMIT | EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+
+    Some((rest, Expr::BinaryOp {
+        span: Some(token.span),
+        op,
+        left: Box::new(expr),
+        right: Box::new(right),
     }))
 }
 
@@ -416,13 +788,499 @@ pub(crate) fn statement(
     i: Input,
 ) -> std::result::Result<Option<(Input, Statement)>, nom::Err<Error>> {
     match i.tokens.first().map(|token| token.kind) {
+        Some(SELECT) => {
+            Ok(query(i)?.map(|(rest, query)| (rest, Statement::Query(Box::new(query)))))
+        }
         Some(ALTER) => Ok(simple_alter_table_stmt(i)),
-        Some(CREATE) => Ok(simple_create_role_stmt(i).or_else(|| simple_create_table_stmt(i))),
+        Some(CALL) => Ok(simple_call_stmt(i)),
+        Some(CREATE) => Ok(simple_create_database_stmt(i)
+            .or_else(|| simple_create_role_stmt(i))
+            .or_else(|| simple_create_table_stmt(i))),
+        Some(DELETE) => simple_delete_stmt(i),
         Some(INSERT) => simple_insert_values_stmt(i),
+        Some(SET) => simple_set_stmt(i),
         Some(SHOW) => Ok(simple_show_create_table_stmt(i)),
-        Some(DROP) => Ok(simple_drop_principal_stmt(i)),
+        Some(UPDATE) => simple_update_stmt(i),
+        Some(DROP) => Ok(simple_drop_database_stmt(i)
+            .or_else(|| simple_drop_table_stmt(i))
+            .or_else(|| simple_drop_view_stmt(i))
+            .or_else(|| simple_drop_principal_stmt(i))),
         _ => Ok(None),
     }
+}
+
+pub(crate) fn statement_format_tail(i: Input) -> Option<(Input, Option<String>)> {
+    let mut rest = i;
+    let mut format = None;
+
+    if rest.tokens.first().map(|token| token.kind) == Some(FORMAT) {
+        let token = rest.tokens.get(1).filter(|token| token.kind == Ident)?;
+        format = Some(token.text().to_string());
+        rest = rest.advance(2);
+    }
+
+    if rest.tokens.first().map(|token| token.kind) == Some(SemiColon) {
+        rest = rest.advance(1);
+    }
+
+    (rest.tokens.first().map(|token| token.kind) == Some(EOI)).then_some((rest, format))
+}
+
+fn simple_call_stmt(i: Input) -> Option<(Input, Statement)> {
+    if i.tokens.first().map(|token| token.kind) != Some(CALL) {
+        return None;
+    }
+    if i.tokens.get(1).map(|token| token.kind) == Some(PROCEDURE) {
+        return None;
+    }
+
+    let (mut rest, name) = simple_identifier(i.advance(1))?;
+    if rest.tokens.first().map(|token| token.kind) != Some(LParen) {
+        return None;
+    }
+    rest = rest.advance(1);
+
+    let mut args = Vec::new();
+    if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
+        args = Vec::with_capacity(2);
+        loop {
+            let (next, arg) = simple_call_arg(rest)?;
+            args.push(arg);
+            rest = next;
+            match rest.tokens.first().map(|token| token.kind) {
+                Some(Comma) => rest = rest.advance(1),
+                Some(RParen) => break,
+                _ => return None,
+            }
+        }
+    }
+    rest = rest.advance(1);
+
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+
+    Some((rest, Statement::Call(CallStmt { name, args })))
+}
+
+fn simple_call_arg(i: Input) -> Option<(Input, String)> {
+    let token = i.tokens.first()?;
+    let arg = match token.kind {
+        LiteralString
+            if token
+                .text()
+                .chars()
+                .next()
+                .is_some_and(|quote| i.dialect.is_string_quote(quote)) =>
+        {
+            parse_simple_string_literal(i, token).ok()?
+        }
+        Ident => token.text().to_string(),
+        LiteralInteger => token.text().to_string(),
+        TRUE | FALSE => token.text().to_ascii_lowercase(),
+        _ => return None,
+    };
+    Some((i.advance(1), arg))
+}
+
+fn simple_set_stmt(i: Input) -> std::result::Result<Option<(Input, Statement)>, nom::Err<Error>> {
+    if i.tokens.first().map(|token| token.kind) != Some(SET) {
+        return Ok(None);
+    }
+
+    let mut rest = i.advance(1);
+    let set_type = match rest.tokens.first().map(|token| token.kind) {
+        Some(GLOBAL) => {
+            rest = rest.advance(1);
+            SetType::SettingsGlobal
+        }
+        Some(SESSION) => {
+            rest = rest.advance(1);
+            SetType::SettingsSession
+        }
+        Some(VARIABLE) => {
+            rest = rest.advance(1);
+            SetType::Variable
+        }
+        _ => SetType::SettingsSession,
+    };
+
+    let Some((next, var)) = simple_identifier(rest) else {
+        return Ok(None);
+    };
+    rest = next;
+
+    if rest.tokens.first().map(|token| token.kind) != Some(Eq) {
+        return Ok(None);
+    }
+
+    let (next, value) = match subexpr(0)(rest.advance(1)) {
+        Ok(res) => res,
+        Err(nom::Err::Error(_)) => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    rest = next;
+
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return Ok(None);
+    }
+
+    Ok(Some((rest, Statement::SetStmt {
+        settings: Settings {
+            set_type,
+            identifiers: vec![var],
+            values: SetValues::Expr(vec![Box::new(value)]),
+        },
+    })))
+}
+
+fn simple_delete_stmt(
+    i: Input,
+) -> std::result::Result<Option<(Input, Statement)>, nom::Err<Error>> {
+    if !matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(DELETE), Some(FROM))
+    ) {
+        return Ok(None);
+    }
+
+    let (mut rest, (catalog, database, table)) =
+        match simple_dot_separated_idents_1_to_3(i.advance(2)) {
+            Some(res) => res,
+            None => return Ok(None),
+        };
+    let (next, table_alias) = match simple_table_alias(rest) {
+        Some(res) => res,
+        None => return Ok(None),
+    };
+    rest = next;
+
+    let mut selection = None;
+    if rest.tokens.first().map(|token| token.kind) == Some(WHERE) {
+        let (next, expr) = subexpr(0)(rest.advance(1))?;
+        rest = next;
+        selection = Some(expr);
+    }
+
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return Ok(None);
+    }
+
+    Ok(Some((
+        rest,
+        Statement::Delete(DeleteStmt {
+            hints: None,
+            catalog,
+            database,
+            table,
+            table_alias,
+            selection,
+            with: None,
+        }),
+    )))
+}
+
+fn simple_update_stmt(
+    i: Input,
+) -> std::result::Result<Option<(Input, Statement)>, nom::Err<Error>> {
+    if i.tokens.first().map(|token| token.kind) != Some(UPDATE) {
+        return Ok(None);
+    }
+
+    let (mut rest, (catalog, database, table)) =
+        match simple_dot_separated_idents_1_to_3(i.advance(1)) {
+            Some(res) => res,
+            None => return Ok(None),
+        };
+    let (next, table_alias) = match simple_table_alias(rest) {
+        Some(res) => res,
+        None => return Ok(None),
+    };
+    rest = next;
+
+    if rest.tokens.first().map(|token| token.kind) != Some(SET) {
+        return Ok(None);
+    }
+    rest = rest.advance(1);
+
+    let mut update_list = Vec::with_capacity(2);
+    loop {
+        let Some((next, update_expr)) = simple_mutation_update_expr(rest)? else {
+            return Ok(None);
+        };
+        update_list.push(update_expr);
+        rest = next;
+        match rest.tokens.first().map(|token| token.kind) {
+            Some(Comma) => rest = rest.advance(1),
+            Some(WHERE | EOI | SemiColon | FORMAT) => break,
+            Some(FROM) => return Ok(None),
+            _ => return Ok(None),
+        }
+    }
+
+    let mut selection = None;
+    if rest.tokens.first().map(|token| token.kind) == Some(WHERE) {
+        let (next, expr) = subexpr(0)(rest.advance(1))?;
+        rest = next;
+        selection = Some(expr);
+    }
+
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return Ok(None);
+    }
+
+    Ok(Some((
+        rest,
+        Statement::Update(UpdateStmt {
+            hints: None,
+            catalog,
+            database,
+            table,
+            table_alias,
+            update_list,
+            from: None,
+            selection,
+            with: None,
+        }),
+    )))
+}
+
+fn simple_mutation_update_expr(
+    i: Input,
+) -> std::result::Result<Option<(Input, MutationUpdateExpr)>, nom::Err<Error>> {
+    let (mut rest, ident0) = match simple_identifier(i) {
+        Some(res) => res,
+        None => return Ok(None),
+    };
+    let (table, name) = if rest.tokens.first().map(|token| token.kind) == Some(Dot) {
+        let Some((next, ident1)) = simple_identifier(rest.advance(1)) else {
+            return Ok(None);
+        };
+        rest = next;
+        (Some(ident0), ident1)
+    } else {
+        (None, ident0)
+    };
+
+    if rest.tokens.first().map(|token| token.kind) != Some(Eq) {
+        return Ok(None);
+    }
+    let (rest, expr) = subexpr(0)(rest.advance(1))?;
+    Ok(Some((rest, MutationUpdateExpr { table, name, expr })))
+}
+
+fn simple_create_database_stmt(i: Input) -> Option<(Input, Statement)> {
+    if i.tokens.first().map(|token| token.kind) != Some(CREATE) {
+        return None;
+    }
+    let mut rest = i.advance(1);
+    let mut opt_or_replace = false;
+    if matches!(
+        (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(OR), Some(REPLACE))
+    ) {
+        rest = rest.advance(2);
+        opt_or_replace = true;
+    }
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(DATABASE | SCHEMA)
+    ) {
+        return None;
+    }
+    rest = rest.advance(1);
+
+    let mut opt_if_not_exists = false;
+    if matches!(
+        (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+            rest.tokens.get(2).map(|token| token.kind),
+        ),
+        (Some(IF), Some(NOT), Some(EXISTS))
+    ) {
+        rest = rest.advance(3);
+        opt_if_not_exists = true;
+    }
+    if opt_or_replace && opt_if_not_exists {
+        return None;
+    }
+
+    let (rest, (catalog, database)) = simple_database_ref(rest)?;
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+
+    let create_option = match (opt_or_replace, opt_if_not_exists) {
+        (false, false) => CreateOption::Create,
+        (true, false) => CreateOption::CreateOrReplace,
+        (false, true) => CreateOption::CreateIfNotExists,
+        (true, true) => unreachable!(),
+    };
+    Some((
+        rest,
+        Statement::CreateDatabase(CreateDatabaseStmt {
+            create_option,
+            database: DatabaseRef { catalog, database },
+            engine: None,
+            options: vec![],
+        }),
+    ))
+}
+
+fn simple_drop_database_stmt(i: Input) -> Option<(Input, Statement)> {
+    if !matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(DROP), Some(DATABASE | SCHEMA))
+    ) {
+        return None;
+    }
+    let mut rest = i.advance(2);
+    let mut if_exists = false;
+    if matches!(
+        (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(IF), Some(EXISTS))
+    ) {
+        rest = rest.advance(2);
+        if_exists = true;
+    }
+    let (rest, (catalog, database)) = simple_database_ref(rest)?;
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+    Some((
+        rest,
+        Statement::DropDatabase(DropDatabaseStmt {
+            if_exists,
+            catalog,
+            database,
+        }),
+    ))
+}
+
+fn simple_drop_table_stmt(i: Input) -> Option<(Input, Statement)> {
+    if !matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(DROP), Some(TABLE))
+    ) {
+        return None;
+    }
+    let mut rest = i.advance(2);
+    let mut if_exists = false;
+    if matches!(
+        (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(IF), Some(EXISTS))
+    ) {
+        rest = rest.advance(2);
+        if_exists = true;
+    }
+    let (rest, (catalog, database, table)) = simple_dot_separated_idents_1_to_3(rest)?;
+    let mut rest = rest;
+    let mut all = false;
+    if rest.tokens.first().map(|token| token.kind) == Some(ALL) {
+        rest = rest.advance(1);
+        all = true;
+    }
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+    Some((
+        rest,
+        Statement::DropTable(DropTableStmt {
+            if_exists,
+            catalog,
+            database,
+            table,
+            all,
+        }),
+    ))
+}
+
+fn simple_drop_view_stmt(i: Input) -> Option<(Input, Statement)> {
+    if !matches!(
+        (
+            i.tokens.first().map(|token| token.kind),
+            i.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(DROP), Some(VIEW))
+    ) {
+        return None;
+    }
+    let mut rest = i.advance(2);
+    let mut if_exists = false;
+    if matches!(
+        (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+        ),
+        (Some(IF), Some(EXISTS))
+    ) {
+        rest = rest.advance(2);
+        if_exists = true;
+    }
+    let (rest, (catalog, database, view)) = simple_dot_separated_idents_1_to_3(rest)?;
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(EOI | SemiColon | FORMAT)
+    ) {
+        return None;
+    }
+    Some((
+        rest,
+        Statement::DropView(DropViewStmt {
+            if_exists,
+            catalog,
+            database,
+            view,
+        }),
+    ))
+}
+
+fn simple_database_ref(i: Input) -> Option<(Input, (Option<Identifier>, Identifier))> {
+    let (rest, (catalog, database, name)) = simple_dot_separated_idents_1_to_3(i)?;
+    if catalog.is_some() {
+        return None;
+    }
+    Some((rest, (database, name)))
 }
 
 fn simple_drop_principal_stmt(i: Input) -> Option<(Input, Statement)> {
@@ -452,8 +1310,7 @@ fn simple_drop_principal_stmt(i: Input) -> Option<(Input, Statement)> {
                         .next()
                         .is_some_and(|quote| rest.dialect.is_string_quote(quote)) =>
                 {
-                    let quote::QuotedString(value, _) = token.text().parse().ok()?;
-                    value
+                    parse_simple_string_literal(rest, token).ok()?
                 }
                 _ => return None,
             };
@@ -480,19 +1337,19 @@ fn simple_drop_principal_stmt(i: Input) -> Option<(Input, Statement)> {
                         .next()
                         .is_some_and(|quote| rest.dialect.is_string_quote(quote)) =>
                 {
-                    let quote::QuotedString(value, _) = token.text().parse().ok()?;
-                    value
+                    parse_simple_string_literal(rest, token).ok()?
                 }
                 _ => return None,
             };
             rest = rest.advance(1);
-            if matches!(
-                (
-                    rest.tokens.first().map(|token| token.kind),
-                    rest.tokens.get(1).map(|token| token.kind),
-                ),
-                (Some(Abs), Some(LiteralString))
-            ) {
+            if rest.tokens.first().map(|token| token.kind) == Some(Abs) {
+                let host = rest
+                    .tokens
+                    .get(1)
+                    .filter(|token| token.kind == LiteralString)?;
+                if parse_simple_string_literal(rest, host).ok()?.as_str() != "%" {
+                    return None;
+                }
                 rest = rest.advance(2);
             }
             if !matches!(
@@ -595,6 +1452,7 @@ fn simple_insert_values_stmt(
 
     let mut columns = Vec::new();
     if rest.tokens.first().map(|token| token.kind) == Some(LParen) {
+        columns = Vec::with_capacity(4);
         rest = rest.advance(1);
         loop {
             let Some((next, column)) = simple_ident(rest) else {
@@ -617,7 +1475,7 @@ fn simple_insert_values_stmt(
         return Ok(None);
     }
     rest = rest.advance(1);
-    let mut rows = Vec::new();
+    let mut rows = Vec::with_capacity(1);
     loop {
         let Some((next, row)) = simple_insert_row(rest)? else {
             return Ok(None);
@@ -649,7 +1507,7 @@ fn simple_insert_row(i: Input) -> std::result::Result<Option<(Input, Vec<Expr>)>
         return Ok(None);
     }
     let mut rest = i.advance(1);
-    let mut row = Vec::new();
+    let mut row = Vec::with_capacity(4);
     loop {
         let Some((next, expr)) = simple_insert_value(rest)? else {
             return Ok(None);
@@ -703,12 +1561,7 @@ fn simple_insert_value(i: Input) -> std::result::Result<Option<(Input, Expr)>, n
                 .next()
                 .is_some_and(|quote| i.dialect.is_string_quote(quote)) =>
         {
-            let quote::QuotedString(value, _) = token.text().parse().map_err(|_| {
-                nom::Err::Failure(Error::from_error_kind(
-                    i,
-                    ErrorKind::other("invalid escape or unicode"),
-                ))
-            })?;
+            let value = parse_simple_string_literal(i, token)?;
             Literal::String(value)
         }
         LiteralInteger => parse_uint(token.text(), 10)
@@ -740,7 +1593,17 @@ fn simple_insert_value(i: Input) -> std::result::Result<Option<(Input, Expr)>, n
                 }),
             })));
         }
-        _ => return Ok(None),
+        _ => {
+            let (rest, expr) = subexpr(0)(i)?;
+            if rest
+                .tokens
+                .first()
+                .is_some_and(|token| matches!(token.kind, Comma | RParen))
+            {
+                return Ok(Some((rest, expr)));
+            }
+            return Ok(None);
+        }
     };
 
     Ok(Some((i.advance(1), Expr::Literal { span, value })))
@@ -825,7 +1688,7 @@ fn simple_alter_table_modify_action(i: Input) -> Option<(Input, AlterTableAction
     let mut columns = Vec::new();
     loop {
         let (next, name) = simple_ident(rest)?;
-        let (next, data_type) = simple_column_type_name(next)?;
+        let (next, data_type) = simple_column_type_name_with_nullable(next)?;
         columns.push(ColumnDefinition {
             name,
             data_type,
@@ -892,16 +1755,8 @@ fn simple_create_table_stmt(i: Input) -> Option<(Input, Statement)> {
 
     let mut columns = Vec::new();
     loop {
-        let (next, name) = simple_ident(rest)?;
-        let (next, data_type) = simple_column_type_name(next)?;
-        columns.push(ColumnDefinition {
-            name,
-            data_type,
-            expr: None,
-            check: None,
-            comment: None,
-            stats_truncate_len: None,
-        });
+        let (next, column) = simple_create_column_definition(rest).ok()??;
+        columns.push(column);
         rest = next;
         match rest.tokens.first().map(|token| token.kind) {
             Some(Comma) => rest = rest.advance(1),
@@ -943,6 +1798,66 @@ fn simple_create_table_stmt(i: Input) -> Option<(Input, Statement)> {
             table_type,
         }),
     ))
+}
+
+fn simple_create_column_definition(
+    i: Input,
+) -> std::result::Result<Option<(Input, ColumnDefinition)>, nom::Err<Error>> {
+    let Some((mut rest, name)) = simple_ident(i) else {
+        return Ok(None);
+    };
+    let Some((next, mut data_type)) = simple_column_type_name_without_boundary(rest) else {
+        return Ok(None);
+    };
+    rest = next;
+
+    let mut expr = None;
+    loop {
+        match (
+            rest.tokens.first().map(|token| token.kind),
+            rest.tokens.get(1).map(|token| token.kind),
+        ) {
+            (Some(NOT), Some(NULL)) => {
+                if data_type.is_nullable() {
+                    return Ok(None);
+                }
+                data_type = data_type.wrap_not_null();
+                rest = rest.advance(2);
+            }
+            (Some(NULL), _) => {
+                if matches!(data_type, TypeName::NotNull(_)) {
+                    return Ok(None);
+                }
+                data_type = data_type.wrap_nullable();
+                rest = rest.advance(1);
+            }
+            (Some(DEFAULT), _) => {
+                if expr.is_some() {
+                    return Ok(None);
+                }
+                let (next, default_expr) = subexpr(0)(rest.advance(1))?;
+                expr = Some(ColumnExpr::Default(Box::new(default_expr)));
+                rest = next;
+            }
+            _ => break,
+        }
+    }
+
+    if !matches!(
+        rest.tokens.first().map(|token| token.kind),
+        Some(Comma | RParen)
+    ) {
+        return Ok(None);
+    }
+
+    Ok(Some((rest, ColumnDefinition {
+        name,
+        data_type,
+        expr,
+        check: None,
+        comment: None,
+        stats_truncate_len: None,
+    })))
 }
 
 fn simple_statement_table_reference(i: Input) -> Option<(Input, TableReference)> {
@@ -991,35 +1906,22 @@ fn simple_ident(i: Input) -> Option<(Input, Identifier)> {
     }))
 }
 
-fn simple_column_type_name(i: Input) -> Option<(Input, TypeName)> {
-    let token = i.tokens.first()?;
-    let (rest, ty) = match token.kind {
-        BOOLEAN | BOOL => (i.advance(1), TypeName::Boolean),
-        INT8 | TINYINT => (consume_simple_type_width(i.advance(1)), TypeName::Int8),
-        INT16 | SMALLINT => (consume_simple_type_width(i.advance(1)), TypeName::Int16),
-        INT32 | INT | INTEGER => (consume_simple_type_width(i.advance(1)), TypeName::Int32),
-        INT64 | SIGNED | BIGINT => (consume_simple_type_width(i.advance(1)), TypeName::Int64),
-        FLOAT32 | FLOAT | REAL => (i.advance(1), TypeName::Float32),
-        FLOAT64 | DOUBLE => {
-            let rest = if i.tokens.get(1).is_some_and(|token| token.kind == PRECISION) {
-                i.advance(2)
-            } else {
-                i.advance(1)
-            };
-            (rest, TypeName::Float64)
+fn simple_column_type_name_with_nullable(i: Input) -> Option<(Input, TypeName)> {
+    let (mut rest, mut ty) = simple_column_type_name_without_boundary(i)?;
+    match (
+        rest.tokens.first().map(|token| token.kind),
+        rest.tokens.get(1).map(|token| token.kind),
+    ) {
+        (Some(NOT), Some(NULL)) => {
+            rest = rest.advance(2);
+            ty = ty.wrap_not_null();
         }
-        DECIMAL => simple_decimal_type(i)?,
-        STRING | VARCHAR | CHAR | CHARACTER | TEXT => {
-            (consume_simple_type_width(i.advance(1)), TypeName::String)
+        (Some(NULL), _) => {
+            rest = rest.advance(1);
+            ty = ty.wrap_nullable();
         }
-        DATE => (i.advance(1), TypeName::Date),
-        DATETIME | TIMESTAMP => (consume_simple_type_width(i.advance(1)), TypeName::Timestamp),
-        BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB | TINYBLOB | BLOB => {
-            (consume_simple_type_width(i.advance(1)), TypeName::Binary)
-        }
-        VARIANT | JSON => (i.advance(1), TypeName::Variant),
-        _ => return None,
-    };
+        _ => {}
+    }
 
     if !matches!(
         rest.tokens.first().map(|token| token.kind),
@@ -1029,6 +1931,39 @@ fn simple_column_type_name(i: Input) -> Option<(Input, TypeName)> {
     }
 
     Some((rest, ty))
+}
+
+fn simple_column_type_name_without_boundary(i: Input) -> Option<(Input, TypeName)> {
+    let token = i.tokens.first()?;
+    match token.kind {
+        BOOLEAN | BOOL => Some((i.advance(1), TypeName::Boolean)),
+        INT8 | TINYINT => Some((consume_simple_type_width(i.advance(1)), TypeName::Int8)),
+        INT16 | SMALLINT => Some((consume_simple_type_width(i.advance(1)), TypeName::Int16)),
+        INT32 | INT | INTEGER => Some((consume_simple_type_width(i.advance(1)), TypeName::Int32)),
+        INT64 | SIGNED | BIGINT => Some((consume_simple_type_width(i.advance(1)), TypeName::Int64)),
+        FLOAT32 | FLOAT | REAL => Some((i.advance(1), TypeName::Float32)),
+        FLOAT64 | DOUBLE => {
+            let rest = if i.tokens.get(1).is_some_and(|token| token.kind == PRECISION) {
+                i.advance(2)
+            } else {
+                i.advance(1)
+            };
+            Some((rest, TypeName::Float64))
+        }
+        DECIMAL => simple_decimal_type(i),
+        STRING | VARCHAR | CHAR | CHARACTER | TEXT => {
+            Some((consume_simple_type_width(i.advance(1)), TypeName::String))
+        }
+        DATE => Some((i.advance(1), TypeName::Date)),
+        DATETIME | TIMESTAMP => {
+            Some((consume_simple_type_width(i.advance(1)), TypeName::Timestamp))
+        }
+        BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB | TINYBLOB | BLOB => {
+            Some((consume_simple_type_width(i.advance(1)), TypeName::Binary))
+        }
+        VARIANT | JSON => Some((i.advance(1), TypeName::Variant)),
+        _ => None,
+    }
 }
 
 fn simple_decimal_type(i: Input) -> Option<(Input, TypeName)> {

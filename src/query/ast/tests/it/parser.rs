@@ -1411,6 +1411,34 @@ fn test_stage_local_filesystem_uri_errors() {
 }
 
 #[test]
+fn test_fast_path_preserves_stage_location_and_drop_user_host() {
+    let cases = [
+        (
+            r#"select * from @s10/a\ b/"#,
+            r#"SELECT * FROM '@s10/a b/'"#,
+        ),
+        (
+            r#"select $1,$2,$3 from @s6_merge_into order by $1,$2,$3;"#,
+            r#"SELECT $1, $2, $3 FROM '@s6_merge_into' ORDER BY $1, $2, $3"#,
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt.to_string(), expected);
+    }
+
+    let tokens = tokenize_sql(r#"DROP USER 'test-j'@'127.0.0.1'"#).unwrap();
+    let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+    assert!(
+        err.1.contains("expecting `'%'`"),
+        "expected DROP USER host error, got:\n{}",
+        err.1
+    );
+}
+
+#[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();

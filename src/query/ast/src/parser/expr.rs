@@ -143,7 +143,9 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     }
 }
 
-fn simple_expr_fast_path(i: Input) -> std::result::Result<Option<(Input, Expr)>, nom::Err<Error>> {
+pub(crate) fn simple_expr_fast_path(
+    i: Input,
+) -> std::result::Result<Option<(Input, Expr)>, nom::Err<Error>> {
     let Some(token) = i.tokens.first() else {
         return Ok(None);
     };
@@ -197,12 +199,7 @@ fn simple_expr_fast_path(i: Input) -> std::result::Result<Option<(Input, Expr)>,
                 .next()
                 .is_some_and(|quote| i.dialect.is_string_quote(quote)) =>
         {
-            let quote::QuotedString(s, _) = token.text().parse().map_err(|_| {
-                nom::Err::Failure(Error::from_error_kind(
-                    i,
-                    ErrorKind::other("invalid escape or unicode"),
-                ))
-            })?;
+            let s = parse_simple_string_literal(i, token)?;
             Expr::Literal {
                 span,
                 value: Literal::String(s),
@@ -1259,12 +1256,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                     .filter(|quote| i.dialect.is_string_quote(*quote))
                     .is_some()
                 {
-                    let quote::QuotedString(s, _) = token.text().parse().map_err(|_| {
-                        nom::Err::Failure(Error::from_error_kind(
-                            i,
-                            ErrorKind::other("invalid escape or unicode"),
-                        ))
-                    })?;
+                    let s = parse_simple_string_literal(i, token)?;
 
                     return Ok((i.advance(1), WithSpan {
                         span: i.slice(..1),
@@ -3205,6 +3197,7 @@ pub(crate) fn simple_function_call_fast_path(
     let mut rest = i.advance(2);
     let mut args = Vec::new();
     if rest.tokens.first().map(|token| token.kind) != Some(RParen) {
+        args = Vec::with_capacity(4);
         loop {
             let Some((next, arg)) = simple_expr_fast_path(rest)? else {
                 return Ok(None);
@@ -3237,6 +3230,35 @@ pub(crate) fn simple_function_call_fast_path(
         window: None,
         lambda: None,
     })))
+}
+
+pub(crate) fn parse_simple_string_literal<'a>(
+    i: Input<'a>,
+    token: &Token<'a>,
+) -> std::result::Result<String, nom::Err<Error<'a>>> {
+    let text = token.text();
+    if let Some(quote) = text.as_bytes().first().copied()
+        && matches!(quote, b'\'' | b'"')
+        && text.as_bytes().last().copied() == Some(quote)
+        && text.len() >= 2
+    {
+        let inner = &text[1..text.len() - 1];
+        if !inner
+            .as_bytes()
+            .iter()
+            .any(|byte| matches!(*byte, b'\\') || *byte == quote)
+        {
+            return Ok(inner.to_string());
+        }
+    }
+
+    let quote::QuotedString(s, _) = text.parse().map_err(|_| {
+        nom::Err::Failure(Error::from_error_kind(
+            i,
+            ErrorKind::other("invalid escape or unicode"),
+        ))
+    })?;
+    Ok(s)
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
