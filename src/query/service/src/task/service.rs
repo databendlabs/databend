@@ -217,19 +217,23 @@ impl TaskService {
             let (_, task_message) = result?;
             let task_key = TaskMessageIdent::new(tenant, task_message.key());
 
-            if let Some(WarehouseOptions {
-                warehouse: Some(warehouse),
-                ..
-            }) = task_message.warehouse_options()
-            {
-                if warehouse
-                    != &self
-                        .create_context(None)
-                        .await?
-                        .get_cluster()
-                        .get_warehouse_id()?
+            // Delete cleanup updates shared metadata, so it must run even if the
+            // task's assigned warehouse currently has no live query node.
+            if !matches!(&task_message, TaskMessage::DeleteTask(_, _, _)) {
+                if let Some(WarehouseOptions {
+                    warehouse: Some(warehouse),
+                    ..
+                }) = task_message.warehouse_options()
                 {
-                    continue;
+                    if warehouse
+                        != &self
+                            .create_context(None)
+                            .await?
+                            .get_cluster()
+                            .get_warehouse_id()?
+                    {
+                        continue;
+                    }
                 }
             }
             match task_message {

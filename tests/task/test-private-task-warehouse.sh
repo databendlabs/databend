@@ -206,6 +206,38 @@ fi
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SUSPEND WAREHOUSE wh2\"}")
 check_response_error "$response"
 
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK drop_wh2_cancel_task WAREHOUSE = 'wh2' AS SELECT 1\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT id FROM system.tasks WHERE name = 'drop_wh2_cancel_task'\"}")
+check_response_error "$response"
+drop_wh2_cancel_task_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${drop_wh2_cancel_task_id}, 'drop_wh2_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', 'wh2', NULL, NULL, NULL, NULL, NULL, NULL, 930000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"DROP TASK drop_wh2_cancel_task\"}")
+check_response_error "$response"
+
+actual=0
+for _ in {1..10}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM system_task.task_run WHERE task_name = 'drop_wh2_cancel_task' AND task_id = ${drop_wh2_cancel_task_id} AND state = 'CANCELLED' AND completed_at IS NOT NULL\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual" = "1" ]; then
+    echo "✅ DROP TASK clears open runs even when the assigned warehouse is suspended"
+else
+    echo "❌ Expected DROP TASK to clear open runs from a suspended assigned warehouse"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t_move_wh\"}")
 check_response_error "$response"
 count_after_move=$(echo "$response" | jq -r '.data[0][0]')
