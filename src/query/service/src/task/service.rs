@@ -484,39 +484,23 @@ impl TaskService {
                             token.cancel();
                         }
                     }
-                    let current_task = match task_id {
-                        Some(_) => task_mgr.describe_task(&task_name).await??,
-                        None => None,
-                    };
-                    let should_clean_name_scoped_state = task_id.is_none()
-                        || current_task
-                            .as_ref()
-                            .is_none_or(|task| Some(task.task_id) == task_id);
-                    let should_clean_task_afters = should_clean_name_scoped_state
-                        || current_task
-                            .as_ref()
-                            .is_some_and(|task| task.after.is_empty());
                     if task_mgr
                         .accept(&task_key)
                         .await
                         .map_err(meta_service_error)?
                     {
-                        if should_clean_task_afters {
-                            self.clean_task_afters(&task_name).await?;
-                        }
+                        self.clean_task_afters(&task_name).await?;
                         if let Some(task_id) = task_id {
                             self.cancel_open_task_runs(&task_name, task_id).await?;
                         }
                     }
-                    if should_clean_name_scoped_state {
-                        task_mgr
-                            .accept(&TaskMessageIdent::new(
-                                tenant,
-                                TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
-                            ))
-                            .await
-                            .map_err(meta_service_error)?;
-                    }
+                    task_mgr
+                        .accept(&TaskMessageIdent::new(
+                            tenant,
+                            TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
+                        ))
+                        .await
+                        .map_err(meta_service_error)?;
                 }
                 TaskMessage::AfterTask(task) => {
                     if !task_mgr
@@ -829,7 +813,7 @@ WHERE ta.task_name = {task_name}
                     error_code = 0, \
                     error_message = {} \
                 WHERE task_name = {} \
-                    AND task_id = {} \
+                    AND task_id <= {} \
                     AND state = 'EXECUTING' \
                     AND completed_at IS NULL;",
                 Utc::now().timestamp(),
