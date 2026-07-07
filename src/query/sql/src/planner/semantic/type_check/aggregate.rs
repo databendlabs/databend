@@ -48,7 +48,13 @@ use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 fn aggregate_base_name(func_name: &str) -> &str {
-    func_name.strip_suffix("_if").unwrap_or(func_name)
+    let if_suffix_len = "_if".len();
+    if let Some(suffix) = func_name.get(func_name.len().saturating_sub(if_suffix_len)..)
+        && suffix.eq_ignore_ascii_case("_if")
+    {
+        return &func_name[..func_name.len() - if_suffix_len];
+    }
+    func_name
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -98,6 +104,15 @@ impl<'a> CoreExprArena<'a> {
                     ErrorCode::SemanticError("DISTINCT aggregate FILTER is not supported")
                         .set_span(span),
                 );
+            }
+            // FILTER appends `_if`, but the factory only resolves one combinator
+            // suffix over a base aggregate. On a combinator call like `sum_if`
+            // this would yield `sum_if_if`, so reject it instead.
+            if !self.aggregate_function_factory.contains_base(&func_name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "FILTER clause is not supported for aggregate combinator `{func_name}`"
+                ))
+                .set_span(span));
             }
             args.push(self.lower_ast_expr(filter)?);
             func_name = format!("{func_name}_if");
@@ -451,8 +466,14 @@ where A: TypeCheckAdapter
         arguments: &mut [ScalarExpr],
         arg_types: &mut [DataType],
     ) -> Result<()> {
-        if !func_name.eq_ignore_ascii_case("sum")
-            || arguments.len() != 1
+        let base_func_name = aggregate_base_name(func_name);
+        let expected_args_len = if base_func_name.len() == func_name.len() {
+            1
+        } else {
+            2
+        };
+        if !base_func_name.eq_ignore_ascii_case("sum")
+            || arguments.len() != expected_args_len
             || !self.adapter.settings().get_enable_decimal_sum_widening()?
         {
             return Ok(());

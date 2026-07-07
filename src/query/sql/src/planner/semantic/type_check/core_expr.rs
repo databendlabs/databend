@@ -580,9 +580,12 @@ where A: TypeCheckAdapter
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
-            CoreExpr::UdfCall { span, name, args } => {
-                self.resolve_udf_call(arena, *span, name, args)
-            }
+            CoreExpr::UdfCall {
+                span,
+                name,
+                args,
+                filter,
+            } => self.resolve_udf_call(arena, *span, name, args, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,

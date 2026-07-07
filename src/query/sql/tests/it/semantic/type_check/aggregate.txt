@@ -117,6 +117,13 @@ status: error
 code: 1065
 message: DISTINCT aggregate FILTER is not supported
 
+=== combinator_aggregate_filter_reports_unsupported ===
+description: FILTER on an aggregate that already targets a combinator (sum_if) should be rejected instead of producing sum_if_if.
+sql: sum_if(number, flag) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is not supported for aggregate combinator `sum_if`
+
 === distinct_aggregate_order_by_reports_unsupported ===
 description: Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.
 sql: string_agg(DISTINCT text ORDER BY number)

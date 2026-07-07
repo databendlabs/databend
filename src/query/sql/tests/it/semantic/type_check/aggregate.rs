@@ -108,6 +108,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "sum(DISTINCT number) FILTER (WHERE flag)",
         },
         SqlTestCase {
+            name: "combinator_aggregate_filter_reports_unsupported",
+            description: "FILTER on an aggregate that already targets a combinator (sum_if) should be rejected instead of producing sum_if_if.",
+            setup_sqls: &[],
+            sql: "sum_if(number, flag) FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "distinct_aggregate_order_by_reports_unsupported",
             description: "Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.",
             setup_sqls: &[],

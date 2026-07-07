@@ -339,6 +339,28 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
                 setup_sqls: &[],
                 sql: "udaf_script(text)",
             },
+            adapter: main_adapter.clone(),
+            cached_udf: None,
+            aliases: &[],
+        },
+        UdfGoldenCase {
+            case: SqlTestCase {
+                name: "scalar_udf_filter_rejected_after_resolution",
+                description: "FILTER on a scalar UDF should still report the aggregate-only error, but only after UDF resolution.",
+                setup_sqls: &[],
+                sql: "scalar_to_string(number) FILTER (WHERE flag)",
+            },
+            adapter: main_adapter.clone(),
+            cached_udf: None,
+            aliases: &[],
+        },
+        UdfGoldenCase {
+            case: SqlTestCase {
+                name: "udaf_script_filter_reports_unimplemented",
+                description: "FILTER on a UDAF should be recognized as an aggregate call and reported as not yet supported rather than aggregate-only.",
+                setup_sqls: &[],
+                sql: "udaf_script(text) FILTER (WHERE flag)",
+            },
             adapter: main_adapter,
             cached_udf: None,
             aliases: &[],
