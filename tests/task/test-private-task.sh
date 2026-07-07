@@ -417,6 +417,58 @@ else
     exit 1
 fi
 
+response=$(query_sql_with_auth "root:" "CREATE TASK manual_cancel_task AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'manual_cancel_task'")
+check_response_error "$response"
+manual_cancel_task_id=$(echo "$response" | jq -r '.data[0][0]')
+other_manual_cancel_task_id=$((manual_cancel_task_id + 1000000))
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${manual_cancel_task_id}, 'manual_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 920000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${other_manual_cancel_task_id}, 'manual_cancel_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 920001, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CALL SYSTEM\$USER_TASK_CANCEL_ONGOING_EXECUTIONS('manual_cancel_task')")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [[ "$actual" == "Cancelled 1 ongoing execution(s) for task manual_cancel_task." ]]; then
+    echo "✅ SYSTEM\$USER_TASK_CANCEL_ONGOING_EXECUTIONS returns cancelled run count"
+else
+    echo "❌ Expected task cancel system function to report one cancelled run"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'manual_cancel_task' AND task_id = ${manual_cancel_task_id} AND state = 'CANCELLED' AND completed_at IS NOT NULL")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "1" ]; then
+    echo "✅ SYSTEM\$USER_TASK_CANCEL_ONGOING_EXECUTIONS cancels open task runs"
+else
+    echo "❌ Expected task cancel system function to cancel open executing task runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'manual_cancel_task' AND task_id = ${other_manual_cancel_task_id} AND state = 'EXECUTING' AND completed_at IS NULL")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "1" ]; then
+    echo "✅ SYSTEM\$USER_TASK_CANCEL_ONGOING_EXECUTIONS preserves newer task generations"
+else
+    echo "❌ Expected task cancel system function to preserve newer task generations"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'CANCELLED', completed_at = now() WHERE task_name = 'manual_cancel_task' AND task_id = ${other_manual_cancel_task_id}")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "DROP TASK manual_cancel_task")
+check_response_error "$response"
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')

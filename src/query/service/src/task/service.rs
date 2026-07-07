@@ -491,7 +491,12 @@ impl TaskService {
                     {
                         self.clean_task_afters(&task_name).await?;
                         if let Some(task_id) = task_id {
-                            self.cancel_open_task_runs(&task_name, task_id).await?;
+                            self.cancel_open_task_runs(
+                                &task_name,
+                                task_id,
+                                "task was dropped while execution status was still open",
+                            )
+                            .await?;
                         }
                     }
                     task_mgr
@@ -799,15 +804,20 @@ WHERE ta.task_name = {task_name}
         Ok(())
     }
 
-    async fn cancel_open_task_runs(&self, task_name: &str, task_id: u64) -> Result<()> {
+    pub async fn cancel_open_task_runs(
+        &self,
+        task_name: &str,
+        task_id: u64,
+        error_message: &str,
+    ) -> Result<u64> {
         let task_name = Self::sql_string_literal(task_name);
-        let error_message =
-            Self::sql_string_literal("task was dropped while execution status was still open");
+        let error_message = Self::sql_string_literal(error_message);
 
-        self.execute_sql(
-            None,
-            &format!(
-                "UPDATE system_task.task_run \
+        let blocks = self
+            .execute_sql(
+                None,
+                &format!(
+                    "UPDATE system_task.task_run \
                 SET state = 'CANCELLED', \
                     completed_at = {}, \
                     error_code = 0, \
@@ -816,15 +826,26 @@ WHERE ta.task_name = {task_name}
                     AND task_id <= {} \
                     AND state = 'EXECUTING' \
                     AND completed_at IS NULL;",
-                Utc::now().timestamp(),
-                error_message,
-                task_name,
-                task_id
-            ),
-        )
-        .await?;
+                    Utc::now().timestamp(),
+                    error_message,
+                    task_name,
+                    task_id
+                ),
+            )
+            .await?;
 
-        Ok(())
+        let affected_rows = blocks
+            .first()
+            .and_then(|block| block.get_by_offset(0).index(0))
+            .and_then(|scalar| {
+                scalar
+                    .as_number()
+                    .and_then(|number| number.as_u_int64())
+                    .cloned()
+            })
+            .unwrap_or(0);
+
+        Ok(affected_rows)
     }
 
     pub async fn update_task_afters(&self, task: &Task) -> Result<()> {

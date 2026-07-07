@@ -24,6 +24,8 @@ mod numbers;
 mod others;
 mod policy_references;
 #[cfg(feature = "task-support")]
+mod private_task_cancel;
+#[cfg(feature = "task-support")]
 mod private_task_history;
 mod show_grants;
 mod show_roles;
@@ -46,6 +48,8 @@ pub use numbers::generate_numbers_parts;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use policy_references::PolicyReferencesTable;
+#[cfg(feature = "task-support")]
+pub use private_task_cancel::PrivateTaskCancelTable;
 #[cfg(feature = "task-support")]
 pub use private_task_history::PrivateTaskHistoryTable;
 pub use system::TableStatisticsFunc;
