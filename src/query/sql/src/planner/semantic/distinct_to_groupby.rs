@@ -54,6 +54,7 @@ impl DistinctToGroupBy {
                                 distinct,
                                 name,
                                 args,
+                                order_by,
                                 filter,
                                 window,
                                 ..
@@ -62,7 +63,7 @@ impl DistinctToGroupBy {
                 alias,
             } = &select_list[0]
             {
-                if filter.is_some() || window.is_some() {
+                if filter.is_some() || !order_by.is_empty() || window.is_some() {
                     return;
                 }
                 let sub_query_name = "_distinct_group_by_subquery";

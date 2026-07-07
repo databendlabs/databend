@@ -518,13 +518,9 @@ impl SelectRewriter {
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
-                func:
-                    FunctionCall {
-                        name,
-                        args,
-                        filter,
-                        ..
-                    },
+                func: FunctionCall {
+                    name, args, filter, ..
+                },
                 ..
             } => {
                 if filter.is_some() {

@@ -529,6 +529,12 @@ select count(distinct x) filter (where b) from t3
 statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
 select string_agg(distinct s order by x) from t3
 
+statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
+select count(distinct x order by y) from t3
+
+statement error (?s)1065.*only aggregate functions allowed in within group syntax
+select count_distinct(x order by y) from t3
+
 statement error (?s)1065.*only aggregate functions allowed in within group syntax
 select percentile_cont(0.5) within group (order by x) from t3
 
