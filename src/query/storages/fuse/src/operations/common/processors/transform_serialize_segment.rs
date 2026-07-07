@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -89,7 +88,6 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
 
 impl<B: SegmentBuilder> TransformSerializeSegment<B> {
     pub fn new(
-        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
@@ -98,11 +96,8 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let table_meta = &table.table_info.meta;
-        let virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            ctx,
-            &table_meta.schema,
-            &table_meta.virtual_schema,
-        );
+        let virtual_column_accumulator =
+            VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
 
         let default_cluster_key_id = table.cluster_key_id();
 
@@ -125,7 +120,6 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
 }
 
 pub fn new_serialize_segment_processor(
-    ctx: Arc<dyn TableContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     table: &FuseTable,
@@ -135,7 +129,6 @@ pub fn new_serialize_segment_processor(
     match table.segment_format {
         FuseSegmentFormat::Row => {
             let processor = TransformSerializeSegment::new(
-                ctx,
                 input,
                 output,
                 table,
@@ -147,7 +140,6 @@ pub fn new_serialize_segment_processor(
         }
         FuseSegmentFormat::Column => {
             let processor = TransformSerializeSegment::new(
-                ctx,
                 input,
                 output,
                 table,

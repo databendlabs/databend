@@ -614,7 +614,6 @@ impl TableMutationAggregator {
         }
 
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
             &self.write_segment_ctx.schema,
             &self.virtual_schema,
         );
@@ -684,7 +683,6 @@ impl TableMutationAggregator {
     // Assign columnId to the virtual column in the merged blocks and generate a new virtual schema.
     fn accumulate_merged_blocks(&mut self) -> Result<Vec<BlockMetaWithHLL>> {
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
             &self.write_segment_ctx.schema,
             &self.virtual_schema,
         );

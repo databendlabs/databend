@@ -20,16 +20,14 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::UInt64Type;
-use databend_common_license::license::Feature::VirtualColumn;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::RefreshVirtualColumnPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_enterprise_virtual_column::get_virtual_column_handler;
+use databend_common_storages_fuse::operations::commit_refresh_virtual_column;
+use databend_common_storages_fuse::operations::prepare_refresh_virtual_column;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshVirtualColumnInterpreter {
@@ -55,9 +53,6 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
-
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
@@ -67,21 +62,18 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let handler = get_virtual_column_handler();
-
         // Generating virtual column data is a time-consuming operation.
         // At this stage, neither the table is locked nor the BlockMeta is modified;
         // only write the virtual column data to parquet file,
         // thus not affecting concurrent insert operations
-        let results = handler
-            .prepare_refresh_virtual_column(
-                self.ctx.clone(),
-                fuse_table,
-                self.plan.limit,
-                self.plan.overwrite,
-                self.plan.selection.clone(),
-            )
-            .await?;
+        let results = prepare_refresh_virtual_column(
+            self.ctx.clone(),
+            fuse_table,
+            self.plan.limit,
+            self.plan.overwrite,
+            self.plan.selection.clone(),
+        )
+        .await?;
 
         if results.is_empty() {
             let result_block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0])]);
@@ -102,14 +94,13 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
             .await?;
 
         let mut commit_res = PipelineBuildResult::create();
-        let applied_blocks = handler
-            .commit_refresh_virtual_column(
-                self.ctx.clone(),
-                fuse_table,
-                &mut commit_res.main_pipeline,
-                results,
-            )
-            .await?;
+        let applied_blocks = commit_refresh_virtual_column(
+            self.ctx.clone(),
+            fuse_table,
+            &mut commit_res.main_pipeline,
+            results,
+        )
+        .await?;
 
         // return the number of refreshed blocks.
         let result_block =
