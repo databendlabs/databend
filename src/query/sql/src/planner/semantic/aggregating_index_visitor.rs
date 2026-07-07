@@ -196,7 +196,7 @@ impl AggregatingIndexRewriter {
 }
 
 #[derive(Debug, Clone, Default, Visitor)]
-#[visitor(FunctionCall(enter), SelectStmt(enter), Query(enter))]
+#[visitor(Expr(enter), FunctionCall(enter), SelectStmt(enter), Query(enter))]
 pub struct AggregatingIndexChecker {
     has_agg_function: bool,
     has_group_by: bool,
@@ -209,6 +209,18 @@ impl AggregatingIndexChecker {
         // Must have at least one of aggregate function, group by, or selection.
         // An aggregating index like `select a + 1 from t` are useless and take up extra storage space.
         !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
+    }
+
+    fn enter_expr(&mut self, expr: &Expr) {
+        if self.not_support {
+            return;
+        }
+        if let Expr::CountAll { filter, window, .. } = expr {
+            self.has_agg_function = true;
+            if filter.is_some() || window.is_some() {
+                self.not_support = true;
+            }
+        }
     }
 
     fn enter_function_call(&mut self, func: &FunctionCall) {
