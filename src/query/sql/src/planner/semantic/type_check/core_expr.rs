@@ -373,6 +373,16 @@ impl<'a> CoreExprArena<'a> {
             .set_span(span));
         }
 
+        if func.distinct
+            && !func.order_by.is_empty()
+            && self.aggregate_function_factory.contains(&func_name)
+        {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
+        }
+
         self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
         self.ensure_window_function_call(
             span,

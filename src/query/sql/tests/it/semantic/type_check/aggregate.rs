@@ -120,6 +120,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "string_agg(DISTINCT text ORDER BY number)",
         },
         SqlTestCase {
+            name: "count_distinct_aggregate_order_by_reports_unsupported",
+            description: "DISTINCT aggregate ORDER BY should be rejected before ordered aggregate function validation.",
+            setup_sqls: &[],
+            sql: "count(DISTINCT number ORDER BY delta)",
+        },
+        SqlTestCase {
             name: "aggregate_parameter_must_be_constant",
             description: "Parameterized aggregate arguments should be constant before aggregate resolution.",
             setup_sqls: &[],

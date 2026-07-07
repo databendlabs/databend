@@ -131,6 +131,13 @@ status: error
 code: 1005
 message: DISTINCT aggregate ORDER BY is not supported
 
+=== count_distinct_aggregate_order_by_reports_unsupported ===
+description: DISTINCT aggregate ORDER BY should be rejected before ordered aggregate function validation.
+sql: count(DISTINCT number ORDER BY delta)
+status: error
+code: 1005
+message: DISTINCT aggregate ORDER BY is not supported
+
 === aggregate_parameter_must_be_constant ===
 description: Parameterized aggregate arguments should be constant before aggregate resolution.
 sql: quantile_cont(number)(number)
