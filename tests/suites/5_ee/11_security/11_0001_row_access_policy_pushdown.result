@@ -93,7 +93,7 @@ EXPLAIN PERF redacts RAP expression
 >>>> CREATE ROW ACCESS POLICY rap_pruning_policy AS (region STRING) RETURNS boolean -> region = 'APAC'
 >>>> ALTER TABLE rap_pruning_test ADD ROW ACCESS POLICY rap_pruning_policy ON (region)
 #### EXPLAIN ANALYZE should show blocks range pruning: 4 to 2 (2 EMEA blocks pruned by RAP)
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 4 to 2, bloom pruning: 2 to 2>]
+├── pruning stats: [segments: <read, decompress, range pruning: 1 to 1>, blocks: <range pruning: 4 to 2, bloom pruning: 2 to 2>]
 >>>> ALTER TABLE rap_pruning_test DROP ROW ACCESS POLICY rap_pruning_policy
 >>>> DROP TABLE IF EXISTS rap_pruning_test
 >>>> DROP ROW ACCESS POLICY IF EXISTS rap_pruning_policy

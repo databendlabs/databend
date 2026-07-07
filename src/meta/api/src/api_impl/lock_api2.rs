@@ -121,7 +121,7 @@ where
             extra_info: lock_key.get_extra_info(),
         };
 
-        let buf = encode_pb(&lock_meta).map_err(MetaError::from)?;
+        let buf = encode_pb(&lock_meta);
         let op = TxnOp::put_sequential(
             lock_key.gen_v2_prefix().dir_name_with_slash(),
             TABLE_LOCK_SEQ_KEY_V2,

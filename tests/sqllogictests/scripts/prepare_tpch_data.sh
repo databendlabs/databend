@@ -9,10 +9,10 @@ db=${1:-"tpch_test"}
 force=${2:-"1"}
 
 if [ "$force" == "0" ]; then
-	table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'nation'" | $BENDSQL_CLIENT_CONNECT --output tsv)
+	table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'nation'" | bendsql_connect_root --output tsv)
 	table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
 	if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
-		res=$(echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT --output tsv)
+		res=$(echo "SELECT COUNT() from ${db}.nation" | bendsql_connect_root --output tsv)
 		res=$(echo "$res" | tr -d '\r\n[:space:]')
 		if [ -n "$res" ] && [ "$res" -gt 0 ]; then
 			echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
@@ -21,11 +21,11 @@ if [ "$force" == "0" ]; then
 	fi
 fi
 
-echo "DROP DATABASE if EXISTS ${db}" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE DATABASE ${db}" | $BENDSQL_CLIENT_CONNECT
+echo "DROP DATABASE if EXISTS ${db}" | bendsql_connect_root
+echo "CREATE DATABASE ${db}" | bendsql_connect_root
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-	echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
+	echo "DROP TABLE IF EXISTS ${db}.$t" | bendsql_connect_root
 done
 
 # create tpch tables
@@ -35,14 +35,14 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.nation
     n_name       STRING not null,
     n_regionkey  INTEGER not null,
     n_comment    STRING
-) CLUSTER BY (n_nationkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (n_nationkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.region
 (
     r_regionkey  INTEGER not null,
     r_name       STRING not null,
     r_comment    STRING
-) CLUSTER BY (r_regionkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (r_regionkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.part
 (
@@ -55,7 +55,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.part
     p_container   STRING not null,
     p_retailprice DECIMAL(15, 2) not null,
     p_comment     STRING not null
-) CLUSTER BY (p_partkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (p_partkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.supplier
 (
@@ -66,7 +66,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.supplier
     s_phone       STRING not null,
     s_acctbal     DECIMAL(15, 2) not null,
     s_comment     STRING not null
-) CLUSTER BY (s_suppkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (s_suppkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.partsupp
 (
@@ -75,7 +75,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.partsupp
     ps_availqty    BIGINT not null,
     ps_supplycost  DECIMAL(15, 2)  not null,
     ps_comment     STRING not null
-) CLUSTER BY (ps_partkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (ps_partkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.customer
 (
@@ -87,7 +87,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.customer
     c_acctbal     DECIMAL(15, 2)   not null,
     c_mktsegment  STRING not null,
     c_comment     STRING not null
-) CLUSTER BY (c_custkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (c_custkey)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.orders
 (
@@ -100,7 +100,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.orders
     o_clerk          STRING not null,
     o_shippriority   INTEGER not null,
     o_comment        STRING not null
-) CLUSTER BY (o_orderkey, o_orderdate)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY (o_orderkey, o_orderdate)" | bendsql_connect_root
 
 echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
 (
@@ -120,7 +120,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
     l_shipinstruct STRING not null,
     l_shipmode     STRING not null,
     l_comment      STRING not null
-) CLUSTER BY(l_shipdate, l_orderkey)" | $BENDSQL_CLIENT_CONNECT
+) CLUSTER BY(l_shipdate, l_orderkey)" | bendsql_connect_root
 
 #import data
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

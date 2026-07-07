@@ -88,6 +88,8 @@ impl SyncMaterializedCTERefOptimizer {
             statistics: Statistics {
                 precise_cardinality: producer_stat_info.statistics.precise_cardinality,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         })
     }

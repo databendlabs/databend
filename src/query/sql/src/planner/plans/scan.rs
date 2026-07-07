@@ -29,6 +29,8 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::ScalarItem;
@@ -37,6 +39,7 @@ use crate::IndexType;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::CountMinSketchSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
@@ -46,6 +49,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
+use crate::optimizer::ir::TopNSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -91,6 +95,8 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
+    pub top_n: HashMap<Symbol, ColumnTopN>,
+    pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,6 +145,21 @@ impl Scan {
             .map(|(col, hist)| (*col, hist.clone()))
             .collect();
 
+        let top_n = self
+            .statistics
+            .top_n
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, top_n)| (*col, top_n.clone()))
+            .collect();
+        let count_min_sketch = self
+            .statistics
+            .count_min_sketch
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, count_min_sketch)| (*col, count_min_sketch.clone()))
+            .collect();
+
         Scan {
             table_index: self.table_index,
             columns,
@@ -150,6 +171,8 @@ impl Scan {
                 table_stats: self.statistics.table_stats,
                 column_stats,
                 histograms,
+                top_n,
+                count_min_sketch,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -379,6 +402,9 @@ impl Operator for Scan {
                 });
             }
         }
+        let mut output_top_n: TopNSet = self.statistics.top_n.clone();
+        let mut output_count_min_sketch: CountMinSketchSet =
+            self.statistics.count_min_sketch.clone();
 
         let precise_cardinality = self
             .statistics
@@ -392,7 +418,9 @@ impl Operator for Scan {
                 let mut sb = SelectivityEstimator::new(
                     column_stats,
                     StatCardinality::exact(precise_cardinality),
-                );
+                )
+                .with_top_n(std::mem::take(&mut output_top_n))
+                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
                 let cardinality = sb.apply(&prewhere.predicates)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -407,6 +435,10 @@ impl Operator for Scan {
         } else {
             None
         };
+        if self.sample.is_some() {
+            output_top_n.clear();
+            output_count_min_sketch.clear();
+        }
 
         // SECURITY: When row access policy is active, apply selectivity from
         // secure predicates first (for reasonable cardinality estimation and
@@ -418,7 +450,10 @@ impl Operator for Scan {
                     let input_cardinality = precise_cardinality
                         .map(StatCardinality::exact)
                         .unwrap_or_else(|| StatCardinality::estimate(cardinality));
-                    SelectivityEstimator::new(column_stats, input_cardinality).apply(preds)?
+                    SelectivityEstimator::new(column_stats, input_cardinality)
+                        .with_top_n(output_top_n)
+                        .with_count_min_sketch(output_count_min_sketch)
+                        .apply(preds)?
                 }
                 _ => cardinality,
             };
@@ -427,6 +462,8 @@ impl Operator for Scan {
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -436,6 +473,8 @@ impl Operator for Scan {
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
+                top_n: output_top_n,
+                count_min_sketch: output_count_min_sketch,
             },
         }))
     }
@@ -456,7 +495,14 @@ impl Operator for Scan {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnTopNEntry;
+
     use super::*;
+    use crate::optimizer::ir::RelExpr;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::RelOperator;
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {
@@ -512,5 +558,51 @@ mod tests {
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
         assert!(derived.agg_index.is_none());
+    }
+
+    #[test]
+    fn test_sampled_scan_clears_top_n_stats() -> Result<()> {
+        let column = Symbol::new(1);
+        let top_n = ColumnTopN {
+            values: vec![ColumnTopNEntry {
+                scalar: Scalar::Number(NumberScalar::UInt64(42)),
+                count: 37,
+                error: 0,
+            }],
+            min_index: None,
+        };
+        let statistics = Arc::new(Statistics {
+            table_stats: Some(TableStatistics {
+                num_rows: Some(100),
+                ..Default::default()
+            }),
+            top_n: [(column, top_n)].into_iter().collect(),
+            ..Default::default()
+        });
+        let scan = Scan {
+            columns: [column].into_iter().collect(),
+            statistics,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        let stats = scan.derive_stats(&rel_expr)?;
+        assert!(stats.statistics.top_n.contains_key(&column));
+        assert_eq!(stats.statistics.precise_cardinality, Some(100));
+
+        let sampled_scan = Scan {
+            sample: Some(SampleConfig {
+                row_level: None,
+                block_level: Some(50.0),
+            }),
+            ..scan
+        };
+        let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
+        let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
+        let sampled_stats = sampled_scan.derive_stats(&sampled_rel_expr)?;
+        assert!(sampled_stats.statistics.top_n.is_empty());
+        assert_eq!(sampled_stats.statistics.precise_cardinality, None);
+
+        Ok(())
     }
 }

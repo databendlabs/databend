@@ -821,6 +821,8 @@ pub enum TokenKind {
     IF,
     #[token("IMMUTABLE", ignore(ascii_case))]
     IMMUTABLE,
+    #[token("ILIKE", ignore(ascii_case))]
+    ILIKE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]

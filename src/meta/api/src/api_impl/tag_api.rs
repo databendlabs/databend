@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::ProcedureIdentity;
@@ -179,9 +180,9 @@ where
         let mut txn = TxnRequest::default();
         txn.condition.push(txn_cond_eq_seq(&name_ident, 0));
         txn.if_then.extend(vec![
-            txn_put_pb_with_ttl(&name_ident, &tag_id, None)?, // name -> id
-            txn_put_pb_with_ttl(&id_ident, &meta, None)?,     // id -> meta
-            txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
+            txn_put_pb_with_ttl(&name_ident, &tag_id, None), // name -> id
+            txn_put_pb_with_ttl(&id_ident, &meta, None),     // id -> meta
+            txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None), // id -> name
         ]);
 
         let (succ, _) = send_txn(self, txn).await?;
@@ -413,8 +414,8 @@ where
                         tag_allowed_value: tag_value.clone(),
                     },
                     None,
-                )?);
-                txn_ops.push(txn_put_pb_with_ttl(&tag_ref_key, &EmptyProto {}, None)?);
+                ));
+                txn_ops.push(txn_put_pb_with_ttl(&tag_ref_key, &EmptyProto {}, None));
             }
 
             let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;

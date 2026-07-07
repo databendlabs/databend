@@ -7,3 +7,20 @@ query I
 select sum(number) from numbers(10) group by number % 2 having avg(number) = 5
 ----
 25
+
+query TI
+select creative_name, sum(cost) as cost
+from (
+    select 'creative_a' as creative_name, 1 as impressions, 0 as clicks, 3 as cost, 0 as installs
+    union all
+    select 'creative_a' as creative_name, 0 as impressions, 1 as clicks, 4 as cost, 0 as installs
+    union all
+    select 'creative_b' as creative_name, 0 as impressions, 0 as clicks, 0 as cost, 0 as installs
+)
+group by creative_name
+having sum(impressions) > 0
+    or sum(clicks) > 0
+    or sum(cost) > 0
+    or sum(installs) > 0
+----
+creative_a 7

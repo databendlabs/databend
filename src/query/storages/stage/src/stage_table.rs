@@ -29,7 +29,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
@@ -120,9 +120,12 @@ impl StageTable {
             .into_iter()
             .filter(|f| f.size > 0)
             .map(|v| {
+                let content_key = v.etag.clone().or_else(|| v.md5.clone());
                 let part = SingleFilePartition {
                     path: v.path.clone(),
                     size: v.size as usize,
+                    content_key,
+                    last_modified: v.last_modified,
                 };
                 let part_info: Box<dyn PartInfo> = Box::new(part);
                 Arc::new(part_info)
@@ -148,7 +151,7 @@ impl Table for StageTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+        (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {

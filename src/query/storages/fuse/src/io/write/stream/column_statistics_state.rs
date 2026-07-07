@@ -76,7 +76,7 @@ impl ColumnStatisticsState {
                         &data_type,
                     );
                     if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
-                        estimator.update_scalar(&s.as_ref());
+                        estimator.update_scalar(&s.as_ref(), rows as u64);
                     }
                 }
                 Value::Column(col) => {

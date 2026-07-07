@@ -18,6 +18,7 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 use clap::ArgAction;
 use clap::Args;
@@ -35,7 +36,6 @@ use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
@@ -46,6 +46,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::EndpointUrlPolicy;
 use databend_common_storage::EndpointUrlPolicyConfig;
+use databend_common_storage::StagePathTraversalPolicy;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -90,6 +91,10 @@ pub struct TelemetryConfig {
 
 fn default_telemetry_enabled() -> bool {
     true
+}
+
+fn default_stage_path_traversal_policy() -> String {
+    "disable".to_string()
 }
 
 impl Default for TelemetryConfig {
@@ -405,6 +410,20 @@ pub struct StorageConfig {
     #[clap(long = "storage-disable-instance-profile")]
     pub disable_instance_profile: bool,
 
+    /// Controls whether stage paths containing parent directory components
+    /// (`../`) are allowed.
+    ///
+    /// `disable` rejects traversal paths for both read and write.
+    /// `enable` allows traversal paths for both read and write.
+    /// `readonly` allows reading existing traversal paths but rejects writes.
+    #[clap(
+        long = "storage-stage-path-traversal-policy",
+        value_name = "VALUE",
+        default_value = "disable"
+    )]
+    #[serde(default = "default_stage_path_traversal_policy")]
+    pub stage_path_traversal_policy: String,
+
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
 
@@ -472,6 +491,7 @@ pub enum EndpointUrlPolicyConfigValue {
     #[default]
     Permissive,
     Strict,
+    Allowlist,
 }
 
 impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
@@ -479,6 +499,7 @@ impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
         match value {
             EndpointUrlPolicyConfigValue::Permissive => EndpointUrlPolicy::Permissive,
             EndpointUrlPolicyConfigValue::Strict => EndpointUrlPolicy::Strict,
+            EndpointUrlPolicyConfigValue::Allowlist => EndpointUrlPolicy::Allowlist,
         }
     }
 }
@@ -488,6 +509,7 @@ impl From<&EndpointUrlPolicy> for EndpointUrlPolicyConfigValue {
         match value {
             EndpointUrlPolicy::Permissive => EndpointUrlPolicyConfigValue::Permissive,
             EndpointUrlPolicy::Strict => EndpointUrlPolicyConfigValue::Strict,
+            EndpointUrlPolicy::Allowlist => EndpointUrlPolicyConfigValue::Allowlist,
         }
     }
 }
@@ -505,6 +527,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             endpoint_url_blocked_cidrs: inner.endpoint_url_policy.blocked_cidrs,
             disable_config_load: inner.disable_config_load,
             disable_instance_profile: inner.disable_instance_profile,
+            stage_path_traversal_policy: inner.stage_path_traversal_policy.to_string(),
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -671,12 +694,15 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         }
 
         let storage_network_params = self.create_storage_network_params();
+        let stage_path_traversal_policy =
+            StagePathTraversalPolicy::from_str(&self.stage_path_traversal_policy)?;
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
             endpoint_url_policy: self.create_endpoint_url_policy_config(),
             disable_config_load: self.disable_config_load,
             disable_instance_profile: self.disable_instance_profile,
+            stage_path_traversal_policy,
             params: {
                 match self.typ.as_str() {
                     "azblob" => {
@@ -1368,42 +1394,6 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
             network_config: None,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct MokaStorageConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for MokaStorageConfig {
-    fn default() -> Self {
-        InnerStorageMokaConfig::default().into()
-    }
-}
-
-impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(v: InnerStorageMokaConfig) -> Self {
-        Self {
-            max_capacity: v.max_capacity,
-            time_to_live: v.time_to_live,
-            time_to_idle: v.time_to_idle,
-        }
-    }
-}
-
-impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig {
-            max_capacity: self.max_capacity,
-            time_to_live: self.time_to_live,
-            time_to_idle: self.time_to_idle,
         })
     }
 }

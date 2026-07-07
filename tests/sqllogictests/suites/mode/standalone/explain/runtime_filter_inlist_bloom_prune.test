@@ -64,7 +64,7 @@ HashJoin
 │       ├── read size: 1.06 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -83,7 +83,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -132,7 +132,7 @@ HashJoin
 │       ├── read size: 1.06 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -152,7 +152,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -211,7 +211,7 @@ HashJoin
 │       ├── read size: <slt:ignore>
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -231,10 +231,71 @@ HashJoin
     ├── read size: <slt:ignore>
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
+
+statement ok
+create or replace table test_nullable_build_token(s String) row_per_block = 1000 as
+select to_string(if(number < 10, number + 50000, number + 1000000)) as s from numbers(10000);
+
+statement ok
+create or replace table test_non_nullable_probe_token(s String not null) bloom_index_columns='s' bloom_index_type='binary_fuse32' row_per_block = 1000 as
+select to_string((number % 1000) * 100 + (number DIV 1000)) as s from numbers(100000);
+
+query I
+select count() from test_non_nullable_probe_token where s in (select s from test_nullable_build_token limit 10);
+----
+10
+
+query T
+EXPLAIN select * from test_non_nullable_probe_token where s in (select s from test_nullable_build_token limit 10);
+----
+HashJoin
+├── output columns: [test_non_nullable_probe_token.s (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [CAST(test_non_nullable_probe_token.s (#0) AS String NULL)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[CAST(test_non_nullable_probe_token.s (#0) AS String NULL)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 100000.00
+├── Limit(Build)
+│   ├── output columns: [test_nullable_build_token.s (#1)]
+│   ├── limit: 10
+│   ├── offset: 0
+│   ├── estimated rows: 10.00
+│   └── TableScan
+│       ├── table: default.default.test_nullable_build_token
+│       ├── scan id: 1
+│       ├── output columns: [s (#1)]
+│       ├── read rows: 1000
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 10
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: 10]
+│       └── estimated rows: 10000.00
+└── TableScan(Probe)
+    ├── table: default.default.test_non_nullable_probe_token
+    ├── scan id: 0
+    ├── output columns: [s (#0)]
+    ├── read rows: 100000
+    ├── read size: 98.68 KiB
+    ├── partitions total: 99
+    ├── partitions scanned: 99
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 100000.00
+
+statement ok
+drop table if exists test_nullable_build_token;
+
+statement ok
+drop table if exists test_non_nullable_probe_token;
 
 statement ok
 drop table if exists test_nullable_string_a;
@@ -328,7 +389,7 @@ HashJoin
 │   ├── read size: <slt:ignore>
 │   ├── partitions total: 3
 │   ├── partitions scanned: 3
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3000.00
 └── TableScan(Probe)
@@ -347,7 +408,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -385,7 +446,7 @@ HashJoin
 │   ├── read size: <slt:ignore>
 │   ├── partitions total: 3
 │   ├── partitions scanned: 3
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3000.00
 └── TableScan(Probe)
@@ -405,7 +466,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00

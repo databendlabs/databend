@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
 use databend_common_expression::types::number::NumberColumn;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -768,8 +767,7 @@ impl CompactSegmentTestFixture {
                         ..Default::default()
                     };
 
-                    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                    let col_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
+                    let (col_metas, buf) = serialize_block(&write_settings, &schema, block)?;
                     let file_size = buf.len() as u64;
 
                     data_accessor.write(&location.0, buf).await?;
@@ -1059,8 +1057,8 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         for chunks in segments.chunks_mut(chunk_size) {
             chunks.sort_by(|a, b| {
                 sort_by_cluster_stats(
-                    &a.summary.cluster_stats,
-                    &b.summary.cluster_stats,
+                    a.summary.cluster_stats.as_ref(),
+                    b.summary.cluster_stats.as_ref(),
                     cluster_key_id,
                 )
             });

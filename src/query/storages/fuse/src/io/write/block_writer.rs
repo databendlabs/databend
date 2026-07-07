@@ -28,7 +28,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
@@ -45,6 +44,7 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_mil
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -55,6 +55,7 @@ use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -78,9 +79,8 @@ pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
-    buf: &mut Vec<u8>,
-) -> Result<HashMap<ColumnId, ColumnMeta>> {
-    serialize_block_with_column_stats(write_settings, schema, None, block, buf)
+) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
+    serialize_block_with_column_stats(write_settings, schema, None, block)
 }
 
 pub fn serialize_block_with_column_stats(
@@ -88,15 +88,13 @@ pub fn serialize_block_with_column_stats(
     schema: &TableSchemaRef,
     column_stats: Option<&StatisticsOfColumns>,
     block: DataBlock,
-    buf: &mut Vec<u8>,
-) -> Result<HashMap<ColumnId, ColumnMeta>> {
+) -> Result<(HashMap<ColumnId, ColumnMeta>, Buffer)> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = blocks_to_parquet_with_stats(
+            let SerializedParquet { payload, metadata } = blocks_to_parquet_with_stats(
                 &schema,
                 vec![block],
-                buf,
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
                 None,
@@ -104,16 +102,21 @@ pub fn serialize_block_with_column_stats(
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
             )?;
-            let meta = column_parquet_metas(&result, &schema)?;
-            Ok(meta)
+            let meta = column_parquet_metas(&metadata, &schema)?;
+            Ok((meta, Buffer::from(payload)))
         }
         FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
     }
 }
 
-/// Take ownership here to avoid extra copy.
+/// Take ownership here to avoid extra copy. Accepts anything convertible to an opendal
+/// `Buffer`, including a multi-chunk `Buffer` that is written out without consolidation.
 #[async_backtrace::framed]
-pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
+pub async fn write_data(
+    data: impl Into<Buffer>,
+    data_accessor: &Operator,
+    location: &str,
+) -> Result<()> {
     data_accessor.write(location, data).await?;
 
     Ok(())
@@ -121,7 +124,7 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
 
 #[derive(Debug)]
 pub struct BlockSerialization {
-    pub block_raw_data: Vec<u8>,
+    pub block_raw_data: Buffer,
     pub block_meta: BlockMeta,
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
@@ -199,14 +202,19 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
-        let vector_index_state = if let Some(ref vector_index_builder) = self.vector_index_builder {
+        let (vector_index_state, vector_stats) = if let Some(ref vector_index_builder) =
+            self.vector_index_builder
+        {
             let vector_index_location = self.meta_locations.block_vector_index_location();
             let mut vector_index_builder = vector_index_builder.clone();
             vector_index_builder.add_block(&data_block)?;
-            let vector_index_state = vector_index_builder.finalize(&vector_index_location)?;
-            Some(vector_index_state)
+            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
+            (
+                vector_index_state.index_state,
+                vector_index_state.vector_stats,
+            )
         } else {
-            None
+            (None, None)
         };
 
         let (spatial_index_state, spatial_stats) =
@@ -239,14 +247,12 @@ impl BlockBuilder {
             &self.write_settings.col_stats_truncate_lens,
         )?;
 
-        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
-        let col_metas = serialize_block_with_column_stats(
+        let (col_metas, buffer) = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,
             Some(&col_stats),
             data_block,
-            &mut buffer,
         )?;
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
@@ -277,6 +283,7 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
+            vector_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -346,7 +353,7 @@ impl BlockWriter {
 
     pub async fn write_down_data_block(
         dal: &Operator,
-        raw_block_data: Vec<u8>,
+        raw_block_data: Buffer,
         block_location: &str,
     ) -> Result<()> {
         let start = Instant::now();

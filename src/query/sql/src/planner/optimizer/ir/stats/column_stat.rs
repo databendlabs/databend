@@ -22,10 +22,14 @@ use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 
 use crate::Symbol;
 
 pub type ColumnStatSet = HashMap<Symbol, ColumnStat>;
+pub type TopNSet = HashMap<Symbol, ColumnTopN>;
+pub type CountMinSketchSet = HashMap<Symbol, ColumnCountMinSketch>;
 
 #[derive(Debug, Clone)]
 /// Statistics information of a column

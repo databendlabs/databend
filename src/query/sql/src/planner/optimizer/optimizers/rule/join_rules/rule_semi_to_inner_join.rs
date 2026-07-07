@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -62,25 +61,23 @@ impl Rule for RuleSemiToInnerJoin {
             return Ok(());
         }
 
-        let conditions = if join.join_type == JoinType::LeftSemi {
-            join.equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect::<Vec<_>>()
-        } else {
-            join.equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect::<Vec<_>>()
-        };
-
-        if conditions.is_empty() {
+        if join.equi_conditions.is_empty() {
             return Ok(());
         }
 
-        let mut condition_cols = HashSet::with_capacity(conditions.len());
-        for condition in conditions.iter() {
-            add_column_idx(condition, &mut condition_cols);
+        let build_join_keys = join.equi_conditions.iter().map(|condition| {
+            if join.join_type == JoinType::LeftSemi {
+                &condition.right
+            } else {
+                &condition.left
+            }
+        });
+
+        let mut build_join_key_cols = HashSet::with_capacity(join.equi_conditions.len());
+        for key in build_join_keys {
+            if let Some(column) = join_key_column(key) {
+                build_join_key_cols.insert(column);
+            }
         }
 
         let child = if join.join_type == JoinType::LeftSemi {
@@ -89,21 +86,20 @@ impl Rule for RuleSemiToInnerJoin {
             s_expr.child(0)?
         };
 
-        // Traverse child to find join keys in group by keys
-        let mut group_by_keys = HashMap::new();
-        find_group_by_keys(child, &mut group_by_keys)?;
-
-        // If condition are all group by keys and not nullable
+        // If group by keys are all condition keys and not nullable
         // we can rewrite semi join to inner join
         // inner join will ignore null values but semi join will keep them
         // this happens in Q38
-        if condition_cols.iter().all(|condition| {
-            if let Some(t) = group_by_keys.get(condition) {
-                !t.is_nullable_or_null()
-            } else {
-                false
+        let mut has_group_by_keys = false;
+        let mut can_rewrite = true;
+        visit_group_by_keys(child, &mut |key, data_type| {
+            has_group_by_keys = true;
+            if !build_join_key_cols.contains(&key) || data_type.is_nullable_or_null() {
+                can_rewrite = false;
             }
-        }) {
+        })?;
+
+        if has_group_by_keys && can_rewrite {
             join.join_type = JoinType::Inner;
             let mut join_expr = SExpr::create_binary(
                 Arc::new(join.into()),
@@ -121,22 +117,17 @@ impl Rule for RuleSemiToInnerJoin {
     }
 }
 
-fn find_group_by_keys(
-    child: &SExpr,
-    group_by_keys: &mut HashMap<Symbol, Box<DataType>>,
-) -> Result<()> {
+fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, DataType)) -> Result<()> {
     match child.plan() {
         RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)
         | RelOperator::Window(_)
         | RelOperator::WindowGroup(_) => {
-            find_group_by_keys(child.child(0)?, group_by_keys)?;
+            visit_group_by_keys(child.child(0)?, visitor)?;
         }
         RelOperator::Aggregate(agg) => {
             for item in agg.group_items.iter() {
-                if let ScalarExpr::BoundColumnRef(c) = &item.scalar {
-                    group_by_keys.insert(c.column.index, c.column.data_type.clone());
-                }
+                visitor(item.index, item.scalar.data_type()?);
             }
         }
         RelOperator::Sort(_)
@@ -163,15 +154,11 @@ fn find_group_by_keys(
     Ok(())
 }
 
-fn add_column_idx(condition: &ScalarExpr, condition_cols: &mut HashSet<Symbol>) {
+fn join_key_column(condition: &ScalarExpr) -> Option<Symbol> {
     match condition {
-        ScalarExpr::BoundColumnRef(c) => {
-            condition_cols.insert(c.column.index);
-        }
-        ScalarExpr::CastExpr(expr) => {
-            add_column_idx(&expr.argument, condition_cols);
-        }
-        _ => {}
+        ScalarExpr::BoundColumnRef(c) => Some(c.column.index),
+        ScalarExpr::CastExpr(expr) if !expr.is_try => join_key_column(&expr.argument),
+        _ => None,
     }
 }
 

@@ -483,7 +483,6 @@ impl Binder {
                 is_select: false,
                 default_exprs: Some(default_values),
                 copy_into_table_options,
-                stage_root: "".to_string(),
                 is_variant: false,
                 ..Default::default()
             },

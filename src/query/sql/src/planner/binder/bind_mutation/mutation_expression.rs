@@ -329,6 +329,7 @@ impl MutationExpression {
                             is_lateral: false,
                             single_to_inner: None,
                             build_side_cache_info: None,
+                            spatial_join: None,
                         };
                         s_expr = SExpr::create_binary(
                             Arc::new(join_plan.into()),

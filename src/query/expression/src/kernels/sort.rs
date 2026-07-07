@@ -110,15 +110,19 @@ impl DataBlock {
     }
 }
 
-pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Result<Vec<u32>> {
+/// Sort scalar rows without taking ownership of the row values.
+pub fn compare_scalars<T: AsRef<[Scalar]>>(
+    rows: &[T],
+    data_types: &[DataType],
+) -> Result<Vec<u32>> {
     let length = rows.len();
     let mut columns = data_types
         .iter()
         .map(|ty| ColumnBuilder::with_capacity(ty, length))
         .collect::<Vec<_>>();
 
-    for row in rows.into_iter() {
-        for (field, column) in row.into_iter().zip(columns.iter_mut()) {
+    for row in rows {
+        for (field, column) in row.as_ref().iter().zip(columns.iter_mut()) {
             column.push(field.as_ref());
         }
     }

@@ -97,7 +97,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
@@ -117,7 +117,7 @@ HashJoin
     ├── read size: <slt:ignore>
     ├── partitions total: 10
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [rf_min_max_probe.tag (#1) = 'keep'], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 10000.00
@@ -173,7 +173,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
 └── TableScan(Probe)
@@ -193,7 +193,7 @@ HashJoin
     ├── read size: <slt:ignore>
     ├── partitions total: 10
     ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
     ├── push downs: [filters: [rf_min_max_probe.tag (#1) = 'keep'], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 10000.00

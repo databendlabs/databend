@@ -68,6 +68,7 @@ impl FuseTable {
                     conflict_resolve_context: ConflictResolveContext::None,
                     new_segment_locs: vec![],
                     table_id: self.get_id(),
+                    insert_rows: 0,
                     virtual_schema: None,
                     virtual_schema_mode: VirtualSchemaMode::Merge,
                     hll: HashMap::new(),

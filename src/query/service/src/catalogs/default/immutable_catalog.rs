@@ -24,6 +24,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -41,6 +42,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -92,8 +94,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -197,7 +197,18 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        if !req.override_existing
+            && self
+                .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
+                .await?
+        {
+            return Ok(CreateDatabaseReply {
+                db_id: DatabaseId::new(0),
+                created: false,
+            });
+        }
+
         Err(ErrorCode::Unimplemented("Cannot create system database"))
     }
 
@@ -595,11 +606,6 @@ impl Catalog for ImmutableCatalog {
     /// Dictionary
     #[async_backtrace::framed]
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
         unimplemented!()
     }
 

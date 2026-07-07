@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
-use databend_common_meta_api::name_id_value_api::CreateIdValueMode;
 use databend_common_meta_api::name_id_value_api::CreateIdValueResult;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::principal::CreateProcedureReply;
@@ -77,12 +77,7 @@ impl ProcedureMgr {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let name_ident = &req.name_ident;
         let meta = &req.meta;
-        let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
-        let create_mode = if overriding {
-            CreateIdValueMode::CreateOrReplace
-        } else {
-            CreateIdValueMode::CreateOnly
-        };
+        let name_ident_raw = serialize_struct(name_ident.procedure_name());
 
         let tenant = &self.tenant;
         let create_res = self
@@ -90,7 +85,7 @@ impl ProcedureMgr {
             .create_id_value(
                 name_ident,
                 meta,
-                create_mode,
+                overriding,
                 |id| {
                     vec![(
                         ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)

@@ -64,13 +64,17 @@ impl SegmentPruner {
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
 
         for segment_location in segment_locs {
-            let info = T::SegmentReader::read_compact_segment_through_cache(
-                self.pruning_ctx.dal.clone(),
-                segment_location.location.clone(),
-                &self.projection,
-                self.table_schema.clone(),
-            )
-            .await?;
+            let info = pruning_cost
+                .measure_async(
+                    PruningCostKind::SegmentsRead,
+                    T::SegmentReader::read_compact_segment_through_cache(
+                        self.pruning_ctx.dal.clone(),
+                        segment_location.location.clone(),
+                        &self.projection,
+                        self.table_schema.clone(),
+                    ),
+                )
+                .await?;
 
             let total_bytes = info.summary().uncompressed_byte_size;
             // Perf.

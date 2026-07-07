@@ -36,5 +36,9 @@ tonic_013 = { package = "tonic", version = "0.13.1" }
 uuid = { workspace = true }
 zstd = { workspace = true }
 
+[dev-dependencies]
+databend-common-meta-store = { workspace = true }
+databend-meta-runtime = { workspace = true }
+
 [lints]
 workspace = true

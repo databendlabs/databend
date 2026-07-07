@@ -34,7 +34,6 @@ use databend_common_sql::plans::ScalarExpr;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
-use super::types::SpatialRuntimeFilterMode;
 use crate::sessions::TableContext;
 
 /// Type alias for probe keys with runtime filter information
@@ -94,7 +93,6 @@ pub async fn build_runtime_filter(
     build_keys: &[RemoteExpr],
     probe_keys: ProbeKeysWithRuntimeFilter,
     build_table_indexes: Vec<Option<IndexType>>,
-    spatial_modes: Vec<Option<SpatialRuntimeFilterMode>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
         return Ok(Default::default());
@@ -131,13 +129,11 @@ pub async fn build_runtime_filter(
         column_idx,
         is_null_equal,
         build_table_index,
-        spatial_mode,
     ) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
-        .zip(spatial_modes.into_iter())
-        .filter_map(|(((b, p), table_idx), spatial_mode)| {
+        .filter_map(|((b, p), table_idx)| {
             p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
                 (
                     b,
@@ -147,21 +143,12 @@ pub async fn build_runtime_filter(
                     column_idx,
                     is_null_equal,
                     table_idx,
-                    spatial_mode,
                 )
             })
         })
     {
-        // Skip if the probe expression is neither a direct column reference nor a
-        // cast from not null to nullable type (e.g. CAST(col AS Nullable(T))).
-        match &probe_key {
-            RemoteExpr::ColumnRef { .. } => {}
-            RemoteExpr::Cast {
-                expr: box RemoteExpr::ColumnRef { data_type, .. },
-                dest_type,
-                ..
-            } if &dest_type.remove_nullable() == data_type => {}
-            _ => continue,
+        if !supported_probe_key_for_runtime_filter(&probe_key) {
+            continue;
         }
 
         let probe_targets =
@@ -182,7 +169,7 @@ pub async fn build_runtime_filter(
         let enable_min_max_runtime_filter =
             !is_null_equal && is_type_supported_for_min_max_filter(&data_type);
 
-        let enable_inlist_runtime_filter = !is_null_equal && spatial_mode.is_none();
+        let enable_inlist_runtime_filter = !is_null_equal;
 
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
@@ -193,7 +180,6 @@ pub async fn build_runtime_filter(
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
-            spatial_mode,
         };
         filters.push(runtime_filter);
     }
@@ -277,28 +263,64 @@ fn scalar_to_remote_expr(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
 ) -> Result<Option<(RemoteExpr<String>, usize, Symbol)>> {
-    if scalar.used_columns().iter().all(|idx| {
-        matches!(
-            metadata.read().column(*idx),
-            ColumnEntry::BaseTableColumn(_)
-        )
-    }) {
-        if let Some(column_idx) = scalar.used_columns().iter().next() {
-            let scan_id = metadata.read().base_column_scan_id(*column_idx);
+    let used_columns = scalar.used_columns();
+    if used_columns.len() != 1 {
+        return Ok(None);
+    }
 
-            if let Some(scan_id) = scan_id {
-                let remote_expr = scalar
-                    .as_raw_expr()
-                    .type_check(&*metadata.read())?
-                    .project_column_ref(|col| Ok(col.column_name.clone()))?
-                    .as_remote_expr();
+    let column_idx = *used_columns.iter().next().unwrap();
+    if !matches!(
+        metadata.read().column(column_idx),
+        ColumnEntry::BaseTableColumn(_)
+    ) {
+        return Ok(None);
+    }
 
-                return Ok(Some((remote_expr, scan_id, *column_idx)));
-            }
-        }
+    let Some(scan_id) = metadata.read().base_column_scan_id(column_idx) else {
+        return Ok(None);
+    };
+
+    let remote_expr = {
+        let md = metadata.read();
+        scalar
+            .as_raw_expr()
+            .type_check(&*md)?
+            .project_column_ref(|col| {
+                let entry = md.column(col.index);
+                if let ColumnEntry::BaseTableColumn(base_col) = entry {
+                    if base_col.path_indices.is_none() {
+                        let table = md.table(base_col.table_index);
+                        let schema = table.table().schema_with_stream();
+                        if let Ok(field) = schema.field_of_column_id(base_col.column_id) {
+                            return Ok(field.name().clone());
+                        }
+                    }
+                    return Ok(base_col.column_name.clone());
+                }
+                Ok(col.column_name.clone())
+            })?
+            .as_remote_expr()
+    };
+
+    if supported_probe_key_for_runtime_filter(&remote_expr) {
+        return Ok(Some((remote_expr, scan_id, column_idx)));
     }
 
     Ok(None)
+}
+
+fn supported_probe_key_for_runtime_filter(probe_key: &RemoteExpr<String>) -> bool {
+    match probe_key {
+        RemoteExpr::ColumnRef { .. } => true,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T)).
+        RemoteExpr::Cast {
+            expr, dest_type, ..
+        } => matches!(
+            expr.as_ref(),
+            RemoteExpr::ColumnRef { data_type, .. } if &dest_type.remove_nullable() == data_type
+        ),
+        _ => false,
+    }
 }
 
 struct UnionFind {

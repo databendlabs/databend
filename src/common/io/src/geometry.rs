@@ -39,6 +39,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
 
+pub const UNKNOWN_SRID: i32 = 0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum GeometryDataType {
     WKB,
@@ -191,7 +193,7 @@ pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
 
 pub fn geometry_format(ewkb: &[u8], format_type: GeometryDataType) -> Result<String> {
     let (geo, srid) = ewkb_to_geo(&mut Ewkb(ewkb))?;
-    let srid = srid.unwrap_or(0);
+    let srid = srid.unwrap_or(UNKNOWN_SRID);
     match format_type {
         GeometryDataType::WKB => geo_to_wkb(geo).map(encode_upper),
         GeometryDataType::EWKB => geo_to_ewkb(geo, Some(srid)).map(encode_upper),

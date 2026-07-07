@@ -93,6 +93,7 @@ struct RoutingCandidate {
     target: String,
     table: Arc<dyn Table>,
     statistics: PartStatistics,
+    route_score: StatisticsRouteScore,
     reusable_pruned_metas: Option<ReusablePrunedMetas>,
 }
 
@@ -107,6 +108,14 @@ struct PrefixRouteScore {
     matched_prefix: usize,
     equality_prefix: usize,
 }
+
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+struct StatisticsRouteScore {
+    prefix: PrefixRouteScore,
+    cluster_key_len: usize,
+}
+
+const STATISTICS_PREFIX_COST_TOLERANCE: usize = 4;
 
 #[derive(Default)]
 struct PredicateColumns {
@@ -193,10 +202,11 @@ impl ProxyTable {
 
         let mut selected: Option<RoutingCandidate> = None;
         let mut default_candidate: Option<RoutingCandidate> = None;
+        let predicate_columns = predicate_columns(&push_downs);
 
         for target in &self.targets {
             let Some(candidate) = self
-                .estimate_target(ctx.clone(), target, push_downs.clone())
+                .estimate_target(ctx.clone(), target, push_downs.clone(), &predicate_columns)
                 .await?
             else {
                 continue;
@@ -207,13 +217,15 @@ impl ProxyTable {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
+                    route_score: candidate.route_score,
                     reusable_pruned_metas: candidate.reusable_pruned_metas.clone(),
                 });
             }
 
-            if selected.as_ref().is_none_or(|selected| {
-                statistics_cost(&candidate.statistics) < statistics_cost(&selected.statistics)
-            }) {
+            if selected
+                .as_ref()
+                .is_none_or(|selected| is_better_statistics_candidate(&candidate, selected))
+            {
                 selected = Some(candidate);
             }
         }
@@ -223,6 +235,7 @@ impl ProxyTable {
         if let Some(default_candidate) = default_candidate {
             if statistics_cost(&default_candidate.statistics)
                 == statistics_cost(&selected.statistics)
+                && default_candidate.route_score == selected.route_score
             {
                 return self
                     .read_target_partitions_from_table(
@@ -349,10 +362,12 @@ impl ProxyTable {
         ctx: Arc<dyn TableContext>,
         target: &str,
         push_downs: Option<PushDownInfo>,
+        predicate_columns: &PredicateColumns,
     ) -> Result<Option<RoutingCandidate>> {
         let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
             return Ok(None);
         };
+        let route_score = statistics_route_score(table.as_ref(), predicate_columns);
         let candidate = self
             .read_target_partitions_from_table(
                 ctx,
@@ -367,6 +382,7 @@ impl ProxyTable {
             target: candidate.target,
             table: candidate.table,
             statistics: candidate.statistics,
+            route_score,
             reusable_pruned_metas: candidate.reusable_pruned_metas,
         }))
     }
@@ -1007,21 +1023,22 @@ fn cluster_prefix_score(
     table: &dyn Table,
     predicate_columns: &PredicateColumns,
 ) -> PrefixRouteScore {
-    cluster_prefix_score_for_columns(cluster_key_columns(table), predicate_columns)
+    cluster_prefix_score_for_columns(&cluster_key_columns(table), predicate_columns)
 }
 
-fn cluster_prefix_score_for_columns(
-    cluster_key_columns: Vec<String>,
+fn cluster_prefix_score_for_columns<S: AsRef<str>>(
+    cluster_key_columns: &[S],
     predicate_columns: &PredicateColumns,
 ) -> PrefixRouteScore {
     let mut score = PrefixRouteScore::default();
     for column in cluster_key_columns {
-        if predicate_columns.equality.contains(&column) {
+        let column = column.as_ref();
+        if predicate_columns.equality.contains(column) {
             score.matched_prefix += 1;
             score.equality_prefix += 1;
             continue;
         }
-        if predicate_columns.range.contains(&column) {
+        if predicate_columns.range.contains(column) {
             score.matched_prefix += 1;
         }
         break;
@@ -1048,12 +1065,82 @@ fn simple_cluster_key_column(expr: &ast::Expr) -> Option<String> {
     }
 }
 
-fn statistics_cost(statistics: &PartStatistics) -> (usize, usize, usize) {
-    (
-        statistics.partitions_scanned,
-        statistics.read_rows,
-        statistics.read_bytes,
+fn statistics_cost(statistics: &PartStatistics) -> (usize, usize) {
+    (statistics.partitions_scanned, statistics.read_rows)
+}
+
+fn statistics_route_score(
+    table: &dyn Table,
+    predicate_columns: &PredicateColumns,
+) -> StatisticsRouteScore {
+    statistics_route_score_for_columns(&cluster_key_columns(table), predicate_columns)
+}
+
+fn statistics_route_score_for_columns<S: AsRef<str>>(
+    cluster_key_columns: &[S],
+    predicate_columns: &PredicateColumns,
+) -> StatisticsRouteScore {
+    let prefix = cluster_prefix_score_for_columns(cluster_key_columns, predicate_columns);
+    StatisticsRouteScore {
+        prefix,
+        cluster_key_len: if prefix.matched_prefix > 0 {
+            cluster_key_columns.len()
+        } else {
+            0
+        },
+    }
+}
+
+fn is_better_statistics_candidate(
+    candidate: &RoutingCandidate,
+    selected: &RoutingCandidate,
+) -> bool {
+    is_better_statistics_route(
+        &candidate.statistics,
+        candidate.route_score,
+        &selected.statistics,
+        selected.route_score,
     )
+}
+
+#[inline]
+fn is_better_statistics_route(
+    candidate_statistics: &PartStatistics,
+    candidate_score: StatisticsRouteScore,
+    selected_statistics: &PartStatistics,
+    selected_score: StatisticsRouteScore,
+) -> bool {
+    let candidate_cost = statistics_cost(candidate_statistics);
+    let selected_cost = statistics_cost(selected_statistics);
+    if candidate_score.prefix > selected_score.prefix
+        && cost_within_prefix_tolerance(candidate_cost, selected_cost)
+    {
+        return true;
+    }
+    if selected_score.prefix > candidate_score.prefix
+        && cost_within_prefix_tolerance(selected_cost, candidate_cost)
+    {
+        return false;
+    }
+    candidate_cost < selected_cost
+        || (candidate_cost == selected_cost && candidate_score > selected_score)
+}
+
+fn cost_within_prefix_tolerance(
+    candidate_cost: (usize, usize),
+    selected_cost: (usize, usize),
+) -> bool {
+    if selected_cost.0 == 0 || selected_cost.1 == 0 {
+        return candidate_cost == selected_cost;
+    }
+    candidate_cost.0 <= tolerated_cost(selected_cost.0)
+        && candidate_cost.1 <= tolerated_cost(selected_cost.1)
+}
+
+fn tolerated_cost(value: usize) -> usize {
+    value
+        .saturating_mul(STATISTICS_PREFIX_COST_TOLERANCE)
+        .max(value.saturating_add(STATISTICS_PREFIX_COST_TOLERANCE))
 }
 
 fn database_from_desc(desc: &str) -> Option<String> {
@@ -1128,6 +1215,162 @@ mod tests {
             String::new(),
             id.to_string(),
         ))
+    }
+
+    #[test]
+    fn test_statistics_cost_ignores_read_bytes() {
+        let small_file = PartStatistics::new_exact(100, 10, 2, 10);
+        let large_file = PartStatistics::new_exact(100, 1000, 2, 10);
+
+        assert_eq!(statistics_cost(&small_file), statistics_cost(&large_file));
+    }
+
+    #[test]
+    fn test_statistics_route_prefers_much_lower_cost_before_cluster_score() {
+        let lower_cost = PartStatistics::new_exact(100, 10, 2, 10);
+        let higher_cost = PartStatistics::new_exact(1000, 10, 20, 20);
+        let weak_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            },
+            cluster_key_len: 1,
+        };
+        let strong_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 3,
+                equality_prefix: 3,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(is_better_statistics_route(
+            &lower_cost,
+            weak_score,
+            &higher_cost,
+            strong_score
+        ));
+        assert!(!is_better_statistics_route(
+            &higher_cost,
+            strong_score,
+            &lower_cost,
+            weak_score
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_prefers_stronger_prefix_when_cost_is_close() {
+        let weak_cost = PartStatistics::new_exact(708, 10, 3, 10);
+        let strong_cost = PartStatistics::new_exact(267, 10, 4, 10);
+        let weak_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            },
+            cluster_key_len: 1,
+        };
+        let strong_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 3,
+                equality_prefix: 3,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(is_better_statistics_route(
+            &strong_cost,
+            strong_score,
+            &weak_cost,
+            weak_score
+        ));
+        assert!(!is_better_statistics_route(
+            &weak_cost,
+            weak_score,
+            &strong_cost,
+            strong_score
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_does_not_override_zero_cost() {
+        let zero_cost = PartStatistics::new_exact(0, 0, 0, 10);
+        let non_zero_cost = PartStatistics::new_exact(1, 10, 1, 10);
+        let weak_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            },
+            cluster_key_len: 1,
+        };
+        let strong_score = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 3,
+                equality_prefix: 3,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(!is_better_statistics_route(
+            &non_zero_cost,
+            strong_score,
+            &zero_cost,
+            weak_score
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_breaks_cost_ties_with_cluster_score() {
+        let cost = PartStatistics::new_exact(100, 10, 2, 10);
+        let trace_chat = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 2,
+                equality_prefix: 2,
+            },
+            cluster_key_len: 2,
+        };
+        let trace_chat_user = StatisticsRouteScore {
+            prefix: PrefixRouteScore {
+                matched_prefix: 2,
+                equality_prefix: 2,
+            },
+            cluster_key_len: 3,
+        };
+
+        assert!(is_better_statistics_route(
+            &cost,
+            trace_chat_user,
+            &cost,
+            trace_chat
+        ));
+        assert!(!is_better_statistics_route(
+            &cost,
+            trace_chat,
+            &cost,
+            trace_chat_user
+        ));
+    }
+
+    #[test]
+    fn test_statistics_route_ignores_cluster_len_without_prefix_match() {
+        let mut columns = PredicateColumns::default();
+        columns.equality.insert("span_id".to_string());
+        let trace = statistics_route_score_for_columns(&["trace_id"], &columns);
+        let trace_chat_user =
+            statistics_route_score_for_columns(&["trace_id", "chat_id", "user_id"], &columns);
+
+        assert_eq!(trace.prefix, PrefixRouteScore::default());
+        assert_eq!(trace_chat_user.prefix, PrefixRouteScore::default());
+        assert_eq!(trace.cluster_key_len, 0);
+        assert_eq!(trace_chat_user.cluster_key_len, 0);
+        assert_eq!(trace, trace_chat_user);
+
+        let cost = PartStatistics::new_exact(100, 10, 2, 10);
+        assert!(!is_better_statistics_route(
+            &cost,
+            trace_chat_user,
+            &cost,
+            trace
+        ));
     }
 
     #[test]
@@ -1244,28 +1487,16 @@ mod tests {
         columns.range.insert("chat_id".to_string());
         columns.equality.insert("user_id".to_string());
 
-        let trace_chat_user = cluster_prefix_score_for_columns(
-            vec![
-                "trace_id".to_string(),
-                "chat_id".to_string(),
-                "user_id".to_string(),
-            ],
-            &columns,
-        );
+        let trace_chat_user =
+            cluster_prefix_score_for_columns(&["trace_id", "chat_id", "user_id"], &columns);
         assert_eq!(trace_chat_user.matched_prefix, 2);
         assert_eq!(trace_chat_user.equality_prefix, 1);
 
-        let chat_trace = cluster_prefix_score_for_columns(
-            vec!["chat_id".to_string(), "trace_id".to_string()],
-            &columns,
-        );
+        let chat_trace = cluster_prefix_score_for_columns(&["chat_id", "trace_id"], &columns);
         assert_eq!(chat_trace.matched_prefix, 1);
         assert_eq!(chat_trace.equality_prefix, 0);
 
-        let user_trace = cluster_prefix_score_for_columns(
-            vec!["user_id".to_string(), "trace_id".to_string()],
-            &columns,
-        );
+        let user_trace = cluster_prefix_score_for_columns(&["user_id", "trace_id"], &columns);
         assert_eq!(user_trace.matched_prefix, 2);
         assert_eq!(user_trace.equality_prefix, 2);
         assert!(user_trace > trace_chat_user);

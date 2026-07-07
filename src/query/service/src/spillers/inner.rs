@@ -155,7 +155,7 @@ impl<A> SpillerInner<A> {
 
         // Spill data to storage.
         let mut encoder = self.block_encoder();
-        encoder.add_blocks(data_block);
+        encoder.add_blocks(data_block)?;
         let data_size = encoder.size();
         let BlocksEncoder {
             buf,

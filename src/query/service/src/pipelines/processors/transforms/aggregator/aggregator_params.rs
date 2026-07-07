@@ -40,9 +40,6 @@ pub struct AggregatorParams {
     pub states_layout: Option<StatesLayout>,
 
     pub cluster_aggregator: bool,
-    pub max_spill_io_requests: usize,
-
-    pub enable_experiment_aggregate: bool,
 
     pub max_block_rows: usize,
     pub max_block_bytes: usize,
@@ -57,8 +54,6 @@ impl AggregatorParams {
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
         cluster_aggregator: bool,
-        max_spill_io_requests: usize,
-        enable_experiment_aggregate: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -78,8 +73,6 @@ impl AggregatorParams {
             cluster_aggregator,
             max_block_rows,
             max_block_bytes,
-            max_spill_io_requests,
-            enable_experiment_aggregate,
         }))
     }
 

@@ -714,6 +714,8 @@ mod tests {
                     })),
                 }),
             ]),
+            top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
 
         JoinKeyStatUpdate::finish_join_histograms(&mut statistics, Symbol::new(0), true)?;
@@ -758,6 +760,8 @@ mod tests {
                     })),
                 }),
             ]),
+            top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut statistics = original_statistics.clone();
         let join_stat = statistics.column_stats.get_mut(&Symbol::new(0)).unwrap();

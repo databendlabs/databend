@@ -226,9 +226,8 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
 
     let write_settings = WriteSettings::default();
     let compression: Compression = write_settings.table_compression.into();
-    let mut buf = Vec::new();
-    let column_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
-    let parquet_bytes = bytes::Bytes::from(buf);
+    let (column_metas, buf) = serialize_block(&write_settings, &schema, block)?;
+    let parquet_bytes = buf.to_bytes();
 
     // Create operator (memory-based for testing)
     let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
@@ -331,13 +330,10 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         location: "test_block".to_string(),
         bloom_filter_index_location: None,
         bloom_filter_index_size: 0,
-        spatial_index_location: None,
-        spatial_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
         columns_meta: column_metas.clone(),
         columns_stat: None,
-        spatial_stats: None,
         compression,
         sort_min_max: None,
         block_meta_index: None,
@@ -361,7 +357,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     column_name: "y".to_string(),
                     filter: Arc::new(bloom_y),
                 }),
-                spatial: None,
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,
@@ -381,7 +376,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     column_name: "d".to_string(),
                     filter: Arc::new(bloom_d),
                 }),
-                spatial: None,
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,

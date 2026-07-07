@@ -24,7 +24,6 @@ use crate::output_format::CSVOutputFormat;
 use crate::output_format::JSONOutputFormat;
 use crate::output_format::NDJSONOutputFormatBase;
 use crate::output_format::OutputFormat;
-use crate::output_format::ParquetOutputFormat;
 use crate::output_format::TEXTOutputFormat;
 
 pub trait FileFormatTypeExt {
@@ -89,7 +88,6 @@ pub fn get_output_format(
                 )),
             }
         }
-        FileFormatParams::Parquet(_) => Box::new(ParquetOutputFormat::create(schema)),
         FileFormatParams::Json(_) => Box::new(JSONOutputFormat::create(schema, settings)),
         others => {
             return Err(ErrorCode::InvalidArgument(format!(

@@ -1240,7 +1240,7 @@ mod tests {
 
     fn encode_pb<T>(value: &T) -> Vec<u8>
     where T: FromToProto {
-        kv_pb_api::encode_pb(value).unwrap()
+        kv_pb_api::encode_pb(value)
     }
 
     fn filter(input: Vec<String>, tenant: &str) -> anyhow::Result<(TenantFilterReport, String)> {

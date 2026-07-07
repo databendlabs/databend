@@ -1,0 +1,135 @@
+statement ok
+drop table if exists avro_unload_t
+
+statement ok
+drop table if exists avro_unload_types_t
+
+statement ok
+create table avro_unload_t(a int, b string, c boolean, d tuple(int, string))
+
+statement ok
+remove @data/avro/unload/output_format
+
+statement ok
+copy into @data/avro/unload/output_format/ from (
+    select 1 as a, 'x' as b, true as c, (10, 'vx') as d
+    union all
+    select 2 as a, 'y' as b, false as c, (20, 'vy') as d
+) file_format = (type = avro)
+
+statement ok
+copy into avro_unload_t from @data/avro/unload/output_format file_format = (type = avro)
+
+query ITB?
+select * from avro_unload_t order by a
+----
+1 x 1 (10,"vx")
+2 y 0 (20,"vy")
+
+statement ok
+drop table avro_unload_t
+
+statement ok
+create table avro_unload_types_t(
+    u8 uint8,
+    u16 uint16,
+    u32 uint32,
+    u64 uint64,
+    i8 int8,
+    i16 int16,
+    i32 int32,
+    i64 int64,
+    f32 float32,
+    f64 float64,
+    d date,
+    dec decimal(10, 2),
+    arr array(int32),
+    m map(string, int32),
+    iv interval,
+    vec vector(3),
+    n int32 null
+)
+
+statement ok
+remove @data/avro/unload/types
+
+statement ok
+copy into @data/avro/unload/types/ from (
+    select
+        255::uint8 as u8,
+        65535::uint16 as u16,
+        '4294967295'::uint32 as u32,
+        '9223372036854775807'::uint64 as u64,
+        '-128'::int8 as i8,
+        '-32768'::int16 as i16,
+        '-2147483648'::int32 as i32,
+        '-9223372036854775808'::int64 as i64,
+        3.5::float32 as f32,
+        -7.25::float64 as f64,
+        '2024-01-02'::date as d,
+        12345.67::decimal(10, 2) as dec,
+        [1, 2, 3]::array(int32) as arr,
+        {'a': 10, 'b': 20}::map(string, int32) as m,
+        to_interval('1 month 2 days 3 seconds') as iv,
+        [1.0, 2.0, 3.0]::vector(3) as vec,
+        null::int32 as n
+) file_format = (type = avro)
+
+statement ok
+copy into avro_unload_types_t from @data/avro/unload/types file_format = (type = avro)
+
+query ??????????????????
+select
+    u8, u16, u32, u64,
+    i8, i16, i32, i64,
+    f32, f64, d, dec, arr,
+    m['a'], m['b'],
+    iv, vec, n
+from avro_unload_types_t
+----
+255 65535 4294967295 9223372036854775807 -128 -32768 -2147483648 -9223372036854775808 3.5 -7.25 2024-01-02 12345.67 [1,2,3] 10 20 1 month 2 days 0:00:03 [1.0,2.0,3.0] NULL
+
+statement ok
+drop table avro_unload_types_t
+
+statement ok
+drop table if exists avro_unload_nested_tuple_t
+
+statement ok
+drop table if exists avro_unload_nested_tuple_t2
+
+statement ok
+create table avro_unload_nested_tuple_t(t tuple(tuple(int, string), tuple(int, string)))
+
+statement ok
+create table avro_unload_nested_tuple_t2(t tuple(tuple(int, string), tuple(field_1 string, field_0 int)))
+
+statement ok
+remove @data/avro/unload/nested_tuple
+
+statement ok
+copy into @data/avro/unload/nested_tuple/ from (
+    select ((1, 'x'), (2, 'y')) as t
+) file_format = (type = avro)
+
+statement ok
+copy into avro_unload_nested_tuple_t from @data/avro/unload/nested_tuple file_format = (type = avro)
+
+statement ok
+copy into avro_unload_nested_tuple_t2 from @data/avro/unload/nested_tuple file_format = (type = avro)
+
+query ?
+select t from avro_unload_nested_tuple_t
+----
+((1,"x"),(2,"y"))
+
+query ?
+select t from avro_unload_nested_tuple_t2
+----
+((1,"x"),("y",2))
+
+statement ok
+drop table avro_unload_nested_tuple_t
+
+statement ok
+drop table avro_unload_nested_tuple_t2

@@ -340,16 +340,20 @@ impl TableContextStage for QueryContext {
     }
 }
 
-#[async_trait::async_trait]
-impl TableContextTableManagement for QueryContext {
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
-    fn get_table_meta_timestamps(
+impl QueryContext {
+    pub(crate) fn get_table_meta_timestamps_without_txn_record(
         &self,
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.get_table_meta_timestamps_impl(table, previous_snapshot, false)
+    }
+
+    fn get_table_meta_timestamps_impl(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        record_txn_begin_timestamp: bool,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
 
@@ -401,7 +405,7 @@ impl TableContextTableManagement for QueryContext {
             Some(validation_context),
         );
 
-        {
+        if record_txn_begin_timestamp {
             let txn_mgr_ref = self.txn_mgr();
             let mut txn_mgr = txn_mgr_ref.lock();
 
@@ -430,6 +434,21 @@ impl TableContextTableManagement for QueryContext {
         }
 
         Ok(table_meta_timestamps)
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for QueryContext {
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.get_table_meta_timestamps_impl(table, previous_snapshot, true)
     }
 
     #[async_backtrace::framed]
@@ -462,14 +481,6 @@ impl TableContextTableManagement for QueryContext {
         let copy_options = CopyIntoTableOptions {
             on_error: on_error_mode.unwrap_or_default(),
             ..Default::default()
-        };
-        let operator = init_stage_operator(&stage_info)?;
-        let info = operator.info();
-        let stage_root = format!("{}{}", info.name(), info.root());
-        let stage_root = if stage_root.ends_with('/') {
-            stage_root
-        } else {
-            format!("{}/", stage_root)
         };
         match &stage_info.file_format_params {
             FileFormatParams::Parquet(fmt) => {
@@ -518,7 +529,6 @@ impl TableContextTableManagement for QueryContext {
                         is_select: true,
                         default_exprs: None,
                         copy_into_table_options: copy_options.clone(),
-                        stage_root,
                         is_variant: true,
                         parquet_metas: None,
                     };
@@ -541,7 +551,6 @@ impl TableContextTableManagement for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    stage_root,
                     is_variant,
                     is_select: true,
                     copy_into_table_options: copy_options.clone(),
@@ -561,7 +570,6 @@ impl TableContextTableManagement for QueryContext {
                     files_to_copy,
                     is_select: true,
                     is_variant: true,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
@@ -585,7 +593,6 @@ impl TableContextTableManagement for QueryContext {
                     files_to_copy,
                     is_select: true,
                     is_variant: false,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
@@ -644,7 +651,6 @@ impl TableContextTableManagement for QueryContext {
                     files_info,
                     files_to_copy,
                     is_select: true,
-                    stage_root,
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };

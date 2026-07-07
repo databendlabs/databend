@@ -842,6 +842,14 @@ pub struct AnalyzeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub no_scan: bool,
+    pub histogram_options: Option<AnalyzeHistogramOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct AnalyzeHistogramOptions {
+    pub algorithm: Option<String>,
+    #[drive(skip)]
+    pub error_rate: Option<f64>,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -856,6 +864,17 @@ impl Display for AnalyzeTableStmt {
         )?;
         if self.no_scan {
             write!(f, " NOSCAN")?;
+        }
+        if let Some(options) = &self.histogram_options {
+            write!(f, " WITH HISTOGRAM")?;
+            let mut sep = " ";
+            if let Some(algorithm) = &options.algorithm {
+                write!(f, "{sep}ALGORITHM = '{algorithm}'")?;
+                sep = ", ";
+            }
+            if let Some(error_rate) = options.error_rate {
+                write!(f, "{sep}ERROR_RATE = {error_rate}")?;
+            }
         }
 
         Ok(())

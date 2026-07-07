@@ -36,6 +36,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
@@ -124,7 +125,7 @@ impl<'a> CoreExprArena<'a> {
 }
 
 // UDF server expects unsigned types in UINT* form instead of SQL unsigned names.
-fn udf_type_string(data_type: &DataType) -> String {
+fn udf_type_string(data_type: &TableDataType) -> String {
     let sql_name = data_type.sql_name();
     match sql_name.as_str() {
         "TINYINT UNSIGNED" => "UINT8".to_string(),
@@ -133,6 +134,14 @@ fn udf_type_string(data_type: &DataType) -> String {
         "BIGINT UNSIGNED" => "UINT64".to_string(),
         _ => sql_name,
     }
+}
+
+fn table_type_to_data_type(ty: &TableDataType) -> DataType {
+    DataType::from(ty)
+}
+
+fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
+    tys.iter().map(table_type_to_data_type).collect()
 }
 
 fn build_udf_cloud_script(
@@ -533,11 +542,9 @@ impl UdfAdapter for FullTypeCheckAdapter {
             udf_definition
                 .arg_types
                 .iter()
-                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
+                .filter(|ty| ty.remove_nullable() != TableDataType::StageLocation),
         ) {
-            if matches!(dest_type, DataType::StageLocation) {
-                continue;
-            }
+            let dest_type = table_type_to_data_type(dest_type);
             let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
             block_entries.push(entry);
         }
@@ -547,7 +554,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
         let handler = udf_definition.handler;
-        let return_type = udf_definition.return_type;
+        let return_type = table_type_to_data_type(&udf_definition.return_type);
         let endpoint = databend_common_expression::udf_client::UDFFlightClient::build_endpoint(
             &udf_definition.address,
             connect_timeout,
@@ -900,14 +907,18 @@ where A: UdfAdapter
             .zip(udf_definition.arg_types.iter())
             .enumerate()
         {
+            let dest_type_no_nullable = dest_type.remove_nullable();
+            let is_stage_location = dest_type_no_nullable == TableDataType::StageLocation;
+            let dest_type_data = table_type_to_data_type(dest_type);
+            let dest_type_no_nullable_data = table_type_to_data_type(&dest_type_no_nullable);
+
             // TODO: support cast constant
             if !matches!(argument.scalar, ScalarExpr::ConstantExpr(_))
-                || (argument.data_type != dest_type.remove_nullable()
-                    && dest_type.remove_nullable() != DataType::StageLocation)
+                || (argument.data_type != dest_type_no_nullable_data && !is_stage_location)
             {
                 all_args_const = false;
             }
-            if dest_type.remove_nullable() == DataType::StageLocation {
+            if is_stage_location {
                 if udf_definition.arg_names.is_empty() {
                     return Err(ErrorCode::InvalidArgument(
                         "StageLocation must have a corresponding variable name",
@@ -952,8 +963,8 @@ where A: UdfAdapter
                 });
                 continue;
             }
-            if argument.data_type != *dest_type {
-                args.push(wrap_cast(&argument.scalar, dest_type));
+            if argument.data_type != dest_type_data {
+                args.push(wrap_cast(&argument.scalar, &dest_type_data));
             } else {
                 args.push(argument.scalar.clone());
             }
@@ -983,9 +994,10 @@ where A: UdfAdapter
                 arg_scalars,
                 udf_definition.clone(),
             )?;
+            let return_type = table_type_to_data_type(&udf_definition.return_type);
             return Ok(UdfResolveResult::Expr(Box::new((
                 ConstantExpr { span, value }.into(),
-                udf_definition.return_type.clone(),
+                return_type,
             ))));
         }
 
@@ -994,6 +1006,8 @@ where A: UdfAdapter
             .map(|arg| arg.display_name.as_str())
             .join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
+        let arg_types = table_types_to_data_types(&udf_definition.arg_types);
+        let return_type = table_type_to_data_type(&udf_definition.return_type);
 
         Ok(UdfResolveResult::RuntimeServerExpr(Box::new((
             UDFCall {
@@ -1003,12 +1017,12 @@ where A: UdfAdapter
                 headers: udf_definition.headers,
                 display_name,
                 udf_type: UDFType::Server(udf_definition.address.clone()),
-                arg_types: udf_definition.arg_types,
-                return_type: Box::new(udf_definition.return_type.clone()),
+                arg_types,
+                return_type: Box::new(return_type.clone()),
                 arguments: args,
             }
             .into(),
-            udf_definition.return_type.clone(),
+            return_type,
         ))))
     }
 
@@ -1044,8 +1058,9 @@ where A: UdfAdapter
         } = udf_definition;
         let mut scalar_arguments = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
-            if argument.data_type != *dest_type {
-                scalar_arguments.push(wrap_cast(&argument.scalar, dest_type));
+            let dest_type = table_type_to_data_type(dest_type);
+            if argument.data_type != dest_type {
+                scalar_arguments.push(wrap_cast(&argument.scalar, &dest_type));
             } else {
                 scalar_arguments.push(argument.scalar.clone());
             }
@@ -1068,6 +1083,8 @@ where A: UdfAdapter
             .map(|arg| arg.display_name.as_str())
             .join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
+        let arg_types = table_types_to_data_types(&arg_types);
+        let return_type = table_type_to_data_type(&return_type);
 
         Ok(UdfResolveResult::RuntimeScriptExpr(Box::new((
             UDFCall {
@@ -1120,10 +1137,11 @@ where A: UdfAdapter
             .iter()
             .zip(arg_types.iter())
             .map(|(argument, dest_type)| {
-                Ok(if argument.data_type == *dest_type {
+                let dest_type = table_type_to_data_type(dest_type);
+                Ok(if argument.data_type == dest_type {
                     argument.scalar.clone()
                 } else {
-                    wrap_cast(&argument.scalar, dest_type)
+                    wrap_cast(&argument.scalar, &dest_type)
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -1132,6 +1150,8 @@ where A: UdfAdapter
             "{name}({})",
             args.iter().map(|arg| arg.display_name.as_str()).join(", ")
         );
+        let arg_types = table_types_to_data_types(&arg_types);
+        let return_type = table_type_to_data_type(&return_type);
 
         Ok(UdfResolveResult::RuntimeScriptExpr(Box::new((
             UDAFCall {
@@ -1143,7 +1163,7 @@ where A: UdfAdapter
                     .iter()
                     .map(|f| UDFField {
                         name: f.name().to_string(),
-                        data_type: f.data_type().clone(),
+                        data_type: table_type_to_data_type(f.data_type()),
                     })
                     .collect(),
                 return_type: Box::new(return_type.clone()),
@@ -1209,19 +1229,20 @@ where A: UdfAdapter
         }
         let mut parameters = Vec::with_capacity(arg_types.len());
         for ((arg_name, dest_type), argument) in arg_types.iter().zip(arguments.iter()) {
-            let arg = if argument.data_type != *dest_type {
-                wrap_cast(&argument.scalar, dest_type)
+            let dest_type = table_type_to_data_type(dest_type);
+            let arg = if argument.data_type != dest_type {
+                wrap_cast(&argument.scalar, &dest_type)
             } else {
                 argument.scalar.clone()
             };
-            parameters.push((arg_name.clone(), dest_type.clone(), arg));
+            parameters.push((arg_name.clone(), dest_type, arg));
         }
         Ok(UdfResolveResult::ScalarDefinition {
             span,
             func_name,
             definition: udf_definition.definition,
             parameters,
-            return_type: udf_definition.return_type,
+            return_type: table_type_to_data_type(&udf_definition.return_type),
         })
     }
 }

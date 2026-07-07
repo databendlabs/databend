@@ -25,11 +25,14 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::pruning::PruningCostController;
+use crate::pruning::PruningCostKind;
 use crate::pruning_pipeline::block_metas_meta::BlockMetasMeta;
 use crate::pruning_pipeline::pruned_segment_meta::PrunedCompactSegmentMeta;
 
 pub struct ExtractSegmentTransform {
     populate_cache: bool,
+    pruning_cost: PruningCostController,
 }
 
 impl ExtractSegmentTransform {
@@ -37,10 +40,12 @@ impl ExtractSegmentTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         populate_cache: bool,
+        pruning_cost: PruningCostController,
     ) -> databend_common_exception::Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(
             BlockMetaAccumulatingTransformer::create(input, output, ExtractSegmentTransform {
                 populate_cache,
+                pruning_cost,
             }),
         ))
     }
@@ -55,8 +60,12 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for ExtractSegment
     ) -> databend_common_exception::Result<Option<DataBlock>> {
         let (segment_location, info) = data.segments;
 
-        let block_metas =
-            Self::extract_block_metas(&segment_location.location.0, &info, self.populate_cache)?;
+        let block_metas = Self::extract_block_metas(
+            &segment_location.location.0,
+            &info,
+            self.populate_cache,
+            &self.pruning_cost,
+        )?;
 
         if block_metas.is_empty() {
             return Ok(None);
@@ -74,18 +83,25 @@ impl ExtractSegmentTransform {
         segment_path: &str,
         segment: &CompactSegmentInfo,
         populate_cache: bool,
+        pruning_cost: &PruningCostController,
     ) -> databend_common_exception::Result<Arc<Vec<Arc<BlockMeta>>>> {
         if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {
+                let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
+                    segment.block_metas()
+                })?;
                 match populate_cache {
-                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
-                    false => Ok(Arc::new(segment.block_metas()?)),
+                    true => Ok(cache.insert(segment_path.to_string(), metas)),
+                    false => Ok(Arc::new(metas)),
                 }
             }
         } else {
-            Ok(Arc::new(segment.block_metas()?))
+            let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
+                segment.block_metas()
+            })?;
+            Ok(Arc::new(metas))
         }
     }
 }

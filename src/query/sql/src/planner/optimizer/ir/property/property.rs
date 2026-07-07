@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::CountMinSketchSet;
+use crate::optimizer::ir::TopNSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
@@ -45,6 +47,8 @@ pub struct Statistics {
     pub precise_cardinality: Option<u64>,
     /// Statistics of columns, column index -> column stat
     pub column_stats: ColumnStatSet,
+    pub top_n: TopNSet,
+    pub count_min_sketch: CountMinSketchSet,
 }
 
 #[derive(Default, Clone, Debug)]

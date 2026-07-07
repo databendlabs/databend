@@ -78,13 +78,30 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
             hilbert_min_bytes,
             push_downs.as_ref().is_none_or(|v| v.filters.is_none()),
         );
+        let mut recluster_segment_pruner = None;
         'FOR: for chunk in segment_locations.chunks(chunk_size) {
             // read segments.
+            if recluster_segment_pruner.is_none() {
+                recluster_segment_pruner = Some(FuseTable::create_recluster_segment_pruner(
+                    &ctx,
+                    fuse_table.schema_with_stream(),
+                    fuse_table.get_operator(),
+                    &push_downs,
+                )?);
+            }
+            let (pruning_ctx, segment_pruner, max_concurrency) = {
+                let (pruning_ctx, segment_pruner, max_concurrency) =
+                    recluster_segment_pruner.as_ref().unwrap();
+                (
+                    pruning_ctx.clone(),
+                    segment_pruner.clone(),
+                    *max_concurrency,
+                )
+            };
             let compact_segments = FuseTable::segment_pruning(
-                &ctx,
-                fuse_table.schema_with_stream(),
-                fuse_table.get_operator(),
-                &push_downs,
+                pruning_ctx,
+                segment_pruner,
+                max_concurrency,
                 chunk.to_vec(),
             )
             .await?;

@@ -235,8 +235,8 @@ impl<'a> SegmentCompactor<'a> {
                 // sort ascending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        &a.0.summary.cluster_stats,
-                        &b.0.summary.cluster_stats,
+                        a.0.summary.cluster_stats.as_ref(),
+                        b.0.summary.cluster_stats.as_ref(),
                         default_cluster_key,
                     )
                 });

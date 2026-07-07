@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::geometry::extract_bbox_and_srid;
 use databend_common_io::Bbox;
+use databend_common_io::UNKNOWN_SRID;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use log::debug;
 
@@ -88,7 +89,7 @@ impl SpatialStatsBuilder {
 
     pub fn finalize(self) -> SpatialStatistics {
         let is_valid = self.is_valid();
-        let srid = self.srid.unwrap_or(0);
+        let srid = self.srid.unwrap_or(UNKNOWN_SRID);
         if is_valid {
             SpatialStatistics {
                 min_x: self.min_x.into(),

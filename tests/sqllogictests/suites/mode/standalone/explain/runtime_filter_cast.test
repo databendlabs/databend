@@ -16,6 +16,35 @@ insert into rf_cast_build values (1), (3), (5);
 statement ok
 insert into rf_cast_probe values (1), (2), (3);
 
+statement ok
+set max_threads = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set enable_bloom_runtime_filter = 1;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set bloom_runtime_filter_threshold = 1000;
+
+statement ok
+set join_runtime_filter_selectivity_threshold = 101;
+
+query I
+SELECT count(*)
+FROM rf_cast_probe p
+JOIN rf_cast_build b
+    ON CAST(p.a AS Nullable(Int32)) = b.id;
+----
+2
+
 query T
 EXPLAIN SELECT *
 FROM rf_cast_probe p
@@ -40,7 +69,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
@@ -51,7 +80,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 3.00
@@ -61,3 +90,88 @@ drop table rf_cast_probe;
 
 statement ok
 drop table rf_cast_build;
+
+statement ok
+drop table if exists rf_cast_probe_s;
+
+statement ok
+drop table if exists rf_cast_build_s;
+
+statement ok
+create table rf_cast_build_s (id Nullable(String));
+
+statement ok
+create table rf_cast_probe_s (a String not null);
+
+statement ok
+insert into rf_cast_build_s values ('a'), ('c'), ('e');
+
+statement ok
+insert into rf_cast_probe_s values ('a'), ('b'), ('c');
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set join_runtime_filter_selectivity_threshold = 101;
+
+query I
+SELECT count(*)
+FROM rf_cast_probe_s p
+JOIN rf_cast_build_s b
+    ON CAST(p.a AS Nullable(String)) = b.id;
+----
+2
+
+statement ok
+drop table rf_cast_probe_s;
+
+statement ok
+drop table rf_cast_build_s;
+
+statement ok
+drop table if exists rf_cast_probe_nullable;
+
+statement ok
+drop table if exists rf_cast_build_nn;
+
+statement ok
+create table rf_cast_build_nn (id Int not null);
+
+statement ok
+create table rf_cast_probe_nullable (a Int);
+
+statement ok
+insert into rf_cast_build_nn values (1), (3), (5);
+
+statement ok
+insert into rf_cast_probe_nullable values (1), (2), (3), (NULL);
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set bloom_runtime_filter_threshold = 1000;
+
+statement ok
+set join_runtime_filter_selectivity_threshold = 101;
+
+query I
+SELECT count(*)
+FROM rf_cast_probe_nullable p
+JOIN rf_cast_build_nn b
+    ON p.a = b.id;
+----
+2
+
+statement ok
+drop table rf_cast_probe_nullable;
+
+statement ok
+drop table rf_cast_build_nn;

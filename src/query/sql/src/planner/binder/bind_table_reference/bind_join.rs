@@ -478,6 +478,7 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            spatial_join: None,
         };
 
         if logical_join.join_type.is_asof_join() {

@@ -28,7 +28,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_common_settings::StagePathTraversalPolicy;
+use databend_common_storage::StagePathTraversalPolicy;
 use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_common_storage::is_stage_path_traversal;
 use databend_common_users::Object;
@@ -110,11 +110,13 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
 }
 
 pub fn validate_stage_path_traversal(
-    settings: &Settings,
+    _settings: &Settings,
     path: &str,
     is_write: bool,
 ) -> Result<()> {
-    let policy = settings.get_stage_path_traversal_policy()?;
+    let policy = databend_common_config::GlobalConfig::instance()
+        .storage
+        .stage_path_traversal_policy;
     validate_stage_path_traversal_policy(policy, path, is_write)
 }
 

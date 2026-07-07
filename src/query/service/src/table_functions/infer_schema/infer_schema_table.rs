@@ -267,6 +267,8 @@ impl Table for InferSchemaTable {
                         let part = SingleFilePartition {
                             path: v.path.clone(),
                             size: v.size as usize,
+                            content_key: v.etag.clone().or_else(|| v.md5.clone()),
+                            last_modified: v.last_modified,
                         };
                         let part_info: Box<dyn PartInfo> = Box::new(part);
                         Arc::new(part_info)

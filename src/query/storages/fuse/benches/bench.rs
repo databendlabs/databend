@@ -117,9 +117,8 @@ mod dummy {
             col_stats_truncate_lens: std::collections::BTreeMap::new(),
         };
         let schema = Arc::new(schema);
-        let mut buffer = Vec::new();
-        let _ = serialize_block(&write_settings, &schema, datablock, &mut buffer).unwrap();
+        let (_, buffer) = serialize_block(&write_settings, &schema, datablock).unwrap();
 
-        (buffer.into(), schema)
+        (buffer.to_bytes(), schema)
     }
 }

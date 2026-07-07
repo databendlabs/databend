@@ -26,6 +26,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -46,6 +47,11 @@ use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_SIZE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
@@ -67,6 +73,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+pub use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
+pub use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use log::error;
 
 /// Table option keys that can occur in 'create table statement'.
@@ -78,6 +86,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
+    r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
@@ -107,6 +116,11 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+    r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+    r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
 
@@ -152,8 +166,10 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
+    // Deprecated: no longer affects recluster, but old tables can still unset it.
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
+    r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
@@ -162,6 +178,11 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+    r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+    r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
+    r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+    r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
 
@@ -289,6 +310,62 @@ pub fn is_valid_approx_distinct_columns(
         ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
     }
     Ok(())
+}
+
+pub fn is_valid_analyze_frequency_columns(
+    options: &BTreeMap<String, String>,
+    schema: TableSchemaRef,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
+        ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_histogram_algorithm(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM) {
+        match value.to_lowercase().as_str() {
+            "window" | "kll_fast" | "kll_full" => {}
+            _ => {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM} must be one of 'window', 'kll_fast', or 'kll_full', got: {value}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_histogram_kll_relative_error(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR) {
+        let relative_error = value.parse::<f64>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be a floating-point number, got: {value}"
+            ))
+        })?;
+        if relative_error <= 0.0 || !relative_error.is_finite() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR} must be finite and greater than zero, got: {relative_error}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_analyze_top_n_size(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    analyze_top_n_size_from_options(options).map(|_| ())
+}
+
+pub fn is_valid_analyze_count_min_sketch_error_rate(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    analyze_count_min_sketch_error_rate_from_options(options).map(|_| ())
 }
 
 pub fn is_valid_change_tracking(

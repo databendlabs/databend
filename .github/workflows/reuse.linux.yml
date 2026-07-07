@@ -51,27 +51,6 @@ jobs:
             exit 1
           fi
 
-  proxy_benchmark_changes:
-    runs-on: ubuntu-latest
-    outputs:
-      any_changed: ${{ steps.proxy.outputs.any_changed }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Check PROXY benchmark related changes
-        uses: tj-actions/changed-files@v47
-        id: proxy
-        with:
-          files: |
-            .github/workflows/reuse.linux.yml
-            scripts/benchmark/proxy_table_routing_bench.py
-            scripts/ci/ci-run-proxy-routing-benchmark.sh
-            src/query/catalog/src/table.rs
-            src/query/settings/src/**
-            src/query/storages/basic/src/proxy_table.rs
-            src/query/storages/fuse/src/**
-
   check:
     needs: info
     runs-on:
@@ -273,8 +252,7 @@ jobs:
         timeout-minutes: 20
 
   test_proxy_routing_benchmark:
-    needs: [build, check, proxy_benchmark_changes]
-    if: needs.proxy_benchmark_changes.outputs.any_changed == 'true'
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"

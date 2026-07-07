@@ -559,7 +559,7 @@ async fn gc_dropped_db_by_id(
     } else {
         // save new db id list
         txn.if_then
-            .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
+            .push(txn_put_pb(&db_id_history_ident, &db_id_list));
     }
 
     // Verify database_meta hasn't changed since the mark database meta as gc_in_progress phase.
@@ -722,7 +722,7 @@ async fn update_txn_to_remove_table_history(
     } else {
         // save new table id list
         txn.if_then
-            .push(txn_put_pb_with_ttl(table_id_history_ident, &history, None)?);
+            .push(txn_put_pb_with_ttl(table_id_history_ident, &history, None));
     }
 
     Ok(())

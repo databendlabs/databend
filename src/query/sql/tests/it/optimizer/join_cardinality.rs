@@ -282,6 +282,8 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
                 null_count: StatCount::exact(0),
                 histogram: Some(histogram_from_json(stats.histogram_json)?),
             })]),
+            top_n: Default::default(),
+            count_min_sketch: Default::default(),
         },
     }))
 }

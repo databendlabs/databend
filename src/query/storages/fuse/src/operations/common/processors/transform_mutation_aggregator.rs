@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VirtualDataSchema;
+use databend_common_expression::types::DataType;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
@@ -70,6 +71,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::VirtualColumnAccumulator;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
@@ -91,10 +93,10 @@ pub struct TableMutationAggregator {
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
     hll: BlockHLL,
+    insert_rows: u64,
     write_segment_ctx: WriteSegmentCtx,
 
-    start_time: Instant,
-    finished_tasks: usize,
+    processed_log_entries: usize,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -105,32 +107,20 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
-        let task_num = mutation_logs.entries.len();
+        self.processed_log_entries += mutation_logs.entries.len();
         mutation_logs.entries.into_iter().for_each(|entry| {
             self.accumulate_log_entry(entry);
         });
-        if task_num > 0 {
-            if self.finished_tasks == 0 {
-                self.ctx.set_status_info(&format!(
-                    "{}: writing block files, elapsed: {:?}",
-                    self.write_segment_ctx.kind,
-                    self.start_time.elapsed()
-                ));
-            }
-            self.finished_tasks += task_num;
-        }
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        self.generate_append_segments().await?;
         info!(
-            "{}: finished writing block files, tasks: {}, elapsed: {:?}",
-            self.write_segment_ctx.kind,
-            self.finished_tasks,
-            self.start_time.elapsed()
+            "{}: finished aggregating mutation logs, entries: {}",
+            self.write_segment_ctx.kind, self.processed_log_entries
         );
+        self.generate_append_segments().await?;
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
@@ -177,6 +167,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
+            self.insert_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
@@ -249,17 +240,24 @@ impl TableMutationAggregator {
             removed_segment_indexes,
             removed_statistics,
             hll: HashMap::new(),
+            insert_rows: 0,
             write_segment_ctx,
-            finished_tasks: 0,
-            start_time: Instant::now(),
+            processed_log_entries: 0,
             table_id: table.get_id(),
         }
     }
 
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
-            MutationLogEntry::ReplacedBlock { index, block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+            MutationLogEntry::ReplacedBlock {
+                index,
+                block_meta,
+                insert_rows,
+            } => {
+                if insert_rows > 0 {
+                    self.insert_rows += insert_rows;
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
                 match self.extended_mutations.entry(index.segment_idx) {
                     Entry::Occupied(mut v) => {
                         v.get_mut().push_replaced(index.block_idx, block_meta);
@@ -272,8 +270,14 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::AppendBlock { block_meta } => {
-                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+            MutationLogEntry::AppendBlock {
+                block_meta,
+                insert_rows,
+            } => {
+                if insert_rows > 0 {
+                    self.insert_rows += insert_rows;
+                    BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
+                }
                 self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
@@ -301,7 +305,10 @@ impl TableMutationAggregator {
                     &summary,
                     self.write_segment_ctx.default_cluster_key,
                 );
-                merge_column_hll_mut(&mut self.hll, &hll);
+                self.insert_rows += summary.row_count;
+                if !hll.is_empty() {
+                    merge_column_hll_mut(&mut self.hll, &hll);
+                }
 
                 self.appended_segments
                     .push((segment_location, format_version));
@@ -353,8 +360,9 @@ impl TableMutationAggregator {
 
         if let Some(id) = self.write_segment_ctx.default_cluster_key {
             // sort ascending.
-            merged_blocks
-                .sort_by(|a, b| sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, id));
+            merged_blocks.sort_by(|a, b| {
+                sort_by_cluster_stats(a.0.cluster_stats.as_ref(), b.0.cluster_stats.as_ref(), id)
+            });
         }
 
         let mut tasks = Vec::new();
@@ -923,12 +931,17 @@ fn fill_missing_segment_cluster_stats(
         return;
     }
 
+    let scalar_cluster_key_exprs = cluster_key_exprs
+        .iter()
+        .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_cluster_key_exprs, schema);
     let (min, max) = get_min_max_stats(
-        cluster_key_exprs,
+        &prepared_cluster_key_exprs,
         &summary.col_stats,
         None,
         Some(cluster_key_id),
-        schema,
     );
     summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0, None));
 }

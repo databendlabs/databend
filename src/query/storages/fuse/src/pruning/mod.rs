@@ -23,7 +23,6 @@ mod pruner_location;
 mod pruning_statistics;
 mod segment_pruner;
 mod spatial_index_pruner;
-mod spatial_runtime_pruner;
 mod vector_index_pruner;
 mod virtual_column_pruner;
 
@@ -47,6 +46,5 @@ pub use pruning_statistics::PruningCostController;
 pub use pruning_statistics::PruningCostKind;
 pub use segment_pruner::SegmentPruner;
 pub use spatial_index_pruner::SpatialIndexPruner;
-pub use spatial_runtime_pruner::SpatialRuntimePruner;
 pub use vector_index_pruner::VectorIndexPruner;
 pub use virtual_column_pruner::VirtualColumnPruner;

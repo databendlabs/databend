@@ -44,6 +44,8 @@ use crate::FuseBlockPartInfo;
 use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
 use crate::io::BloomIndexRebuilder;
+use crate::pruning::PruningCostController;
+use crate::pruning::PruningCostKind;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
@@ -155,6 +157,8 @@ pub struct BloomPrunerCreator {
 
     /// bloom index builder, if set to Some(_), missing bloom index will be built during pruning
     bloom_index_builder: Option<BloomIndexRebuilder>,
+
+    pruning_cost: PruningCostController,
 }
 
 impl BloomPrunerCreator {
@@ -167,6 +171,7 @@ impl BloomPrunerCreator {
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
+        pruning_cost: PruningCostController,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         let Some(expr) = filter_expr else {
             return Ok(None);
@@ -219,6 +224,7 @@ impl BloomPrunerCreator {
             settings,
             data_schema: schema.clone(),
             bloom_index_builder,
+            pruning_cost,
         })))
     }
 
@@ -253,12 +259,16 @@ impl BloomPrunerCreator {
         )?;
 
         // load the relevant index columns
-        let maybe_filter = index_location
-            .read_block_filter(
-                self.dal.clone(),
-                &self.settings,
-                &index_columns,
-                index_length,
+        let maybe_filter = self
+            .pruning_cost
+            .measure_async(
+                PruningCostKind::BlocksBloomIndexRead,
+                index_location.read_block_filter(
+                    self.dal.clone(),
+                    &self.settings,
+                    &index_columns,
+                    index_length,
+                ),
             )
             .await;
 

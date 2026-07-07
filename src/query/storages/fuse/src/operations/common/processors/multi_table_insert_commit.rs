@@ -53,6 +53,7 @@ use crate::operations::set_compaction_num_block_hint;
 
 pub struct CommitMultiTableInsert {
     commit_metas: HashMap<u64, CommitMeta>,
+    insert_rows: HashMap<u64, u64>,
     tables: HashMap<u64, Arc<dyn Table>>,
     ctx: Arc<dyn TableContext>,
     overwrite: bool,
@@ -74,6 +75,7 @@ impl CommitMultiTableInsert {
     ) -> Self {
         Self {
             commit_metas: Default::default(),
+            insert_rows: Default::default(),
             tables,
             ctx,
             overwrite,
@@ -98,11 +100,7 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         let mut hlls = HashMap::with_capacity(self.commit_metas.len());
         let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
-        let insert_rows = {
-            let stats = self.ctx.mutation_state().multi_table_insert_status();
-            let status = stats.lock().unwrap();
-            status.insert_rows.clone()
-        };
+        let insert_rows = std::mem::take(&mut self.insert_rows);
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
@@ -203,6 +201,16 @@ impl AsyncSink for CommitMultiTableInsert {
                         );
                     }
                 }
+                self.ctx
+                    .mutation_state()
+                    .set_multi_table_insert_rows(insert_rows.clone());
+                {
+                    let txn_mgr = self.ctx.txn_mgr();
+                    let mut txn_mgr = txn_mgr.lock();
+                    if txn_mgr.is_active() {
+                        txn_mgr.add_multi_table_insert_rows(insert_rows.clone());
+                    }
+                }
 
                 return Ok(());
             };
@@ -272,6 +280,12 @@ impl AsyncSink for CommitMultiTableInsert {
 
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
+        match self.insert_rows.get_mut(&meta.table_id) {
+            Some(rows) => *rows += meta.insert_rows,
+            None => {
+                self.insert_rows.insert(meta.table_id, meta.insert_rows);
+            }
+        }
         match self.commit_metas.get_mut(&meta.table_id) {
             Some(m) => {
                 let table = self.tables.get(&meta.table_id).unwrap();

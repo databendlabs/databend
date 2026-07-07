@@ -17,13 +17,11 @@ use databend_common_expression::DataBlock;
 pub mod csv;
 pub mod json;
 pub mod ndjson;
-pub mod parquet;
 pub mod tsv;
 
 pub use csv::CSVOutputFormat;
 pub use json::JSONOutputFormat;
 pub use ndjson::NDJSONOutputFormatBase;
-pub use parquet::ParquetOutputFormat;
 pub use tsv::TEXTOutputFormat;
 
 pub trait OutputFormat: Send {

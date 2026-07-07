@@ -39,6 +39,7 @@ use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::optimizers::operator::FinalizeSpatialJoinOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -301,7 +302,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
         )
         // Clean up unused CTEs
-        .add(CleanupUnusedCTEOptimizer);
+        .add(CleanupUnusedCTEOptimizer)
+        // Finalize derived join annotations after all logical rewrites.
+        .add(FinalizeSpatialJoinOptimizer::new(opt_ctx.clone()));
 
     // 17. Execute the pipeline
     let s_expr = pipeline.execute().await?;

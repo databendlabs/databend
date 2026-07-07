@@ -108,11 +108,7 @@ fn test_aggr_functions() {
     test_agg_quantile_disc(file, eval_aggr);
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_quantile_tdigest(file, eval_aggr);
-    // FIXME
-    test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
-        let block_entries = columns.to_vec();
-        eval_aggr_for_test(name, params, &block_entries, rows, false, false, vec![])
-    });
+    test_agg_quantile_tdigest_weighted(file, eval_aggr);
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);

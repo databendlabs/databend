@@ -37,6 +37,26 @@ status: error
 code: 1065
 message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
 
+=== having_aggregate_reuses_select_alias_name_as_input_column ===
+description: A HAVING aggregate argument should resolve to the input column even when a SELECT aggregate has the same alias.
+sql: SELECT creative_name, sum(cost) AS cost FROM t GROUP BY creative_name HAVING sum(impressions) > 0 OR sum(clicks) > 0 OR sum(cost) > 0 OR sum(installs) > 0
+status: ok
+EvalScalar
+├── scalars: [t.creative_name (#0) AS (#0), sum(cost) (#5) AS (#5)]
+└── Filter
+    ├── filters: [or(or(or(gt(sum(impressions) (#6), 0), gt(sum(clicks) (#7), 0)), gt(sum(cost) (#5), 0)), gt(sum(installs) (#8), 0))]
+    └── Aggregate(Initial)
+        ├── group items: [t.creative_name (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.cost (#3)) AS (#5), sum(t.impressions (#1)) AS (#6), sum(t.clicks (#2)) AS (#7), sum(t.installs (#4)) AS (#8)]
+        └── EvalScalar
+            ├── scalars: [t.creative_name (#0) AS (#0), t.impressions (#1) AS (#1), t.clicks (#2) AS (#2), t.cost (#3) AS (#3), t.installs (#4) AS (#4)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === order_by_can_introduce_aggregate_in_aggregate_query ===
 description: ORDER BY may introduce a new aggregate expression when the query is already aggregated.
 sql: SELECT count(*) FROM t ORDER BY sum(number)

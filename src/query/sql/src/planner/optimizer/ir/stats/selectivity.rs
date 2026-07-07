@@ -39,6 +39,8 @@ use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::CountMinSketchSet;
+use crate::optimizer::ir::TopNSet;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -60,6 +62,8 @@ const FULL_WILDCARD_SEL: f64 = 2.0;
 pub struct SelectivityEstimator {
     cardinality: StatCardinality,
     column_stats: ColumnStatSet,
+    top_n: TopNSet,
+    count_min_sketch: CountMinSketchSet,
     overrides: ColumnStatSet,
 }
 
@@ -68,8 +72,20 @@ impl SelectivityEstimator {
         Self {
             cardinality,
             column_stats: input_stat,
+            top_n: TopNSet::new(),
+            count_min_sketch: CountMinSketchSet::new(),
             overrides: ColumnStatSet::new(),
         }
+    }
+
+    pub fn with_top_n(mut self, top_n: TopNSet) -> Self {
+        self.top_n = top_n;
+        self
+    }
+
+    pub fn with_count_min_sketch(mut self, count_min_sketch: CountMinSketchSet) -> Self {
+        self.count_min_sketch = count_min_sketch;
+        self
     }
 
     fn merged_column_stats(&self) -> ColumnStatSet {
@@ -152,6 +168,8 @@ impl SelectivityEstimator {
             selectivity: Selectivity::Unknown,
             constraint_context: ConstraintContext::And,
             column_stats: &self.column_stats,
+            top_n: &self.top_n,
+            count_min_sketch: &self.count_min_sketch,
             constraints: ValueConstraintState::default(),
         };
         visitor.visit_expr(&expr)?;
@@ -395,6 +413,8 @@ struct SelectivityVisitor<'a> {
     selectivity: Selectivity,
     constraint_context: ConstraintContext,
     column_stats: &'a ColumnStatSet,
+    top_n: &'a TopNSet,
+    count_min_sketch: &'a CountMinSketchSet,
     constraints: ValueConstraintState,
 }
 
@@ -656,8 +676,15 @@ impl SelectivityVisitor<'_> {
                     self.constraints.add(
                         self.column_stats,
                         column_index,
-                        ValueConstraint::from_comparison(op, const_datum),
+                        ValueConstraint::from_comparison(op, const_datum.clone()),
                     )?;
+                    if let Some(selectivity) = self.derive_frequency_equality_selectivity(
+                        column_index,
+                        op,
+                        &constant.scalar,
+                    )? {
+                        return Ok(selectivity);
+                    }
                     if distorted_range {
                         return Ok(Selectivity::LowerBound);
                     }
@@ -670,6 +697,10 @@ impl SelectivityVisitor<'_> {
                 }
                 return if distorted_range {
                     Ok(Selectivity::LowerBound)
+                } else if let Some(selectivity) =
+                    self.derive_frequency_equality_selectivity(column_index, op, &constant.scalar)?
+                {
+                    Ok(selectivity)
                 } else {
                     self.derive_function_selectivity(func)
                 };
@@ -678,6 +709,122 @@ impl SelectivityVisitor<'_> {
         }
 
         self.derive_function_selectivity(func)
+    }
+
+    fn derive_frequency_equality_selectivity(
+        &self,
+        column_index: Symbol,
+        op: ComparisonOp,
+        scalar: &Scalar,
+    ) -> Result<Option<Selectivity>> {
+        let exact_top_n_hit = self
+            .top_n
+            .get(&column_index)
+            .and_then(|top_n| top_n.get_entry(scalar))
+            .is_some_and(|entry| entry.error == 0);
+        if exact_top_n_hit
+            && let Some(selectivity) =
+                self.derive_top_n_equality_selectivity(column_index, op, scalar)?
+        {
+            return Ok(Some(selectivity));
+        }
+
+        if let Some(selectivity) =
+            self.derive_count_min_sketch_equality_selectivity(column_index, op, scalar)?
+        {
+            return Ok(Some(selectivity));
+        }
+
+        self.derive_top_n_equality_selectivity(column_index, op, scalar)
+    }
+
+    fn derive_top_n_equality_selectivity(
+        &self,
+        column_index: Symbol,
+        op: ComparisonOp,
+        scalar: &Scalar,
+    ) -> Result<Option<Selectivity>> {
+        if !matches!(op, ComparisonOp::Equal | ComparisonOp::NotEqual) {
+            return Ok(None);
+        }
+        let Some(top_n) = self.top_n.get(&column_index) else {
+            return Ok(None);
+        };
+        let Some(entry) = top_n.get_entry(scalar) else {
+            return Ok(None);
+        };
+        let cardinality = self.cardinality.value();
+        if cardinality == 0.0 {
+            return Ok(Some(Selectivity::N(0.0)));
+        }
+        let Some(column_stat) = self.column_stats.get(&column_index) else {
+            return Ok(None);
+        };
+        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count);
+        let upper_count = (entry.count as f64).min(non_null_cardinality);
+        let lower_count = (entry.count.saturating_sub(entry.error) as f64).min(upper_count);
+        if entry.error > 0
+            && let Some(ndv) = column_stat.ndv.expected
+            && ndv > 0.0
+            && lower_count <= non_null_cardinality / ndv
+        {
+            return Ok(None);
+        }
+        let matched = if matches!(op, ComparisonOp::NotEqual) {
+            non_null_cardinality - lower_count
+        } else {
+            upper_count
+        };
+        Selectivity::checked_estimate(matched / cardinality).map(Some)
+    }
+
+    fn derive_count_min_sketch_equality_selectivity(
+        &self,
+        column_index: Symbol,
+        op: ComparisonOp,
+        scalar: &Scalar,
+    ) -> Result<Option<Selectivity>> {
+        if !matches!(op, ComparisonOp::Equal | ComparisonOp::NotEqual) {
+            return Ok(None);
+        }
+        let Some(count_min_sketch) = self.count_min_sketch.get(&column_index) else {
+            return Ok(None);
+        };
+        let Some(column_stat) = self.column_stats.get(&column_index) else {
+            return Ok(None);
+        };
+        let cardinality = self.cardinality.value();
+        if cardinality == 0.0 {
+            return Ok(Some(Selectivity::N(0.0)));
+        }
+        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count);
+        if non_null_cardinality == 0.0 {
+            return Ok(Some(Selectivity::N(0.0)));
+        }
+        let Some(ndv) = column_stat.ndv.expected else {
+            return Ok(None);
+        };
+        if ndv <= 0.0 {
+            return Ok(None);
+        }
+        let Some(estimated_count) = count_min_sketch.estimate(scalar) else {
+            return Ok(None);
+        };
+
+        let upper_count = (estimated_count as f64).min(non_null_cardinality);
+        let error_bound = count_min_sketch.error_bound(non_null_cardinality.ceil() as u64) as f64;
+        let lower_count = (upper_count - error_bound).max(0.0);
+        let average_count = non_null_cardinality / ndv;
+        if lower_count <= average_count {
+            return Ok(None);
+        }
+
+        let matched = if matches!(op, ComparisonOp::NotEqual) {
+            non_null_cardinality - lower_count
+        } else {
+            upper_count
+        };
+        Selectivity::checked_estimate(matched / cardinality).map(Some)
     }
 
     fn derive_function_selectivity(&self, func: &ExprCall) -> Result<Selectivity> {
@@ -802,6 +949,8 @@ impl SelectivityVisitor<'_> {
             selectivity: Selectivity::Unknown,
             constraint_context,
             column_stats: self.column_stats,
+            top_n: self.top_n,
+            count_min_sketch: self.count_min_sketch,
             constraints: self.constraints.clone(),
         }
     }

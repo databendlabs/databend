@@ -65,42 +65,6 @@ pub enum OutofMemoryBehavior {
     Spilling,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StagePathTraversalPolicy {
-    Disable,
-    Enable,
-    ReadOnly,
-}
-
-impl StagePathTraversalPolicy {
-    pub fn allows_read(self) -> bool {
-        matches!(
-            self,
-            StagePathTraversalPolicy::Enable | StagePathTraversalPolicy::ReadOnly
-        )
-    }
-
-    pub fn allows_write(self) -> bool {
-        matches!(self, StagePathTraversalPolicy::Enable)
-    }
-}
-
-impl FromStr for StagePathTraversalPolicy {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "disable" => Ok(StagePathTraversalPolicy::Disable),
-            "enable" => Ok(StagePathTraversalPolicy::Enable),
-            "readonly" => Ok(StagePathTraversalPolicy::ReadOnly),
-            _ => Err(ErrorCode::InvalidConfig(format!(
-                "invalid StagePathTraversalPolicy: {:?}",
-                s
-            ))),
-        }
-    }
-}
-
 impl SpillFileFormat {
     pub fn range() -> Vec<String> {
         ["arrow", "parquet"]
@@ -377,10 +341,6 @@ impl Settings {
         Ok(self.try_get_u64("purge_duplicated_files_in_copy")? != 0)
     }
 
-    pub fn get_stage_path_traversal_policy(&self) -> Result<StagePathTraversalPolicy> {
-        StagePathTraversalPolicy::from_str(&self.try_get_string("stage_path_traversal_policy")?)
-    }
-
     pub fn get_timezone(&self) -> Result<String> {
         self.try_get_string("timezone")
     }
@@ -403,10 +363,6 @@ impl Settings {
 
     pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("min_max_runtime_filter_threshold")
-    }
-
-    pub fn get_spatial_runtime_filter_threshold(&self) -> Result<u64> {
-        self.try_get_u64("spatial_runtime_filter_threshold")
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -492,6 +448,14 @@ impl Settings {
 
     pub fn get_enable_join_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
+    }
+
+    pub fn get_enable_spatial_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_spatial_join")? != 0)
+    }
+
+    pub fn get_spatial_join_max_build_rows(&self) -> Result<u64> {
+        self.try_get_u64("spatial_join_max_build_rows")
     }
 
     pub fn get_join_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
@@ -749,6 +713,27 @@ impl Settings {
 
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
+    }
+
+    pub fn get_analyze_histogram_algorithm(&self) -> Result<String> {
+        Ok(self
+            .try_get_string("analyze_histogram_algorithm")?
+            .to_lowercase())
+    }
+
+    pub fn get_analyze_histogram_kll_relative_error(&self) -> Result<f64> {
+        let value = self.try_get_string("analyze_histogram_kll_relative_error")?;
+        let relative_error = value.parse::<f64>().map_err(|_| {
+            ErrorCode::WrongValueForVariable(format!(
+                "Invalid analyze_histogram_kll_relative_error value: {value}"
+            ))
+        })?;
+        if relative_error <= 0.0 || !relative_error.is_finite() {
+            return Err(ErrorCode::WrongValueForVariable(format!(
+                "analyze_histogram_kll_relative_error must be finite and greater than zero, got {relative_error}"
+            )));
+        }
+        Ok(relative_error)
     }
 
     pub fn get_enable_auto_analyze(&self) -> Result<bool> {
@@ -1039,10 +1024,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_backpressure_spiller")? != 0)
     }
 
-    pub fn get_max_spill_io_requests(&self) -> Result<u64> {
-        self.try_get_u64("max_spill_io_requests")
-    }
-
     // Get grouping_sets_channel_size.
     pub fn get_grouping_sets_channel_size(&self) -> Result<u64> {
         self.try_get_u64("grouping_sets_channel_size")
@@ -1226,10 +1207,6 @@ impl Settings {
         self.try_set_u64("enable_auto_materialize_cte", val)
     }
 
-    pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
-        self.try_get_u64("max_aggregate_restore_worker")
-    }
-
     pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
@@ -1262,10 +1239,6 @@ impl Settings {
                 s3_storage_class_setting, e
             ))
         })
-    }
-
-    pub fn get_enable_experiment_aggregate(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experiment_aggregate")? != 0)
     }
 
     pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {

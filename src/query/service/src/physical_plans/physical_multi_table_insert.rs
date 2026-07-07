@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
@@ -32,6 +33,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::DynTransformBuilder;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::AsyncTransformer;
 use databend_common_pipeline_transforms::Transformer;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -40,6 +42,7 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
+use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ChunkAppendDataFormatter;
@@ -645,6 +648,11 @@ impl IPhysicalPlan for ChunkAppendData {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkAppendDataFormatter::create(self))
     }
@@ -671,6 +679,9 @@ impl IPhysicalPlan for ChunkAppendData {
         let mut eval_cluster_key_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(self.target_tables.len());
         let mut eval_cluster_key_num = 0;
+        let mut vector_cluster_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(self.target_tables.len());
+        let mut vector_cluster_num = 0;
         let mut sort_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(self.target_tables.len());
         let mut sort_num = 0;
@@ -691,7 +702,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 builder.ctx.clone(),
                 0,
                 block_thresholds,
-                Some(schema),
+                schema,
             )?;
             let operators = cluster_stats_gen.operators.clone();
             if !operators.is_empty() {
@@ -710,16 +721,27 @@ impl IPhysicalPlan for ChunkAppendData {
             } else {
                 eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
-            let cluster_keys = &cluster_stats_gen.cluster_key_index;
-            if !cluster_keys.is_empty() {
-                let sort_desc: Vec<SortColumnDescription> = cluster_keys
-                    .iter()
-                    .map(|index| SortColumnDescription {
-                        offset: *index,
-                        asc: true,
-                        nulls_first: false,
-                    })
-                    .collect();
+            if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+                let rows_per_block = block_thresholds.max_rows_per_block;
+                vector_cluster_builders.push(Box::new(move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformVectorCluster::new(
+                            vector_operator.vector_column_input_offset,
+                            vector_operator.info.dimension,
+                            vector_operator.info.distance_type,
+                            rows_per_block,
+                        ),
+                    )))
+                }));
+                vector_cluster_num += 1;
+            } else {
+                vector_cluster_builders.push(Box::new(builder.dummy_transform_builder()));
+            }
+
+            let sort_desc: Vec<SortColumnDescription> = cluster_stats_gen.sort_descs();
+            if !sort_desc.is_empty() {
                 let sort_desc: Arc<[_]> = sort_desc.into();
                 sort_builders.push(Box::new(
                     move |transform_input_port, transform_output_port| {
@@ -755,6 +777,12 @@ impl IPhysicalPlan for ChunkAppendData {
             builder
                 .main_pipeline
                 .add_transforms_by_chunk(eval_cluster_key_builders)?;
+        }
+
+        if vector_cluster_num > 0 {
+            builder
+                .main_pipeline
+                .add_transforms_by_chunk(vector_cluster_builders)?;
         }
 
         if sort_num > 0 {
@@ -846,14 +874,72 @@ impl IPhysicalPlan for ChunkMerge {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ChunkSerializeCommitMeta {
+    pub meta: PhysicalPlanMeta,
+    pub input: PhysicalPlan,
+    pub targets: Vec<SerializableTable>,
+}
+
+#[typetag::serde]
+impl IPhysicalPlan for ChunkSerializeCommitMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        assert_eq!(children.len(), 1);
+        let input = children.pop().unwrap();
+        PhysicalPlan::new(ChunkSerializeCommitMeta {
+            meta: self.meta.clone(),
+            input,
+            targets: self.targets.clone(),
+        })
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+        add_commit_meta_transforms(builder, &self.targets)?;
+        builder.main_pipeline.try_resize(1)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ChunkCommitInsert {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub overwrite: bool,
     pub deduplicated_label: Option<String>,
+    pub input_commit_meta: bool,
     pub targets: Vec<SerializableTable>,
 }
+
+type MultiTableCommitTargets = (
+    HashMap<u64, Arc<dyn Table>>,
+    HashMap<u64, TableMetaTimestamps>,
+);
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkCommitInsert {
@@ -885,6 +971,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
             update_stream_meta: self.update_stream_meta.clone(),
             overwrite: self.overwrite,
             deduplicated_label: self.deduplicated_label.clone(),
+            input_commit_meta: self.input_commit_meta,
             targets: self.targets.clone(),
         })
     }
@@ -892,42 +979,11 @@ impl IPhysicalPlan for ChunkCommitInsert {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let mut table_meta_timestampss = HashMap::new();
-
-        let mut serialize_segment_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(self.targets.len());
-        let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(self.targets.len());
-        let mut tables = HashMap::new();
-
-        for target in &self.targets {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&target.target_table_info, None)?;
-            let block_thresholds = table.get_block_thresholds();
-            serialize_segment_builders.push(Box::new(
-                builder.serialize_segment_transform_builder(
-                    table.clone(),
-                    block_thresholds,
-                    target.table_meta_timestamps,
-                )?,
-            ));
-            mutation_aggregator_builders.push(Box::new(
-                builder.mutation_aggregator_transform_builder(
-                    table.clone(),
-                    target.table_meta_timestamps,
-                )?,
-            ));
-            table_meta_timestampss.insert(table.get_id(), target.table_meta_timestamps);
-            tables.insert(table.get_id(), table);
-        }
-
-        builder
-            .main_pipeline
-            .add_transforms_by_chunk(serialize_segment_builders)?;
-        builder
-            .main_pipeline
-            .add_transforms_by_chunk(mutation_aggregator_builders)?;
+        let (tables, table_meta_timestampss) = if self.input_commit_meta {
+            build_target_tables(builder, &self.targets)?
+        } else {
+            add_commit_meta_transforms(builder, &self.targets)?
+        };
         builder.main_pipeline.try_resize(1)?;
 
         let catalog = CatalogManager::instance().build_catalog(
@@ -950,4 +1006,59 @@ impl IPhysicalPlan for ChunkCommitInsert {
             )))
         })
     }
+}
+
+fn build_target_tables(
+    builder: &PipelineBuilder,
+    targets: &[SerializableTable],
+) -> Result<MultiTableCommitTargets> {
+    let mut tables = HashMap::new();
+    let mut table_meta_timestampss = HashMap::new();
+
+    for target in targets {
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&target.target_table_info, None)?;
+        table_meta_timestampss.insert(table.get_id(), target.table_meta_timestamps);
+        tables.insert(table.get_id(), table);
+    }
+
+    Ok((tables, table_meta_timestampss))
+}
+
+fn add_commit_meta_transforms(
+    builder: &mut PipelineBuilder,
+    targets: &[SerializableTable],
+) -> Result<MultiTableCommitTargets> {
+    let (tables, table_meta_timestampss) = build_target_tables(builder, targets)?;
+
+    let mut serialize_segment_builders: Vec<DynTransformBuilder> =
+        Vec::with_capacity(targets.len());
+    let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
+        Vec::with_capacity(targets.len());
+
+    for target in targets {
+        let table = tables
+            .get(&target.target_table_info.ident.table_id)
+            .unwrap()
+            .clone();
+        let block_thresholds = table.get_block_thresholds();
+        serialize_segment_builders.push(Box::new(builder.serialize_segment_transform_builder(
+            table.clone(),
+            block_thresholds,
+            target.table_meta_timestamps,
+        )?));
+        mutation_aggregator_builders.push(Box::new(
+            builder.mutation_aggregator_transform_builder(table, target.table_meta_timestamps)?,
+        ));
+    }
+
+    builder
+        .main_pipeline
+        .add_transforms_by_chunk(serialize_segment_builders)?;
+    builder
+        .main_pipeline
+        .add_transforms_by_chunk(mutation_aggregator_builders)?;
+
+    Ok((tables, table_meta_timestampss))
 }

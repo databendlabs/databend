@@ -28,4 +28,3 @@ pub use settings_default::SettingScope;
 pub use settings_getter_setter::FlightCompression;
 pub use settings_getter_setter::FlightKeepAliveParams;
 pub use settings_getter_setter::OutofMemoryBehavior;
-pub use settings_getter_setter::StagePathTraversalPolicy;

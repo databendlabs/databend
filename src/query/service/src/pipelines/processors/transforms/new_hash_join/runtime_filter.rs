@@ -35,7 +35,6 @@ pub struct RuntimeFiltersDesc {
     pub bloom_threshold: usize,
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
-    pub spatial_threshold: usize,
     pub selectivity_threshold: u64,
 
     broadcast_id: Option<u32>,
@@ -49,7 +48,6 @@ impl RuntimeFiltersDesc {
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
         let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
         let func_ctx = ctx.get_function_context()?;
 
@@ -80,7 +78,6 @@ impl RuntimeFiltersDesc {
             bloom_threshold,
             inlist_threshold,
             min_max_threshold,
-            spatial_threshold,
             selectivity_threshold,
             runtime_filters_ready,
             ctx: ctx.clone(),

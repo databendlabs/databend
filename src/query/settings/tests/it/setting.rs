@@ -17,7 +17,6 @@ use databend_common_config::InnerConfig;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_common_settings::StagePathTraversalPolicy;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -97,47 +96,6 @@ async fn test_set_settings() {
         }
 
         {
-            assert_eq!(
-                settings.get_stage_path_traversal_policy().unwrap(),
-                StagePathTraversalPolicy::ReadOnly
-            );
-            settings
-                .set_setting(
-                    "stage_path_traversal_policy".to_string(),
-                    "enable".to_string(),
-                )
-                .unwrap();
-            assert_eq!(
-                settings.get_stage_path_traversal_policy().unwrap(),
-                StagePathTraversalPolicy::Enable
-            );
-            settings
-                .set_setting(
-                    "stage_path_traversal_policy".to_string(),
-                    "DISABLE".to_string(),
-                )
-                .unwrap();
-            assert_eq!(
-                settings.get_stage_path_traversal_policy().unwrap(),
-                StagePathTraversalPolicy::Disable
-            );
-
-            let result = settings.set_setting(
-                "stage_path_traversal_policy".to_string(),
-                "invalid".to_string(),
-            );
-            let expect = "WrongValueForVariable. Code: 2803, Text = Value invalid is not within the allowed values [\"disable\", \"enable\", \"readonly\"].";
-            assert_eq!(expect, format!("{}", result.unwrap_err()));
-
-            settings
-                .set_setting(
-                    "stage_path_traversal_policy".to_string(),
-                    "readonly".to_string(),
-                )
-                .unwrap();
-        }
-
-        {
             assert!(!settings.get_enable_proxy_bloom_pruning().unwrap());
             settings
                 .set_setting("enable_proxy_bloom_pruning".to_string(), "1".to_string())
@@ -146,6 +104,23 @@ async fn test_set_settings() {
 
             let result =
                 settings.set_setting("enable_proxy_bloom_pruning".to_string(), "2".to_string());
+            let expect =
+                "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
+
+        {
+            assert!(!settings.get_enable_spatial_join().unwrap());
+            assert_eq!(
+                settings.get_spatial_join_max_build_rows().unwrap(),
+                1_000_000
+            );
+            settings
+                .set_setting("enable_spatial_join".to_string(), "1".to_string())
+                .unwrap();
+            assert!(settings.get_enable_spatial_join().unwrap());
+
+            let result = settings.set_setting("enable_spatial_join".to_string(), "2".to_string());
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
             assert_eq!(expect, format!("{}", result.unwrap_err()));

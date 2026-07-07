@@ -24,7 +24,6 @@ use super::compress;
 use crate::kv_pb_api::errors::NoneValue;
 use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::errors::PbDecodeError;
-use crate::kv_pb_api::errors::PbEncodeError;
 
 #[allow(deprecated)]
 fn prost_decode_error(message: impl Into<String>) -> prost::DecodeError {
@@ -34,7 +33,7 @@ fn prost_decode_error(message: impl Into<String>) -> prost::DecodeError {
 /// Encode a `FromToProto` value to protobuf bytes, with transparent zstd compression.
 ///
 /// Delegates to [`compress::GLOBAL_ENCODER`].
-pub fn encode_pb<T: FromToProto>(value: &T) -> Result<Vec<u8>, PbEncodeError> {
+pub fn encode_pb<T: FromToProto>(value: &T) -> Vec<u8> {
     compress::GLOBAL_ENCODER.encode_pb(value)
 }
 
@@ -49,7 +48,7 @@ pub fn decode_pb<T: FromToProto>(buf: &[u8]) -> Result<T, PbDecodeError> {
 /// Encode an upsert Operation of T into protobuf encoded value.
 ///
 /// Delegates to [`compress::GLOBAL_ENCODER`].
-pub fn encode_operation<T>(value: &Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
+pub fn encode_operation<T>(value: &Operation<T>) -> Operation<Vec<u8>>
 where T: FromToProto {
     compress::GLOBAL_ENCODER.encode_operation(value)
 }
@@ -149,12 +148,12 @@ mod tests {
         };
 
         // Disabled: raw protobuf, no header.
-        let encoded_off = Encoder::new(false).encode_pb(&meta).unwrap();
+        let encoded_off = Encoder::new(false).encode_pb(&meta);
         assert_ne!(encoded_off.first().copied(), Some(0x0F));
         assert_eq!(decode_pb::<CatalogMeta>(&encoded_off).unwrap(), meta);
 
         // Enabled: zstd header.
-        let encoded_on = Encoder::new(true).encode_pb(&meta).unwrap();
+        let encoded_on = Encoder::new(true).encode_pb(&meta);
         assert_eq!(&encoded_on[..4], &[0x0F, 0x01, 0x00, 0x00]);
         assert_eq!(decode_pb::<CatalogMeta>(&encoded_on).unwrap(), meta);
     }
@@ -171,7 +170,7 @@ mod tests {
             created_on: DateTime::<Utc>::MIN_UTC,
         };
 
-        let encoded = Encoder::new(true).encode_pb(&meta).unwrap();
+        let encoded = Encoder::new(true).encode_pb(&meta);
 
         assert_ne!(
             encoded.first().copied(),

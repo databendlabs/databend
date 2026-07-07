@@ -29,6 +29,32 @@ query I
 select * from (select * from numbers(100)) n left semi join t1 on n.number = t1.a;
 ----
 
+# Regression: grouping by b does not make the expression b % 2 unique.
+query I
+select a
+from (values (0)) as t1(a)
+left semi join (
+    select b
+    from (values (0), (2)) as t2(b)
+    group by b
+) as g on g.b % 2 = t1.a;
+----
+0
+
+# Regression: the join keys must cover the full GROUP BY key. Grouping by
+# (b, c) does not make b unique, so rewriting this semi join to an inner join
+# would duplicate the probe row.
+query I
+select a
+from (values (0)) as t1(a)
+left semi join (
+    select b, c
+    from (values (0, 1), (0, 2)) as t2(b, c)
+    group by b, c
+) as g on g.b = t1.a;
+----
+0
+
 # left anti join with empty build side
 query I
 select * from (select * from numbers(10)) n left anti join t1 on n.number = t1.a order by number;
@@ -309,4 +335,3 @@ drop table if exists t1;
 
 statement ok
 with v2 as (SELECT 'xx' || cast(number as string) AS invoice_nr FROM numbers(135) group by invoice_nr order by invoice_nr) select v2.invoice_nr from v2 where EXISTS (SELECT cast(number as string) AS invoice_nr FROM numbers(800) where v2.invoice_nr = cast(number as string)) ignore_result;
-

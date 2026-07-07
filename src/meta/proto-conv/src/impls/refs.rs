@@ -43,12 +43,12 @@ impl FromToProto for mt::TableTag {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            expire_at: self.expire_at.to_pb_opt()?,
+            expire_at: self.expire_at.to_pb_opt(),
             snapshot_loc: self.snapshot_loc.clone(),
-        })
+        }
     }
 }

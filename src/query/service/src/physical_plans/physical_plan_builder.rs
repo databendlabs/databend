@@ -43,6 +43,7 @@ pub struct PhysicalPlanBuilder {
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
+    pub build_depth: usize,
 }
 
 impl PhysicalPlanBuilder {
@@ -56,6 +57,7 @@ impl PhysicalPlanBuilder {
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
+            build_depth: 0,
         }
     }
 
@@ -69,15 +71,39 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        let is_root_build = self.build_depth == 0;
+        if is_root_build {
+            self.ctx.clear_pruned_partitions_stats();
+        }
+
         if !self.is_cte_required_columns_collected {
             self.collect_cte_required_columns(s_expr, required.clone())?;
             self.is_cte_required_columns_collected = true;
         }
 
-        let mut plan = self.build_physical_plan(s_expr, required).await?;
-        plan.adjust_plan_id(&mut 0);
+        self.build_depth += 1;
+        let build_result = self.build_physical_plan(s_expr, required).await;
+        self.build_depth -= 1;
+
+        let mut plan = build_result?;
+        if is_root_build {
+            plan.adjust_plan_id(&mut 0);
+            self.publish_synchronous_pruning_stats(&plan);
+        }
 
         Ok(plan)
+    }
+
+    fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
+        let mut sources = Vec::new();
+        plan.get_all_data_source(&mut sources);
+
+        for (plan_id, source) in sources {
+            if source.statistics.pruning_stats != Default::default() {
+                self.ctx
+                    .set_pruned_partitions_stats(plan_id, source.statistics);
+            }
+        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]

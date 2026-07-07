@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 # set up
-cat <<EOF |  $BENDSQL_CLIENT_CONNECT > /dev/null
+cat <<EOF |  bendsql_connect_root > /dev/null
 create or replace database i13947;
 use i13947;
 create or replace stage test_stage;
@@ -27,4 +27,4 @@ curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
   -d '{"sql": "copy into i13947.tmp from (select * from @test_stage)", "pagination": { "wait_time_secs": 6}}'  \
   | jq -r '.stats.write_progress.rows, .error'
 
-echo "DROP database i13947;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP database i13947;" | bendsql_connect_root

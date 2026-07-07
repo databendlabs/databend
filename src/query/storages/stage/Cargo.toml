@@ -14,6 +14,7 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bstr = { workspace = true }
+chrono = { workspace = true }
 csv-core = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }

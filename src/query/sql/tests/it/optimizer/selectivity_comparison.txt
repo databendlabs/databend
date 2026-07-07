@@ -242,3 +242,219 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
 
+=== topn_equality_cache ===
+description: Equality predicates should use exact TopN frequencies when the constant is cached.
+expr          : id = 42
+cardinality   : 1000
+estimated     : 37
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(42), max: UInt(42), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 42
+cardinality   : 1000
+estimated     : 963
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 963.0, null_count: 0, histogram: None }
+
+expr          : id = 7
+cardinality   : 1000
+estimated     : 1
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 37 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+
+=== count_min_sketch_equality_cache ===
+description: Equality predicates should use Count-Min Sketch estimates when the value is clearly above the NDV fallback.
+expr          : id = 77
+cardinality   : 1000
+estimated     : 42
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(77), max: UInt(77), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 77
+cardinality   : 1000
+estimated     : 959
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: ~99.99999999999865[..100.0], null_count: 0, histogram: None }
+
+=== count_min_sketch_equality_cache_fallback ===
+description: Count-Min Sketch estimates should fall back when the value is not clearly above the NDV fallback.
+expr          : id = 77
+cardinality   : 1000
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(77), max: UInt(77), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 77
+cardinality   : 1000
+estimated     : 990
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+
+=== count_min_sketch_hot_value_with_coarse_error ===
+description: Count-Min Sketch estimates should still be used when the error bound is coarse but the value is clearly hot.
+expr          : id = 0
+cardinality   : 200000
+estimated     : 160000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9999), ndv: 2001.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(0), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 0
+cardinality   : 200000
+estimated     : 40200
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9999), ndv: 2001.0, null_count: 0, histogram: None }
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9999), ndv: ~2000.9999996362567[..2001.0], null_count: 0, histogram: None }
+
+=== topn_precedes_count_min_sketch ===
+description: TopN equality estimates should take precedence when both TopN and Count-Min Sketch have a frequency for the scalar.
+expr          : id = 77
+cardinality   : 1000
+estimated     : 37
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 100.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(77_u64) => 37 (error 0)
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(77), max: UInt(77), ndv: 1.0, null_count: 0, histogram: None }
+
+=== count_min_sketch_precedes_approximate_topn ===
+description: Count-Min Sketch should be used when an approximate TopN hit is looser than the CMS estimate.
+expr          : id = 199
+cardinality   : 1000000
+estimated     : 2500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(99999), ndv: 100000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(199_u64) => 20000 (error 17500)
+in cms        :
+0 present
+out stats     :
+0 ColumnStat { min: UInt(199), max: UInt(199), ndv: 1.0, null_count: 0, histogram: None }
+
+=== topn_equality_cache_with_and_filters ===
+description: TopN equality estimates should compose with AND filters.
+expr          : and_filters(id = 1, id = 2)
+cardinality   : 1000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(1_u64) => 300 (error 0)
+0 Number(2_u64) => 200 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : and_filters(id > 10, id = 1)
+cardinality   : 1000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(1_u64) => 300 (error 0)
+0 Number(2_u64) => 200 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 0.0, null_count: 0, histogram: None }
+
+=== topn_equality_cache_with_error ===
+description: Approximate TopN frequencies should use the count upper bound for equality and the lower bound for inequality.
+expr          : id = 42
+cardinality   : 1000
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 100 (error 60)
+out stats     :
+0 ColumnStat { min: UInt(42), max: UInt(42), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 42
+cardinality   : 1000
+estimated     : 960
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 100 (error 60)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 960.0, null_count: 0, histogram: None }
+
+=== topn_equality_cache_fallback ===
+description: Approximate TopN hits should fall back when the lower bound does not exceed the NDV estimate.
+expr          : id = 42
+cardinality   : 1000
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 10.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 500 (error 450)
+out stats     :
+0 ColumnStat { min: UInt(42), max: UInt(42), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : id != 42
+cardinality   : 1000
+estimated     : 900
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 10.0, null_count: 0, histogram: None }
+in topn       :
+0 Number(42_u64) => 500 (error 450)
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 10.0, null_count: 0, histogram: None }
+
+=== topn_nullable_not_equal ===
+description: TopN inequality estimates should exclude null rows from SQL not-equal matches.
+expr          : n = 1
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: 5.0, null_count: 50, histogram: None }
+in topn       :
+0 Number(1_u64) => 10 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(1), max: UInt(1), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : n != 1
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: 5.0, null_count: 50, histogram: None }
+in topn       :
+0 Number(1_u64) => 10 (error 0)
+out stats     :
+0 ColumnStat { min: UInt(1), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: ~20.0, histogram: None }
+

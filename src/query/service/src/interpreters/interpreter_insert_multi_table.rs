@@ -32,6 +32,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::Else;
 use databend_common_sql::plans::FunctionCall;
@@ -52,12 +53,16 @@ use crate::physical_plans::ChunkEvalScalar;
 use crate::physical_plans::ChunkFillAndReorder;
 use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
+use crate::physical_plans::ChunkSerializeCommitMeta;
 use crate::physical_plans::Duplicate;
 use crate::physical_plans::EvalScalar;
+use crate::physical_plans::Exchange;
 use crate::physical_plans::FillAndReorder;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MultiInsertEvalScalar;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::SerializableTable;
 use crate::physical_plans::Shuffle;
@@ -99,7 +104,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let physical_plan = self.build_physical_plan().await?;
+        let physical_plan = self.build_physical_plan(false).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         // Execute hook.
@@ -126,11 +131,11 @@ impl Interpreter for InsertMultiTableInterpreter {
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let mut columns = vec![];
-        let status = self.ctx.mutation_state().multi_table_insert_status();
-        let guard = status.lock().unwrap();
+        let insert_rows = self.ctx.mutation_state().multi_table_insert_rows();
+        let guard = insert_rows.lock().unwrap();
         for (tid, _) in &self.plan.target_tables {
-            let insert_rows = guard.insert_rows.get(tid).cloned().unwrap_or_default();
-            columns.push(UInt64Type::from_data(vec![insert_rows]));
+            let insert_row = guard.get(tid).cloned().unwrap_or_default();
+            columns.push(UInt64Type::from_data(vec![insert_row]));
         }
         let blocks = vec![DataBlock::new_from_columns(columns)];
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
@@ -138,16 +143,16 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(&self, dry_run: bool) -> Result<PhysicalPlan> {
         let (mut root, _) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches
-            .build_serializable_target_tables(self.ctx.clone())
+            .build_serializable_target_tables(self.ctx.clone(), dry_run)
             .await?;
         let deduplicated_serializable_tables = branches
-            .build_deduplicated_serializable_target_tables(self.ctx.clone())
+            .build_deduplicated_serializable_target_tables(self.ctx.clone(), dry_run)
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
         let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
@@ -182,61 +187,63 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        root = PhysicalPlan::new(Duplicate {
-            input: root,
-            n: branches.len(),
-            meta: PhysicalPlanMeta::new("Duplicate"),
-        });
+        let top_exchange = Exchange::from_physical_plan(&root);
+        if let Some(exchange) = top_exchange
+            && exchange.kind != FragmentKind::Merge
+        {
+            return Err(ErrorCode::Internal(format!(
+                "unexpected top-level exchange kind for multi-table insert: {:?}",
+                exchange.kind
+            )));
+        }
 
-        let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = PhysicalPlan::new(Shuffle {
-            input: root,
-            strategy: shuffle_strategy,
-            meta: PhysicalPlanMeta::new("Shuffle"),
-        });
-
-        root = PhysicalPlan::new(ChunkFilter {
-            predicates,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkFilter"),
-        });
-
-        root = PhysicalPlan::new(ChunkEvalScalar {
-            eval_scalars,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
-        });
-
-        root = PhysicalPlan::new(ChunkCastSchema {
-            cast_schemas,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
-        });
-
-        root = PhysicalPlan::new(ChunkFillAndReorder {
-            fill_and_reorders,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
-        });
-
-        root = PhysicalPlan::new(ChunkAppendData {
-            input: root,
-            target_tables: serializable_tables.clone(),
-            meta: PhysicalPlanMeta::new("ChunkAppendData"),
-        });
-
-        root = PhysicalPlan::new(ChunkMerge {
-            group_ids,
-            input: root,
-            meta: PhysicalPlanMeta::new("ChunkMerge"),
-        });
+        let distributed_insert = branches.support_distributed_insert() && top_exchange.is_some();
+        let input = if let Some(exchange) = top_exchange.filter(|_| distributed_insert) {
+            let input = exchange.input.clone();
+            let remote_write_plan = Self::build_write_plan(
+                input,
+                branches.len(),
+                predicates,
+                eval_scalars,
+                cast_schemas,
+                fill_and_reorders,
+                serializable_tables.clone(),
+            );
+            let remote_commit_input = PhysicalPlan::new(ChunkMerge {
+                group_ids: group_ids.clone(),
+                input: remote_write_plan,
+                meta: PhysicalPlanMeta::new("ChunkMerge"),
+            });
+            let remote_commit_meta = PhysicalPlan::new(ChunkSerializeCommitMeta {
+                input: remote_commit_input,
+                targets: deduplicated_serializable_tables.clone(),
+                meta: PhysicalPlanMeta::new("CommitMeta"),
+            });
+            exchange.derive(vec![remote_commit_meta])
+        } else {
+            let write_plan = Self::build_write_plan(
+                root,
+                branches.len(),
+                predicates,
+                eval_scalars,
+                cast_schemas,
+                fill_and_reorders,
+                serializable_tables.clone(),
+            );
+            PhysicalPlan::new(ChunkMerge {
+                group_ids,
+                input: write_plan,
+                meta: PhysicalPlanMeta::new("ChunkMerge"),
+            })
+        };
 
         root = PhysicalPlan::new(ChunkCommitInsert {
             update_stream_meta,
 
-            input: root,
+            input,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
+            input_commit_meta: distributed_insert,
             targets: deduplicated_serializable_tables,
             meta: PhysicalPlanMeta::new("Commit"),
         });
@@ -244,6 +251,58 @@ impl InsertMultiTableInterpreter {
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
+    }
+
+    fn build_write_plan(
+        input: PhysicalPlan,
+        branch_len: usize,
+        predicates: Vec<Option<RemoteExpr>>,
+        eval_scalars: Vec<Option<MultiInsertEvalScalar>>,
+        cast_schemas: Vec<Option<CastSchema>>,
+        fill_and_reorders: Vec<Option<FillAndReorder>>,
+        target_tables: Vec<SerializableTable>,
+    ) -> PhysicalPlan {
+        let root = PhysicalPlan::new(Duplicate {
+            input,
+            n: branch_len,
+            meta: PhysicalPlanMeta::new("Duplicate"),
+        });
+
+        let root = PhysicalPlan::new(Shuffle {
+            input: root,
+            strategy: ShuffleStrategy::Transpose(branch_len),
+            meta: PhysicalPlanMeta::new("Shuffle"),
+        });
+
+        let root = PhysicalPlan::new(ChunkFilter {
+            predicates,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFilter"),
+        });
+
+        let root = PhysicalPlan::new(ChunkEvalScalar {
+            eval_scalars,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
+        });
+
+        let root = PhysicalPlan::new(ChunkCastSchema {
+            cast_schemas,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
+        });
+
+        let root = PhysicalPlan::new(ChunkFillAndReorder {
+            fill_and_reorders,
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
+        });
+
+        PhysicalPlan::new(ChunkAppendData {
+            input: root,
+            target_tables,
+            meta: PhysicalPlanMeta::new("ChunkAppendData"),
+        })
     }
 
     async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
@@ -479,9 +538,16 @@ impl InsertIntoBranches {
         self.len
     }
 
+    fn support_distributed_insert(&self) -> bool {
+        self.tables
+            .iter()
+            .all(|table| table.support_distributed_insert() && !table.is_temp())
+    }
+
     async fn build_serializable_target_tables(
         &self,
         ctx: Arc<QueryContext>,
+        dry_run: bool,
     ) -> Result<Vec<SerializableTable>> {
         let mut serializable_tables = vec![];
         for table in &self.tables {
@@ -489,7 +555,11 @@ impl InsertIntoBranches {
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let snapshot = fuse_table.read_table_snapshot().await?;
-            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?;
+            let table_meta_timestamps = if dry_run {
+                ctx.get_table_meta_timestamps_without_txn_record(table.as_ref(), snapshot)?
+            } else {
+                ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?
+            };
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
@@ -502,6 +572,7 @@ impl InsertIntoBranches {
     async fn build_deduplicated_serializable_target_tables(
         &self,
         ctx: Arc<QueryContext>,
+        dry_run: bool,
     ) -> Result<Vec<SerializableTable>> {
         let mut serializable_tables = vec![];
         let mut last_table_id = None;
@@ -515,7 +586,11 @@ impl InsertIntoBranches {
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let snapshot = fuse_table.read_table_snapshot().await?;
-            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?;
+            let table_meta_timestamps = if dry_run {
+                ctx.get_table_meta_timestamps_without_txn_record(table.as_ref(), snapshot)?
+            } else {
+                ctx.get_table_meta_timestamps(table.as_ref(), snapshot)?
+            };
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),

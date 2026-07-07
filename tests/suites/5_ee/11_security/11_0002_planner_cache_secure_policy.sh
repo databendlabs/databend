@@ -13,7 +13,7 @@ USER_B="pc_user_b"
 PASSWORD="123"
 
 quiet_root_sql() {
-	echo "$1" | $BENDSQL_CLIENT_OUTPUT_NULL
+	echo "$1" | bendsql_connect_root_null
 }
 
 cleanup() {
@@ -27,7 +27,7 @@ cleanup() {
 run_user_query() {
 	local user="$1"
 	local sql="$2"
-	bendsql_query_http_user_connect "${user}" "${PASSWORD}" -A --quote-style=never <<<"${sql}"
+	bendsql_connect_user "${user}" "${PASSWORD}" -A --quote-style=never <<<"${sql}"
 }
 
 expect_user_query() {

@@ -41,6 +41,7 @@ use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
 use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::ewkb_to_bbox;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -753,7 +754,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             let srid = ewkb_to_bbox(ewkb)
                 .and_then(|result| result.srid)
-                .unwrap_or_default();
+                .unwrap_or(UNKNOWN_SRID);
             output.push(srid);
         }),
     );

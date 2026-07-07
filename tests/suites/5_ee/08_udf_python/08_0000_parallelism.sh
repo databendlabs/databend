@@ -2,7 +2,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-$BENDSQL_CLIENT_CONNECT --query="""
+bendsql_connect_root --query="""
 CREATE OR REPLACE FUNCTION python_sleep ( INT64 ) RETURNS INT64 LANGUAGE python HANDLER = 'sleep' AS \$\$
 import time
 
@@ -12,8 +12,8 @@ def sleep(n):
 \$\$;
 """
 
-$BENDSQL_CLIENT_CONNECT --query='select python_sleep(100)' &
+bendsql_connect_root --query='select python_sleep(100)' &
 job_pid=$!
-$BENDSQL_CLIENT_CONNECT --query='select python_sleep(1)'
-$BENDSQL_CLIENT_CONNECT --query='select python_sleep(2)'
+bendsql_connect_root --query='select python_sleep(1)'
+bendsql_connect_root --query='select python_sleep(2)'
 wait $job_pid

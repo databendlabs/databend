@@ -116,7 +116,8 @@ impl PruningContext {
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
-        let collect_pruning_cost = matches!(ctx.get_query_kind(), QueryKind::Explain);
+        let collect_pruning_cost =
+            matches!(ctx.get_query_kind(), QueryKind::Explain | QueryKind::Query);
 
         let filter_expr = push_down.as_ref().and_then(|extra| {
             extra
@@ -160,6 +161,9 @@ impl PruningContext {
             default_stats,
         )?;
 
+        let pruning_stats = Arc::new(FusePruningStatistics::default());
+        let pruning_cost = PruningCostController::new(pruning_stats.clone(), collect_pruning_cost);
+
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
@@ -179,6 +183,7 @@ impl PruningContext {
                 bloom_index_cols,
                 ngram_args,
                 bloom_index_builder,
+                pruning_cost.clone(),
             )?
         };
 
@@ -232,10 +237,6 @@ impl PruningContext {
             Some("pruning-worker".to_owned()),
         )?);
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
-        let pruning_stats = Arc::new(FusePruningStatistics::default());
-
-        let pruning_cost = PruningCostController::new(pruning_stats.clone(), collect_pruning_cost);
-
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
@@ -423,6 +424,7 @@ impl FusePruner {
                 let segment_pruner = segment_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
                 let push_down = self.push_down.clone();
+                let pruning_cost = self.pruning_ctx.pruning_cost.clone();
 
                 async move {
                     // Build pruning tasks.
@@ -463,6 +465,7 @@ impl FusePruner {
                                 &segment_location.location.0,
                                 compact_segment_info,
                                 populate_block_meta_cache,
+                                &pruning_cost,
                             )?;
                             res.extend(
                                 block_pruner
@@ -473,8 +476,12 @@ impl FusePruner {
                     } else {
                         let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
-                            let mut block_metas =
-                                Self::extract_block_metas(&location.location.0, &info, true)?;
+                            let mut block_metas = Self::extract_block_metas(
+                                &location.location.0,
+                                &info,
+                                true,
+                                &pruning_cost,
+                            )?;
                             if let Some(probability) = sample_probability {
                                 if block_metas.len() <= SMALL_DATASET_SAMPLE_THRESHOLD {
                                     // Deterministic sampling for small datasets
@@ -541,18 +548,25 @@ impl FusePruner {
         segment_path: &str,
         segment: &CompactSegmentInfo,
         populate_cache: bool,
+        pruning_cost: &PruningCostController,
     ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
         if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {
+                let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
+                    segment.block_metas()
+                })?;
                 match populate_cache {
-                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
-                    false => Ok(Arc::new(segment.block_metas()?)),
+                    true => Ok(cache.insert(segment_path.to_string(), metas)),
+                    false => Ok(Arc::new(metas)),
                 }
             }
         } else {
-            Ok(Arc::new(segment.block_metas()?))
+            let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
+                segment.block_metas()
+            })?;
+            Ok(Arc::new(metas))
         }
     }
 
@@ -709,6 +723,9 @@ impl FusePruner {
     pub fn pruning_stats(&self) -> databend_common_catalog::plan::PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();
 
+        let segments_read_cost = stats.get_segments_read_cost();
+        let segments_decompress_cost = stats.get_segments_decompress_cost();
+
         let segments_range_pruning_before = stats.get_segments_range_pruning_before() as usize;
         let segments_range_pruning_after = stats.get_segments_range_pruning_after() as usize;
         let segments_range_pruning_cost = stats.get_segments_range_pruning_cost();
@@ -720,6 +737,7 @@ impl FusePruner {
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
         let blocks_bloom_pruning_cost = stats.get_blocks_bloom_pruning_cost();
+        let blocks_bloom_index_read_cost = stats.get_blocks_bloom_index_read_cost();
 
         let blocks_inverted_index_pruning_before =
             stats.get_blocks_inverted_index_pruning_before() as usize;
@@ -744,6 +762,8 @@ impl FusePruner {
         let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
 
         databend_common_catalog::plan::PruningStatistics {
+            segments_read_cost,
+            segments_decompress_cost,
             segments_range_pruning_before,
             segments_range_pruning_after,
             segments_range_pruning_cost,
@@ -753,6 +773,7 @@ impl FusePruner {
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
             blocks_bloom_pruning_cost,
+            blocks_bloom_index_read_cost,
             blocks_inverted_index_pruning_before,
             blocks_inverted_index_pruning_after,
             blocks_inverted_index_pruning_cost,

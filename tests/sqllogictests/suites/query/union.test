@@ -365,6 +365,46 @@ select a, typeof(a), cast(a as string) as s from (select '1' as a union all sele
 1.00000 DECIMAL(38, 5) 1.00000
 
 statement ok
+drop table if exists tmp_union_bool_nn;
+
+statement ok
+drop table if exists tmp_union_bool_null;
+
+statement ok
+create table tmp_union_bool_nn(b boolean not null);
+
+statement ok
+create table tmp_union_bool_null(b boolean null);
+
+statement ok
+insert into tmp_union_bool_nn values (true), (false);
+
+statement ok
+insert into tmp_union_bool_null values (null), (true);
+
+statement ok
+analyze table tmp_union_bool_nn;
+
+statement ok
+analyze table tmp_union_bool_null;
+
+query B rowsort
+select b from (
+  select b from tmp_union_bool_nn
+  union all
+  select b from tmp_union_bool_null
+) where b = true;
+----
+1
+1
+
+statement ok
+drop table tmp_union_bool_nn;
+
+statement ok
+drop table tmp_union_bool_null;
+
+statement ok
 create or replace table t1 (a int, b int);
 
 statement ok

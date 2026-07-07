@@ -24,7 +24,6 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_config::UDFConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::normalize_identifier;
@@ -66,8 +65,7 @@ impl BuiltinUDFs {
                                         "StageLocation must have a corresponding variable name",
                                     ));
                                 }
-                                arg_datatypes
-                                    .push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                                arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                             }
                         }
                         UDFArgs::NameWithTypes(name_with_types) => {
@@ -79,12 +77,11 @@ impl BuiltinUDFs {
                                     )
                                     .name,
                                 );
-                                arg_datatypes
-                                    .push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                                arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                             }
                         }
                     }
-                    let return_type = DataType::from(&resolve_type_name_udf(&return_type)?);
+                    let return_type = resolve_type_name_udf(&return_type)?;
                     let udf = UserDefinedFunction::create_udf_server(
                         name,
                         &address,

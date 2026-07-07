@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
@@ -62,7 +63,6 @@ use super::schema_api::mark_table_index_as_deleted;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
@@ -95,17 +95,13 @@ where
 
         let name_ident = &req.name_ident;
         let meta = &req.meta;
-        let create_mode = match req.create_option {
-            CreateOption::Create | CreateOption::CreateIfNotExists => CreateIdValueMode::CreateOnly,
-            CreateOption::CreateOrReplace => CreateIdValueMode::CreateOrReplace,
-        };
-        let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident))?;
+        let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident));
 
         let create_res = self
             .create_id_value(
                 name_ident,
                 meta,
-                create_mode,
+                req.override_existing,
                 |id| {
                     vec![(
                         IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
@@ -121,20 +117,14 @@ where
             .await?;
 
         match create_res {
-            CreateIdValueResult::Created(id) => Ok(CreateIndexReply { index_id: *id }),
-            CreateIdValueResult::Existing(existent) => match req.create_option {
-                CreateOption::Create => {
-                    Err(AppError::from(name_ident.exist_error(func_name!())).into())
-                }
-                CreateOption::CreateIfNotExists => Ok(CreateIndexReply {
-                    index_id: *existent.data,
-                }),
-                CreateOption::CreateOrReplace => {
-                    unreachable!(
-                        "create_index: CreateOrReplace should never conflict with existent"
-                    );
-                }
-            },
+            CreateIdValueResult::Created(id) => Ok(CreateIndexReply {
+                index_id: *id,
+                created: true,
+            }),
+            CreateIdValueResult::Existing(existent) => Ok(CreateIndexReply {
+                index_id: *existent.data,
+                created: false,
+            }),
         }
     }
 
@@ -362,7 +352,7 @@ where
                 //
                 vec![txn_cond_eq_seq(&tbid, tb_meta_seq)],
                 vec![
-                    txn_put_pb_with_ttl(&tbid, &table_meta, None)?, // tb_id -> tb_meta
+                    txn_put_pb_with_ttl(&tbid, &table_meta, None), // tb_id -> tb_meta
                 ],
             );
 
@@ -447,7 +437,7 @@ where
                     txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 vec![
-                    txn_put_pb(&tbid, &table_meta)?, // tb_id -> tb_meta
+                    txn_put_pb(&tbid, &table_meta), // tb_id -> tb_meta
                     TxnOp::put(m_key, m_value),
                 ],
             );

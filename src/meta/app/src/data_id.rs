@@ -227,8 +227,7 @@ mod prost_message_impl {
                 v = v.wrapping_mul(7);
 
                 let id = DataId::<Resource>::new(v);
-                let mut buf = Vec::new();
-                prost::Message::encode(&id, &mut buf).unwrap();
+                let buf = prost::Message::encode_to_vec(&id);
                 let expected = format!("{}", v);
                 assert_eq!(buf, expected.as_bytes());
 

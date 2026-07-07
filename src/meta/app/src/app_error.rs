@@ -19,6 +19,9 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_meta_client::types::MatchSeq;
 
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
+use crate::UnknownOrExistsError;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;
 use crate::principal::procedure_name_ident;
@@ -30,7 +33,6 @@ use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
-use crate::tenant_key::ident::TIdent;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -1018,22 +1020,33 @@ pub enum AppError {
 }
 
 impl AppError {
-    /// Create an `unknown` TIdent error.
-    pub fn unknown<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    /// Create an `unknown` meta-service key error.
+    pub fn unknown<K>(key: &K, ctx: impl Display) -> AppError
     where
-        N: Clone,
-        AppError: From<UnknownError<R, N>>,
+        K: KeyUnknownBuilder,
+        AppError: From<K::UnknownError>,
     {
-        AppError::from(ident.unknown_error(ctx))
+        AppError::from(key.unknown_error(ctx))
     }
 
-    /// Create an `exist` TIdent error.
-    pub fn exists<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    /// Create an `exist` meta-service key error.
+    pub fn exists<K>(key: &K, ctx: impl Display) -> AppError
     where
-        N: Clone,
-        AppError: From<ExistError<R, N>>,
+        K: KeyExistsBuilder,
+        AppError: From<K::ExistError>,
     {
-        AppError::from(ident.exist_error(ctx))
+        AppError::from(key.exist_error(ctx))
+    }
+}
+
+impl<UnknownError, ExistError> From<UnknownOrExistsError<UnknownError, ExistError>> for AppError
+where AppError: From<UnknownError> + From<ExistError>
+{
+    fn from(error: UnknownOrExistsError<UnknownError, ExistError>) -> Self {
+        match error {
+            UnknownOrExistsError::Unknown(error) => AppError::from(error),
+            UnknownOrExistsError::Exists(error) => AppError::from(error),
+        }
     }
 }
 

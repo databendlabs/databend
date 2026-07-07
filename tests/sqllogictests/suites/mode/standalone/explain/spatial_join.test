@@ -1,0 +1,231 @@
+statement ok
+DROP DATABASE IF EXISTS test_spatial_join_explain
+
+statement ok
+CREATE DATABASE test_spatial_join_explain
+
+statement ok
+USE test_spatial_join_explain
+
+statement ok
+CREATE TABLE left_polygons(id INT, geom GEOMETRY)
+
+statement ok
+CREATE TABLE right_polygons(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO left_polygons VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(2, TO_GEOMETRY('POLYGON((10 0, 10 5, 15 5, 15 0, 10 0))'))
+
+statement ok
+INSERT INTO right_polygons VALUES
+(10, TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))')),
+(20, TO_GEOMETRY('POLYGON((11 1, 11 2, 12 2, 12 1, 11 1))')),
+(30, TO_GEOMETRY('POLYGON((100 100, 100 101, 101 101, 101 100, 100 100))'))
+
+statement ok
+SET enable_spatial_join = 0
+
+query T
+EXPLAIN SELECT l.id, r.id
+FROM left_polygons AS l
+JOIN right_polygons AS r
+ON ST_Intersects(l.geom, r.geom)
+----
+HashJoin
+├── output columns: [r.id (#2), l.id (#0)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [st_intersects(l.geom (#1), r.geom (#3))]
+├── estimated rows: 6.00
+├── TableScan(Build)
+│   ├── table: default.test_spatial_join_explain.left_polygons
+│   ├── scan id: 0
+│   ├── output columns: [id (#0), geom (#1)]
+│   ├── read rows: 2
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.test_spatial_join_explain.right_polygons
+    ├── scan id: 1
+    ├── output columns: [id (#2), geom (#3)]
+    ├── read rows: 3
+    ├── read size: <slt:ignore>
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+statement ok
+SET enable_spatial_join = 1
+
+query T
+EXPLAIN SELECT l.id, r.id
+FROM left_polygons AS l
+JOIN right_polygons AS r
+ON ST_Intersects(l.geom, r.geom)
+----
+SpatialJoin
+├── output columns: [r.id (#2), l.id (#0)]
+├── build side: Right
+├── spatial predicates: [st_intersects(l.geom (#1), r.geom (#3))]
+├── TableScan(Build)
+│   ├── table: default.test_spatial_join_explain.left_polygons
+│   ├── scan id: 0
+│   ├── output columns: [id (#0), geom (#1)]
+│   ├── read rows: 2
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.test_spatial_join_explain.right_polygons
+    ├── scan id: 1
+    ├── output columns: [id (#2), geom (#3)]
+    ├── read rows: 3
+    ├── read size: <slt:ignore>
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+EXPLAIN SELECT l.id, r.id
+FROM left_polygons AS l
+JOIN right_polygons AS r
+ON ST_DWithin(l.geom, r.geom, 2.0)
+----
+SpatialJoin
+├── output columns: [r.id (#2), l.id (#0)]
+├── build side: Right
+├── spatial predicates: [st_dwithin(l.geom (#1), r.geom (#3), 2)]
+├── TableScan(Build)
+│   ├── table: default.test_spatial_join_explain.left_polygons
+│   ├── scan id: 0
+│   ├── output columns: [id (#0), geom (#1)]
+│   ├── read rows: 2
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.test_spatial_join_explain.right_polygons
+    ├── scan id: 1
+    ├── output columns: [id (#2), geom (#3)]
+    ├── read rows: 3
+    ├── read size: <slt:ignore>
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+EXPLAIN SELECT l.id, count(r.id) AS matched_count
+FROM left_polygons AS l
+JOIN right_polygons AS r
+ON ST_Within(r.geom, l.geom)
+GROUP BY l.id
+----
+AggregateFinal
+├── output columns: [count(r.id) (#4), l.id (#0)]
+├── group by: [id]
+├── aggregate functions: [count(id)]
+├── estimated rows: 2.00
+└── AggregatePartial
+    ├── group by: [id]
+    ├── aggregate functions: [count(id)]
+    ├── estimated rows: 2.00
+    └── SpatialJoin
+        ├── output columns: [r.id (#2), l.id (#0)]
+        ├── build side: Right
+        ├── spatial predicates: [st_within(r.geom (#3), l.geom (#1))]
+        ├── TableScan(Build)
+        │   ├── table: default.test_spatial_join_explain.left_polygons
+        │   ├── scan id: 0
+        │   ├── output columns: [id (#0), geom (#1)]
+        │   ├── read rows: 2
+        │   ├── read size: <slt:ignore>
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 2.00
+        └── TableScan(Probe)
+            ├── table: default.test_spatial_join_explain.right_polygons
+            ├── scan id: 1
+            ├── output columns: [id (#2), geom (#3)]
+            ├── read rows: 3
+            ├── read size: <slt:ignore>
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 3.00
+
+# Same-side column scenario: both geometry arguments come from the left table.
+# The planner must reject this as a spatial join candidate. Since the predicate
+# only references `dual_geom`, it can be pushed into that table scan and the
+# remaining join is a regular cross HashJoin.
+statement ok
+CREATE TABLE dual_geom(id INT, geom1 GEOMETRY, geom2 GEOMETRY)
+
+statement ok
+INSERT INTO dual_geom VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))
+
+query T
+EXPLAIN SELECT d.id, r.id
+FROM dual_geom AS d
+JOIN right_polygons AS r
+ON ST_Intersects(d.geom1, d.geom2)
+----
+HashJoin
+├── output columns: [r.id (#3), d.id (#0)]
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: []
+├── estimated rows: <slt:ignore>
+├── TableScan(Build)
+│   ├── table: default.test_spatial_join_explain.dual_geom
+│   ├── scan id: 0
+│   ├── output columns: [id (#0)]
+│   ├── read rows: 1
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(st_intersects(dual_geom.geom1 (#1), dual_geom.geom2 (#2)))], limit: NONE]
+│   └── estimated rows: <slt:ignore>
+└── TableScan(Probe)
+    ├── table: default.test_spatial_join_explain.right_polygons
+    ├── scan id: 1
+    ├── output columns: [id (#3)]
+    ├── read rows: 3
+    ├── read size: <slt:ignore>
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+statement ok
+DROP TABLE dual_geom
+
+statement ok
+DROP DATABASE test_spatial_join_explain

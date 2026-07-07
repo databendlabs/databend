@@ -117,7 +117,7 @@ error:
   --> SQL:1:19
   |
 1 | CAST(1 AS STRING) ESCAPE '$'
-  | ----              ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
+  | ----              ^^^^^^ escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr
   | |                  
   | while parsing expression
 
@@ -129,7 +129,7 @@ error:
   --> SQL:1:7
   |
 1 | 1 + 1 ESCAPE '$'
-  | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
+  | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr
   | |      
   | while parsing expression
 

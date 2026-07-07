@@ -156,6 +156,8 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -173,6 +175,8 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -227,6 +231,8 @@ impl Aggregate {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

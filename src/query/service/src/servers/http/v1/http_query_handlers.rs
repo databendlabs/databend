@@ -697,6 +697,9 @@ async fn query_page_handler(
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.mem_stat = query_mem_stat;
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
 
         tracking_payload.tracking(query_page_handle)
     };
@@ -905,6 +908,9 @@ pub(crate) async fn query_handler(
         let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
+        tracking_payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
         tracking_payload.workload_group_resource = tracking_workload_group;
 

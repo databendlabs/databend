@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -34,6 +36,9 @@ pub struct Decompressor {
     decompressor: Option<(DecompressDecoder, usize)>,
     path: Option<String>,
     zip_buf: Vec<u8>,
+    /// File-level metadata captured from the first batch of each file.
+    file_content_key: Option<String>,
+    file_last_modified: Option<DateTime<Utc>>,
 }
 
 impl Decompressor {
@@ -44,17 +49,22 @@ impl Decompressor {
             path: None,
             decompressor: None,
             zip_buf: Vec::new(),
+            file_content_key: None,
+            file_last_modified: None,
         })
     }
 
-    fn new_file(&mut self, path: String) {
+    fn new_file(&mut self, batch: &BytesBatch) {
         assert!(self.decompressor.is_none());
+        let path = batch.path.clone();
         let algo = if let Some(algo) = &self.algo {
             Some(algo.to_owned())
         } else {
             CompressAlgorithm::from_path(&path)
         };
         self.path = Some(path);
+        self.file_content_key = batch.content_key.clone();
+        self.file_last_modified = batch.last_modified;
 
         if let Some(algo) = algo {
             if matches!(algo, CompressAlgorithm::Zip) {
@@ -78,10 +88,10 @@ impl AccumulatingTransform for Decompressor {
             .and_then(BytesBatch::downcast_from)
             .unwrap();
         match &self.path {
-            None => self.new_file(batch.path.clone()),
+            None => self.new_file(&batch),
             Some(path) => {
                 if path != &batch.path {
-                    self.new_file(batch.path.clone())
+                    self.new_file(&batch)
                 }
             }
         }
@@ -107,6 +117,8 @@ impl AccumulatingTransform for Decompressor {
                     path: batch.path.clone(),
                     offset: 0,
                     is_eof: batch.is_eof,
+                    content_key: self.file_content_key.clone(),
+                    last_modified: self.file_last_modified,
                 });
                 self.zip_buf.clear();
                 Ok(vec![DataBlock::empty_with_meta(new_batch)])
@@ -144,6 +156,8 @@ impl AccumulatingTransform for Decompressor {
                 path: batch.path.clone(),
                 offset: *offset,
                 is_eof: batch.is_eof,
+                content_key: self.file_content_key.clone(),
+                last_modified: self.file_last_modified,
             });
             *offset += batch.data.len();
             if batch.is_eof {

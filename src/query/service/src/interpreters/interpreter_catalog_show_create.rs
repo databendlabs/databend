@@ -21,7 +21,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
 
@@ -66,8 +65,9 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
                     op.address,
                     op.storage_params
-                        .clone()
-                        .unwrap_or(Box::new(StorageParams::None))
+                        .as_ref()
+                        .map(|sp| sp.to_string())
+                        .unwrap_or_else(|| "none".to_string())
                 ),
             ),
             CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
