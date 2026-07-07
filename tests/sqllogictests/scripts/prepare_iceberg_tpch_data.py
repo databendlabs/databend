@@ -25,10 +25,12 @@ spark = (
     .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
     .config(
         "spark.jars.packages",
-        "org.apache.iceberg:iceberg-aws-bundle:1.6.1,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1",
+        "org.apache.iceberg:iceberg-aws-bundle:1.10.0,org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0",
     )
     .getOrCreate()
 )
+
+spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.tpch")
 
 tables = {
     "lineitem": (
