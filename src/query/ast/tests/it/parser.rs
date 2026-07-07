@@ -1429,6 +1429,14 @@ fn test_fast_path_preserves_stage_location_and_drop_user_host() {
         assert_eq!(stmt.to_string(), expected);
     }
 
+    let tokens =
+        tokenize_sql(r#"select columns(a -> length(a) = 2), columns('i.*') from db.t"#).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    assert_eq!(
+        stmt.to_string(),
+        r#"SELECT COLUMNS(a -> length(a) = 2), COLUMNS(_t -> _t REGEXP 'i.*') FROM db.t"#
+    );
+
     let tokens = tokenize_sql(r#"DROP USER 'test-j'@'127.0.0.1'"#).unwrap();
     let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
     assert!(

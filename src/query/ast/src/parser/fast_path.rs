@@ -253,6 +253,10 @@ fn simple_select_targets(
 fn simple_select_target(
     i: Input,
 ) -> std::result::Result<Option<(Input, SelectTarget)>, nom::Err<Error>> {
+    if i.tokens.first().is_some_and(|token| token.kind == COLUMNS) {
+        return Ok(None);
+    }
+
     if let Some(star) = i.tokens.first().filter(|token| token.kind == Multiply) {
         return Ok(Some((i.advance(1), SelectTarget::StarColumns {
             qualified: vec![Indirection::Star(Some(star.span))],
