@@ -34,12 +34,12 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
+use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::SnapshotChanges;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::operations::mutation::SegmentCompactionState;
@@ -142,10 +142,7 @@ impl FuseTable {
         );
         let block = DataBlock::empty_with_meta(Box::new(meta));
 
-        pipeline.add_source(
-            |output| OneBlockSource::create(output, block.clone()),
-            1,
-        )?;
+        pipeline.add_source(|output| OneBlockSource::create(output, block.clone()), 1)?;
 
         let snapshot_gen = MutationGenerator::new(Some(base_snapshot), MutationKind::Compact);
         pipeline.add_sink(|input| {

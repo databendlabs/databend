@@ -29,6 +29,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
 use databend_common_expression::types::number::NumberColumn;
 use databend_common_expression::types::number::NumberScalar;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -43,12 +44,12 @@ use databend_common_storages_fuse::operations::CompactOptions;
 use databend_common_storages_fuse::operations::SegmentCompactMutator;
 use databend_common_storages_fuse::operations::SegmentCompactionState;
 use databend_common_storages_fuse::operations::SegmentCompactor;
-use databend_common_pipeline::core::Pipeline;
-use databend_query::pipelines::executor::ExecutorSettings;
-use databend_query::pipelines::executor::PipelineCompleteExecutor;use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
+use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
@@ -207,20 +208,12 @@ async fn test_compact_segment_unresolvable_conflict() -> anyhow::Result<()> {
 
 #[async_trait::async_trait]
 trait TryCommitCompact {
-    async fn try_commit_compact(
-        self,
-        table: &FuseTable,
-        ctx: Arc<QueryContext>,
-    ) -> Result<()>;
+    async fn try_commit_compact(self, table: &FuseTable, ctx: Arc<QueryContext>) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl TryCommitCompact for SegmentCompactMutator {
-    async fn try_commit_compact(
-        self,
-        table: &FuseTable,
-        ctx: Arc<QueryContext>,
-    ) -> Result<()> {
+    async fn try_commit_compact(self, table: &FuseTable, ctx: Arc<QueryContext>) -> Result<()> {
         let base_snapshot = self.base_snapshot().clone();
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(table, Some(base_snapshot.clone()))?;
@@ -237,8 +230,7 @@ impl TryCommitCompact for SegmentCompactMutator {
             table_meta_timestamps,
         )?;
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-        let executor =
-            PipelineCompleteExecutor::from_pipelines(vec![pipeline], executor_settings)?;
+        let executor = PipelineCompleteExecutor::from_pipelines(vec![pipeline], executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute().await?;
         Ok(())
