@@ -30,7 +30,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -42,28 +43,27 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::string_value;
 
-use crate::stream_table::StreamStatus;
 use crate::stream_table::StreamTable;
 use crate::stream_table::extract_fully_qualified_stream_name;
 
-const STREAM_STATUS: &str = "stream_status";
+const STREAM_BACKLOG: &str = "stream_backlog";
 
-pub struct StreamStatusTable {
+pub struct StreamBacklogTable {
     table_info: TableInfo,
     stream_name: String,
 }
 
-impl StreamStatusTable {
+impl StreamBacklogTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let args = table_args.expect_all_positioned(STREAM_STATUS, Some(1))?;
+        let args = table_args.expect_all_positioned(STREAM_BACKLOG, Some(1))?;
         let stream_name = string_value(&args[0])?;
 
-        let engine = STREAM_STATUS.to_owned();
+        let engine = STREAM_BACKLOG.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -77,7 +77,7 @@ impl StreamStatusTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(StreamStatusTable {
+        Ok(Arc::new(StreamBacklogTable {
             table_info,
             stream_name,
         }))
@@ -85,7 +85,7 @@ impl StreamStatusTable {
 }
 
 #[async_trait::async_trait]
-impl Table for StreamStatusTable {
+impl Table for StreamBacklogTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -119,7 +119,7 @@ impl Table for StreamStatusTable {
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
-                StreamStatusDataSource::create(ctx.clone(), output, self.stream_name.to_owned())
+                StreamBacklogDataSource::create(ctx.clone(), output, self.stream_name.to_owned())
             },
             1,
         )?;
@@ -128,7 +128,7 @@ impl Table for StreamStatusTable {
     }
 }
 
-impl TableFunction for StreamStatusTable {
+impl TableFunction for StreamBacklogTable {
     fn function_name(&self) -> &str {
         self.name()
     }
@@ -139,7 +139,7 @@ impl TableFunction for StreamStatusTable {
     }
 }
 
-struct StreamStatusDataSource {
+struct StreamBacklogDataSource {
     ctx: Arc<dyn TableContext>,
     finish: bool,
     cat_name: String,
@@ -147,7 +147,7 @@ struct StreamStatusDataSource {
     stream_name: String,
 }
 
-impl StreamStatusDataSource {
+impl StreamBacklogDataSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -155,7 +155,7 @@ impl StreamStatusDataSource {
     ) -> Result<ProcessorPtr> {
         let (cat_name, db_name, stream_name) =
             extract_fully_qualified_stream_name(ctx.as_ref(), stream_name.as_str())?;
-        AsyncSourcer::create(ctx.get_scan_progress(), output, StreamStatusDataSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, StreamBacklogDataSource {
             ctx,
             finish: false,
             cat_name,
@@ -166,8 +166,8 @@ impl StreamStatusDataSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for StreamStatusDataSource {
-    const NAME: &'static str = "stream_status";
+impl AsyncSource for StreamBacklogDataSource {
+    const NAME: &'static str = "stream_backlog";
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
@@ -184,18 +184,31 @@ impl AsyncSource for StreamStatusDataSource {
             .get_table(&tenant_id, &self.db_name, &self.stream_name)
             .await?;
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;
-
-        let has_data = matches!(
-            tbl.check_stream_status(self.ctx.clone()).await?,
-            StreamStatus::MayHaveData
-        );
+        let backlog = tbl.stream_backlog(self.ctx.clone()).await?;
 
         Ok(Some(DataBlock::new_from_columns(vec![
-            BooleanType::from_data(vec![has_data]),
+            UInt64Type::from_data(vec![backlog.rows_added]),
+            UInt64Type::from_data(vec![backlog.rows_removed]),
+            UInt64Type::from_data(vec![backlog.estimated_rows]),
+            UInt64Type::from_data(vec![backlog.estimated_bytes]),
         ])))
     }
 }
 
 fn schema() -> Arc<TableSchema> {
-    TableSchemaRefExt::create(vec![TableField::new("has_data", TableDataType::Boolean)])
+    TableSchemaRefExt::create(vec![
+        TableField::new("rows_added", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new(
+            "rows_removed",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        TableField::new(
+            "estimated_rows",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        TableField::new(
+            "estimated_bytes",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+    ])
 }

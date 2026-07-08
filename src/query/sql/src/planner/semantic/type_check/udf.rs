@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -111,6 +112,16 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         }
 
+        if !func.order_by.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+
+        // Whether the name is a scalar UDF or a UDAF is only known after loading
+        // the definition, so carry the FILTER clause through and reject it during
+        // resolution rather than here.
         let args = func
             .args
             .iter()
@@ -120,6 +131,7 @@ impl<'a> CoreExprArena<'a> {
             span,
             name: &func.name,
             args,
+            filter: func.filter.as_deref(),
         })))
     }
 }
@@ -684,6 +696,7 @@ where A: super::TypeCheckAdapter
         span: Span,
         name: &Identifier,
         args: &CoreUdfCallArgs,
+        filter: Option<&Expr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
         if self.adapter.forbid_udf() {
@@ -694,6 +707,22 @@ where A: super::TypeCheckAdapter
         let Some(udf) = udf else {
             return Err(self.unknown_function_error(span, &udf_name));
         };
+
+        // FILTER is only meaningful for aggregates. Scalar UDFs get the shared
+        // error; UDAFs get a dedicated one since FILTER execution isn't wired up
+        // yet (the parser accepts it for PostgreSQL compatibility).
+        if filter.is_some() {
+            if udf.definition.is_aggregate() {
+                return Err(ErrorCode::Unimplemented(
+                    "FILTER clause is not supported for aggregate UDFs yet",
+                )
+                .set_span(span));
+            }
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
 
         let arguments = args
             .iter()

@@ -188,6 +188,7 @@ impl Dataframe {
                     args: vec![],
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },

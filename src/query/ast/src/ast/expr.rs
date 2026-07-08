@@ -185,6 +185,7 @@ pub enum Expr {
     CountAll {
         span: Span,
         qualified: Vec<Indirection>,
+        filter: Option<Box<Expr>>,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -776,11 +777,17 @@ impl Display for Expr {
                     write!(f, "{value}")?;
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     write!(f, "COUNT(")?;
                     write_dot_separated_list(f, qualified)?;
                     write!(f, ")")?;
+                    if let Some(filter) = filter {
+                        write!(f, " FILTER ( WHERE {filter} )")?;
+                    }
                     if let Some(window) = window {
                         write!(f, " OVER {window}")?;
                     }
@@ -1108,6 +1115,7 @@ pub struct FunctionCall {
     pub args: Vec<Expr>,
     pub params: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
+    pub filter: Option<Box<Expr>>,
     pub window: Option<WindowDesc>,
     pub lambda: Option<Lambda>,
 }
@@ -1120,6 +1128,7 @@ impl Default for FunctionCall {
             args: vec![],
             params: vec![],
             order_by: vec![],
+            filter: None,
             window: None,
             lambda: None,
         }
@@ -1134,6 +1143,7 @@ impl Display for FunctionCall {
             args,
             params,
             order_by,
+            filter,
             window,
             lambda,
         } = self;
@@ -1157,6 +1167,9 @@ impl Display for FunctionCall {
             write!(f, " WITHIN GROUP ( ORDER BY ")?;
             write_comma_separated_list(f, &self.order_by)?;
             write!(f, " )")?;
+        }
+        if let Some(filter) = filter {
+            write!(f, " FILTER ( WHERE {filter} )")?;
         }
         if let Some(window) = window {
             if let Some(ignore_null) = window.ignore_nulls {
@@ -1575,6 +1588,7 @@ pub enum BinaryOperator {
     NotILike(Option<String>),
     ILikeAny(Option<String>),
     Regexp,
+    PgRegexpMatch,
     RLike,
     NotRegexp,
     NotRLike,
@@ -1621,6 +1635,7 @@ impl BinaryOperator {
             BinaryOperator::Like(_) => "like".to_string(),
             BinaryOperator::ILike(_) => "ilike".to_string(),
             BinaryOperator::ILikeAny(_) => "ilike_any".to_string(),
+            BinaryOperator::PgRegexpMatch => "regexp".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -1718,6 +1733,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Regexp => {
                 write!(f, "REGEXP")
+            }
+            BinaryOperator::PgRegexpMatch => {
+                write!(f, "~")
             }
             BinaryOperator::RLike => {
                 write!(f, "RLIKE")

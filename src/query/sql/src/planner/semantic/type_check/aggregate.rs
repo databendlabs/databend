@@ -47,6 +47,16 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
+fn aggregate_base_name(func_name: &str) -> &str {
+    let if_suffix_len = "_if".len();
+    if let Some(suffix) = func_name.get(func_name.len().saturating_sub(if_suffix_len)..)
+        && suffix.eq_ignore_ascii_case("_if")
+    {
+        return &func_name[..func_name.len() - if_suffix_len];
+    }
+    func_name
+}
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn try_lower_aggregate_function(
         &mut self,
@@ -64,19 +74,49 @@ impl<'a> CoreExprArena<'a> {
             args,
             params,
             order_by,
+            filter,
             window,
             ..
         } = func;
         let display_name = format!("{original_expr:#}");
-        let func_name = func_name.to_string();
-        let remove_count_args = func_name.eq_ignore_ascii_case("count")
+        let mut func_name = func_name.to_string();
+
+        if *distinct && !order_by.is_empty() {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
+        }
+
+        let remove_count_args = filter.is_none()
+            && func_name.eq_ignore_ascii_case("count")
             && !*distinct
             && args
                 .iter()
                 .all(|expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null));
         let params = self.lower_function_params(params)?;
-        let args = self.lower_expr_args(args)?;
+        let mut args = self.lower_expr_args(args)?;
         let order_by = self.lower_order_by_exprs(order_by)?;
+
+        if let Some(filter) = filter {
+            if *distinct {
+                return Err(
+                    ErrorCode::SemanticError("DISTINCT aggregate FILTER is not supported")
+                        .set_span(span),
+                );
+            }
+            // FILTER appends `_if`, but the factory only resolves one combinator
+            // suffix over a base aggregate. On a combinator call like `sum_if`
+            // this would yield `sum_if_if`, so reject it instead.
+            if !self.aggregate_function_factory.contains_base(&func_name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "FILTER clause is not supported for aggregate combinator `{func_name}`"
+                ))
+                .set_span(span));
+            }
+            args.push(self.lower_ast_expr(filter)?);
+            func_name = format!("{func_name}_if");
+        }
 
         Ok(Some(if let Some(window) = window {
             let window = super::window::CoreWindowDesc {
@@ -114,7 +154,8 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         has_order_by: bool,
     ) -> Result<()> {
-        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name)) {
+        let base_func_name = aggregate_base_name(func_name);
+        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(base_func_name)) {
             return Err(ErrorCode::SemanticError(
                 "only aggregate functions allowed in within group syntax",
             )
@@ -127,8 +168,48 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         display_name: String,
         span: Span,
+        filter: Option<&'a Expr>,
         window: Option<&'a Window>,
     ) -> Result<CoreExprId> {
+        if let Some(filter) = filter {
+            let mut args = SmallVec::new();
+            let one = self.alloc(CoreExpr::Literal {
+                span,
+                value: Scalar::Number(NumberScalar::UInt64(1)),
+            });
+            args.push(one);
+            args.push(self.lower_ast_expr(filter)?);
+
+            return Ok(if let Some(window) = window {
+                let window = super::window::CoreWindowDesc {
+                    ignore_nulls: None,
+                    window: self.lower_window(window)?,
+                };
+                self.alloc(CoreExpr::AggregateWindowFunction {
+                    display_name,
+                    span,
+                    func_name: "count_if".to_string(),
+                    distinct: false,
+                    params: SmallVec::new(),
+                    args,
+                    remove_count_args: false,
+                    order_by: SmallVec::new(),
+                    window,
+                })
+            } else {
+                self.alloc(CoreExpr::AggregateFunction {
+                    display_name,
+                    span,
+                    func_name: "count_if".to_string(),
+                    distinct: false,
+                    params: SmallVec::new(),
+                    args,
+                    remove_count_args: false,
+                    order_by: SmallVec::new(),
+                })
+            });
+        }
+
         if let Some(window) = window {
             let window = self.lower_window(window)?;
             Ok(self.alloc(CoreExpr::CountAllWindowFunction {
@@ -168,7 +249,9 @@ where A: TypeCheckAdapter
         order_by: &CoreOrderByExprs,
         in_window_call: bool,
     ) -> Result<(AggregateFunction, DataType)> {
-        if !order_by.is_empty() && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name))
+        let base_func_name = aggregate_base_name(func_name);
+        if !order_by.is_empty()
+            && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(base_func_name))
         {
             return Err(ErrorCode::SemanticError(
                 "only aggregate functions allowed in within group syntax",
@@ -300,20 +383,22 @@ where A: TypeCheckAdapter
         remove_count_args: bool,
     ) -> Result<(AggregateFunction, DataType)> {
         // Convert the delimiter of string_agg to params
-        let params = if (func_name.eq_ignore_ascii_case("string_agg")
-            || func_name.eq_ignore_ascii_case("listagg")
-            || func_name.eq_ignore_ascii_case("group_concat"))
-            && arguments.len() == 2
+        let base_func_name = aggregate_base_name(func_name);
+        let expected_string_agg_args = if base_func_name == func_name { 2 } else { 3 };
+        let params = if (base_func_name.eq_ignore_ascii_case("string_agg")
+            || base_func_name.eq_ignore_ascii_case("listagg")
+            || base_func_name.eq_ignore_ascii_case("group_concat"))
+            && arguments.len() == expected_string_agg_args
             && params.is_empty()
         {
             let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
             if arg_types[1] != DataType::String || delimiter_value.is_err() {
                 return Err(ErrorCode::SemanticError(format!(
-                    "The delimiter of `{func_name}` must be a constant string"
+                    "The delimiter of `{base_func_name}` must be a constant string"
                 )));
             }
-            let _ = arguments.pop();
-            let _ = arg_types.pop();
+            arguments.remove(1);
+            arg_types.remove(1);
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {
@@ -321,8 +406,9 @@ where A: TypeCheckAdapter
         };
 
         // Convert the num_buckets of histogram to params
-        let params = if func_name.eq_ignore_ascii_case("histogram")
-            && arguments.len() == 2
+        let expected_histogram_args = if base_func_name == func_name { 2 } else { 3 };
+        let params = if base_func_name.eq_ignore_ascii_case("histogram")
+            && arguments.len() == expected_histogram_args
             && params.is_empty()
         {
             let max_num_buckets: u64 = check_number(
@@ -380,8 +466,14 @@ where A: TypeCheckAdapter
         arguments: &mut [ScalarExpr],
         arg_types: &mut [DataType],
     ) -> Result<()> {
-        if !func_name.eq_ignore_ascii_case("sum")
-            || arguments.len() != 1
+        let base_func_name = aggregate_base_name(func_name);
+        let expected_args_len = if base_func_name.len() == func_name.len() {
+            1
+        } else {
+            2
+        };
+        if !base_func_name.eq_ignore_ascii_case("sum")
+            || arguments.len() != expected_args_len
             || !self.adapter.settings().get_enable_decimal_sum_widening()?
         {
             return Ok(());
