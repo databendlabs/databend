@@ -25,6 +25,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::traits::Location;
+use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 
@@ -301,6 +302,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
     }
 
     fn partition_build_data(&mut self, data: DataBlock) -> Result<Vec<(usize, DataBlock)>> {
+        self.update_right_mark_build_has_null(&data)?;
         let mut hashes = Vec::with_capacity(data.num_rows());
 
         get_hashes(
@@ -319,6 +321,27 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         }
 
         Ok(self.build_partition_stream.partition(hashes, data, true))
+    }
+
+    fn update_right_mark_build_has_null(&self, data: &DataBlock) -> Result<()> {
+        if !matches!(self.desc.join_type, JoinType::RightMark) {
+            return Ok(());
+        }
+
+        let keys = self.desc.build_key(data, &self.function_context)?;
+        if keys.iter().any(|entry| {
+            entry
+                .as_column()
+                .unwrap()
+                .validity()
+                .1
+                .is_some_and(|validity| validity.null_count() > 0)
+        }) {
+            let mut has_null = self.desc.marker_join_desc.has_null.write();
+            *has_null = true;
+        }
+
+        Ok(())
     }
 
     fn partition_probe_data(&mut self, data: DataBlock) -> Result<Vec<(usize, DataBlock)>> {

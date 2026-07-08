@@ -35,6 +35,7 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_DISABLED;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
@@ -101,7 +102,7 @@ impl Join for SemiLeftHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<false>()
+        self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {

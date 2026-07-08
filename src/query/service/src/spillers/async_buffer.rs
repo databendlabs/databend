@@ -56,6 +56,8 @@ use parquet::basic::Compression;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+use parquet::schema::types::SchemaDescriptor;
+use parquet::schema::types::Type;
 
 use super::record_read_profile;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
@@ -392,6 +394,7 @@ impl Drop for BufferWriter {
 pub struct InitializedBlocksStreamWriter {
     table_schema: TableSchemaRef,
     writer: ArrowWriter<BufferWriter>,
+    empty_schema_row_groups: Vec<RowGroupMetaData>,
 }
 
 pub enum SpillsDataWriter {
@@ -420,20 +423,54 @@ impl SpillsDataWriter {
                 let arrow_schema = Arc::new(Schema::from(table_schema.as_ref()));
                 let buffer_writer = writer.take().unwrap();
                 let mut writer = ArrowWriter::try_new(buffer_writer, arrow_schema, Some(props))?;
+
+                if !block.is_empty() && block.num_columns() == 0 {
+                    let num_rows = block.num_rows() as i64;
+                    let empty_schema_row_group = Self::empty_schema_row_group(num_rows)?;
+
+                    *self = SpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
+                        writer,
+                        table_schema,
+                        empty_schema_row_groups: vec![empty_schema_row_group],
+                    });
+
+                    return Ok(());
+                }
+
                 let record_batch = block.to_record_batch(&table_schema)?;
                 writer.write(&record_batch)?;
                 *self = SpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
                     writer,
                     table_schema,
+                    empty_schema_row_groups: vec![],
                 });
 
                 Ok(())
             }
             SpillsDataWriter::Initialized(writer) => {
+                if !block.is_empty() && block.num_columns() == 0 {
+                    let num_rows = block.num_rows() as i64;
+                    let empty_schema_row_group = Self::empty_schema_row_group(num_rows)?;
+                    writer.empty_schema_row_groups.push(empty_schema_row_group);
+                    return Ok(());
+                }
+
                 let record_batch = block.to_record_batch(&writer.table_schema)?;
                 Ok(writer.writer.write(&record_batch)?)
             }
         }
+    }
+
+    fn empty_schema_row_group(num_rows: i64) -> Result<RowGroupMetaData> {
+        let schema = Type::group_type_builder("schema")
+            .with_fields(vec![])
+            .build()?;
+        let descr = SchemaDescriptor::new(Arc::new(schema));
+
+        Ok(RowGroupMetaData::builder(Arc::new(descr))
+            .set_num_rows(num_rows)
+            .set_total_byte_size(0)
+            .build()?)
     }
 
     pub fn flush(&mut self) -> Result<()> {
@@ -473,7 +510,8 @@ impl SpillsDataWriter {
             }
             SpillsDataWriter::Initialized(mut writer) => {
                 writer.writer.flush()?;
-                let row_groups = writer.writer.flushed_row_groups().to_vec();
+                let mut row_groups = writer.writer.flushed_row_groups().to_vec();
+                row_groups.extend(writer.empty_schema_row_groups);
                 let bytes_written = writer.writer.bytes_written();
                 writer.writer.into_inner()?.close()?;
 
@@ -545,6 +583,13 @@ impl SpillsDataReader {
             Err(_) => return Ok(None),
         };
 
+        if fetched.chunks.is_empty() && fetched.metadata.num_rows() > 0 {
+            record_read_profile(self.target, &start, fetched.read_bytes);
+            return Ok(Some(DataBlock::empty_with_rows(
+                fetched.metadata.num_rows() as usize,
+            )));
+        }
+
         self.read_bytes += fetched.read_bytes;
 
         let mut rg_core = RowGroupCore::new(fetched.metadata, None);
@@ -557,13 +602,20 @@ impl SpillsDataReader {
             num_rows,
             None,
         )?;
-        let batch = reader.next().transpose()?.unwrap();
-        debug_assert!(reader.next().is_none());
         record_read_profile(self.target, &start, fetched.read_bytes);
-        Ok(Some(DataBlock::from_record_batch(
-            &self.data_schema,
-            &batch,
-        )?))
+        match reader.next().transpose()? {
+            Some(batch) => {
+                debug_assert!(reader.next().is_none());
+                Ok(Some(DataBlock::from_record_batch(
+                    &self.data_schema,
+                    &batch,
+                )?))
+            }
+            None if num_rows == 0 => Ok(Some(DataBlock::empty())),
+            None => Err(ErrorCode::Internal(format!(
+                "Parquet row group has {num_rows} rows but no record batch was produced"
+            ))),
+        }
     }
 }
 
@@ -744,6 +796,15 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
 async fn reader_task_loop(op: ReaderTaskOperator) {
     for row_group_meta in op.row_groups {
         let result = async {
+            let num_rows = row_group_meta.num_rows() as usize;
+            if num_rows > 0 && row_group_meta.total_byte_size() == 0 {
+                return Ok(FetchedRowGroup {
+                    metadata: row_group_meta,
+                    chunks: vec![],
+                    read_bytes: 0,
+                });
+            }
+
             let rg_core = RowGroupCore::new(row_group_meta.clone(), None);
             let ranges = rg_core.fetch_ranges(&ProjectionMask::all());
             let (chunks, _) = get_ranges(&ranges, &op.settings, &op.location, &op.op).await?;
@@ -768,7 +829,9 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
+    use databend_base::uniq_id::GlobalUniq;
     use databend_common_base::runtime::spawn;
+    use databend_common_expression::DataSchemaRefExt;
     use opendal::Operator;
 
     use super::*;
@@ -921,6 +984,39 @@ mod tests {
         let buffer_writer = pool.buffer_write(writer, 2 * CHUNK_SIZE);
         let metadata = buffer_writer.close().unwrap();
         assert_eq!(metadata.content_length(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spills_reader_reads_empty_schema_block() {
+        let pool = SpillsBufferPool::create(2).unwrap();
+        let operator = create_test_operator().unwrap();
+        let path = format!("spills_empty_schema_{}", GlobalUniq::unique());
+
+        let mut writer = pool
+            .writer(operator.clone(), path.clone(), 2 * CHUNK_SIZE)
+            .unwrap();
+        writer.write(DataBlock::empty_with_rows(7)).unwrap();
+        let (_written, row_groups) = writer.close().unwrap();
+        assert_eq!(row_groups.len(), 1);
+        assert_eq!(row_groups[0].num_rows(), 7);
+        assert_eq!(row_groups[0].total_byte_size(), 0);
+
+        let mut reader = pool
+            .reader(
+                operator.clone(),
+                path.clone(),
+                DataSchemaRefExt::create(vec![]),
+                row_groups,
+                SpillTarget::Local,
+                ReadSettings::default(),
+            )
+            .unwrap();
+        let block = reader.read().unwrap().unwrap();
+        assert_eq!(block.num_rows(), 7);
+        assert_eq!(block.num_columns(), 0);
+        assert!(reader.read().unwrap().is_none());
+
+        let _ = operator.delete(&path).await;
     }
 
     #[tokio::test(flavor = "multi_thread")]

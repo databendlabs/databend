@@ -104,6 +104,10 @@ impl HybridHashJoin {
         self.basic_state.build_queue.as_mut().clear();
         self.basic_state.scan_map.as_mut().clear();
         self.basic_state.scan_queue.as_mut().clear();
+        self.basic_state.columns.as_mut().clear();
+        self.basic_state.column_types.as_mut().clear();
+        self.basic_state.arenas.as_mut().clear();
+        self.basic_state.packets.as_mut().clear();
 
         // Move chunks to transition_queue
         for memory_block in std::mem::take(self.basic_state.chunks.as_mut()) {
@@ -279,6 +283,10 @@ impl GraceMemoryJoin for HybridHashJoin {
                     new_basic_state.build_queue.as_mut().clear();
                     new_basic_state.scan_map.as_mut().clear();
                     new_basic_state.scan_queue.as_mut().clear();
+                    new_basic_state.columns.as_mut().clear();
+                    new_basic_state.column_types.as_mut().clear();
+                    new_basic_state.arenas.as_mut().clear();
+                    new_basic_state.packets.as_mut().clear();
                 }
 
                 // Create new memory join

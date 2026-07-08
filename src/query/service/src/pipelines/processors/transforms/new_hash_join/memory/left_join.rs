@@ -40,6 +40,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::memory::basic::SCAN_MAP_DISABLED;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
@@ -92,7 +93,7 @@ impl Join for OuterLeftHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<false>()
+        self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

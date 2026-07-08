@@ -14,7 +14,7 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::PoisonError;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
@@ -24,42 +24,40 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::types::DataType;
 use databend_common_expression::with_join_hash_method;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::atomic_scan_map;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
+use crate::pipelines::processors::transforms::memory::left_join::null_block;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
+use crate::pipelines::processors::transforms::wrap_nullable_block;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
-pub struct SemiRightHashJoin {
+pub struct RightSingleHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
-
     pub(crate) desc: Arc<HashJoinDesc>,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
-    pub(crate) inlist_threshold: usize,
-    pub(crate) bloom_threshold: usize,
-    pub(crate) min_max_threshold: usize,
-
     pub(crate) finished: bool,
 }
 
-impl SemiRightHashJoin {
+impl RightSingleHashJoin {
     pub fn create(
         ctx: &QueryContext,
         function_ctx: FunctionContext,
@@ -69,12 +67,7 @@ impl SemiRightHashJoin {
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
-        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
-        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
-        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
-
         let basic_hash_join = BasicHashJoin::create(
             &settings,
             function_ctx.clone(),
@@ -84,21 +77,18 @@ impl SemiRightHashJoin {
             0,
         )?;
 
-        Ok(SemiRightHashJoin {
+        Ok(RightSingleHashJoin {
             desc,
             basic_hash_join,
             function_ctx,
             basic_state: state,
             performance_context: context,
-            inlist_threshold,
-            bloom_threshold,
-            min_max_threshold,
             finished: false,
         })
     }
 }
 
-impl Join for SemiRightHashJoin {
+impl Join for RightSingleHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         self.basic_hash_join.add_block(data)
     }
@@ -107,30 +97,14 @@ impl Join for SemiRightHashJoin {
         self.basic_hash_join.final_build::<SCAN_MAP_MATCHED>()
     }
 
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        let locked = self.basic_state.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.basic_state.packets.as_mut().push(packet);
-    }
-
-    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(
-            packets,
-            self.inlist_threshold,
-            self.bloom_threshold,
-            self.min_max_threshold,
-        )
-    }
-
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         self.basic_hash_join.finalize_chunks();
-
-        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
-        let mut probe_keys = DataBlock::new(probe_keys, data.num_rows());
-
+        let mut probe_keys = {
+            let nullable_block = wrap_nullable_block(&data);
+            let probe_keys = self.desc.probe_key(&nullable_block, &self.function_ctx)?;
+            DataBlock::new(probe_keys, data.num_rows())
+        };
         let valids = self.desc.build_valids_by_keys(&probe_keys)?;
-
         self.desc.remove_keys_nullable(&mut probe_keys);
         let probe_block = data.project(&self.desc.probe_projection);
 
@@ -138,41 +112,27 @@ impl Join for SemiRightHashJoin {
             HashJoinHashTable::T(table) => {
                 let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
                 probe_hash_statistics.clear(probe_block.num_rows());
-
                 let probe_data = ProbeData::new(probe_keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
             }
-            HashJoinHashTable::NestedLoop(_) => {
-                unreachable!()
-            }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })?;
 
-        match self.performance_context.filter_executor.as_mut() {
-            None => Ok(SemiRightHashJoinStream::<false>::create(
-                probe_block,
-                self.basic_state.clone(),
-                probe_stream,
-                self.desc.clone(),
-                &mut self.performance_context.probe_result,
-                None,
-            )),
-            Some(filter_executor) => Ok(SemiRightHashJoinStream::<true>::create(
-                probe_block,
-                self.basic_state.clone(),
-                probe_stream,
-                self.desc.clone(),
-                &mut self.performance_context.probe_result,
-                Some(filter_executor),
-            )),
-        }
+        Ok(RightSingleHashJoinStream::create(
+            probe_block,
+            self.basic_state.clone(),
+            probe_stream,
+            self.desc.clone(),
+            &mut self.performance_context.probe_result,
+            self.performance_context.filter_executor.as_mut(),
+        ))
     }
 
     fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
         self.basic_hash_join.finalize_chunks();
-
         if self.finished {
             return Ok(None);
         }
@@ -183,15 +143,36 @@ impl Join for SemiRightHashJoin {
             .probe_result
             .matched_probe
             .capacity();
-
-        Ok(Some(SemiRightHashJoinFinalStream::create(
+        Ok(Some(RightSingleHashJoinFinalStream::create(
             max_rows,
+            self.desc.clone(),
             self.basic_state.clone(),
         )))
     }
 }
 
-pub struct SemiRightHashJoinStream<'a, const CONJUNCT: bool> {
+pub(crate) fn mark_right_single_row(
+    join_state: &BasicHashJoinState,
+    row_ptr: RowPtr,
+) -> Result<()> {
+    let chunk_idx = row_ptr.chunk_index as usize;
+    let row_idx = row_ptr.row_index as usize;
+
+    let scan_map = atomic_scan_map(&join_state.scan_map[chunk_idx]);
+    match scan_map[row_idx].compare_exchange(
+        SCAN_ROW_UNMATCHED,
+        SCAN_ROW_MATCHED,
+        Ordering::SeqCst,
+        Ordering::SeqCst,
+    ) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(ErrorCode::Internal(
+            "Scalar subquery can't return more than one row",
+        )),
+    }
+}
+
+struct RightSingleHashJoinStream<'a> {
     desc: Arc<HashJoinDesc>,
     probe_data_block: DataBlock,
     join_state: Arc<BasicHashJoinState>,
@@ -200,92 +181,10 @@ pub struct SemiRightHashJoinStream<'a, const CONJUNCT: bool> {
     filter_executor: Option<&'a mut FilterExecutor>,
 }
 
-unsafe impl<'a, const CONJUNCT: bool> Send for SemiRightHashJoinStream<'a, CONJUNCT> {}
-unsafe impl<'a, const CONJUNCT: bool> Sync for SemiRightHashJoinStream<'a, CONJUNCT> {}
+unsafe impl<'a> Send for RightSingleHashJoinStream<'a> {}
+unsafe impl<'a> Sync for RightSingleHashJoinStream<'a> {}
 
-impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUNCT> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        loop {
-            self.probed_rows.clear();
-            let max_rows = self.probed_rows.matched_probe.capacity();
-            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
-
-            if self.probed_rows.is_empty() {
-                return Ok(None);
-            }
-
-            if self.probed_rows.matched_probe.is_empty() {
-                continue;
-            }
-
-            if !CONJUNCT {
-                for row_ptr in &self.probed_rows.matched_build {
-                    let row_idx = row_ptr.row_index as usize;
-                    let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
-                }
-
-                continue;
-            }
-
-            let Some(filter_executor) = self.filter_executor.as_mut() else {
-                for row_ptr in &self.probed_rows.matched_build {
-                    let row_idx = row_ptr.row_index as usize;
-                    let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
-                }
-
-                continue;
-            };
-
-            let probe_block = match self.probe_data_block.num_columns() {
-                0 => None,
-                _ => Some(DataBlock::take(
-                    &self.probe_data_block,
-                    self.probed_rows.matched_probe.as_slice(),
-                )?),
-            };
-
-            let build_block = match self.join_state.columns.is_empty() {
-                true => None,
-                false => {
-                    let row_ptrs = self.probed_rows.matched_build.as_slice();
-                    Some(DataBlock::take_column_vec(
-                        self.join_state.columns.as_slice(),
-                        self.join_state.column_types.as_slice(),
-                        row_ptrs,
-                    ))
-                }
-            };
-
-            let result_block = final_result_block(
-                &self.desc,
-                probe_block,
-                build_block,
-                self.probed_rows.matched_build.len(),
-            );
-
-            if !result_block.is_empty() {
-                let result_count = filter_executor.select(&result_block)?;
-
-                if result_count == 0 {
-                    continue;
-                }
-
-                let true_sel = filter_executor.true_selection();
-
-                for idx in true_sel.iter().take(result_count) {
-                    let row_ptr = self.probed_rows.matched_build[*idx as usize];
-                    let row_idx = row_ptr.row_index as usize;
-                    let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
-                }
-            }
-        }
-    }
-}
-
-impl<'a, const CONJUNCT: bool> SemiRightHashJoinStream<'a, CONJUNCT> {
+impl<'a> RightSingleHashJoinStream<'a> {
     pub fn create(
         probe_data_block: DataBlock,
         join_state: Arc<BasicHashJoinState>,
@@ -294,7 +193,7 @@ impl<'a, const CONJUNCT: bool> SemiRightHashJoinStream<'a, CONJUNCT> {
         probed_rows: &'a mut ProbedRows,
         filter_executor: Option<&'a mut FilterExecutor>,
     ) -> Box<dyn JoinStream + 'a> {
-        Box::new(SemiRightHashJoinStream::<'a, CONJUNCT> {
+        Box::new(RightSingleHashJoinStream {
             desc,
             join_state,
             probed_rows,
@@ -305,15 +204,82 @@ impl<'a, const CONJUNCT: bool> SemiRightHashJoinStream<'a, CONJUNCT> {
     }
 }
 
-struct SemiRightHashJoinFinalStream<'a> {
+impl<'a> JoinStream for RightSingleHashJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            self.probed_rows.clear();
+            let max_rows = self.probed_rows.matched_probe.capacity();
+            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
+
+            if self.probed_rows.is_empty() {
+                return Ok(None);
+            }
+            if self.probed_rows.matched_probe.is_empty() {
+                continue;
+            }
+
+            let probe_block = match self.probe_data_block.num_columns() {
+                0 => None,
+                _ => Some(wrap_nullable_block(&DataBlock::take(
+                    &self.probe_data_block,
+                    self.probed_rows.matched_probe.as_slice(),
+                )?)),
+            };
+            let build_block = match self.join_state.columns.is_empty() {
+                true => None,
+                false => Some(DataBlock::take_column_vec(
+                    self.join_state.columns.as_slice(),
+                    self.join_state.column_types.as_slice(),
+                    self.probed_rows.matched_build.as_slice(),
+                )),
+            };
+            let data_block = final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            );
+
+            let Some(filter_executor) = self.filter_executor.as_mut() else {
+                for row_ptr in &self.probed_rows.matched_build {
+                    mark_right_single_row(&self.join_state, *row_ptr)?;
+                }
+                return Ok(Some(data_block));
+            };
+
+            let result_count = filter_executor.select(&data_block)?;
+            if result_count == 0 {
+                continue;
+            }
+
+            for idx in filter_executor.true_selection().iter().take(result_count) {
+                mark_right_single_row(
+                    &self.join_state,
+                    self.probed_rows.matched_build[*idx as usize],
+                )?;
+            }
+
+            let num_rows = data_block.num_rows();
+            return Ok(Some(filter_executor.take(
+                data_block,
+                num_rows,
+                result_count,
+            )?));
+        }
+    }
+}
+
+struct RightSingleHashJoinFinalStream<'a> {
     max_rows: usize,
+    desc: Arc<HashJoinDesc>,
     join_state: Arc<BasicHashJoinState>,
     scan_idx: Vec<RowPtr>,
     scan_progress: Option<(usize, usize)>,
+    types: Vec<DataType>,
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
+impl<'a> JoinStream for RightSingleHashJoinFinalStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         while let Some((chunk_idx, row_idx)) = self.scan_progress.take() {
             let scan_map = &self.join_state.scan_map[chunk_idx];
@@ -323,11 +289,10 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
             for idx in (row_idx..scan_map.len()).take(remain_rows) {
                 assume(idx < scan_map.len());
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
-
-                if scan_map[idx] == SCAN_ROW_MATCHED {
+                if scan_map[idx] == SCAN_ROW_UNMATCHED {
                     self.scan_idx.push(RowPtr {
-                        chunk_index: chunk_idx as _,
-                        row_index: idx as _,
+                        chunk_index: chunk_idx as u32,
+                        row_index: idx as u32,
                     });
                 }
             }
@@ -347,34 +312,46 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
             return Ok(None);
         }
 
+        let num_rows = self.scan_idx.len();
+        let probe_block = null_block(&self.types, num_rows);
         let build_block = match self.join_state.columns.is_empty() {
-            true => Some(DataBlock::new(vec![], self.scan_idx.len())),
-            false => {
-                let row_ptrs = self.scan_idx.as_slice();
-                Some(DataBlock::take_column_vec(
-                    self.join_state.columns.as_slice(),
-                    self.join_state.column_types.as_slice(),
-                    row_ptrs,
-                ))
-            }
+            true => None,
+            false => Some(DataBlock::take_column_vec(
+                self.join_state.columns.as_slice(),
+                self.join_state.column_types.as_slice(),
+                self.scan_idx.as_slice(),
+            )),
         };
-
         self.scan_idx.clear();
-        Ok(build_block)
+        Ok(Some(final_result_block(
+            &self.desc,
+            probe_block,
+            build_block,
+            num_rows,
+        )))
     }
 }
 
-impl<'a> SemiRightHashJoinFinalStream<'a> {
+impl<'a> RightSingleHashJoinFinalStream<'a> {
     pub fn create(
         max_rows: usize,
+        desc: Arc<HashJoinDesc>,
         join_state: Arc<BasicHashJoinState>,
     ) -> Box<dyn JoinStream + 'a> {
         let scan_progress = join_state.steal_scan_chunk_index();
+        let mut types = vec![];
+        for (i, field) in desc.probe_schema.fields().iter().enumerate() {
+            if desc.probe_projection.contains(&i) {
+                types.push(field.data_type().clone());
+            }
+        }
 
-        Box::new(SemiRightHashJoinFinalStream::<'a> {
+        Box::new(RightSingleHashJoinFinalStream {
             max_rows,
+            desc,
             join_state,
             scan_progress,
+            types,
             scan_idx: Vec::with_capacity(max_rows),
             _marker: Default::default(),
         })
