@@ -770,10 +770,29 @@ WHERE ta.task_name = {task_name}
         OR (nt.completed_at IS NOT NULL AND tr.completed_at <= nt.completed_at)
       )
   );");
-            if let Some(next_task) = self.execute_sql(None, &check).await?.first().and_then(|block| block.columns()[0].index(0).and_then(|scalar| { scalar.as_string().map(|s| s.to_string()) })) {
+            let blocks = self.execute_sql(None, &check).await?;
+            for next_task in Self::next_task_names_from_blocks(&blocks) {
                 yield Result::Ok(next_task);
             }
         }
+    }
+
+    fn next_task_names_from_blocks(blocks: &[DataBlock]) -> Vec<String> {
+        let mut next_tasks = Vec::new();
+        for block in blocks {
+            let Some(column) = block.columns().first() else {
+                continue;
+            };
+            for row in 0..block.num_rows() {
+                if let Some(next_task) = column
+                    .index(row)
+                    .and_then(|scalar| scalar.as_string().map(|s| s.to_string()))
+                {
+                    next_tasks.push(next_task);
+                }
+            }
+        }
+        next_tasks
     }
 
     pub async fn clean_task_afters(&self, task_name: &str) -> Result<()> {
@@ -1073,5 +1092,31 @@ WHERE ta.task_name = {task_name}
 
     fn make_run_id() -> u64 {
         Utc::now().timestamp_micros() as u64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
+
+    use super::TaskService;
+
+    #[test]
+    fn next_task_names_from_blocks_collects_all_rows() {
+        let blocks = vec![
+            DataBlock::new_from_columns(vec![StringType::from_data(vec![
+                "fanout_child_a",
+                "fanout_child_b",
+            ])]),
+            DataBlock::new_from_columns(vec![StringType::from_data(vec!["fanout_child_c"])]),
+        ];
+
+        assert_eq!(TaskService::next_task_names_from_blocks(&blocks), vec![
+            "fanout_child_a".to_string(),
+            "fanout_child_b".to_string(),
+            "fanout_child_c".to_string(),
+        ]);
     }
 }
