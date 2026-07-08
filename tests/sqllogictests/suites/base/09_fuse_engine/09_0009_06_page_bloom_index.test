@@ -1,4 +1,4 @@
-# Page-level (granule-level) bloom index: verify equality/IN predicates over a table written with a
+# Granule-level bloom index: verify equality/IN predicates over a table written with a
 # `TYPE bloom` index and `index_granularity` return correct results. Exercises the write path
 # (per-granule filter payloads + sidecar offset columns) and the read path (per-granule bloom
 # narrowing of the surviving granule set) end to end.
@@ -47,13 +47,13 @@ SELECT count(*), sum(a) FROM pb_t
 ----
 10000 49995000
 
-# Predicate on a non-indexed column must still return correct rows (page-bloom must not apply).
+# Predicate on a non-indexed column must still return correct rows (granule bloom must not apply).
 query IT
 SELECT * FROM pb_t WHERE b = 'v7777'
 ----
 7777 v7777
 
-# Range predicate (not eq): page-bloom cannot narrow, results must stay correct.
+# Range predicate (not eq): granule bloom cannot narrow, results must stay correct.
 query I
 SELECT count(*) FROM pb_t WHERE a >= 1234 AND a <= 5678
 ----
@@ -76,7 +76,7 @@ SELECT count(*) FROM pb_t WHERE a IN (1, 250, 4242, 9999)
 statement ok
 UNSET max_block_size
 
-# Combined with a cluster key: the sparse (cluster-key) pruner narrows first, then page-bloom narrows
+# Combined with a cluster key: the sparse (cluster-key) pruner narrows first, then granule bloom narrows
 # the survivor set further. Results must remain correct.
 statement ok
 CREATE TABLE pb_ck(a int, b int) CLUSTER BY (a) index_granularity = 100
@@ -109,7 +109,7 @@ statement ok
 DROP TABLE pb_ck
 
 # An index created AFTER data is written applies to blocks written afterwards; older blocks have no
-# page-bloom sidecar columns and must degrade to a full (correct) read.
+# granule bloom sidecar columns and must degrade to a full (correct) read.
 statement ok
 CREATE TABLE pb_late(a int) index_granularity = 100
 
@@ -120,7 +120,7 @@ statement ok
 CREATE BLOOM INDEX pb_late_idx ON pb_late(a)
 
 statement ok
-INSERT INTO pb_late SELECT number FROM numbers(5000, 5000)
+INSERT INTO pb_late SELECT number + 5000 FROM numbers(5000)
 
 # Rows from both the pre-index and post-index blocks must be found.
 query I
