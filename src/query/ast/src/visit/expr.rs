@@ -116,12 +116,18 @@ impl Walk for Expr {
                     }
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     for item in qualified {
                         if let crate::ast::Indirection::Identifier(ident) = item {
                             try_walk!(ident.walk(visitor));
                         }
+                    }
+                    if let Some(filter) = filter {
+                        try_walk!(filter.walk(visitor));
                     }
                     if let Some(window) = window {
                         try_walk!(window.walk(visitor));
@@ -290,12 +296,18 @@ impl WalkMut for Expr {
                     }
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     for item in qualified {
                         if let crate::ast::Indirection::Identifier(ident) = item {
                             try_walk!(ident.walk_mut(visitor));
                         }
+                    }
+                    if let Some(filter) = filter {
+                        try_walk!(filter.walk_mut(visitor));
                     }
                     if let Some(window) = window {
                         try_walk!(window.walk_mut(visitor));
@@ -388,6 +400,9 @@ impl Walk for FunctionCall {
         for order in &self.order_by {
             try_walk!(order.expr.walk(visitor));
         }
+        if let Some(filter) = &self.filter {
+            try_walk!(filter.walk(visitor));
+        }
         if let Some(window) = &self.window {
             try_walk!(window.walk(visitor));
         }
@@ -415,6 +430,9 @@ impl WalkMut for FunctionCall {
         }
         for order in &mut self.order_by {
             try_walk!(order.expr.walk_mut(visitor));
+        }
+        if let Some(filter) = &mut self.filter {
+            try_walk!(filter.walk_mut(visitor));
         }
         if let Some(window) = &mut self.window {
             try_walk!(window.walk_mut(visitor));

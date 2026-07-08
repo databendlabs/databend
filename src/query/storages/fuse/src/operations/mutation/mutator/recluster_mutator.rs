@@ -262,7 +262,9 @@ impl ReclusterFinalCarry {
 /// current cluster key, so selection can borrow them directly and write-back can
 /// reuse the original `Arc<BlockMeta>` without cloning the (potentially large)
 /// `ClusterStatistics`. `Normalized` holds statistics recomputed for a block
-/// whose cached cluster key differs from the current one.
+/// whose cached cluster key differs from the current one. Normalized stats are
+/// only a selection-time view; they must not be persisted into unchanged block
+/// metas because they do not prove that the physical block is ordered.
 enum ReclusterBlockStats {
     Original,
     Normalized(ClusterStatistics),
@@ -285,19 +287,6 @@ impl ReclusterBlock {
                 .expect("Original implies matched cluster_stats"),
             ReclusterBlockStats::Normalized(stats) => stats,
         }
-    }
-
-    fn into_indexed_meta(self) -> (BlockIndex, Arc<BlockMeta>) {
-        let ReclusterBlock { index, meta, stats } = self;
-        let block_meta = match stats {
-            ReclusterBlockStats::Original => meta,
-            ReclusterBlockStats::Normalized(stats) => {
-                let mut block_meta = Arc::unwrap_or_clone(meta);
-                block_meta.cluster_stats = Some(stats);
-                Arc::new(block_meta)
-            }
-        };
-        (index, block_meta)
     }
 }
 
@@ -490,6 +479,9 @@ impl ReclusterMutator {
         candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
+            let all_original_stats = blocks
+                .iter()
+                .all(|block| matches!(block.stats, ReclusterBlockStats::Original));
             let unordered = || {
                 blocks.windows(2).any(|window| {
                     sort_by_cluster_stats(
@@ -505,7 +497,8 @@ impl ReclusterMutator {
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack = self.mode == ReclusterMode::Conservative && unordered();
+            let unordered_repack =
+                self.mode == ReclusterMode::Conservative && all_original_stats && unordered();
             if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
@@ -524,29 +517,14 @@ impl ReclusterMutator {
             }
         }
 
-        drop(blocks);
-
-        let mut selected_segment_blocks = vec![Vec::new(); window_segment_infos.len()];
-        for (window_pos, selected) in selected_window_positions.iter().copied().enumerate() {
-            if !selected {
-                continue;
-            }
-            for block in blocks_by_segment[window_pos].drain(..) {
-                let (index, block_meta) = block.into_indexed_meta();
-                selected_segment_blocks[window_pos].push((index.block_idx, block_meta));
-            }
-        }
-
         for (window_pos, selected) in selected_window_positions.into_iter().enumerate() {
             if !selected {
                 continue;
             }
             let info = &window_segment_infos[window_pos];
-            let mut block_metas = std::mem::take(&mut selected_segment_blocks[window_pos]);
-            block_metas.sort_by_key(|(block_idx, _)| *block_idx);
-            let blocks = block_metas
-                .into_iter()
-                .map(|(_, block_meta)| block_meta)
+            let blocks = blocks_by_segment[window_pos]
+                .drain(..)
+                .map(|block| block.meta)
                 .collect::<Vec<_>>();
             candidate_window.segments[window_pos].1 = Some(Arc::new(SegmentInfo {
                 format_version: info.format_version,

@@ -325,6 +325,14 @@ impl AggregateFunctionFactory {
         false
     }
 
+    /// Whether `func_name` is a registered base aggregate, i.e. resolves
+    /// without stripping a combinator suffix (`_if`, `_distinct`, `_state`).
+    /// Unlike [`Self::contains`], `sum_if` is not a base aggregate.
+    pub fn contains_base(&self, func_name: impl AsRef<str>) -> bool {
+        self.case_insensitive_desc
+            .contains_key(&func_name.as_ref().to_lowercase())
+    }
+
     pub fn is_decomposable(&self, func_name: impl AsRef<str>) -> bool {
         let origin = func_name.as_ref();
 

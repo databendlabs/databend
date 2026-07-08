@@ -466,6 +466,81 @@ select array_agg(x) within group (order by x desc) from t3;
 ----
 [3,2,1,0]
 
+query T
+select listagg(s, '|') within group (order by x desc) filter (where b) from t3;
+----
+abc|xyz
+
+# PostgreSQL aggregate syntax compatibility.
+query T
+select string_agg(s, '|' order by x desc) from t3;
+----
+abc|def|xyz
+
+query T
+select string_agg(s, '|' order by x desc) filter (where b) from t3;
+----
+abc|xyz
+
+query T
+select string_agg(s, '|' order by z desc nulls first) from t3;
+----
+def|abc|xyz
+
+query T
+select array_agg(x order by y + 1 desc, x desc) from t3;
+----
+[1,0,3,2]
+
+query I
+select sum(x) filter (where b) from t3;
+----
+3
+
+query R
+select avg(x) filter (where b) from t3;
+----
+1.5
+
+query I
+select count(*) filter (where b) from t3;
+----
+2
+
+query I
+select count(s) filter (where x >= 1) from t3;
+----
+2
+
+query I
+select min(x) filter (where s ~ '^[ad]') from t3;
+----
+2
+
+statement error (?s)1065.*FILTER clause is only supported for aggregate functions
+select abs(x) filter (where b) from t3
+
+statement error (?s)1065.*DISTINCT aggregate FILTER is not supported
+select sum(distinct x) filter (where b) from t3
+
+statement error (?s)1065.*DISTINCT aggregate FILTER is not supported
+select count(distinct x) filter (where b) from t3
+
+statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
+select string_agg(distinct s order by x) from t3
+
+statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
+select count(distinct x order by y) from t3
+
+statement error (?s)1065.*only aggregate functions allowed in within group syntax
+select count_distinct(x order by y) from t3
+
+statement error (?s)1065.*only aggregate functions allowed in within group syntax
+select percentile_cont(0.5) within group (order by x) from t3
+
+statement error (?s)1065.*only aggregate functions allowed in within group syntax
+select rank(42) within group (order by x) from t3
+
 query TT
 select array_agg(s), array_agg(null) from t3;
 ----

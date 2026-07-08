@@ -320,7 +320,7 @@ pub enum TokenKind {
     #[token("~*")]
     TildeAsterisk,
     /// A case sensitive not match regular expression operator in PostgreSQL
-    #[token("!*")]
+    #[token("!~")]
     ExclamationMarkTilde,
     /// A case insensitive not match regular expression operator in PostgreSQL
     #[token("!~*")]
@@ -733,6 +733,8 @@ pub enum TokenKind {
     FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FILTER", ignore(ascii_case))]
+    FILTER,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
     #[token("FINGERPRINT", ignore(ascii_case))]
@@ -821,6 +823,8 @@ pub enum TokenKind {
     IF,
     #[token("IMMUTABLE", ignore(ascii_case))]
     IMMUTABLE,
+    #[token("ILIKE", ignore(ascii_case))]
+    ILIKE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
