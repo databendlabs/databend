@@ -38,6 +38,7 @@ mod table_index;
 mod truncate;
 mod util;
 mod vacuum;
+mod virtual_column;
 
 pub use agg_index_sink::AggIndexSink;
 pub use analyze::AnalyzeHistogramInfo;
@@ -60,3 +61,8 @@ pub use table_index::do_refresh_table_index;
 pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
 pub use vacuum::vacuum_tables_from_info;
+pub use virtual_column::VirtualColumnVacuumResult;
+pub use virtual_column::cleanup_vacuum_virtual_column_files;
+pub use virtual_column::commit_refresh_virtual_column;
+pub use virtual_column::do_vacuum_virtual_column;
+pub use virtual_column::prepare_refresh_virtual_column;

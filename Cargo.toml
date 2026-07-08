@@ -138,7 +138,6 @@ databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
 databend-enterprise-table-ref-handler = { path = "src/query/ee_features/table_ref_handler" }
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
-databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars/arithmetic" }
 databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
 databend-functions-scalar-decimal = { path = "src/query/functions/src/scalars/decimal" }

@@ -17,9 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
@@ -50,8 +48,6 @@ use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_hashtable::StackHashMap;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::VirtualColumnNameIndex;
@@ -118,13 +114,7 @@ pub struct VirtualColumnBuilder {
 }
 
 impl VirtualColumnBuilder {
-    pub fn try_create(
-        ctx: Arc<dyn TableContext>,
-        schema: TableSchemaRef,
-    ) -> Result<VirtualColumnBuilder> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)?;
-
+    pub fn try_create(schema: TableSchemaRef) -> Result<VirtualColumnBuilder> {
         let mut variant_fields = Vec::new();
         let mut variant_offsets = Vec::new();
         for (i, field) in schema.fields.iter().enumerate() {
