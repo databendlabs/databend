@@ -25,6 +25,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -529,14 +530,19 @@ impl FuseTable {
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
         // Previous statistics file location (if any).
         let mut prev_stats_location = snapshot.table_statistics_location();
-        let top_n_column_ids = if refresh_top_n && insert_rows > 0 {
+        let top_n_columns = if refresh_top_n && insert_rows > 0 {
             self.append_top_n_columns(self.schema())?
-                .map(|(columns, _)| columns.values().map(|field| field.column_id()).collect())
+                .map(|(columns, _)| {
+                    columns
+                        .into_values()
+                        .map(|field| (field.column_id(), field))
+                        .collect()
+                })
                 .unwrap_or_default()
         } else {
-            Vec::new()
+            HashMap::new()
         };
-        let has_top_n_update = !top_n_column_ids.is_empty();
+        let has_top_n_update = !top_n_columns.is_empty();
         let table_row_count = summary.row_count.saturating_add(insert_rows);
 
         // If no new rows/statistics are inserted, just reuse previous statistics.
@@ -627,7 +633,7 @@ impl FuseTable {
         let table_statistics = if has_top_n_update {
             self.build_append_top_n_statistics(
                 snapshot,
-                top_n_column_ids,
+                top_n_columns,
                 &new_hll,
                 insert_top_n,
                 table_row_count,
@@ -658,7 +664,7 @@ impl FuseTable {
     async fn build_append_top_n_statistics(
         &self,
         snapshot: &Option<Arc<TableSnapshot>>,
-        top_n_column_ids: Vec<ColumnId>,
+        top_n_columns: HashMap<ColumnId, TableField>,
         hll: &BlockHLL,
         insert_top_n: &BlockTopN,
         row_count: u64,
@@ -678,10 +684,10 @@ impl FuseTable {
         let mut top_n = fresh_prev_stats
             .map(|(_, stats)| stats.top_n.clone())
             .unwrap_or_default();
-        top_n.retain(|column_id, _| top_n_column_ids.contains(column_id));
+        top_n.retain(|column_id, _| top_n_columns.contains_key(column_id));
 
         let append_top_n = append_top_n_merge_input(
-            &top_n_column_ids,
+            &top_n_columns,
             snapshot.as_ref().map(|snapshot| &snapshot.summary),
             &top_n,
             insert_top_n,
@@ -720,7 +726,7 @@ impl FuseTable {
 }
 
 fn append_top_n_merge_input(
-    column_ids: &[ColumnId],
+    columns: &HashMap<ColumnId, TableField>,
     previous_summary: Option<&Statistics>,
     previous_top_n: &BlockTopN,
     insert_top_n: &BlockTopN,
@@ -728,12 +734,12 @@ fn append_top_n_merge_input(
     let previous_summary = previous_summary.filter(|summary| summary.row_count != 0);
     let mut append_top_n = HashMap::new();
 
-    for &column_id in column_ids {
+    for (&column_id, field) in columns {
         let Some(column_top_n) = insert_top_n.get(&column_id).cloned() else {
             continue;
         };
         if previous_top_n.contains_key(&column_id)
-            || column_has_no_previous_values(previous_summary, column_id)
+            || column_has_no_previous_values(previous_summary, column_id, field)
         {
             append_top_n.insert(column_id, column_top_n);
         }
@@ -745,14 +751,19 @@ fn append_top_n_merge_input(
 fn column_has_no_previous_values(
     previous_summary: Option<&Statistics>,
     column_id: ColumnId,
+    field: &TableField,
 ) -> bool {
     let Some(summary) = previous_summary else {
         return true;
     };
-    summary
-        .col_stats
-        .get(&column_id)
-        .is_some_and(|stats| stats.null_count == summary.row_count)
+    match summary.col_stats.get(&column_id) {
+        Some(stats) => stats.null_count == summary.row_count,
+        None => {
+            // A nullable column added without a default has no old column stats;
+            // historical rows read as NULL and should not block append TopN.
+            field.default_expr().is_none() && field.is_nullable_or_null()
+        }
+    }
 }
 
 pub(crate) fn is_fresh_table_snapshot_top_n(
