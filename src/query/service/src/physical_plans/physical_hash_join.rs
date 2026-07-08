@@ -739,11 +739,32 @@ impl PhysicalPlanBuilder {
                     .base_column_scan_id(*column_idx)
                     .unwrap();
 
+                let metadata = self.metadata.read();
                 return Ok(Some((
                     left_condition
                         .as_raw_expr()
-                        .type_check(&*self.metadata.read())?
-                        .project_column_ref(|col| Ok(col.column_name.clone()))?,
+                        .type_check(&*metadata)?
+                        .project_column_ref(|col| {
+                            // Use the physical column name from the table schema
+                            // (looked up by column_id) rather than the binding's
+                            // context name, which can be an alias that collides
+                            // with another column in the same table.
+                            let entry = metadata.column(col.index);
+                            if let ColumnEntry::BaseTableColumn(base_col) = entry {
+                                if base_col.path_indices.is_none() {
+                                    let table = metadata.table(base_col.table_index);
+                                    let schema = table.table().schema_with_stream();
+                                    if let Ok(field) = schema.field_of_column_id(base_col.column_id)
+                                    {
+                                        return Ok(field.name().clone());
+                                    }
+                                }
+                                // For nested/path columns, or when schema lookup
+                                // fails, use the stable metadata-level column name.
+                                return Ok(base_col.column_name.clone());
+                            }
+                            Ok(col.column_name.clone())
+                        })?,
                     scan_id,
                     table_index,
                     *column_idx,

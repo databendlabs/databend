@@ -156,9 +156,17 @@ pub fn project_columnar(
                 match missing_as {
                     // default
                     NullAs::Error => {
+                        let advice = build_columnar_missing_advice(
+                            input_schema,
+                            output_schema,
+                            field_name,
+                            case_sensitive,
+                            "MISSING_FIELD_AS=ERROR",
+                            None,
+                        );
                         return Err(ErrorCode::BadDataValueType(format!(
-                            "file {} missing column `{}`",
-                            location, field_name,
+                            "file {} missing column `{}`. {}",
+                            location, field_name, advice,
                         )));
                     }
                     NullAs::Null => {
@@ -169,9 +177,17 @@ pub fn project_columnar(
                                 scalar: Scalar::Null,
                             })
                         } else {
+                            let advice = build_columnar_missing_advice(
+                                input_schema,
+                                output_schema,
+                                field_name,
+                                case_sensitive,
+                                "MISSING_FIELD_AS=NULL",
+                                Some("the column is not nullable"),
+                            );
                             return Err(ErrorCode::BadDataValueType(format!(
-                                "{} missing column `{}`",
-                                location, field_name,
+                                "file {} missing column `{}`. {}",
+                                location, field_name, advice,
                             )));
                         }
                     }
@@ -205,6 +221,56 @@ pub fn project_columnar(
         )));
     }
     Ok((output_projection, pushdown_columns))
+}
+
+fn build_columnar_missing_advice(
+    input_schema: &TableSchemaRef,
+    output_schema: &TableSchemaRef,
+    field_name: &str,
+    case_sensitive: bool,
+    current_setting: &str,
+    extra_reason: Option<&str>,
+) -> String {
+    let mut hints = Vec::new();
+
+    // Hint 1: current MISSING_FIELD_AS setting
+    hints.push(format!("current FILE_FORMAT option: {current_setting}"));
+
+    // Hint 2: if there's an extra reason (e.g., column not nullable)
+    if let Some(reason) = extra_reason {
+        hints.push(reason.to_string());
+    }
+
+    // Hint 3: if case_sensitive, check if there's a case-insensitive match in the file
+    if case_sensitive {
+        let lower_field = field_name.to_lowercase();
+        let matched = input_schema
+            .fields()
+            .iter()
+            .find(|f| f.name().to_lowercase() == lower_field && f.name() != field_name);
+        if let Some(f) = matched {
+            hints.push(format!(
+                "found column '{}' with different case in file; consider using `COLUMN_MATCH_MODE=CASE_INSENSITIVE`",
+                f.name()
+            ));
+        }
+    }
+
+    // Hint 4: if target table has a single Variant column, suggest select $1
+    let fields = output_schema.fields();
+    if fields.len() == 1
+        && matches!(
+            fields[0].data_type.remove_nullable(),
+            TableDataType::Variant
+        )
+    {
+        hints.push(
+            "the target table has a single VARIANT column; consider using `COPY INTO <table> FROM (SELECT $1 FROM @<stage>)` to load raw data"
+                .to_string(),
+        );
+    }
+
+    hints.join(". ")
 }
 
 fn project_array_tuple(

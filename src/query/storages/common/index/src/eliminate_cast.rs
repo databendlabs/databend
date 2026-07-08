@@ -57,7 +57,22 @@ impl ExprVisitor<String> for RewriteVisitor<'_> {
                 return Ok(result);
             }
         }
-        Self::visit_function_call(call, self)
+        match Self::visit_function_call(call, self)? {
+            Some(Expr::FunctionCall(func)) => {
+                let name = func.id.name();
+                match check_function(
+                    func.span,
+                    name.as_ref(),
+                    func.id.params(),
+                    &func.args,
+                    self.fn_registry,
+                ) {
+                    Ok(expr) => Ok(Some(expr)),
+                    Err(_) => Ok(None),
+                }
+            }
+            result => Ok(result),
+        }
     }
 }
 

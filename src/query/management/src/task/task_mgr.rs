@@ -237,6 +237,7 @@ impl TaskMgr {
             self.send(TaskMessage::DeleteTask(
                 task_name.to_string(),
                 task.warehouse_options.clone(),
+                Some(task.task_id),
             ))
             .await?;
 

@@ -125,6 +125,27 @@ ON ST_DWithin(s.geom, l.geom, 0.5)
 ----
 300
 
+# Alias self joins must not double-count probe rows in a cluster. The two
+# polygons are disjoint, so only each row's self-pair matches.
+query I
+SELECT count(*)
+FROM small_polygons AS a
+JOIN small_polygons AS b
+ON ST_Intersects(a.geom, b.geom)
+----
+2
+
+# A residual predicate is outside the current spatial join admission. This
+# result guards against accidentally taking the spatial path and dropping the
+# residual filter.
+query I
+SELECT count(*)
+FROM small_polygons AS a
+JOIN small_polygons AS b
+ON a.id < b.id AND ST_Intersects(a.geom, b.geom)
+----
+0
+
 statement ok
 SET enable_spatial_join = 0
 

@@ -38,9 +38,13 @@ impl<'a> CoreExprArena<'a> {
         right: &'a Expr,
     ) -> Result<CoreExprId> {
         match op {
-            BinaryOperator::NotLike(_) | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+            BinaryOperator::NotLike(_)
+            | BinaryOperator::NotILike(_)
+            | BinaryOperator::NotRegexp
+            | BinaryOperator::NotRLike => {
                 let positive_op = match op {
                     BinaryOperator::NotLike(escape) => BinaryOperator::Like(escape.clone()),
+                    BinaryOperator::NotILike(escape) => BinaryOperator::ILike(escape.clone()),
                     BinaryOperator::NotRegexp => BinaryOperator::Regexp,
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
@@ -69,6 +73,12 @@ impl<'a> CoreExprArena<'a> {
             }
             BinaryOperator::LikeAny(escape) => {
                 self.lower_like_escape_expr(span, "like_any", left, right, escape.as_ref())
+            }
+            BinaryOperator::ILike(escape) => {
+                self.lower_like_escape_expr(span, "ilike", left, right, escape.as_ref())
+            }
+            BinaryOperator::ILikeAny(escape) => {
+                self.lower_like_escape_expr(span, "ilike_any", left, right, escape.as_ref())
             }
             BinaryOperator::Regexp => {
                 self.lower_like_escape_expr(span, "regexp", left, right, None)

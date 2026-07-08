@@ -30,3 +30,17 @@ query TTT
 select name, value, type from show_variables() where name='a';
 ----
 a 3 UInt8
+
+statement ok
+set variable x = (select 1 where 1 = 0)
+
+query T
+select getvariable('x')
+----
+NULL
+
+statement error Expect 2 column in set query result, but got 1 columns
+set variable (a, b) = (select 1 where 1 = 0)
+
+statement error Expect 1 column in set query result, but got 2 columns
+set variable x = (select 1, 2 where 1 = 0)

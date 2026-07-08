@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
@@ -133,6 +134,9 @@ enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: CoreUdfCallArgs,
+        // Carried through to UDF resolution, where scalar UDFs and UDAFs are
+        // distinguished before a FILTER clause can be handled or rejected.
+        filter: Option<&'a Expr>,
     },
     LambdaFunction {
         span: Span,

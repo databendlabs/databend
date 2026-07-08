@@ -322,9 +322,17 @@ impl<'a> CoreExprArena<'a> {
                 results,
                 else_result.as_deref(),
             )?,
-            expr @ Expr::CountAll { span, window, .. } => {
-                self.lower_count_all_expr(format!("{expr:#}"), *span, window.as_ref())?
-            }
+            expr @ Expr::CountAll {
+                span,
+                filter,
+                window,
+                ..
+            } => self.lower_count_all_expr(
+                format!("{expr:#}"),
+                *span,
+                filter.as_deref(),
+                window.as_ref(),
+            )?,
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
@@ -356,6 +364,23 @@ impl<'a> CoreExprArena<'a> {
         self.ensure_window_not_in_lambda(span, func.window.is_some())?;
         if let Some(expr) = self.try_lower_udf_call(span, &func_name, func)? {
             return Ok(expr);
+        }
+
+        if func.filter.is_some() && !self.aggregate_function_factory.contains(&func_name) {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
+        if func.distinct
+            && !func.order_by.is_empty()
+            && self.aggregate_function_factory.contains(&func_name)
+        {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
         }
 
         self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
@@ -565,9 +590,12 @@ where A: TypeCheckAdapter
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
-            CoreExpr::UdfCall { span, name, args } => {
-                self.resolve_udf_call(arena, *span, name, args)
-            }
+            CoreExpr::UdfCall {
+                span,
+                name,
+                args,
+                filter,
+            } => self.resolve_udf_call(arena, *span, name, args, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,

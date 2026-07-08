@@ -1,0 +1,56 @@
+# ILIKE operator should match patterns case-insensitively.
+
+query B
+SELECT 'Databend' ILIKE 'data%'
+----
+1
+
+query B
+SELECT 'Databend' LIKE 'data%'
+----
+0
+
+query B
+SELECT 'Databend' NOT ILIKE 'data%'
+----
+0
+
+query B
+SELECT 'Databend' ILIKE ANY ('foo%', 'DATA%')
+----
+1
+
+query B
+SELECT 'Databend' ILIKE ANY ('foo%', 'bar%')
+----
+0
+
+query B
+SELECT 'A_%' ILIKE 'a!_!%' ESCAPE '!'
+----
+1
+
+query B
+SELECT 'A_%' NOT ILIKE 'a!_!%' ESCAPE '!'
+----
+0
+
+query B
+SELECT 'A_%' ILIKE ANY ('b!_!%', 'a!_!%') ESCAPE '!'
+----
+1
+
+query B
+SELECT 'ab' ILIKE 'aA%' ESCAPE 'A'
+----
+0
+
+query B
+SELECT 'a%' ILIKE 'aA%' ESCAPE 'A'
+----
+1
+
+query B
+SELECT 'ab' ILIKE ANY ('z%', 'aA%') ESCAPE 'A'
+----
+0

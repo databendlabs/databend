@@ -31,7 +31,7 @@ error:
 1 | CAST(col1 AS foo)
   | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `STAGE_LOCATION`, <Ident>, <LiteralString>, `IDENTIFIER`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
   | |             
-  | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
+  | while parsing `function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
 
 
@@ -54,7 +54,7 @@ error:
 1 | CAST(col1)
   | ----     ^ expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
   | |         
-  | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
+  | while parsing `function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
 
 
@@ -117,7 +117,7 @@ error:
   --> SQL:1:19
   |
 1 | CAST(1 AS STRING) ESCAPE '$'
-  | ----              ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
+  | ----              ^^^^^^ escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr
   | |                  
   | while parsing expression
 
@@ -129,7 +129,7 @@ error:
   --> SQL:1:7
   |
 1 | 1 + 1 ESCAPE '$'
-  | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
+  | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr
   | |      
   | while parsing expression
 

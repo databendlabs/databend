@@ -29,8 +29,6 @@ pub enum Feature {
     Vacuum,
     #[serde(alias = "test", alias = "TEST")]
     Test,
-    #[serde(alias = "virtual_column", alias = "VIRTUAL_COLUMN")]
-    VirtualColumn,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
     #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
@@ -77,7 +75,6 @@ impl fmt::Display for Feature {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),
             Feature::Test => write!(f, "test"),
-            Feature::VirtualColumn => write!(f, "virtual_column"),
             Feature::DataMask => write!(f, "data_mask"),
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
@@ -202,10 +199,6 @@ mod tests {
             serde_json::from_str::<Feature>("\"Test\"").unwrap()
         );
         assert_eq!(
-            Feature::VirtualColumn,
-            serde_json::from_str::<Feature>("\"VIRTUAL_COLUMN\"").unwrap()
-        );
-        assert_eq!(
             Feature::DataMask,
             serde_json::from_str::<Feature>("\"DataMask\"").unwrap()
         );
@@ -281,7 +274,6 @@ mod tests {
                 Feature::LicenseInfo,
                 Feature::Vacuum,
                 Feature::Test,
-                Feature::VirtualColumn,
                 Feature::DataMask,
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
@@ -298,7 +290,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
             license_info.to_string()
         );
     }
@@ -310,7 +302,6 @@ mod tests {
             Feature::LicenseInfo,
             Feature::Vacuum,
             Feature::Test,
-            Feature::VirtualColumn,
             Feature::DataMask,
             Feature::ComputedColumn,
             Feature::StorageEncryption,

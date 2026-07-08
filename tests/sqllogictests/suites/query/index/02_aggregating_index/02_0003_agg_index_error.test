@@ -64,6 +64,20 @@ onlyif mysql
 statement error 1105
 CREATE AGGREGATING INDEX testi AS select sum(a) from t group by rand()
 
+# `COUNT(*)` parses to a dedicated CountAll node; a FILTER on it must be rejected
+# rather than slipping past the checker into the index rewriters.
+onlyif mysql
+statement error 1105
+CREATE AGGREGATING INDEX testi AS select count(*) filter (where a > 1) from t
+
+onlyif mysql
+statement error 1105
+CREATE AGGREGATING INDEX testi AS select b, count(*) filter (where a > 1) from t group by b
+
+onlyif mysql
+statement error 1105
+CREATE AGGREGATING INDEX testi AS select count(*) filter (where a > 1) from t where c > 1
+
 statement ok
 DROP TABLE t
 

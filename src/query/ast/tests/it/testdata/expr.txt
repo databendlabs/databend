@@ -113,6 +113,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -842,6 +843,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1392,6 +1394,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1422,6 +1425,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1450,6 +1454,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1517,6 +1522,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1700,6 +1706,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1728,6 +1735,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1866,6 +1874,7 @@ DateTrunc {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -1908,6 +1917,7 @@ TimeSlice {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -1953,6 +1963,7 @@ TimeSlice {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -1998,6 +2009,7 @@ TimeSlice {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2044,6 +2056,7 @@ DateTrunc {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2090,6 +2103,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -2129,6 +2143,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -2171,6 +2186,7 @@ DateTrunc {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2214,6 +2230,7 @@ DateTrunc {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2257,6 +2274,7 @@ DateTrunc {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2300,6 +2318,7 @@ DateDiff {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2330,6 +2349,7 @@ DateDiff {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2373,6 +2393,7 @@ LastDay {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2416,6 +2437,7 @@ LastDay {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2467,6 +2489,7 @@ DateSub {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2510,6 +2533,7 @@ DateBetween {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2540,6 +2564,7 @@ DateBetween {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -2942,6 +2967,86 @@ BinaryOp {
 
 
 ---------- Input ----------
+a ~ '^11'
+---------- Output ---------
+a ~ '^11'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..3,
+    ),
+    op: PgRegexpMatch,
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            4..9,
+        ),
+        value: String(
+            "^11",
+        ),
+    },
+}
+
+
+---------- Input ----------
+a !~ '^11'
+---------- Output ---------
+a NOT REGEXP '^11'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..4,
+    ),
+    op: NotRegexp,
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            5..10,
+        ),
+        value: String(
+            "^11",
+        ),
+    },
+}
+
+
+---------- Input ----------
 a like '%1$%1%' escape '$'
 ---------- Output ---------
 a LIKE '%1$%1%' ESCAPE '$'
@@ -3020,6 +3125,94 @@ LikeWithEscape {
     },
     is_not: true,
     escape: "$",
+}
+
+
+---------- Input ----------
+a ilike '%1$%1%' escape '$'
+---------- Output ---------
+a ILIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..7,
+    ),
+    op: ILike(
+        Some(
+            "$",
+        ),
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            8..16,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
+}
+
+
+---------- Input ----------
+a not ilike '%1$%1%' escape '$'
+---------- Output ---------
+a NOT ILIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..11,
+    ),
+    op: NotILike(
+        Some(
+            "$",
+        ),
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            12..20,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
 }
 
 
@@ -3239,6 +3432,7 @@ BinaryOp {
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -3358,6 +3552,7 @@ BinaryOp {
             ],
             params: [],
             order_by: [],
+            filter: None,
             window: None,
             lambda: None,
         },
@@ -3410,6 +3605,7 @@ BinaryOp {
                         ],
                         params: [],
                         order_by: [],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },
@@ -3472,6 +3668,7 @@ BinaryOp {
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -4002,6 +4199,114 @@ LikeAnyWithEscape {
 
 
 ---------- Input ----------
+'中文'::text ILIKE ANY ('a', 'b')
+---------- Output ---------
+'中文'::STRING ILIKE ANY ('a', 'b')
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..24,
+    ),
+    op: ILikeAny(
+        None,
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            25..35,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    26..29,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    31..34,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+'中文'::text ILIKE ANY ('a', 'b') ESCAPE '$'
+---------- Output ---------
+'中文'::STRING ILIKE ANY ('a', 'b') ESCAPE '$'
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..24,
+    ),
+    op: ILikeAny(
+        Some(
+            "$",
+        ),
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            25..35,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    26..29,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    31..34,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
 '中文'::text LIKE ANY (SELECT 'a', 'b')
 ---------- Output ---------
 '中文'::STRING LIKE ANY (SELECT 'a', 'b')
@@ -4358,6 +4663,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4425,6 +4731,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4478,6 +4785,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4564,6 +4872,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4609,6 +4918,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4676,6 +4986,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4830,6 +5141,375 @@ Map {
 
 
 ---------- Input ----------
+ARRAY_AGG(a ORDER BY b)
+---------- Output ---------
+ARRAY_AGG(a) WITHIN GROUP ( ORDER BY b )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..23,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "ARRAY_AGG",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    10..11,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                10..11,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        21..22,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    21..22,
+                                ),
+                                name: "b",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+ARRAY_AGG(DISTINCT a ORDER BY a DESC NULLS LAST)
+---------- Output ---------
+ARRAY_AGG(DISTINCT a) WITHIN GROUP ( ORDER BY a DESC NULLS LAST )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..48,
+    ),
+    func: FunctionCall {
+        distinct: true,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "ARRAY_AGG",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    19..20,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                19..20,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        30..31,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    30..31,
+                                ),
+                                name: "a",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: Some(
+                    false,
+                ),
+                nulls_first: Some(
+                    false,
+                ),
+            },
+        ],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+STRING_AGG(name, ',' ORDER BY name)
+---------- Output ---------
+STRING_AGG(name, ',') WITHIN GROUP ( ORDER BY name )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..35,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..10,
+            ),
+            name: "STRING_AGG",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    11..15,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                11..15,
+                            ),
+                            name: "name",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            Literal {
+                span: Some(
+                    17..20,
+                ),
+                value: String(
+                    ",",
+                ),
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        30..34,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    30..34,
+                                ),
+                                name: "name",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+SUM(amount) FILTER (WHERE status = 'paid')
+---------- Output ---------
+SUM(amount) FILTER ( WHERE status = 'paid' )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..42,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..3,
+            ),
+            name: "SUM",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    4..10,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                4..10,
+                            ),
+                            name: "amount",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        filter: Some(
+            BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Eq,
+                left: ColumnRef {
+                    span: Some(
+                        26..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    26..32,
+                                ),
+                                name: "status",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        35..41,
+                    ),
+                    value: String(
+                        "paid",
+                    ),
+                },
+            },
+        ),
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+COUNT(*) FILTER (WHERE amount > 0)
+---------- Output ---------
+COUNT(*) FILTER ( WHERE amount > 0 )
+---------- AST ------------
+CountAll {
+    span: Some(
+        0..34,
+    ),
+    qualified: [
+        Star(
+            Some(
+                6..7,
+            ),
+        ),
+    ],
+    filter: Some(
+        BinaryOp {
+            span: Some(
+                30..31,
+            ),
+            op: Gt,
+            left: ColumnRef {
+                span: Some(
+                    23..29,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                23..29,
+                            ),
+                            name: "amount",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            right: Literal {
+                span: Some(
+                    32..33,
+                ),
+                value: UInt64(
+                    0,
+                ),
+            },
+        },
+    ),
+    window: None,
+}
+
+
+---------- Input ----------
 LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)
 ---------- Output ---------
 LISTAGG(salary, '|') WITHIN GROUP ( ORDER BY salary DESC NULLS LAST )
@@ -4907,6 +5587,133 @@ FunctionCall {
                 ),
             },
         ],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY income)
+---------- Output ---------
+PERCENTILE_CONT(0.5) WITHIN GROUP ( ORDER BY income )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..51,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..15,
+            ),
+            name: "PERCENTILE_CONT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    16..19,
+                ),
+                value: Decimal256 {
+                    value: 5,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        44..50,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    44..50,
+                                ),
+                                name: "income",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        filter: None,
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+RANK(42) WITHIN GROUP (ORDER BY score)
+---------- Output ---------
+RANK(42) WITHIN GROUP ( ORDER BY score )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..38,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..4,
+            ),
+            name: "RANK",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    5..7,
+                ),
+                value: UInt64(
+                    42,
+                ),
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        32..37,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    32..37,
+                                ),
+                                name: "score",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: None,
+                nulls_first: None,
+            },
+        ],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -4935,6 +5742,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5021,6 +5829,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5081,6 +5890,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5161,6 +5971,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5275,6 +6086,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5376,6 +6188,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5463,6 +6276,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5511,6 +6325,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5583,6 +6398,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5653,6 +6469,7 @@ FunctionCall {
         args: [],
         params: [],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5765,6 +6582,7 @@ FunctionCall {
             },
         ],
         order_by: [],
+        filter: None,
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -5881,6 +6699,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {
@@ -5975,6 +6794,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {
@@ -6068,6 +6888,7 @@ Tuple {
                 args: [],
                 params: [],
                 order_by: [],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -6089,6 +6910,7 @@ Tuple {
                 args: [],
                 params: [],
                 order_by: [],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -6110,6 +6932,7 @@ Tuple {
                 args: [],
                 params: [],
                 order_by: [],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -6172,6 +6995,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {
@@ -6312,6 +7136,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {
@@ -6452,6 +7277,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {
@@ -6581,6 +7407,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
             Lambda {

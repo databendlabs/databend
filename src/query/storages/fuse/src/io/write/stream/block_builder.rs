@@ -660,7 +660,7 @@ impl StreamBlockProperties {
         )?;
 
         let virtual_column_builder = if table.enable_virtual_column() {
-            VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
+            VirtualColumnBuilder::try_create(source_schema.clone()).ok()
         } else {
             None
         };

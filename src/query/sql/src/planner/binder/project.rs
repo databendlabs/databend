@@ -669,6 +669,7 @@ impl Binder {
                     distinct: false,
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                 },
             };

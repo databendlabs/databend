@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2021 Datafuse Labs
 //
-// Licensed under the Elastic License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.elastic.co/licensing/elastic-license
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,7 +21,6 @@ use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::Projection;
-use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,34 +38,13 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::RefreshSelection;
-use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
-use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
-use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::BlockReader;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::io::VirtualColumnBuilder;
-use databend_common_storages_fuse::io::WriteSettings;
-use databend_common_storages_fuse::io::read::read_segment_stats;
-use databend_common_storages_fuse::io::write_data;
-use databend_common_storages_fuse::operations::BlockMetaIndex;
-use databend_common_storages_fuse::operations::CommitSink;
-use databend_common_storages_fuse::operations::MutationGenerator;
-use databend_common_storages_fuse::operations::MutationLogEntry;
-use databend_common_storages_fuse::operations::MutationLogs;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
-use databend_common_storages_fuse::operations::VirtualSchemaMode;
-use databend_enterprise_virtual_column::VirtualColumnRefreshResult;
-use databend_query::pipelines::PipelineBuildResult;
-use databend_query::pipelines::executor::ExecutorSettings;
-use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Table;
 use databend_storages_common_io::Files;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -76,6 +54,39 @@ use log::debug;
 use log::info;
 use opendal::ErrorKind;
 use opendal::Operator;
+
+use crate::FuseStorageFormat;
+use crate::FuseTable;
+use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
+use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
+use crate::io::BlockReader;
+use crate::io::MetaReaders;
+use crate::io::TableMetaLocationGenerator;
+use crate::io::VirtualColumnBuilder;
+use crate::io::WriteSettings;
+use crate::io::read::read_segment_stats;
+use crate::io::write_data;
+use crate::operations::BlockMetaIndex;
+use crate::operations::CommitSink;
+use crate::operations::MutationGenerator;
+use crate::operations::MutationLogEntry;
+use crate::operations::MutationLogs;
+use crate::operations::TableMutationAggregator;
+use crate::operations::VirtualSchemaMode;
+
+#[derive(Clone, Debug)]
+pub struct VirtualColumnRefreshResult {
+    pub block_location: String,
+    pub draft_virtual_block_meta: DraftVirtualBlockMeta,
+    pub column_hlls: Option<RawBlockHLL>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct VirtualColumnVacuumResult {
+    pub removed_files: u64,
+    pub need_commit: bool,
+    pub need_cleanup: bool,
+}
 
 // Refresh virtual columns in two phases:
 // 1) Prepare virtual column files for selected blocks (slow path, no commit).
@@ -124,7 +135,7 @@ pub async fn prepare_refresh_virtual_column(
             "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
         ));
     }
-    let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
+    let virtual_column_builder = VirtualColumnBuilder::try_create(source_schema)?;
 
     let projection = Projection::Columns(field_indices);
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
@@ -397,20 +408,21 @@ pub async fn commit_refresh_virtual_column(
 pub async fn do_vacuum_virtual_column(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
-) -> Result<u64> {
+    pipeline: &mut Pipeline,
+) -> Result<VirtualColumnVacuumResult> {
     let start = Instant::now();
     let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
         info!(
             "Vacuum virtual column finished in {} ms (no snapshot)",
             start.elapsed().as_millis()
         );
-        return Ok(0);
+        return Ok(VirtualColumnVacuumResult::default());
     };
 
     let (mut mutation_entries, rebuilt_virtual_schema) =
         prepare_vacuum_virtual_column_mutations(fuse_table, latest_snapshot.clone()).await?;
 
-    let mut removed_files = mutation_entries.len() as u64;
+    let removed_files = mutation_entries.len() as u64;
     let schema_changed = fuse_table.get_table_info().meta.virtual_schema != rebuilt_virtual_schema;
     let need_commit = !mutation_entries.is_empty() || schema_changed;
 
@@ -420,35 +432,32 @@ pub async fn do_vacuum_virtual_column(
             mode: VirtualSchemaMode::Replace,
         });
 
-        let mut build_res = PipelineBuildResult::create();
         let block = DataBlock::from(MutationLogs {
             entries: mutation_entries,
         });
-        build_res.main_pipeline.add_source(
+        pipeline.add_source(
             move |output| OneBlockSource::create(output, block.clone()),
             1,
         )?;
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(fuse_table, Some(latest_snapshot.clone()))?;
-        build_res
-            .main_pipeline
-            .add_async_accumulating_transformer(|| {
-                TableMutationAggregator::create(
-                    fuse_table,
-                    ctx.clone(),
-                    latest_snapshot.segments.clone(),
-                    vec![],
-                    vec![],
-                    Statistics::default(),
-                    MutationKind::Refresh,
-                    table_meta_timestamps,
-                )
-            });
+        pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::create(
+                fuse_table,
+                ctx.clone(),
+                latest_snapshot.segments.clone(),
+                vec![],
+                vec![],
+                Statistics::default(),
+                MutationKind::Refresh,
+                table_meta_timestamps,
+            )
+        });
 
         let prev_snapshot_id = latest_snapshot.snapshot_id;
         let snapshot_gen = MutationGenerator::new(Some(latest_snapshot), MutationKind::Refresh);
-        build_res.main_pipeline.add_sink(|input| {
+        pipeline.add_sink(|input| {
             CommitSink::try_create(
                 fuse_table,
                 ctx.clone(),
@@ -462,31 +471,97 @@ pub async fn do_vacuum_virtual_column(
                 table_meta_timestamps,
             )
         })?;
-
-        execute_complete_pipeline(ctx.clone(), build_res).await?;
     }
 
+    info!(
+        "Prepared virtual column vacuum in {} ms, removed {} files, need_commit={}",
+        start.elapsed().as_millis(),
+        removed_files,
+        need_commit
+    );
+
+    Ok(VirtualColumnVacuumResult {
+        removed_files,
+        need_commit,
+        need_cleanup: true,
+    })
+}
+
+#[async_backtrace::framed]
+pub async fn cleanup_vacuum_virtual_column_files(
+    ctx: Arc<dyn TableContext>,
+    fuse_table: &FuseTable,
+) -> Result<u64> {
     // Unconditionally remove legacy virtual column files. Safe even if historical
     // snapshots still reference them — missing virtual columns are tolerated and
     // queries fall back to reading from the original variant column.
-    remove_legacy_virtual_column_files(fuse_table).await?;
+    let operator = fuse_table.get_operator();
+    let table_data_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/');
 
-    let orphan_removed = if need_commit {
-        let latest_table = fuse_table.refresh(ctx.as_ref()).await?;
-        let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
-        remove_orphan_virtual_column_files(ctx.clone(), latest_fuse_table).await?
-    } else {
-        remove_orphan_virtual_column_files(ctx.clone(), fuse_table).await?
-    };
-    removed_files += orphan_removed;
-
-    info!(
-        "Vacuum virtual column finished in {} ms, removed {} files",
-        start.elapsed().as_millis(),
-        removed_files
+    // remove legacy virtual column dir
+    let v1_prefix = format!(
+        "{}/{}/",
+        table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
     );
+    operator.remove_all(&v1_prefix).await?;
 
-    Ok(removed_files)
+    // remove orphan virtual column files
+    let Some(snapshot_referenced_segments) = fuse_table
+        .get_snapshot_referenced_segments(ctx.clone(), |status| ctx.set_status_info(&status))
+        .await?
+    else {
+        return Ok(0);
+    };
+
+    let table_schema = fuse_table.schema();
+    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+
+    let mut referenced_virtual_locations = HashSet::new();
+    for (location, ver) in &snapshot_referenced_segments {
+        let segment = segment_reader
+            .read(&LoadParams {
+                location: location.to_string(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+
+        for block_meta in segment.block_metas()?.into_iter() {
+            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
+                let virtual_location = virtual_block_meta.virtual_location.0.as_str();
+                if !virtual_location.is_empty() {
+                    referenced_virtual_locations.insert(virtual_location.to_string());
+                }
+            }
+        }
+    }
+
+    let mut all_virtual_locations = Vec::new();
+    let operator = fuse_table.get_operator();
+    let table_data_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/');
+    let v2_prefix = format!("{}/{}/", table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX);
+    collect_virtual_locations(&operator, &v2_prefix, &mut all_virtual_locations).await?;
+
+    let files_to_remove: Vec<_> = all_virtual_locations
+        .into_iter()
+        .filter(|location| !referenced_virtual_locations.contains(location))
+        .collect();
+
+    if files_to_remove.is_empty() {
+        return Ok(0);
+    }
+
+    let op = Files::create(ctx, fuse_table.get_operator());
+    op.remove_file_in_batch(&files_to_remove).await?;
+
+    Ok(files_to_remove.len() as u64)
 }
 
 #[async_backtrace::framed]
@@ -599,197 +674,6 @@ fn prune_virtual_schema(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::HashSet;
-
-    use anyhow::Result;
-    use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
-    use databend_common_expression::VariantDataType;
-    use databend_common_expression::VirtualDataField;
-    use databend_common_expression::VirtualDataSchema;
-    use opendal::Operator;
-    use opendal::services::Memory;
-
-    use super::collect_virtual_locations;
-    use super::prune_virtual_schema;
-
-    fn schema_with_ids(ids: &[u32]) -> VirtualDataSchema {
-        VirtualDataSchema {
-            fields: ids
-                .iter()
-                .map(|column_id| VirtualDataField {
-                    name: format!("v['{column_id}']"),
-                    data_types: vec![VariantDataType::String],
-                    source_column_id: 0,
-                    column_id: *column_id,
-                })
-                .collect(),
-            metadata: std::collections::BTreeMap::new(),
-            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
-            number_of_blocks: 0,
-        }
-    }
-
-    // Only fields whose column_id appears in referenced_column_ids are kept.
-    // Output is sorted by column_id. number_of_blocks is updated to the given value.
-    #[test]
-    fn test_prune_virtual_schema_keeps_referenced_and_updates_blocks() {
-        let schema = schema_with_ids(&[3, 1, 2]);
-        let referenced = HashSet::from([1_u32, 3_u32]);
-
-        let pruned =
-            prune_virtual_schema(&Some(schema), &referenced, 7).expect("schema should remain");
-
-        let column_ids = pruned
-            .fields
-            .iter()
-            .map(|f| f.column_id)
-            .collect::<Vec<_>>();
-        assert_eq!(column_ids, vec![1, 3]);
-        assert_eq!(pruned.number_of_blocks, 7);
-    }
-
-    // When no fields are referenced, prune returns None (schema cleared).
-    #[test]
-    fn test_prune_virtual_schema_empty_returns_none() {
-        let schema = schema_with_ids(&[1, 2]);
-        let referenced: HashSet<u32> = HashSet::new();
-
-        let pruned = prune_virtual_schema(&Some(schema), &referenced, 0);
-        assert!(pruned.is_none());
-    }
-
-    // Even if all fields are referenced, the result is capped at VIRTUAL_COLUMNS_LIMIT.
-    // This prevents historically oversized schemas from persisting after vacuum.
-    #[test]
-    fn test_prune_virtual_schema_truncates_to_limit() {
-        let ids = (0..(VIRTUAL_COLUMNS_LIMIT as u32 + 5)).collect::<Vec<_>>();
-        let schema = schema_with_ids(&ids);
-        let referenced = ids.iter().copied().collect::<HashSet<_>>();
-
-        let pruned =
-            prune_virtual_schema(&Some(schema), &referenced, 1).expect("schema should remain");
-
-        assert_eq!(pruned.fields.len(), VIRTUAL_COLUMNS_LIMIT);
-        assert_eq!(
-            pruned.fields.last().unwrap().column_id,
-            VIRTUAL_COLUMNS_LIMIT as u32 - 1
-        );
-    }
-
-    // When the _vb_v2 prefix doesn't exist on storage, collect should return
-    // an empty list without error (handles NotFound gracefully).
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {
-        let operator = Operator::new(Memory::default())?.finish();
-        let mut files = Vec::new();
-        collect_virtual_locations(&operator, "missing/_vb_v2/", &mut files).await?;
-        assert!(files.is_empty());
-        Ok(())
-    }
-}
-
-async fn execute_complete_pipeline(
-    ctx: Arc<dyn TableContext>,
-    mut build_res: PipelineBuildResult,
-) -> Result<()> {
-    if build_res.main_pipeline.is_empty() {
-        return Ok(());
-    }
-
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-
-    if build_res.main_pipeline.is_complete_pipeline()? {
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-        let executor_settings = ExecutorSettings::try_create(ctx)?;
-        let complete_executor =
-            PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        complete_executor.execute().await?;
-    }
-
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn remove_legacy_virtual_column_files(fuse_table: &FuseTable) -> Result<()> {
-    let operator = fuse_table.get_operator();
-    let table_data_prefix = fuse_table
-        .meta_location_generator()
-        .prefix()
-        .trim_start_matches('/');
-
-    // remove legacy virtual column dir
-    let v1_prefix = format!(
-        "{}/{}/",
-        table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
-    );
-    operator.remove_all(&v1_prefix).await?;
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn remove_orphan_virtual_column_files(
-    ctx: Arc<dyn TableContext>,
-    fuse_table: &FuseTable,
-) -> Result<u64> {
-    let Some(snapshot_referenced_segments) = fuse_table
-        .get_snapshot_referenced_segments(ctx.clone(), |status| ctx.set_status_info(&status))
-        .await?
-    else {
-        return Ok(0);
-    };
-
-    let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
-
-    let mut referenced_virtual_locations = HashSet::new();
-    for (location, ver) in &snapshot_referenced_segments {
-        let segment = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
-
-        for block_meta in segment.block_metas()?.into_iter() {
-            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
-                let virtual_location = virtual_block_meta.virtual_location.0.as_str();
-                if !virtual_location.is_empty() {
-                    referenced_virtual_locations.insert(virtual_location.to_string());
-                }
-            }
-        }
-    }
-
-    let mut all_virtual_locations = Vec::new();
-    let operator = fuse_table.get_operator();
-    let table_data_prefix = fuse_table
-        .meta_location_generator()
-        .prefix()
-        .trim_start_matches('/');
-    let v2_prefix = format!("{}/{}/", table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX);
-    collect_virtual_locations(&operator, &v2_prefix, &mut all_virtual_locations).await?;
-
-    let files_to_remove: Vec<_> = all_virtual_locations
-        .into_iter()
-        .filter(|location| !referenced_virtual_locations.contains(location))
-        .collect();
-
-    if files_to_remove.is_empty() {
-        return Ok(0);
-    }
-
-    let op = Files::create(ctx, fuse_table.get_operator());
-    op.remove_file_in_batch(&files_to_remove).await?;
-
-    Ok(files_to_remove.len() as u64)
-}
-
 #[async_backtrace::framed]
 async fn collect_virtual_locations(
     operator: &Operator,
@@ -892,7 +776,7 @@ async fn build_virtual_columns(
                 let processed_blocks = processed.fetch_add(1, Ordering::Relaxed) + 1;
                 if processed_blocks == 1
                     || processed_blocks == block_nums
-                    || processed_blocks % VIRTUAL_COLUMN_PROGRESS_LOG_STEP == 0
+                    || processed_blocks.is_multiple_of(VIRTUAL_COLUMN_PROGRESS_LOG_STEP)
                 {
                     info!(
                         "Virtual column build progress: {}/{}",
@@ -923,4 +807,88 @@ async fn build_virtual_columns(
         output.push(result?);
     }
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+    use databend_common_expression::VariantDataType;
+    use databend_common_expression::VirtualDataField;
+    use databend_common_expression::VirtualDataSchema;
+    use opendal::Operator;
+    use opendal::services::Memory;
+
+    use super::collect_virtual_locations;
+    use super::prune_virtual_schema;
+
+    fn schema_with_ids(ids: &[u32]) -> VirtualDataSchema {
+        VirtualDataSchema {
+            fields: ids
+                .iter()
+                .map(|column_id| VirtualDataField {
+                    name: format!("v['{column_id}']"),
+                    data_types: vec![VariantDataType::String],
+                    source_column_id: 0,
+                    column_id: *column_id,
+                })
+                .collect(),
+            metadata: std::collections::BTreeMap::new(),
+            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
+            number_of_blocks: 0,
+        }
+    }
+
+    #[test]
+    fn test_prune_virtual_schema_keeps_referenced_and_updates_blocks() {
+        let schema = schema_with_ids(&[3, 1, 2]);
+        let referenced = HashSet::from([1_u32, 3_u32]);
+
+        let pruned =
+            prune_virtual_schema(&Some(schema), &referenced, 7).expect("schema should remain");
+
+        let column_ids = pruned
+            .fields
+            .iter()
+            .map(|f| f.column_id)
+            .collect::<Vec<_>>();
+        assert_eq!(column_ids, vec![1, 3]);
+        assert_eq!(pruned.number_of_blocks, 7);
+    }
+
+    #[test]
+    fn test_prune_virtual_schema_empty_returns_none() {
+        let schema = schema_with_ids(&[1, 2]);
+        let referenced: HashSet<u32> = HashSet::new();
+
+        let pruned = prune_virtual_schema(&Some(schema), &referenced, 0);
+        assert!(pruned.is_none());
+    }
+
+    #[test]
+    fn test_prune_virtual_schema_truncates_to_limit() {
+        let ids = (0..(VIRTUAL_COLUMNS_LIMIT as u32 + 5)).collect::<Vec<_>>();
+        let schema = schema_with_ids(&ids);
+        let referenced = ids.iter().copied().collect::<HashSet<_>>();
+
+        let pruned =
+            prune_virtual_schema(&Some(schema), &referenced, 1).expect("schema should remain");
+
+        assert_eq!(pruned.fields.len(), VIRTUAL_COLUMNS_LIMIT);
+        assert_eq!(
+            pruned.fields.last().unwrap().column_id,
+            VIRTUAL_COLUMNS_LIMIT as u32 - 1
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {
+        let operator = Operator::new(Memory::default())?.finish();
+        let mut files = Vec::new();
+        collect_virtual_locations(&operator, "missing/_vb_v2/", &mut files).await?;
+        assert!(files.is_empty());
+        Ok(())
+    }
 }

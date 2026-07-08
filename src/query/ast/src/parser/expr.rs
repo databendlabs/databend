@@ -103,6 +103,13 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                             op: UnaryOperator::Minus,
                         };
                     }
+                    ExprElement::BinaryOp {
+                        op: BinaryOperator::PgRegexpMatch,
+                    } => {
+                        *elem = ExprElement::UnaryOp {
+                            op: UnaryOperator::BitwiseNot,
+                        };
+                    }
                     // replace `:ident` to hole, ...
                     ExprElement::MapAccess {
                         accessor: MapAccessor::Colon { key },
@@ -253,6 +260,7 @@ pub enum ExprElement {
     /// `Count(*)` expression
     CountAll {
         qualified: QualifiedName,
+        filter: Option<Expr>,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -405,7 +413,11 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Like(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::LikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotLike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::ILikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotILike(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::PgRegexpMatch => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRLike => Affix::Infix(Precedence(20), Associativity::Left),
@@ -602,9 +614,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 value,
             },
-            ExprElement::CountAll { qualified, window } => Expr::CountAll {
+            ExprElement::CountAll {
+                qualified,
+                filter,
+                window,
+            } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
                 qualified,
+                filter: filter.map(Box::new),
                 window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
@@ -664,6 +681,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                             args: vec![source],
                             params: vec![],
                             order_by: vec![],
+                            filter: None,
                             window: None,
                             lambda: Some(Lambda {
                                 params: vec![param.clone()],
@@ -681,6 +699,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                         args: vec![source],
                         params: vec![],
                         order_by: vec![],
+                        filter: None,
                         window: None,
                         lambda: Some(Lambda {
                             params: vec![param.clone()],
@@ -901,6 +920,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     args: [vec![lhs], args].concat(),
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                     lambda,
                 },
@@ -969,7 +989,44 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     right,
                     escape,
                 },
-                _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotILike(Some(escape)),
+                    left,
+                    right,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(_),
+                    left,
+                    right,
+                } => Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::ILikeAny(Some(escape)),
+                    left,
+                    right,
+                },
+                _ => {
+                    return Err(
+                        "escape clause must be after LIKE/NOT LIKE/ILIKE/NOT ILIKE/LIKE ANY/ILIKE ANY binary expr",
+                    );
+                }
             },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: transform_span(elem.span.tokens),
@@ -1163,15 +1220,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-            COUNT ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
+            COUNT ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ")" ~ #aggregate_filter? ~ ( OVER ~ #window_spec_ident )?
         },
-        |(_, _, res, star, _, window)| match res {
+        |(_, _, res, star, _, filter, window)| match res {
             Some((fst, _, Some((snd, _)))) => ExprElement::CountAll {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Identifier(snd),
                     Indirection::Star(Some(star.span)),
                 ],
+                filter,
                 window: window.map(|w| w.1),
             },
             Some((fst, _, None)) => ExprElement::CountAll {
@@ -1179,10 +1237,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                     Indirection::Identifier(fst),
                     Indirection::Star(Some(star.span)),
                 ],
+                filter,
                 window: window.map(|w| w.1),
             },
             None => ExprElement::CountAll {
                 qualified: vec![Indirection::Star(Some(star.span))],
+                filter,
                 window: window.map(|w| w.1),
             },
         },
@@ -1542,6 +1602,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 args: vec![],
                 params: vec![],
                 order_by: vec![],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -1556,6 +1617,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 args: vec![],
                 params: vec![],
                 order_by: vec![],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -1570,6 +1632,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 args: vec![],
                 params: vec![],
                 order_by: vec![],
+                filter: None,
                 window: None,
                 lambda: None,
             },
@@ -1671,6 +1734,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         .parse(i),
         IN => with_span!(rule!(#in_list | #in_subquery)).parse(i),
         LIKE => with_span!(rule!(#like_subquery | #binary_op)).parse(i),
+        ILIKE => with_span!(binary_op).parse(i),
         EXISTS => with_span!(exists).parse(i),
         BETWEEN => with_span!(between).parse(i),
         CAST | TRY_CAST => with_span!(cast).parse(i),
@@ -1744,6 +1808,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | XOR
             | REGEXP
             | RLIKE
+            | BitWiseNot
+            | ExclamationMarkTilde
             | BitWiseOr
             | BitWiseAnd
             | BitWiseXor
@@ -1762,7 +1828,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | AtQuestion
             | AtAt
             | HashMinus => with_span!(json_op).parse(i),
-        Factorial | SquareRoot | BitWiseNot | CubeRoot | Abs => with_span!(unary_op).parse(i),
+        Factorial | SquareRoot | CubeRoot | Abs => with_span!(unary_op).parse(i),
         LiteralString => with_span!(string).parse(i),
         LiteralCodeString => with_span!(code_string).parse(i),
         LiteralInteger => with_span!(decimal_uint).parse(i),
@@ -1852,6 +1918,8 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             OR => BinaryOperator::Or,
             XOR => BinaryOperator::Xor,
             REGEXP => BinaryOperator::Regexp,
+            BitWiseNot => BinaryOperator::PgRegexpMatch,
+            ExclamationMarkTilde => BinaryOperator::NotRegexp,
             RLIKE => BinaryOperator::RLike,
             BitWiseOr => BinaryOperator::BitwiseOr,
             BitWiseAnd => BinaryOperator::BitwiseAnd,
@@ -1867,9 +1935,19 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
                     return_op(i, 1, BinaryOperator::Like(None))
                 };
             }
+            ILIKE => {
+                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
+                    return_op(i, 2, BinaryOperator::ILikeAny(None))
+                } else {
+                    return_op(i, 1, BinaryOperator::ILike(None))
+                };
+            }
             NOT => match i.tokens.get(1).map(|first| first.kind) {
                 Some(LIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
+                }
+                Some(ILIKE) => {
+                    return return_op(i, 2, BinaryOperator::NotILike(None));
                 }
                 Some(REGEXP) => {
                     return return_op(i, 2, BinaryOperator::NotRegexp);
@@ -2555,40 +2633,91 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
     .parse(i)
 }
 
+fn aggregate_order_by(i: Input) -> IResult<Vec<OrderByExpr>> {
+    map(
+        rule! {
+            ORDER ~ BY ~ ^#comma_separated_list1(order_by_expr)
+        },
+        |(_, _, order_by)| order_by,
+    )
+    .parse(i)
+}
+
+fn aggregate_filter(i: Input) -> IResult<Expr> {
+    map(
+        rule! {
+            FILTER ~ "(" ~ WHERE ~ ^#subexpr(0) ~ ")"
+        },
+        |(_, _, _, filter, _)| filter,
+    )
+    .parse(i)
+}
+
 pub fn function_call(i: Input) -> IResult<ExprElement> {
     enum FunctionCallSuffix {
         Simple {
             distinct: bool,
             args: Vec<Expr>,
         },
-        Lambda {
-            arg: Expr,
-            params: Vec<Identifier>,
-            expr: Box<Expr>,
+        Filter {
+            distinct: bool,
+            args: Vec<Expr>,
+            filter: Expr,
         },
         Window {
             distinct: bool,
             args: Vec<Expr>,
+            filter: Option<Expr>,
             window: WindowDesc,
+        },
+        ArgumentOrderBy {
+            distinct: bool,
+            args: Vec<Expr>,
+            order_by: Vec<OrderByExpr>,
+            filter: Option<Expr>,
+            window: Option<WindowDesc>,
         },
         WithInGroupWindow {
             distinct: bool,
             args: Vec<Expr>,
             order_by: Vec<OrderByExpr>,
+            filter: Option<Expr>,
             window: Option<WindowDesc>,
         },
         ParamsWindow {
             distinct: bool,
             params: Vec<Expr>,
             args: Vec<Expr>,
+            order_by: Vec<OrderByExpr>,
+            filter: Option<Expr>,
             window: Option<WindowDesc>,
         },
+        Lambda {
+            arg: Expr,
+            params: Vec<Identifier>,
+            expr: Box<Expr>,
+        },
     }
+
+    fn merge_aggregate_order_by(
+        argument_order_by: Option<Vec<OrderByExpr>>,
+        within_group_order_by: Option<Vec<OrderByExpr>>,
+    ) -> std::result::Result<Vec<OrderByExpr>, nom::Err<ErrorKind>> {
+        match (argument_order_by, within_group_order_by) {
+            (Some(_), Some(_)) => Err(nom::Err::Error(ErrorKind::other(
+                "ORDER BY inside aggregate arguments cannot be combined with WITHIN GROUP",
+            ))),
+            (Some(order_by), None) | (None, Some(order_by)) => Ok(order_by),
+            (None, None) => Ok(vec![]),
+        }
+    }
+
     let function_call_body = map_res(
         rule! {
-            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ ")"
-            ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")")?
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
+            ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ #aggregate_order_by? ~ ")")?
             ~ #within_group?
+            ~ #aggregate_filter?
             ~ #window_function?
         },
         |(
@@ -2598,9 +2727,11 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             _,
             opt_lambda,
             params_0,
+            argument_order_by,
             _,
             params_1,
-            order_by,
+            within_group_order_by,
+            filter,
             window,
         )| {
             match (
@@ -2608,13 +2739,17 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 opt_lambda,
                 opt_distinct_0,
                 params_0,
+                argument_order_by,
                 params_1,
-                order_by,
+                within_group_order_by,
+                filter,
                 window,
             ) {
                 (
                     Some(first_param),
                     Some((lambda_params, _, arg_1)),
+                    None,
+                    None,
                     None,
                     None,
                     None,
@@ -2630,8 +2765,10 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     None,
                     None,
                     params_0,
-                    Some((_, opt_distinct_1, params_1, _)),
                     None,
+                    Some((_, opt_distinct_1, params_1, param_order_by, _)),
+                    within_group_order_by,
+                    filter,
                     window,
                 ) => {
                     let params = params_0
@@ -2640,40 +2777,18 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                             params
                         })
                         .unwrap_or_else(|| vec![first_param]);
+                    let order_by = merge_aggregate_order_by(param_order_by, within_group_order_by)?;
 
                     Ok(FunctionCallSuffix::ParamsWindow {
                         distinct: opt_distinct_1.is_some(),
                         params,
                         args: params_1.unwrap_or_default(),
-                        window,
-                    })
-                }
-                (first_param, None, opt_distinct, params, None, Some(order_by), window) => {
-                    let mut args = params.unwrap_or_default();
-                    if let Some(first_param) = first_param {
-                        args.insert(0, first_param)
-                    }
-
-                    Ok(FunctionCallSuffix::WithInGroupWindow {
-                        distinct: opt_distinct.is_some(),
-                        args,
                         order_by,
+                        filter,
                         window,
                     })
                 }
-                (first_param, None, opt_distinct, params, None, None, Some(window)) => {
-                    let mut args = params.unwrap_or_default();
-                    if let Some(first_param) = first_param {
-                        args.insert(0, first_param)
-                    }
-
-                    Ok(FunctionCallSuffix::Window {
-                        distinct: opt_distinct.is_some(),
-                        args,
-                        window,
-                    })
-                }
-                (first_param, None, opt_distinct, params, None, None, None) => {
+                (first_param, None, opt_distinct, params, None, None, None, None, None) => {
                     let mut args = params.unwrap_or_default();
                     if let Some(first_param) = first_param {
                         args.insert(0, first_param)
@@ -2683,6 +2798,94 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         distinct: opt_distinct.is_some(),
                         args,
                     })
+                }
+                (first_param, None, opt_distinct, params, None, None, None, Some(filter), None) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::Filter {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        filter,
+                    })
+                }
+                (
+                    first_param,
+                    None,
+                    opt_distinct,
+                    params,
+                    None,
+                    None,
+                    None,
+                    filter,
+                    Some(window),
+                ) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::Window {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        filter,
+                        window,
+                    })
+                }
+                (
+                    first_param,
+                    None,
+                    opt_distinct,
+                    params,
+                    Some(order_by),
+                    None,
+                    None,
+                    filter,
+                    window,
+                ) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::ArgumentOrderBy {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        order_by,
+                        filter,
+                        window,
+                    })
+                }
+                (
+                    first_param,
+                    None,
+                    opt_distinct,
+                    params,
+                    None,
+                    None,
+                    Some(order_by),
+                    filter,
+                    window,
+                ) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::WithInGroupWindow {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        order_by,
+                        filter,
+                        window,
+                    })
+                }
+                (_, None, _, _, Some(_), None, Some(_), _, _) => {
+                    Err(nom::Err::Error(ErrorKind::other(
+                        "ORDER BY inside aggregate arguments cannot be combined with WITHIN GROUP",
+                    )))
                 }
                 _ => Err(nom::Err::Error(ErrorKind::other(
                     "Unsupported function format",
@@ -2694,7 +2897,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
     map(
         rule!(
             #function_name
-            ~ #function_call_body : "`function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
+            ~ #function_call_body : "`function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
         ),
         |(name, suffix)| match suffix {
             FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
@@ -2704,7 +2907,66 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     args,
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::Filter {
+                distinct,
+                args,
+                filter,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by: vec![],
+                    filter: Some(Box::new(filter)),
+                    window: None,
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::Window {
+                distinct,
+                args,
+                filter,
+                window,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by: vec![],
+                    filter: filter.map(Box::new),
+                    window: Some(window),
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::ArgumentOrderBy {
+                distinct,
+                args,
+                order_by,
+                filter,
+                window,
+            }
+            | FunctionCallSuffix::WithInGroupWindow {
+                distinct,
+                args,
+                order_by,
+                filter,
+                window,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by,
+                    filter: filter.map(Box::new),
+                    window,
                     lambda: None,
                 },
             },
@@ -2715,45 +2977,17 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     args: vec![arg],
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                     lambda: Some(Lambda { params, expr }),
-                },
-            },
-            FunctionCallSuffix::Window {
-                distinct,
-                args,
-                window,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by: vec![],
-                    window: Some(window),
-                    lambda: None,
-                },
-            },
-            FunctionCallSuffix::WithInGroupWindow {
-                distinct,
-                args,
-                order_by,
-                window,
-            } => ExprElement::FunctionCall {
-                func: FunctionCall {
-                    distinct,
-                    name,
-                    args,
-                    params: vec![],
-                    order_by,
-                    window,
-                    lambda: None,
                 },
             },
             FunctionCallSuffix::ParamsWindow {
                 distinct,
                 params,
                 args,
+                order_by,
+                filter,
                 window,
             } => ExprElement::FunctionCall {
                 func: FunctionCall {
@@ -2761,7 +2995,8 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     name,
                     args,
                     params,
-                    order_by: vec![],
+                    order_by,
+                    filter: filter.map(Box::new),
                     window,
                     lambda: None,
                 },
@@ -2886,6 +3121,7 @@ pub(crate) fn make_func_get_variable(span: Span, name: String) -> Expr {
             }],
             params: vec![],
             order_by: vec![],
+            filter: None,
             window: None,
             lambda: None,
         },

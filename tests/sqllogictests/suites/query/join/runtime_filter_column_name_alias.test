@@ -1,0 +1,90 @@
+# Test: bloom runtime filter must resolve the physical column name, not an alias.
+#
+# t_probe has col_a (values 100..404) and col_b (values 1..20).
+# Subquery aliases col_b AS col_a, then joins with t_build(col_a = 1,2,3).
+# Bug: RF resolves "col_a" to the physical col_a (100..404) instead of
+# the aliased source col_b (1..20), bloom rejects all rows → returns 0.
+# Expected: 3
+
+statement ok
+CREATE OR REPLACE TABLE t_probe(col_a INT NOT NULL, col_b INT NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_build(col_a INT NOT NULL);
+
+statement ok
+INSERT INTO t_probe VALUES (100,1),(101,2),(102,3),(103,4),(104,5),(200,6),(201,7),(202,8),(203,9),(204,10),(300,11),(301,12),(302,13),(303,14),(304,15),(400,16),(401,17),(402,18),(403,19),(404,20);
+
+statement ok
+INSERT INTO t_build VALUES (1),(2),(3);
+
+query I
+SELECT count() FROM t_build AS b INNER JOIN (SELECT col_b AS col_a FROM t_probe) AS p ON b.col_a = p.col_a;
+----
+3
+
+statement ok
+DROP TABLE t_probe;
+
+statement ok
+DROP TABLE t_build;
+
+# Test: runtime filter on a tuple inner field must still work correctly.
+# The path_indices guard should not break nested column RF behavior.
+# t_nested has a Tuple column with named field "key". We join on t:key.
+# Expected: 3 matches.
+
+statement ok
+CREATE OR REPLACE TABLE t_nested(id INT NOT NULL, t TUPLE(key INT, name VARCHAR) NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_lookup(key INT NOT NULL);
+
+statement ok
+INSERT INTO t_nested VALUES (1,(10,'a')),(2,(20,'b')),(3,(30,'c')),(4,(40,'d')),(5,(50,'e')),(6,(60,'f')),(7,(70,'g')),(8,(80,'h')),(9,(90,'i')),(10,(100,'j'));
+
+statement ok
+INSERT INTO t_lookup VALUES (10),(20),(30);
+
+query I
+SELECT count() FROM t_lookup AS b INNER JOIN t_nested AS p ON b.key = p.t:key;
+----
+3
+
+statement ok
+DROP TABLE t_nested;
+
+statement ok
+DROP TABLE t_lookup;
+
+# Test: tuple inner field aliased to collide with a top-level column.
+#
+# t_data has both a top-level "key" (values 100..109) and a tuple field
+# t:key (values 1..10). Subquery aliases t:key AS key, which collides
+# with the physical top-level "key" column.
+# Bug scenario: RF resolves "key" to the physical top-level column
+# (100..109) instead of the tuple leaf t:key (1..10), bloom rejects all.
+# Expected: 3
+
+statement ok
+CREATE OR REPLACE TABLE t_data(key INT NOT NULL, t TUPLE(key INT, name VARCHAR) NOT NULL) row_per_block = 5;
+
+statement ok
+CREATE OR REPLACE TABLE t_dim(key INT NOT NULL);
+
+statement ok
+INSERT INTO t_data VALUES (100,(1,'a')),(101,(2,'b')),(102,(3,'c')),(103,(4,'d')),(104,(5,'e')),(105,(6,'f')),(106,(7,'g')),(107,(8,'h')),(108,(9,'i')),(109,(10,'j'));
+
+statement ok
+INSERT INTO t_dim VALUES (1),(2),(3);
+
+query I
+SELECT count() FROM t_dim AS d INNER JOIN (SELECT t:key AS key FROM t_data) AS p ON d.key = p.key;
+----
+3
+
+statement ok
+DROP TABLE t_data;
+
+statement ok
+DROP TABLE t_dim;
