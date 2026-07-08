@@ -62,6 +62,10 @@ use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
 use crate::io::create_inverted_index_builders;
+use crate::io::granule_index::GranuleIndexBuildOutput;
+use crate::io::granule_index::GranuleIndexBuilder;
+use crate::io::granule_index::GranuleIndexSpec;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::PageIndexBuilder;
@@ -217,6 +221,9 @@ pub struct StreamBlockBuilder {
     vector_index_builder: Option<VectorIndexBuilder>,
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
+    /// One builder per declared granule-level index, driven in `write()` at the same granule
+    /// boundaries as the sparse page index.
+    granule_index_builders: Vec<Box<dyn GranuleIndexBuilder>>,
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
@@ -264,6 +271,12 @@ impl StreamBlockBuilder {
             true,
         );
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None, None)?;
+        let func_ctx = properties.ctx.get_function_context()?;
+        let granule_index_builders = properties
+            .granule_index_specs
+            .iter()
+            .map(|spec| spec.new_builder(func_ctx.clone()))
+            .collect::<Result<Vec<_>>>()?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -280,6 +293,7 @@ impl StreamBlockBuilder {
             vector_index_builder,
             spatial_index_builder,
             block_stats_builder,
+            granule_index_builders,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -350,12 +364,20 @@ impl StreamBlockBuilder {
                 let mut filled = start_row % granule_rows;
                 while offset < num_rows {
                     let take = (granule_rows - filled).min(num_rows - offset);
-                    self.block_writer
-                        .write(block.slice(offset..offset + take))?;
+                    let range = offset..offset + take;
+                    self.block_writer.write(block.slice(range.clone()))?;
+                    // Feed the same slice into each granule-level builder so its granule pages align
+                    // 1:1 with the sparse page index's granules.
+                    for b in self.granule_index_builders.iter_mut() {
+                        b.push_rows(&block, range.clone())?;
+                    }
                     offset += take;
                     filled += take;
                     if filled == granule_rows {
                         self.block_writer.flush_page()?;
+                        for b in self.granule_index_builders.iter_mut() {
+                            b.finalize_granule()?;
+                        }
                         filled = 0;
                     }
                 }
@@ -465,6 +487,22 @@ impl StreamBlockBuilder {
         // write path (`BlockBuilder`, used by recluster and linear-clustered inserts). An
         // offset-only index still lets the read path stream a block in `max_block_size` chunks; it
         // just never narrows (every granule survives).
+        // Finalize the granule-level builders (deriving payload locations from the block location) and
+        // collect their payload files + sidecar offset columns.
+        let mut granule_index_payloads = Vec::new();
+        let mut granule_index_fields = Vec::new();
+        let mut granule_index_columns = Vec::new();
+        for b in std::mem::take(&mut self.granule_index_builders) {
+            let GranuleIndexBuildOutput {
+                payloads,
+                sidecar_fields,
+                sidecar_columns,
+            } = b.finalize(&block_location.0)?;
+            granule_index_payloads.extend(payloads);
+            granule_index_fields.extend(sidecar_fields);
+            granule_index_columns.extend(sidecar_columns);
+        }
+
         let page_index_state = match page_layout {
             Some(page_layout) => {
                 let granule_rows = self
@@ -475,9 +513,20 @@ impl StreamBlockBuilder {
                 let leaf_column_ids = self.properties.source_schema.to_leaf_column_ids();
                 let builder = PageIndexBuilder::new(None, granule_rows, leaf_column_ids);
                 let location = self.properties.meta_locations.block_page_index_location();
-                Some(builder.build(&page_layout, &[], location)?)
+                Some(builder.build_with_extra_columns(
+                    &page_layout,
+                    &[],
+                    location,
+                    granule_index_fields,
+                    granule_index_columns,
+                )?)
             }
-            None => None,
+            None => {
+                // No page layout means a single-granule block: there is no sidecar to attach the
+                // offset columns to, so the payloads (if any) are dropped along with them.
+                granule_index_payloads.clear();
+                None
+            }
         };
         let page_index_size = page_index_state.as_ref().map(|s| s.size);
         let page_index_location = page_index_state.as_ref().map(|s| s.location.clone());
@@ -533,6 +582,7 @@ impl StreamBlockBuilder {
             spatial_index_state,
             page_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
+            granule_index_payloads,
         };
         Ok(serialized)
     }
@@ -556,6 +606,7 @@ pub struct StreamBlockProperties {
     virtual_column_builder: Option<VirtualColumnBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
     table_indexes: BTreeMap<String, TableIndex>,
+    granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
 }
 
 impl StreamBlockProperties {
@@ -602,6 +653,11 @@ impl StreamBlockProperties {
             .collect::<HashSet<_>>();
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let granule_index_specs = build_granule_index_specs(
+            &table.table_info.meta.indexes,
+            &table.table_info.meta.schema,
+            table.bloom_index_type(),
+        )?;
 
         let virtual_column_builder = if table.enable_virtual_column() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
@@ -642,6 +698,7 @@ impl StreamBlockProperties {
             table_meta_timestamps,
             table_indexes,
             ndv_columns_map,
+            granule_index_specs,
         }))
     }
 }

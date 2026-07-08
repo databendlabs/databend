@@ -30,6 +30,7 @@ use uuid::Uuid;
 use uuid::Version;
 
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
+use crate::FUSE_TBL_GRANULE_BLOOM_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_PAGE_INDEX_PREFIX;
@@ -366,6 +367,29 @@ impl TableMetaLocationGenerator {
         )
     }
 
+    /// Derive the granule-bloom payload file location for one indexed column of one block.
+    /// Layout mirrors the inverted index: `.../_i_gb/<index_name>/<ver>/<block_id>_<col>.gbloom`.
+    /// The `version` (a per-CREATE uuid) makes drop/recreate produce a distinct path, so stale
+    /// payloads never collide and are reclaimed by GC. It is compacted to a short base-62 string
+    /// (see [`compact_index_version`]) rather than truncated, so distinct versions never alias.
+    pub fn gen_granule_bloom_location_from_block_location(
+        loc: &str,
+        index_name: &str,
+        index_version: &str,
+        col_id: u32,
+    ) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_name = trim_object_prefix(splits[len - 1]);
+        let id: String = block_name.chars().take(32).collect();
+        let ver = compact_index_version(index_version);
+        format!(
+            "{}/{}/{}/{}/{}_{}.gbloom",
+            prefix, FUSE_TBL_GRANULE_BLOOM_INDEX_PREFIX, index_name, ver, id, col_id,
+        )
+    }
+
     pub fn gen_bloom_index_location_from_block_location(loc: &str) -> String {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
@@ -395,6 +419,32 @@ impl TableMetaLocationGenerator {
             SegmentStatistics::VERSION,
         )
     }
+}
+
+/// Base-62 alphabet (0-9 a-z A-Z) for compacting a 128-bit index version into a short, filesystem-
+/// and column-name-safe token.
+const BASE62_ALPHABET: &[u8; 62] =
+    b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// Compact a per-CREATE index `version` (a `Uuid::simple()` hex string) into a short base-62 token.
+/// Parsing the full 128-bit value keeps it collision-free (unlike truncating to a hex prefix), so
+/// distinct versions never alias in payload paths or sidecar column names. Non-UUID input is returned
+/// unchanged.
+pub fn compact_index_version(version: &str) -> String {
+    let Ok(uuid) = Uuid::parse_str(version) else {
+        return version.to_string();
+    };
+    let mut n = uuid.as_u128();
+    if n == 0 {
+        return "0".to_string();
+    }
+    let mut buf = Vec::with_capacity(22);
+    while n > 0 {
+        buf.push(BASE62_ALPHABET[(n % 62) as usize]);
+        n /= 62;
+    }
+    buf.reverse();
+    String::from_utf8(buf).expect("base62 alphabet is ascii")
 }
 
 trait SnapshotLocationCreator {
@@ -451,5 +501,55 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
             TableSnapshotStatisticsVersion::V4(_) => "_ts_v4.json".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::BASE62_ALPHABET;
+    use super::compact_index_version;
+
+    /// Decode a base-62 token back to its u128 value, so tests can assert round-trip fidelity.
+    fn base62_decode(s: &str) -> u128 {
+        let mut n: u128 = 0;
+        for c in s.bytes() {
+            let d = BASE62_ALPHABET.iter().position(|&a| a == c).unwrap() as u128;
+            n = n * 62 + d;
+        }
+        n
+    }
+
+    #[test]
+    fn test_compact_index_version_roundtrip_and_bounds() {
+        // A `simple()` UUID (32 hex, no dashes) round-trips through base-62 with no loss and stays
+        // within 22 chars — the max for a 128-bit value.
+        for _ in 0..1000 {
+            let uuid = Uuid::new_v4();
+            let token = compact_index_version(&uuid.simple().to_string());
+            assert!(token.len() <= 22, "token {token} exceeds 22 chars");
+            assert_eq!(base62_decode(&token), uuid.as_u128());
+        }
+    }
+
+    #[test]
+    fn test_compact_index_version_distinct() {
+        // Two versions that share a long hex prefix (which a truncate-to-7 scheme would alias) must
+        // still produce distinct tokens.
+        let a = "00000000000000000000000000000001";
+        let b = "00000000000000000000000000000002";
+        assert_ne!(compact_index_version(a), compact_index_version(b));
+    }
+
+    #[test]
+    fn test_compact_index_version_edge_cases() {
+        // All-zero UUID -> "0".
+        assert_eq!(
+            compact_index_version("00000000000000000000000000000000"),
+            "0"
+        );
+        // Non-UUID input is returned verbatim (deterministic fallback).
+        assert_eq!(compact_index_version("not-a-uuid"), "not-a-uuid");
     }
 }

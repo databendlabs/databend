@@ -46,6 +46,7 @@ use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -162,6 +163,11 @@ impl TransformSerializeBlock {
             FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let granule_index_specs = build_granule_index_specs(
+            &table.table_info.meta.indexes,
+            &table.table_info.meta.schema,
+            table.bloom_index_type(),
+        )?;
 
         let virtual_column_builder = if table.enable_virtual_column() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
@@ -200,6 +206,7 @@ impl TransformSerializeBlock {
             bloom_columns_map,
             ndv_columns_map,
             ngram_args,
+            granule_index_specs,
             inverted_index_builders,
             virtual_column_builder,
             vector_index_builder,

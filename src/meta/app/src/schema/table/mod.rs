@@ -264,6 +264,7 @@ pub enum TableIndexType {
     Ngram = 1,
     Vector = 2,
     Spatial = 3,
+    Bloom = 4,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -459,6 +460,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Spatial => {
                 write!(f, "SPATIAL")
+            }
+            TableIndexType::Bloom => {
+                write!(f, "BLOOM")
             }
         }
     }

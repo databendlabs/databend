@@ -62,6 +62,9 @@ use crate::FuseStorageFormat;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
+use crate::io::granule_index::GranuleIndexBuildOutput;
+use crate::io::granule_index::GranuleIndexPayload;
+use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::PageIndexBuilder;
@@ -139,6 +142,9 @@ pub struct BlockSerialization {
     pub spatial_index_state: Option<SpatialIndexState>,
     pub page_index_state: Option<PageIndexState>,
     pub column_hlls: Option<BlockHLLState>,
+    /// Granule-level index payload files (one per indexed column per declared index). Written down
+    /// alongside the block; their per-granule offsets live in the `_pidx` sidecar.
+    pub granule_index_payloads: Vec<GranuleIndexPayload>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -156,6 +162,8 @@ pub struct BlockBuilder {
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ngram_args: Vec<NgramArgs>,
+    /// One spec per declared granule-level index; empty makes the granule-level write path a no-op.
+    pub granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub vector_index_builder: Option<VectorIndexBuilder>,
@@ -210,6 +218,7 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
+
         let (vector_index_state, vector_stats) = if let Some(ref vector_index_builder) =
             self.vector_index_builder
         {
@@ -257,14 +266,56 @@ impl BlockBuilder {
 
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
 
-        // Sparse page index: decode `index_granularity` once. `Some(g)` records the page layout and
-        // (for a cluster-sorted, non-overlapping block) per-granule mins; `None` maps to a
-        // "granule = whole block" serialization (`usize::MAX`) that captures no page layout. The
-        // per-granule mins must be computed before `data_block` is moved into the serializer.
         let (granule_rows, granule_mins) = match self.write_settings.index_granularity {
             Some(g) => (g, self.cluster_stats_gen.granule_mins(&data_block, g)?),
             None => (usize::MAX, None),
         };
+
+        let num_rows = data_block.num_rows();
+        let (granule_index_extra_fields, granule_index_extra_columns, granule_index_payloads) =
+            if !self.granule_index_specs.is_empty()
+                && granule_rows != usize::MAX
+                && num_rows > granule_rows
+            {
+                let func_ctx = self.ctx.get_function_context()?;
+                let mut builders = self
+                    .granule_index_specs
+                    .iter()
+                    .map(|spec| spec.new_builder(func_ctx.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+
+                let mut offset = 0;
+                while offset < num_rows {
+                    let take = granule_rows.min(num_rows - offset);
+                    let range = offset..offset + take;
+                    for b in builders.iter_mut() {
+                        b.push_rows(&data_block, range.clone())?;
+                    }
+                    offset += take;
+                    if offset < num_rows {
+                        for b in builders.iter_mut() {
+                            b.finalize_granule()?;
+                        }
+                    }
+                }
+
+                let mut fields = Vec::new();
+                let mut columns = Vec::new();
+                let mut payloads = Vec::new();
+                for b in builders {
+                    let GranuleIndexBuildOutput {
+                        payloads: p,
+                        sidecar_fields,
+                        sidecar_columns,
+                    } = b.finalize(&block_location.0)?;
+                    payloads.extend(p);
+                    fields.extend(sidecar_fields);
+                    columns.extend(sidecar_columns);
+                }
+                (fields, columns, payloads)
+            } else {
+                (Vec::new(), Vec::new(), Vec::new())
+            };
 
         let serialized = block_to_parquet(
             &self.source_schema,
@@ -290,7 +341,13 @@ impl BlockBuilder {
                 let leaf_column_ids = self.source_schema.to_leaf_column_ids();
                 let builder = PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
                 let location = self.meta_locations.block_page_index_location();
-                Some(builder.build(&page_layout, &mins, location)?)
+                Some(builder.build_with_extra_columns(
+                    &page_layout,
+                    &mins,
+                    location,
+                    granule_index_extra_fields,
+                    granule_index_extra_columns,
+                )?)
             }
             None => None,
         };
@@ -353,6 +410,7 @@ impl BlockBuilder {
             spatial_index_state,
             page_index_state,
             column_hlls,
+            granule_index_payloads,
         };
         Ok(serialized)
     }
@@ -391,10 +449,21 @@ impl BlockWriter {
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
         Self::write_down_page_index_state(dal, serialized.page_index_state).await?;
+        Self::write_down_granule_index_payloads(dal, serialized.granule_index_payloads).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
         Ok(extended_block_meta)
+    }
+
+    async fn write_down_granule_index_payloads(
+        dal: &Operator,
+        payloads: Vec<GranuleIndexPayload>,
+    ) -> Result<()> {
+        for payload in payloads {
+            write_data(payload.data, dal, &payload.location).await?;
+        }
+        Ok(())
     }
 
     pub async fn write_down_data_block(

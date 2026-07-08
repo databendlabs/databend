@@ -27,6 +27,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
@@ -458,6 +459,8 @@ impl FuseTable {
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),
+            std::collections::BTreeMap::new(),
+            BloomIndexType::default(),
             max_concurrency,
             None,
         )?;

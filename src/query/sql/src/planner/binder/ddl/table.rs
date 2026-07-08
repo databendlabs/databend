@@ -2172,6 +2172,15 @@ impl Binder {
                         self.validate_spatial_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Spatial, column_ids, options)
                 }
+                AstTableIndexType::Bloom => {
+                    let column_ids = self.validate_bloom_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_bloom_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Bloom, column_ids, options)
+                }
                 AstTableIndexType::Aggregating => unreachable!(),
             };
 

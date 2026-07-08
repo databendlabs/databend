@@ -312,6 +312,8 @@ impl FuseTable {
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
+            self.table_info.meta.indexes.clone(),
+            self.bloom_index_type(),
             None,
         )?;
 

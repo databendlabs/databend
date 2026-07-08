@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod granule_index;
 mod locations;
 pub mod read;
 mod segments;
@@ -19,6 +20,7 @@ mod snapshots;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;
+pub use locations::compact_index_version;
 pub use read::AggIndexReader;
 pub use read::BlockReadContext;
 pub use read::BlockReadResult;

@@ -129,6 +129,33 @@ fn is_valid_index_distance_values<S: AsRef<str>>(opt_val: S) -> bool {
     INDEX_DISTANCE_VALUES.contains(opt_val.as_ref())
 }
 
+/// Whether a column type can be indexed by a bloom filter. Mirrors
+/// `Xor8Filter::supported_type` (storages-common-index), duplicated here to avoid pulling the
+/// index crate into the planner. Keep in sync with that source.
+fn is_bloom_supported_type(data_type: &TableDataType) -> bool {
+    let inner = data_type.remove_nullable();
+    if let TableDataType::Map(inner_ty) = &inner {
+        if let TableDataType::Tuple { fields_type, .. } = inner_ty.remove_nullable() {
+            return matches!(
+                fields_type[1].remove_nullable(),
+                TableDataType::Number(_)
+                    | TableDataType::String
+                    | TableDataType::Variant
+                    | TableDataType::Timestamp
+                    | TableDataType::Date
+            );
+        }
+        return false;
+    }
+    matches!(
+        inner,
+        TableDataType::Number(_)
+            | TableDataType::String
+            | TableDataType::Timestamp
+            | TableDataType::Date
+    )
+}
+
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_query_index(
@@ -499,6 +526,12 @@ impl Binder {
                     self.validate_spatial_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_spatial_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Spatial)
+            }
+            AstTableIndexType::Bloom => {
+                let column_ids =
+                    self.validate_bloom_index_columns(table_schema.clone(), columns)?;
+                let index_options = self.validate_bloom_index_options(index_options)?;
+                (column_ids, index_options, TableIndexType::Bloom)
             }
             AstTableIndexType::Aggregating => unreachable!(),
         };
@@ -889,6 +922,49 @@ impl Binder {
         let options = BTreeMap::new();
         // todo
         Ok(options)
+    }
+
+    pub(in crate::planner::binder) fn validate_bloom_index_columns(
+        &self,
+        table_schema: TableSchemaRef,
+        columns: &[Identifier],
+    ) -> Result<Vec<ColumnId>> {
+        let mut column_set = BTreeSet::new();
+        for column in columns {
+            match table_schema.field_with_name(&column.name) {
+                Ok(field) => {
+                    if !is_bloom_supported_type(&field.data_type) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Bloom index does not support the type of column {}: {}",
+                            column, field.data_type
+                        )));
+                    }
+                    if column_set.contains(&field.column_id) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Bloom index column must be unique, but column {} is duplicate",
+                            column.name
+                        )));
+                    }
+                    column_set.insert(field.column_id);
+                }
+                Err(_) => {
+                    return Err(ErrorCode::UnsupportedIndex(format!(
+                        "Table does not have column {}",
+                        column
+                    )));
+                }
+            }
+        }
+        Ok(Vec::from_iter(column_set))
+    }
+
+    pub(in crate::planner::binder) fn validate_bloom_index_options(
+        &self,
+        _index_options: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>> {
+        // Bloom page index currently takes no user options; filter type defaults are applied at
+        // build time. Reserved for future tuning knobs.
+        Ok(BTreeMap::new())
     }
 
     #[async_backtrace::framed]

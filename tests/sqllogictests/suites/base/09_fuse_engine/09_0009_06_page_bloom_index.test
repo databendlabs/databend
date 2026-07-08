@@ -1,0 +1,153 @@
+# Page-level (granule-level) bloom index: verify equality/IN predicates over a table written with a
+# `TYPE bloom` index and `index_granularity` return correct results. Exercises the write path
+# (per-granule filter payloads + sidecar offset columns) and the read path (per-granule bloom
+# narrowing of the surviving granule set) end to end.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_06
+
+statement ok
+CREATE DATABASE db_09_0009_06
+
+statement ok
+USE db_09_0009_06
+
+# Small granule so a single block spans many granules; index created before insert so the write path
+# builds per-granule payloads.
+statement ok
+CREATE TABLE pb_t(a int, b string) index_granularity = 100
+
+statement ok
+CREATE BLOOM INDEX pb_idx ON pb_t(a)
+
+statement ok
+INSERT INTO pb_t SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+
+# Point lookup on the indexed column: only granules whose filter may contain 4242 are read.
+query IT
+SELECT * FROM pb_t WHERE a = 4242
+----
+4242 v4242
+
+# Equality that matches nothing in range: every granule's filter proves false -> block dropped.
+query I
+SELECT count(*) FROM pb_t WHERE a = 100000
+----
+0
+
+# IN list spanning several granules.
+query I
+SELECT count(*) FROM pb_t WHERE a IN (1, 250, 4242, 9999)
+----
+4
+
+# Aggregate over the full table is unaffected (no eq predicate to narrow on).
+query II
+SELECT count(*), sum(a) FROM pb_t
+----
+10000 49995000
+
+# Predicate on a non-indexed column must still return correct rows (page-bloom must not apply).
+query IT
+SELECT * FROM pb_t WHERE b = 'v7777'
+----
+7777 v7777
+
+# Range predicate (not eq): page-bloom cannot narrow, results must stay correct.
+query I
+SELECT count(*) FROM pb_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+# Narrowed read split into <= max_block_size sub-blocks must still be correct.
+statement ok
+SET max_block_size = 128
+
+query IT
+SELECT * FROM pb_t WHERE a = 4242
+----
+4242 v4242
+
+query I
+SELECT count(*) FROM pb_t WHERE a IN (1, 250, 4242, 9999)
+----
+4
+
+statement ok
+UNSET max_block_size
+
+# Combined with a cluster key: the sparse (cluster-key) pruner narrows first, then page-bloom narrows
+# the survivor set further. Results must remain correct.
+statement ok
+CREATE TABLE pb_ck(a int, b int) CLUSTER BY (a) index_granularity = 100
+
+statement ok
+CREATE BLOOM INDEX pb_ck_idx ON pb_ck(b)
+
+statement ok
+INSERT INTO pb_ck SELECT number, number * 2 FROM numbers(10000)
+
+# Cluster-key range narrows to a granule run; the eq on `b` narrows within it.
+query II
+SELECT a, b FROM pb_ck WHERE a >= 2000 AND a < 3000 AND b = 5000
+----
+2500 5000
+
+# eq on the bloom column alone.
+query II
+SELECT a, b FROM pb_ck WHERE b = 8484
+----
+4242 8484
+
+# eq that matches nothing.
+query I
+SELECT count(*) FROM pb_ck WHERE b = 3
+----
+0
+
+statement ok
+DROP TABLE pb_ck
+
+# An index created AFTER data is written applies to blocks written afterwards; older blocks have no
+# page-bloom sidecar columns and must degrade to a full (correct) read.
+statement ok
+CREATE TABLE pb_late(a int) index_granularity = 100
+
+statement ok
+INSERT INTO pb_late SELECT number FROM numbers(5000)
+
+statement ok
+CREATE BLOOM INDEX pb_late_idx ON pb_late(a)
+
+statement ok
+INSERT INTO pb_late SELECT number FROM numbers(5000, 5000)
+
+# Rows from both the pre-index and post-index blocks must be found.
+query I
+SELECT count(*) FROM pb_late WHERE a = 42
+----
+1
+
+query I
+SELECT count(*) FROM pb_late WHERE a = 7777
+----
+1
+
+query I
+SELECT count(*) FROM pb_late WHERE a IN (42, 7777, 100000)
+----
+2
+
+query I
+SELECT count(*) FROM pb_late
+----
+10000
+
+statement ok
+DROP TABLE pb_late
+
+statement ok
+DROP TABLE pb_t
+
+statement ok
+DROP DATABASE db_09_0009_06

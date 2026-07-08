@@ -323,6 +323,7 @@ impl BlockPruner {
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
         let sparse_page_index_pruner = pruning_ctx.sparse_page_index_pruner.clone();
+        let granule_index_pruners = pruning_ctx.granule_index_pruners.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
@@ -347,6 +348,26 @@ impl BlockPruner {
                 return Ok(prune_result);
             }
             prune_result.page_granule_ranges = ranges;
+        }
+
+        // Fold every granule-level pruner over the running survivor set (from the sparse pruner, or
+        // all granules), before the block-level bloom filter so an empty set drops the block early.
+        // `None` from a pruner means it does not apply and leaves the set unchanged.
+        for pruner in &granule_index_pruners {
+            let input = prune_result.page_granule_ranges.as_deref();
+            let ranges = pruning_cost
+                .measure_async(
+                    PruningCostKind::BlocksRange,
+                    pruner.prune_granules(&block_meta, input),
+                )
+                .await;
+            if let Some(ranges) = ranges {
+                if ranges.is_empty() {
+                    prune_result.keep = false;
+                    return Ok(prune_result);
+                }
+                prune_result.page_granule_ranges = Some(ranges);
+            }
         }
 
         if limit_before_bloom {

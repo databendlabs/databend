@@ -31,6 +31,8 @@
 //! cluster_key_id, the ordered cluster-key element types, the ordered indexed leaf column ids, and
 //! per-column dict-page range + chunk_end.
 
+use std::collections::HashMap;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -132,17 +134,17 @@ impl PageIndexBuilder {
         }
     }
 
-    /// Assemble and serialize the index file.
-    ///
-    /// * `page_layout` — per-leaf page layout (absolute offsets), in parquet leaf order.
-    /// * `granule_mins` — cluster-key min Scalar (a tuple) at the start of each granule. Empty for
-    ///   an offset-only index (no cluster key); `num_granules` is then taken from `page_layout`.
-    /// * `location` — pre-generated index file location.
-    pub fn build(
+    /// Assemble and serialize the index file. `granule_mins` is empty for an offset-only index (no
+    /// cluster key), in which case `num_granules` comes from `page_layout`. `extra_fields`/
+    /// `extra_columns` (paired) append extra per-granule columns to the sidecar for granule-level
+    /// index implementations to read back; empty for a plain sparse page index.
+    pub fn build_with_extra_columns(
         &self,
         page_layout: &[LeafPageLayout],
         granule_mins: &[Scalar],
         location: Location,
+        extra_fields: Vec<TableField>,
+        extra_columns: Vec<Column>,
     ) -> Result<PageIndexState> {
         if page_layout.len() != self.leaf_column_ids.len() {
             return Err(ErrorCode::Internal(format!(
@@ -199,7 +201,13 @@ impl PageIndexBuilder {
             columns: columns_meta,
         };
 
-        let (schema, block) = build_index_block(min_columns, &offset_columns, &meta)?;
+        let (schema, block) = build_index_block(
+            min_columns,
+            &offset_columns,
+            &meta,
+            extra_fields,
+            extra_columns,
+        )?;
         let kv = KeyValue {
             key: PAGE_INDEX_META_KEY.to_string(),
             value: Some(serde_json::to_string(&meta).map_err(|e| {
@@ -291,10 +299,13 @@ fn build_index_block(
     min_columns: Vec<Column>,
     offset_columns: &[Vec<u64>],
     meta: &PageIndexMeta,
+    extra_fields: Vec<TableField>,
+    extra_columns: Vec<Column>,
 ) -> Result<(TableSchema, DataBlock)> {
     let num_granules = meta.num_granules as usize;
-    let mut fields = Vec::with_capacity(min_columns.len() + offset_columns.len() + 1);
-    let mut columns = Vec::with_capacity(min_columns.len() + offset_columns.len() + 1);
+    let cap = min_columns.len() + offset_columns.len() + 1 + extra_fields.len();
+    let mut fields = Vec::with_capacity(cap);
+    let mut columns = Vec::with_capacity(cap);
 
     for (i, (col, ty)) in min_columns
         .iter()
@@ -327,6 +338,13 @@ fn build_index_block(
         vec![true; num_granules],
     ));
 
+    // Extra per-granule columns appended by granule-level index implementations. Appended after the reserved
+    // columns so older readers, which decode by name, simply ignore them.
+    for (field, column) in extra_fields.into_iter().zip(extra_columns.into_iter()) {
+        fields.push(field);
+        columns.push(column);
+    }
+
     let schema = TableSchema::new(fields);
     let block = DataBlock::new_from_columns(columns);
     Ok((schema, block))
@@ -349,6 +367,10 @@ pub struct PageIndex {
     /// yet — kept so granule deletion can be added without another on-disk format change.
     #[allow(dead_code)]
     pub active: Vec<bool>,
+    /// Extra per-granule `UInt64` sidecar columns appended by granule-level index implementations,
+    /// keyed by raw column name. The generic index does not interpret these; each implementation
+    /// names its own columns and reads them back via [`PageIndex::sidecar_u64_column`].
+    pub sidecar_u64_columns: HashMap<String, Vec<u64>>,
 }
 
 impl PageIndex {
@@ -425,12 +447,46 @@ impl PageIndex {
             None => vec![true; num_granules],
         };
 
+        // Stash every non-structural column by name for the owning index to read back. The known set
+        // is derived exactly from `meta` rather than by prefix, which could collide with an
+        // implementation's own column names.
+        let mut known: std::collections::HashSet<String> = std::collections::HashSet::with_capacity(
+            meta.cluster_key_types.len() + meta.columns.len() + 1,
+        );
+        for i in 0..meta.cluster_key_types.len() {
+            known.insert(format!("{PAGE_INDEX_MIN_COL_PREFIX}{i}"));
+        }
+        for col in &meta.columns {
+            known.insert(format!("{PAGE_INDEX_OFFSET_COL_PREFIX}{}", col.column_id));
+        }
+        known.insert(PAGE_INDEX_ACTIVE_COL.to_string());
+
+        let mut sidecar_u64_columns: HashMap<String, Vec<u64>> = HashMap::new();
+        for field in batch.schema().fields() {
+            let name = field.name();
+            if known.contains(name) {
+                continue;
+            }
+            let arr = batch.column_by_name(name).expect("field exists in batch");
+            if let Ok(values) = decode_u64_column(arr) {
+                sidecar_u64_columns.insert(name.clone(), values);
+            }
+        }
+
         Ok(PageIndex {
             meta,
             granule_mins,
             offsets,
             active,
+            sidecar_u64_columns,
         })
+    }
+
+    /// Read back an extra per-granule `UInt64` sidecar column by its raw name, or `None` if absent
+    /// (older sidecar, or this index did not write it). Used by granule-level index implementations
+    /// to recover the offset columns they appended at write time.
+    pub fn sidecar_u64_column(&self, name: &str) -> Option<&[u64]> {
+        self.sidecar_u64_columns.get(name).map(|v| v.as_slice())
     }
 
     /// Load and decode the sparse page index sidecar file for a block. The index is tiny (one row
@@ -650,10 +706,12 @@ mod tests {
 
         let builder = PageIndexBuilder::new(Some(42), granule_rows, vec![7, 9]);
         let state = builder
-            .build(
+            .build_with_extra_columns(
                 &page_layout,
                 &granule_mins,
                 ("page_index/test.parquet".to_string(), 0),
+                Vec::new(),
+                Vec::new(),
             )
             .unwrap();
 
@@ -734,10 +792,12 @@ mod tests {
 
         let builder = PageIndexBuilder::new(Some(1), granule_rows, vec![7, 9]);
         let state = builder
-            .build(
+            .build_with_extra_columns(
                 &page_layout,
                 &granule_mins,
                 ("page_index/split.parquet".to_string(), 0),
+                Vec::new(),
+                Vec::new(),
             )
             .unwrap();
         let bytes: Vec<u8> = state.data.to_bytes().to_vec();
@@ -809,10 +869,12 @@ mod tests {
 
         let builder = PageIndexBuilder::new(Some(7), granule_rows, vec![5]);
         let state = builder
-            .build(
+            .build_with_extra_columns(
                 &page_layout,
                 &granule_mins,
                 ("page_index/multi.parquet".to_string(), 0),
+                Vec::new(),
+                Vec::new(),
             )
             .unwrap();
 
