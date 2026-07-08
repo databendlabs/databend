@@ -1,0 +1,93 @@
+name: "materialized_cte_ref_stats_after_dphyp"
+description: "Q64-shaped materialized CTE case where CTE refs should use producer stats after DPhyp improves the producer join order"
+
+tables:
+  cte_fact: regressions/cte_fact.sql
+  cte_item: regressions/cte_item.sql
+  cte_store: regressions/cte_store.sql
+
+node_num: 1
+
+sql: |
+  SETTINGS (enable_auto_materialize_cte = 1) WITH cross_sales AS (
+    SELECT
+      f.f_item_id AS item_id,
+      count(*) AS cnt,
+      sum(f.f_qty) AS qty
+    FROM cte_fact AS f,
+         cte_item AS i,
+         cte_store AS s
+    WHERE f.f_item_id = i.i_item_id
+      AND f.f_store_id = s.s_store_id
+      AND i.i_color IN ('blue', 'green')
+      AND s.s_region = 'west'
+    GROUP BY
+      f.f_item_id
+  )
+  SELECT
+    cs1.item_id,
+    cs1.cnt,
+    cs2.cnt
+  FROM cross_sales AS cs1,
+       cross_sales AS cs2
+  WHERE cs1.item_id = cs2.item_id
+    AND cs2.cnt <= cs1.cnt;
+
+table_statistics:
+  cte_fact:
+    num_rows: 100000000
+    data_size: 3200000000
+    number_of_blocks: 100
+    number_of_segments: 10
+  cte_item:
+    num_rows: 1000000
+    data_size: 32000000
+    number_of_blocks: 10
+    number_of_segments: 1
+  cte_store:
+    num_rows: 100000
+    data_size: 3200000
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  cte_fact.f_item_id:
+    min: 1
+    max: 1000000
+    ndv: 1000000
+    null_count: 0
+  cte_fact.f_store_id:
+    min: 1
+    max: 100000
+    ndv: 100000
+    null_count: 0
+  cte_fact.f_date_id:
+    min: 1998
+    max: 2003
+    ndv: 6
+    null_count: 0
+  cte_fact.f_qty:
+    min: 1
+    max: 100
+    ndv: 100
+    null_count: 0
+  cte_item.i_item_id:
+    min: 1
+    max: 1000000
+    ndv: 1000000
+    null_count: 0
+  cte_item.i_color:
+    min: "black"
+    max: "white"
+    ndv: 50
+    null_count: 0
+  cte_store.s_store_id:
+    min: 1
+    max: 100000
+    ndv: 100000
+    null_count: 0
+  cte_store.s_region:
+    min: "east"
+    max: "west"
+    ndv: 10
+    null_count: 0

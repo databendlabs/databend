@@ -1,0 +1,57 @@
+Exchange(Merge)
+└── Sequence(Sequence)
+    ├── MaterializedCTE
+    │   ├── cte_name: __materialized_cte_0_cross_sales
+    │   ├── ref_count: 2
+    │   ├── channel_size: None
+    │   └── Aggregate(Final)
+    │       ├── group items: [cte_fact.f_item_id (#0) AS (#0)]
+    │       ├── aggregate functions: [count() AS (#8), sum(cte_fact.f_qty (#3)) AS (#9)]
+    │       └── Aggregate(Partial)
+    │           ├── group items: [cte_fact.f_item_id (#0) AS (#0)]
+    │           ├── aggregate functions: [count() AS (#8), sum(cte_fact.f_qty (#3)) AS (#9)]
+    │           └── Exchange(Hash)
+    │               ├── Exchange(Hash): keys: [cte_fact.f_item_id (#0)]
+    │               └── EvalScalar
+    │                   ├── scalars: [cte_fact.f_item_id (#0) AS (#0), cte_fact.f_qty (#3) AS (#3), cte_item.i_item_id (#4) AS (#30), cte_fact.f_store_id (#1) AS (#31), cte_store.s_store_id (#6) AS (#32), cte_item.i_color (#5) AS (#33), cte_store.s_region (#7) AS (#34)]
+    │                   └── Join(Inner)
+    │                       ├── build keys: [cte_store.s_store_id (#6)]
+    │                       ├── probe keys: [cte_fact.f_store_id (#1)]
+    │                       ├── other filters: []
+    │                       ├── Exchange(Broadcast)
+    │                       │   └── Scan
+    │                       │       ├── table: default.cte_store (#2)
+    │                       │       ├── filters: [eq(cte_store.s_region (#7), 'west')]
+    │                       │       ├── order by: []
+    │                       │       └── limit: NONE
+    │                       └── Join(Inner)
+    │                           ├── build keys: [cte_item.i_item_id (#4)]
+    │                           ├── probe keys: [cte_fact.f_item_id (#0)]
+    │                           ├── other filters: []
+    │                           ├── Exchange(Broadcast)
+    │                           │   └── Scan
+    │                           │       ├── table: default.cte_item (#1)
+    │                           │       ├── filters: [or_filters(eq(cte_item.i_color (#5), 'blue'), eq(cte_item.i_color (#5), 'green'))]
+    │                           │       ├── order by: []
+    │                           │       └── limit: NONE
+    │                           └── Scan
+    │                               ├── table: default.cte_fact (#0)
+    │                               ├── filters: []
+    │                               ├── order by: []
+    │                               └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [cte_fact.f_item_id (#10) AS (#10), COUNT(*) (#18) AS (#18), COUNT(*) (#28) AS (#28), cte_fact.f_item_id (#20) AS (#35)]
+        └── Join(Inner)
+            ├── build keys: [cte_fact.f_item_id (#20)]
+            ├── probe keys: [cte_fact.f_item_id (#10)]
+            ├── other filters: [lte(COUNT(*) (#28), COUNT(*) (#18))]
+            ├── Exchange(Broadcast)
+            │   └── MaterializedCTERef
+            │       ├── cte_name: __materialized_cte_0_cross_sales
+            │       ├── output columns: [cte_fact.f_item_id (#20), COUNT(*) (#28), sum(f.f_qty) (#29)]
+            │       └── column mapping: [cte_fact.f_item_id (#20) -> cte_fact.f_item_id (#0), COUNT(*) (#28) -> COUNT(*) (#8), sum(f.f_qty) (#29) -> sum(f.f_qty) (#9)]
+            └── MaterializedCTERef
+                ├── cte_name: __materialized_cte_0_cross_sales
+                ├── output columns: [cte_fact.f_item_id (#10), COUNT(*) (#18), sum(f.f_qty) (#19)]
+                └── column mapping: [cte_fact.f_item_id (#10) -> cte_fact.f_item_id (#0), COUNT(*) (#18) -> COUNT(*) (#8), sum(f.f_qty) (#19) -> sum(f.f_qty) (#9)]
+
