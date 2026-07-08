@@ -212,6 +212,14 @@ impl Interpreter for SetInterpreter {
                 let num_rows: usize = datablocks.iter().map(|b| b.num_rows()).sum();
                 if num_rows == 0 {
                     if matches!(self.set.set_type, SetType::Variable) {
+                        let num_columns = bind_context.columns.len();
+                        if num_columns != self.set.idents.len() {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Expect {} column in set query result, but got {} columns",
+                                self.set.idents.len(),
+                                num_columns
+                            )));
+                        }
                         self.execute_variables(vec![Scalar::Null; self.set.idents.len()])
                             .await?;
                         return Ok(PipelineBuildResult::create());
