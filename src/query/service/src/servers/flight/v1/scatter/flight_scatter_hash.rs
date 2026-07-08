@@ -25,6 +25,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::AccessType;
@@ -181,15 +182,29 @@ impl SkewHashFlightScatter {
 
     fn is_hot_key(&self, value: &Value<AnyType>, row: usize) -> bool {
         match value {
-            Value::Scalar(scalar) => {
-                !matches!(scalar, Scalar::Null)
-                    && self.skew_info.hot_keys.binary_search(scalar).is_ok()
-            }
+            Value::Scalar(scalar) => self.is_hot_scalar_ref(scalar.as_ref()),
             Value::Column(column) => {
-                let scalar = unsafe { column.index_unchecked(row).to_owned() };
-                !matches!(scalar, Scalar::Null)
-                    && self.skew_info.hot_keys.binary_search(&scalar).is_ok()
+                let scalar = unsafe { column.index_unchecked(row) };
+                self.is_hot_scalar_ref(scalar)
             }
+        }
+    }
+
+    fn is_hot_scalar_ref(&self, scalar: ScalarRef<'_>) -> bool {
+        if matches!(scalar, ScalarRef::Null) {
+            return false;
+        }
+
+        match self
+            .skew_info
+            .hot_keys
+            .binary_search_by(|hot_key| hot_key.as_ref().cmp(&scalar))
+        {
+            Ok(index) => {
+                self.skew_info.hot_keys[index].as_ref().partial_cmp(&scalar)
+                    == Some(std::cmp::Ordering::Equal)
+            }
+            Err(_) => false,
         }
     }
 
@@ -515,6 +530,7 @@ fn get_hash_values(
 #[cfg(test)]
 mod tests {
     use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
 
     use super::*;
@@ -548,6 +564,17 @@ mod tests {
                 extra_build_rows: 0,
             },
         }
+    }
+
+    #[test]
+    fn test_skew_hash_hot_key_lookup_uses_column_scalar_ref() {
+        let mut scatter = skew_probe_scatter();
+        scatter.skew_info.hot_keys = vec![Scalar::String("hot".to_string())];
+
+        let values = Value::Column(StringType::from_data(vec!["hot", "cold"]));
+
+        assert!(scatter.is_hot_key(&values, 0));
+        assert!(!scatter.is_hot_key(&values, 1));
     }
 
     #[test]
