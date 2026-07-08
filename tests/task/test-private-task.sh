@@ -343,6 +343,77 @@ else
     exit 1
 fi
 
+# Check Task Fan-out
+
+response=$(query_sql_with_auth "root:" "CREATE OR REPLACE TABLE fanout_sink (child string)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK fanout_root AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK fanout_child_a AFTER 'fanout_root' AS INSERT INTO fanout_sink VALUES ('a')")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK fanout_child_b AFTER 'fanout_root' AS INSERT INTO fanout_sink VALUES ('b')")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK fanout_child_c AFTER 'fanout_root' AS INSERT INTO fanout_sink VALUES ('c')")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK fanout_child_a RESUME")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK fanout_child_b RESUME")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK fanout_child_c RESUME")
+check_response_error "$response"
+
+actual_after_count=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_after WHERE task_name = 'fanout_root' AND next_task IN ('fanout_child_a', 'fanout_child_b', 'fanout_child_c')")
+    check_response_error "$response"
+    actual_after_count=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual_after_count" = "3" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual_after_count" = "3" ]; then
+    echo "✅ Private task fan-out AFTER bindings are ready"
+else
+    echo "❌ Expected private task fan-out AFTER bindings to be ready"
+    echo "Expected: 3"
+    echo "Actual  : $actual_after_count"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "EXECUTE TASK fanout_root")
+check_response_error "$response"
+
+actual='[]'
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT child FROM fanout_sink ORDER BY child")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = '[["a"],["b"],["c"]]' ]; then
+        break
+    fi
+    sleep 1
+done
+
+expected='[["a"],["b"],["c"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Private task fan-out triggers all successors"
+else
+    echo "❌ Expected private task fan-out to trigger all successors"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')
