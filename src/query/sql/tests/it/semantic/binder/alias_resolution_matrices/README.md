@@ -306,7 +306,7 @@ precedence or grouping-set scope.
 Local context axes:
 
 ```text
-relation x legality x setting
+relation x ambiguity x function_kind
 ```
 
 ### `predicate_alias`

@@ -407,10 +407,14 @@ impl QueryVisitor {
             },
             Expr::CountAll {
                 span,
+                filter,
                 window,
                 qualified,
             } => Expr::CountAll {
                 span: *span,
+                filter: filter
+                    .as_ref()
+                    .map(|filter| Box::new(self.fuzz_expr(filter))),
                 window: window.as_ref().map(|window| self.fuzz_window(window)),
                 qualified: qualified.clone(),
             },
@@ -681,6 +685,7 @@ impl QueryVisitor {
                 args,
                 params,
                 order_by: vec![],
+                filter: None,
                 window: None,
                 lambda: None,
             },

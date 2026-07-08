@@ -520,6 +520,16 @@ fn test_like(file: &mut impl Write) {
     )];
     run_ast(file, "parse_json(lhs) like 'a%'", &columns);
     run_ast(file, "parse_json(lhs) like '%ab%'", &columns);
+
+    run_ast(file, r#""ilike"('Databend', 'data%')"#, &[]);
+    run_ast(file, r#""ilike"('ab', 'aA%', 'A')"#, &[]);
+    run_ast(file, r#""ilike"('a%', 'aA%', 'A')"#, &[]);
+    run_ast(file, r#""ilike_any"('ab', ('z%', 'aA%'), 'A')"#, &[]);
+    let columns = [
+        ("lhs", StringType::from_data(vec!["ab", "a%"])),
+        ("rhs", StringType::from_data(vec!["aA%", "aA%"])),
+    ];
+    run_ast(file, r#""ilike"(lhs, rhs, 'A')"#, &columns);
 }
 
 fn test_regexp(file: &mut impl Write) {

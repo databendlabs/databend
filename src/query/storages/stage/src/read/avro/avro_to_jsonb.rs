@@ -81,10 +81,13 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
             let months: u32 = d.months().into();
             let days: u32 = d.days().into();
             let millis: u32 = d.millis().into();
+            let months =
+                i32::try_from(months).map_err(|_| "duration months out of range".to_string())?;
+            let days = i32::try_from(days).map_err(|_| "duration days out of range".to_string())?;
             jsonb::Value::Interval(jsonb::Interval {
-                months: months as i32,
-                days: days as i32,
-                micros: (millis * 1000) as i64,
+                months,
+                days,
+                micros: <i64 as From<u32>>::from(millis) * 1000,
             })
         }
 

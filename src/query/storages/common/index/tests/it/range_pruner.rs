@@ -17,18 +17,25 @@ use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_expression::Cast;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_index::eliminate_cast;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -127,6 +134,61 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
     assert!(!index.apply(&stats, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_range_index_keeps_nullable_boolean_cast_under_is_true() {
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "b",
+        TableDataType::Boolean,
+    )]));
+    let stats = create_stats(
+        &[("b", Scalar::Boolean(false), Scalar::Boolean(true))],
+        &schema,
+    );
+    let nullable_boolean = DataType::Boolean.wrap_nullable();
+    let column = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "b".to_string(),
+        data_type: DataType::Boolean,
+        display_name: "b".to_string(),
+    });
+    let cast = Expr::Cast(Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(column),
+        dest_type: nullable_boolean.clone(),
+    });
+    let constant = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Boolean(true),
+        data_type: nullable_boolean,
+    });
+    let eq_expr = check_function(None, "eq", &[], &[cast, constant], &BUILTIN_FUNCTIONS).unwrap();
+    let expr = check_function(None, "is_true", &[], &[eq_expr], &BUILTIN_FUNCTIONS).unwrap();
+    let inverted_expr = check_function(
+        None,
+        "not",
+        &[],
+        std::slice::from_ref(&expr),
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    let input_domains = [("b".to_string(), Domain::full(&DataType::Boolean))]
+        .into_iter()
+        .collect();
+
+    let rewritten_expr = eliminate_cast(&expr, input_domains).unwrap();
+    assert_eq!(rewritten_expr.data_type(), &DataType::Boolean);
+    let index = RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+        .unwrap();
+
+    assert!(index.apply(&stats, None, |_| false).unwrap());
+
+    let inverted_index =
+        RangeIndex::try_create(func_ctx, &inverted_expr, schema, Default::default()).unwrap();
+    assert!(inverted_index.apply(&stats, None, |_| false).unwrap());
 }
 
 #[test]

@@ -51,7 +51,7 @@ impl Binder {
     pub fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
-        having: ScalarExpr,
+        mut having: ScalarExpr,
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.expr_context = ExprContext::HavingClause;
@@ -66,7 +66,6 @@ impl Binder {
             .set_span(having.span()));
         }
 
-        let mut having = having;
         AggregateRewriter::rewrite_existing_expr(
             &bind_context.aggregate_info,
             &mut having,

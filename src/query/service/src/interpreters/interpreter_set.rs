@@ -209,19 +209,31 @@ impl Interpreter for SetInterpreter {
                     .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
                     .await?;
                 let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
+                let num_columns = bind_context.columns.len();
+                if num_columns != self.set.idents.len() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Expect {} column in set query result, but got {} columns",
+                        self.set.idents.len(),
+                        num_columns
+                    )));
+                }
+                let num_rows: usize = datablocks.iter().map(|b| b.num_rows()).sum();
+                if num_rows == 0 {
+                    if matches!(self.set.set_type, SetType::Variable) {
+                        self.execute_variables(vec![Scalar::Null; self.set.idents.len()])
+                            .await?;
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    return Err(ErrorCode::BadArguments(
+                        "Subquery in SET statement returned 0 rows, expected exactly 1 row",
+                    ));
+                }
                 let datablock = DataBlock::concat(&datablocks)?;
 
                 if datablock.num_rows() != 1 {
                     return Err(ErrorCode::BadArguments(format!(
                         "Expect scalar result in set query result, but got {} rows",
                         datablock.num_rows()
-                    )));
-                }
-                if datablock.num_columns() != self.set.idents.len() {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Expect {} column in set query result, but got {} columns",
-                        self.set.idents.len(),
-                        datablock.num_columns()
                     )));
                 }
                 datablock

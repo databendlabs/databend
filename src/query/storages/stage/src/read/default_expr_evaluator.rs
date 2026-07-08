@@ -96,6 +96,8 @@ impl DefaultExprEvaluator {
                     column_index,
                     column_name: field.name().to_string(),
                     column_type: field.data_type().to_string(),
+                    advice: "column has a SEQUENCE default which cannot be filled from file data"
+                        .to_string(),
                 });
             }
         }

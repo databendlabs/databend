@@ -1794,6 +1794,65 @@ evaluation (internal):
 +--------+--------------------------------------------------------+
 
 
+ast            : "ilike"('Databend', 'data%')
+raw expr       : ilike('Databend', 'data%')
+checked expr   : ilike<String, String>("Databend", "data%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "ilike"('ab', 'aA%', 'A')
+raw expr       : ilike('ab', 'aA%', 'A')
+checked expr   : ilike<String, String, String>("ab", "aA%", "A")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : "ilike"('a%', 'aA%', 'A')
+raw expr       : ilike('a%', 'aA%', 'A')
+checked expr   : ilike<String, String, String>("a%", "aA%", "A")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : "ilike_any"('ab', ('z%', 'aA%'), 'A')
+raw expr       : ilike_any('ab', tuple('z%', 'aA%'), 'A')
+checked expr   : ilike_any<String, Tuple(String, String), String>("ab", tuple<String, String>("z%", "aA%"), "A")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : "ilike"(lhs, rhs, 'A')
+raw expr       : ilike(lhs::String, rhs::String, 'A')
+checked expr   : ilike<String, String, String>(lhs, rhs, "A")
+optimized expr : ilike<String, String, String>(lhs, "aA%", "A")
+evaluation:
++--------+---------------+-----------------+---------------+
+|        | lhs           | rhs             | Output        |
++--------+---------------+-----------------+---------------+
+| Type   | String        | String          | Boolean       |
+| Domain | {"a%"..="ab"} | {"aA%"..="aA%"} | {FALSE, TRUE} |
+| Row 0  | 'ab'          | 'aA%'           | false         |
+| Row 1  | 'a%'          | 'aA%'           | true          |
++--------+---------------+-----------------+---------------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| lhs    | Column(StringColumn[ab, a%])   |
+| rhs    | Column(StringColumn[aA%, aA%]) |
+| Output | Boolean([0b______10])          |
++--------+--------------------------------+
+
+
 ast            : lhs regexp rhs
 raw expr       : regexp(lhs::String, rhs::String)
 checked expr   : regexp<String, String>(lhs, rhs)

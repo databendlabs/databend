@@ -770,10 +770,24 @@ WHERE ta.task_name = {task_name}
         OR (nt.completed_at IS NOT NULL AND tr.completed_at <= nt.completed_at)
       )
   );");
-            if let Some(next_task) = self.execute_sql(None, &check).await?.first().and_then(|block| block.columns()[0].index(0).and_then(|scalar| { scalar.as_string().map(|s| s.to_string()) })) {
+            let blocks = self.execute_sql(None, &check).await?;
+            for next_task in Self::next_task_names_from_blocks(&blocks) {
                 yield Result::Ok(next_task);
             }
         }
+    }
+
+    fn next_task_names_from_blocks(blocks: &[DataBlock]) -> impl Iterator<Item = String> + '_ {
+        blocks.iter().flat_map(|block| {
+            let column = block.columns().first();
+            (0..block.num_rows()).filter_map(move |row| {
+                column.and_then(|column| {
+                    column
+                        .index(row)
+                        .and_then(|scalar| scalar.as_string().map(|s| s.to_string()))
+                })
+            })
+        })
     }
 
     pub async fn clean_task_afters(&self, task_name: &str) -> Result<()> {

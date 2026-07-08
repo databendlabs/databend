@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2021 Datafuse Labs
 //
-// Licensed under the Elastic License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.elastic.co/licensing/elastic-license
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,14 +22,13 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::VariantType;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
-use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use jsonb::OwnedJsonb;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let fixture = TestFixture::setup().await?;
     fixture
         .default_session()
         .get_settings()
@@ -37,7 +36,6 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
 
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
-    let ctx = fixture.new_query_ctx().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -51,7 +49,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
         0,
     ); // Dummy location
 
-    let mut builder = VirtualColumnBuilder::try_create(ctx.clone(), schema.clone()).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(schema.clone()).unwrap();
 
     let block = DataBlock::new(
         vec![
@@ -305,7 +303,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     // Test consecutive blocks with different JSON virtual columns
     // This test verifies that when adding consecutive blocks with completely different
     // JSON structures, both blocks can correctly generate virtual column data
-    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(schema).unwrap();
 
     // First block with one set of JSON fields
     let block1 = DataBlock::new(
@@ -392,7 +390,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let fixture = TestFixture::setup().await?;
     fixture
         .default_session()
         .get_settings()
@@ -400,8 +398,6 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
 
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
-
-    let ctx = fixture.new_query_ctx().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -415,7 +411,7 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
         0,
     ); // Dummy location
 
-    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(schema).unwrap();
 
     // Create blocks with consistent schema across all blocks
     let blocks = vec![
@@ -562,7 +558,7 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder_multi_schema_typed_paths() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let fixture = TestFixture::setup().await?;
     fixture
         .default_session()
         .get_settings()
@@ -570,8 +566,6 @@ async fn test_virtual_column_builder_multi_schema_typed_paths() -> anyhow::Resul
 
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
-
-    let ctx = fixture.new_query_ctx().await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -585,7 +579,7 @@ async fn test_virtual_column_builder_multi_schema_typed_paths() -> anyhow::Resul
         0,
     );
 
-    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(schema).unwrap();
 
     let mut ids = Vec::with_capacity(500);
     let mut variants = Vec::with_capacity(500);

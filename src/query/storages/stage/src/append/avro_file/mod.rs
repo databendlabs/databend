@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod virtual_column;
+mod pipeline;
+mod writer_processor;
 
-pub use virtual_column::VirtualColumnHandler;
-pub use virtual_column::VirtualColumnHandlerWrapper;
-pub use virtual_column::VirtualColumnRefreshResult;
-pub use virtual_column::get_virtual_column_handler;
+pub(crate) use pipeline::append_data_to_avro_files;

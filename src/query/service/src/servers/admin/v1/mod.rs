@@ -20,6 +20,7 @@ pub mod procedures;
 pub mod processes;
 pub mod query_dump;
 pub mod settings;
+pub mod stream_backlog;
 pub mod stream_status;
 pub mod system;
 pub mod table_statistics;

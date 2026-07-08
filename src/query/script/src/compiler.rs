@@ -1269,6 +1269,7 @@ fn wrap_is_true(expr: Expr) -> Expr {
             args: vec![expr],
             params: vec![],
             order_by: vec![],
+            filter: None,
             window: None,
             lambda: None,
         },
