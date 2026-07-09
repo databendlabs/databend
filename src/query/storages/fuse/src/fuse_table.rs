@@ -1439,10 +1439,11 @@ impl Table for FuseTable {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         limit: Option<usize>,
     ) -> Result<()> {
         self.check_format_supported()?;
-        self.do_compact_segments(ctx, limit).await
+        self.do_compact_segments(ctx, pipeline, limit).await
     }
 
     #[async_backtrace::framed]

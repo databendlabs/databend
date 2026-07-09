@@ -208,7 +208,7 @@ impl TaskService {
     }
 
     async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) -> Result<()> {
-        let mut scheduled_tasks: HashMap<String, CancellationToken> = HashMap::new();
+        let mut scheduled_tasks: HashMap<String, (u64, CancellationToken)> = HashMap::new();
         let task_mgr = UserApiProvider::instance().task_api(tenant);
 
         let mut steam = self.subscribe().await?;
@@ -217,19 +217,23 @@ impl TaskService {
             let (_, task_message) = result?;
             let task_key = TaskMessageIdent::new(tenant, task_message.key());
 
-            if let Some(WarehouseOptions {
-                warehouse: Some(warehouse),
-                ..
-            }) = task_message.warehouse_options()
-            {
-                if warehouse
-                    != &self
-                        .create_context(None)
-                        .await?
-                        .get_cluster()
-                        .get_warehouse_id()?
+            // Delete cleanup updates shared metadata, so it must run even if the
+            // task's assigned warehouse currently has no live query node.
+            if !matches!(&task_message, TaskMessage::DeleteTask(_, _, _)) {
+                if let Some(WarehouseOptions {
+                    warehouse: Some(warehouse),
+                    ..
+                }) = task_message.warehouse_options()
                 {
-                    continue;
+                    if warehouse
+                        != &self
+                            .create_context(None)
+                            .await?
+                            .get_cluster()
+                            .get_warehouse_id()?
+                    {
+                        continue;
+                    }
                 }
             }
             match task_message {
@@ -238,7 +242,7 @@ impl TaskService {
                     debug_assert!(task.schedule_options.is_some());
                     if let Some(schedule_options) = &task.schedule_options {
                         // clean old task if alter
-                        if let Some(token) = scheduled_tasks.remove(&task.task_name) {
+                        if let Some((_, token)) = scheduled_tasks.remove(&task.task_name) {
                             token.cancel();
                         }
                         match task.status {
@@ -248,6 +252,7 @@ impl TaskService {
 
                         let token = CancellationToken::new();
                         let child_token = token.child_token();
+                        let task_id = task.task_id;
                         let task_name = task.task_name.to_string();
                         let task_name_clone = task_name.clone();
                         let task_service = TaskService::instance();
@@ -354,7 +359,7 @@ impl TaskService {
                                     });
                             }
                         }
-                        let _ = scheduled_tasks.insert(task_name_clone, token);
+                        let _ = scheduled_tasks.insert(task_name_clone, (task_id, token));
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
@@ -473,9 +478,15 @@ impl TaskService {
                         }
                     });
                 }
-                TaskMessage::DeleteTask(task_name, _) => {
-                    if let Some(token) = scheduled_tasks.remove(&task_name) {
-                        token.cancel();
+                TaskMessage::DeleteTask(task_name, _, task_id) => {
+                    if task_id.is_none_or(|task_id| {
+                        scheduled_tasks
+                            .get(&task_name)
+                            .is_some_and(|(scheduled_task_id, _)| *scheduled_task_id == task_id)
+                    }) {
+                        if let Some((_, token)) = scheduled_tasks.remove(&task_name) {
+                            token.cancel();
+                        }
                     }
                     if task_mgr
                         .accept(&task_key)
@@ -483,6 +494,14 @@ impl TaskService {
                         .map_err(meta_service_error)?
                     {
                         self.clean_task_afters(&task_name).await?;
+                        if let Some(task_id) = task_id {
+                            self.cancel_open_task_runs(
+                                &task_name,
+                                task_id,
+                                "task was dropped while execution status was still open",
+                            )
+                            .await?;
+                        }
                     }
                     task_mgr
                         .accept(&TaskMessageIdent::new(
@@ -801,6 +820,50 @@ WHERE ta.task_name = {task_name}
         .await?;
 
         Ok(())
+    }
+
+    pub async fn cancel_open_task_runs(
+        &self,
+        task_name: &str,
+        task_id: u64,
+        error_message: &str,
+    ) -> Result<u64> {
+        let task_name = Self::sql_string_literal(task_name);
+        let error_message = Self::sql_string_literal(error_message);
+
+        let blocks = self
+            .execute_sql(
+                None,
+                &format!(
+                    "UPDATE system_task.task_run \
+                SET state = 'CANCELLED', \
+                    completed_at = {}, \
+                    error_code = 0, \
+                    error_message = {} \
+                WHERE task_name = {} \
+                    AND task_id <= {} \
+                    AND state = 'EXECUTING' \
+                    AND completed_at IS NULL;",
+                    Utc::now().timestamp(),
+                    error_message,
+                    task_name,
+                    task_id
+                ),
+            )
+            .await?;
+
+        let affected_rows = blocks
+            .first()
+            .and_then(|block| block.get_by_offset(0).index(0))
+            .and_then(|scalar| {
+                scalar
+                    .as_number()
+                    .and_then(|number| number.as_u_int64())
+                    .cloned()
+            })
+            .unwrap_or(0);
+
+        Ok(affected_rows)
     }
 
     pub async fn update_task_afters(&self, task: &Task) -> Result<()> {

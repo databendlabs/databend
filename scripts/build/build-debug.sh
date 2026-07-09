@@ -45,12 +45,11 @@ else
 fi
 
 if [[ ${#query_build_args[@]} -eq 0 ]]; then
-	cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests --bin=databend-sqlsmith
+	cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests
 else
 	cargo build -p databend-binaries --bin=databend-query "${query_build_args[@]}"
 	cargo build -p databend-meta-binaries --bin=databend-meta --bin=databend-metactl
 	cargo build -p databend-sqllogictests --bin=databend-sqllogictests
-	cargo build -p databend-sqlsmith --bin=databend-sqlsmith
 fi
 
 echo "All done..."

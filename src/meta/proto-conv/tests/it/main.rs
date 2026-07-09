@@ -170,3 +170,4 @@ mod v175_field_stats_truncate_len;
 mod v176_task_script_sql;
 mod v177_arrow_file_format_params;
 mod v178_storage_config;
+mod v179_task_delete_task_id;

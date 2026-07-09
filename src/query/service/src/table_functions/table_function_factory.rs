@@ -59,6 +59,8 @@ use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseTagFunc;
 #[cfg(feature = "task-support")]
+use crate::table_functions::PrivateTaskCancelTable;
+#[cfg(feature = "task-support")]
 use crate::table_functions::PrivateTaskHistoryTable;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
@@ -334,6 +336,10 @@ impl TableFunctionFactory {
             creators.insert(
                 "task_history".to_string(),
                 (next_id(), Arc::new(PrivateTaskHistoryTable::create)),
+            );
+            creators.insert(
+                "user_task_cancel_ongoing_executions".to_string(),
+                (next_id(), Arc::new(PrivateTaskCancelTable::create)),
             );
         } else {
             creators.insert(

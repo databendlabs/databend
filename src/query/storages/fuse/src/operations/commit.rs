@@ -16,17 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use backoff::backoff::Backoff;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
-use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
@@ -35,7 +31,6 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -45,8 +40,6 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -60,25 +53,19 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use log::debug;
 use log::info;
 use opendal::Operator;
 
 use super::TableMutationAggregator;
-use super::decorate_snapshot;
 use super::new_serialize_segment_processor;
 use crate::FuseTable;
 use crate::io::MetaReaders;
 use crate::io::MetaWriter;
-use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::SnapshotHintWriter;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
-use crate::operations::common::ConflictResolveContext;
-use crate::operations::set_backoff;
 use crate::statistics::TableStatsGenerator;
-use crate::statistics::merge_statistics;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -320,195 +307,6 @@ impl FuseTable {
         SnapshotHintWriter::new(ctx, operator)
             .write_last_snapshot_hint(location_generator, last_snapshot_path, new_table_meta)
             .await
-    }
-
-    // TODO use commit sink instead
-    #[async_backtrace::framed]
-    pub async fn commit_mutation(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
-        base_segments: &[Location],
-        base_summary: Statistics,
-        table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<()> {
-        let mut retries = 0;
-        let mut backoff = set_backoff(None, None, None);
-
-        let mut latest_snapshot = base_snapshot.clone();
-        let mut latest_table_info = &self.table_info;
-        let default_cluster_key_id = self.cluster_key_id();
-        let base_schema = self.schema();
-
-        // holding the reference of latest table during retries
-        let mut latest_table_ref: Arc<dyn Table>;
-
-        // potentially concurrently appended segments, init it to empty
-        let mut concurrently_appended_segment_locations: &[Location] = &[];
-
-        // Status
-        ctx.set_status_info("mutation: begin try to commit");
-
-        loop {
-            let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
-                latest_snapshot.clone(),
-                Some(latest_table_info.ident.seq),
-                table_meta_timestamps,
-            )?;
-
-            if base_schema != latest_table_info.schema() {
-                return Err(ErrorCode::StorageOther(
-                    "The schema of the table has changed",
-                ));
-            }
-            let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
-                ctx.clone(),
-                self.operator.clone(),
-                base_segments,
-                &base_summary,
-                concurrently_appended_segment_locations,
-                base_schema.clone(),
-                default_cluster_key_id,
-            )
-            .await?;
-            snapshot_tobe_committed.segments = segments_tobe_committed;
-            snapshot_tobe_committed.summary = statistics_tobe_committed;
-            snapshot_tobe_committed.summary.additional_stats_meta = latest_snapshot
-                .summary
-                .additional_stats_meta
-                .as_ref()
-                .cloned();
-
-            decorate_snapshot(
-                &mut snapshot_tobe_committed,
-                ctx.txn_mgr(),
-                Some(base_snapshot.clone()),
-                self.get_id(),
-            )?;
-
-            match self
-                .commit_to_meta_server(
-                    ctx.as_ref(),
-                    latest_table_info,
-                    &self.meta_location_generator,
-                    snapshot_tobe_committed,
-                    None,
-                    &None,
-                    &self.operator,
-                )
-                .await
-            {
-                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            let name = self.table_info.name.clone();
-                            debug!(
-                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                                d.as_millis(),
-                                name.as_str(),
-                                self.table_info.ident
-                            );
-
-                            tokio::time::sleep(d).await;
-                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                            let latest_fuse_table =
-                                FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                            latest_snapshot =
-                                latest_fuse_table
-                                    .read_table_snapshot()
-                                    .await?
-                                    .ok_or_else(|| {
-                                        ErrorCode::Internal(
-                                            "mutation meets empty snapshot during conflict reconciliation",
-                                        )
-                                    })?;
-                            latest_table_info = &latest_fuse_table.table_info;
-
-                            // Check if there is only insertion during the operation.
-                            if let Some(range_of_newly_append) =
-                                ConflictResolveContext::is_latest_snapshot_append_only(
-                                    &base_snapshot,
-                                    &latest_snapshot,
-                                )
-                            {
-                                info!("resolvable conflicts detected");
-                                metrics_inc_commit_mutation_latest_snapshot_append_only();
-                                concurrently_appended_segment_locations =
-                                    &latest_snapshot.segments[range_of_newly_append];
-                            } else {
-                                metrics_inc_commit_mutation_unresolvable_conflict();
-                                break Err(ErrorCode::UnresolvableConflict(
-                                    "segment compact conflict with other operations",
-                                ));
-                            }
-
-                            retries += 1;
-                            metrics_inc_commit_mutation_retry();
-                            continue;
-                        }
-                        None => {
-                            // Commit not fulfilled, abort.
-                            //
-                            // Note that, here the last error we have seen is TableVersionMismatched,
-                            // otherwise we should have been returned, thus it is safe to abort the operation here.
-                            break Err(ErrorCode::StorageOther(format!(
-                                "commit mutation failed after {} retries",
-                                retries
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    // we are not sure about if the table state has been modified or not, just propagate the error
-                    // and return, without aborting anything.
-                    break Err(e);
-                }
-                Ok(_) => {
-                    break {
-                        metrics_inc_commit_mutation_success();
-                        Ok(())
-                    };
-                }
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn merge_with_base(
-        ctx: Arc<dyn TableContext>,
-        operator: Operator,
-        base_segments: &[Location],
-        base_summary: &Statistics,
-        concurrently_appended_segment_locations: &[Location],
-        schema: TableSchemaRef,
-        default_cluster_key_id: Option<u32>,
-    ) -> Result<(Vec<Location>, Statistics)> {
-        if concurrently_appended_segment_locations.is_empty() {
-            Ok((base_segments.to_owned(), base_summary.clone()))
-        } else {
-            // place the concurrently appended segments at the head of segment list
-            let new_segments = concurrently_appended_segment_locations
-                .iter()
-                .chain(base_segments.iter())
-                .cloned()
-                .collect();
-
-            let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
-            let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
-                .await?;
-
-            let mut new_statistics = base_summary.clone();
-            for result in concurrent_appended_segment_infos.into_iter() {
-                let concurrent_appended_segment = result?;
-                new_statistics = merge_statistics(
-                    new_statistics.clone(),
-                    &concurrent_appended_segment.summary,
-                    default_cluster_key_id,
-                );
-            }
-            Ok((new_segments, new_statistics))
-        }
     }
 
     // check if there are any fuse table legacy options
