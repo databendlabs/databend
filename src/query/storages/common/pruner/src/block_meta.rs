@@ -58,6 +58,7 @@ pub struct VirtualBlockMetaIndex {
     // Key is parquet column id used for reading, value is the column meta.
     pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
     // Key is (source column id, shared data type), value is the base column id for shared map data.
+    #[serde(with = "shared_virtual_column_ids_serde")]
     pub shared_virtual_column_ids: BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
     // If all the virtual columns are generated,
     // we can reduce IO by ignoring the source column.
@@ -91,6 +92,37 @@ pub enum VirtualColumnReadPlan {
     Object {
         entries: Vec<(String, VirtualColumnReadPlan)>,
     },
+}
+
+mod shared_virtual_column_ids_serde {
+    use std::collections::BTreeMap;
+
+    use databend_common_expression::ColumnId;
+    use databend_storages_common_index::VirtualColumnSharedDataType;
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::Serialize;
+    use serde::Serializer;
+
+    type SharedVirtualColumnIds = BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>;
+    type SharedVirtualColumnIdEntry = ((ColumnId, VirtualColumnSharedDataType), ColumnId);
+
+    pub fn serialize<S>(ids: &SharedVirtualColumnIds, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        ids.iter()
+            .map(|(key, value)| (*key, *value))
+            .collect::<Vec<SharedVirtualColumnIdEntry>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SharedVirtualColumnIds, D::Error>
+    where D: Deserializer<'de> {
+        Ok(
+            Vec::<SharedVirtualColumnIdEntry>::deserialize(deserializer)?
+                .into_iter()
+                .collect(),
+        )
+    }
 }
 
 #[typetag::serde(name = "block_meta_index")]

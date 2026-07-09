@@ -5585,7 +5585,6 @@ dependencies = [
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
- "databend-enterprise-virtual-column",
  "databend-meta-client 260205.12.0",
  "databend-meta-runtime",
  "databend-query",
@@ -5672,21 +5671,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
-]
-
-[[package]]
-name = "databend-enterprise-virtual-column"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-pipeline",
- "databend-common-sql",
- "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -6445,7 +6429,6 @@ dependencies = [
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
- "databend-enterprise-virtual-column",
  "databend-meta-client 260205.12.0",
  "databend-meta-plugin-semaphore",
  "databend-meta-runtime",
@@ -6624,34 +6607,6 @@ dependencies = [
  "tokio",
  "url",
  "walkdir",
-]
-
-[[package]]
-name = "databend-sqlsmith"
-version = "0.1.0"
-dependencies = [
- "clap",
- "cookie",
- "databend-common-ast",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-formats",
- "databend-common-functions",
- "databend-common-io",
- "databend-common-sql",
- "derive-visitor",
- "ethnum",
- "itertools 0.13.0",
- "jiff",
- "jsonb",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -18352,18 +18307,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-serde"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
-dependencies = [
- "serde",
- "tracing-core",
- "valuable",
- "valuable-serde",
-]
-
-[[package]]
 name = "tracing-subscriber"
 version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18373,17 +18316,12 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "regex-automata",
- "serde",
- "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-serde",
- "valuable",
- "valuable-serde",
 ]
 
 [[package]]
@@ -18715,16 +18653,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "valuable-serde"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee0548edecd1b907be7e67789923b7d02275b9ba4a33ebc33300e2c947a8cb1"
-dependencies = [
- "serde",
- "valuable",
-]
 
 [[package]]
 name = "value-bag"

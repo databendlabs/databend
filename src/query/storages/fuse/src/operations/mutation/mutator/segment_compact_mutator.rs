@@ -23,11 +23,11 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
-use crate::FuseTable;
 use crate::TableContext;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
@@ -45,6 +45,8 @@ pub struct SegmentCompactionState {
     pub new_segment_paths: Vec<String>,
     // number of fragmented segments compacted
     pub num_fragments_compacted: usize,
+    // statistics of segments that were consumed by compaction
+    pub removed_statistics: Statistics,
 }
 
 pub struct SegmentCompactMutator {
@@ -79,6 +81,14 @@ impl SegmentCompactMutator {
 
     fn has_compaction(&self) -> bool {
         !self.compaction.new_segment_paths.is_empty()
+    }
+
+    pub fn into_compaction_state(self) -> SegmentCompactionState {
+        self.compaction
+    }
+
+    pub fn base_snapshot(&self) -> &Arc<TableSnapshot> {
+        &self.compact_params.base_snapshot
     }
 
     #[async_backtrace::framed]
@@ -128,27 +138,6 @@ impl SegmentCompactMutator {
         metrics_set_compact_segments_select_duration_second(select_begin.elapsed());
 
         Ok(self.has_compaction())
-    }
-
-    #[async_backtrace::framed]
-    pub async fn try_commit(&self, table: &FuseTable) -> Result<()> {
-        if !self.has_compaction() {
-            // defensive checking
-            return Ok(());
-        }
-
-        // summary of snapshot is unchanged for compact segments.
-        let statistics = self.compact_params.base_snapshot.summary.clone();
-
-        table
-            .commit_mutation(
-                &self.ctx,
-                self.compact_params.base_snapshot.clone(),
-                &self.compaction.segments_locations,
-                statistics,
-                self.table_meta_timestamps,
-            )
-            .await
     }
 }
 
@@ -367,6 +356,12 @@ impl<'a> SegmentCompactor<'a> {
                 None => hlls_has_none = true,
             }
         }
+
+        merge_statistics_mut(
+            &mut self.compacted_state.removed_statistics,
+            &new_statistics,
+            self.default_cluster_key_id,
+        );
 
         let location = self
             .location_generator

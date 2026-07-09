@@ -37,6 +37,7 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::GlobalQueriesExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::servers::flight::v1::packets::NodePerfCounters;
@@ -271,6 +272,15 @@ impl PipelineExecutor {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
             PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.format_graph_nodes(false),
+        }
+    }
+
+    pub fn top_memory_plan_nodes(&self, limit: usize) -> Vec<PlanNodeMemoryUsage> {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.graph.top_memory_plan_nodes(limit)
+            }
+            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.top_memory_plan_nodes(limit),
         }
     }
 

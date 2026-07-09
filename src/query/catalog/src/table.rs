@@ -399,9 +399,10 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _) = (ctx, limit);
+        let (_, _, _) = (ctx, pipeline, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",

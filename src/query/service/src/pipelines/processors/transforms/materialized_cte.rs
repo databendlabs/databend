@@ -152,10 +152,12 @@ impl MaterializedCteSink {
         data_blocks: Vec<DataBlock>,
     ) -> Result<Vec<MaterializedCtePayload>> {
         let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let path = format!("{}/{}", self.prefix, GlobalUniq::unique());
-        let mut writer = buffer_pool.writer(operator, path.clone(), self.writer_pool_bytes)?;
+        let mut writer =
+            buffer_pool.writer(operator, path.clone(), self.writer_pool_bytes, target)?;
 
         let schema = Arc::new(data_blocks[0].infer_schema());
         let mut row_group_ranges = Vec::with_capacity(data_blocks.len());

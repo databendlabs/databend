@@ -38,8 +38,6 @@ use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::convert_to_type_name;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 
 use crate::NameResolutionContext;
 use crate::normalize_identifier;
@@ -135,9 +133,6 @@ impl Binder {
             .get_settings()
             .get_enable_experimental_virtual_column()
             .unwrap_or_default()
-            && LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
-                .is_ok()
     }
 
     fn auto_materialize_cte(&mut self, with: &mut With, query: &Query) -> Result<()> {
