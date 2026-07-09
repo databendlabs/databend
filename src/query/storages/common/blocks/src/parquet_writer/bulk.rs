@@ -18,7 +18,7 @@
 //! `write_leaf_column`/`write_byte_array_column`, exposed by the datafuse-extras arrow-rs
 //! fork) so compressed pages are flushed to the sink as they fill, instead of buffering whole
 //! column chunks in memory like `ArrowWriter` does. The caller supplies the sink (any
-//! `io::Write`); [`BulkBlockParquetWriter::finish`] writes the footer and hands the sink back
+//! `io::Write`); [`BulkParquetFileWriter::finish`] writes the footer and hands the sink back
 //! alongside the metadata, so the caller reads the serialized bytes from its own sink. The
 //! provided [`ChunkedWriteBuffer`] sink keeps the bytes as 4 MiB chunks that the fuse write
 //! path can forward straight to opendal with no consolidation copy.
@@ -201,14 +201,14 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 /// streaming IO writer). [`Self::new`] defaults to the chunked in-memory buffer;
 /// [`Self::create`] takes an arbitrary sink. `W: Default` lets [`Self::finish`] move the
 /// finished sink out via `mem::take` after the footer is written.
-pub struct BulkBlockParquetWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
+pub struct BulkParquetFileWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
     leaf_kinds: Vec<LeafEncoderKind>,
     next_leaf: usize,
     row_group: Option<SerializedRowGroupWriter<'static, W>>,
     file_writer: Box<SerializedFileWriter<W>>,
 }
 
-impl BulkBlockParquetWriter<ChunkedWriteBuffer> {
+impl BulkParquetFileWriter<ChunkedWriteBuffer> {
     /// Construct a writer backed by the in-memory [`ChunkedWriteBuffer`]. [`Self::finish`] returns
     /// the buffer, whose bytes the caller reads via [`ChunkedWriteBuffer::into_chunks`].
     pub fn new(arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Result<Self> {
@@ -220,7 +220,7 @@ impl BulkBlockParquetWriter<ChunkedWriteBuffer> {
     }
 }
 
-impl<W: io::Write + Send + Default + 'static> BulkBlockParquetWriter<W> {
+impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
     /// Construct a writer that streams the serialized parquet into the caller-provided `sink`.
     /// The footer is written on [`Self::finish`], which returns the metadata plus the sink moved
     /// back out.

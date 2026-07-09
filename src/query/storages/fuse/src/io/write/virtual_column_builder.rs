@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
@@ -49,7 +50,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_hashtable::StackHashMap;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::block_to_parquet;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnIdMap;
@@ -76,6 +77,7 @@ use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use super::fuse_block_writer::FuseBlockWriter;
 use crate::index::VIRTUAL_COLUMN_NODES_KEY;
 use crate::index::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
 use crate::index::encode_compact_virtual_column_nodes;
@@ -932,21 +934,32 @@ impl VirtualColumnBuilder {
             &std::collections::BTreeMap::new(),
         )?;
 
+        // Plain write (`granule_rows = None`); virtual columns derive their metas from the raw
+        // parquet footer, so use `finish_plain` to get the full `SerializedParquet` back.
+        let props = Arc::new(build_parquet_writer_properties(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary,
+            Some(&columns_statistics),
+            metadata,
+            virtual_block.num_rows(),
+            virtual_block_schema.as_ref(),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
+        ));
+        let mut writer = FuseBlockWriter::new(
+            props,
+            virtual_block_schema.clone(),
+            None,
+            Vec::new(),
+            None,
+            None,
+        );
+        writer.write(virtual_block)?;
         let SerializedParquet {
             payload,
             metadata: file_meta,
             ..
-        } = block_to_parquet(
-            virtual_block_schema.as_ref(),
-            virtual_block,
-            write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
-            metadata,
-            Some(&columns_statistics),
-            write_settings.data_page_rows,
-            write_settings.data_page_bytes,
-            usize::MAX,
-        )?;
+        } = writer.finish_plain()?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
             file_meta,

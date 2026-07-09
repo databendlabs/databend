@@ -28,7 +28,7 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
-use crate::parquet_writer::BlockParquetWriter;
+use crate::parquet_writer::ParquetFileWriter;
 use crate::parquet_writer::SerializedParquet;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
@@ -66,78 +66,10 @@ pub fn blocks_to_parquet(
         None,
     ));
 
-    // `BlockParquetWriter` encodes each block immediately and splits oversized batches into
+    // `ParquetFileWriter` encodes each block immediately and splits oversized batches into
     // page-bounded chunks internally, so no pre-splitting is needed here.
-    let mut writer = BlockParquetWriter::new(arrow_schema, props);
+    let mut writer = ParquetFileWriter::new(arrow_schema, props);
     writer.write_blocks(blocks)?;
-    writer.finish()
-}
-
-/// Serialize a single block to parquet. This is the one entry point for serializing a data block:
-/// `granule_rows` controls whether the sparse-granule layout is captured.
-///
-/// - `granule_rows == usize::MAX` (or any value `>= num_rows`, including empty/single-granule
-///   blocks): the block is written in one shot with no page-boundary forcing, and `page_layout`
-///   comes back `None`. This is byte-for-byte the plain serialization path.
-/// - `granule_rows < num_rows` (block spans >= 2 granules): a page is forced on every `granule_rows`
-///   boundary via explicit `flush_page`, and `page_layout` comes back `Some`, so the caller can
-///   build a sparse granule index mapping each granule to its first data page.
-///
-/// The block must already be in its final row order (the caller sorts / clusters upstream); this
-/// function does not reorder rows.
-pub fn block_to_parquet(
-    table_schema: &TableSchema,
-    block: DataBlock,
-    compression: TableCompression,
-    enable_dictionary: bool,
-    metadata: Option<Vec<KeyValue>>,
-    column_stats: Option<&StatisticsOfColumns>,
-    data_page_rows: Option<usize>,
-    data_page_bytes: Option<usize>,
-    granule_rows: usize,
-) -> Result<SerializedParquet> {
-    // `granule_rows == 0` would make `take` zero (infinite loop). Callers pass `usize::MAX` for
-    // "no granularity" and a validated `>= 1` otherwise; this is just a defensive invariant.
-    assert!(granule_rows > 0, "granule_rows must be positive");
-    let num_rows = block.num_rows();
-    let arrow_schema = Arc::new(table_schema.into());
-
-    let props = Arc::new(build_parquet_writer_properties(
-        compression,
-        enable_dictionary,
-        column_stats,
-        metadata,
-        num_rows,
-        table_schema,
-        data_page_rows,
-        data_page_bytes,
-    ));
-
-    let mut writer = BlockParquetWriter::new(arrow_schema, props);
-
-    // Build a granule index only when the block spans >= 2 granules; a single (or empty) granule has
-    // nothing to narrow, and block-level min/max already covers it.
-    if num_rows > granule_rows {
-        writer.enable_page_layout();
-
-        // Write the block one granule slice at a time, flushing a page on each boundary so every
-        // leaf column has a page starting exactly on the granule's first row. The trailing partial
-        // granule (if any) is left buffered; `finish` flushes it into a final page that still
-        // starts on the last granule boundary.
-        let mut offset = 0;
-        while offset < num_rows {
-            let take = granule_rows.min(num_rows - offset);
-            writer.write_block(block.slice(offset..offset + take))?;
-            offset += take;
-            if offset < num_rows {
-                writer.flush_page()?;
-            }
-        }
-    } else {
-        // Empty / single-granule / no-granularity: one write, no page-boundary forcing. An empty
-        // block is still written once, matching the plain serialization path byte-for-byte.
-        writer.write_block(block)?;
-    }
     writer.finish()
 }
 

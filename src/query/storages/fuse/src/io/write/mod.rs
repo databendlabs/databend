@@ -15,6 +15,7 @@
 mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;
+mod fuse_block_writer;
 mod granule_index_writer;
 mod inverted_index_writer;
 mod meta_writer;

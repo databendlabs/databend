@@ -18,11 +18,11 @@
 //! serialized payload is a list of `Bytes` ([`SerializedParquet::payload`]) that the fuse write
 //! path forwards straight to opendal with no consolidation copy. Two writers are provided:
 //!
-//! - [`BulkBlockParquetWriter`] (leaf-oriented, low-level — see the `bulk` module): drive it
+//! - [`BulkParquetFileWriter`] (leaf-oriented, low-level — see the `bulk` module): drive it
 //!   leaf by leaf; each `write` encodes an `ArrowLeafColumn` straight into the open leaf's page
 //!   writer, flushing pages to the sink as they fill — no per-column chunk buffer. The
 //!   vertical-merge path drives this directly, leaf-for-leaf against the reader.
-//! - [`BlockParquetWriter`] (row-oriented, high-level — see the `block` module): receives
+//! - [`ParquetFileWriter`] (row-oriented, high-level — see the `block` module): receives
 //!   `DataBlock`s and encodes+compresses each immediately into one column writer per leaf, so
 //!   buffered memory is the compressed pages rather than the raw blocks; at `finish` it
 //!   assembles the file from the closed column chunks with no data copy.
@@ -38,13 +38,13 @@ mod bulk;
 use bytes::Bytes;
 use parquet::file::metadata::ParquetMetaData;
 
-pub use self::block::BlockParquetWriter;
-pub use self::bulk::BulkBlockParquetWriter;
+pub use self::block::ParquetFileWriter;
+pub use self::bulk::BulkParquetFileWriter;
 pub use self::bulk::ChunkedWriteBuffer;
 pub use self::bulk::DEFAULT_CHUNK_SIZE;
 pub use self::bulk::LeafColumnWriter;
 
-/// Result of finishing a [`BulkBlockParquetWriter`] / [`BlockParquetWriter`]: the serialized
+/// Result of finishing a [`BulkParquetFileWriter`] / [`ParquetFileWriter`]: the serialized
 /// single-row-group Parquet bytes plus the file metadata.
 ///
 /// `payload` is a list of chunks rather than one `Vec<u8>`: the fuse write path forwards it
@@ -56,7 +56,7 @@ pub struct SerializedParquet {
     pub payload: Vec<Bytes>,
     pub metadata: ParquetMetaData,
     /// Per-leaf page layout (absolute byte offsets), in parquet leaf order. Populated only when
-    /// the writer was asked to capture it (see [`BlockParquetWriter::enable_page_layout`]); `None`
+    /// the writer was asked to capture it (see [`ParquetFileWriter::enable_page_layout`]); `None`
     /// otherwise so the common write path pays nothing. Used to build the sparse granule index that
     /// maps cluster-key granules to physical page byte ranges.
     pub page_layout: Option<Vec<LeafPageLayout>>,
@@ -309,9 +309,9 @@ pub(crate) mod test_util {
         use arrow_array::ArrayRef;
         use parquet::arrow::arrow_writer::compute_leaves;
 
-        use super::BulkBlockParquetWriter;
+        use super::BulkParquetFileWriter;
 
-        let mut writer = BulkBlockParquetWriter::new(arrow_schema.clone(), props).unwrap();
+        let mut writer = BulkParquetFileWriter::new(arrow_schema.clone(), props).unwrap();
         for (field_idx, field) in arrow_schema.fields().iter().enumerate() {
             let leaves_per_fragment: Vec<_> = blocks
                 .iter()
@@ -356,7 +356,7 @@ mod tests {
         let schema = sample_schema();
         let arrow_schema = Arc::new(Schema::from(&schema));
 
-        let mut buffered = BlockParquetWriter::new(arrow_schema.clone(), props(&schema));
+        let mut buffered = ParquetFileWriter::new(arrow_schema.clone(), props(&schema));
         buffered.write_block(sample_block()).unwrap();
         buffered.write_block(sample_block()).unwrap();
         let buffered_bytes = buffered.finish().unwrap().payload.concat();
@@ -389,7 +389,7 @@ mod tests {
     }
 
     // The low-level leaf writer goes through `SerializedFileWriter`, which (unlike the
-    // hand-assembled high-level `BlockParquetWriter`) DOES emit an OffsetIndex. Either way a
+    // hand-assembled high-level `ParquetFileWriter`) DOES emit an OffsetIndex. Either way a
     // column chunk split across many pages must read back correctly through a standard parquet
     // reader. This covers the low-level path's multi-page behavior.
     #[test]
@@ -427,7 +427,7 @@ mod tests {
         assert_eq!(meta.num_row_groups(), 1);
         assert!(
             meta.offset_index().is_some(),
-            "BulkBlockParquetWriter goes through SerializedFileWriter and keeps the OffsetIndex"
+            "BulkParquetFileWriter goes through SerializedFileWriter and keeps the OffsetIndex"
         );
 
         let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.clone())).unwrap();
@@ -498,7 +498,7 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|kv| kv.key == ARROW_SCHEMA_META_KEY),
-            "BulkBlockParquetWriter must embed ARROW:schema"
+            "BulkParquetFileWriter must embed ARROW:schema"
         );
         let recovered: TableSchema = builder.schema().as_ref().try_into().unwrap();
         assert_eq!(recovered.fields()[0].data_type(), &TableDataType::Variant);

@@ -38,7 +38,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIndex;
-use databend_storages_common_blocks::BlockParquetWriter;
+use databend_storages_common_blocks::ParquetFileWriter;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -159,7 +159,7 @@ fn payload_table_schema() -> TableSchema {
 /// A payload writer that flushes exactly one data page per granule: PLAIN, no dictionary, no
 /// compression, `data_page_row_count_limit = 1`, page layout captured. No dictionary means each
 /// page self-decodes from its own bytes — which is what the pruner relies on.
-fn new_payload_writer() -> Result<BlockParquetWriter> {
+fn new_payload_writer() -> Result<ParquetFileWriter> {
     let table_schema = payload_table_schema();
     let arrow_schema = Arc::new((&table_schema).into());
     let props = Arc::new(build_parquet_writer_properties(
@@ -173,7 +173,7 @@ fn new_payload_writer() -> Result<BlockParquetWriter> {
         Some(1), // one row per data page
         None,
     ));
-    let mut writer = BlockParquetWriter::new(arrow_schema, props);
+    let mut writer = ParquetFileWriter::new(arrow_schema, props);
     writer.enable_page_layout();
     Ok(writer)
 }
@@ -185,7 +185,7 @@ struct ColumnPayloadState {
     col_id: u32,
 
     granules: usize,
-    writer: BlockParquetWriter,
+    writer: ParquetFileWriter,
     current: Option<BloomIndexBuilder>,
 }
 

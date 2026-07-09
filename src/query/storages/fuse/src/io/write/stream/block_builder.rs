@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -34,10 +33,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::BlockParquetWriter;
-use databend_storages_common_blocks::LeafPageLayout;
 use databend_storages_common_blocks::NdvProvider;
-use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -46,10 +42,11 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Buffer;
 
+use super::super::fuse_block_writer::FuseBlockOutput;
+use super::super::fuse_block_writer::FuseBlockWriter;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
@@ -62,139 +59,13 @@ use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
 use crate::io::create_inverted_index_builders;
-use crate::io::granule_index::GranuleIndexBuildOutput;
-use crate::io::granule_index::GranuleIndexBuilder;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::build_granule_index_specs;
 use crate::io::write::BlockStatsBuilder;
-use crate::io::write::GranuleIndexWriter;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::stream::ColumnStatisticsState;
-use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
-use crate::operations::column_parquet_metas;
-
-/// Encoded row group produced by [`ArrowParquetWriter::finish`].
-struct FinishedRowGroup {
-    /// Per-column parquet metadata.
-    col_metas: HashMap<ColumnId, ColumnMeta>,
-    /// Serialized parquet bytes of the row group.
-    data: Buffer,
-    /// Per-leaf page layout for building the sparse granule index; `Some` only when page-layout
-    /// capture was enabled (clustered table with `index_granularity`).
-    page_layout: Option<Vec<LeafPageLayout>>,
-}
-
-pub struct UninitializedArrowWriter {
-    write_settings: WriteSettings,
-    arrow_schema: Arc<Schema>,
-    table_schema: TableSchemaRef,
-}
-impl UninitializedArrowWriter {
-    fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<BlockParquetWriter> {
-        let write_settings = &self.write_settings;
-        let num_rows = cols_ndv_info.num_rows;
-
-        // For a clustered table with `index_granularity`, force data pages to cut on granule
-        // boundaries so the explicit `flush_page` calls (which guarantee a page starts on each
-        // granule row) leave minimal residue and the sparse index pages line up with granules.
-        let data_page_rows = write_settings
-            .index_granularity
-            .or(write_settings.data_page_rows);
-
-        let writer_properties = Arc::new(build_parquet_writer_properties(
-            write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
-            Some(cols_ndv_info),
-            None,
-            num_rows,
-            self.table_schema.as_ref(),
-            data_page_rows,
-            write_settings.data_page_bytes,
-        ));
-        let mut writer = BlockParquetWriter::new(self.arrow_schema.clone(), writer_properties);
-        if write_settings.index_granularity.is_some() {
-            writer.enable_page_layout();
-        }
-        Ok(writer)
-    }
-}
-
-pub struct InitializedArrowWriter {
-    inner: BlockParquetWriter,
-}
-pub enum ArrowParquetWriter {
-    Uninitialized(UninitializedArrowWriter),
-    Initialized(InitializedArrowWriter),
-}
-impl ArrowParquetWriter {
-    fn new_uninitialized(write_settings: WriteSettings, table_schema: TableSchemaRef) -> Self {
-        let arrow_schema = Arc::new(table_schema.as_ref().into());
-        ArrowParquetWriter::Uninitialized(UninitializedArrowWriter {
-            write_settings,
-            arrow_schema,
-            table_schema,
-        })
-    }
-
-    fn start(&mut self, cols_ndv_info: ColumnsNdvInfo) -> Result<()> {
-        let ArrowParquetWriter::Uninitialized(uninitialized) = self else {
-            unreachable!("Unexpected writer state: ArrowParquetWriter has been initialized");
-        };
-        let inner = uninitialized.init(cols_ndv_info)?;
-        *self = ArrowParquetWriter::Initialized(InitializedArrowWriter { inner });
-        Ok(())
-    }
-
-    fn write(&mut self, block: DataBlock) -> Result<()> {
-        let Initialized(writer) = self else {
-            unreachable!("ArrowParquetWriter::write called before initialization");
-        };
-        // The streaming writer encodes and compresses the block's columns immediately into
-        // per-leaf column writers, so buffered memory is the compressed pages, not raw blocks.
-        writer.inner.write_block(block)?;
-        Ok(())
-    }
-
-    /// Force a page boundary across all leaf columns at the current row position. Used at granule
-    /// boundaries so the sparse granule index can map a granule to the pages that start on its row.
-    fn flush_page(&mut self) -> Result<()> {
-        if let Initialized(writer) = self {
-            writer.inner.flush_page()?;
-        }
-        Ok(())
-    }
-
-    /// Encode all buffered blocks into a single row group, returning the per-column
-    /// metadata, the serialized parquet bytes as opendal chunks, and (when page-layout capture
-    /// was enabled) the per-leaf page layout for building the sparse granule index.
-    fn finish(self, schema: &TableSchemaRef) -> Result<FinishedRowGroup> {
-        let Initialized(writer) = self else {
-            unreachable!("ArrowParquetWriter::finish called before initialization");
-        };
-        let SerializedParquet {
-            payload,
-            metadata,
-            page_layout,
-        } = writer.inner.finish()?;
-        let col_metas = column_parquet_metas(&metadata, schema)?;
-        Ok(FinishedRowGroup {
-            col_metas,
-            data: Buffer::from(payload),
-            page_layout,
-        })
-    }
-
-    fn compressed_size(&self) -> usize {
-        // Encoding happens eagerly in `write`, so the buffered compressed-page size is a live
-        // estimate that `need_flush` can use directly.
-        match self {
-            Initialized(writer) => writer.inner.compressed_size(),
-            ArrowParquetWriter::Uninitialized(_) => 0,
-        }
-    }
-}
 
 pub struct ColumnsNdvInfo {
     cols_ndv: HashMap<ColumnId, usize>,
@@ -214,16 +85,15 @@ impl NdvProvider for ColumnsNdvInfo {
 
 pub struct StreamBlockBuilder {
     properties: Arc<StreamBlockProperties>,
-    block_writer: ArrowParquetWriter,
+    /// `None` until the first block arrives: props depend on first-block NDV, so creation is
+    /// deferred to `write`.
+    block_writer: Option<FuseBlockWriter>,
     inverted_index_writers: Vec<InvertedIndexWriter>,
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     vector_index_builder: Option<VectorIndexBuilder>,
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
-    /// One builder per declared granule-level index, driven in `write()` at the same granule
-    /// boundaries as the sparse granule index.
-    granule_index_builders: Vec<Box<dyn GranuleIndexBuilder>>,
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
@@ -234,15 +104,13 @@ pub struct StreamBlockBuilder {
 
 impl StreamBlockBuilder {
     pub fn try_new_with_config(properties: Arc<StreamBlockProperties>) -> Result<Self> {
-        let block_writer = match properties.write_settings.storage_format {
-            FuseStorageFormat::Parquet => ArrowParquetWriter::new_uninitialized(
-                properties.write_settings.clone(),
-                properties.source_schema.clone(),
-            ),
-            FuseStorageFormat::Unsupported => {
-                return Err(crate::unsupported_storage_format_error());
-            }
-        };
+        // Reject unsupported formats up front so the deferred `write` can assume Parquet.
+        if matches!(
+            properties.write_settings.storage_format,
+            FuseStorageFormat::Unsupported
+        ) {
+            return Err(crate::unsupported_storage_format_error());
+        }
 
         let inverted_index_writers = properties
             .inverted_index_builders
@@ -271,12 +139,6 @@ impl StreamBlockBuilder {
             true,
         );
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, None, None)?;
-        let func_ctx = properties.ctx.get_function_context()?;
-        let granule_index_builders = properties
-            .granule_index_specs
-            .iter()
-            .map(|spec| spec.new_builder(func_ctx.clone()))
-            .collect::<Result<Vec<_>>>()?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -286,14 +148,13 @@ impl StreamBlockBuilder {
         );
         Ok(StreamBlockBuilder {
             properties,
-            block_writer,
+            block_writer: None,
             inverted_index_writers,
             bloom_index_builder,
             virtual_column_builder,
             vector_index_builder,
             spatial_index_builder,
             block_stats_builder,
-            granule_index_builders,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -306,7 +167,10 @@ impl StreamBlockBuilder {
     }
 
     pub fn need_flush(&self) -> bool {
-        let file_size = self.block_writer.compressed_size();
+        let file_size = self
+            .block_writer
+            .as_ref()
+            .map_or(0, |w| w.compressed_size());
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
             || self.block_size >= self.properties.block_thresholds.min_bytes_per_block * 2
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
@@ -317,12 +181,6 @@ impl StreamBlockBuilder {
         if block.is_empty() {
             return Ok(());
         }
-
-        let had_existing_rows = self.row_count > 0;
-        // Absolute row offset of this block's first row within the row group, before this block is
-        // counted. Used to align granule boundaries (multiples of `index_granularity`) across the
-        // cumulative row stream, regardless of how blocks happen to be chunked.
-        let start_row = self.row_count;
 
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
@@ -344,49 +202,50 @@ impl StreamBlockBuilder {
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size(block.num_columns());
 
-        if !had_existing_rows {
-            // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
-            // block's NDV stats to heuristically configure the parquet writer.
+        if self.block_writer.is_none() {
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
             cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
-            self.block_writer
-                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
+            let ndv_info = ColumnsNdvInfo::new(block.num_rows(), cols_ndv);
+            self.block_writer = Some(self.new_block_writer(ndv_info)?);
         }
 
-        match self.properties.write_settings.index_granularity {
-            Some(granule_rows) => {
-                // Split writes at granule boundaries, forcing a page flush on each so every leaf
-                // column has a page starting exactly on the granule's first row. The trailing
-                // partial granule (if any) is left buffered; the writer's close flushes it into a
-                // final page that still starts on the last granule boundary.
-                let num_rows = block.num_rows();
-                let mut offset = 0;
-                let mut filled = start_row % granule_rows;
-                while offset < num_rows {
-                    let take = (granule_rows - filled).min(num_rows - offset);
-                    let range = offset..offset + take;
-                    self.block_writer.write(block.slice(range.clone()))?;
-                    // Feed the same slice into each granule-level builder so its granule pages align
-                    // 1:1 with the sparse granule index's granules.
-                    for b in self.granule_index_builders.iter_mut() {
-                        b.push_rows(&block, range.clone())?;
-                    }
-                    offset += take;
-                    filled += take;
-                    if filled == granule_rows {
-                        self.block_writer.flush_page()?;
-                        for b in self.granule_index_builders.iter_mut() {
-                            b.finalize_granule()?;
-                        }
-                        filled = 0;
-                    }
-                }
-            }
-            _ => {
-                self.block_writer.write(block)?;
-            }
-        }
+        // FuseBlockWriter tracks the residual granule fill across calls, so just forward the block.
+        self.block_writer.as_mut().unwrap().write(block)?;
         Ok(())
+    }
+
+    /// Build the parquet writer for the first block, configured from its NDV snapshot.
+    fn new_block_writer(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<FuseBlockWriter> {
+        let write_settings = &self.properties.write_settings;
+        let num_rows = cols_ndv_info.num_rows;
+        let data_page_rows = write_settings
+            .index_granularity
+            .or(write_settings.data_page_rows);
+        let props = Arc::new(build_parquet_writer_properties(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary,
+            Some(cols_ndv_info),
+            None,
+            num_rows,
+            self.properties.source_schema.as_ref(),
+            data_page_rows,
+            write_settings.data_page_bytes,
+        ));
+        let func_ctx = self.properties.ctx.get_function_context()?;
+        let granule_index_builders = self
+            .properties
+            .granule_index_specs
+            .iter()
+            .map(|spec| spec.new_builder(func_ctx.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(FuseBlockWriter::new(
+            props,
+            self.properties.source_schema.clone(),
+            write_settings.index_granularity,
+            granule_index_builders,
+            None, // offset-only: no cluster-key mins on the stream path
+            None,
+        ))
     }
 
     pub fn finish(mut self) -> Result<BlockSerialization> {
@@ -473,68 +332,31 @@ impl StreamBlockBuilder {
         let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
         let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
 
-        let FinishedRowGroup {
-            col_metas,
+        // Offset-only index (no cluster-key mins): the stream path writes unsorted / Hilbert blocks,
+        // which are not linearly sorted, so recording mins would corrupt pruning. Mins are built only
+        // on the sorted `BlockBuilder` path.
+        let mins_location = self
+            .properties
+            .meta_locations
+            .block_granule_index_location();
+        let offsets_location = self
+            .properties
+            .meta_locations
+            .block_granule_index_location();
+        let FuseBlockOutput {
             data: block_raw_data,
-            page_layout,
-        } = self.block_writer.finish(&self.properties.source_schema)?;
-
-        // The stream writer builds an *offset-only* granule index: page byte offsets at each granule
-        // boundary, but no per-granule min/max. It writes freshly-inserted (unsorted) blocks and
-        // Hilbert-clustered blocks, neither of which is linearly sorted, so recording mins here
-        // would corrupt pruning (which treats `mins[i+1]` as granule `i`'s upper bound — only valid
-        // for a cluster-sorted block). The per-granule min/max index is built instead on the sorted
-        // write path (`BlockBuilder`, used by recluster and linear-clustered inserts). An
-        // offset-only index still lets the read path stream a block in `max_block_size` chunks; it
-        // just never narrows (every granule survives).
-        // Finalize the granule-level builders (deriving payload locations from the block location) and
-        // collect their payload files + sidecar offset columns.
-        let mut granule_index_payloads = Vec::new();
-        let mut granule_index_fields = Vec::new();
-        let mut granule_index_columns = Vec::new();
-        for b in std::mem::take(&mut self.granule_index_builders) {
-            let GranuleIndexBuildOutput {
-                payloads,
-                sidecar_fields,
-                sidecar_columns,
-            } = b.finalize(&block_location.0)?;
-            granule_index_payloads.extend(payloads);
-            granule_index_fields.extend(sidecar_fields);
-            granule_index_columns.extend(sidecar_columns);
-        }
-
-        let granule_index_state = match page_layout {
-            Some(page_layout) => {
-                let granule_rows = self
-                    .properties
-                    .write_settings
-                    .index_granularity
-                    .expect("index_granularity set when page_layout was captured");
-                let leaf_column_ids = self.properties.source_schema.to_leaf_column_ids();
-                let builder = GranuleIndexWriter::new(None, granule_rows, leaf_column_ids);
-                let mins_location = self
-                    .properties
-                    .meta_locations
-                    .block_granule_index_location();
-                let offsets_location = self
-                    .properties
-                    .meta_locations
-                    .block_granule_index_location();
-                Some(builder.build_with_extra_columns(
-                    &page_layout,
-                    &[],
-                    mins_location,
-                    offsets_location,
-                    granule_index_fields,
-                    granule_index_columns,
-                )?)
-            }
-            None => {
-                // No page layout means a single-granule block: there is no sidecar to attach the
-                // offset columns to, so the payloads (if any) are dropped along with them.
-                granule_index_payloads.clear();
-                None
-            }
+            col_metas,
+            granule_index_state,
+            granule_index_payloads,
+        } = match self.block_writer.take() {
+            Some(w) => w.finish(&block_location.0, mins_location, offsets_location)?,
+            // Empty builder: no block was ever written.
+            None => FuseBlockOutput {
+                data: Buffer::new(),
+                col_metas: HashMap::new(),
+                granule_index_state: None,
+                granule_index_payloads: Vec::new(),
+            },
         };
         let granule_index = granule_index_state.as_ref().map(|s| s.layout());
 

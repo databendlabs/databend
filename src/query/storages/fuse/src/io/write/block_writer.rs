@@ -45,7 +45,7 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_num
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::block_to_parquet;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -58,15 +58,16 @@ use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Buffer;
 use opendal::Operator;
 
+use super::fuse_block_writer::FuseBlockOutput;
+use super::fuse_block_writer::FuseBlockWriter;
+use super::fuse_block_writer::GranuleMins;
 use crate::FuseStorageFormat;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
-use crate::io::granule_index::GranuleIndexBuildOutput;
 use crate::io::granule_index::GranuleIndexPayload;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::write::GranuleIndexState;
-use crate::io::write::GranuleIndexWriter;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::SpatialIndexBuilder;
@@ -97,20 +98,23 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            // `granule_rows = usize::MAX`: no page-boundary forcing, byte-for-byte the plain path.
-            let SerializedParquet {
-                payload, metadata, ..
-            } = block_to_parquet(
-                &schema,
-                block,
+            // Plain write: `granule_rows = None`, no page-boundary forcing, no granule index.
+            let props = Arc::new(build_parquet_writer_properties(
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
-                None,
                 column_stats,
+                None,
+                block.num_rows(),
+                &schema,
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
-                usize::MAX,
-            )?;
+            ));
+            let mut writer =
+                FuseBlockWriter::new(props, schema.clone(), None, Vec::new(), None, None);
+            writer.write(block)?;
+            let SerializedParquet {
+                payload, metadata, ..
+            } = writer.finish_plain()?;
             let meta = column_parquet_metas(&metadata, &schema)?;
             Ok((meta, Buffer::from(payload)))
         }
@@ -266,94 +270,63 @@ impl BlockBuilder {
 
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
 
-        let (granule_rows, granule_mins) = match self.write_settings.index_granularity {
-            Some(g) => (g, self.cluster_stats_gen.granule_mins(&data_block, g)?),
-            None => (usize::MAX, None),
+        let num_rows = data_block.num_rows();
+        // Only index blocks spanning >= 2 granules; block-level min/max already covers a single one.
+        let granule_rows = self
+            .write_settings
+            .index_granularity
+            .filter(|g| num_rows > *g);
+
+        let (mins, cluster_key_id) = match granule_rows {
+            Some(_) if !self.cluster_stats_gen.cluster_key_index.is_empty() => (
+                Some(GranuleMins::new(
+                    self.cluster_stats_gen.cluster_key_index.clone(),
+                    self.cluster_stats_gen.operators.clone(),
+                    self.cluster_stats_gen.func_ctx.clone(),
+                )),
+                Some(self.cluster_stats_gen.cluster_key_id()),
+            ),
+            _ => (None, None),
         };
 
-        let num_rows = data_block.num_rows();
-        let (granule_index_extra_fields, granule_index_extra_columns, granule_index_payloads) =
-            if !self.granule_index_specs.is_empty()
-                && granule_rows != usize::MAX
-                && num_rows > granule_rows
-            {
-                let func_ctx = self.ctx.get_function_context()?;
-                let mut builders = self
-                    .granule_index_specs
-                    .iter()
-                    .map(|spec| spec.new_builder(func_ctx.clone()))
-                    .collect::<Result<Vec<_>>>()?;
+        let func_ctx = self.ctx.get_function_context()?;
+        let granule_index_builders = if granule_rows.is_some() {
+            self.granule_index_specs
+                .iter()
+                .map(|spec| spec.new_builder(func_ctx.clone()))
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
 
-                let mut offset = 0;
-                while offset < num_rows {
-                    let take = granule_rows.min(num_rows - offset);
-                    let range = offset..offset + take;
-                    for b in builders.iter_mut() {
-                        b.push_rows(&data_block, range.clone())?;
-                    }
-                    offset += take;
-                    if offset < num_rows {
-                        for b in builders.iter_mut() {
-                            b.finalize_granule()?;
-                        }
-                    }
-                }
-
-                let mut fields = Vec::new();
-                let mut columns = Vec::new();
-                let mut payloads = Vec::new();
-                for b in builders {
-                    let GranuleIndexBuildOutput {
-                        payloads: p,
-                        sidecar_fields,
-                        sidecar_columns,
-                    } = b.finalize(&block_location.0)?;
-                    payloads.extend(p);
-                    fields.extend(sidecar_fields);
-                    columns.extend(sidecar_columns);
-                }
-                (fields, columns, payloads)
-            } else {
-                (Vec::new(), Vec::new(), Vec::new())
-            };
-
-        let serialized = block_to_parquet(
-            &self.source_schema,
-            data_block,
+        let props = Arc::new(build_parquet_writer_properties(
             self.write_settings.table_compression,
             self.write_settings.enable_parquet_dictionary,
-            None,
             Some(&col_stats),
+            None,
+            num_rows,
+            &self.source_schema,
             self.write_settings.data_page_rows,
             self.write_settings.data_page_bytes,
+        ));
+        let mut block_writer = FuseBlockWriter::new(
+            props,
+            self.source_schema.clone(),
             granule_rows,
-        )?;
+            granule_index_builders,
+            mins,
+            cluster_key_id,
+        );
+        block_writer.write(data_block)?;
 
-        let col_metas = column_parquet_metas(&serialized.metadata, &self.source_schema)?;
-        let buffer = Buffer::from(serialized.payload);
-
-        let granule_index_state = match serialized.page_layout {
-            Some(page_layout) => {
-                let (cluster_key_id, mins) = match granule_mins {
-                    Some(mins) => (Some(self.cluster_stats_gen.cluster_key_id()), mins),
-                    None => (None, Vec::new()),
-                };
-                let leaf_column_ids = self.source_schema.to_leaf_column_ids();
-                let builder =
-                    GranuleIndexWriter::new(cluster_key_id, granule_rows, leaf_column_ids);
-                let mins_location = self.meta_locations.block_granule_index_location();
-                let offsets_location = self.meta_locations.block_granule_index_location();
-                Some(builder.build_with_extra_columns(
-                    &page_layout,
-                    &mins,
-                    mins_location,
-                    offsets_location,
-                    granule_index_extra_fields,
-                    granule_index_extra_columns,
-                )?)
-            }
-            None => None,
-        };
+        let mins_location = self.meta_locations.block_granule_index_location();
+        let offsets_location = self.meta_locations.block_granule_index_location();
+        let FuseBlockOutput {
+            data: buffer,
+            col_metas,
+            granule_index_state,
+            granule_index_payloads,
+        } = block_writer.finish(&block_location.0, mins_location, offsets_location)?;
 
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
