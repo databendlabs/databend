@@ -195,13 +195,12 @@ pub struct BlockMeta {
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
-    /// Location of the sparse page index that maps cluster-key granules to page byte ranges.
-    /// Present only on clustered tables written with `index_granularity`. Old segments without
-    /// this field deserialize to `None`, and the read path falls back to full-block reads.
+    /// Layout of the sparse granule index sidecar files (cluster-key mins + per-granule page byte
+    /// offsets) that enable sub-block granule pruning. Present only on clustered tables written
+    /// with `index_granularity`. Old segments without this field deserialize to `None`, and the
+    /// read path falls back to full-block reads.
     #[serde(default)]
-    pub page_index_location: Option<Location>,
-    #[serde(default)]
-    pub page_index_size: Option<u64>,
+    pub granule_index: Option<GranuleIndexLayout>,
     pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
@@ -209,6 +208,48 @@ pub struct BlockMeta {
 
     // block create_on
     pub create_on: Option<DateTime<Utc>>,
+}
+
+/// A contiguous byte range `[offset, offset + len)` inside a sidecar file, describing where one
+/// logical column's parquet chunk lives. Recording this in block meta lets the read path decode the
+/// column from its raw bytes without ever reading the sidecar's own parquet footer.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct BytesRange {
+    pub offset: u64,
+    pub len: u64,
+}
+
+/// Layout of one sparse-granule-index sidecar parquet file: its location/size plus, per logical
+/// column, the byte range(s) of that column's chunk(s) within the file. The read path decodes each
+/// column straight from its raw chunk bytes (via the column-chunk path) instead of parsing the
+/// sidecar footer, so the footer's per-column offsets are never needed at read time.
+///
+/// `columns` is keyed by the logical column name written into the sidecar:
+/// - `m{i}` — the `i`-th cluster-key element's per-granule min (mins file only);
+/// - `g_{column_id}` — a leaf column's per-granule data-page offset (offsets file only);
+/// - `gbloom_{ver}_{off|len}_{column_id}` — a bloom granule index's per-granule payload offsets.
+///
+/// The `Vec<BytesRange>` per column is a forward-looking shape: today every column is a single
+/// chunk (`len() == 1`), but the sidecar is expected to be page-split alongside the mins file, at
+/// which point a column spans several chunks read in order.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct GranuleIndexFileLayout {
+    pub location: Location,
+    pub size: u64,
+    pub columns: HashMap<String, Vec<BytesRange>>,
+}
+
+/// Sparse granule index sidecar layout for one block. Split into two files by access pattern: the
+/// `mins` file (cluster-key per-granule mins, read on the prune hot path when a cluster-key
+/// predicate applies) and the `offsets` file (per-granule page byte offsets for every leaf column
+/// plus any granule-level index payload offsets, read only when a surviving block is actually
+/// scanned). `mins` is `None` for a table without a cluster key (offset-only index: pruning cannot
+/// narrow, but page offsets still drive granule-bounded reads).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct GranuleIndexLayout {
+    pub granule_rows: u32,
+    pub mins: Option<GranuleIndexFileLayout>,
+    pub offsets: GranuleIndexFileLayout,
 }
 
 impl BlockMeta {
@@ -252,8 +293,7 @@ impl BlockMeta {
             spatial_index_location,
             spatial_stats,
 
-            page_index_location: None,
-            page_index_size: None,
+            granule_index: None,
 
             vector_stats: None,
 
@@ -396,8 +436,7 @@ impl BlockMeta {
             spatial_index_location: None,
             spatial_stats: None,
 
-            page_index_location: None,
-            page_index_size: None,
+            granule_index: None,
 
             vector_stats: None,
 
@@ -433,8 +472,7 @@ impl BlockMeta {
             spatial_index_location: None,
             spatial_stats: None,
 
-            page_index_location: None,
-            page_index_size: None,
+            granule_index: None,
 
             vector_stats: None,
 

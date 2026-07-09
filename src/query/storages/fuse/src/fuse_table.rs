@@ -536,10 +536,10 @@ impl FuseTable {
     }
 
     /// True when this table has a linear cluster key and a positive `index_granularity`, i.e. the
-    /// sparse page index applies. Hilbert-clustered and unclustered tables are excluded — the
+    /// sparse granule index applies. Hilbert-clustered and unclustered tables are excluded — the
     /// sparse index narrows on a monotonic cluster-key sequence, which only linear clustering
     /// guarantees within a block.
-    pub fn sparse_page_index_enabled(&self) -> bool {
+    pub fn sparse_granule_index_enabled(&self) -> bool {
         self.cluster_type() == Some(ClusterType::Linear)
             && self
                 .table_info

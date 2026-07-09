@@ -39,7 +39,7 @@ pub struct ReadBlockContext {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     max_block_size: usize,
-    allow_page_index_skip: bool,
+    allow_granule_index_skip: bool,
 }
 
 impl ReadBlockContext {
@@ -50,7 +50,7 @@ impl ReadBlockContext {
         block_format: FuseParquetBlockFormat,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
-        allow_page_index_skip: bool,
+        allow_granule_index_skip: bool,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             read_settings: ReadSettings::from_ctx(&ctx)?,
@@ -59,7 +59,7 @@ impl ReadBlockContext {
             block_format,
             index_reader,
             virtual_reader,
-            allow_page_index_skip,
+            allow_granule_index_skip,
             max_block_size: ctx.get_settings().get_max_block_size()? as usize,
         }))
     }
@@ -82,11 +82,11 @@ impl ReadBlockContext {
             .as_ref()
             .and_then(|source| source.ignore_column_ids.clone());
 
-        // Sparse-page-index narrowed read: when prune time selected a granule run and the query is
+        // Sparse-granule-index narrowed read: when prune time selected a granule run and the query is
         // eligible (no position-dependent columns) and no virtual columns are projected, fetch only
         // the matching granules' byte ranges instead of the whole block.
-        if self.allow_page_index_skip && ignore_column_ids.is_none() {
-            if let Some(data) = self.try_read_data_by_page_index(fuse_part).await? {
+        if self.allow_granule_index_skip && ignore_column_ids.is_none() {
+            if let Some(data) = self.try_read_data_by_granule_index(fuse_part).await? {
                 return Ok(ParquetDataSource::Normal((data, virtual_source)));
             }
         }
@@ -105,50 +105,60 @@ impl ReadBlockContext {
         Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
     }
 
-    /// Attempt a sparse-page-index narrowed read for `fuse_part`. Returns `None` when narrowing
+    /// Attempt a sparse-granule-index narrowed read for `fuse_part`. Returns `None` when narrowing
     /// does not apply (no granule ranges carried, or no sidecar index), so the caller falls back to
     /// a full-block read. A failure to load/decode the sidecar degrades to `None` as well.
     ///
     /// On success, returns one `BlockReadResult` per `max_block_size`-bounded sub-run so the
     /// deserializer emits several row-bounded `DataBlock`s instead of one oversized block.
-    async fn try_read_data_by_page_index(
+    async fn try_read_data_by_granule_index(
         &self,
         fuse_part: &FuseBlockPartInfo,
     ) -> Result<Option<Vec<crate::io::BlockReadResult>>> {
         let Some(block_meta_index) = fuse_part.block_meta_index() else {
             return Ok(None);
         };
-        let Some(granule_ranges) = block_meta_index.page_granule_ranges.clone() else {
+        let Some(granule_ranges) = block_meta_index.granule_ranges.clone() else {
             return Ok(None);
         };
-        let Some(location) = fuse_part.page_index_location.as_ref() else {
+        let Some(granule_index) = fuse_part.granule_index.as_ref() else {
             return Ok(None);
         };
 
-        let index = match crate::io::PageIndex::load(
+        // Leaf column ids this query projects; only those need per-granule offsets loaded.
+        let column_ids: Vec<u32> = fuse_part.columns_meta.keys().copied().collect();
+
+        let index = match crate::io::OffsetsIndex::load(
             self.block_read_ctx.operator(),
-            &location.0,
-            fuse_part.page_index_size,
+            &self.read_settings,
+            &granule_index.offsets,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            &column_ids,
         )
         .await
         {
             Ok(index) => index,
             Err(e) => {
                 debug!(
-                    "[FUSE-READ] page index load failed for {}, reading whole block: {e}",
+                    "[FUSE-READ] granule index load failed for {}, reading whole block: {e}",
                     fuse_part.location
                 );
                 return Ok(None);
             }
         };
 
-        let plans =
-            index.read_plans_for_ranges(&granule_ranges, fuse_part.nums_rows, self.max_block_size);
+        let plans = index.read_plans_for_ranges(
+            &fuse_part.columns_meta,
+            &granule_ranges,
+            fuse_part.nums_rows,
+            self.max_block_size,
+        );
         let mut results = Vec::with_capacity(plans.len());
         for plan in &plans {
             let data = self
                 .block_read_ctx
-                .read_columns_data_by_page_index(&self.read_settings, &fuse_part.location, plan)
+                .read_columns_data_by_granule_index(&self.read_settings, &fuse_part.location, plan)
                 .await?;
             results.push(data);
         }
@@ -200,7 +210,6 @@ impl ReadBlockContext {
             None,
             0,
             None,
-            0,
             block_meta.num_rows,
             block_meta.columns_meta,
             None,

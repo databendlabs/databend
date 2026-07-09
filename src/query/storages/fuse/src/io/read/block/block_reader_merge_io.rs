@@ -37,7 +37,7 @@ pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
     pub(crate) cached_column_data: CachedColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
-    /// When the read was narrowed to a contiguous run of sparse-page-index granules, the number of
+    /// When the read was narrowed to a contiguous run of sparse-granule-index granules, the number of
     /// rows those granules contain (fewer than the block's total). `None` for a full-block read.
     /// The deserializer uses this to size the decoded batch and the prewhere filter bitmap.
     num_rows_override: Option<usize>,
@@ -73,7 +73,7 @@ impl BlockReadResult {
         }
     }
 
-    /// Number of rows the narrowed read covers, when sparse-page-index skipping applied.
+    /// Number of rows the narrowed read covers, when sparse-granule-index skipping applied.
     pub fn num_rows_override(&self) -> Option<usize> {
         self.num_rows_override
     }

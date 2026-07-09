@@ -130,7 +130,7 @@ impl ClusterStatsGenerator {
         self.cluster_key_id
     }
 
-    /// Per-granule cluster-key min tuples suitable for a sparse page index, or `None` when the block
+    /// Per-granule cluster-key min tuples suitable for a sparse granule index, or `None` when the block
     /// cannot be soundly indexed. `block` must be the block handed to the serializer *before* the
     /// extra key columns are popped, so the cluster-key columns are still present.
     ///

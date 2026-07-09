@@ -65,10 +65,10 @@ use crate::io::build_column_hlls;
 use crate::io::granule_index::GranuleIndexBuildOutput;
 use crate::io::granule_index::GranuleIndexPayload;
 use crate::io::granule_index::GranuleIndexSpec;
+use crate::io::write::GranuleIndexState;
+use crate::io::write::GranuleIndexWriter;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
-use crate::io::write::PageIndexBuilder;
-use crate::io::write::PageIndexState;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
@@ -140,7 +140,7 @@ pub struct BlockSerialization {
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
     pub spatial_index_state: Option<SpatialIndexState>,
-    pub page_index_state: Option<PageIndexState>,
+    pub granule_index_state: Option<GranuleIndexState>,
     pub column_hlls: Option<BlockHLLState>,
     /// Granule-level index payload files (one per indexed column per declared index). Written down
     /// alongside the block; their per-granule offsets live in the `_pidx` sidecar.
@@ -332,19 +332,22 @@ impl BlockBuilder {
         let col_metas = column_parquet_metas(&serialized.metadata, &self.source_schema)?;
         let buffer = Buffer::from(serialized.payload);
 
-        let page_index_state = match serialized.page_layout {
+        let granule_index_state = match serialized.page_layout {
             Some(page_layout) => {
                 let (cluster_key_id, mins) = match granule_mins {
                     Some(mins) => (Some(self.cluster_stats_gen.cluster_key_id()), mins),
                     None => (None, Vec::new()),
                 };
                 let leaf_column_ids = self.source_schema.to_leaf_column_ids();
-                let builder = PageIndexBuilder::new(cluster_key_id, granule_rows, leaf_column_ids);
-                let location = self.meta_locations.block_page_index_location();
+                let builder =
+                    GranuleIndexWriter::new(cluster_key_id, granule_rows, leaf_column_ids);
+                let mins_location = self.meta_locations.block_granule_index_location();
+                let offsets_location = self.meta_locations.block_granule_index_location();
                 Some(builder.build_with_extra_columns(
                     &page_layout,
                     &mins,
-                    location,
+                    mins_location,
+                    offsets_location,
                     granule_index_extra_fields,
                     granule_index_extra_columns,
                 )?)
@@ -382,8 +385,7 @@ impl BlockBuilder {
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             spatial_stats,
-            page_index_location: page_index_state.as_ref().map(|s| s.location.clone()),
-            page_index_size: page_index_state.as_ref().map(|s| s.size),
+            granule_index: granule_index_state.as_ref().map(|s| s.layout()),
             vector_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
@@ -408,7 +410,7 @@ impl BlockBuilder {
             virtual_column_state,
             vector_index_state,
             spatial_index_state,
-            page_index_state,
+            granule_index_state,
             column_hlls,
             granule_index_payloads,
         };
@@ -448,7 +450,7 @@ impl BlockWriter {
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
-        Self::write_down_page_index_state(dal, serialized.page_index_state).await?;
+        Self::write_down_granule_index_state(dal, serialized.granule_index_state).await?;
         Self::write_down_granule_index_payloads(dal, serialized.granule_index_payloads).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
@@ -536,13 +538,16 @@ impl BlockWriter {
         Ok(())
     }
 
-    pub async fn write_down_page_index_state(
+    pub async fn write_down_granule_index_state(
         dal: &Operator,
-        page_index_state: Option<PageIndexState>,
+        granule_index_state: Option<GranuleIndexState>,
     ) -> Result<()> {
-        if let Some(page_index_state) = page_index_state {
-            let location = &page_index_state.location.0;
-            write_data(page_index_state.data, dal, location).await?;
+        if let Some(granule_index_state) = granule_index_state {
+            if let Some(mins) = granule_index_state.mins {
+                write_data(mins.data, dal, &mins.layout.location.0).await?;
+            }
+            let offsets = granule_index_state.offsets;
+            write_data(offsets.data, dal, &offsets.layout.location.0).await?;
         }
         Ok(())
     }

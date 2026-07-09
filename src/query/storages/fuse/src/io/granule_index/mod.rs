@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Granule-level skip-index framework: a skip index that narrows within a block at granule
-//! granularity, layered on the sparse page index. On write, each index emits one payload parquet
+//! granularity, layered on the sparse granule index. On write, each index emits one payload parquet
 //! file per indexed column plus per-granule offset columns in the block's `_pidx` sidecar; at prune
 //! time the offsets locate each granule's payload page directly.
 
@@ -49,15 +49,26 @@ pub struct GranuleIndexPayload {
 /// Output of a finalized builder for one block: per-column payload files plus the offset columns to
 /// append to the `_pidx` sidecar. `sidecar_fields`/`sidecar_columns` are paired; each column has
 /// `num_granules` rows and a name chosen by the implementation.
+#[derive(Default)]
 pub struct GranuleIndexBuildOutput {
     pub payloads: Vec<GranuleIndexPayload>,
     pub sidecar_fields: Vec<TableField>,
     pub sidecar_columns: Vec<Column>,
 }
 
+impl GranuleIndexBuildOutput {
+    /// Fold another index's output into this one; the offsets sidecar concatenates every index's
+    /// columns, and payload files are collected across all indexes.
+    pub fn merge(&mut self, other: GranuleIndexBuildOutput) {
+        self.payloads.extend(other.payloads);
+        self.sidecar_fields.extend(other.sidecar_fields);
+        self.sidecar_columns.extend(other.sidecar_columns);
+    }
+}
+
 /// Builds a granule-level index for one block. Granule boundaries are independent of `push_rows`
 /// slice boundaries; the caller must call `finalize_granule` at each granule boundary, matching the
-/// sparse page index.
+/// sparse granule index.
 pub trait GranuleIndexBuilder: Send {
     fn push_rows(&mut self, block: &DataBlock, range: Range<usize>) -> Result<()>;
 

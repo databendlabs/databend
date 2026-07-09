@@ -58,7 +58,7 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    /// Decoded blocks awaiting emission. A plain read enqueues one block; a sparse-page-index
+    /// Decoded blocks awaiting emission. A plain read enqueues one block; a sparse-granule-index
     /// narrowed read enqueues one block per `max_block_size`-bounded sub-run.
     output_data: VecDeque<DataBlock>,
     src_schema: DataSchema,
@@ -270,7 +270,7 @@ impl Processor for DeserializeDataTransform {
                         //
                         // `offsets` carries each surviving row's *block-relative* position so
                         // position-dependent internal columns (`_row_id`, `_base_row_id`, …) number
-                        // rows correctly. A sparse-page-index narrowed sub-run starts at
+                        // rows correctly. A sparse-granule-index narrowed sub-run starts at
                         // `block_row_offset`, so that base is added to every position:
                         //  - with a prewhere filter: surviving sub-block-local bits, shifted by base;
                         //  - no filter but narrowed (base > 0): the full contiguous run `base..base+n`;

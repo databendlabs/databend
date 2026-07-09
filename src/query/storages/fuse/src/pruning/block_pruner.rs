@@ -281,7 +281,7 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
-                        page_granule_ranges: prune_result.page_granule_ranges.clone(),
+                        granule_ranges: prune_result.granule_ranges.clone(),
                         page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
@@ -322,23 +322,23 @@ impl BlockPruner {
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
-        let sparse_page_index_pruner = pruning_ctx.sparse_page_index_pruner.clone();
+        let sparse_granule_index_pruner = pruning_ctx.sparse_granule_index_pruner.clone();
         let granule_index_pruners = pruning_ctx.granule_index_pruners.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
 
-        // Sparse page index narrowing (parquet format, `index_granularity` set), run *before* the
+        // Sparse granule index narrowing (parquet format, `index_granularity` set), run *before* the
         // bloom filter: it is a cheap, precise cluster-key filter, so when its survivor set is empty
         // (no granule can satisfy the predicate) the whole block is dropped here and we skip the
         // more expensive bloom-filter IO entirely. A non-empty survivor set is stashed for the
         // reader to fetch only those granules' byte ranges. Independent of the native-format page
         // pruner.
-        if let Some(sparse_page_index_pruner) = sparse_page_index_pruner {
+        if let Some(sparse_granule_index_pruner) = sparse_granule_index_pruner {
             let ranges = pruning_cost
                 .measure_async(
                     PruningCostKind::BlocksRange,
-                    sparse_page_index_pruner.select_granule_ranges(&block_meta),
+                    sparse_granule_index_pruner.select_granule_ranges(&block_meta),
                 )
                 .await;
             // `Some(empty)` = the index applied and pruned every granule -> drop the block.
@@ -347,14 +347,14 @@ impl BlockPruner {
                 prune_result.keep = false;
                 return Ok(prune_result);
             }
-            prune_result.page_granule_ranges = ranges;
+            prune_result.granule_ranges = ranges;
         }
 
         // Fold every granule-level pruner over the running survivor set (from the sparse pruner, or
         // all granules), before the block-level bloom filter so an empty set drops the block early.
         // `None` from a pruner means it does not apply and leaves the set unchanged.
         for pruner in &granule_index_pruners {
-            let input = prune_result.page_granule_ranges.as_deref();
+            let input = prune_result.granule_ranges.as_deref();
             let ranges = pruning_cost
                 .measure_async(
                     PruningCostKind::BlocksRange,
@@ -366,7 +366,7 @@ impl BlockPruner {
                     prune_result.keep = false;
                     return Ok(prune_result);
                 }
-                prune_result.page_granule_ranges = Some(ranges);
+                prune_result.granule_ranges = Some(ranges);
             }
         }
 
@@ -530,7 +530,7 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx,
                         range: None,
-                        page_granule_ranges: None,
+                        granule_ranges: None,
                         page_size: block_meta.page_size() as usize,
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_meta.as_ref().location.0.clone(),
@@ -567,8 +567,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
-    // the surviving sparse-page-index granule runs (maximally coalesced) for the cluster-key predicate
-    page_granule_ranges: Option<Vec<Range<usize>>>,
+    // the surviving sparse-granule-index granule runs (maximally coalesced) for the cluster-key predicate
+    granule_ranges: Option<Vec<Range<usize>>>,
     // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search
     matched_rows: Option<Vec<usize>>,
@@ -585,7 +585,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
-            page_granule_ranges: None,
+            granule_ranges: None,
             matched_rows: None,
             matched_scores: None,
             virtual_block_meta: None,
@@ -598,7 +598,7 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
-            page_granule_ranges: block_meta_index.page_granule_ranges.clone(),
+            granule_ranges: block_meta_index.granule_ranges.clone(),
             matched_rows: block_meta_index.matched_rows.clone(),
             matched_scores: block_meta_index.matched_scores.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
@@ -607,7 +607,7 @@ impl BlockPruneResult {
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
-        block_meta_index.page_granule_ranges = self.page_granule_ranges;
+        block_meta_index.granule_ranges = self.granule_ranges;
         block_meta_index.matched_rows = self.matched_rows;
         block_meta_index.matched_scores = self.matched_scores;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;

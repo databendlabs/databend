@@ -50,6 +50,7 @@ use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -61,9 +62,10 @@ use super::GranuleIndexBuilder;
 use super::GranuleIndexPayload;
 use super::GranuleIndexPruner;
 use super::GranuleIndexSpec;
-use crate::io::PageIndex;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::compact_index_version;
+use crate::io::load_u64_columns;
+use crate::io::num_granules_of;
 
 /// Names of the `(off, len)` sidecar offset columns for one indexed column. Keyed by compacted index
 /// version and column id so several indexes on the same column — or a recreated index — never
@@ -442,12 +444,16 @@ impl BloomGranuleIndexPruner {
     async fn try_prune(
         &self,
         block_meta: &BlockMeta,
-        location: &str,
-        size: u64,
+        granule_index: &GranuleIndexLayout,
         input_ranges: Option<&[Range<usize>]>,
     ) -> Result<Option<Vec<Range<usize>>>> {
-        let index = PageIndex::load(&self.dal, location, size).await?;
-        let num_granules = index.meta.num_granules as usize;
+        let num_granules = num_granules_of(
+            block_meta.row_count as usize,
+            granule_index.granule_rows as usize,
+        );
+        if num_granules == 0 {
+            return Ok(None);
+        }
 
         // The survivor set to evaluate: the previous stage's output, or all granules.
         let survivors: Vec<usize> = match input_ranges {
@@ -457,6 +463,25 @@ impl BloomGranuleIndexPruner {
         if survivors.is_empty() {
             return Ok(Some(Vec::new()));
         }
+
+        // Recover each matched column's per-granule payload (offset, len) columns from the offsets
+        // sidecar via the recorded byte ranges (no footer). Columns absent from the layout (block
+        // predates this index) are simply missing and their column is skipped below.
+        let mut wanted_names = Vec::with_capacity(self.matched_columns.len() * 2);
+        for col in &self.matched_columns {
+            let (off_name, len_name) =
+                sidecar_offset_col_names(&col.index_version, col.field.column_id());
+            wanted_names.push(off_name);
+            wanted_names.push(len_name);
+        }
+        let u64_columns = load_u64_columns(
+            &self.dal,
+            &self.settings,
+            &granule_index.offsets,
+            &wanted_names,
+            num_granules,
+        )
+        .await?;
 
         let empty_stats = StatisticsOfColumns::new();
         let column_stats = block_meta.col_stats.clone();
@@ -468,13 +493,9 @@ impl BloomGranuleIndexPruner {
 
         for col in &self.matched_columns {
             let col_id = col.field.column_id();
-            // Recover this column's per-granule payload (offset, len) from the sidecar. Absent when
-            // the block predates this index -> skip the column.
             let (off_name, len_name) = sidecar_offset_col_names(&col.index_version, col_id);
-            let (Some(offs), Some(lens)) = (
-                index.sidecar_u64_column(&off_name),
-                index.sidecar_u64_column(&len_name),
-            ) else {
+            let (Some(offs), Some(lens)) = (u64_columns.get(&off_name), u64_columns.get(&len_name))
+            else {
                 continue;
             };
             any_column_has_payload = true;
@@ -576,10 +597,9 @@ impl GranuleIndexPruner for BloomGranuleIndexPruner {
         block_meta: &BlockMeta,
         input: Option<&[Range<usize>]>,
     ) -> Option<Vec<Range<usize>>> {
-        let location = block_meta.page_index_location.as_ref()?;
-        let size = block_meta.page_index_size.unwrap_or(0);
+        let granule_index = block_meta.granule_index.as_ref()?;
 
-        match self.try_prune(block_meta, &location.0, size, input).await {
+        match self.try_prune(block_meta, granule_index, input).await {
             Ok(ranges) => ranges,
             Err(e) => {
                 log::warn!(

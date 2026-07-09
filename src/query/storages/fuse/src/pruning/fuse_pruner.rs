@@ -77,7 +77,7 @@ use crate::pruning::InvertedIndexPruner;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
-use crate::pruning::SparsePageIndexPruner;
+use crate::pruning::SparseGranuleIndexPruner;
 use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
@@ -94,7 +94,7 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
-    pub sparse_page_index_pruner: Option<Arc<SparsePageIndexPruner>>,
+    pub sparse_granule_index_pruner: Option<Arc<SparseGranuleIndexPruner>>,
     /// Granule-level index pruners, each narrowing the surviving granule set in turn. Empty when none
     /// applies to the query.
     pub granule_index_pruners: Vec<Arc<dyn GranuleIndexPruner>>,
@@ -196,18 +196,19 @@ impl PruningContext {
             )?
         };
 
-        // Sparse page index pruner, used in parquet format with `index_granularity` set: narrows
+        // Sparse granule index pruner, used in parquet format with `index_granularity` set: narrows
         // the byte ranges read per block to the granules matching the cluster-key predicate.
-        let sparse_page_index_pruner = if lightweight_pruning {
+        let sparse_granule_index_pruner = if lightweight_pruning {
             None
         } else {
-            SparsePageIndexPruner::try_create(
+            SparseGranuleIndexPruner::try_create(
                 func_ctx.clone(),
                 &table_schema,
                 filter_expr.as_ref(),
                 cluster_key_meta,
                 cluster_keys,
                 dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
             )?
         };
 
@@ -282,7 +283,7 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
-            sparse_page_index_pruner,
+            sparse_granule_index_pruner,
             granule_index_pruners,
             internal_column_pruner,
             inverted_index_pruner,

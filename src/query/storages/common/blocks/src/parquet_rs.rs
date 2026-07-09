@@ -74,14 +74,14 @@ pub fn blocks_to_parquet(
 }
 
 /// Serialize a single block to parquet. This is the one entry point for serializing a data block:
-/// `granule_rows` controls whether the sparse-page layout is captured.
+/// `granule_rows` controls whether the sparse-granule layout is captured.
 ///
 /// - `granule_rows == usize::MAX` (or any value `>= num_rows`, including empty/single-granule
 ///   blocks): the block is written in one shot with no page-boundary forcing, and `page_layout`
 ///   comes back `None`. This is byte-for-byte the plain serialization path.
 /// - `granule_rows < num_rows` (block spans >= 2 granules): a page is forced on every `granule_rows`
 ///   boundary via explicit `flush_page`, and `page_layout` comes back `Some`, so the caller can
-///   build a sparse page index mapping each granule to its first data page.
+///   build a sparse granule index mapping each granule to its first data page.
 ///
 /// The block must already be in its final row order (the caller sorts / clusters upstream); this
 /// function does not reorder rows.
@@ -115,7 +115,7 @@ pub fn block_to_parquet(
 
     let mut writer = BlockParquetWriter::new(arrow_schema, props);
 
-    // Build a page index only when the block spans >= 2 granules; a single (or empty) granule has
+    // Build a granule index only when the block spans >= 2 granules; a single (or empty) granule has
     // nothing to narrow, and block-level min/max already covers it.
     if num_rows > granule_rows {
         writer.enable_page_layout();

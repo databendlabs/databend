@@ -67,8 +67,8 @@ use crate::io::granule_index::GranuleIndexBuilder;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::build_granule_index_specs;
 use crate::io::write::BlockStatsBuilder;
+use crate::io::write::GranuleIndexWriter;
 use crate::io::write::InvertedIndexState;
-use crate::io::write::PageIndexBuilder;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
@@ -81,7 +81,7 @@ struct FinishedRowGroup {
     col_metas: HashMap<ColumnId, ColumnMeta>,
     /// Serialized parquet bytes of the row group.
     data: Buffer,
-    /// Per-leaf page layout for building the sparse page index; `Some` only when page-layout
+    /// Per-leaf page layout for building the sparse granule index; `Some` only when page-layout
     /// capture was enabled (clustered table with `index_granularity`).
     page_layout: Option<Vec<LeafPageLayout>>,
 }
@@ -158,7 +158,7 @@ impl ArrowParquetWriter {
     }
 
     /// Force a page boundary across all leaf columns at the current row position. Used at granule
-    /// boundaries so the sparse page index can map a granule to the pages that start on its row.
+    /// boundaries so the sparse granule index can map a granule to the pages that start on its row.
     fn flush_page(&mut self) -> Result<()> {
         if let Initialized(writer) = self {
             writer.inner.flush_page()?;
@@ -168,7 +168,7 @@ impl ArrowParquetWriter {
 
     /// Encode all buffered blocks into a single row group, returning the per-column
     /// metadata, the serialized parquet bytes as opendal chunks, and (when page-layout capture
-    /// was enabled) the per-leaf page layout for building the sparse page index.
+    /// was enabled) the per-leaf page layout for building the sparse granule index.
     fn finish(self, schema: &TableSchemaRef) -> Result<FinishedRowGroup> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
@@ -222,7 +222,7 @@ pub struct StreamBlockBuilder {
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
     /// One builder per declared granule-level index, driven in `write()` at the same granule
-    /// boundaries as the sparse page index.
+    /// boundaries as the sparse granule index.
     granule_index_builders: Vec<Box<dyn GranuleIndexBuilder>>,
 
     cluster_stats_state: ClusterStatisticsState,
@@ -367,7 +367,7 @@ impl StreamBlockBuilder {
                     let range = offset..offset + take;
                     self.block_writer.write(block.slice(range.clone()))?;
                     // Feed the same slice into each granule-level builder so its granule pages align
-                    // 1:1 with the sparse page index's granules.
+                    // 1:1 with the sparse granule index's granules.
                     for b in self.granule_index_builders.iter_mut() {
                         b.push_rows(&block, range.clone())?;
                     }
@@ -479,7 +479,7 @@ impl StreamBlockBuilder {
             page_layout,
         } = self.block_writer.finish(&self.properties.source_schema)?;
 
-        // The stream writer builds an *offset-only* page index: page byte offsets at each granule
+        // The stream writer builds an *offset-only* granule index: page byte offsets at each granule
         // boundary, but no per-granule min/max. It writes freshly-inserted (unsorted) blocks and
         // Hilbert-clustered blocks, neither of which is linearly sorted, so recording mins here
         // would corrupt pruning (which treats `mins[i+1]` as granule `i`'s upper bound — only valid
@@ -503,7 +503,7 @@ impl StreamBlockBuilder {
             granule_index_columns.extend(sidecar_columns);
         }
 
-        let page_index_state = match page_layout {
+        let granule_index_state = match page_layout {
             Some(page_layout) => {
                 let granule_rows = self
                     .properties
@@ -511,12 +511,20 @@ impl StreamBlockBuilder {
                     .index_granularity
                     .expect("index_granularity set when page_layout was captured");
                 let leaf_column_ids = self.properties.source_schema.to_leaf_column_ids();
-                let builder = PageIndexBuilder::new(None, granule_rows, leaf_column_ids);
-                let location = self.properties.meta_locations.block_page_index_location();
+                let builder = GranuleIndexWriter::new(None, granule_rows, leaf_column_ids);
+                let mins_location = self
+                    .properties
+                    .meta_locations
+                    .block_granule_index_location();
+                let offsets_location = self
+                    .properties
+                    .meta_locations
+                    .block_granule_index_location();
                 Some(builder.build_with_extra_columns(
                     &page_layout,
                     &[],
-                    location,
+                    mins_location,
+                    offsets_location,
                     granule_index_fields,
                     granule_index_columns,
                 )?)
@@ -528,8 +536,7 @@ impl StreamBlockBuilder {
                 None
             }
         };
-        let page_index_size = page_index_state.as_ref().map(|s| s.size);
-        let page_index_location = page_index_state.as_ref().map(|s| s.location.clone());
+        let granule_index = granule_index_state.as_ref().map(|s| s.layout());
 
         let file_size = block_raw_data.len();
         let inverted_index_size = inverted_index_states
@@ -562,8 +569,7 @@ impl StreamBlockBuilder {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
-            page_index_location,
-            page_index_size,
+            granule_index,
             vector_stats,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: bloom_index_state
@@ -580,7 +586,7 @@ impl StreamBlockBuilder {
             virtual_column_state,
             vector_index_state,
             spatial_index_state,
-            page_index_state,
+            granule_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
             granule_index_payloads,
         };

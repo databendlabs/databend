@@ -55,7 +55,7 @@ impl BlockReader {
         self.deserialize_part_with_num_rows(part, part.nums_rows, column_chunks, selection)
     }
 
-    /// Like [`deserialize_part`], but with an explicit row count. Used by sparse-page-index
+    /// Like [`deserialize_part`], but with an explicit row count. Used by sparse-granule-index
     /// narrowed reads, where the reconstructed partial column chunks contain fewer rows than the
     /// block's `nums_rows`.
     pub fn deserialize_part_with_num_rows(

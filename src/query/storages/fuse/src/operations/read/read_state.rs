@@ -198,7 +198,7 @@ impl ReadState {
         self.deserialize_and_filter_with_num_rows(columns_chunks, part, part.nums_rows)
     }
 
-    /// Like [`deserialize_and_filter`], but with an explicit row count for sparse-page-index
+    /// Like [`deserialize_and_filter`], but with an explicit row count for sparse-granule-index
     /// narrowed reads, where the fetched partial chunks cover fewer rows than `part.nums_rows`.
     pub fn deserialize_and_filter_with_num_rows(
         &self,

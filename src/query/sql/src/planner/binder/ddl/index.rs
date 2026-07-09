@@ -962,7 +962,7 @@ impl Binder {
         &self,
         _index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
-        // Bloom page index currently takes no user options; filter type defaults are applied at
+        // Bloom granule index currently takes no user options; filter type defaults are applied at
         // build time. Reserved for future tuning knobs.
         Ok(BTreeMap::new())
     }

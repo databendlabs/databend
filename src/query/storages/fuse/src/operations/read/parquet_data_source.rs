@@ -22,7 +22,7 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 pub enum ParquetDataSource {
     AggIndex((PartInfoPtr, BlockReadResult)),
     /// Normal block read. Carries one `BlockReadResult` per emitted `DataBlock`: a plain full-block
-    /// read has a single element, while a sparse-page-index narrowed read splits the surviving
+    /// read has a single element, while a sparse-granule-index narrowed read splits the surviving
     /// granules into several `max_block_size`-bounded sub-runs, one `BlockReadResult` each.
     Normal((Vec<BlockReadResult>, Option<VirtualBlockReadResult>)),
 }

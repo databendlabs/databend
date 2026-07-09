@@ -57,7 +57,7 @@ pub struct SerializedParquet {
     pub metadata: ParquetMetaData,
     /// Per-leaf page layout (absolute byte offsets), in parquet leaf order. Populated only when
     /// the writer was asked to capture it (see [`BlockParquetWriter::enable_page_layout`]); `None`
-    /// otherwise so the common write path pays nothing. Used to build the sparse page index that
+    /// otherwise so the common write path pays nothing. Used to build the sparse granule index that
     /// maps cluster-key granules to physical page byte ranges.
     pub page_layout: Option<Vec<LeafPageLayout>>,
 }

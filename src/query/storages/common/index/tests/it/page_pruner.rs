@@ -23,7 +23,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
-use databend_storages_common_index::PageIndex;
+use databend_storages_common_index::GranuleIndex;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use goldenfile::Mint;
 
@@ -78,7 +78,7 @@ fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>
     let columns = [("a", Int32Type::data_type()), ("b", Int32Type::data_type())];
     let expr = parse_expr(text, &columns);
 
-    let index = PageIndex::try_create(func_ctx, cluster_keys, &expr, schema).unwrap();
+    let index = GranuleIndex::try_create(func_ctx, cluster_keys, &expr, schema).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();

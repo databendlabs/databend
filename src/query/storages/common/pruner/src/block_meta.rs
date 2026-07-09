@@ -35,7 +35,7 @@ pub struct BlockMetaIndex {
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
     #[serde(default)]
-    pub page_granule_ranges: Option<Vec<Range<usize>>>,
+    pub granule_ranges: Option<Vec<Range<usize>>>,
     /// The page size of the block.
     /// If the block format is parquet, its page size is the rows count of the block.
     /// If the block format is native, its page size is the rows count of each page. (The rows count of the last page may be smaller than the page size.)

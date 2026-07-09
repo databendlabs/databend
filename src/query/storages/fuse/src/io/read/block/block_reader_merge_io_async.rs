@@ -50,7 +50,7 @@ impl BlockReader {
 }
 
 impl BlockReadContext {
-    /// Read only the byte ranges of the projected columns covered by a sparse-page-index
+    /// Read only the byte ranges of the projected columns covered by a sparse-granule-index
     /// [`BlockReadPlan`]. Each projected leaf column is fetched as its dictionary page (if any)
     /// plus the single contiguous data-page range for the selected granules, then reassembled
     /// into a `[dict bytes] ++ [data bytes]` buffer — a valid standalone parquet column chunk.
@@ -58,7 +58,7 @@ impl BlockReadContext {
     /// Skips all caches: the byte ranges depend on the query predicate, so they are not stable
     /// cache keys. The result carries the narrowed row count via `num_rows_override`.
     #[async_backtrace::framed]
-    pub async fn read_columns_data_by_page_index(
+    pub async fn read_columns_data_by_granule_index(
         &self,
         settings: &ReadSettings,
         location: &str,
@@ -111,7 +111,7 @@ impl BlockReadContext {
                 .get(&synth_id)
                 .ok_or_else(|| {
                     databend_common_exception::ErrorCode::Internal(format!(
-                        "page index narrowed read missing synthetic range {synth_id}"
+                        "granule index narrowed read missing synthetic range {synth_id}"
                     ))
                 })?;
             let chunk = merge_io_result

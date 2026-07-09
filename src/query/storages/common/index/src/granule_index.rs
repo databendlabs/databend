@@ -37,7 +37,7 @@ use super::eliminate_cast::*;
 use crate::range_index::statistics_to_domain;
 
 #[derive(Clone)]
-pub struct PageIndex {
+pub struct GranuleIndex {
     expr: Expr<String>,
     column_refs: HashMap<String, DataType>,
     func_ctx: FunctionContext,
@@ -46,7 +46,7 @@ pub struct PageIndex {
     cluster_key_fields: Vec<DataField>,
 }
 
-impl PageIndex {
+impl GranuleIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
         cluster_keys: Vec<String>,
@@ -97,8 +97,8 @@ impl PageIndex {
                 .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
     }
 
-    /// Apply the page index with explicitly provided granule mins and block max.
-    /// Used by the sparse page index pruner which loads mins from a sidecar file.
+    /// Apply the granule index with explicitly provided granule mins and block max.
+    /// Used by the sparse granule index pruner which loads mins from a sidecar file.
     pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
         let pages = min_values.len();
         if pages == 0 {

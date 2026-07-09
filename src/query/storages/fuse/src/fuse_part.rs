@@ -33,6 +33,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use databend_storages_common_table_meta::meta::Location;
 
 /// Fuse table partition information.
@@ -43,9 +44,7 @@ pub struct FuseBlockPartInfo {
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
     #[serde(default)]
-    pub page_index_location: Option<Location>,
-    #[serde(default)]
-    pub page_index_size: u64,
+    pub granule_index: Option<GranuleIndexLayout>,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
@@ -86,8 +85,7 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
-        page_index_location: Option<Location>,
-        page_index_size: u64,
+        granule_index: Option<GranuleIndexLayout>,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
@@ -100,8 +98,7 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
-            page_index_location,
-            page_index_size,
+            granule_index,
             create_on,
             columns_meta,
             nums_rows: rows_count as usize,
