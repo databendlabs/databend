@@ -23,18 +23,25 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 
-use super::eval_aggr_for_test;
-use super::run_agg_ast;
+use super::aggregate_case_support::eval_legacy_aggregate;
+use super::aggregate_simulation_support::AggregationSimulator;
+use super::aggregate_simulation_support::eval_legacy_aggregate_for_test;
+use super::aggregate_simulation_support::simulate_two_groups_group_by;
+use super::aggregate_simulation_support::write_aggregate_expr_case;
 
 struct StateDropGuard {
     func: AggregateFunctionRef,
@@ -67,7 +74,7 @@ fn simulate_accumulate_matches_rows(
     let arguments = entries.iter().map(BlockEntry::data_type).collect();
     let func = factory.get(name, params.clone(), arguments, sort_descs.clone())?;
     let data_type = func.return_type()?;
-    let states_layout = get_states_layout(&[func.clone()])?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -98,7 +105,7 @@ fn simulate_accumulate_matches_rows(
 
     assert_eq!(batch_column, rows_column);
 
-    let batch_roundtrip = eval_aggr_for_test(
+    let batch_roundtrip = eval_legacy_aggregate_for_test(
         name,
         params.clone(),
         entries,
@@ -107,7 +114,8 @@ fn simulate_accumulate_matches_rows(
         true,
         sort_descs.clone(),
     )?;
-    let rows_roundtrip = eval_aggr_for_test(name, params, entries, rows, true, true, sort_descs)?;
+    let rows_roundtrip =
+        eval_legacy_aggregate_for_test(name, params, entries, rows, true, true, sort_descs)?;
     assert_eq!(batch_roundtrip.0, batch_column);
     assert_eq!(rows_roundtrip.0, rows_column);
 
@@ -119,93 +127,150 @@ fn test_quantile_tdigest_edge_cases() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_tdigest.txt").unwrap();
 
-    test_tdigest_empty_input(file);
-    test_tdigest_singleton_input(file);
-    test_tdigest_min_max_endpoints(file);
-    test_tdigest_weighted_interior_interpolation(file);
-    test_tdigest_singleton_boundaries(file);
-    test_tdigest_weighted_merged_centroid(file);
-    test_tdigest_weighted_zero_weight(file);
-    test_tdigest_weighted_tail_boundary(file);
-    test_tdigest_merge_empty_right(file);
-    test_tdigest_weighted_nan_input(file);
-    test_tdigest_weighted_zero_weight_nan(file);
-    test_tdigest_weighted_merge_nan_only_right(file);
-    test_tdigest_nan_input(file);
-    test_tdigest_merge_nan_only_right(file);
-    test_tdigest_merge_with_uncompressed_left(file);
-    test_tdigest_group_by_nan_input(file);
-    test_tdigest_weighted_group_by_nan_input(file);
+    test_tdigest_empty_input(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_singleton_input(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_min_max_endpoints(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_min_max_endpoints(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_interior_interpolation(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_median_names(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_singleton_boundaries(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_merged_centroid(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_zero_weight(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_tail_boundary(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_merge_empty_right(file, simulate_merge_empty_right);
+    test_tdigest_weighted_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_zero_weight_nan(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_weighted_merge_nan_only_right(file, simulate_merge_last_row_into_left);
+    test_tdigest_nan_input(file, simulate_accumulate_matches_rows_and_legacy);
+    test_tdigest_merge_nan_only_right(file, simulate_merge_last_row_into_left);
+    test_tdigest_merge_with_uncompressed_left(file, simulate_merge_into_uncompressed_left);
+    test_tdigest_group_by_nan_input(file, simulate_accumulate_keys_matches_rows_and_legacy);
+    test_tdigest_weighted_group_by_nan_input(
+        file,
+        simulate_accumulate_keys_matches_rows_and_legacy,
+    );
 }
 
-fn test_tdigest_empty_input(file: &mut impl Write) {
+fn test_tdigest_empty_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [("v", Int64Type::from_data(Vec::<i64>::new()).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_singleton_input(file: &mut impl Write) {
+fn test_tdigest_singleton_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [("v", Int64Type::from_data(vec![42_i64]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_min_max_endpoints(file: &mut impl Write) {
+fn test_tdigest_min_max_endpoints(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let positive_values = [("v", Int64Type::from_data(vec![1_i64, 2, 3]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0, 1)(v)",
         &positive_values,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 
     let negative_values = [("v", Int64Type::from_data(vec![-3_i64, -2, -1]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0, 1)(v)",
         &negative_values,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_interior_interpolation(file: &mut impl Write) {
+fn test_tdigest_weighted_min_max_endpoints(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
+    let positive_values = [
+        ("v", Int64Type::from_data(vec![1_i64, 5, 9]).into()),
+        ("w", UInt64Type::from_data(vec![2_u64, 1, 1]).into()),
+    ];
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0, 1)(v, w)",
+        &positive_values,
+        simulator,
+        vec![],
+    );
+
+    let negative_values = [
+        ("v", Int64Type::from_data(vec![-9_i64, -5, -1]).into()),
+        ("w", UInt64Type::from_data(vec![1_u64, 2, 1]).into()),
+    ];
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0, 1)(v, w)",
+        &negative_values,
+        simulator,
+        vec![],
+    );
+}
+
+fn test_tdigest_weighted_interior_interpolation(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         ("v", Int64Type::from_data(vec![0_i64, 10]).into()),
         ("w", UInt64Type::from_data(vec![2_u64, 2]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_singleton_boundaries(file: &mut impl Write) {
+fn test_tdigest_median_names(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let values = [("v", Int64Type::from_data(vec![9_i64, 1, 5, 3, 7]).into())];
+    write_aggregate_expr_case(file, "median_tdigest(v)", &values, simulator, vec![]);
+
+    let weighted_values = [
+        ("v", Int64Type::from_data(vec![9_i64, 1, 5, 3, 7]).into()),
+        ("w", UInt64Type::from_data(vec![1_u64, 2, 1, 3, 1]).into()),
+    ];
+    write_aggregate_expr_case(
+        file,
+        "median_tdigest_weighted(v, w)",
+        &weighted_values,
+        simulator,
+        vec![],
+    );
+}
+
+fn test_tdigest_singleton_boundaries(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [("v", Int64Type::from_data(vec![0_i64, 10, 20, 30]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.4, 0.6)(v)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_merged_centroid(file: &mut impl Write) {
+fn test_tdigest_weighted_merged_centroid(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         (
             "v",
@@ -213,55 +278,58 @@ fn test_tdigest_weighted_merged_centroid(file: &mut impl Write) {
         ),
         ("w", UInt64Type::from_data(vec![499_u64, 1, 1, 499]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_zero_weight(file: &mut impl Write) {
+fn test_tdigest_weighted_zero_weight(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
         ("v", Int64Type::from_data(vec![0_i64, 10]).into()),
         ("w", UInt64Type::from_data(vec![0_u64, 1]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_tail_boundary(file: &mut impl Write) {
+fn test_tdigest_weighted_tail_boundary(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         ("v", Int64Type::from_data(vec![0_i64, 1, 2]).into()),
         ("w", UInt64Type::from_data(vec![1_u64, 1, 2]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.75)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_merge_empty_right(file: &mut impl Write) {
+fn test_tdigest_merge_empty_right(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [("v", Int64Type::from_data(vec![1_i64, 2, 3]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_merge_empty_right,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_nan_input(file: &mut impl Write) {
+fn test_tdigest_weighted_nan_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
         (
             "v",
@@ -269,97 +337,109 @@ fn test_tdigest_weighted_nan_input(file: &mut impl Write) {
         ),
         ("w", UInt64Type::from_data(vec![1_u64, 1, 1]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_zero_weight_nan(file: &mut impl Write) {
+fn test_tdigest_weighted_zero_weight_nan(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         ("v", Float64Type::from_data(vec![f64::NAN, 10.0_f64]).into()),
         ("w", UInt64Type::from_data(vec![0_u64, 1]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0)(v, w)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_merge_nan_only_right(file: &mut impl Write) {
+fn test_tdigest_weighted_merge_nan_only_right(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         ("v", Float64Type::from_data(vec![1.0_f64, f64::NAN]).into()),
         ("w", UInt64Type::from_data(vec![1_u64, 1]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_merge_last_row_into_left,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_nan_input(file: &mut impl Write) {
+fn test_tdigest_nan_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [(
         "v",
         Float64Type::from_data(vec![1.0_f64, f64::NAN, 2.0]).into(),
     )];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_accumulate_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_merge_nan_only_right(file: &mut impl Write) {
+fn test_tdigest_merge_nan_only_right(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [("v", Float64Type::from_data(vec![1.0_f64, f64::NAN]).into())];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_merge_last_row_into_left,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_merge_with_uncompressed_left(file: &mut impl Write) {
+fn test_tdigest_merge_with_uncompressed_left(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         ("v", Int64Type::from_data(vec![0_i64, 100, 50]).into()),
         ("w", UInt64Type::from_data(vec![1_u64, 1, 10]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_merge_into_uncompressed_left,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_group_by_nan_input(file: &mut impl Write) {
+fn test_tdigest_group_by_nan_input(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [(
         "v",
         Float64Type::from_data(vec![1.0_f64, 10.0, f64::NAN, 20.0]).into(),
     )];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest(0.5)(v)",
         &columns,
-        simulate_accumulate_keys_matches_rows,
+        simulator,
         vec![],
     );
 }
 
-fn test_tdigest_weighted_group_by_nan_input(file: &mut impl Write) {
+fn test_tdigest_weighted_group_by_nan_input(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
     let columns = [
         (
             "v",
@@ -367,18 +447,18 @@ fn test_tdigest_weighted_group_by_nan_input(file: &mut impl Write) {
         ),
         ("w", UInt64Type::from_data(vec![1_u64, 1, 1, 1]).into()),
     ];
-    run_agg_ast(
+    write_aggregate_expr_case(
         file,
         "quantile_tdigest_weighted(0.5)(v, w)",
         &columns,
-        simulate_accumulate_keys_matches_rows,
+        simulator,
         vec![],
     );
 }
 
 fn simulate_accumulate_keys_matches_rows(
     name: &str,
-    params: Vec<databend_common_expression::Scalar>,
+    params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
@@ -387,7 +467,7 @@ fn simulate_accumulate_keys_matches_rows(
     let arguments = entries.iter().map(BlockEntry::data_type).collect();
     let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
-    let states_layout = get_states_layout(&[func.clone()])?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -444,9 +524,58 @@ fn simulate_accumulate_keys_matches_rows(
     Ok((keys_column, data_type))
 }
 
+fn simulate_accumulate_matches_rows_and_legacy(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    let args_type = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    let legacy =
+        simulate_accumulate_matches_rows(name, params.clone(), entries, rows, sort_descs.clone())?;
+    let standard = eval_legacy_aggregate(name, params, entries, rows, sort_descs)?;
+
+    assert_eq!(
+        standard, legacy,
+        "legacy accumulate result mismatch for {name}({args_type:?})"
+    );
+    Ok(legacy)
+}
+
+fn simulate_accumulate_keys_matches_rows_and_legacy(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    let args_type = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    let legacy = simulate_accumulate_keys_matches_rows(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        sort_descs.clone(),
+    )?;
+    let standard = simulate_two_groups_group_by(name, params, entries, rows, sort_descs)?;
+
+    assert_eq!(
+        standard, legacy,
+        "legacy group-by result mismatch for {name}({args_type:?})"
+    );
+    Ok(legacy)
+}
+
 fn simulate_merge_last_row_into_left(
     name: &str,
-    params: Vec<databend_common_expression::Scalar>,
+    params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
@@ -457,7 +586,7 @@ fn simulate_merge_last_row_into_left(
 
 fn simulate_merge_empty_right(
     name: &str,
-    params: Vec<databend_common_expression::Scalar>,
+    params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
@@ -467,7 +596,7 @@ fn simulate_merge_empty_right(
 
 fn simulate_merge_into_uncompressed_left(
     name: &str,
-    params: Vec<databend_common_expression::Scalar>,
+    params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
@@ -478,7 +607,7 @@ fn simulate_merge_into_uncompressed_left(
 
 fn simulate_merge_split(
     name: &str,
-    params: Vec<databend_common_expression::Scalar>,
+    params: Vec<Scalar>,
     entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
@@ -488,7 +617,7 @@ fn simulate_merge_split(
     let arguments = entries.iter().map(BlockEntry::data_type).collect();
     let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
-    let states_layout = get_states_layout(&[func.clone()])?;
+    let states_layout = get_states_layout(std::slice::from_ref(&func))?;
     let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
@@ -515,4 +644,176 @@ fn simulate_merge_split(
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
     func.merge_result(left, false, &mut builder)?;
     Ok((builder.build(), data_type))
+}
+
+fn run_quantile_tdigest_general(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let columns = [
+        (
+            "a",
+            databend_common_expression::types::number::Int64Type::from_data(vec![4i64, 3, 2, 1])
+                .into(),
+        ),
+        (
+            "b",
+            databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 3, 4])
+                .into(),
+        ),
+        (
+            "dec",
+            Decimal64Type::from_data_with_size(
+                vec![110_i64, 220, 330, 440],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            )
+            .into(),
+        ),
+        (
+            "x_null",
+            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
+                vec![1u64, 2, 3, 4],
+                vec![true, true, false, false],
+            )
+            .into(),
+        ),
+    ];
+    let columns = columns.as_slice();
+
+    write_aggregate_expr_case(file, "quantile_tdigest(0.8)(a)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest(0.8)(dec)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(file, "median_tdigest(dec)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest(0.8)(NULL)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest(0.8)(x_null)",
+        columns,
+        simulator,
+        vec![],
+    );
+}
+
+#[test]
+fn test_quantile_tdigest_general_cases() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("quantile_tdigest_general.txt").unwrap();
+    run_quantile_tdigest_general(file, eval_legacy_aggregate);
+}
+
+#[test]
+fn test_quantile_tdigest_general_group_by() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint
+        .new_goldenfile("quantile_tdigest_general_group_by.txt")
+        .unwrap();
+    run_quantile_tdigest_general(file, simulate_two_groups_group_by);
+}
+
+fn run_quantile_tdigest_weighted_general(
+    file: &mut impl Write,
+    simulator: impl AggregationSimulator,
+) {
+    let columns = [
+        (
+            "a",
+            databend_common_expression::types::number::Int64Type::from_data(vec![4i64, 3, 2, 1])
+                .into(),
+        ),
+        (
+            "b",
+            databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 3, 4])
+                .into(),
+        ),
+        (
+            "f",
+            Float64Type::from_data(vec![1.25_f64, -2.5, 3.75, 4.5]).into(),
+        ),
+        ("w8", UInt8Type::from_data(vec![1_u8, 2, 3, 4]).into()),
+        (
+            "x_null",
+            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
+                vec![1u64, 2, 3, 4],
+                vec![true, true, false, false],
+            )
+            .into(),
+        ),
+    ];
+    let columns = columns.as_slice();
+
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0.8)(a, b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0, 0.5, 1)(a, b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "median_tdigest_weighted(a, b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0.8)(f, w8)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0.8)(NULL, b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0.8)(x_null, b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted(0.8)(a, a)",
+        columns,
+        simulator,
+        vec![],
+    );
+}
+
+#[test]
+fn test_quantile_tdigest_weighted_general_cases() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint
+        .new_goldenfile("quantile_tdigest_weighted_general.txt")
+        .unwrap();
+    run_quantile_tdigest_weighted_general(file, eval_legacy_aggregate);
+}
+
+#[test]
+fn test_quantile_tdigest_weighted_general_group_by() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint
+        .new_goldenfile("quantile_tdigest_weighted_general_group_by.txt")
+        .unwrap();
+    run_quantile_tdigest_weighted_general(file, simulate_two_groups_group_by);
 }
