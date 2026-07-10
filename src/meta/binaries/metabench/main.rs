@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -216,6 +217,8 @@ struct Config {
     /// The RPC to benchmark:
     /// "upsert_kv": send kv-api upsert_kv,
     /// "table": create db, table and upsert_table_option;
+    /// "create_tables": accumulate distinct tables, a new db every `db_size` tables;
+    /// "create_tables:{"db_size":1000,"meta_size":600}": after ":" is a json config string;
     /// "get_table": single get_table() rpc;
     /// "table_copy_file": upsert table with copy file.
     /// "table_copy_file:{"file_cnt":100}": upsert table with 100 copy files. After ":" is a json config string
@@ -227,6 +230,11 @@ struct Config {
     /// "list:{"prefix":"custom_prefix","limit":50,"interval_ms":100}": combine all options;
     #[clap(long, default_value = "upsert_kv")]
     pub rpc: String,
+
+    /// Stop issuing new operations after this many seconds; 0 means no time limit.
+    /// Each client still runs at most `--number` operations.
+    #[clap(long, default_value = "0")]
+    pub run_secs: u64,
 }
 
 #[tokio::main]
@@ -265,6 +273,11 @@ async fn main() {
     println!("effective client_pool_size: {}", client_pool_size);
 
     let start = Instant::now();
+    let deadline = if config.run_secs > 0 {
+        Some(start + Duration::from_secs(config.run_secs))
+    } else {
+        None
+    };
     let mut client_num = 0;
     let mut handles = Vec::new();
     let stats = Arc::new(BenchStats::new());
@@ -284,6 +297,11 @@ async fn main() {
         let handle = DatabendRuntime::spawn(
             async move {
                 for i in 0..number {
+                    if let Some(deadline) = deadline {
+                        if Instant::now() >= deadline {
+                            break;
+                        }
+                    }
                     let op_start = Instant::now();
                     let success =
                         run_benchmark_once(&client, &cmd, &rpc, prefix, client_num, i, &param)
@@ -361,6 +379,8 @@ async fn run_benchmark_once(
         benchmark_upsert(client, prefix, client_num, i).await
     } else if cmd == "table" {
         benchmark_table(client, prefix, client_num, i).await
+    } else if cmd == "create_tables" {
+        benchmark_create_tables(client, prefix, client_num, i, param).await
     } else if cmd == "get_table" {
         benchmark_get_table(client, prefix, client_num, i).await
     } else if cmd == "table_copy_file" {
@@ -483,6 +503,83 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
 
     print_res(i, "create_table again", &res);
     success && res.is_ok()
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct CreateTablesConfig {
+    /// Number of tables per database: client `c` puts table `t-{i}` into db `db-{prefix}-{c}-{i/db_size}`.
+    db_size: u64,
+    /// Bytes of padding in `TableMeta.options`, to control the serialized TableMeta size.
+    meta_size: usize,
+}
+
+impl Default for CreateTablesConfig {
+    fn default() -> Self {
+        Self {
+            db_size: 1000,
+            meta_size: 600,
+        }
+    }
+}
+
+/// Create distinct tables that accumulate, unlike `table` which churns a single table.
+///
+/// Each client works in its own databases so that concurrent creates do not
+/// conflict on the same db_meta record.
+async fn benchmark_create_tables(
+    client: &MetaStore,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) -> bool {
+    let param: CreateTablesConfig = if param.is_empty() {
+        Default::default()
+    } else {
+        serde_json::from_str(param).unwrap()
+    };
+
+    let tenant = Tenant::new_literal(&format!("bench-{}", prefix));
+    let db_name = format!("db-{}-{}-{}", prefix, client_num, i / param.db_size);
+
+    if i % param.db_size == 0 {
+        let res = client
+            .create_database(CreateDatabaseReq {
+                override_existing: false,
+                catalog_name: None,
+                name_ident: DatabaseNameIdent::new(&tenant, &db_name),
+                meta: Default::default(),
+            })
+            .await;
+        print_res(i, "create_db", &res);
+    }
+
+    let mut table_meta = TableMeta {
+        engine: "FUSE".to_string(),
+        ..Default::default()
+    };
+    table_meta
+        .options
+        .insert("bench_pad".to_string(), "x".repeat(param.meta_size));
+
+    let res = client
+        .create_table(CreateTableReq {
+            create_option: CreateOption::CreateIfNotExists,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant,
+                db_name,
+                table_name: format!("t-{}", i),
+            },
+            table_meta,
+            as_dropped: false,
+            table_properties: None,
+            table_partition: None,
+        })
+        .await;
+
+    print_res(i, "create_tables", &res);
+    res.is_ok()
 }
 
 async fn benchmark_get_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) -> bool {
