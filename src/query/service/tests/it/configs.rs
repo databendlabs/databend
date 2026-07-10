@@ -84,6 +84,7 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             ("STORAGE_WEBHDFS_ENDPOINT_URL", Some("endpoint_url")),
             ("STORAGE_WEBHDFS_ROOT", Some("/path/to/root")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
+            ("QUERY_PRODUCT_NAME", Some("Cloud Query")),
             ("CONFIG_FILE", None),
         ],
         || {
@@ -94,6 +95,7 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             assert_eq!("DEBUG", configured.log.level);
 
             assert_eq!("tenant-1", configured.query.tenant_id);
+            assert_eq!("Cloud Query", configured.query.product_name);
             assert_eq!("cluster-1", configured.query.cluster_id);
             assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
             assert_eq!(3306, configured.query.mysql_handler_port);
@@ -677,6 +679,7 @@ fn test_override_config() -> anyhow::Result<()> {
 
 [query]
 tenant_id = "tenant_id_from_file"
+product_name = "Cloud Query"
 cluster_id = ""
 num_cpus = 0
 mysql_handler_host = "127.0.0.1"
@@ -811,6 +814,7 @@ path = "_cache"
             assert!(!cfg.log.query.log_query_on);
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
+            assert_eq!("Cloud Query", cfg.query.product_name);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.typ);
 
