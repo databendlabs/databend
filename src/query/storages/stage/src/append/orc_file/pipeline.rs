@@ -30,10 +30,10 @@ pub(crate) fn append_data_to_orc_files(
     query_id: String,
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
-    max_file_size: usize,
+    max_threads: usize,
 ) -> Result<()> {
     let max_file_size =
-        LimitFileSizeProcessor::build(pipeline, mem_limit, max_file_size, &info.options)?;
+        LimitFileSizeProcessor::build(pipeline, mem_limit, max_threads, &info.options)?;
     pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         OrcFileWriter::try_create(
