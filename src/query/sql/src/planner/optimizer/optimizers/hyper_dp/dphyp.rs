@@ -769,7 +769,14 @@ impl DPhpyOptimizer {
         Ok(new_s_expr)
     }
 
-    /// Replace the join expression in the plan tree
+    /// Replace a join node while invalidating properties cached for the old tree.
+    fn replace_join_node(join_expr: &SExpr, s_expr: &SExpr) -> SExpr {
+        s_expr
+            .replace_plan(join_expr.plan.clone())
+            .replace_children(join_expr.children.clone())
+    }
+
+    /// Replace the join expression in the plan tree.
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         struct JoinExprReplacer<'a> {
             optimizer: &'a DPhpyOptimizer,
@@ -784,9 +791,7 @@ impl DPhpyOptimizer {
                 }
 
                 if matches!(expr.plan(), RelOperator::Join(_)) {
-                    let mut new_expr = expr.clone();
-                    new_expr.plan = self.join_expr.plan.clone();
-                    new_expr.children = self.join_expr.children.clone();
+                    let new_expr = DPhpyOptimizer::replace_join_node(self.join_expr, expr);
                     self.replaced = true;
                     return Ok(VisitAction::Replace(
                         self.optimizer.apply_filters(&new_expr)?,
@@ -901,6 +906,7 @@ mod tests {
     use super::*;
     use crate::plans::ConstantExpr;
     use crate::plans::DummyTableScan;
+    use crate::plans::Join;
     use crate::plans::MaterializedCTE;
     use crate::plans::MaterializedCTERef;
     use crate::plans::Sequence;
@@ -911,6 +917,50 @@ mod tests {
             value: Scalar::Boolean(value),
         }
         .into()
+    }
+
+    fn cte_ref_with_cardinality(name: &str, cardinality: f64) -> SExpr {
+        SExpr::create_leaf(RelOperator::MaterializedCTERef(MaterializedCTERef {
+            cte_name: name.to_string(),
+            output_columns: vec![],
+            def: SExpr::create_leaf(DummyTableScan::new()),
+            column_mapping: HashMap::new(),
+            stat_info: Some(Arc::new(StatInfo {
+                cardinality,
+                statistics: Statistics::default(),
+            })),
+        }))
+    }
+
+    #[test]
+    fn test_replace_join_node_invalidates_cached_cardinality() {
+        let original = SExpr::create_binary(
+            Join::default(),
+            Arc::new(cte_ref_with_cardinality("left_original", 10.0)),
+            Arc::new(cte_ref_with_cardinality("right_original", 10.0)),
+        );
+        assert_eq!(
+            RelExpr::with_s_expr(&original)
+                .derive_cardinality()
+                .unwrap()
+                .cardinality,
+            100.0
+        );
+
+        let replacement = SExpr::create_binary(
+            Join::default(),
+            Arc::new(cte_ref_with_cardinality("left_replacement", 2.0)),
+            Arc::new(cte_ref_with_cardinality("right_replacement", 3.0)),
+        );
+        let replaced = DPhpyOptimizer::replace_join_node(&replacement, &original);
+
+        assert_eq!(
+            RelExpr::with_s_expr(&replaced)
+                .derive_cardinality()
+                .unwrap()
+                .cardinality,
+            6.0
+        );
     }
 
     #[test]
