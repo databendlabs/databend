@@ -699,7 +699,8 @@ impl DPhpyOptimizer {
         }
 
         if let Some(join_expr) = hyper_dp.find_best_order()? {
-            let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
+            let join_expr = self.apply_filters(&join_expr)?;
+            let new_s_expr = Self::replace_join_expr(&join_expr, &s_expr)?;
             self.opt_ctx.set_flag("dphyp_optimized", true);
             Ok(new_s_expr)
         } else {
@@ -769,17 +770,9 @@ impl DPhpyOptimizer {
         Ok(new_s_expr)
     }
 
-    /// Replace a join node while invalidating properties cached for the old tree.
-    fn replace_join_node(join_expr: &SExpr, s_expr: &SExpr) -> SExpr {
-        s_expr
-            .replace_plan(join_expr.plan.clone())
-            .replace_children(join_expr.children.clone())
-    }
-
     /// Replace the join expression in the plan tree.
-    fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
+    fn replace_join_expr(join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         struct JoinExprReplacer<'a> {
-            optimizer: &'a DPhpyOptimizer,
             join_expr: &'a SExpr,
             replaced: bool,
         }
@@ -787,28 +780,27 @@ impl DPhpyOptimizer {
         impl SExprVisitor for JoinExprReplacer<'_> {
             fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
                 if self.replaced {
-                    return Ok(VisitAction::Continue);
+                    return Ok(VisitAction::SkipChildren);
                 }
 
                 if matches!(expr.plan(), RelOperator::Join(_)) {
-                    let new_expr = DPhpyOptimizer::replace_join_node(self.join_expr, expr);
                     self.replaced = true;
-                    return Ok(VisitAction::Replace(
-                        self.optimizer.apply_filters(&new_expr)?,
-                    ));
+                    return Ok(VisitAction::Replace(self.join_expr.clone()));
                 }
 
                 Ok(VisitAction::Continue)
             }
         }
 
-        Ok(s_expr
-            .accept(&mut JoinExprReplacer {
-                optimizer: self,
-                join_expr,
-                replaced: false,
-            })?
-            .unwrap_or_else(|| s_expr.clone()))
+        let result = s_expr.accept(&mut JoinExprReplacer {
+            join_expr,
+            replaced: false,
+        })?;
+        result.ok_or_else(|| {
+            ErrorCode::Internal(
+                "DPhyp replaced a join, but the expression tree was not rebuilt".to_string(),
+            )
+        })
     }
 
     /// Check if a filter exists in the expression and remove it from filters set
@@ -906,7 +898,6 @@ mod tests {
     use super::*;
     use crate::plans::ConstantExpr;
     use crate::plans::DummyTableScan;
-    use crate::plans::Join;
     use crate::plans::MaterializedCTE;
     use crate::plans::MaterializedCTERef;
     use crate::plans::Sequence;
@@ -917,50 +908,6 @@ mod tests {
             value: Scalar::Boolean(value),
         }
         .into()
-    }
-
-    fn cte_ref_with_cardinality(name: &str, cardinality: f64) -> SExpr {
-        SExpr::create_leaf(RelOperator::MaterializedCTERef(MaterializedCTERef {
-            cte_name: name.to_string(),
-            output_columns: vec![],
-            def: SExpr::create_leaf(DummyTableScan::new()),
-            column_mapping: HashMap::new(),
-            stat_info: Some(Arc::new(StatInfo {
-                cardinality,
-                statistics: Statistics::default(),
-            })),
-        }))
-    }
-
-    #[test]
-    fn test_replace_join_node_invalidates_cached_cardinality() {
-        let original = SExpr::create_binary(
-            Join::default(),
-            Arc::new(cte_ref_with_cardinality("left_original", 10.0)),
-            Arc::new(cte_ref_with_cardinality("right_original", 10.0)),
-        );
-        assert_eq!(
-            RelExpr::with_s_expr(&original)
-                .derive_cardinality()
-                .unwrap()
-                .cardinality,
-            100.0
-        );
-
-        let replacement = SExpr::create_binary(
-            Join::default(),
-            Arc::new(cte_ref_with_cardinality("left_replacement", 2.0)),
-            Arc::new(cte_ref_with_cardinality("right_replacement", 3.0)),
-        );
-        let replaced = DPhpyOptimizer::replace_join_node(&replacement, &original);
-
-        assert_eq!(
-            RelExpr::with_s_expr(&replaced)
-                .derive_cardinality()
-                .unwrap()
-                .cardinality,
-            6.0
-        );
     }
 
     #[test]

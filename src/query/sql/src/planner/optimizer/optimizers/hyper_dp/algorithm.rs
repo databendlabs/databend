@@ -85,7 +85,8 @@ impl<S> Default for JoinArena<S> {
 impl<S> JoinArena<S> {
     fn push(&mut self, node: JoinNode<S>) -> NodeId {
         let id = if let Some(id) = self.free_list.pop() {
-            self.nodes[id.0] = Some(node);
+            let _old = self.nodes[id.0].replace(node);
+            assert!(_old.is_none(), "free join node slot should be empty");
             id
         } else {
             let id = NodeId(self.nodes.len());
@@ -106,11 +107,12 @@ impl<S> JoinArena<S> {
             if !live.insert(id) {
                 continue;
             }
-            if let Some(node) = self.nodes[id.0].as_ref() {
-                if let JoinNodeChildren::ArenaJoin { left, right } = &node.children {
-                    stack.push(*left);
-                    stack.push(*right);
-                }
+            let node = self.nodes[id.0]
+                .as_ref()
+                .expect("reachable join node should be live");
+            if let JoinNodeChildren::ArenaJoin { left, right } = &node.children {
+                stack.push(*left);
+                stack.push(*right);
             }
         }
 
@@ -123,6 +125,9 @@ impl<S> JoinArena<S> {
     }
 
     fn free_node(&mut self, id: NodeId) {
+        self.nodes[id.0]
+            .take()
+            .expect("join node should be live before free");
         self.free_list.push(id);
     }
 }
@@ -177,8 +182,29 @@ struct JoinGraph {
 impl JoinGraph {
     fn sort_cached_neighbors(&mut self) {
         for neighbors in self.cached_neighbors.values_mut() {
-            neighbors.sort();
+            neighbors.sort_unstable();
         }
+    }
+
+    fn collect_subset_edges<'a>(
+        edge: &'a GraphEdge,
+        nodes: &[RelationId],
+        subset_edges: &mut Vec<&'a GraphEdge>,
+    ) {
+        for (idx, node) in nodes.iter().enumerate() {
+            if let Some(child) = edge.children.get(node) {
+                if !child.neighbors.is_empty() {
+                    subset_edges.push(child);
+                }
+                Self::collect_subset_edges(child, &nodes[idx + 1..], subset_edges);
+            }
+        }
+    }
+
+    fn subset_edges(&self, nodes: &[RelationId]) -> Vec<&GraphEdge> {
+        let mut subset_edges = vec![];
+        Self::collect_subset_edges(&self.root_edge, nodes, &mut subset_edges);
+        subset_edges
     }
 
     fn is_connected(
@@ -186,20 +212,11 @@ impl JoinGraph {
         nodes: &[RelationId],
         neighbor: &[RelationId],
     ) -> Result<Vec<JoinEdgeRef>> {
-        let nodes_size = nodes.len();
         let mut edge_refs = vec![];
-        for i in 0..nodes_size {
-            let mut edge = &self.root_edge;
-            for node in nodes.iter().take(nodes_size).skip(i) {
-                if let Some(child) = edge.children.get(node) {
-                    edge = child;
-                } else {
-                    break;
-                }
-                for neighbor_info in edge.neighbors.iter() {
-                    if is_subset(&neighbor_info.neighbors, neighbor) {
-                        edge_refs.extend(neighbor_info.edge_refs.clone());
-                    }
+        for edge in self.subset_edges(nodes) {
+            for neighbor_info in edge.neighbors.iter() {
+                if is_subset(&neighbor_info.neighbors, neighbor) {
+                    edge_refs.extend(neighbor_info.edge_refs.clone());
                 }
             }
         }
@@ -220,31 +237,19 @@ impl JoinGraph {
         let mut cached_neighbors = vec![];
         let mut neighbors = vec![];
         let mut visit = HashSet::new();
-        let nodes_size = nodes.len();
-        for i in 0..nodes_size {
-            let mut edge = &self.root_edge;
-            for node in nodes.iter().take(nodes_size).skip(i) {
-                if let Some(child) = edge.children.get(node) {
-                    edge = child;
-                } else {
-                    break;
-                }
-                for neighbor_info in edge.neighbors.iter() {
-                    let min_neighbor = neighbor_info.neighbors[0];
-                    if !visit.contains(&min_neighbor) {
-                        visit.insert(min_neighbor);
-                        cached_neighbors.push(min_neighbor);
-                        if !forbidden_nodes.contains(&min_neighbor)
-                            && !nodes.contains(&min_neighbor)
-                        {
-                            neighbors.push(min_neighbor);
-                        }
+        for edge in self.subset_edges(nodes) {
+            for neighbor_info in edge.neighbors.iter() {
+                let min_neighbor = neighbor_info.neighbors[0];
+                if visit.insert(min_neighbor) {
+                    cached_neighbors.push(min_neighbor);
+                    if !forbidden_nodes.contains(&min_neighbor) && !nodes.contains(&min_neighbor) {
+                        neighbors.push(min_neighbor);
                     }
                 }
             }
         }
-        cached_neighbors.sort();
-        neighbors.sort();
+        cached_neighbors.sort_unstable();
+        neighbors.sort_unstable();
         self.cached_neighbors
             .insert(nodes.to_vec().into_boxed_slice(), cached_neighbors);
         Ok(neighbors)
@@ -315,6 +320,22 @@ impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
         right_relation_set: &HashSet<RelationId>,
         edge_id: usize,
     ) -> Result<()> {
+        debug_assert!(
+            !left_relation_set.is_empty() && !right_relation_set.is_empty(),
+            "join edge endpoints should be non-empty"
+        );
+        debug_assert!(
+            left_relation_set.is_disjoint(right_relation_set),
+            "join edge endpoints should be disjoint"
+        );
+        debug_assert!(
+            left_relation_set
+                .iter()
+                .chain(right_relation_set)
+                .all(|relation| *relation < self.relation_count),
+            "join edge relation should exist"
+        );
+
         let left_relation_set = self.relation_set_tree.get_relation_set(left_relation_set)?;
         let right_relation_set = self
             .relation_set_tree
@@ -919,5 +940,57 @@ mod tests {
         ]);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_join_graph_matches_non_contiguous_subset_endpoint() -> Result<()> {
+        let mut graph = JoinGraph::default();
+        graph.create_edges(&[0, 2], &[3], JoinEdgeRef {
+            id: 7,
+            reversed: false,
+        });
+
+        assert_eq!(graph.is_connected(&[0, 1, 2], &[3])?, vec![JoinEdgeRef {
+            id: 7,
+            reversed: false,
+        }]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_arena_does_not_reuse_a_live_slot() {
+        let mut arena = JoinArena::default();
+        let root = arena.push(JoinNode {
+            children: JoinNodeChildren::Leaf,
+            cost: 0.0,
+            cardinality: 1.0,
+            state: (),
+        });
+        let garbage = arena.push(JoinNode {
+            children: JoinNodeChildren::Leaf,
+            cost: 0.0,
+            cardinality: 1.0,
+            state: (),
+        });
+
+        arena.collect_garbage(std::iter::once(root));
+        arena.collect_garbage(std::iter::once(root));
+
+        let first_reuse = arena.push(JoinNode {
+            children: JoinNodeChildren::Leaf,
+            cost: 0.0,
+            cardinality: 1.0,
+            state: (),
+        });
+        let second_reuse = arena.push(JoinNode {
+            children: JoinNodeChildren::Leaf,
+            cost: 0.0,
+            cardinality: 1.0,
+            state: (),
+        });
+
+        assert_eq!(first_reuse, garbage);
+        assert_ne!(second_reuse, first_reuse);
     }
 }

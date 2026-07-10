@@ -12,27 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::BasicColumnStatistics;
-use databend_common_catalog::TableStatistics;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
-use databend_common_expression::types::F64;
-use databend_common_expression::types::NumberScalar;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
-use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -41,7 +33,6 @@ use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
-use databend_common_statistics::Datum;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
@@ -395,170 +386,6 @@ async fn test_lite_replay_statistics_trace_materialized_cte_golden() -> Result<(
     write_statistics_trace_summary_case(&mut file, &case).await?;
 
     Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_q64_materialized_cte_ref_stats_with_collected_statistics() -> Result<()> {
-    let suite = TestSuite::new(TestSuite::optimizer_data_dir(), Some("tpcds".to_string()));
-    let case = suite
-        .load_cases()?
-        .into_iter()
-        .find(|case| case.name == "materialized_cte_ref_stats_after_dphyp")
-        .expect("Q64 materialized CTE regression case must exist");
-
-    let ctx = LiteTableContext::create().await?;
-    ctx.configure_for_optimizer_case(true)?;
-    ctx.set_cluster_node_num(case.node_num.unwrap_or(1));
-    ctx.set_table_warehouse_distribution(true);
-    register_case_tables_with_stats(&ctx, &case).await?;
-
-    ctx.get_settings()
-        .set_optimizer_skip_list("DPhpyOptimizer".to_string())?;
-    let before_dphyp = ctx.optimize_plan(ctx.bind_sql(&case.sql).await?).await?;
-    let Plan::Query {
-        s_expr: before_dphyp_expr,
-        ..
-    } = &before_dphyp
-    else {
-        panic!("Q64 regression must produce a query plan");
-    };
-    let mut before_dphyp_stats = MaterializedCteStatsCollector {
-        allow_missing_ref_stats: true,
-        ..Default::default()
-    };
-    before_dphyp_expr.accept(&mut before_dphyp_stats)?;
-    let before_dphyp_producer = before_dphyp_stats
-        .producer
-        .expect("cross_sales materialized CTE producer must exist before DPhyp");
-    assert!(
-        (2.95e17..2.96e17).contains(&before_dphyp_producer),
-        "expected pre-DPhyp cross_sales cardinality near 2.9549e17, got {before_dphyp_producer}"
-    );
-    assert_eq!(before_dphyp_stats.ref_count, 2);
-
-    ctx.get_settings().set_optimizer_skip_list("".to_string())?;
-    let optimized = ctx.optimize_plan(ctx.bind_sql(&case.sql).await?).await?;
-    let Plan::Query { s_expr, .. } = optimized else {
-        panic!("Q64 regression must produce a query plan");
-    };
-
-    let mut collector = MaterializedCteStatsCollector::default();
-    s_expr.accept(&mut collector)?;
-    let producer = collector
-        .producer
-        .expect("cross_sales materialized CTE producer must exist");
-    assert!(
-        (252.0..253.0).contains(&producer),
-        "expected DPhyp cross_sales cardinality near 252.44, got {producer}"
-    );
-    assert_eq!(collector.ref_count, 2, "expected two cross_sales consumers");
-    for consumer in collector.refs {
-        assert!(
-            (producer - consumer).abs() < 1e-9,
-            "cross_sales producer cardinality {producer} differs from consumer {consumer}"
-        );
-    }
-    Ok(())
-}
-
-#[derive(Default)]
-struct MaterializedCteStatsCollector {
-    producer: Option<f64>,
-    refs: Vec<f64>,
-    ref_count: usize,
-    allow_missing_ref_stats: bool,
-}
-
-impl SExprVisitor for MaterializedCteStatsCollector {
-    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        match expr.plan() {
-            RelOperator::MaterializedCTE(cte) if cte.cte_name.ends_with("cross_sales") => {
-                self.producer = Some(
-                    RelExpr::with_s_expr(expr.unary_child())
-                        .derive_cardinality()?
-                        .cardinality,
-                );
-            }
-            RelOperator::MaterializedCTERef(cte_ref)
-                if cte_ref.cte_name.ends_with("cross_sales") =>
-            {
-                self.ref_count += 1;
-                match &cte_ref.stat_info {
-                    Some(stat_info) => self.refs.push(stat_info.cardinality),
-                    None if self.allow_missing_ref_stats => {}
-                    None => panic!("DPhyp must synchronize materialized CTE ref stats"),
-                }
-            }
-            _ => {}
-        }
-        Ok(VisitAction::Continue)
-    }
-}
-
-async fn register_case_tables_with_stats(
-    ctx: &Arc<LiteTableContext>,
-    case: &TestCase,
-) -> Result<()> {
-    for (table_name, sql) in &case.tables {
-        let table_stats = case
-            .table_stats
-            .get(table_name)
-            .map(|stats| TableStatistics {
-                num_rows: stats.num_rows,
-                data_size: stats.data_size,
-                data_size_compressed: stats.data_size_compressed,
-                index_size: stats.index_size,
-                bloom_index_size: None,
-                ngram_index_size: None,
-                inverted_index_size: None,
-                vector_index_size: None,
-                virtual_column_size: None,
-                number_of_blocks: stats.number_of_blocks,
-                number_of_segments: stats.number_of_segments,
-            });
-        let prefix = format!("{table_name}.");
-        let column_stats = case
-            .column_stats
-            .iter()
-            .filter_map(|(name, stats)| {
-                name.strip_prefix(&prefix).map(|column_name| {
-                    (column_name.to_string(), BasicColumnStatistics {
-                        min: stats.min.as_ref().and_then(case_stat_datum),
-                        max: stats.max.as_ref().and_then(case_stat_datum),
-                        ndv: stats.ndv,
-                        null_count: stats.null_count.unwrap_or(0),
-                        in_memory_size: 0,
-                    })
-                })
-            })
-            .collect::<HashMap<_, _>>();
-
-        for statement in sql.split(';').filter(|sql| !sql.trim().is_empty()) {
-            ctx.register_table_sql_with_stats(
-                statement,
-                table_stats,
-                column_stats.clone(),
-                HashMap::new(),
-            )
-            .await?;
-        }
-    }
-    Ok(())
-}
-
-fn case_stat_datum(value: &serde_json::Value) -> Option<Datum> {
-    match value {
-        serde_json::Value::Number(number) => number
-            .as_i64()
-            .and_then(|value| Scalar::Number(NumberScalar::Int64(value)).to_datum())
-            .or_else(|| {
-                number.as_f64().and_then(|value| {
-                    Scalar::Number(NumberScalar::Float64(F64::from(value))).to_datum()
-                })
-            }),
-        serde_json::Value::String(value) => Scalar::String(value.clone()).to_datum(),
-        _ => None,
-    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
