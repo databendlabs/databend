@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -37,6 +39,7 @@ use super::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::Symbol;
+use crate::optimizer::ir::ClusterKeyStatistics;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::CountMinSketchSet;
@@ -97,6 +100,8 @@ pub struct Statistics {
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
     pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
+    // table index -> cluster-key expressions in that table's cluster-key order
+    pub cluster_keys: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -144,6 +149,15 @@ impl Scan {
             .filter(|(col, _)| columns.contains(*col))
             .map(|(col, hist)| (*col, hist.clone()))
             .collect();
+        let cluster_keys = self
+            .statistics
+            .cluster_keys
+            .iter()
+            .filter_map(|(table_index, cluster_key_order)| {
+                Self::cluster_key_order_refs_columns(cluster_key_order, &columns)
+                    .then_some((*table_index, cluster_key_order.clone()))
+            })
+            .collect();
 
         let top_n = self
             .statistics
@@ -173,6 +187,7 @@ impl Scan {
                 histograms,
                 top_n,
                 count_min_sketch,
+                cluster_keys,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -255,6 +270,15 @@ impl Scan {
         secure_predicates
             .iter()
             .any(|secure_predicate| !prewhere.predicates.contains(secure_predicate))
+    }
+
+    fn cluster_key_order_refs_columns(
+        cluster_key_order: &[Expr<Symbol>],
+        columns: &ColumnSet,
+    ) -> bool {
+        cluster_key_order
+            .iter()
+            .any(|expr| expr.column_refs().keys().any(|col| columns.contains(col)))
     }
 }
 
@@ -405,6 +429,15 @@ impl Operator for Scan {
         let mut output_top_n: TopNSet = self.statistics.top_n.clone();
         let mut output_count_min_sketch: CountMinSketchSet =
             self.statistics.count_min_sketch.clone();
+        let cluster_keys = self
+            .statistics
+            .cluster_keys
+            .iter()
+            .filter_map(|(table_index, cluster_key_order)| {
+                Self::cluster_key_order_refs_columns(cluster_key_order, &used_columns)
+                    .then_some((*table_index, cluster_key_order.clone()))
+            })
+            .collect();
 
         let precise_cardinality = self
             .statistics
@@ -439,6 +472,16 @@ impl Operator for Scan {
             output_top_n.clear();
             output_count_min_sketch.clear();
         }
+        let cluster_key_stats = ClusterKeyStatistics {
+            keys: cluster_keys,
+            filter_keys: ClusterKeyStatistics::collect_filter_keys(
+                self.push_down_predicates.iter().flatten().chain(
+                    self.prewhere
+                        .iter()
+                        .flat_map(|prewhere| prewhere.predicates.iter()),
+                ),
+            )?,
+        };
 
         // SECURITY: When row access policy is active, apply selectivity from
         // secure predicates first (for reasonable cardinality estimation and
@@ -464,6 +507,7 @@ impl Operator for Scan {
                     column_stats: Default::default(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    cluster_key_stats,
                 },
             }));
         }
@@ -475,6 +519,7 @@ impl Operator for Scan {
                 column_stats,
                 top_n: output_top_n,
                 count_min_sketch: output_count_min_sketch,
+                cluster_key_stats,
             },
         }))
     }

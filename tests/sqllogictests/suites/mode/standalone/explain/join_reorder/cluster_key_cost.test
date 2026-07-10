@@ -1,0 +1,469 @@
+statement ok
+drop database if exists join_reorder_cluster_key_cost;
+
+statement ok
+create database join_reorder_cluster_key_cost;
+
+statement ok
+use join_reorder_cluster_key_cost;
+
+# Isolate the cluster-key filter discount from TPCH data shape.
+statement ok
+create or replace table clustered_side(
+    join_key int,
+    filter_key int,
+    payload int
+) cluster by(filter_key) as
+select
+    (number % 100)::int,
+    (number % 10)::int,
+    number::int
+from numbers(1000);
+
+statement ok
+create or replace table plain_side(
+    join_key int,
+    filter_key int,
+    payload int
+) as
+select
+    (number % 100)::int,
+    (number % 10)::int,
+    number::int
+from numbers(1000);
+
+statement ok
+analyze table clustered_side;
+
+statement ok
+analyze table plain_side;
+
+statement ok
+set cost_factor_cluster_key = 0;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+
+statement ok
+set cost_factor_cluster_key = 85;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+
+statement ok
+set cost_factor_cluster_key = 100;
+
+query T
+explain join select *
+from clustered_side
+join plain_side on clustered_side.join_key = plain_side.join_key
+where clustered_side.filter_key = 1
+  and plain_side.filter_key = 1;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.plain_side (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.clustered_side (#0) (read rows: 1000)
+
+# Numeric three-table cases from cluster_key_join_order.rs.
+statement ok
+set cost_factor_cluster_key = 85;
+
+statement ok
+create or replace table a(k1 BIGINT, k2 BIGINT, v BIGINT) cluster by(k1, k2) as
+select number::BIGINT, number::BIGINT, number::BIGINT
+from numbers(1000);
+
+statement ok
+create or replace table b(k1 BIGINT, k2 BIGINT, v BIGINT) as
+select number::BIGINT, number::BIGINT, number::BIGINT
+from numbers(1000);
+
+statement ok
+create or replace table c(k1 BIGINT, k2 BIGINT, v BIGINT) as
+select number::BIGINT, number::BIGINT, number::BIGINT
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+statement ok
+analyze table b;
+
+statement ok
+analyze table c;
+
+# k1_k2_prefix
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+# filter_preserves_cluster_keys
+query T
+explain join
+SELECT *
+FROM (SELECT * FROM a WHERE v >= 0) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+# limit_and_join_preserve_cluster_keys
+query T
+explain join
+SELECT *
+FROM (SELECT * FROM a LIMIT 1000) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+# build_side_cluster_keys_do_not_propagate
+query T
+explain join
+SELECT *
+FROM b
+JOIN (SELECT * FROM a LIMIT 100) a ON b.k1 = a.k1
+JOIN (SELECT * FROM c LIMIT 10) c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+│       └── Probe
+│           └── Scan: default.join_reorder_cluster_key_cost.a (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.b (#0) (read rows: 1000)
+
+statement ok
+create or replace table a(k1 BIGINT, k2 BIGINT, v BIGINT) cluster by(k2, k1) as
+select number::BIGINT, number::BIGINT, number::BIGINT
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+# k2_k1_prefix
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+# String filter cases from cluster_key_join_order.rs.
+statement ok
+create or replace table a(join_key BIGINT, column_a STRING, column_b STRING) cluster by(column_a) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+create or replace table b(join_key BIGINT, column_a STRING, column_b STRING) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+statement ok
+analyze table b;
+
+# clustered_filter_side_becomes_build
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+  AND b.column_b = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+
+statement ok
+create or replace table t(join_key BIGINT, column_a STRING, column_b STRING) cluster by(column_a) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+analyze table t;
+
+# self_join_filter_on_clustered_alias_becomes_build
+query T
+explain join
+SELECT *
+FROM t AS l
+JOIN t AS r ON l.join_key = r.join_key
+WHERE l.column_a = 'xxx'
+  AND r.column_b = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.t (#0) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.t (#1) (read rows: 1000)
+
+statement ok
+unset cost_factor_cluster_key;
+
+# clustered_filter_discount_disabled
+query T
+explain join
+SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+  AND b.column_b = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+# Composite cluster-key cases from cluster_key_join_order.rs.
+statement ok
+set cost_factor_cluster_key = 85;
+
+statement ok
+create or replace table table_a(join_key BIGINT, column_a STRING, column_b STRING) cluster by(column_a, column_b) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+create or replace table table_b(join_key BIGINT, column_a STRING, column_b STRING) cluster by(column_b, column_a) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+analyze table table_a;
+
+statement ok
+analyze table table_b;
+
+# composite_cluster_key_filter_on_second_column
+query T
+explain join
+SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+  ON a.column_a = b.column_a
+ AND a.column_b = b.column_b
+WHERE b.column_b = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.table_b (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.table_a (#0) (read rows: 1000)
+
+# composite_cluster_key_filter_on_first_column
+query T
+explain join
+SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+  ON a.column_a = b.column_a
+ AND a.column_b = b.column_b
+WHERE a.column_a = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.table_a (#0) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.table_b (#1) (read rows: 1000)
+
+statement ok
+create or replace table table_b(join_key BIGINT, column_a STRING, column_b STRING) as
+select
+    number::BIGINT,
+    if(number % 10 = 0, 'xxx', 'aaa'),
+    if(number % 10 = 1, 'xxx', 'bbb')
+from numbers(1000);
+
+statement ok
+analyze table table_b;
+
+# composite_cluster_key_later_column_is_not_prefix
+query T
+explain join
+SELECT a.column_b, b.column_b
+FROM table_a AS a
+JOIN table_b AS b
+  ON a.column_b = b.column_b
+WHERE a.column_b = 'xxx';
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.table_b (#1) (read rows: 1000)
+└── Probe
+    └── Scan: default.join_reorder_cluster_key_cost.table_a (#0) (read rows: 1000)
+
+# Linear expression cluster-key case from cluster_key_join_order.rs.
+statement ok
+create or replace table a(
+    k1 BIGINT,
+    k2 BIGINT,
+    v BIGINT,
+    start_time TIMESTAMP,
+    start_day UInt32,
+    trace_id STRING
+) cluster by linear (
+    to_yyyymmdd(start_time),
+    substring(trace_id from 1 for 40)
+) as
+select
+    number::BIGINT,
+    number::BIGINT,
+    number::BIGINT,
+    '2024-01-01 00:00:00'::TIMESTAMP,
+    20240101::UInt32,
+    number::STRING
+from numbers(1000);
+
+statement ok
+create or replace table b(
+    k1 BIGINT,
+    k2 BIGINT,
+    v BIGINT,
+    start_time TIMESTAMP,
+    start_day UInt32,
+    trace_id STRING
+) as
+select
+    number::BIGINT,
+    number::BIGINT,
+    number::BIGINT,
+    '2024-01-01 00:00:00'::TIMESTAMP,
+    20240101::UInt32,
+    number::STRING
+from numbers(1000);
+
+statement ok
+create or replace table c(
+    k1 BIGINT,
+    k2 BIGINT,
+    v BIGINT,
+    start_time TIMESTAMP,
+    start_day UInt32,
+    trace_id STRING
+) as
+select
+    number::BIGINT,
+    number::BIGINT,
+    number::BIGINT,
+    '2024-01-01 00:00:00'::TIMESTAMP,
+    20240101::UInt32,
+    number::STRING
+from numbers(1000);
+
+statement ok
+analyze table a;
+
+statement ok
+analyze table b;
+
+statement ok
+analyze table c;
+
+# linear_expression_cluster_key
+query T
+explain join
+SELECT *
+FROM a
+JOIN b
+    ON to_yyyymmdd(a.start_time) = b.start_day
+    AND substring(a.trace_id from 1 for 40) = b.trace_id
+JOIN c ON a.k2 = c.k2;
+----
+HashJoin: INNER
+├── Build
+│   └── Scan: default.join_reorder_cluster_key_cost.c (#2) (read rows: 1000)
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.join_reorder_cluster_key_cost.b (#1) (read rows: 1000)
+        └── Probe
+            └── Scan: default.join_reorder_cluster_key_cost.a (#0) (read rows: 1000)
+
+statement ok
+unset cost_factor_cluster_key;

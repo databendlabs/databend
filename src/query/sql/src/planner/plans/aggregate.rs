@@ -158,6 +158,7 @@ impl Aggregate {
                     column_stats: column_stats.clone(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    cluster_key_stats: Default::default(),
                 },
             }));
         }
@@ -177,6 +178,7 @@ impl Aggregate {
                     column_stats: column_stats.clone(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    cluster_key_stats: Default::default(),
                 },
             }));
         }
@@ -233,6 +235,7 @@ impl Aggregate {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         }))
     }

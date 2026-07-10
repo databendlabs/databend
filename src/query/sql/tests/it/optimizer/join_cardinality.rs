@@ -284,6 +284,7 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         },
     }))
 }
