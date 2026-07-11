@@ -89,6 +89,10 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn default_ref() -> MetadataRef {
+        Arc::new(RwLock::new(Self::default()))
+    }
+
     fn next_column_index(&self) -> Symbol {
         Symbol::new(self.columns.len())
     }

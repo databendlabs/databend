@@ -184,6 +184,7 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 databend-common-sql-test-support = { workspace = true }
+databend-enterprise-query = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 geo = { workspace = true }
 goldenfile = { workspace = true }
