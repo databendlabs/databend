@@ -727,11 +727,11 @@ async fn benchmark_batch_create_tables(
         };
 
         txn.if_then.extend([
-            /* name -> id */
+            // name -> id
             txn_put_pb(&name_key, &TableId::new(table_id)),
-            /* id -> meta */
+            // id -> meta
             txn_put_pb(&TableId::new(table_id), &table_meta),
-            /* name history */
+            // name history
             txn_put_pb(
                 &TableIdHistoryIdent {
                     database_id: db_id,
@@ -739,7 +739,7 @@ async fn benchmark_batch_create_tables(
                 },
                 &id_list,
             ),
-            /* id -> name */
+            // id -> name
             txn_put_pb(&TableIdToName { table_id }, &name_key),
         ]);
     }
@@ -808,7 +808,10 @@ async fn benchmark_get_table_rand(
         .await;
 
     if let Err(e) = &res {
-        println!("ERROR: get_table_rand({}/{}) failed: {:?}", db_name, table_name, e);
+        println!(
+            "ERROR: get_table_rand({}/{}) failed: {:?}",
+            db_name, table_name, e
+        );
     } else if i % 100_000 == 0 {
         println!("{:>10}-th get_table_rand ok: {}/{}", i, db_name, table_name);
     }
