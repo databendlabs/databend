@@ -56,11 +56,16 @@ class DatabendMeta:
         Returns None when the service is not running. The pid file makes the
         process reachable across Python invocations, e.g. a `stop` command run
         after the `start` process has exited.
+
+        A pid read from the file is trusted only when it still belongs to a
+        databend-meta process, so a stale file whose pid the OS has recycled
+        for an unrelated process is not mistaken for a live meta.
         """
         if ProcessManager.is_process_running(self.process):
             return self.process.pid
         pid = ProcessManager.read_pid_file(self.pid_file())
-        return pid if ProcessManager.is_pid_running(pid) else None
+        binary = os.path.basename(self.binary_path)
+        return pid if ProcessManager.is_pid_command(pid, binary) else None
 
     def _print_start_info(self) -> None:
         """Print startup information."""
@@ -149,11 +154,12 @@ class DatabendMeta:
         if self.process is not None:
             ProcessManager.stop_process(self.process, "meta")
             self.process = None
-            return
+        else:
+            pid = self.pid()
+            if pid is not None:
+                ProcessManager.stop_pid(pid, "meta")
 
-        pid = self.pid()
-        if pid is not None:
-            ProcessManager.stop_pid(pid, "meta")
+        ProcessManager.remove_pid_file(self.pid_file())
 
     def is_running(self) -> bool:
         """Check if meta service is running (this instance or via pid file)."""

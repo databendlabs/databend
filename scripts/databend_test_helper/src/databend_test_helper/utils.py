@@ -6,6 +6,7 @@ import subprocess
 import socket
 import time
 import toml
+import psutil
 from typing import Optional, Dict, Any
 
 
@@ -154,6 +155,14 @@ class ProcessManager:
             return None
 
     @staticmethod
+    def remove_pid_file(pid_file: str) -> None:
+        """Remove a pid file, tolerating a missing file."""
+        try:
+            os.remove(pid_file)
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
     def is_pid_running(pid: Optional[int]) -> bool:
         """Check if a pid refers to a live process."""
         if pid is None:
@@ -165,6 +174,21 @@ class ProcessManager:
             return False
         except PermissionError:
             return True
+
+    @staticmethod
+    def is_pid_command(pid: Optional[int], command: str) -> bool:
+        """Check if `pid` is a live process whose executable is named `command`.
+
+        Guards against pid reuse: once a process exits, the OS may recycle its
+        pid for an unrelated process. Matching the executable name keeps a
+        stale pid file from being mistaken for the original service.
+        """
+        if pid is None:
+            return False
+        try:
+            return psutil.Process(pid).name() == command
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
 
     @staticmethod
     def stop_pid(pid: int, service_name: str, timeout: int = 10) -> None:
