@@ -381,6 +381,7 @@ usage examples:
 - `test_transaction.lua` - Atomic conditional transactions
 - `test_spawn.lua` - Task spawning and concurrent gRPC operations
 - `test_sleep.lua` - Async sleep
+- `test_to_string.lua` - `metactl.to_string` rendering rules
 
 The CLI surface of `databend-metactl lua` (file and stdin input) is covered by
 `tests/metactl/subcommands/cmd_lua.py`.
