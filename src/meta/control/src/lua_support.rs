@@ -461,6 +461,18 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
         .set("sleep", sleep_fn)
         .map_err(|e| anyhow::anyhow!("Failed to register sleep function: {}", e))?;
 
+    // Register a monotonic millisecond clock for timing and benchmarks. The
+    // epoch is this environment's setup time; only differences between calls are
+    // meaningful. `Instant` guarantees the value never goes backwards.
+    let start = std::time::Instant::now();
+    let now_ms_fn = lua
+        .create_function(move |_lua, ()| Ok(start.elapsed().as_secs_f64() * 1000.0))
+        .map_err(|e| anyhow::anyhow!("Failed to create now_ms function: {}", e))?;
+
+    metactl_table
+        .set("now_ms", now_ms_fn)
+        .map_err(|e| anyhow::anyhow!("Failed to register now_ms function: {}", e))?;
+
     // Register the Zipf load generator. The module returns the `ZipfGenerator`
     // table, exposed as `metactl.ZipfGenerator` so any script can call
     // `metactl.ZipfGenerator:new(num_keys, alpha)` directly.
@@ -789,5 +801,25 @@ mod tests {
             .eval::<i64>()
             .unwrap();
         assert_eq!(24, index);
+    }
+
+    #[test]
+    fn test_now_ms_is_monotonic() {
+        let lua = Lua::new();
+        setup_lua_environment(&lua).unwrap();
+        let (a, b) = lua
+            .load(
+                r#"
+                local a = metactl.now_ms()
+                local sum = 0
+                for i = 1, 1000000 do sum = sum + i end
+                local b = metactl.now_ms()
+                return a, b
+                "#,
+            )
+            .eval::<(f64, f64)>()
+            .unwrap();
+        assert!(a >= 0.0, "now_ms must be non-negative, got {a}");
+        assert!(b >= a, "now_ms must not go backwards: {a} then {b}");
     }
 }

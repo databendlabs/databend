@@ -55,6 +55,21 @@ metactl.sleep(0.5)  -- Sleep for 500ms
 metactl.sleep(2.0)  -- Sleep for 2 seconds
 ```
 
+### metactl.now_ms()
+
+Returns a monotonic clock reading in milliseconds, for timing and benchmarks.
+
+**Returns:**
+- A number of milliseconds (fractional). The value never decreases between calls; only the difference between two readings is meaningful (the origin is when the Lua environment was created).
+
+**Example:**
+```lua
+local t0 = metactl.now_ms()
+client:upsert("my_key", "my_value")
+local elapsed_ms = metactl.now_ms() - t0
+print(string.format("upsert took %.3f ms", elapsed_ms))
+```
+
 ### metactl.to_string(value)
 
 Converts any Lua value to a human-readable string representation.
