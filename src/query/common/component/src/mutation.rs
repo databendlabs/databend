@@ -23,6 +23,7 @@ use databend_common_storage::MutationStatus;
 pub struct MutationState {
     mutation_status: Arc<RwLock<MutationStatus>>,
     multi_table_insert_rows: Arc<Mutex<HashMap<u64, u64>>>,
+    recluster_terminate: Arc<Mutex<Option<bool>>>,
 }
 
 impl MutationState {
@@ -44,5 +45,13 @@ impl MutationState {
 
     pub fn multi_table_insert_rows(&self) -> Arc<Mutex<HashMap<u64, u64>>> {
         self.multi_table_insert_rows.clone()
+    }
+
+    pub fn set_recluster_terminate(&self, terminate: bool) {
+        *self.recluster_terminate.lock().unwrap() = Some(terminate);
+    }
+
+    pub fn take_recluster_terminate(&self) -> Option<bool> {
+        self.recluster_terminate.lock().unwrap().take()
     }
 }

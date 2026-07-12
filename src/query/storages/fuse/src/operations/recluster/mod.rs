@@ -17,6 +17,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+mod depth;
+pub(crate) mod hilbert_recluster;
+mod linear_recluster;
+mod overlap_selection;
+mod recluster_mutator;
+mod vector_recluster;
+
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
@@ -30,29 +37,39 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
+pub(crate) use depth::ReclusterDepthStats;
+pub(crate) use depth::calculate_max_depth;
+pub(crate) use depth::collect_depth_stats;
 use log::debug;
 use log::info;
 use log::warn;
 use opendal::Operator;
+pub use recluster_mutator::CandidateScore;
+pub use recluster_mutator::ReclusterCandidateWindow;
+pub use recluster_mutator::ReclusterFinalCarry;
+pub use recluster_mutator::ReclusterMutator;
+pub use recluster_mutator::SelectedReclusterSegment;
 use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::operations::ReclusterFinalCarry;
-use crate::operations::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
+/// Recluster candidate selection mode.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReclusterMode {
+    /// Legacy one-window probing with tighter rewrite selection.
     Conservative,
+    /// Broader probing that groups mature blocks by level ranges.
     Aggressive,
 }
 
 impl FuseTable {
+    /// Build recluster tasks for the current table snapshot.
     #[async_backtrace::framed]
     pub async fn do_recluster(
         &self,
@@ -66,7 +83,7 @@ impl FuseTable {
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
-        if self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
+        if !matches!(self.cluster_type(), Some(ClusterType::Linear)) {
             return Ok(None);
         }
 
@@ -432,6 +449,7 @@ impl FuseTable {
         Ok(Some((parts, snapshot)))
     }
 
+    /// Create the segment pruner used before recluster candidate probing.
     pub fn create_recluster_segment_pruner(
         ctx: &Arc<dyn TableContext>,
         schema: TableSchemaRef,
@@ -467,6 +485,7 @@ impl FuseTable {
         Ok((pruning_ctx, segment_pruner, max_concurrency))
     }
 
+    /// Prune candidate segment locations and load compact segment metadata.
     pub async fn segment_pruning(
         pruning_ctx: Arc<PruningContext>,
         segment_pruner: Arc<SegmentPruner>,

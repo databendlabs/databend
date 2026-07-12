@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactLazyPartInfo;
+use databend_common_storages_fuse::operations::CompactSource as FuseCompactSource;
 use databend_common_storages_fuse::operations::CompactTransform;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -161,11 +162,8 @@ impl IPhysicalPlan for CompactSource {
         // Add source pipe.
         builder.main_pipeline.add_source(
             |output| {
-                let source = databend_common_storages_fuse::operations::CompactSource::create(
-                    builder.ctx.clone(),
-                    block_reader.clone(),
-                    1,
-                );
+                let source =
+                    FuseCompactSource::create(builder.ctx.clone(), block_reader.clone(), 1);
                 PrefetchAsyncSourcer::create(builder.ctx.get_scan_progress(), output, source)
             },
             max_threads,
@@ -204,8 +202,8 @@ impl IPhysicalPlan for CompactSource {
             builder.main_pipeline.try_resize(1)?;
             builder
                 .main_pipeline
-                .add_async_accumulating_transformer(|| {
-                    TableMutationAggregator::create(
+                .try_add_async_accumulating_transformer(|| {
+                    Ok(TableMutationAggregator::create(
                         table,
                         builder.ctx.clone(),
                         vec![],
@@ -214,8 +212,8 @@ impl IPhysicalPlan for CompactSource {
                         Default::default(),
                         MutationKind::Compact,
                         self.table_meta_timestamps,
-                    )
-                });
+                    ))
+                })?;
         }
         Ok(())
     }

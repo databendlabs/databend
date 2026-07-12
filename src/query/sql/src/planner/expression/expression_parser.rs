@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
-use databend_common_ast::parser::parse_cluster_key_exprs;
+pub use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -57,6 +57,145 @@ use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+
+pub const HILBERT_CLUSTER_MARKER: &str = "hilbert";
+
+/// Parsed and bound cluster keys plus their non-linear layout.
+#[derive(Clone, Debug)]
+pub struct ClusterKeys {
+    /// Flattened cluster expressions. Hilbert dimensions are appended after the scalar prefix.
+    pub keys: Vec<Expr<usize>>,
+    /// Layout describing how the flattened keys should be interpreted.
+    pub kind: ClusterKeyKind,
+}
+
+impl ClusterKeys {
+    pub fn into_keys(self) -> Vec<Expr<usize>> {
+        let mut keys = self.keys;
+        if let Some(hilbert_start) = self.kind.hilbert_start() {
+            keys.truncate(hilbert_start);
+        }
+        keys
+    }
+
+    /// Expressions persisted into ClusterStatistics plus trailing Hilbert dimension count.
+    pub fn into_cluster_stats_keys(mut self) -> (Vec<Expr<usize>>, usize) {
+        if let Some(hilbert_start) = self.kind.hilbert_start() {
+            let hilbert_len = self.keys.len() - hilbert_start;
+            return (self.keys, hilbert_len);
+        }
+
+        if let Some(vector_index) = self.kind.vector_index() {
+            debug_assert!(vector_index < self.keys.len());
+            self.keys.remove(vector_index);
+        }
+        (self.keys, 0)
+    }
+
+    pub fn hilbert_len(&self) -> usize {
+        self.kind
+            .hilbert_start()
+            .map_or(0, |hilbert_start| self.keys.len() - hilbert_start)
+    }
+}
+
+/// Mutually exclusive cluster key layout.
+#[derive(Clone, Copy, Debug)]
+pub enum ClusterKeyKind {
+    /// Ordinary linear cluster keys.
+    Linear,
+    /// Linear keys with one vector key at `vector_index`.
+    Vector { vector_index: usize },
+    /// Linear prefix followed by trailing Hilbert marker dimensions.
+    Hilbert { hilbert_start: usize },
+}
+
+impl ClusterKeyKind {
+    /// Start offset of trailing Hilbert dimensions in the flattened key list.
+    pub fn hilbert_start(self) -> Option<usize> {
+        match self {
+            Self::Hilbert { hilbert_start } => Some(hilbert_start),
+            Self::Linear | Self::Vector { .. } => None,
+        }
+    }
+
+    /// Offset of the vector key in the flattened key list.
+    pub fn vector_index(self) -> Option<usize> {
+        match self {
+            Self::Vector { vector_index } => Some(vector_index),
+            Self::Linear | Self::Hilbert { .. } => None,
+        }
+    }
+}
+
+pub fn is_hilbert_cluster_marker(ast: &AExpr) -> bool {
+    hilbert_marker_args(ast).is_some()
+}
+
+fn hilbert_marker_args(ast: &AExpr) -> Option<&[AExpr]> {
+    let AExpr::FunctionCall { func, .. } = ast else {
+        return None;
+    };
+    if func.name.name.eq_ignore_ascii_case(HILBERT_CLUSTER_MARKER) {
+        Some(func.args.as_slice())
+    } else {
+        None
+    }
+}
+
+pub fn validate_hilbert_marker_position(
+    ast: &AExpr,
+    key_index: usize,
+    key_count: usize,
+    has_hilbert_marker: bool,
+    vector_cluster_key_num: usize,
+) -> Result<&[AExpr]> {
+    if has_hilbert_marker {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "Only one hilbert cluster marker is supported in cluster by",
+        ));
+    }
+    if key_index + 1 != key_count {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "hilbert cluster marker must be the last cluster key",
+        ));
+    }
+    if vector_cluster_key_num > 0 {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "hilbert cluster marker cannot be used with vector cluster key",
+        ));
+    }
+
+    let AExpr::FunctionCall { func, .. } = ast else {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Cluster by expression `{:#}` is not a hilbert marker",
+            ast
+        )));
+    };
+    if !func.name.name.eq_ignore_ascii_case(HILBERT_CLUSTER_MARKER) {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Cluster by expression `{:#}` is not a hilbert marker",
+            ast
+        )));
+    }
+    if func.distinct
+        || !func.params.is_empty()
+        || !func.order_by.is_empty()
+        || func.window.is_some()
+        || func.lambda.is_some()
+    {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "hilbert cluster marker only supports deterministic single-column arguments",
+        ));
+    }
+    if !(2..=5).contains(&func.args.len()) {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "hilbert cluster marker requires the dimension to be between 2 and 5",
+        ));
+    }
+
+    Ok(&func.args)
+}
 
 pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
@@ -382,7 +521,7 @@ pub fn parse_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
-) -> Result<Vec<Expr>> {
+) -> Result<ClusterKeys> {
     let schema = table_meta.schema();
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
@@ -396,19 +535,51 @@ pub fn parse_cluster_keys(
         false,
     )?;
 
-    let exprs: Vec<Expr> = ast_exprs
+    let key_capacity = ast_exprs
         .iter()
-        .map(|ast| {
-            let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar
-                .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.column_name))?;
-            Ok(expr)
-        })
-        .collect::<Result<_>>()?;
+        .map(|ast| hilbert_marker_args(ast).map_or(1, |args| args.len()))
+        .sum();
+    let mut keys = Vec::with_capacity(key_capacity);
+    let mut vector_index = None;
+    let mut hilbert_start = None;
 
-    let mut res = Vec::with_capacity(exprs.len());
-    for expr in exprs {
+    for (key_index, ast) in ast_exprs.iter().enumerate() {
+        if is_hilbert_cluster_marker(ast) {
+            let args = validate_hilbert_marker_position(
+                ast,
+                key_index,
+                ast_exprs.len(),
+                hilbert_start.is_some(),
+                usize::from(vector_index.is_some()),
+            )?;
+            hilbert_start = Some(keys.len());
+            for arg in args {
+                let (scalar, _) = *type_checker.resolve(arg)?;
+                let expr = scalar
+                    .as_expr()?
+                    .project_column_ref(|col| schema.index_of(&col.column_name))?;
+                if matches!(expr.data_type().remove_nullable(), DataType::Vector(_)) {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "hilbert cluster marker cannot be used with vector cluster key",
+                    ));
+                }
+                keys.push(expr);
+            }
+            continue;
+        }
+
+        let (scalar, _) = *type_checker.resolve(ast)?;
+        let expr = scalar
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.column_name))?;
+        if matches!(expr.data_type().remove_nullable(), DataType::Vector(_)) {
+            if vector_index.replace(keys.len()).is_some() {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Only one vector column is supported in cluster by",
+                ));
+            }
+        }
+
         let inner_type = expr.data_type().remove_nullable();
         let mut should_wrapper = false;
         if inner_type == DataType::String {
@@ -445,9 +616,17 @@ pub fn parse_cluster_keys(
         } else {
             expr
         };
-        res.push(expr);
+        keys.push(expr);
     }
-    Ok(res)
+
+    let kind = if let Some(hilbert_start) = hilbert_start {
+        ClusterKeyKind::Hilbert { hilbert_start }
+    } else if let Some(vector_index) = vector_index {
+        ClusterKeyKind::Vector { vector_index }
+    } else {
+        ClusterKeyKind::Linear
+    };
+    Ok(ClusterKeys { keys, kind })
 }
 
 pub fn analyze_cluster_keys(
@@ -475,10 +654,53 @@ pub fn analyze_cluster_keys(
         sql_dialect: settings.get_sql_dialect()?,
     };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
-    let mut cluster_keys = Vec::with_capacity(exprs.len());
+    let mut cluster_keys = Vec::with_capacity(ast_exprs.len());
     let mut vector_cluster_key_num = 0;
-    for ast in ast_exprs {
-        let (scalar, _) = *type_checker.resolve(&ast)?;
+    let mut hilbert_cluster_marker_seen = false;
+    let key_count = ast_exprs.len();
+    for (key_index, ast) in ast_exprs.iter().enumerate() {
+        if is_hilbert_cluster_marker(ast) {
+            let args = validate_hilbert_marker_position(
+                ast,
+                key_index,
+                key_count,
+                hilbert_cluster_marker_seen,
+                vector_cluster_key_num,
+            )?;
+            for arg in args {
+                let (scalar, _) = *type_checker.resolve(arg)?;
+                if scalar.used_columns().len() != 1 || !scalar.evaluable() {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "hilbert cluster marker argument `{:#}` is invalid",
+                        arg
+                    )));
+                }
+
+                let expr = scalar.as_symbol_expr()?;
+                if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "hilbert cluster marker argument `{:#}` is not deterministic",
+                        arg
+                    )));
+                }
+                let data_type = expr.data_type();
+                let (is_valid_type, is_vector_type) = Binder::valid_cluster_key_type(data_type);
+                if !is_valid_type || is_vector_type {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "Unsupported data type '{}' for hilbert cluster marker argument `{:#}`",
+                        data_type, arg
+                    )));
+                }
+            }
+
+            hilbert_cluster_marker_seen = true;
+            let mut cluster_by = ast.clone();
+            cluster_by.drive_mut(&mut normalizer);
+            cluster_keys.push(format!("{:#}", &cluster_by));
+            continue;
+        }
+
+        let (scalar, _) = *type_checker.resolve(ast)?;
         if scalar.used_columns().len() != 1 || !scalar.evaluable() {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is invalid",

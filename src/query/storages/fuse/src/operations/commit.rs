@@ -90,8 +90,8 @@ impl FuseTable {
             )
         })?;
 
-        pipeline.add_async_accumulating_transformer(|| {
-            TableMutationAggregator::create(
+        pipeline.try_add_async_accumulating_transformer(|| {
+            Ok(TableMutationAggregator::create(
                 self,
                 ctx.clone(),
                 vec![],
@@ -100,8 +100,8 @@ impl FuseTable {
                 Statistics::default(),
                 MutationKind::Insert,
                 table_meta_timestamps,
-            )
-        });
+            ))
+        })?;
 
         let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
         pipeline.add_sink(|input| {

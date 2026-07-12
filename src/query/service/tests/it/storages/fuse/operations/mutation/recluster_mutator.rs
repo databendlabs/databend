@@ -1226,7 +1226,6 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     let vector_cluster_info = VectorClusterInfo {
         key_index: 1,
         column_id: 1,
-        column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
     };
@@ -1304,7 +1303,6 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     let vector_cluster_info = VectorClusterInfo {
         key_index: 0,
         column_id: 1,
-        column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
     };
@@ -1336,6 +1334,80 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
     assert_eq!(task_part_counts(&parts), vec![2]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_vector_only_fallback_windows_are_disjoint() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
+
+    let segment_locations = gen_recluster_segments_by_vector_stats(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 1, [0.0, 0.0], 1.0)],
+            vec![(2, 2, [0.5, 0.0], 1.0)],
+            vec![(3, 3, [10.0, 0.0], 1.0)],
+        ],
+        false,
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = vector_recluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+
+    let vector_cluster_info = VectorClusterInfo {
+        key_index: 0,
+        column_id: 1,
+        dimension: 2,
+        distance_type: VectorDistanceType::L2,
+    };
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_vector_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        1,
+        ReclusterMode::Conservative,
+        Some(vector_cluster_info),
+    );
+
+    let segment_windows = mutator.select_segments(&compact_segments, 3)?;
+    let mut seen_segments = HashSet::new();
+    for window in segment_windows {
+        for segment in window {
+            assert!(
+                seen_segments.insert(segment.loc.segment_idx),
+                "segment {} selected by more than one window",
+                segment.loc.segment_idx
+            );
+        }
+    }
+    assert_eq!(seen_segments, HashSet::from([0, 1, 2]));
 
     Ok(())
 }

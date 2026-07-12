@@ -72,7 +72,6 @@ impl FuseTable {
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(self, Some(compact_options.base_snapshot.clone()))?;
-
         let mut segment_compactor = SegmentCompactMutator::try_create(
             ctx.clone(),
             compact_options,

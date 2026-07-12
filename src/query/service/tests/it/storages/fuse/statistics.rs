@@ -48,6 +48,7 @@ use databend_common_storages_fuse::statistics::Trim;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
+use databend_query::storages::fuse::statistics::ClusterStatsOperator;
 use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::storages::fuse::statistics::VectorClusterInfo;
 use databend_query::storages::fuse::statistics::VectorClusterOperator;
@@ -532,6 +533,51 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
     ));
     assert_eq!(res_4, expect);
 
+    let hilbert_cluster_stats_0 = Some(ClusterStatistics::new(
+        0,
+        vec![
+            Scalar::from(5i64),
+            Scalar::Tuple(vec![Scalar::from(2i64), Scalar::from(4i64)]),
+        ],
+        vec![
+            Scalar::from(5i64),
+            Scalar::Tuple(vec![Scalar::from(3i64), Scalar::from(6i64)]),
+        ],
+        1,
+        None,
+    ));
+    let hilbert_cluster_stats_1 = Some(ClusterStatistics::new(
+        0,
+        vec![
+            Scalar::from(1i64),
+            Scalar::Tuple(vec![Scalar::from(1i64), Scalar::from(5i64)]),
+        ],
+        vec![
+            Scalar::from(7i64),
+            Scalar::Tuple(vec![Scalar::from(4i64), Scalar::from(8i64)]),
+        ],
+        2,
+        None,
+    ));
+    let res_5 = reducers::reduce_cluster_statistics(
+        &[hilbert_cluster_stats_0, hilbert_cluster_stats_1],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![
+            Scalar::from(1i64),
+            Scalar::Tuple(vec![Scalar::from(1i64), Scalar::from(4i64)]),
+        ],
+        vec![
+            Scalar::from(7i64),
+            Scalar::Tuple(vec![Scalar::from(4i64), Scalar::from(8i64)]),
+        ],
+        2,
+        None,
+    ));
+    assert_eq!(res_5, expect);
+
     Ok(())
 }
 
@@ -562,22 +608,22 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0, 1, 2],
+        vec![0, 2],
         0,
         None,
         0,
         block_compactor,
         vec![],
-        Some(VectorClusterOperator {
+        Some(ClusterStatsOperator::Vector(VectorClusterOperator {
             info: VectorClusterInfo {
                 key_index: 1,
                 column_id: 1,
-                column_name: "embedding".to_string(),
                 dimension: 2,
                 distance_type: VectorDistanceType::L2,
             },
             vector_column_input_offset: 1,
             vector_cluster_id_offset: 1,
-        }),
+        })),
         vec![],
         FunctionContext::default(),
     );
@@ -654,6 +700,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0],
+        vec![0],
         0,
         None,
         0,
@@ -697,6 +744,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![1],
+        vec![1],
         0,
         None,
         0,
@@ -715,6 +763,7 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     // different cluster_key_id.
     let stats_gen = ClusterStatsGenerator::new(
         1,
+        vec![0],
         vec![0],
         0,
         None,

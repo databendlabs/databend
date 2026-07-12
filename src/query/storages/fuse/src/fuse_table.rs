@@ -51,12 +51,10 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
-use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
@@ -74,7 +72,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
-use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageMetrics;
@@ -99,7 +96,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -522,30 +518,6 @@ impl FuseTable {
         self.table_info.meta.cluster_key_id()
     }
 
-    pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        if self
-            .cluster_type()
-            .is_none_or(|v| matches!(v, ClusterType::Hilbert))
-        {
-            return vec![];
-        }
-
-        let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
-        let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
-        let cluster_keys = exprs
-            .iter()
-            .map(|k| {
-                k.project_column_ref(|index| {
-                    Ok(table_meta.schema().field(*index).name().to_string())
-                })
-                .unwrap()
-                .as_remote_expr()
-            })
-            .collect();
-        cluster_keys
-    }
-
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
     }
@@ -563,24 +535,6 @@ impl FuseTable {
         table_meta_options
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .is_some()
-    }
-
-    pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys() else {
-            return vec![];
-        };
-        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-        match cluster_type {
-            ClusterType::Hilbert => vec![DataType::Binary],
-            ClusterType::Linear => {
-                let cluster_keys =
-                    parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
-                cluster_keys
-                    .into_iter()
-                    .map(|v| v.data_type().clone())
-                    .collect()
-            }
-        }
     }
 
     /// Returns the data retention policy for this table.

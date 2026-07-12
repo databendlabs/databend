@@ -49,6 +49,8 @@ use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
 use crate::meta::format::encode;
+use crate::meta::reduce_cluster_min_max;
+use crate::meta::split_hilbert_tuple_minmax;
 use crate::meta::supported_stat_type;
 
 pub trait SegmentBuilder: Send + Sync + 'static {
@@ -395,28 +397,39 @@ fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                 return None;
             }
 
-            min_stats.push(stat.min());
-            max_stats.push(stat.max());
+            min_stats.push(stat.min().as_slice());
+            max_stats.push(stat.max().as_slice());
             levels.push(stat.level);
         } else {
             return None;
         }
     }
 
-    let min = min_stats
-        .into_iter()
-        .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
-        .unwrap();
-    let max = max_stats
-        .into_iter()
-        .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
-        .unwrap();
+    let has_hilbert = min_stats
+        .iter()
+        .zip(max_stats.iter())
+        .any(|(min, max)| split_hilbert_tuple_minmax(min, max).is_some());
+    let (min, max) = if has_hilbert {
+        reduce_cluster_min_max(&min_stats, &max_stats)?
+    } else {
+        let min = min_stats
+            .into_iter()
+            .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+            .unwrap()
+            .to_vec();
+        let max = max_stats
+            .into_iter()
+            .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+            .unwrap()
+            .to_vec();
+        (min, max)
+    };
     let level = levels.into_iter().max().unwrap_or(0);
 
     Some(ClusterStatistics::new(
         cluster_key_id,
-        min.clone(),
-        max.clone(),
+        min,
+        max,
         level,
         None,
     ))

@@ -61,6 +61,7 @@ use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
 use log::debug;
 use log::error;
+use log::info;
 use log::warn;
 
 use crate::interpreters::Interpreter;
@@ -227,6 +228,7 @@ impl ReclusterTableInterpreter {
         hilbert_info: &mut Option<HilbertBuildInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<bool> {
+        self.ctx.mutation_state().take_recluster_terminate();
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
@@ -326,6 +328,18 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
         // make sure the lock guard is dropped before the next loop.
         drop(lock_guard);
+
+        if self.plan.is_final {
+            if self
+                .ctx
+                .mutation_state()
+                .take_recluster_terminate()
+                .unwrap_or(false)
+            {
+                info!("recluster: final loop stop reason=no_task_improved_enough");
+                return Ok(true);
+            }
+        }
 
         Ok(false)
     }

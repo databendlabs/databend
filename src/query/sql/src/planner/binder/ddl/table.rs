@@ -131,6 +131,8 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
+use crate::planner::expression::is_hilbert_cluster_marker;
+use crate::planner::expression::validate_hilbert_marker_position;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::plans::AddColumnOption;
@@ -1973,17 +1975,16 @@ impl Binder {
             if let Some(len) = column.stats_truncate_len {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!(
-                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
-                            name, inner_type
-                        ),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                        name, inner_type
+                    )));
                 }
                 if len == 0 || len > 4096 {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN must be in range [1, 4096], got {}",
+                        len
+                    )));
                 }
             }
             fields_stats_truncate_len.push(column.stats_truncate_len);
@@ -2378,7 +2379,66 @@ impl Binder {
         };
         let mut cluster_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
-        for cluster_expr in cluster_exprs.iter() {
+        let mut hilbert_cluster_marker_seen = false;
+        for (key_index, cluster_expr) in cluster_exprs.iter().enumerate() {
+            if is_hilbert_cluster_marker(cluster_expr) {
+                if matches!(cluster_type, AstClusterType::Hilbert) {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "hilbert cluster marker is only supported in linear cluster by",
+                    ));
+                }
+
+                let args = validate_hilbert_marker_position(
+                    cluster_expr,
+                    key_index,
+                    expr_len,
+                    hilbert_cluster_marker_seen,
+                    vector_cluster_key_num,
+                )?;
+
+                for arg in args {
+                    let (cluster_key, _) = scalar_binder.bind(arg)?;
+                    if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
+                        return Err(ErrorCode::InvalidClusterKeys(format!(
+                            "hilbert cluster marker argument `{:#}` is invalid",
+                            arg
+                        )));
+                    }
+
+                    let expr = cluster_key.as_expr()?;
+                    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        return Err(ErrorCode::InvalidClusterKeys(format!(
+                            "hilbert cluster marker argument `{:#}` is not deterministic",
+                            arg
+                        )));
+                    }
+
+                    let data_type = expr.data_type();
+                    let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
+                    if !is_valid_type || is_vector_type {
+                        return Err(ErrorCode::InvalidClusterKeys(format!(
+                            "Unsupported data type '{}' for hilbert cluster marker argument `{:#}`",
+                            data_type, arg
+                        )));
+                    }
+
+                    for id in expr.column_refs().keys() {
+                        if schema.field_with_name(&id.column_name).is_err() {
+                            return Err(ErrorCode::InvalidClusterKeys(format!(
+                                "hilbert cluster marker argument `{:#}` is invalid",
+                                arg
+                            )));
+                        }
+                    }
+                }
+
+                hilbert_cluster_marker_seen = true;
+                let mut cluster_expr = cluster_expr.clone();
+                cluster_expr.drive_mut(&mut normalizer);
+                cluster_keys.push(format!("{:#}", &cluster_expr));
+                continue;
+            }
+
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(

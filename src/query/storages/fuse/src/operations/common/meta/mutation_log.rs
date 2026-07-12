@@ -65,6 +65,9 @@ pub enum MutationLogEntry {
         virtual_schema: Option<VirtualDataSchema>,
         mode: VirtualSchemaMode,
     },
+    ReclusterExtras {
+        improved_enough: bool,
+    },
     DoNothing,
 }
 

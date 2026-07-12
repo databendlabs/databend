@@ -1,0 +1,66 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+CREATE OR REPLACE DATABASE test_hilbert_marker
+
+statement ok
+USE test_hilbert_marker
+
+statement ok
+CREATE OR REPLACE TABLE t_marker(a int, b int, c int) CLUSTER BY (a, hilbert(b, c)) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_marker_expr(a int, b string, c int) CLUSTER BY (a, hilbert(substring(b, 1, 2), c + 1)) row_per_block=2 block_per_segment=2
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert_marker', 't_marker')
+----
+(a, hilbert(b, c)) linear
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert_marker', 't_marker_expr')
+----
+(a, hilbert(substring(b, 1, 2), c + 1)) linear
+
+statement ok
+INSERT INTO t_marker VALUES (1, 10, 10), (1, 20, 20), (2, 30, 30), (2, 40, 40)
+
+statement ok
+INSERT INTO t_marker_expr VALUES (1, 'aa', 10), (1, 'ab', 20), (2, 'ba', 30), (2, 'bb', 40)
+
+query II
+SELECT count(), sum(a) FROM t_marker
+----
+4 6
+
+query II
+SELECT count(), sum(a) FROM t_marker_expr
+----
+4 6
+
+statement error 1081.*hilbert cluster marker must be the last cluster key
+CREATE OR REPLACE TABLE bad_position(a int, b int, c int) CLUSTER BY (hilbert(a, b), c)
+
+statement error 1081.*requires the dimension to be between 2 and 5
+CREATE OR REPLACE TABLE bad_dimension(a int) CLUSTER BY (hilbert(a))
+
+statement error 1081.*is invalid
+CREATE OR REPLACE TABLE bad_expr(a int, b int, c int) CLUSTER BY (hilbert(a + b, c))
+
+statement error 1008.*hilbert
+SELECT hilbert(1, 2)
+
+statement ok
+DROP DATABASE test_hilbert_marker ALL

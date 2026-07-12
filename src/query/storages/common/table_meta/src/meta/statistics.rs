@@ -53,6 +53,156 @@ pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type BlockTopN = HashMap<ColumnId, ColumnTopN>;
 pub type BlockCountMinSketch = HashMap<ColumnId, ColumnCountMinSketch>;
 pub type RawBlockHLL = Vec<u8>;
+pub type HilbertTupleMinMax<'a> = (&'a [Scalar], &'a [Scalar], &'a [Scalar], &'a [Scalar]);
+
+/// Split the trailing tuple encoding used by linear cluster keys with a Hilbert marker.
+///
+/// This encoding relies on ordinary cluster keys not supporting tuple data types. Hilbert
+/// markers accept two to five dimensions, so tuples outside that range are not recognized.
+pub fn split_hilbert_tuple_minmax<'a>(
+    min: &'a [Scalar],
+    max: &'a [Scalar],
+) -> Option<HilbertTupleMinMax<'a>> {
+    if min.len() != max.len() {
+        return None;
+    }
+
+    let (Some(Scalar::Tuple(dim_min)), Some(Scalar::Tuple(dim_max))) = (min.last(), max.last())
+    else {
+        return None;
+    };
+    if dim_min.len() != dim_max.len() || !(2..=5).contains(&dim_min.len()) {
+        return None;
+    }
+
+    Some((
+        &min[..min.len() - 1],
+        &max[..max.len() - 1],
+        dim_min.as_slice(),
+        dim_max.as_slice(),
+    ))
+}
+
+pub fn cluster_stats_hilbert_minmax(
+    stats: &crate::meta::ClusterStatistics,
+) -> Option<(&[Scalar], &[Scalar])> {
+    split_hilbert_tuple_minmax(stats.min(), stats.max())
+        .map(|(_, _, dim_min, dim_max)| (dim_min, dim_max))
+}
+
+pub fn cluster_stats_scalar_minmax(
+    stats: &crate::meta::ClusterStatistics,
+) -> (&[Scalar], &[Scalar]) {
+    split_hilbert_tuple_minmax(stats.min(), stats.max())
+        .map(|(min, max, _, _)| (min, max))
+        .unwrap_or((stats.min(), stats.max()))
+}
+
+/// Conservative scalar-prefix overlap check; incomplete stats are treated as overlapping.
+pub fn cluster_stats_scalar_overlap(
+    left: &crate::meta::ClusterStatistics,
+    right: &crate::meta::ClusterStatistics,
+) -> bool {
+    let (left_min, left_max) = cluster_stats_scalar_minmax(left);
+    let (right_min, right_max) = cluster_stats_scalar_minmax(right);
+    if left_min.len() != left_max.len()
+        || right_min.len() != right_max.len()
+        || left_min.len() != right_min.len()
+    {
+        return true;
+    }
+
+    scalar_tuple_cmp(left_min, right_max) != Ordering::Greater
+        && scalar_tuple_cmp(right_min, left_max) != Ordering::Greater
+}
+
+pub fn cluster_stats_has_hilbert_tuple(stats: &crate::meta::ClusterStatistics) -> bool {
+    cluster_stats_hilbert_minmax(stats).is_some()
+}
+
+pub fn reduce_cluster_min_max(
+    min_stats: &[&[Scalar]],
+    max_stats: &[&[Scalar]],
+) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+    if min_stats.is_empty() || max_stats.is_empty() || min_stats.len() != max_stats.len() {
+        return None;
+    }
+
+    let has_hilbert = split_hilbert_tuple_minmax(min_stats[0], max_stats[0]).is_some();
+    if !has_hilbert {
+        if min_stats
+            .iter()
+            .zip(max_stats.iter())
+            .any(|(min, max)| split_hilbert_tuple_minmax(min, max).is_some())
+        {
+            return None;
+        }
+        let min = min_stats
+            .iter()
+            .copied()
+            .min_by(|left, right| scalar_tuple_cmp(left, right))?
+            .to_vec();
+        let max = max_stats
+            .iter()
+            .copied()
+            .max_by(|left, right| scalar_tuple_cmp(left, right))?
+            .to_vec();
+        return Some((min, max));
+    }
+
+    let (mut scalar_min, mut scalar_max, first_dim_min, first_dim_max) =
+        split_hilbert_tuple_minmax(min_stats[0], max_stats[0])?;
+    let dim_len = first_dim_min.len();
+    let mut dim_min_values = first_dim_min.iter().collect::<Vec<_>>();
+    let mut dim_max_values = first_dim_max.iter().collect::<Vec<_>>();
+
+    for (min, max) in min_stats.iter().zip(max_stats.iter()).skip(1) {
+        let (next_scalar_min, next_scalar_max, next_dim_min, next_dim_max) =
+            split_hilbert_tuple_minmax(min, max)?;
+        if next_dim_min.len() != dim_len {
+            return None;
+        }
+
+        if scalar_tuple_cmp(scalar_min, next_scalar_min) == Ordering::Greater {
+            scalar_min = next_scalar_min;
+        }
+        if scalar_tuple_cmp(scalar_max, next_scalar_max) == Ordering::Less {
+            scalar_max = next_scalar_max;
+        }
+
+        for dim in 0..dim_len {
+            if next_dim_min[dim]
+                .as_ref()
+                .cmp(&dim_min_values[dim].as_ref())
+                == Ordering::Less
+            {
+                dim_min_values[dim] = &next_dim_min[dim];
+            }
+            if next_dim_max[dim]
+                .as_ref()
+                .cmp(&dim_max_values[dim].as_ref())
+                == Ordering::Greater
+            {
+                dim_max_values[dim] = &next_dim_max[dim];
+            }
+        }
+    }
+
+    let mut min = scalar_min.to_vec();
+    let mut max = scalar_max.to_vec();
+    let dim_min_values = dim_min_values.into_iter().cloned().collect();
+    let dim_max_values = dim_max_values.into_iter().cloned().collect();
+    min.push(Scalar::Tuple(dim_min_values));
+    max.push(Scalar::Tuple(dim_max_values));
+
+    Some((min, max))
+}
+
+fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Ordering {
+    left.iter()
+        .map(Scalar::as_ref)
+        .cmp(right.iter().map(Scalar::as_ref))
+}
 
 const COUNT_MIN_SKETCH_WIDTH: usize = 2048;
 const MAX_COUNT_MIN_SKETCH_WIDTH: usize = 1 << 20;
@@ -534,6 +684,27 @@ mod tests {
 
     fn int32_scalar(value: i32) -> Scalar {
         Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    #[test]
+    fn cluster_stats_scalar_overlap_uses_lexicographic_prefix_ranges() {
+        let stats = |min: &[i32], max: &[i32]| {
+            let mut min = min.iter().copied().map(int32_scalar).collect::<Vec<_>>();
+            let mut max = max.iter().copied().map(int32_scalar).collect::<Vec<_>>();
+            min.push(Scalar::Tuple(vec![int32_scalar(0), int32_scalar(0)]));
+            max.push(Scalar::Tuple(vec![int32_scalar(10), int32_scalar(10)]));
+            crate::meta::ClusterStatistics::new(0, min, max, 0, None)
+        };
+
+        let left = stats(&[1, 100], &[2, 200]);
+        assert!(cluster_stats_scalar_overlap(
+            &left,
+            &stats(&[2, 0], &[3, 50])
+        ));
+        assert!(!cluster_stats_scalar_overlap(
+            &left,
+            &stats(&[2, 201], &[3, 0])
+        ));
     }
 
     #[test]

@@ -27,7 +27,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::LimitType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
@@ -38,6 +37,7 @@ use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
@@ -48,6 +48,8 @@ use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::operations::TransformVectorCluster;
 use crate::statistics::ClusterStatsGenerator;
+use crate::statistics::ClusterStatsOperator;
+use crate::statistics::HilbertClusterOperator;
 use crate::statistics::VectorClusterOperator;
 use crate::statistics::vector_cluster_info_from_column;
 
@@ -110,14 +112,14 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
-        let operators = cluster_stats_gen.operators.clone();
-        if !operators.is_empty() {
+        if !cluster_stats_gen.eval_operators.is_empty() {
+            let eval_operators = cluster_stats_gen.eval_operators.clone();
             let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 move || {
                     Ok(CompoundBlockOperator::new(
-                        operators.clone(),
+                        eval_operators.clone(),
                         func_ctx2.clone(),
                         num_input_columns,
                     ))
@@ -130,17 +132,20 @@ impl FuseTable {
             pipeline.add_pipe(builder.finalize());
         }
 
-        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let rows_per_block = block_thresholds.max_rows_per_block;
+            let vector_column_input_offset = vector_operator.vector_column_input_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                         input,
                         output,
                         TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
+                            vector_column_input_offset,
+                            dimension,
+                            distance_type,
                             rows_per_block,
                         ),
                     )))
@@ -184,23 +189,30 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
-        let operators = cluster_stats_gen.operators.clone();
-        if !operators.is_empty() {
+        if !cluster_stats_gen.eval_operators.is_empty() {
+            let eval_operators = cluster_stats_gen.eval_operators.clone();
             let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transformer(move || {
-                CompoundBlockOperator::new(operators.clone(), func_ctx2.clone(), num_input_columns)
+                CompoundBlockOperator::new(
+                    eval_operators.clone(),
+                    func_ctx2.clone(),
+                    num_input_columns,
+                )
             });
         }
 
-        if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let rows_per_block = block_thresholds.max_rows_per_block;
+            let vector_column_input_offset = vector_operator.vector_column_input_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
             pipeline.add_accumulating_transformer(move || {
                 TransformVectorCluster::new(
-                    vector_operator.vector_column_input_offset,
-                    vector_operator.info.dimension,
-                    vector_operator.info.distance_type,
+                    vector_column_input_offset,
+                    dimension,
+                    distance_type,
                     rows_per_block,
                 )
             });
@@ -216,6 +228,41 @@ impl FuseTable {
         Ok(cluster_stats_gen)
     }
 
+    /// Build a stats generator for recluster, adding the task-local Hilbert proxy sort key.
+    ///
+    /// `get_cluster_stats_gen` intentionally keeps Hilbert dimensions out of append sorting
+    /// and only persists their original min/max stats. Recluster is the only path that
+    /// appends `_hilbert_cluster_sort_key`, sorts by it, then drops it before writing.
+    pub fn get_recluster_stats_gen(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        level: i32,
+        block_thresholds: BlockThresholds,
+        input_schema: Arc<DataSchema>,
+    ) -> Result<ClusterStatsGenerator> {
+        let mut cluster_stats_gen =
+            self.get_cluster_stats_gen(ctx, level, block_thresholds, input_schema)?;
+        if let Some(ClusterStatsOperator::Hilbert(operator)) =
+            cluster_stats_gen.special_operator.as_mut()
+        {
+            let offset = cluster_stats_gen.out_fields.len();
+            cluster_stats_gen.cluster_key_index.push(offset);
+            cluster_stats_gen.extra_key_num += 1;
+            cluster_stats_gen.out_fields.push(DataField::new(
+                "_hilbert_cluster_sort_key",
+                DataType::Binary,
+            ));
+            operator.hilbert_proxy_offset = Some(offset);
+        }
+        Ok(cluster_stats_gen)
+    }
+
+    /// Build a stats generator for append/mutation without Hilbert proxy sorting.
+    ///
+    /// For `CLUSTER BY (prefix..., hilbert(...))`, append only sorts by the scalar prefix.
+    /// The Hilbert dimensions are still evaluated and stored in `ClusterStatistics` as a
+    /// trailing tuple so later recluster tasks can choose overlap candidates from the
+    /// original dimension bbox. They must not be added to `cluster_key_index` here.
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -223,39 +270,56 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_type = self.cluster_type();
-        if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
+        if !matches!(self.cluster_type(), Some(ClusterType::Linear)) {
             return Ok(ClusterStatsGenerator::default());
         }
 
+        let table_schema = self.schema();
+        let Some(ast_cluster_key_exprs) = self.resolve_cluster_keys() else {
+            return Err(ErrorCode::Internal(
+                "cluster stats generator requires cluster key expressions",
+            ));
+        };
+        let Some(cluster_key_id) = self.cluster_key_id() else {
+            return Err(ErrorCode::Internal(
+                "cluster stats generator requires cluster key id",
+            ));
+        };
+        let parsed_cluster_keys =
+            parse_cluster_keys(ctx.clone(), Arc::new(self.clone()), ast_cluster_key_exprs)?;
+        let kind = parsed_cluster_keys.kind;
+        let hilbert_len = parsed_cluster_keys.hilbert_len();
+        let hilbert_start = kind.hilbert_start();
+        let vector_key_index = kind.vector_index();
+        let cluster_key_exprs = parsed_cluster_keys.keys;
+        let input_offset = |id: &usize| input_schema.index_of(table_schema.field(*id).name());
         let mut merged = input_schema.fields().clone();
-
-        let cluster_keys = self.linear_cluster_keys(ctx.clone());
-        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut cluster_key_index =
+            Vec::with_capacity(cluster_key_exprs.len().saturating_sub(hilbert_len));
+        let mut stats_key_offsets = Vec::with_capacity(cluster_key_exprs.len());
         let mut extra_key_num = 0;
 
-        let mut exprs = Vec::with_capacity(cluster_keys.len());
+        let mut exprs = Vec::with_capacity(cluster_key_exprs.len());
         let mut vector_cluster_info = None;
-        let mut vector_column_input_offset = None;
+        let mut hilbert_dimension_offsets = Vec::with_capacity(hilbert_len);
 
-        for (key_index, remote_expr) in cluster_keys.iter().enumerate() {
-            let expr = remote_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| input_schema.index_of(name))?;
-            if let DataType::Vector(vector_ty) = expr.data_type().remove_nullable() {
+        for (key_index, cluster_key_expr) in cluster_key_exprs.iter().enumerate() {
+            let expr = cluster_key_expr.project_column_ref(input_offset)?;
+            let is_vector_key = Some(key_index) == vector_key_index;
+            let is_hilbert_dimension = hilbert_start.is_some_and(|start| key_index >= start);
+            if is_vector_key {
+                let DataType::Vector(vector_ty) = expr.data_type().remove_nullable() else {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Vector cluster key must be vector type",
+                    ));
+                };
                 let Expr::ColumnRef(ColumnRef { id, .. }) = &expr else {
                     return Err(ErrorCode::InvalidClusterKeys(
                         "Vector cluster key only supports direct column reference",
                     ));
                 };
-                if vector_cluster_info.is_some() {
-                    return Err(ErrorCode::InvalidClusterKeys(
-                        "Only one vector column is supported in cluster by",
-                    ));
-                }
                 let input_field = input_schema.field(*id);
-                let schema = self.schema();
-                let field = schema.field_with_name(input_field.name())?;
+                let field = table_schema.field_with_name(input_field.name())?;
                 let dimension: usize = vector_ty.dimension().try_into().map_err(|_| {
                     ErrorCode::InvalidClusterKeys(
                         "Vector cluster key dimension is too large for kmeans",
@@ -273,25 +337,32 @@ impl FuseTable {
                     field.name(),
                     dimension,
                 )?;
-                vector_column_input_offset = Some(*id);
-                vector_cluster_info = Some(vector_info);
+                vector_cluster_info = Some((vector_info, *id));
             }
-            let index = match &expr {
-                Expr::ColumnRef(ColumnRef { id, .. }) => *id,
-                _ => {
-                    let cname = format!("{}", expr);
-                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
+            let index = match expr {
+                Expr::ColumnRef(ColumnRef { id, .. }) => id,
+                expr => {
+                    let name = format!("{}", expr);
+                    merged.push(DataField::new(name.as_str(), expr.data_type().clone()));
                     exprs.push(expr);
-
-                    let offset = merged.len() - 1;
                     extra_key_num += 1;
-                    offset
+                    merged.len() - 1
                 }
             };
-            cluster_key_index.push(index);
+            if is_hilbert_dimension {
+                // Hilbert dimensions are persisted as bbox stats, but append does not sort
+                // by them. Recluster injects the transient proxy sort key when it rewrites.
+                hilbert_dimension_offsets.push(index);
+                stats_key_offsets.push(index);
+            } else {
+                cluster_key_index.push(index);
+                if !is_vector_key {
+                    stats_key_offsets.push(index);
+                }
+            }
         }
 
-        let operators = if exprs.is_empty() {
+        let eval_operators = if exprs.is_empty() {
             vec![]
         } else {
             vec![BlockOperator::Map {
@@ -299,38 +370,54 @@ impl FuseTable {
                 projections: None,
             }]
         };
-        let mut vector_operator = None;
-        if let Some(vector_info) = vector_cluster_info {
-            if vector_info.key_index < cluster_key_index.len() {
-                if let Some(vector_column_input_offset) = vector_column_input_offset {
-                    let cluster_id_offset = merged.len();
-                    merged.push(DataField::new(
-                        "_vector_cluster_sort_key",
-                        DataType::Number(NumberDataType::UInt64),
-                    ));
-                    extra_key_num += 1;
-                    // Keep the original CLUSTER BY order. For CLUSTER BY (a, embedding, b),
-                    // sorting should use (a, _vector_cluster_sort_key, b), not append the
-                    // vector sort key after all scalar keys.
-                    cluster_key_index[vector_info.key_index] = cluster_id_offset;
-                    vector_operator = Some(VectorClusterOperator {
-                        info: vector_info,
-                        vector_column_input_offset,
-                        vector_cluster_id_offset: cluster_id_offset,
-                    });
-                }
+        let vector_operator =
+            if let Some((vector_info, vector_column_input_offset)) = vector_cluster_info {
+                debug_assert!(vector_info.key_index < cluster_key_index.len());
+                let cluster_id_offset = merged.len();
+                merged.push(DataField::new(
+                    "_vector_cluster_sort_key",
+                    DataType::Number(NumberDataType::UInt64),
+                ));
+                extra_key_num += 1;
+                // Keep the original CLUSTER BY order. For CLUSTER BY (a, embedding, b),
+                // sorting should use (a, _vector_cluster_sort_key, b), not append the
+                // vector sort key after all scalar keys.
+                cluster_key_index[vector_info.key_index] = cluster_id_offset;
+                Some(VectorClusterOperator {
+                    info: vector_info,
+                    vector_column_input_offset,
+                    vector_cluster_id_offset: cluster_id_offset,
+                })
+            } else {
+                None
+            };
+
+        let special_operator = if let Some(vector_operator) = vector_operator {
+            if !hilbert_dimension_offsets.is_empty() {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "hilbert cluster marker cannot be used with vector cluster key",
+                ));
             }
-        }
+            Some(ClusterStatsOperator::Vector(vector_operator))
+        } else if hilbert_dimension_offsets.is_empty() {
+            None
+        } else {
+            Some(ClusterStatsOperator::Hilbert(HilbertClusterOperator {
+                dimension_offsets: hilbert_dimension_offsets,
+                hilbert_proxy_offset: None,
+            }))
+        };
 
         Ok(ClusterStatsGenerator::new(
-            self.cluster_key_id().unwrap(),
+            cluster_key_id,
             cluster_key_index,
+            stats_key_offsets,
             extra_key_num,
             None,
             level,
             block_thresholds,
-            operators,
-            vector_operator,
+            eval_operators,
+            special_operator,
             merged,
             ctx.get_function_context()?,
         ))

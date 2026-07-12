@@ -5083,6 +5083,7 @@ dependencies = [
  "paste",
  "rand 0.8.5",
  "roaring 0.10.12",
+ "rstar 0.12.2",
  "serde",
  "serde_json",
  "sha2",

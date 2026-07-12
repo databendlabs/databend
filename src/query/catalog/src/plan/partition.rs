@@ -24,10 +24,12 @@ use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_meta_client::types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -438,12 +440,29 @@ pub struct ReclusterTask {
     pub total_bytes: usize,
     pub total_compressed: usize,
     pub level: i32,
+    pub depth_kind: ReclusterDepthKind,
+    pub max_depth: usize,
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum ReclusterDepthKind {
+    Linear {
+        cluster_key_types: Vec<DataType>,
+    },
+    Hilbert {
+        require_scalar_overlap: bool,
+    },
+    Vector {
+        column_id: u32,
+        distance_type: VectorDistanceType,
+        require_scalar_overlap: bool,
+    },
+}
 
 #[derive(Clone, Default)]
 pub struct ReclusterParts {

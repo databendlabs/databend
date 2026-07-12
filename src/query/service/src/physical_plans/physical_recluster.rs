@@ -44,9 +44,12 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::TransformHilbertCluster;
+use databend_common_storages_fuse::operations::TransformReclusterDepth;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
+use databend_common_storages_fuse::statistics::ClusterStatsOperator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -185,18 +188,18 @@ impl IPhysicalPlan for Recluster {
                 }
 
                 let input_schema = DataSchema::from(table.schema_with_stream()).into();
-                let cluster_stats_gen = table.get_cluster_stats_gen(
+                let cluster_stats_gen = table.get_recluster_stats_gen(
                     builder.ctx.clone(),
                     task.level + 1,
                     block_thresholds,
                     input_schema,
                 )?;
-                let operators = cluster_stats_gen.operators.clone();
-                if !operators.is_empty() {
+                if !cluster_stats_gen.eval_operators.is_empty() {
+                    let eval_operators = cluster_stats_gen.eval_operators.clone();
                     let func_ctx2 = cluster_stats_gen.func_ctx.clone();
                     builder.main_pipeline.add_transformer(move || {
                         CompoundBlockOperator::new(
-                            operators.clone(),
+                            eval_operators.clone(),
                             func_ctx2.clone(),
                             num_input_columns,
                         )
@@ -212,17 +215,31 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
-                    builder.main_pipeline.try_resize(1)?;
-                    builder.main_pipeline.add_accumulating_transformer(move || {
-                        TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
-                            rows_per_block,
-                        )
-                    });
-                    builder.main_pipeline.try_resize(max_threads)?;
+                match &cluster_stats_gen.special_operator {
+                    Some(ClusterStatsOperator::Vector(vector_operator)) => {
+                        let vector_column_input_offset = vector_operator.vector_column_input_offset;
+                        let dimension = vector_operator.info.dimension;
+                        let distance_type = vector_operator.info.distance_type;
+                        builder.main_pipeline.try_resize(1)?;
+                        builder.main_pipeline.add_accumulating_transformer(move || {
+                            TransformVectorCluster::new(
+                                vector_column_input_offset,
+                                dimension,
+                                distance_type,
+                                rows_per_block,
+                            )
+                        });
+                        builder.main_pipeline.try_resize(max_threads)?;
+                    }
+                    Some(ClusterStatsOperator::Hilbert(hilbert_operator)) => {
+                        let dimension_offsets = hilbert_operator.dimension_offsets.clone();
+                        builder.main_pipeline.try_resize(1)?;
+                        builder.main_pipeline.add_accumulating_transformer(move || {
+                            TransformHilbertCluster::new(dimension_offsets.clone())
+                        });
+                        builder.main_pipeline.try_resize(max_threads)?;
+                    }
+                    None => {}
                 }
 
                 // construct output fields
@@ -230,7 +247,7 @@ impl IPhysicalPlan for Recluster {
                 let schema = DataSchemaRefExt::create(output_fields);
                 let sort_descs = cluster_stats_gen.sort_descs();
                 let skip_partial_sort =
-                    task.all_ordered && cluster_stats_gen.vector_operator.is_none();
+                    task.all_ordered && cluster_stats_gen.special_operator.is_none();
 
                 // merge sort
                 let sort_pipeline_builder = SortPipelineBuilder::create(
@@ -279,7 +296,15 @@ impl IPhysicalPlan for Recluster {
                         )?;
                         proc.into_processor()
                     },
-                )
+                )?;
+                builder.main_pipeline.try_resize(1)?;
+                let depth_kind = task.depth_kind.clone();
+                let max_depth = task.max_depth;
+                builder
+                    .main_pipeline
+                    .try_add_async_accumulating_transformer(move || {
+                        Ok(TransformReclusterDepth::new(depth_kind.clone(), max_depth))
+                    })
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),

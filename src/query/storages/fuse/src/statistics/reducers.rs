@@ -29,6 +29,8 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
+use super::reduce_cluster_min_max;
+
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
@@ -274,11 +276,10 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     blocks_cluster_stats: &[T],
     default_cluster_key_id: Option<u32>,
 ) -> Option<ClusterStatistics> {
-    if blocks_cluster_stats.is_empty() || default_cluster_key_id.is_none() {
+    let cluster_key_id = default_cluster_key_id?;
+    if blocks_cluster_stats.is_empty() {
         return None;
     }
-
-    let cluster_key_id = default_cluster_key_id.unwrap();
     let len = blocks_cluster_stats.len();
     let mut min_stats = Vec::with_capacity(len);
     let mut max_stats = Vec::with_capacity(len);
@@ -290,32 +291,15 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                 return None;
             }
 
-            min_stats.push(stat.min());
-            max_stats.push(stat.max());
+            min_stats.push(stat.min().as_slice());
+            max_stats.push(stat.max().as_slice());
             levels.push(stat.level);
         } else {
             return None;
         }
     }
 
-    let min = min_stats
-        .into_iter()
-        .min_by(|x, y| {
-            x.iter()
-                .map(Scalar::as_ref)
-                .cmp(y.iter().map(Scalar::as_ref))
-        })
-        .unwrap()
-        .clone();
-    let max = max_stats
-        .into_iter()
-        .max_by(|x, y| {
-            x.iter()
-                .map(Scalar::as_ref)
-                .cmp(y.iter().map(Scalar::as_ref))
-        })
-        .unwrap()
-        .clone();
+    let (min, max) = reduce_cluster_min_max(&min_stats, &max_stats)?;
     let level = levels.into_iter().max().unwrap_or(0);
 
     Some(ClusterStatistics::new(

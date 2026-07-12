@@ -258,8 +258,8 @@ pub async fn do_refresh_table_index(
     pipeline.try_resize(1)?;
     let table_meta_timestamps =
         ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?;
-    pipeline.add_async_accumulating_transformer(|| {
-        TableMutationAggregator::create(
+    pipeline.try_add_async_accumulating_transformer(|| {
+        Ok(TableMutationAggregator::create(
             fuse_table,
             ctx.clone(),
             snapshot.segments.clone(),
@@ -268,8 +268,8 @@ pub async fn do_refresh_table_index(
             Statistics::default(),
             MutationKind::Refresh,
             table_meta_timestamps,
-        )
-    });
+        ))
+    })?;
 
     let prev_snapshot_id = snapshot.snapshot_id;
     let snapshot_gen = MutationGenerator::new(Some(snapshot), MutationKind::Refresh);

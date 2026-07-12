@@ -26,13 +26,10 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VirtualDataSchema;
-use databend_common_expression::types::DataType;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -70,8 +67,6 @@ use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::VirtualColumnAccumulator;
-use crate::statistics::get_min_max_stats;
-use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
@@ -82,6 +77,7 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
+    recluster_improved: Option<bool>,
     set_hilbert_level: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
@@ -108,9 +104,9 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
         self.processed_log_entries += mutation_logs.entries.len();
-        mutation_logs.entries.into_iter().for_each(|entry| {
-            self.accumulate_log_entry(entry);
-        });
+        for entry in mutation_logs.entries {
+            self.accumulate_log_entry(entry)?;
+        }
         Ok(None)
     }
 
@@ -174,6 +170,11 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
         );
         debug!("mutations {:?}", meta);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
+
+        if let Some(improved) = self.recluster_improved {
+            self.ctx.mutation_state().set_recluster_terminate(!improved);
+        }
+
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
     }
 }
@@ -199,32 +200,15 @@ impl TableMutationAggregator {
                     | MutationKind::Replace
                     | MutationKind::Recluster
             );
-        let fill_missing_cluster_stats =
-            cluster_type.is_some_and(|v| matches!(v, ClusterType::Linear));
-
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
-        let cluster_key_exprs = if fill_missing_cluster_stats {
-            table
-                .resolve_cluster_keys()
-                .map(|cluster_keys| {
-                    parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
-                })
-                .transpose()
-                .expect("table cluster keys should be valid")
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
         let write_segment_ctx = WriteSegmentCtx {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator().clone(),
             thresholds: table.get_block_thresholds(),
             default_cluster_key: table.cluster_key_id(),
-            cluster_key_exprs: Arc::from(cluster_key_exprs.clone()),
             schema: table.schema(),
             kind,
             table_meta_timestamps,
-            fill_missing_cluster_stats,
         };
         TableMutationAggregator {
             ctx,
@@ -236,6 +220,7 @@ impl TableMutationAggregator {
             virtual_schema_mode: VirtualSchemaMode::Merge,
             base_segments,
             merged_blocks,
+            recluster_improved: None,
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
@@ -247,7 +232,7 @@ impl TableMutationAggregator {
         }
     }
 
-    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
+    fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) -> Result<()> {
         match log_entry {
             MutationLogEntry::ReplacedBlock {
                 index,
@@ -347,8 +332,13 @@ impl TableMutationAggregator {
                     self.write_segment_ctx.default_cluster_key,
                 );
             }
+            MutationLogEntry::ReclusterExtras { improved_enough } => {
+                self.recluster_improved =
+                    Some(self.recluster_improved.unwrap_or(false) || improved_enough);
+            }
             MutationLogEntry::DoNothing => (),
         }
+        Ok(())
     }
 
     async fn generate_append_segments(&mut self) -> Result<()> {
@@ -826,11 +816,9 @@ struct WriteSegmentCtx {
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
-    cluster_key_exprs: Arc<[Expr<usize>]>,
     schema: TableSchemaRef,
     kind: MutationKind,
     table_meta_timestamps: TableMetaTimestamps,
-    fill_missing_cluster_stats: bool,
 }
 
 impl WriteSegmentCtx {
@@ -875,19 +863,6 @@ impl WriteSegmentCtx {
                 level,
                 pages: None,
             });
-        } else if self.fill_missing_cluster_stats {
-            // Mutation paths may produce a new segment whose blocks do not all carry
-            // block-level cluster_stats for the current cluster key yet. In that case
-            // reduce_block_metas() leaves summary.cluster_stats empty. Reconstruct a
-            // segment-level min/max here from the merged summary col_stats so the new
-            // segment can participate in later recluster selection and clustering
-            // introspection without waiting for another rewrite.
-            fill_missing_segment_cluster_stats(
-                &mut new_summary,
-                self.default_cluster_key,
-                &self.cluster_key_exprs,
-                self.schema.as_ref(),
-            );
         }
 
         if let Some(stats) = stats {
@@ -911,37 +886,6 @@ impl WriteSegmentCtx {
             .await?;
         Ok((location, new_summary))
     }
-}
-
-fn fill_missing_segment_cluster_stats(
-    summary: &mut Statistics,
-    default_cluster_key: Option<u32>,
-    cluster_key_exprs: &[Expr<usize>],
-    schema: &databend_common_expression::TableSchema,
-) {
-    if summary.cluster_stats.is_some() {
-        return;
-    }
-    let Some(cluster_key_id) = default_cluster_key else {
-        return;
-    };
-    if cluster_key_exprs.is_empty() {
-        return;
-    }
-
-    let scalar_cluster_key_exprs = cluster_key_exprs
-        .iter()
-        .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
-        .cloned()
-        .collect::<Vec<_>>();
-    let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_cluster_key_exprs, schema);
-    let (min, max) = get_min_max_stats(
-        &prepared_cluster_key_exprs,
-        &summary.col_stats,
-        None,
-        Some(cluster_key_id),
-    );
-    summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0, None));
 }
 
 fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u8>>> {

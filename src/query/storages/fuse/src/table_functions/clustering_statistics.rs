@@ -25,7 +25,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -37,9 +36,13 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
 use crate::io::SegmentsIO;
+use crate::operations::build_hilbert_candidates;
 use crate::sessions::TableContext;
 use crate::statistics::BlockOverlapDepth;
 use crate::statistics::calculate_block_overlap_depths;
+use crate::statistics::cluster_key_types_for_depth;
+use crate::statistics::cluster_stats_for_hilbert_depth;
+use crate::statistics::cluster_stats_scalar_overlap;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 use crate::table_functions::TableMetaFunc;
@@ -94,45 +97,54 @@ impl TableMetaFunc for ClusteringStatistics {
         }
 
         let cluster_keys = tbl.resolve_cluster_keys().unwrap();
-        let exprs = parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?;
-        let scalar_exprs = exprs
-            .into_iter()
-            .filter(|expr| !matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
-            .collect::<Vec<_>>();
-        let scalar_cluster_key_types = scalar_exprs
-            .iter()
-            .map(|v| {
-                let data_type = v.data_type();
-                if matches!(*data_type, DataType::String) {
-                    data_type.wrap_nullable()
-                } else {
-                    data_type.clone()
-                }
-            })
-            .collect::<Vec<_>>();
+        let (stats_exprs, hilbert_len) =
+            parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?
+                .into_cluster_stats_keys();
+        let use_hilbert_stats = hilbert_len > 0;
+        let require_scalar_overlap = stats_exprs.len() > hilbert_len;
+        let scalar_cluster_key_types = if use_hilbert_stats {
+            Vec::new()
+        } else {
+            cluster_key_types_for_depth(&stats_exprs)
+        };
 
-        let mut segment_names = Vec::with_capacity(capacity);
-        let mut block_names = Vec::with_capacity(capacity);
-        let mut ranges = Vec::with_capacity(capacity);
-        let mut levels = Vec::with_capacity(capacity);
-        let mut pages = Vec::with_capacity(capacity);
+        let mut segment_names = Vec::with_capacity(output_len);
+        let mut block_names = Vec::with_capacity(output_len);
+        let mut ranges = if use_hilbert_stats {
+            Vec::with_capacity(output_len)
+        } else {
+            Vec::with_capacity(capacity)
+        };
+        let mut levels = Vec::with_capacity(output_len);
+        let mut pages = Vec::with_capacity(output_len);
+        let mut hilbert_cluster_stats = if use_hilbert_stats {
+            Vec::with_capacity(capacity)
+        } else {
+            Vec::new()
+        };
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
         let schema = tbl.schema();
-        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&scalar_exprs, schema.as_ref());
+        let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&stats_exprs, schema.as_ref());
 
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         let format_vec = |v: &[Scalar]| -> String {
-            format!(
-                "[{}]",
-                v.iter()
-                    .map(|item| format!("{}", item))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+            use std::fmt::Write;
+
+            let mut output = String::from("[");
+            for (idx, item) in v.iter().enumerate() {
+                if idx > 0 {
+                    output.push_str(", ");
+                }
+                write!(&mut output, "{}", item).expect("write to String");
+            }
+            output.push(']');
+            output
         };
-        // block_depth is a global overlap metric, so all block ranges must be
-        // collected before LIMIT can be applied to the final output rows.
+        // block_depth is a global overlap metric. Scalar keys keep all ranges in
+        // `ranges`; Hilbert keeps all depth input in `hilbert_cluster_stats` and
+        // stores only displayed min/max rows in `ranges`.
+        let mut row_idx = 0usize;
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, true)
@@ -143,29 +155,56 @@ impl TableMetaFunc for ClusteringStatistics {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    let (min, max) = get_min_max_stats(
-                        &prepared_cluster_key_exprs,
-                        &block.col_stats,
-                        block.cluster_stats.as_ref(),
-                        Some(cluster_key_id),
-                    );
                     let current_cluster_stats = block
                         .cluster_stats
                         .as_ref()
                         .filter(|v| v.cluster_key_id == cluster_key_id);
+                    let keep_output_row = row_idx < output_len;
+                    if use_hilbert_stats {
+                        let stats = cluster_stats_for_hilbert_depth(
+                            &prepared_cluster_key_exprs,
+                            &block.col_stats,
+                            current_cluster_stats,
+                            cluster_key_id,
+                            hilbert_len,
+                        );
+                        if keep_output_row {
+                            ranges.push((stats.min().clone(), stats.max().clone()));
+                        }
+                        hilbert_cluster_stats.push(stats);
+                    } else {
+                        ranges.push(get_min_max_stats(
+                            &prepared_cluster_key_exprs,
+                            &block.col_stats,
+                            current_cluster_stats,
+                            Some(cluster_key_id),
+                        ));
+                    }
 
-                    segment_names.push(segment_loc.clone());
-                    block_names.push(block.location.0.clone());
-                    levels.push(current_cluster_stats.map(|v| v.level));
-                    pages.push(
-                        current_cluster_stats.and_then(|v| v.pages.as_ref().map(|v| format_vec(v))),
-                    );
-                    ranges.push((min, max));
+                    if keep_output_row {
+                        segment_names.push(segment_loc.clone());
+                        block_names.push(block.location.0.clone());
+                        levels.push(current_cluster_stats.map(|v| v.level));
+                        pages.push(
+                            current_cluster_stats
+                                .and_then(|v| v.pages.as_ref().map(|v| format_vec(v))),
+                        );
+                    }
+                    row_idx += 1;
                 }
             }
         }
 
-        let block_depths = if scalar_cluster_key_types.is_empty() {
+        let block_depths = if use_hilbert_stats {
+            build_hilbert_candidates(&hilbert_cluster_stats, |left, right| {
+                !require_scalar_overlap
+                    || cluster_stats_scalar_overlap(
+                        &hilbert_cluster_stats[left],
+                        &hilbert_cluster_stats[right],
+                    )
+            })
+            .overlap_depths()
+        } else if scalar_cluster_key_types.is_empty() {
             vec![BlockOverlapDepth::default(); ranges.len()]
         } else {
             calculate_block_overlap_depths(&ranges, &scalar_cluster_key_types)?

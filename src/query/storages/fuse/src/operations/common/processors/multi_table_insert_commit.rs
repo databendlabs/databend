@@ -102,10 +102,11 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = std::mem::take(&mut self.insert_rows);
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
+            let table = self.tables.get(&table_id).unwrap();
+
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
-            let table = self.tables.get(&table_id).unwrap();
             if table.is_temp() {
                 let (req, imperfect_count) = build_update_temp_table_req(
                     table.as_ref(),
@@ -289,7 +290,7 @@ impl AsyncSink for CommitMultiTableInsert {
         match self.commit_metas.get_mut(&meta.table_id) {
             Some(m) => {
                 let table = self.tables.get(&meta.table_id).unwrap();
-                let table = FuseTable::try_from_table(table.as_ref()).unwrap();
+                let table = FuseTable::try_from_table(table.as_ref())?;
                 *m = TransformMergeCommitMeta::merge_commit_meta(
                     m.clone(),
                     meta,
