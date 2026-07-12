@@ -23,6 +23,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -100,6 +101,8 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -1013,6 +1016,7 @@ impl Binder {
             && let Some(partition_exprs) = partition_by
         {
             let partition_opt = ClusterOption {
+                cluster_type: AstClusterType::Linear,
                 cluster_exprs: partition_exprs.clone(),
             };
             let keys = self
@@ -1030,6 +1034,11 @@ impl Binder {
                 .analyze_cluster_keys(cluster_opt, schema.clone(), table_indexes.as_ref())
                 .await?;
             if !keys.is_empty() {
+                let cluster_type = match cluster_opt.cluster_type {
+                    AstClusterType::Linear => ClusterType::Linear,
+                    AstClusterType::Hilbert => ClusterType::Hilbert,
+                };
+                options.insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
                 options
                     .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
@@ -1481,6 +1490,10 @@ impl Binder {
                         table,
                         branch,
                         cluster_keys,
+                        cluster_type: match cluster_by.cluster_type {
+                            AstClusterType::Linear => ClusterType::Linear,
+                            AstClusterType::Hilbert => ClusterType::Hilbert,
+                        },
                     },
                 )))
             }
@@ -2060,17 +2073,16 @@ impl Binder {
             if let Some(len) = column.stats_truncate_len {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!(
-                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
-                            name, inner_type
-                        ),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                        name, inner_type
+                    )));
                 }
                 if len == 0 || len > 4096 {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN must be in range [1, 4096], got {}",
+                        len
+                    )));
                 }
             }
             fields_stats_truncate_len.push(column.stats_truncate_len);
@@ -2425,9 +2437,17 @@ impl Binder {
         key_name: &str,
         allow_vector: bool,
     ) -> Result<Vec<String>> {
-        let ClusterOption { cluster_exprs } = cluster_opt;
+        let ClusterOption {
+            cluster_type,
+            cluster_exprs,
+        } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
+        if *cluster_type == AstClusterType::Hilbert && expr_len != 2 {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires exactly two dimensions",
+            ));
+        }
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
@@ -2496,6 +2516,11 @@ impl Binder {
                 )));
             }
             if is_vector_type {
+                if *cluster_type == AstClusterType::Hilbert {
+                    return Err(ErrorCode::InvalidClusterKeys(
+                        "Hilbert clustering does not support vector dimensions",
+                    ));
+                }
                 vector_cluster_key_num += 1;
                 if vector_cluster_key_num > 1 {
                     return Err(ErrorCode::InvalidClusterKeys(

@@ -16,9 +16,10 @@ mod block_builder;
 mod column_ndv_estimator;
 mod column_statistics_builder;
 mod column_statistics_state;
+mod hilbert_statistics;
 
 pub(crate) use block_builder::StreamBlockBuilder;
-pub(crate) use block_builder::StreamBlockProperties;
+pub use block_builder::StreamBlockProperties;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimator;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimatorOps;
 pub(crate) use column_ndv_estimator::create_column_ndv_estimator;
@@ -26,3 +27,4 @@ pub(crate) use column_statistics_builder::ColumnStatisticsBuilder;
 pub(crate) use column_statistics_builder::ColumnStatsOps;
 pub(crate) use column_statistics_builder::create_column_stats_builder;
 pub(crate) use column_statistics_state::ColumnStatisticsState;
+pub use hilbert_statistics::HilbertStatisticsBuilder;

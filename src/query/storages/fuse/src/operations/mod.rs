@@ -62,6 +62,8 @@ pub use recluster::ReclusterFinalCarry;
 pub use recluster::ReclusterMode;
 pub use recluster::ReclusterMutator;
 pub use recluster::SelectedReclusterSegment;
+pub use recluster::SelectedReclusterWindow;
+pub(crate) use recluster::hilbert_diagnostics;
 pub use replace_into::*;
 pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;

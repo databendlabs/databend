@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -21,13 +23,18 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -37,6 +44,13 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::HilbertStatisticsBuilder;
+use databend_common_storages_fuse::io::StreamBlockProperties;
+use databend_common_storages_fuse::operations::HilbertRangeExchange;
+use databend_common_storages_fuse::operations::HilbertRangeState;
+use databend_common_storages_fuse::operations::TransformBlockBuilder;
+use databend_common_storages_fuse::operations::TransformBlockWriter;
+use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -179,12 +193,12 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
-                let operators = cluster_stats_gen.operators.clone();
-                if !operators.is_empty() {
+                if !cluster_stats_gen.eval_operators.is_empty() {
+                    let eval_operators = cluster_stats_gen.eval_operators.clone();
                     let func_ctx2 = cluster_stats_gen.func_ctx.clone();
                     builder.main_pipeline.add_transformer(move || {
                         CompoundBlockOperator::new(
-                            operators.clone(),
+                            eval_operators.clone(),
                             func_ctx2.clone(),
                             num_input_columns,
                         )
@@ -200,74 +214,167 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+                if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
+                    let vector_column_input_offset = vector_operator.vector_column_input_offset;
+                    let dimension = vector_operator.info.dimension;
+                    let distance_type = vector_operator.info.distance_type;
                     builder.main_pipeline.try_resize(1)?;
                     builder.main_pipeline.add_accumulating_transformer(move || {
                         TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
+                            vector_column_input_offset,
+                            dimension,
+                            distance_type,
                             rows_per_block,
                         )
                     });
                     builder.main_pipeline.try_resize(max_threads)?;
-                }
+                } else if cluster_stats_gen.is_hilbert() {
+                    let dimension_offsets = cluster_stats_gen.hilbert_dimension_offsets()?;
+                    let worker_count = builder.main_pipeline.output_len().max(1);
+                    let target_blocks = task.total_rows.div_ceil(rows_per_block).max(1);
+                    let num_collectors = max_threads
+                        .min(target_blocks)
+                        .clamp(1, u8::MAX as usize + 1);
+                    let state = HilbertRangeState::create(
+                        dimension_offsets,
+                        task.total_rows,
+                        worker_count,
+                        num_collectors,
+                    );
 
-                // construct output fields
-                let output_fields = cluster_stats_gen.out_fields.clone();
-                let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs = cluster_stats_gen.sort_descs();
-                let skip_partial_sort =
-                    task.all_ordered && cluster_stats_gen.vector_operator.is_none();
+                    // Every input stream samples locally, then all streams replay against one
+                    // immutable task-local weighted range plan.
+                    let worker_id = AtomicUsize::new(0);
+                    builder.main_pipeline.add_transform(|input, output| {
+                        let id = worker_id.fetch_add(1, Ordering::Relaxed);
+                        Ok(ProcessorPtr::create(TransformHilbertCluster::create(
+                            input,
+                            output,
+                            state.clone(),
+                            id,
+                        )))
+                    })?;
 
-                // merge sort
-                let sort_pipeline_builder = SortPipelineBuilder::create(
-                    builder.ctx.clone(),
-                    schema,
-                    sort_descs.into(),
-                    None,
-                    settings.get_enable_fixed_rows_sort()?,
-                )?
-                .with_block_size_hit(rows_per_block);
-                if !skip_partial_sort {
-                    let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
-                    builder.main_pipeline.add_transformer(move || {
-                        TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
-                    });
-                }
-                sort_pipeline_builder.build_merge_sort_pipeline(
-                    &mut builder.main_pipeline,
-                    false,
-                    false,
-                )?;
+                    builder.main_pipeline.try_resize(num_collectors)?;
+                    builder
+                        .main_pipeline
+                        .exchange(num_collectors, HilbertRangeExchange::create(state))?;
 
-                // Compact after merge sort. This ordered compactor keeps block growth bounded
-                // without requiring a hard post-sort size cap, since final serialized sizes are
-                // not known yet and over-splitting here would create small fragmented blocks.
-                let compact_thresholds = block_thresholds
-                    .set_rows_per_block(rows_per_block)
-                    .set_bytes_per_block(bytes_per_block);
-                build_ordered_compact_pipeline(
-                    &mut builder.main_pipeline,
-                    compact_thresholds,
-                    max_threads,
-                    cluster_stats_gen.extra_key_num,
-                )?;
-
-                builder.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        let proc = TransformSerializeBlock::try_create(
+                    // Skip local sorting when range exchange is expected to form one target block
+                    // per collector; keep it when each collector must be split into multiple blocks.
+                    if target_blocks > num_collectors {
+                        let mut sort_fields = cluster_stats_gen.out_fields.clone();
+                        let hilbert_value_offset = sort_fields.len();
+                        sort_fields.push(DataField::new(
+                            "_task_hilbert_value",
+                            DataType::Number(NumberDataType::UInt32),
+                        ));
+                        let sort_schema = DataSchemaRefExt::create(sort_fields);
+                        let sort_desc = vec![SortColumnDescription {
+                            offset: hilbert_value_offset,
+                            asc: true,
+                            nulls_first: false,
+                        }];
+                        SortPipelineBuilder::create(
                             builder.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            table,
-                            cluster_stats_gen.clone(),
-                            MutationKind::Recluster,
-                            self.table_meta_timestamps,
-                        )?;
-                        proc.into_processor()
-                    },
-                )
+                            sort_schema,
+                            sort_desc.into(),
+                            None,
+                            settings.get_enable_fixed_rows_sort()?,
+                        )?
+                        .with_block_size_hit(rows_per_block)
+                        .build_local_sort_pipeline(&mut builder.main_pipeline)?;
+                    }
+
+                    let temporary_column_count = cluster_stats_gen.extra_key_num + 1;
+                    let cluster_stats_builder = HilbertStatisticsBuilder::for_recluster(
+                        table.cluster_key_id().ok_or_else(|| {
+                            ErrorCode::Internal("Hilbert recluster requires a cluster key id")
+                        })?,
+                        dimension_offsets,
+                        temporary_column_count,
+                        task.level + 1,
+                    );
+                    let stream_thresholds = block_thresholds
+                        .set_rows_per_block(rows_per_block)
+                        .set_bytes_per_block(bytes_per_block);
+                    let properties = StreamBlockProperties::try_create_for_hilbert_recluster(
+                        builder.ctx.clone(),
+                        table,
+                        self.table_meta_timestamps,
+                        stream_thresholds,
+                        cluster_stats_builder,
+                        task.partition_stats.clone(),
+                    )?;
+                    builder.main_pipeline.add_transform(|input, output| {
+                        TransformBlockBuilder::try_create(input, output, properties.clone())
+                    })?;
+                    builder
+                        .main_pipeline
+                        .add_async_accumulating_transformer(|| {
+                            TransformBlockWriter::create(
+                                builder.ctx.clone(),
+                                MutationKind::Recluster,
+                                table,
+                                false,
+                            )
+                        });
+                }
+
+                let is_hilbert = cluster_stats_gen.is_hilbert();
+                if !is_hilbert {
+                    // Linear and vector clustering retain their existing row-sort pipeline.
+                    let output_fields = cluster_stats_gen.out_fields.clone();
+                    let schema = DataSchemaRefExt::create(output_fields);
+                    let sort_descs = cluster_stats_gen.sort_descs();
+                    let skip_partial_sort = task.all_ordered && cluster_stats_gen.is_linear();
+                    let sort_pipeline_builder = SortPipelineBuilder::create(
+                        builder.ctx.clone(),
+                        schema,
+                        sort_descs.into(),
+                        None,
+                        settings.get_enable_fixed_rows_sort()?,
+                    )?
+                    .with_block_size_hit(rows_per_block);
+                    if !skip_partial_sort {
+                        let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
+                        builder.main_pipeline.add_transformer(move || {
+                            TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
+                        });
+                    }
+                    sort_pipeline_builder.build_merge_sort_pipeline(
+                        &mut builder.main_pipeline,
+                        false,
+                        false,
+                    )?;
+
+                    let compact_thresholds = block_thresholds
+                        .set_rows_per_block(rows_per_block)
+                        .set_bytes_per_block(bytes_per_block);
+                    build_ordered_compact_pipeline(
+                        &mut builder.main_pipeline,
+                        compact_thresholds,
+                        max_threads,
+                        cluster_stats_gen.extra_key_num,
+                    )?;
+
+                    builder.main_pipeline.add_transform(
+                        |transform_input_port, transform_output_port| {
+                            let proc = TransformSerializeBlock::try_create(
+                                builder.ctx.clone(),
+                                transform_input_port,
+                                transform_output_port,
+                                table,
+                                cluster_stats_gen.clone(),
+                                MutationKind::Recluster,
+                                self.table_meta_timestamps,
+                            )?;
+                            proc.into_processor()
+                        },
+                    )?;
+                }
+
+                Ok(())
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),

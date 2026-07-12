@@ -1,0 +1,143 @@
+statement ok
+CREATE OR REPLACE DATABASE test_hilbert
+
+statement ok
+USE test_hilbert
+
+statement ok
+CREATE OR REPLACE TABLE t_direct(a int, b int) CLUSTER BY HILBERT(a, b) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_expr(a int, b string, c int) CLUSTER BY HILBERT(substring(b, 1, 2), c + 1) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_string(b string, c int) CLUSTER BY HILBERT(b, c) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_recluster(b int, c int) CLUSTER BY HILBERT(b, c) row_per_block=2 block_per_segment=2
+
+statement ok
+CREATE OR REPLACE TABLE t_partitioned_recluster(p int, b int, c int) PARTITION BY (p) CLUSTER BY HILBERT(b, c) row_per_block=2 block_per_segment=10
+
+statement ok
+CREATE OR REPLACE TABLE t_alter(a int, b int) CLUSTER BY LINEAR(a)
+
+statement ok
+ALTER TABLE t_alter CLUSTER BY HILBERT(a, b)
+
+query TT rowsort
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_direct')
+UNION ALL
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_alter')
+----
+(a, b) hilbert
+(a, b) hilbert
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_expr')
+----
+(SUBSTRING(b FROM 1 FOR 2), c + 1) hilbert
+
+query TT
+SELECT cluster_key, type FROM clustering_information('test_hilbert', 't_string')
+----
+(b, c) hilbert
+
+statement ok
+INSERT INTO t_direct VALUES (10, 10), (20, 20), (30, 30), (40, 40)
+
+statement ok
+INSERT INTO t_expr VALUES (1, 'aa', 10), (1, 'ab', 20), (2, 'ba', 30), (2, 'bb', 40)
+
+statement ok
+INSERT INTO t_string VALUES ('abcdefgh-01', 10), ('abcdefgh-02', 20), ('ijklmnop-01', 30), ('ijklmnop-02', 40)
+
+query II
+SELECT count(), sum(a + b) FROM t_direct
+----
+4 200
+
+query II
+SELECT count(), sum(a) FROM t_expr
+----
+4 6
+
+query I
+SELECT count() FROM t_string
+----
+4
+
+# Appends keep Hilbert dimensions as block statistics. FINAL recluster must
+# consume those dimensions through the task-local Hilbert sort key and preserve rows.
+statement ok
+INSERT INTO t_recluster VALUES (0, 0), (100, 100)
+
+statement ok
+INSERT INTO t_recluster VALUES (10, 90), (90, 10)
+
+statement ok
+INSERT INTO t_recluster VALUES (20, 80), (80, 20)
+
+statement ok
+INSERT INTO t_recluster VALUES (30, 70), (70, 30)
+
+query B
+SELECT info:max_depth::int > 1 FROM clustering_information('test_hilbert', 't_recluster')
+----
+1
+
+statement ok
+ALTER TABLE t_recluster RECLUSTER FINAL
+
+query II
+SELECT count(), sum(b + c) FROM t_recluster
+----
+8 800
+
+query I
+SELECT count() FROM clustering_statistics('test_hilbert', 't_recluster') WHERE block_depth IS NOT NULL
+----
+0
+
+# A Hilbert recluster task is partition-local. Its stream writer must carry the
+# task partition statistics into every output block so those blocks can share segments.
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 0, 0), (0, 100, 100), (1, 0, 0), (1, 100, 100)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 10, 90), (0, 90, 10), (1, 10, 90), (1, 90, 10)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 20, 80), (0, 80, 20), (1, 20, 80), (1, 80, 20)
+
+statement ok
+INSERT INTO t_partitioned_recluster VALUES (0, 30, 70), (0, 70, 30), (1, 30, 70), (1, 70, 30)
+
+statement ok
+ALTER TABLE t_partitioned_recluster RECLUSTER FINAL
+
+query I
+SELECT segment_count < block_count FROM fuse_snapshot('test_hilbert', 't_partitioned_recluster') LIMIT 1
+----
+1
+
+query II
+SELECT count(), count_if(p = 0) FROM t_partitioned_recluster
+----
+16 8
+
+# hilbert is syntax in CLUSTER BY HILBERT(...), not a scalar function.
+statement error 1008
+CREATE OR REPLACE TABLE bad_function(a int, b int) CLUSTER BY (hilbert(a, b))
+
+statement error 1008
+CREATE OR REPLACE TABLE bad_position(a int, b int, c int) CLUSTER BY (hilbert(a, b), c)
+
+statement error 1008
+CREATE OR REPLACE TABLE bad_dimension(a int) CLUSTER BY (hilbert(a))
+
+statement error 1008
+SELECT hilbert(1, 2)
+
+statement ok
+DROP DATABASE test_hilbert

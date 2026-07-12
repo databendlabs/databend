@@ -120,6 +120,7 @@ impl TableSnapshot {
         mut summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
+        cluster_type: Option<ClusterType>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -160,6 +161,11 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        if cluster_key_meta.is_some() != cluster_type.is_some() {
+            return Err(ErrorCode::Internal(
+                "snapshot cluster key metadata and cluster type must be set together",
+            ));
+        }
         let cluster_key_id = cluster_key_meta.as_ref().map(|(id, _)| *id);
         if summary
             .cluster_stats
@@ -168,7 +174,6 @@ impl TableSnapshot {
         {
             summary.cluster_stats = None;
         }
-        let cluster_type = cluster_key_meta.as_ref().map(|_| ClusterType::Linear);
         let logical_change_counters = Some(
             prev_snapshot
                 .as_ref()
@@ -194,6 +199,7 @@ impl TableSnapshot {
     pub fn try_from_previous(
         previous: Arc<TableSnapshot>,
         target_cluster_key_meta: Option<ClusterKey>,
+        target_cluster_type: Option<ClusterType>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -205,6 +211,7 @@ impl TableSnapshot {
             previous.summary.clone(),
             previous.segments.clone(),
             target_cluster_key_meta,
+            target_cluster_type,
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
@@ -424,26 +431,26 @@ mod tests {
 
     #[test]
     fn test_try_from_previous_uses_target_cluster_key_metadata() {
+        let cluster_key_meta = Some((1, "(a, b)".to_string()));
+        let cluster_stats = ClusterStatistics::new(1, vec![], vec![], 0);
         let mut previous = TableSnapshot::try_new(
             None,
             None,
             TableSchema::empty(),
             Statistics::default(),
             vec![],
-            None,
+            cluster_key_meta.clone(),
+            Some(ClusterType::Linear),
             None,
             TableMetaTimestamps::default(),
         )
         .unwrap();
-        let cluster_key_meta = Some((1, "(a, b)".to_string()));
-        let cluster_stats = ClusterStatistics::new(1, vec![], vec![], 0);
-        previous.cluster_key_meta = cluster_key_meta.clone();
-        previous.cluster_type = None;
         previous.summary.cluster_stats = Some(cluster_stats.clone());
 
         let snapshot = TableSnapshot::try_from_previous(
             Arc::new(previous),
             cluster_key_meta.clone(),
+            Some(ClusterType::Linear),
             None,
             TableMetaTimestamps::default(),
         )
@@ -455,24 +462,69 @@ mod tests {
     }
 
     #[test]
-    fn test_try_from_previous_clears_cluster_metadata_without_target_key() {
-        let mut previous = TableSnapshot::try_new(
+    fn test_try_from_previous_uses_explicit_hilbert_type_when_key_changes() {
+        let previous_cluster_key_meta = Some((1, "(a, b)".to_string()));
+        let target_cluster_key_meta = Some((2, "(x, y)".to_string()));
+        let previous = TableSnapshot::try_new(
             None,
             None,
             TableSchema::empty(),
             Statistics::default(),
             vec![],
-            None,
+            previous_cluster_key_meta,
+            Some(ClusterType::Hilbert),
             None,
             TableMetaTimestamps::default(),
         )
         .unwrap();
-        previous.cluster_key_meta = Some((1, "(a, b)".to_string()));
-        previous.cluster_type = Some(ClusterType::Hilbert);
-        previous.summary.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0));
 
         let snapshot = TableSnapshot::try_from_previous(
             Arc::new(previous),
+            target_cluster_key_meta.clone(),
+            Some(ClusterType::Hilbert),
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.cluster_key_meta, target_cluster_key_meta);
+        assert_eq!(snapshot.cluster_type, Some(ClusterType::Hilbert));
+    }
+
+    #[test]
+    fn test_snapshot_rejects_partial_cluster_metadata() {
+        let result = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            Some((1, "(a, b)".to_string())),
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_from_previous_clears_cluster_metadata_without_target_key() {
+        let previous = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            Some((1, "(a, b)".to_string())),
+            Some(ClusterType::Hilbert),
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+
+        let snapshot = TableSnapshot::try_from_previous(
+            Arc::new(previous),
+            None,
             None,
             None,
             TableMetaTimestamps::default(),
@@ -491,6 +543,7 @@ mod tests {
             TableSchema::default(),
             Statistics::default(),
             vec![],
+            None,
             None,
             None,
             TableMetaTimestamps::new(None, TimeDelta::hours(1)),

@@ -24,6 +24,8 @@ use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::cluster_type_from_options;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -73,6 +75,7 @@ impl SnapshotGenerator for MutationGenerator {
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
+        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -98,7 +101,9 @@ impl SnapshotGenerator for MutationGenerator {
                     let mut new_summary = merge_statistics(
                         previous.summary(),
                         &ctx.merged_statistics,
-                        cluster_key_meta.as_ref().map(|v| v.0),
+                        cluster_key_meta
+                            .as_ref()
+                            .map(|v| (v.0, cluster_type_from_options(&table_info.meta.options))),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
 
@@ -116,6 +121,7 @@ impl SnapshotGenerator for MutationGenerator {
                         new_summary,
                         new_segments,
                         cluster_key_meta,
+                        cluster_type,
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;

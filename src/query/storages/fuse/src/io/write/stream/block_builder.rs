@@ -46,6 +46,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Buffer;
 
@@ -65,6 +66,8 @@ use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
+use crate::io::write::stream::hilbert_statistics::HilbertStatisticsBuilder;
+use crate::io::write::stream::hilbert_statistics::HilbertStatisticsState;
 use crate::operations::column_parquet_metas;
 
 pub struct UninitializedArrowWriter {
@@ -177,6 +180,7 @@ pub struct StreamBlockBuilder {
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
 
+    cluster_stats_state: HilbertStatisticsState,
     column_stats_state: ColumnStatisticsState,
 
     row_count: usize,
@@ -226,6 +230,8 @@ impl StreamBlockBuilder {
             .as_ref()
             .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n, None)?;
+        let cluster_stats_state =
+            HilbertStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
             &properties.stats_columns,
             &properties.distinct_columns,
@@ -240,6 +246,7 @@ impl StreamBlockBuilder {
             vector_index_builder,
             spatial_index_builder,
             block_stats_builder,
+            cluster_stats_state,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -265,6 +272,7 @@ impl StreamBlockBuilder {
 
         let had_existing_rows = self.row_count > 0;
 
+        let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
         self.bloom_index_builder.add_block(&block)?;
@@ -397,16 +405,19 @@ impl StreamBlockBuilder {
             .iter()
             .map(|v| v.size)
             .reduce(|a, b| a + b);
+        let large_enough = self
+            .properties
+            .block_thresholds
+            .check_large_enough(self.row_count, self.block_size);
+        let cluster_stats = self.cluster_stats_state.finalize(large_enough)?;
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
             block_size: self.block_size as u64,
             file_size: file_size as u64,
             col_stats,
             col_metas,
-            // Stream block writing is only enabled for tables without a cluster key, so cluster
-            // statistics cannot be produced on this path.
-            cluster_stats: None,
-            partition_stats: None,
+            cluster_stats,
+            partition_stats: self.properties.partition_stats.clone(),
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
             bloom_filter_index_size: bloom_index_state
@@ -449,8 +460,10 @@ pub struct StreamBlockProperties {
     pub(crate) block_thresholds: BlockThresholds,
 
     meta_locations: TableMetaLocationGenerator,
-    source_schema: TableSchemaRef,
+    pub(crate) source_schema: TableSchemaRef,
 
+    cluster_stats_builder: Arc<HilbertStatisticsBuilder>,
+    partition_stats: Option<PartitionStatistics>,
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
@@ -469,6 +482,45 @@ impl StreamBlockProperties {
         table: &FuseTable,
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Arc<Self>> {
+        Self::try_create_with_config(
+            ctx,
+            table,
+            kind,
+            table_meta_timestamps,
+            table.get_block_thresholds(),
+            None,
+            None,
+        )
+    }
+
+    pub fn try_create_for_hilbert_recluster(
+        ctx: Arc<dyn TableContext>,
+        table: &FuseTable,
+        table_meta_timestamps: TableMetaTimestamps,
+        block_thresholds: BlockThresholds,
+        cluster_stats_builder: Arc<HilbertStatisticsBuilder>,
+        partition_stats: Option<PartitionStatistics>,
+    ) -> Result<Arc<Self>> {
+        Self::try_create_with_config(
+            ctx,
+            table,
+            MutationKind::Recluster,
+            table_meta_timestamps,
+            block_thresholds,
+            Some(cluster_stats_builder),
+            partition_stats,
+        )
+    }
+
+    fn try_create_with_config(
+        ctx: Arc<dyn TableContext>,
+        table: &FuseTable,
+        kind: MutationKind,
+        table_meta_timestamps: TableMetaTimestamps,
+        block_thresholds: BlockThresholds,
+        cluster_stats_builder: Option<Arc<HilbertStatisticsBuilder>>,
+        partition_stats: Option<PartitionStatistics>,
     ) -> Result<Arc<Self>> {
         let schema = table.schema();
         // remove virtual computed fields.
@@ -519,6 +571,11 @@ impl StreamBlockProperties {
             None
         };
 
+        let cluster_stats_builder = match cluster_stats_builder {
+            Some(builder) => builder,
+            None => HilbertStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?,
+        };
+
         let mut stats_columns = vec![];
         let mut distinct_columns = vec![];
         let leaf_fields = source_schema.leaf_fields();
@@ -536,9 +593,11 @@ impl StreamBlockProperties {
         Ok(Arc::new(StreamBlockProperties {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
-            block_thresholds: table.get_block_thresholds(),
+            block_thresholds,
             source_schema,
             write_settings,
+            cluster_stats_builder,
+            partition_stats,
             virtual_column_builder,
             stats_columns,
             distinct_columns,

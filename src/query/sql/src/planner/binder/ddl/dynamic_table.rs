@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::CreateDynamicTableStmt;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_config::GlobalConfig;
@@ -23,7 +24,9 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::storage::StorageParams;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -174,6 +177,11 @@ impl Binder {
                 .analyze_cluster_keys(cluster_opt, schema.clone(), None)
                 .await?;
             if !keys.is_empty() {
+                let cluster_type = match cluster_opt.cluster_type {
+                    AstClusterType::Linear => ClusterType::Linear,
+                    AstClusterType::Hilbert => ClusterType::Hilbert,
+                };
+                options.insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
         }

@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -66,6 +68,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::table::ClusterType;
 use futures_util::TryStreamExt;
 use rand::Rng;
 use rand::thread_rng;
@@ -328,7 +331,7 @@ async fn build_mutator(
         compact_params,
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
-        tbl.cluster_key_id(),
+        tbl.cluster_key_info(),
         table_meta_timestamps,
     )?;
 
@@ -725,9 +728,10 @@ impl CompactSegmentTestFixture {
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
+        let cluster_key_info = cluster_key_id.map(|id| (id, ClusterType::Linear));
         let seg_acc = SegmentCompactor::new(
             self.threshold.block_per_segment as u64,
-            cluster_key_id,
+            cluster_key_info,
             max_threads,
             &fuse_segment_io,
             data_accessor,
@@ -747,7 +751,7 @@ impl CompactSegmentTestFixture {
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_id);
+            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info);
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
@@ -798,7 +802,8 @@ impl CompactSegmentTestFixture {
                         &block,
                         None,
                         &schema,
-                        &std::collections::BTreeMap::new(),
+                        &BTreeMap::new(),
+                        HashMap::new(),
                     )?;
 
                     let cluster_stats = if unclustered && num_blocks % 4 == 0 {
@@ -862,7 +867,11 @@ impl CompactSegmentTestFixture {
                     collected_blocks.push(block_meta.clone());
                     stats_acc.add_block(block_meta).unwrap();
                 }
-                let segment_info = stats_acc.build(thresholds, cluster_key_id, None)?;
+                let segment_info = stats_acc.build(
+                    thresholds,
+                    cluster_key_id.map(|id| (id, ClusterType::Linear)),
+                    None,
+                )?;
                 let path = location_gen
                     .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;
@@ -1097,15 +1106,16 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             false,
         )
         .await?;
+        let cluster_key_info = Some((cluster_key_id, ClusterType::Linear));
         let mut summary = Statistics::default();
         for segment in &segments {
-            merge_statistics_mut(&mut summary, &segment.summary, Some(cluster_key_id));
+            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info);
         }
 
         eprintln!("running compact, limit {}", limit);
         let seg_acc = SegmentCompactor::new(
             threshold.block_per_segment as u64,
-            Some(cluster_key_id),
+            cluster_key_info,
             chunk_size,
             &fuse_segment_io,
             &data_accessor,
@@ -1158,7 +1168,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             merge_statistics_mut(
                 &mut statistics_of_segments,
                 &segment.summary,
-                Some(cluster_key_id),
+                cluster_key_info,
             );
 
             output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));

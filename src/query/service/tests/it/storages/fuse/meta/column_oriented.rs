@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -41,6 +43,7 @@ use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::decode;
 use databend_storages_common_table_meta::meta::testing::MetaEncoding;
+use databend_storages_common_table_meta::table::ClusterType;
 use opendal::Operator;
 
 async fn generate_column_oriented_segment()
@@ -91,7 +94,8 @@ async fn generate_column_oriented_segment()
             &block,
             None,
             &table_schema,
-            &std::collections::BTreeMap::new(),
+            &BTreeMap::new(),
+            HashMap::new(),
         )
         .unwrap();
         let block_writer = BlockWriter::new(
@@ -118,7 +122,7 @@ async fn generate_column_oriented_segment()
             segment_builder.add_block(block_meta.clone()).unwrap();
         }
         segment_builder
-            .build(Default::default(), Some(0), None)
+            .build(Default::default(), Some((0, ClusterType::Linear)), None)
             .unwrap()
     };
 
@@ -311,7 +315,12 @@ fn check_block_level_meta(
 }
 
 fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrientedSegment) {
-    let summary = reduce_block_metas(block_metas, Default::default(), Some(0)).unwrap();
+    let summary = reduce_block_metas(
+        block_metas,
+        Default::default(),
+        Some((0, ClusterType::Linear)),
+    )
+    .unwrap();
     assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
     assert_eq!(
         summary.block_count,

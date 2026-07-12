@@ -28,7 +28,7 @@ SET hide_options_in_show_create_table=0
 query TT
 SHOW CREATE TABLE t
 ----
-t <slt:ignore>PARTITION BY (p % 3)<slt:ignore>CLUSTER BY (c)<slt:ignore>BLOCK_PER_SEGMENT='1000'<slt:ignore>ROW_PER_BLOCK='1000'<slt:ignore>
+t <slt:ignore>PARTITION BY (p % 3)<slt:ignore>CLUSTER BY LINEAR(c)<slt:ignore>BLOCK_PER_SEGMENT='1000'<slt:ignore>ROW_PER_BLOCK='1000'<slt:ignore>
 
 statement ok
 SET hide_options_in_show_create_table=1

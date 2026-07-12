@@ -312,7 +312,7 @@ async fn set_segment_format(
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
-                            fuse_table.cluster_key_id(),
+                            fuse_table.cluster_key_info(),
                             additional_stats_meta,
                         )?
                         .serialize()?;
@@ -332,6 +332,7 @@ async fn set_segment_format(
         table_snapshot.summary.clone(),
         new_segment_locations,
         fuse_table.cluster_key_meta(),
+        fuse_table.cluster_type(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;

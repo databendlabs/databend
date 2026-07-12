@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
@@ -26,6 +27,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
@@ -344,7 +346,7 @@ impl Partitions {
                 let sorted: serde_json::Map<String, Value> = map
                     .into_iter()
                     .map(|(k, v)| (k, Self::sort_json_keys(v)))
-                    .collect::<std::collections::BTreeMap<_, _>>()
+                    .collect::<BTreeMap<_, _>>()
                     .into_iter()
                     .collect();
                 Value::Object(sorted)
@@ -441,6 +443,9 @@ pub struct ReclusterTask {
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
+    // Exact PARTITION BY values shared by every input and output block in this task.
+    #[serde(default)]
+    pub partition_stats: Option<PartitionStatistics>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);

@@ -113,6 +113,20 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false, keep_order_col)
     }
 
+    /// Sort each pipeline independently without a final cross-pipeline merge.
+    ///
+    /// This is used after range partitioning, where every worker already owns a disjoint ordered
+    /// key interval. Each local merge can spill, while preserving parallel output streams.
+    pub fn build_local_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_column_desc(),
+            )
+        });
+        self.build_merge_sort(pipeline, false, false)
+    }
+
     fn build_merge_sort(
         &self,
         pipeline: &mut Pipeline,

@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use opendal::Operator;
 use rand::Rng;
 use rand::thread_rng;
@@ -234,6 +235,7 @@ async fn test_safety() -> anyhow::Result<()> {
             locations.clone(),
             None,
             None,
+            None,
             TestFixture::default_table_meta_timestamps(),
         )?;
 
@@ -251,7 +253,7 @@ async fn test_safety() -> anyhow::Result<()> {
             threshold,
             compact_params,
             operator.clone(),
-            cluster_key_id,
+            cluster_key_id.map(|id| (id, ClusterType::Linear)),
         );
         let selections = block_compact_mutator.target_select().await?;
         if selections.is_empty() {

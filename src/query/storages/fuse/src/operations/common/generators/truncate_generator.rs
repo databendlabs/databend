@@ -21,6 +21,7 @@ use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::operations::common::SnapshotGenerator;
 use crate::statistics::TableStatsGenerator;
@@ -59,6 +60,7 @@ impl SnapshotGenerator for TruncateGenerator {
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
+        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         _table_stats_gen: TableStatsGenerator,
@@ -70,6 +72,7 @@ impl SnapshotGenerator for TruncateGenerator {
             Default::default(),
             vec![],
             cluster_key_meta,
+            cluster_type,
             None,
             table_meta_timestamps,
         )

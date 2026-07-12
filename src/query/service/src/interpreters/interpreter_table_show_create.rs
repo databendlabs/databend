@@ -34,6 +34,8 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -317,7 +319,14 @@ impl ShowCreateTableInterpreter {
                 "({})",
                 exprs.into_iter().map(|e| format!("{:#}", e)).join(", ")
             );
-            table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
+            let cluster_type = table_info
+                .options()
+                .get(OPT_KEY_CLUSTER_TYPE)
+                .map(String::as_str)
+                .unwrap_or(LINEAR_CLUSTER_TYPE)
+                .to_uppercase();
+            table_create_sql
+                .push_str(format!(" CLUSTER BY {cluster_type}{cluster_keys_str}").as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {

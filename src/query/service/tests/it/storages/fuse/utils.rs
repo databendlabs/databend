@@ -34,6 +34,7 @@ pub fn new_empty_snapshot(schema: TableSchema) -> TableSnapshot {
         vec![],
         None,
         None,
+        None,
         TableMetaTimestamps::new(None, Duration::hours(1)),
     )
     .unwrap()
