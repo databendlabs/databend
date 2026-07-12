@@ -80,8 +80,7 @@ async fn test_lua_scripts() -> anyhow::Result<()> {
         // one line so Lua error line numbers stay offset by exactly one from
         // the script file.
         let banner = format!("--- running Lua test: {name}");
-        let script =
-            format!("print({banner:?}) TEST_GRPC_ADDRESS = {grpc_address:?}\n{body}");
+        let script = format!("print({banner:?}) TEST_GRPC_ADDRESS = {grpc_address:?}\n{body}");
 
         run_lua_script(&script)
             .await
