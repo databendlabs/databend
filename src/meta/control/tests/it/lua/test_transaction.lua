@@ -1,25 +1,15 @@
-#!/usr/bin/env python3
+-- Transaction API coverage against the in-process meta-service: table-form
+-- and helper-form transactions, conditions, atomicity under contention,
+-- unconditional/empty transactions, binary values, TTL, and validation errors.
+--
+-- Runs under the metactl Lua test harness (tests/it/lua.rs). Sequence-number
+-- assertions are relative to this script's own writes, which is safe because
+-- scripts run one at a time against the shared meta-service. Keys are
+-- namespaced under `lua-txn/`. Failures are raised via `error`.
 
-import shutil
-import subprocess
+print("transaction: table/helper txns, conditions, atomicity, binary, TTL, validation")
 
-from metactl_utils import metactl_bin
-from utils import kill_databend_meta, print_title, start_meta_node
-
-
-GRPC_ADDR = "127.0.0.1:9191"
-
-EXPECTED_OUTPUT = """table transaction: ok
-helper else: ok
-conditions: ok
-atomic: ok
-unconditional: ok
-binary: ok
-ttl: ok
-invalid: ok"""
-
-LUA_SCRIPT = r"""
-local client = metactl.new_grpc_client("__GRPC_ADDR__")
+local client = metactl.new_grpc_client(TEST_GRPC_ADDRESS)
 
 local function assert_equal(actual, expected, label)
     if actual ~= expected then
@@ -197,7 +187,7 @@ print("conditions: ok")
 local contenders_ready = 0
 
 local function contend(value)
-    local worker = metactl.new_grpc_client("__GRPC_ADDR__")
+    local worker = metactl.new_grpc_client(TEST_GRPC_ADDRESS)
     contenders_ready = contenders_ready + 1
     while contenders_ready < 2 do
         metactl.sleep(0.001)
@@ -350,33 +340,3 @@ for label, ttl in pairs({negative = -1, infinite = math.huge, nan = 0 / 0}) do
 end
 assert_equal(get("lua-txn/invalid", "invalid state"), metactl.NULL, "invalid state")
 print("invalid: ok")
-"""
-
-
-def setup_test_environment():
-    kill_databend_meta()
-    shutil.rmtree(".databend", ignore_errors=True)
-    start_meta_node(1, False)
-
-
-def test_lua_transactions():
-    print_title("Test Lua transactions")
-    setup_test_environment()
-    result = subprocess.run(
-        [metactl_bin, "lua"],
-        input=LUA_SCRIPT.replace("__GRPC_ADDR__", GRPC_ADDR),
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-    assert result.stdout.strip() == EXPECTED_OUTPUT, result.stdout
-    kill_databend_meta()
-    shutil.rmtree(".databend", ignore_errors=True)
-
-
-def main():
-    test_lua_transactions()
-
-
-if __name__ == "__main__":
-    main()

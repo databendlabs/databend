@@ -21,6 +21,9 @@ local MAX_BOTTOM_PERCENT = 25
 local COMPARISON_BUCKET_10 = 10
 local COMPARISON_BUCKET_50 = 50
 
+print("zipf: distribution shape over " .. NUM_SAMPLES .. " samples of "
+    .. NUM_KEYS .. " keys, alpha " .. ALPHA)
+
 local function test_zipf_distribution()
     math.randomseed(RANDOM_SEED_1)
 

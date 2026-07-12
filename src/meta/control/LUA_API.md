@@ -375,8 +375,12 @@ The meta service returns structured data that can be processed using `metactl.to
 
 ## Examples
 
-See the test files in `tests/metactl/subcommands/` for comprehensive usage examples:
-- `cmd_lua_grpc.py` - Basic gRPC operations
-- `cmd_lua_transaction.py` - Atomic conditional transactions
-- `cmd_lua_spawn_grpc.py` - Concurrent gRPC operations
-- `cmd_lua_spawn_concurrent.py` - Task spawning patterns
+See the Lua test scripts in `src/meta/control/tests/it/lua/` for comprehensive
+usage examples:
+- `test_grpc_kv.lua` - Basic gRPC operations
+- `test_transaction.lua` - Atomic conditional transactions
+- `test_spawn.lua` - Task spawning and concurrent gRPC operations
+- `test_sleep.lua` - Async sleep
+
+The CLI surface of `databend-metactl lua` (file and stdin input) is covered by
+`tests/metactl/subcommands/cmd_lua.py`.

@@ -25,7 +25,13 @@ const LUA_TEST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/it/lua");
 /// Each script runs with the full `metactl` namespace (see
 /// `setup_lua_environment`) plus a global `TEST_GRPC_ADDRESS` string holding the
 /// gRPC address of the in-process meta-service, so a script can connect with
-/// `metactl.new_grpc_client(TEST_GRPC_ADDRESS)`.
+/// `metactl.new_grpc_client(TEST_GRPC_ADDRESS)`. The runner waits for the
+/// service to accept writes before running the first script, so scripts do not
+/// need their own readiness retry.
+///
+/// The runner prints a banner before each script and each script prints its
+/// own progress, so `cargo test` output shows which script is running and
+/// which one a failure belongs to.
 ///
 /// A script signals failure by raising a Lua error (e.g. via `assert`); it must
 /// not call `os.exit`, which would abort the whole test binary.
@@ -36,6 +42,21 @@ const LUA_TEST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/it/lua");
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lua_scripts() -> anyhow::Result<()> {
     let (_meta, grpc_address) = start_metasrv::<DatabendRuntime>().await?;
+
+    // The single-node cluster may need a moment to elect itself leader; retry
+    // the first write until the service accepts it.
+    let readiness = format!(
+        r#"
+        local client = metactl.new_grpc_client({grpc_address:?})
+        for _ = 1, 50 do
+            local _, err = client:upsert("lua_it/ready", "1")
+            if err == nil then return end
+            metactl.sleep(0.2)
+        end
+        error("meta-service did not become ready for gRPC writes")
+        "#
+    );
+    run_lua_script(&readiness).await?;
 
     let mut scripts = std::fs::read_dir(LUA_TEST_DIR)?
         .map(|entry| Ok(entry?.path()))
@@ -50,16 +71,26 @@ async fn test_lua_scripts() -> anyhow::Result<()> {
 
     for path in &scripts {
         let name = path.file_name().unwrap().to_string_lossy();
-        println!("--- running Lua test: {name}");
 
         let body = std::fs::read_to_string(path)?;
-        // Inject the in-process meta-service address as a global for the script.
-        let script = format!("TEST_GRPC_ADDRESS = {grpc_address:?}\n{body}");
+        // Announce the script via Lua `print` so the banner lands in the same
+        // output stream as the script's own prints (Rust `println!` is
+        // captured by the test harness, Lua `print` is not), and inject the
+        // in-process meta-service address as a global. Both statements share
+        // one line so Lua error line numbers stay offset by exactly one from
+        // the script file.
+        let banner = format!("--- running Lua test: {name}");
+        let script =
+            format!("print({banner:?}) TEST_GRPC_ADDRESS = {grpc_address:?}\n{body}");
 
         run_lua_script(&script)
             .await
             .map_err(|e| anyhow::anyhow!("Lua test `{name}` failed: {e}"))?;
+
+        println!("--- passed: {name}");
     }
+
+    println!("all {} Lua test scripts passed", scripts.len());
 
     Ok(())
 }
