@@ -169,7 +169,37 @@ local function test_uniform_input_conversion()
     return true
 end
 
+local function test_default_parameters()
+    local DEFAULT_NUM_KEYS = 1000
+    local DEFAULT_ALPHA = 1.0
+    local SAMPLE_COUNT = 20
+
+    -- Both constructor parameters are optional; alpha defaults to exactly
+    -- 1.0, the removable singularity of the power-law formula (division by
+    -- 1 - alpha), so this also exercises the log-uniform fallback.
+    local zipf = ZipfGenerator:new()
+    assert(zipf.num_keys == DEFAULT_NUM_KEYS, "default num_keys should be " .. DEFAULT_NUM_KEYS)
+    assert(zipf.alpha == DEFAULT_ALPHA, "default alpha should be " .. DEFAULT_ALPHA)
+
+    local seen = {}
+    for i = 1, SAMPLE_COUNT do
+        local index = zipf:generate_key_index(i / SAMPLE_COUNT)
+        assert(index >= 1 and index <= DEFAULT_NUM_KEYS,
+            "index out of range [1, " .. DEFAULT_NUM_KEYS .. "]: " .. tostring(index))
+        seen[index] = true
+    end
+    local distinct = 0
+    for _ in pairs(seen) do
+        distinct = distinct + 1
+    end
+    assert(distinct > 1, "alpha = 1.0 should not collapse every sample to the same index")
+
+    print("✓ Default parameters test passed!")
+    return true
+end
+
 -- Each function asserts its own invariants; a failing assert raises a Lua error
 -- that the Rust harness reports as a test failure. Do not call os.exit here.
 test_zipf_distribution()
 test_uniform_input_conversion()
+test_default_parameters()

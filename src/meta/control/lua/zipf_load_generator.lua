@@ -19,27 +19,44 @@ local ZipfGenerator = {}
 ZipfGenerator.__index = ZipfGenerator
 
 function ZipfGenerator:new(num_keys, alpha)
+    -- Normalize defaults on the parameters themselves before they are read
+    -- below; `x or default` inside the `obj` table literal would not help
+    -- the *other* fields in the same literal, which still see the raw
+    -- (possibly nil) parameter.
+    num_keys = num_keys or 1000
+    alpha = alpha or 1.0
+
     local obj = {
-        num_keys = num_keys or 1000,        -- Total number of unique keys in the dataset
-        alpha = alpha or 1.0,               -- Zipf exponent: higher values = more skewed distribution
-        q_inv = 1.0 / (1.0 - alpha),        -- Inverse of (1-alpha)
-        a_pow_q = 1.0 ^ (1.0 - alpha),      -- Pre-computed power of lower bound
-        span = 0                            -- b^(1-alpha) - a^(1-alpha)
+        num_keys = num_keys,                -- Total number of unique keys in the dataset
+        alpha = alpha,                      -- Zipf exponent: higher values = more skewed distribution
+        log_uniform = alpha == 1.0          -- alpha = 1 is a removable singularity of q_inv below
     }
     setmetatable(obj, self)
 
-    -- Precompute constants for O(1) generation
-    local b_pow_q = num_keys ^ (1.0 - alpha)
-    obj.span = b_pow_q - obj.a_pow_q
+    if not obj.log_uniform then
+        -- Precompute constants for O(1) generation
+        obj.q_inv = 1.0 / (1.0 - alpha)        -- Inverse of (1-alpha)
+        obj.a_pow_q = 1.0 ^ (1.0 - alpha)      -- Pre-computed power of lower bound
+        local b_pow_q = num_keys ^ (1.0 - alpha)
+        obj.span = b_pow_q - obj.a_pow_q       -- b^(1-alpha) - a^(1-alpha)
+    end
 
     return obj
 end
 
--- Inverse CDF of a power law truncated to [1, num_keys]:
+-- Inverse CDF of a power law truncated to [1, num_keys], mapping uniform x in
+-- [0, 1) to an index in [1, num_keys]:
 -- t = (a^(1-alpha) + x * (b^(1-alpha) - a^(1-alpha)))^(1/(1-alpha))
--- Maps uniform x in [0, 1) to an index in [1, num_keys].
+--
+-- At alpha = 1 the exponent 1/(1-alpha) is undefined; the limit of the above
+-- as alpha -> 1 is the log-uniform inverse CDF t = num_keys^x.
 function ZipfGenerator:generate_key_index(x)
-    local t = (self.a_pow_q + x * self.span) ^ self.q_inv
+    local t
+    if self.log_uniform then
+        t = self.num_keys ^ x
+    else
+        t = (self.a_pow_q + x * self.span) ^ self.q_inv
+    end
     return math.floor(t + 0.5)
 end
 
