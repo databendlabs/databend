@@ -178,7 +178,7 @@ impl<'a> ClusteringInformationImpl<'a> {
         cluster_key: &Option<String>,
     ) -> Result<ClusteringInformationResponse> {
         let mut default_cluster_key_id = None;
-        let (cluster_key, exprs) = match (self.table.cluster_key_str(), cluster_key) {
+        let (cluster_key, mut exprs) = match (self.table.cluster_key_str(), cluster_key) {
             (a, Some(b)) => {
                 let (cluster_key, exprs) =
                     analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
@@ -187,24 +187,31 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
                     .collect::<Result<Vec<_>>>()?;
                 if a.is_some() && a.unwrap() == cluster_key {
-                    default_cluster_key_id = self.table.cluster_key_id();
+                    default_cluster_key_id = self.table.physical_cluster_key_id();
                 }
                 (cluster_key, exprs)
             }
             (Some(a), None) => {
-                let cluster_keys = self.table.resolve_cluster_keys().unwrap();
+                let cluster_keys = self.table.resolve_physical_cluster_keys().unwrap();
                 let exprs = parse_cluster_keys(
                     self.ctx.clone(),
                     Arc::new(self.table.clone()),
                     cluster_keys,
                 )?;
-                default_cluster_key_id = self.table.cluster_key_id();
+                default_cluster_key_id = self.table.physical_cluster_key_id();
                 (a.to_string(), exprs)
             }
             _ => {
                 unreachable!("Unclustered table {}", self.table.table_info.desc);
             }
         };
+        if default_cluster_key_id.is_some() && self.table.partition_key_count() != 0 {
+            exprs = parse_cluster_keys(
+                self.ctx.clone(),
+                Arc::new(self.table.clone()),
+                self.table.resolve_physical_cluster_keys().unwrap(),
+            )?;
+        }
 
         let cluster_type = "linear".to_string();
 

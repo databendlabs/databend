@@ -35,6 +35,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::read::read_segment_stats_in_parallel;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
 #[derive(Default)]
@@ -56,6 +57,7 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    pub(crate) partition_key_count: usize,
     table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -75,6 +77,7 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            partition_key_count: 0,
             table_meta_timestamps,
         })
     }
@@ -119,7 +122,7 @@ impl SegmentCompactMutator {
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
-        let compactor = SegmentCompactor::new(
+        let mut compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
             self.default_cluster_key_id,
             chunk_size,
@@ -128,6 +131,7 @@ impl SegmentCompactMutator {
             &self.location_generator,
             self.table_meta_timestamps,
         );
+        compactor.partition_key_count = self.partition_key_count;
 
         self.compaction = compactor
             .compact(base_segment_locations, limit, |status| {
@@ -156,6 +160,7 @@ pub struct SegmentCompactor<'a> {
     // within R, smaller one is preferred
     threshold: u64,
     default_cluster_key_id: Option<u32>,
+    partition_key_count: usize,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
@@ -183,6 +188,7 @@ impl<'a> SegmentCompactor<'a> {
         Self {
             threshold,
             default_cluster_key_id,
+            partition_key_count: 0,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             chunk_size,
@@ -292,6 +298,17 @@ impl<'a> SegmentCompactor<'a> {
 
         if num_blocks_current_segment == 0 {
             return Ok(());
+        }
+
+        if let Some((previous, _)) = self.fragmented_segments.last()
+            && !same_partition(
+                previous.summary.cluster_stats.as_ref(),
+                segment_info.summary.cluster_stats.as_ref(),
+                self.default_cluster_key_id,
+                self.partition_key_count,
+            )
+        {
+            self.compact_fragments().await?;
         }
 
         let s = self.accumulated_num_blocks + num_blocks_current_segment;

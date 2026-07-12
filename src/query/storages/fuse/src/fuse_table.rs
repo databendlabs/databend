@@ -25,6 +25,8 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_ast::ast::Expr as AstExpr;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -99,8 +101,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -522,16 +524,56 @@ impl FuseTable {
         self.table_info.meta.cluster_key_id()
     }
 
+    fn partition_key_str(&self) -> Option<&str> {
+        self.table_info
+            .meta
+            .options
+            .get(OPT_KEY_PARTITION_BY)
+            .map(String::as_str)
+    }
+
+    fn resolve_partition_keys(&self) -> Option<Vec<AstExpr>> {
+        self.partition_key_str()
+            .map(|partition_key| parse_cluster_key_exprs(partition_key).unwrap())
+    }
+
+    pub fn partition_key_count(&self) -> usize {
+        self.resolve_partition_keys().map_or(0, |keys| keys.len())
+    }
+
+    /// The key used for physical Fuse layout. Partition expressions are always the
+    /// leading dimensions, followed by the user-visible linear cluster key.
+    pub fn resolve_physical_cluster_keys(&self) -> Option<Vec<AstExpr>> {
+        let mut keys = self.resolve_partition_keys().unwrap_or_default();
+        if let Some(cluster_keys) = self.resolve_cluster_keys() {
+            keys.extend(cluster_keys);
+        }
+        (!keys.is_empty()).then_some(keys)
+    }
+
+    pub fn physical_cluster_key_id(&self) -> Option<u32> {
+        self.cluster_key_id()
+            .or_else(|| self.partition_key_str().map(|_| 0))
+    }
+
+    pub fn physical_cluster_type(&self) -> Option<ClusterType> {
+        if self.partition_key_str().is_some() {
+            Some(ClusterType::Linear)
+        } else {
+            self.cluster_type()
+        }
+    }
+
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         if self
-            .cluster_type()
+            .physical_cluster_type()
             .is_none_or(|v| matches!(v, ClusterType::Hilbert))
         {
             return vec![];
         }
 
         let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
+        let cluster_key_exprs = self.resolve_physical_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
         let cluster_keys = exprs
             .iter()
@@ -566,10 +608,10 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys() else {
+        let Some(ast_exprs) = self.resolve_physical_cluster_keys() else {
             return vec![];
         };
-        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        let cluster_type = self.physical_cluster_type().unwrap_or(ClusterType::Linear);
         match cluster_type {
             ClusterType::Hilbert => vec![DataType::Binary],
             ClusterType::Linear => {

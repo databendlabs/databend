@@ -35,6 +35,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -321,6 +322,21 @@ impl ShowCreateTableInterpreter {
                 .collect::<Vec<_>>()
                 .join("");
             table_create_sql.push_str(&s);
+        }
+
+        if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+            let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
+            let mut normalizer = ClusterKeyNormalizer {
+                force_quoted_ident,
+                unquoted_ident_case_sensitive,
+                quoted_ident_case_sensitive,
+                sql_dialect,
+            };
+            for expr in exprs.iter_mut() {
+                expr.drive_mut(&mut normalizer);
+            }
+            let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
+            table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
         }
 
         if engine != "ICEBERG" && engine != "DELTA" {

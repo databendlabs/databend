@@ -189,7 +189,7 @@ pub struct CreateTableStmt {
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
-    pub iceberg_table_partition: Option<Vec<Identifier>>,
+    pub partition_by: Option<Vec<Expr>>,
     pub table_properties: Option<BTreeMap<String, String>>,
     pub as_query: Option<Box<Query>>,
     pub table_type: TableType,
@@ -248,9 +248,9 @@ impl Display for CreateTableStmt {
             write_space_separated_string_map(f, &self.table_options)?;
         }
 
-        if let Some(iceberg_table_partition) = &self.iceberg_table_partition {
+        if let Some(partition_by) = &self.partition_by {
             write!(f, " PARTITION BY(")?;
-            write_comma_separated_list(f, iceberg_table_partition)?;
+            write_comma_separated_list(f, partition_by)?;
             write!(f, ")")?;
         }
 

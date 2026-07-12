@@ -28,6 +28,7 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -101,6 +102,15 @@ impl Interpreter for DropTableColumnInterpreter {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Cannot drop column '{}' because it is referenced by cluster key {}",
                     self.plan.column, cluster_key
+                )));
+            }
+        }
+        if let Some(partition_key) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+            let referenced = cluster_key_referenced_columns(partition_key)?;
+            if referenced.contains(self.plan.column.as_str()) {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot drop column '{}' because it is referenced by partition key {}",
+                    self.plan.column, partition_key
                 )));
             }
         }

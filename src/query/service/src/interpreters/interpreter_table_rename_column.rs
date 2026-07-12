@@ -25,6 +25,7 @@ use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -128,6 +129,16 @@ impl Interpreter for RenameTableColumnInterpreter {
                 &self.plan.old_column,
                 &self.plan.new_column,
             )?;
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_PARTITION_BY)
+            && let Some(new_partition_key) = rename_column_in_cluster_key(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?
+        {
+            *value = new_partition_key;
         }
 
         let mut new_cluster_key = None;

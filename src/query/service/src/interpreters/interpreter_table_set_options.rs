@@ -48,6 +48,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -153,6 +154,13 @@ impl Interpreter for SetOptionsInterpreter {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_CLUSTER_TYPE
+            )));
+        }
+        if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_PARTITION_BY
             )));
         }
 

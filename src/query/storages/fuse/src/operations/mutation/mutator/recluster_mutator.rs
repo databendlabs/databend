@@ -71,6 +71,7 @@ use crate::statistics::PreparedClusterKeyExpr;
 use crate::statistics::RangeMaxTree;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::get_min_max_stats;
+use crate::statistics::partition_values;
 use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -310,6 +311,7 @@ pub struct ReclusterMutator {
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
+    pub(crate) partition_key_count: usize,
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
     pub(crate) memory_threshold: usize,
@@ -326,7 +328,7 @@ impl ReclusterMutator {
         mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
-        let cluster_key_id = table.cluster_key_id().unwrap();
+        let cluster_key_id = table.physical_cluster_key_id().unwrap();
         let block_thresholds = table.get_block_thresholds();
 
         let depth_threshold = table
@@ -351,7 +353,7 @@ impl ReclusterMutator {
         }
 
         // safe to unwrap
-        let cluster_keys = table.resolve_cluster_keys().unwrap();
+        let cluster_keys = table.resolve_physical_cluster_keys().unwrap();
         let full_cluster_key_exprs =
             parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let vector_cluster_info = vector_cluster_info_from_exprs(table, &full_cluster_key_exprs)?;
@@ -376,6 +378,7 @@ impl ReclusterMutator {
             depth_threshold,
             block_thresholds,
             cluster_key_id,
+            partition_key_count: table.partition_key_count(),
             max_tasks,
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -422,6 +425,7 @@ impl ReclusterMutator {
             depth_threshold,
             block_thresholds,
             cluster_key_id,
+            partition_key_count: 0,
             max_tasks,
             memory_threshold,
             prepared_cluster_key_exprs,
@@ -545,7 +549,7 @@ impl ReclusterMutator {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
+        let mut blocks_map: BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             let level = block.stats().level;
             if level < 0 {
@@ -555,8 +559,19 @@ impl ReclusterMutator {
                 // Terminal-level blocks are excluded from further rewrite tasks.
                 continue;
             }
+            let partition = if self.partition_key_count == 0 {
+                Vec::new()
+            } else if let Some(partition) = partition_values(
+                Some(block.stats()),
+                Some(self.cluster_key_id),
+                self.partition_key_count,
+            ) {
+                partition.to_vec()
+            } else {
+                continue;
+            };
             blocks_map
-                .entry(ReclusterGroup::assign(level, self.mode))
+                .entry((ReclusterGroup::assign(level, self.mode), partition))
                 .or_default()
                 .push(idx);
         }
@@ -564,7 +579,7 @@ impl ReclusterMutator {
         let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
         let mut deferred_group_candidates = None;
         let large_task_bytes_threshold = self.large_task_bytes_threshold();
-        for (group, indices) in blocks_map {
+        for ((group, _), indices) in blocks_map {
             if tasks.len() >= task_budget {
                 break;
             }
@@ -1170,8 +1185,33 @@ impl ReclusterMutator {
         let mut current_window_max_depth = 0usize;
         let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
         let sorted_indices = compare_scalars(&keys, &self.cluster_key_types)?;
+        let mut previous_partition: Option<Vec<Scalar>> = None;
 
         for idx in sorted_indices {
+            let point = &keys[idx as usize];
+            let point_partition = (self.partition_key_count != 0
+                && point.len() >= self.partition_key_count)
+                .then(|| point[..self.partition_key_count].to_vec());
+            if previous_partition.is_some()
+                && (point_partition.is_none() || previous_partition != point_partition)
+            {
+                // A sweep window is never allowed to span physical partitions. In
+                // particular, this prevents the repack-only path from combining
+                // otherwise disjoint partition segments.
+                if let Some((segs, depth)) = prev_window.take() {
+                    windows.push((segs, depth));
+                }
+                if !current_window.is_empty() {
+                    windows.push((
+                        std::mem::take(&mut current_window),
+                        current_window_max_depth,
+                    ));
+                }
+                current_window_max_depth = 0;
+                unfinished_intervals.clear();
+            }
+            previous_partition = point_partition;
+
             let start = &values[idx as usize].0;
             let end = &values[idx as usize].1;
             let point_depth = Self::calc_point_depth(unfinished_intervals.len(), start, end);

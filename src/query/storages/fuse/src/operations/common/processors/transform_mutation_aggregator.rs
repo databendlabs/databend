@@ -74,6 +74,7 @@ use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
+use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
 pub struct TableMutationAggregator {
@@ -190,7 +191,7 @@ impl TableMutationAggregator {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let cluster_type = table.cluster_type();
+        let cluster_type = table.physical_cluster_type();
         let set_hilbert_level = cluster_type.is_some_and(|v| matches!(v, ClusterType::Hilbert))
             && matches!(
                 kind,
@@ -205,7 +206,7 @@ impl TableMutationAggregator {
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
         let cluster_key_exprs = if fill_missing_cluster_stats {
             table
-                .resolve_cluster_keys()
+                .resolve_physical_cluster_keys()
                 .map(|cluster_keys| {
                     parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
                 })
@@ -219,7 +220,8 @@ impl TableMutationAggregator {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator().clone(),
             thresholds: table.get_block_thresholds(),
-            default_cluster_key: table.cluster_key_id(),
+            default_cluster_key: table.physical_cluster_key_id(),
+            partition_key_count: table.partition_key_count(),
             cluster_key_exprs: Arc::from(cluster_key_exprs.clone()),
             schema: table.schema(),
             kind,
@@ -365,30 +367,52 @@ impl TableMutationAggregator {
             });
         }
 
-        let mut tasks = Vec::new();
-        let segments_num =
-            (merged_blocks.len() / self.write_segment_ctx.thresholds.block_per_segment).max(1);
-        let chunk_size = merged_blocks.len().div_ceil(segments_num);
-        let set_hilbert_level = self.set_hilbert_level;
-        for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
-            let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
-                chunk.unzip();
-            let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
-                None
-            } else {
-                let hlls = new_hlls
-                    .into_iter()
-                    .map(|x| x.unwrap_or_default())
-                    .collect::<Vec<_>>();
-                Some(SegmentStatistics::new(hlls).to_bytes()?)
-            };
-            let all_perfect = new_blocks.len() > 1;
+        let mut partition_groups: Vec<Vec<BlockMetaWithHLL>> = Vec::new();
+        for block in merged_blocks {
+            if partition_groups
+                .last()
+                .and_then(|group| group.last())
+                .is_none_or(|previous| {
+                    !same_partition(
+                        previous.0.cluster_stats.as_ref(),
+                        block.0.cluster_stats.as_ref(),
+                        self.write_segment_ctx.default_cluster_key,
+                        self.write_segment_ctx.partition_key_count,
+                    )
+                })
+            {
+                partition_groups.push(Vec::new());
+            }
+            partition_groups.last_mut().unwrap().push(block);
+        }
 
-            let ctx = self.write_segment_ctx.clone();
-            tasks.push(async move {
-                ctx.write_segment(new_blocks, new_hlls, all_perfect, set_hilbert_level)
-                    .await
-            });
+        let mut tasks = Vec::new();
+        let set_hilbert_level = self.set_hilbert_level;
+        for partition_blocks in partition_groups {
+            let segments_num = (partition_blocks.len()
+                / self.write_segment_ctx.thresholds.block_per_segment)
+                .max(1);
+            let chunk_size = partition_blocks.len().div_ceil(segments_num);
+            for chunk in &partition_blocks.into_iter().chunks(chunk_size) {
+                let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
+                    chunk.unzip();
+                let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
+                    None
+                } else {
+                    let hlls = new_hlls
+                        .into_iter()
+                        .map(|x| x.unwrap_or_default())
+                        .collect::<Vec<_>>();
+                    Some(SegmentStatistics::new(hlls).to_bytes()?)
+                };
+                let all_perfect = new_blocks.len() > 1;
+
+                let ctx = self.write_segment_ctx.clone();
+                tasks.push(async move {
+                    ctx.write_segment(new_blocks, new_hlls, all_perfect, set_hilbert_level)
+                        .await
+                });
+            }
         }
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
@@ -826,6 +850,7 @@ struct WriteSegmentCtx {
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
+    partition_key_count: usize,
     cluster_key_exprs: Arc<[Expr<usize>]>,
     schema: TableSchemaRef,
     kind: MutationKind,

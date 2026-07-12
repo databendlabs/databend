@@ -42,6 +42,7 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
+use databend_common_storages_fuse::operations::TransformPartitionBy;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -685,6 +686,9 @@ impl IPhysicalPlan for ChunkAppendData {
         let mut sort_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(self.target_tables.len());
         let mut sort_num = 0;
+        let mut partition_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(self.target_tables.len());
+        let mut partition_num = 0;
 
         for append_data in self.target_tables.iter() {
             let table = builder
@@ -757,6 +761,20 @@ impl IPhysicalPlan for ChunkAppendData {
             } else {
                 sort_builders.push(Box::new(builder.dummy_transform_builder()));
             }
+            let partition_key_indices: Arc<[_]> =
+                cluster_stats_gen.cluster_key_index[..cluster_stats_gen.partition_key_count].into();
+            if !partition_key_indices.is_empty() {
+                partition_builders.push(Box::new(move |input, output| {
+                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                        input,
+                        output,
+                        TransformPartitionBy::new(partition_key_indices.clone()),
+                    )))
+                }));
+                partition_num += 1;
+            } else {
+                partition_builders.push(Box::new(builder.dummy_transform_builder()));
+            }
             serialize_block_builders.push(Box::new(
                 builder.with_tid_serialize_block_transform_builder(
                     table,
@@ -789,6 +807,12 @@ impl IPhysicalPlan for ChunkAppendData {
             builder
                 .main_pipeline
                 .add_transforms_by_chunk(sort_builders)?;
+        }
+
+        if partition_num > 0 {
+            builder
+                .main_pipeline
+                .add_transforms_by_chunk(partition_builders)?;
         }
 
         builder

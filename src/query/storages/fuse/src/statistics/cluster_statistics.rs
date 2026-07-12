@@ -90,6 +90,7 @@ pub struct ClusterStatsGenerator {
     block_thresholds: BlockThresholds,
 
     pub extra_key_num: usize,
+    pub partition_key_count: usize,
     pub cluster_key_index: Vec<usize>,
     pub operators: Vec<BlockOperator>,
     pub vector_operator: Option<VectorClusterOperator>,
@@ -114,6 +115,7 @@ impl ClusterStatsGenerator {
         Self {
             cluster_key_id,
             cluster_key_index,
+            partition_key_count: 0,
             extra_key_num,
             max_page_size,
             level,
@@ -311,6 +313,46 @@ pub fn sort_by_cluster_stats(
                 .cmp(b.max().iter().map(Scalar::as_ref))
         }
         _ => Ordering::Equal,
+    }
+}
+
+/// Returns the exact partition prefix stored in physical cluster statistics.
+/// A partitioned block/segment is valid only when every prefix dimension has
+/// identical min and max values.
+pub(crate) fn partition_values(
+    stats: Option<&ClusterStatistics>,
+    cluster_key_id: Option<u32>,
+    partition_key_count: usize,
+) -> Option<&[Scalar]> {
+    if partition_key_count == 0 {
+        return None;
+    }
+    let stats = stats?;
+    if Some(stats.cluster_key_id) != cluster_key_id
+        || stats.min.len() < partition_key_count
+        || stats.max.len() < partition_key_count
+        || stats.min[..partition_key_count] != stats.max[..partition_key_count]
+    {
+        return None;
+    }
+    Some(&stats.min[..partition_key_count])
+}
+
+pub(crate) fn same_partition(
+    left: Option<&ClusterStatistics>,
+    right: Option<&ClusterStatistics>,
+    cluster_key_id: Option<u32>,
+    partition_key_count: usize,
+) -> bool {
+    if partition_key_count == 0 {
+        return true;
+    }
+    match (
+        partition_values(left, cluster_key_id, partition_key_count),
+        partition_values(right, cluster_key_id, partition_key_count),
+    ) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
     }
 }
 
