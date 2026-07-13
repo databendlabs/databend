@@ -84,6 +84,7 @@ async fn apply_snapshot_pruning(
         op,
         schema,
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),

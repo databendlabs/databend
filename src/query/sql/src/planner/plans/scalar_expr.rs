@@ -19,6 +19,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -885,6 +886,18 @@ impl ComparisonOp {
             ComparisonOp::LT => ComparisonOp::GT,
             ComparisonOp::GTE => ComparisonOp::LTE,
             ComparisonOp::LTE => ComparisonOp::GTE,
+        }
+    }
+
+    pub fn range_bounds<T>(&self, value: T) -> Option<(Bound<T>, Bound<T>)>
+    where T: Clone {
+        match self {
+            ComparisonOp::Equal => Some((Bound::Included(value.clone()), Bound::Included(value))),
+            ComparisonOp::NotEqual => None,
+            ComparisonOp::GT => Some((Bound::Excluded(value), Bound::Unbounded)),
+            ComparisonOp::LT => Some((Bound::Unbounded, Bound::Excluded(value))),
+            ComparisonOp::GTE => Some((Bound::Included(value), Bound::Unbounded)),
+            ComparisonOp::LTE => Some((Bound::Unbounded, Bound::Included(value))),
         }
     }
 }

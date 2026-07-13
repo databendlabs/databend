@@ -868,7 +868,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
         // Extract constraints from each expression
         for arg in args {
-            if let Some(constraint) = self.extract_range_constraint(arg) {
+            if let Some(constraint) = RangeConstraint::try_from_expr(arg) {
                 column_constraints
                     .entry(constraint.column_id.clone())
                     .or_default()
@@ -897,54 +897,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
 
         None // No conclusive mutual exclusion found
-    }
-
-    /// Extract range constraint from a comparison expression
-    fn extract_range_constraint(&self, expr: &Expr<Index>) -> Option<RangeConstraint<Index>> {
-        if let Expr::FunctionCall(FunctionCall { function, args, .. }) = expr {
-            if args.len() != 2 {
-                return None;
-            }
-
-            let op = function.signature.name.as_str();
-            if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
-                return None;
-            }
-
-            // Try both orders: column op constant and constant op column
-            if let (Some(column_ref), Some(constant)) =
-                (args[0].as_column_ref(), args[1].as_constant())
-            {
-                return Some(RangeConstraint {
-                    column_id: column_ref.id.clone(),
-                    data_type: column_ref.data_type.clone(),
-                    operator: op.to_string(),
-                    constant: constant.scalar.clone(),
-                    is_flipped: false,
-                });
-            } else if let (Some(constant), Some(column_ref)) =
-                (args[0].as_constant(), args[1].as_column_ref())
-            {
-                // Flip the operator for constant op column
-                let flipped_op = match op {
-                    "gt" => "lt",
-                    "gte" => "lte",
-                    "lt" => "gt",
-                    "lte" => "gte",
-                    "eq" => "eq",
-                    "noteq" => "noteq",
-                    _ => return None,
-                };
-                return Some(RangeConstraint {
-                    column_id: column_ref.id.clone(),
-                    data_type: column_ref.data_type.clone(),
-                    operator: flipped_op.to_string(),
-                    constant: constant.scalar.clone(),
-                    is_flipped: true,
-                });
-            }
-        }
-        None
     }
 
     /// Check if two range constraints are mutually exclusive
@@ -1096,4 +1048,59 @@ pub struct RangeConstraint<Index> {
     pub operator: String, // "gt", "gte", "lt", "lte", "eq"
     pub constant: Scalar,
     pub is_flipped: bool, // true if original was constant op column
+}
+
+impl<Index: ColumnIndex> RangeConstraint<Index> {
+    /// Extracts a normalized column-to-constant comparison. Comparisons with
+    /// the constant on the left are flipped so the column is always the lhs.
+    pub fn try_from_expr(expr: &Expr<Index>) -> Option<Self> {
+        let Expr::FunctionCall(call) = expr else {
+            return None;
+        };
+        Self::try_from_function_call(call)
+    }
+
+    pub fn try_from_function_call(call: &FunctionCall<Index>) -> Option<Self> {
+        let FunctionCall { function, args, .. } = call;
+        if args.len() != 2 {
+            return None;
+        }
+
+        let op = function.signature.name.as_str();
+        if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
+            return None;
+        }
+
+        if let (Some(column_ref), Some(constant)) = (args[0].as_column_ref(), args[1].as_constant())
+        {
+            return Some(Self {
+                column_id: column_ref.id.clone(),
+                data_type: column_ref.data_type.clone(),
+                operator: op.to_string(),
+                constant: constant.scalar.clone(),
+                is_flipped: false,
+            });
+        }
+
+        let (Some(constant), Some(column_ref)) = (args[0].as_constant(), args[1].as_column_ref())
+        else {
+            return None;
+        };
+        let operator = match op {
+            "gt" => "lt",
+            "gte" => "lte",
+            "lt" => "gt",
+            "lte" => "gte",
+            "eq" => "eq",
+            "noteq" => "noteq",
+            _ => unreachable!(),
+        };
+        Some(Self {
+            column_id: column_ref.id.clone(),
+            data_type: column_ref.data_type.clone(),
+            operator: operator.to_string(),
+            constant: constant.scalar.clone(),
+            is_flipped: true,
+        })
+    }
 }

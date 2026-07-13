@@ -144,6 +144,7 @@ use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
+use crate::pruning::PartitionPruningInfo;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
@@ -562,6 +563,24 @@ impl FuseTable {
         } else {
             self.cluster_type()
         }
+    }
+
+    pub fn partition_pruning_info(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Option<PartitionPruningInfo> {
+        let partition_key_count = self.partition_key_count();
+        if partition_key_count == 0 {
+            return None;
+        }
+        Some(PartitionPruningInfo {
+            cluster_key_id: self.physical_cluster_key_id().unwrap(),
+            partition_keys: self
+                .linear_cluster_keys(ctx)
+                .into_iter()
+                .take(partition_key_count)
+                .collect(),
+        })
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
