@@ -656,6 +656,7 @@ impl FuseTable {
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
             || pruner.pruning_ctx.spatial_index_pruner.is_some()
             || pruner.pruning_ctx.virtual_column_pruner.is_some()
+            || runtime_filter_prune_context_for_block.is_some()
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {
