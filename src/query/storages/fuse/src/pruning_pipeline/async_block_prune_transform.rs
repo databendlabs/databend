@@ -63,6 +63,26 @@ impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
             if let Some(meta) = BlockMetasMeta::downcast_from(ptr) {
                 let block_meta_indexes =
                     self.block_pruner.internal_column_pruning(&meta.block_metas);
+                let blocks_before = block_meta_indexes.len();
+                let dynamic_block_locations = match self.runtime_filter_prune_context.as_ref() {
+                    Some(context) => context.dynamic_block_locations().await?,
+                    None => Vec::new(),
+                };
+                let block_meta_indexes: Vec<_> = block_meta_indexes
+                    .into_iter()
+                    .filter(|(_, block)| {
+                        dynamic_block_locations
+                            .iter()
+                            .all(|locations| locations.contains(&block.location.0))
+                    })
+                    .collect();
+                if let Some(context) = self.runtime_filter_prune_context.as_ref() {
+                    context.log_dynamic_block_prune(
+                        meta.segment_location.segment_idx,
+                        blocks_before,
+                        block_meta_indexes.len(),
+                    );
+                }
                 let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
                     Some(context) => context.runtime_stats_pruner().await?,
                     None => None,

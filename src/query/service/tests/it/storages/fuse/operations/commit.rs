@@ -30,6 +30,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::DynamicBlockPruneFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -886,6 +887,14 @@ impl TableContextPartitionStats for CtxDelegation {
 }
 
 impl TableContextRuntimeFilter for CtxDelegation {
+    fn set_dynamic_block_prune_filter(&self, scan_id: usize, filter: Arc<DynamicBlockPruneFilter>) {
+        self.ctx.set_dynamic_block_prune_filter(scan_id, filter);
+    }
+
+    fn get_dynamic_block_prune_filters(&self, scan_id: usize) -> Vec<Arc<DynamicBlockPruneFilter>> {
+        self.ctx.get_dynamic_block_prune_filters(scan_id)
+    }
+
     fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
         todo!()
     }

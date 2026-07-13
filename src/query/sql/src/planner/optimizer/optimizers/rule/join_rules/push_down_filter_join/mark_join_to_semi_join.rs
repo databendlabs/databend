@@ -14,11 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_exception::Result;
 
+use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::optimizer::ir::SExpr;
+use crate::plans::DynamicBlockPrune;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -67,6 +70,19 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
         JoinType::RightMark => JoinType::LeftSemi,
         _ => unreachable!(),
     };
+
+    if join.join_type == JoinType::LeftSemi
+        && join.equi_conditions.len() == 1
+        && join.non_equi_conditions.is_empty()
+        && let ScalarExpr::BoundColumnRef(column) = &join.equi_conditions[0].left
+        && let ColumnEntry::InternalColumn(internal) = metadata.read().column(column.column.index)
+        && internal.internal_column.column_type() == &InternalColumnType::BlockName
+        && metadata.read().table(internal.table_index).table().engine() == "FUSE"
+    {
+        join.dynamic_block_prune = Some(DynamicBlockPrune {
+            table_index: internal.table_index,
+        });
+    }
 
     metadata.write().add_removed_mark_index(mark_index);
 

@@ -272,9 +272,10 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if pruning_mode == ReadPartitionsPruningMode::Normal
-                    && (self.is_column_oriented()
-                        || (segment_len > nodes_num && distributed_pruning))
+                if pruning_mode == ReadPartitionsPruningMode::DynamicBlockPrune
+                    || (pruning_mode == ReadPartitionsPruningMode::Normal
+                        && (self.is_column_oriented()
+                            || (segment_len > nodes_num && distributed_pruning)))
                 {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
@@ -361,7 +362,11 @@ impl FuseTable {
                     )
                 });
 
-        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        // Dynamic block locations are query-specific and are not represented in
+        // the deterministic prune-cache key. Always run the prune pipeline so
+        // cached parts cannot bypass their intersection with the exact set.
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+            && ctx.get_dynamic_block_prune_filters(plan.scan_id).is_empty();
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
@@ -656,6 +661,7 @@ impl FuseTable {
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
             || pruner.pruning_ctx.spatial_index_pruner.is_some()
             || pruner.pruning_ctx.virtual_column_pruner.is_some()
+            || runtime_filter_prune_context_for_block.is_some()
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {
