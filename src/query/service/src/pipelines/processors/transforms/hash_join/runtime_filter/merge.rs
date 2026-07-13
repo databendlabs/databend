@@ -16,10 +16,10 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnMinMax;
 
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
-use super::packet::SerializableDomain;
 
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
@@ -43,10 +43,6 @@ pub fn merge_join_runtime_filter_packets(
         return Ok(result);
     }
 
-    let should_merge_inlist = total_build_rows < inlist_threshold;
-    let should_merge_bloom = total_build_rows < bloom_threshold;
-    let should_merge_min_max = total_build_rows < min_max_threshold;
-
     let packets = packets
         .into_iter()
         .filter_map(|packet| packet.packets)
@@ -63,17 +59,17 @@ pub fn merge_join_runtime_filter_packets(
     for id in packets[0].keys() {
         result.insert(*id, RuntimeFilterPacket {
             id: *id,
-            inlist: if should_merge_inlist {
+            inlist: if total_build_rows <= inlist_threshold {
                 merge_inlist(&packets, *id)?
             } else {
                 None
             },
-            min_max: if should_merge_min_max {
-                merge_min_max(&packets, *id)
+            min_max: if total_build_rows <= min_max_threshold {
+                merge_min_max(&packets, *id)?
             } else {
                 None
             },
-            bloom: if should_merge_bloom {
+            bloom: if total_build_rows <= bloom_threshold {
                 merge_bloom(&packets, *id)
             } else {
                 None
@@ -116,42 +112,22 @@ fn merge_inlist(
 fn merge_min_max(
     packets: &[HashMap<usize, RuntimeFilterPacket>],
     rf_id: usize,
-) -> Option<SerializableDomain> {
-    if packets
-        .iter()
-        .any(|packet| packet.get(&rf_id).unwrap().min_max.is_none())
+) -> Result<Option<ColumnMinMax>> {
+    let mut iter = packets.iter().map(|packet| packet.get(&rf_id).unwrap());
+    if let Some(first) = iter.next()
+        && let Some(first) = &first.min_max
     {
-        return None;
+        let mut acc = first.clone();
+        for item in iter {
+            let Some(min_max) = &item.min_max else {
+                return Ok(None);
+            };
+            acc.merge(min_max)?;
+        }
+        Ok(Some(acc))
+    } else {
+        Ok(None)
     }
-    let min = packets
-        .iter()
-        .map(|packet| {
-            packet
-                .get(&rf_id)
-                .unwrap()
-                .min_max
-                .as_ref()
-                .unwrap()
-                .min
-                .clone()
-        })
-        .min()
-        .unwrap();
-    let max = packets
-        .iter()
-        .map(|packet| {
-            packet
-                .get(&rf_id)
-                .unwrap()
-                .min_max
-                .as_ref()
-                .unwrap()
-                .max
-                .clone()
-        })
-        .max()
-        .unwrap();
-    Some(SerializableDomain { min, max })
 }
 
 fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u64>> {
@@ -180,10 +156,13 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::MinMax;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::SimpleDomain;
 
     use super::*;
 
@@ -196,16 +175,20 @@ mod tests {
         builder.build()
     }
 
+    fn int_min_max(min: i32, max: i32) -> ColumnMinMax {
+        ColumnMinMax::Values(MinMax::Number(
+            NumberDomain::Int32(SimpleDomain { min, max }),
+            false,
+        ))
+    }
+
     #[test]
     fn test_merge_short_circuit_all_types() -> Result<()> {
         let mut runtime_filters = HashMap::new();
         runtime_filters.insert(1, RuntimeFilterPacket {
             id: 1,
             inlist: Some(int_column(&[1, 2, 3])),
-            min_max: Some(SerializableDomain {
-                min: Scalar::Number(NumberScalar::Int32(1)),
-                max: Scalar::Number(NumberScalar::Int32(3)),
-            }),
+            min_max: Some(int_min_max(1, 3)),
             bloom: Some(vec![11, 22, 33]),
         });
 
@@ -227,20 +210,14 @@ mod tests {
         runtime_filters_1.insert(7, RuntimeFilterPacket {
             id: 7,
             inlist: Some(int_column(&[1, 2])),
-            min_max: Some(SerializableDomain {
-                min: Scalar::Number(NumberScalar::Int32(1)),
-                max: Scalar::Number(NumberScalar::Int32(5)),
-            }),
+            min_max: Some(int_min_max(1, 5)),
             bloom: Some(vec![1, 2]),
         });
         let mut runtime_filters_2 = HashMap::new();
         runtime_filters_2.insert(7, RuntimeFilterPacket {
             id: 7,
             inlist: Some(int_column(&[3, 4])),
-            min_max: Some(SerializableDomain {
-                min: Scalar::Number(NumberScalar::Int32(-1)),
-                max: Scalar::Number(NumberScalar::Int32(8)),
-            }),
+            min_max: Some(int_min_max(-1, 8)),
             bloom: Some(vec![3, 4]),
         });
 
@@ -258,13 +235,7 @@ mod tests {
         assert_eq!(merged.build_rows, 11);
         assert!(packet.inlist.is_none());
         assert_eq!(packet.bloom, Some(vec![1, 2, 3, 4]));
-        assert_eq!(
-            packet.min_max,
-            Some(SerializableDomain {
-                min: Scalar::Number(NumberScalar::Int32(-1)),
-                max: Scalar::Number(NumberScalar::Int32(8)),
-            })
-        );
+        assert_eq!(packet.min_max, Some(int_min_max(-1, 8)));
         Ok(())
     }
 
