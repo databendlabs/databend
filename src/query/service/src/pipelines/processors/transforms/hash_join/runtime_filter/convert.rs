@@ -188,6 +188,7 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::ColumnMinMax;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::ConstantFolder;
@@ -215,6 +216,7 @@ mod tests {
     use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
+    use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 
     fn int32_domain(min: i32, max: i32) -> Domain {
         Domain::Number(NumberDomain::Int32(SimpleDomain { min, max }))

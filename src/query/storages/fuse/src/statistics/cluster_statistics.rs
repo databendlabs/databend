@@ -32,6 +32,16 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_expression::TableSchema;
 use databend_common_expression::compare_scalars;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::decimal::DecimalDomain;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::NumberDomain;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_number_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_meta_app::schema::TableIndex;
@@ -702,6 +712,57 @@ pub(crate) fn prepare_cluster_key_exprs(
         .collect()
 }
 
+fn domain_to_cluster_boundaries(domain: &Domain) -> (Scalar, Scalar) {
+    match domain {
+        Domain::Number(domain) => with_number_type!(|NUM| match domain {
+            NumberDomain::NUM(SimpleDomain { min, max }) => (
+                Scalar::Number(NumberScalar::NUM(*min)),
+                Scalar::Number(NumberScalar::NUM(*max)),
+            ),
+        }),
+        Domain::Decimal(domain) => with_decimal_type!(|DECIMAL| match domain {
+            DecimalDomain::DECIMAL(SimpleDomain { min, max }, size) => (
+                Scalar::Decimal(DecimalScalar::DECIMAL(*min, *size)),
+                Scalar::Decimal(DecimalScalar::DECIMAL(*max, *size)),
+            ),
+        }),
+        Domain::Boolean(BooleanDomain {
+            has_false,
+            has_true,
+        }) => (Scalar::Boolean(!*has_false), Scalar::Boolean(*has_true)),
+        Domain::String(StringDomain { min, max }) => (
+            Scalar::String(min.clone()),
+            max.clone().map(Scalar::String).unwrap_or(Scalar::Null),
+        ),
+        Domain::Timestamp(SimpleDomain { min, max }) => {
+            (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
+        }
+        Domain::TimestampTz(SimpleDomain { min, max }) => {
+            (Scalar::TimestampTz(*min), Scalar::TimestampTz(*max))
+        }
+        Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+        Domain::Interval(SimpleDomain { min, max }) => {
+            (Scalar::Interval(*min), Scalar::Interval(*max))
+        }
+        Domain::Nullable(NullableDomain {
+            has_null,
+            value: Some(value),
+        }) => {
+            let (min, mut max) = domain_to_cluster_boundaries(value);
+            if *has_null {
+                max = Scalar::Null;
+            }
+            (min, max)
+        }
+        Domain::Nullable(NullableDomain { value: None, .. }) => (Scalar::Null, Scalar::Null),
+        Domain::Tuple(fields) => {
+            let (mins, maxs) = fields.iter().map(domain_to_cluster_boundaries).unzip();
+            (Scalar::Tuple(mins), Scalar::Tuple(maxs))
+        }
+        _ => (Scalar::Null, Scalar::Null),
+    }
+}
+
 /// Reconstruct cluster min/max stats from column stats and prepared key domains.
 pub(crate) fn get_min_max_stats(
     prepared_exprs: &[PreparedClusterKeyExpr],
@@ -738,10 +799,10 @@ pub(crate) fn get_min_max_stats(
             &BUILTIN_FUNCTIONS,
         );
         let domain = domain_opt.unwrap_or_else(|| Domain::full(&prepared_expr.data_type));
-        let (mut min, mut max) = domain.to_minmax();
+        let (mut min, mut max) = domain_to_cluster_boundaries(&domain);
         if min.as_ref().cmp(&max.as_ref()) == Ordering::Greater {
             warn!("invalid cluster key expression range, fallback to full domain");
-            (min, max) = Domain::full(&prepared_expr.data_type).to_minmax();
+            (min, max) = domain_to_cluster_boundaries(&Domain::full(&prepared_expr.data_type));
         }
         mins.push(min);
         maxs.push(max);
