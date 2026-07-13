@@ -478,6 +478,7 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            dynamic_block_prune: None,
             spatial_join: None,
         };
 

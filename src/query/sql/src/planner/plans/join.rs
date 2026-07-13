@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::ColumnSet;
+use crate::IndexType;
 use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::JoinConditionColumns;
@@ -215,6 +216,13 @@ pub struct HashJoinBuildCacheInfo {
     pub columns: Vec<Symbol>,
 }
 
+/// A positive semi join on `_block_name` that can be executed by pruning the
+/// probe-side table scan with the exact set produced by the build side.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DynamicBlockPrune {
+    pub table_index: IndexType,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct JoinEquiCondition {
     pub left: ScalarExpr,
@@ -297,6 +305,8 @@ pub struct Join {
     pub single_to_inner: Option<JoinType>,
     // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    /// Derived from a positive `_block_name IN (subquery)` predicate.
+    pub dynamic_block_prune: Option<DynamicBlockPrune>,
     // Derived annotation. The canonical join condition remains
     // `non_equi_conditions`; this is finalized after logical rewrites.
     pub spatial_join: Option<Box<SpatialJoinCandidate>>,
@@ -314,6 +324,7 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            dynamic_block_prune: None,
             spatial_join: None,
         }
     }
@@ -806,6 +817,15 @@ impl Operator for Join {
             return Ok(required);
         }
 
+        if self.dynamic_block_prune.is_some() {
+            required.distribution = if child_index == 1 {
+                Distribution::Broadcast
+            } else {
+                Distribution::Any
+            };
+            return Ok(required);
+        }
+
         // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
@@ -928,6 +948,17 @@ impl Operator for Join {
                     },
                 ],
             ]);
+        }
+
+        if self.dynamic_block_prune.is_some() {
+            return Ok(vec![vec![
+                RequiredProperty {
+                    distribution: Distribution::Any,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Broadcast,
+                },
+            ]]);
         }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side

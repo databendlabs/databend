@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Expr;
 
+use crate::runtime_filter_info::DynamicBlockPruneFilter;
 use crate::runtime_filter_info::RuntimeBloomFilter;
 use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
@@ -25,6 +26,20 @@ use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::runtime_filter_info::RuntimeFilterReport;
 
 pub trait TableContextRuntimeFilter: Send + Sync {
+    fn set_dynamic_block_prune_filter(
+        &self,
+        _scan_id: usize,
+        _filter: Arc<DynamicBlockPruneFilter>,
+    ) {
+    }
+
+    fn get_dynamic_block_prune_filters(
+        &self,
+        _scan_id: usize,
+    ) -> Vec<Arc<DynamicBlockPruneFilter>> {
+        Vec::new()
+    }
+
     fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
         unimplemented!()
     }

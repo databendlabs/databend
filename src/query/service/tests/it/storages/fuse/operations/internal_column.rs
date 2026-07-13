@@ -18,14 +18,21 @@ use std::collections::HashSet;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
+use databend_common_expression::Scalar;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::Value;
 use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberScalar;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
@@ -36,6 +43,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -86,6 +94,17 @@ fn check_data_block(expected: Vec<DataBlock>, blocks: Vec<DataBlock>) -> Result<
     );
 
     Ok(())
+}
+
+async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> {
+    let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
+    match &blocks[0].get_by_offset(0).value() {
+        Value::Scalar(Scalar::Number(NumberScalar::UInt64(value))) => Ok(*value),
+        Value::Column(Column::Number(NumberColumn::UInt64(values))) => Ok(values[0]),
+        value => Err(ErrorCode::BadDataValueType(format!(
+            "expected UInt64 count, got {value:?}"
+        ))),
+    }
 }
 
 async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Result<()> {
@@ -153,7 +172,6 @@ async fn test_internal_column() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
-
     let internal_columns = vec![
         INTERNAL_COLUMN_FACTORY
             .get_internal_column(ROW_ID_COL_NAME)
@@ -279,6 +297,108 @@ async fn test_internal_column() -> anyhow::Result<()> {
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_dynamic_block_prune_from_in_subquery() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {db}.{tbl} SET OPTIONS(row_per_block = 2, block_per_segment = 10)"
+        ))
+        .await?;
+
+    // Keep multiple blocks in a single segment. Without forcing lazy segment
+    // pruning this shape would materialize concrete block parts too early.
+    let table = fixture.latest_default_table().await?;
+    let blocks = TestFixture::gen_sample_blocks_stream(3, 1)
+        .try_collect()
+        .await?;
+    fixture
+        .append_commit_blocks(table, blocks, false, true)
+        .await?;
+
+    let one_block = format!(
+        "SELECT count(*) FROM {db}.{tbl} WHERE _block_name IN \
+         (SELECT block_location FROM fuse_block('{db}', '{tbl}') ORDER BY block_location LIMIT 1)"
+    );
+    assert_eq!(
+        2,
+        query_count(fixture.execute_query(&one_block).await?).await?
+    );
+
+    let duplicate_block = format!(
+        "SELECT count(*) FROM {db}.{tbl} WHERE _block_name IN (\
+         SELECT selected.block_location FROM (\
+           SELECT block_location FROM fuse_block('{db}', '{tbl}') \
+           ORDER BY block_location LIMIT 1\
+         ) AS selected, numbers(2))"
+    );
+    assert_eq!(
+        2,
+        query_count(fixture.execute_query(&duplicate_block).await?).await?
+    );
+
+    let empty = format!(
+        "SELECT count(*) FROM {db}.{tbl} WHERE _block_name IN \
+         (SELECT block_location FROM fuse_block('{db}', '{tbl}') WHERE false)"
+    );
+    assert_eq!(0, query_count(fixture.execute_query(&empty).await?).await?);
+
+    let null_only = format!(
+        "SELECT count(*) FROM {db}.{tbl} WHERE _block_name IN \
+         (SELECT CAST(NULL AS STRING) FROM numbers(1))"
+    );
+    assert_eq!(
+        0,
+        query_count(fixture.execute_query(&null_only).await?).await?
+    );
+
+    let explain = format!("EXPLAIN PIPELINE {one_block}");
+    let blocks = fixture
+        .execute_query(&explain)
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let formatted = pretty_format_blocks(&blocks)?;
+    assert!(formatted.contains("DynamicBlockPruneSink"), "{formatted}");
+    assert!(!formatted.contains("HashJoin"), "{formatted}");
+
+    let cache_ctx = fixture.new_query_ctx().await?;
+    cache_ctx
+        .get_settings()
+        .set_setting("enable_prune_cache".to_string(), "1".to_string())?;
+    assert_eq!(
+        2,
+        query_count(execute_query(cache_ctx, &one_block).await?).await?
+    );
+
+    let fallback_ctx = fixture.new_query_ctx().await?;
+    fallback_ctx
+        .get_settings()
+        .set_setting("enable_prune_pipeline".to_string(), "0".to_string())?;
+    assert_eq!(
+        2,
+        query_count(execute_query(fallback_ctx, &one_block).await?).await?
+    );
+    let fallback_explain_ctx = fixture.new_query_ctx().await?;
+    fallback_explain_ctx
+        .get_settings()
+        .set_setting("enable_prune_pipeline".to_string(), "0".to_string())?;
+    let fallback_explain = format!("EXPLAIN PIPELINE {one_block}");
+    let blocks = execute_query(fallback_explain_ctx, &fallback_explain)
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let formatted = pretty_format_blocks(&blocks)?;
+    assert!(!formatted.contains("DynamicBlockPruneSink"), "{formatted}");
+    assert!(formatted.contains("HashJoin"), "{formatted}");
 
     Ok(())
 }
