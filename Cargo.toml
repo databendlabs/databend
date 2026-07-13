@@ -31,6 +31,7 @@ members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
+    "src/tests/planner_replay",
     "tests/sqllogictests",
 ]
 default-members = [
@@ -56,6 +57,7 @@ default-members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
+    "src/tests/planner_replay",
     "tests/sqllogictests",
 ]
 
@@ -77,6 +79,7 @@ databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }
 databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
+databend-common-expression-test-support = { path = "src/query/expression/test-support" }
 databend-common-formats = { path = "src/query/formats" }
 databend-common-frozen-api = { path = "src/common/frozen_api" }
 databend-common-functions = { path = "src/query/functions" }

@@ -194,7 +194,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,query,meta,metactl,metabench,metaverifier
+          artifacts: sqllogictests,planner-replay,query,meta,metactl,metabench,metaverifier
       - name: Basic Sqllogic Test
         shell: bash
         env:
@@ -308,7 +308,7 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: default
-          artifacts: sqllogictests
+          artifacts: sqllogictests,planner-replay
           path: distro/bin
       - name: Pack Testsuite
         run: |

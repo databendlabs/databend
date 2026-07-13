@@ -7,21 +7,36 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-pipeline = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-statistics = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-users = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-meta-runtime = { workspace = true }
+databend-storages-common-session = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 
 goldenfile = { workspace = true }
-log = { workspace = true }
-match-template = { workspace = true }
+jwt-simple = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

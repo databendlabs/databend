@@ -4,16 +4,13 @@ from .copy_utils import run_all
 
 
 # For row-based formats, queries must include at least one $N column reference.
-# parquet uses named columns directly.
-#
-# orc/avro are excluded because they do not support unload (output), so test
-# data cannot be generated with `copy into @stage`. Track separately.
-FORMATS = ["csv", "ndjson", "text", "parquet"]
+# Parquet and ORC use named columns directly.
+FORMATS = ["csv", "ndjson", "text", "parquet", "orc", "avro"]
 
 
 def _col_ref(fmt):
     """Return a data column reference appropriate for the format."""
-    if fmt == "parquet":
+    if fmt in ("parquet", "orc"):
         return "a"
     return "$1"
 
@@ -33,7 +30,13 @@ def _content_key_present(conn):
     return _storage_type(conn) != "fs"
 
 
-def _unload(conn, name, path, fmt, query="select number as a, number + 100 as b from numbers(2)"):
+def _unload(
+    conn,
+    name,
+    path,
+    fmt,
+    query="select number::int64 as a, (number + 100)::int64 as b from numbers(2)",
+):
     """Create a stage and unload `query` to a known raw path inside it.
 
     Using single=true + use_raw_path=true gives a deterministic file name so we
