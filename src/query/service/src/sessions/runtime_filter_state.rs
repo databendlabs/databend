@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_catalog::runtime_filter_info::DynamicBlockPruneFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
@@ -32,6 +33,7 @@ use parking_lot::RwLock;
 pub struct RuntimeFilterState {
     runtime_filters: RwLock<HashMap<usize, RuntimeFilterInfo>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
+    dynamic_block_prune_filters: RwLock<HashMap<usize, Vec<Arc<DynamicBlockPruneFilter>>>>,
     runtime_filter_logged: AtomicBool,
 }
 
@@ -43,6 +45,7 @@ impl RuntimeFilterState {
     pub fn clear(&self) {
         self.runtime_filters.write().clear();
         self.runtime_filter_ready.write().clear();
+        self.dynamic_block_prune_filters.write().clear();
         self.runtime_filter_logged.store(false, Ordering::SeqCst);
     }
 
@@ -55,6 +58,11 @@ impl RuntimeFilterState {
         if !self.runtime_filter_ready.read().is_empty() {
             return Err(ErrorCode::Internal(format!(
                 "Runtime filter ready set should be empty for query {query_id}"
+            )));
+        }
+        if !self.dynamic_block_prune_filters.read().is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Dynamic block prune filters should be empty for query {query_id}"
             )));
         }
         if self.runtime_filter_logged.load(Ordering::Relaxed) {
@@ -73,6 +81,29 @@ impl RuntimeFilterState {
                 entry.filters.push(new_filter);
             }
         }
+    }
+
+    pub fn set_dynamic_block_prune_filter(
+        &self,
+        scan_id: usize,
+        filter: Arc<DynamicBlockPruneFilter>,
+    ) {
+        self.dynamic_block_prune_filters
+            .write()
+            .entry(scan_id)
+            .or_default()
+            .push(filter);
+    }
+
+    pub fn get_dynamic_block_prune_filters(
+        &self,
+        scan_id: usize,
+    ) -> Vec<Arc<DynamicBlockPruneFilter>> {
+        self.dynamic_block_prune_filters
+            .read()
+            .get(&scan_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {

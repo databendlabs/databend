@@ -204,6 +204,7 @@ impl SubqueryDecorrelatorOptimizer {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            dynamic_block_prune: None,
             spatial_join: None,
         };
 
@@ -301,6 +302,7 @@ impl SubqueryDecorrelatorOptimizer {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    dynamic_block_prune: None,
                     spatial_join: None,
                 };
                 let s_expr = SExpr::create_binary(
@@ -371,6 +373,7 @@ impl SubqueryDecorrelatorOptimizer {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    dynamic_block_prune: None,
                     spatial_join: None,
                 };
                 let s_expr = SExpr::create_binary(
@@ -459,6 +462,7 @@ impl SubqueryDecorrelatorOptimizer {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    dynamic_block_prune: None,
                     spatial_join: None,
                 }
                 .into();

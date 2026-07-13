@@ -157,6 +157,9 @@ pub enum ReadPartitionsPruningMode {
     #[default]
     Normal,
     Lightweight,
+    /// Keep Fuse segments lazy so query-specific dynamic block pruning is
+    /// guaranteed to run before block parts are materialized.
+    DynamicBlockPrune,
 }
 
 /// Extras is a wrapper for push down items.

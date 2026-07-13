@@ -551,6 +551,7 @@ impl SubqueryDecorrelatorOptimizer {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    dynamic_block_prune: join.dynamic_block_prune.clone(),
                     spatial_join: None,
                 },
                 left_flatten_plan,
