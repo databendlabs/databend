@@ -29,6 +29,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
@@ -429,12 +430,15 @@ impl PhysicalPlanBuilder {
             table_schema = Arc::new(schema);
         }
 
-        let push_downs = self.push_downs(
+        let mut push_downs = self.push_downs(
             &scan,
             &table_schema,
             project_virtual_columns,
             has_inner_column,
         )?;
+        if self.dynamic_block_prune_scan_ids.contains(&scan.scan_id) {
+            push_downs.read_partitions_pruning_mode = ReadPartitionsPruningMode::DynamicBlockPrune;
+        }
 
         // Generate secure cache key extra for Row Access Policy predicates.
         // Constant-fold so session-dependent functions (e.g. GETVARIABLE)

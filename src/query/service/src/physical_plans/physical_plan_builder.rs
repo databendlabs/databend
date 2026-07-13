@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
@@ -43,6 +44,7 @@ pub struct PhysicalPlanBuilder {
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
+    pub dynamic_block_prune_scan_ids: HashSet<usize>,
     pub build_depth: usize,
 }
 
@@ -57,6 +59,7 @@ impl PhysicalPlanBuilder {
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
+            dynamic_block_prune_scan_ids: HashSet::new(),
             build_depth: 0,
         }
     }

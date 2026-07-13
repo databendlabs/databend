@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_catalog::runtime_filter_info::DynamicBlockPruneFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -36,6 +38,7 @@ pub struct RuntimeFilterPruneContext {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
     runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
+    dynamic_block_prune_filters: Vec<Arc<DynamicBlockPruneFilter>>,
     statistics_column_ids: Vec<ColumnId>,
     runtime_filter_wait_finished: Arc<AtomicBool>,
     runtime_stats_pruner: Arc<OnceLock<Option<Arc<RuntimeStatsPruner>>>>,
@@ -48,7 +51,8 @@ impl RuntimeFilterPruneContext {
         table_schema: TableSchemaRef,
     ) -> Result<Option<Self>> {
         let runtime_filter_ready = Self::statistics_ready(&ctx.get_runtime_filter_ready(scan_id));
-        if runtime_filter_ready.is_empty() {
+        let dynamic_block_prune_filters = ctx.get_dynamic_block_prune_filters(scan_id);
+        if runtime_filter_ready.is_empty() && dynamic_block_prune_filters.is_empty() {
             return Ok(None);
         }
         let statistics_column_ids =
@@ -60,6 +64,7 @@ impl RuntimeFilterPruneContext {
             scan_id,
             table_schema,
             runtime_filter_ready,
+            dynamic_block_prune_filters,
             statistics_column_ids,
             runtime_filter_wait_finished: Arc::new(AtomicBool::new(false)),
             runtime_stats_pruner: Arc::new(OnceLock::new()),
@@ -100,6 +105,32 @@ impl RuntimeFilterPruneContext {
             pruner,
             Self::all_runtime_filters_ready(&self.runtime_filter_ready),
         ))
+    }
+
+    pub async fn dynamic_block_locations(&self) -> Result<Vec<Arc<HashSet<String>>>> {
+        let mut locations = Vec::with_capacity(self.dynamic_block_prune_filters.len());
+        let abort_notify = self.ctx.get_abort_notify();
+        for filter in &self.dynamic_block_prune_filters {
+            let mut receiver = filter.subscribe();
+            while receiver.borrow().is_none() {
+                tokio::select! {
+                    changed = receiver.changed() => {
+                        changed.map_err(|_| {
+                            databend_common_exception::ErrorCode::TokioError(
+                                "dynamic block prune producer stopped before publishing locations",
+                            )
+                        })?;
+                    }
+                    _ = abort_notify.notified() => {
+                        return Err(databend_common_exception::ErrorCode::AbortedQuery(
+                            "query aborted while waiting for dynamic block locations",
+                        ));
+                    }
+                }
+            }
+            locations.push(receiver.borrow().as_ref().unwrap().clone());
+        }
+        Ok(locations)
     }
 
     fn statistics_ready(
