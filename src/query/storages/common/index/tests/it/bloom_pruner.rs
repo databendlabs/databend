@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnMinMax;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -169,7 +170,7 @@ fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
         .filter_map(|(i, entry)| {
             let field = bloom_columns.get(&i)?;
             let column = entry.as_column().unwrap();
-            let (min, max) = column.domain().to_minmax();
+            let (min, max) = column.min_max().unwrap().into_option().unwrap().scalars();
             Some((field.column_id, ColumnStatistics {
                 min,
                 max,
@@ -744,7 +745,11 @@ fn eval_index_expr(
                 .as_nullable()
                 .map(|nullable| nullable.validity.null_count())
                 .unwrap_or_default() as u64;
-            let (min, max) = column.domain().to_minmax();
+            let (min, max) = column
+                .min_max()
+                .ok()
+                .and_then(ColumnMinMax::into_option)
+                .map_or((Scalar::Null, Scalar::Null), |min_max| min_max.scalars());
             Some((field.column_id, ColumnStatistics {
                 min,
                 max,

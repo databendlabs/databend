@@ -16,8 +16,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnMinMax;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
@@ -29,7 +29,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
-use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_for_bloom;
 
 struct SingleFilterBuilder {
@@ -37,7 +36,7 @@ struct SingleFilterBuilder {
     inlist_data_type: DataType,
     hash_method: HashMethodKind,
 
-    min_max_domain: Option<Domain>,
+    min_max: Option<ColumnMinMax>,
     min_max_threshold: usize,
 
     inlist_builder: Option<ColumnBuilder>,
@@ -62,12 +61,9 @@ impl SingleFilterBuilder {
             id: desc.id,
             inlist_data_type: bloom_data_type,
             hash_method,
-            min_max_domain: None,
-            min_max_threshold: if desc.enable_min_max_runtime_filter {
-                min_max_threshold
-            } else {
-                0
-            },
+            min_max: (desc.enable_min_max_runtime_filter && min_max_threshold > 0)
+                .then_some(ColumnMinMax::Empty),
+            min_max_threshold,
             inlist_builder: None,
             inlist_threshold: if desc.enable_inlist_runtime_filter {
                 inlist_threshold
@@ -85,22 +81,22 @@ impl SingleFilterBuilder {
 
     fn add_column(&mut self, column: &Column, total_rows: usize) -> Result<()> {
         let new_total = total_rows + column.len();
-        self.add_min_max(column, new_total);
+        self.add_min_max(column, new_total)?;
         self.add_inlist(column, new_total);
         self.add_bloom(column, new_total)?;
         Ok(())
     }
 
-    fn add_min_max(&mut self, column: &Column, new_total: usize) {
+    fn add_min_max(&mut self, column: &Column, new_total: usize) -> Result<()> {
         if new_total > self.min_max_threshold {
-            self.min_max_domain = None;
-            return;
+            self.min_max = None;
+            return Ok(());
         }
-        let col_domain = column.remove_nullable().domain();
-        self.min_max_domain = Some(match self.min_max_domain.take() {
-            Some(d) => d.merge(&col_domain),
-            None => col_domain,
-        });
+
+        if let Some(min_max) = self.min_max.as_mut() {
+            min_max.merge(&column.min_max()?)?;
+        }
+        Ok(())
     }
 
     fn add_inlist(&mut self, column: &Column, new_total: usize) {
@@ -139,10 +135,7 @@ impl SingleFilterBuilder {
     }
 
     fn finish(mut self, func_ctx: &FunctionContext) -> Result<RuntimeFilterPacket> {
-        let min_max = self.min_max_domain.take().map(|domain| {
-            let (min, max) = domain.to_minmax();
-            SerializableDomain { min, max }
-        });
+        let min_max = self.min_max.take();
 
         let inlist = if let Some(builder) = self.inlist_builder.take() {
             let column = builder.build();
@@ -278,6 +271,7 @@ mod tests {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Expr;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::StringType;
 
     use super::*;
@@ -307,6 +301,40 @@ mod tests {
         let inlist = packet.inlist.unwrap();
         assert_eq!(inlist.data_type(), DataType::String);
         assert_eq!(inlist.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_min_max_retains_null_from_an_all_null_batch() -> Result<()> {
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key: Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Nullable(Box::new(DataType::Number(
+                    databend_common_expression::types::NumberDataType::Int32,
+                ))),
+                display_name: "build_key".to_string(),
+            }),
+            probe_targets: vec![],
+            build_table_rows: Some(4),
+            enable_bloom_runtime_filter: false,
+            enable_inlist_runtime_filter: false,
+            enable_min_max_runtime_filter: true,
+        };
+
+        let mut builder = SingleFilterBuilder::new(&desc, 0, 0, 10)?;
+        builder.add_column(&Int32Type::from_opt_data(vec![None, None]), 0)?;
+        builder.add_column(&Int32Type::from_opt_data(vec![Some(3), Some(5)]), 2)?;
+
+        let min_max = builder
+            .finish(&FunctionContext::default())?
+            .min_max
+            .unwrap()
+            .into_option()
+            .unwrap();
+        assert!(min_max.has_null());
+        assert_eq!(min_max.scalars(), (3i32.into(), 5i32.into()));
         Ok(())
     }
 }

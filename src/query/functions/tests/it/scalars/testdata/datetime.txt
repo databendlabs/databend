@@ -2708,6 +2708,15 @@ output domain  : {202109..=202109}
 output         : 202109
 
 
+ast            : to_yyyymm(to_date(2932896))
+raw expr       : to_yyyymm(to_date(2932896))
+checked expr   : to_yyyymm<Date>(CAST<Int64>(CAST<UInt32>(2932896_u32 AS Int64) AS Date))
+optimized expr : 999912_u32
+output type    : UInt32
+output domain  : {999912..=999912}
+output         : 999912
+
+
 ast            : to_yyyymmdd(to_date(18875))
 raw expr       : to_yyyymmdd(to_date(18875))
 checked expr   : to_yyyymmdd<Date>(CAST<Int64>(CAST<UInt16>(18875_u16 AS Int64) AS Date))
