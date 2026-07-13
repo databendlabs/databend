@@ -135,3 +135,56 @@ drop table t_11772_1;
 
 statement ok
 drop table t_11772_2;
+
+# Dynamic block pruning for positive `_block_name IN (subquery)`.
+
+statement ok
+drop table if exists t_dynamic_block_prune;
+
+statement ok
+create table t_dynamic_block_prune(a Int64);
+
+statement ok
+insert into t_dynamic_block_prune values (1);
+
+statement ok
+insert into t_dynamic_block_prune values (2);
+
+statement ok
+insert into t_dynamic_block_prune values (3);
+
+query I
+select count(*) from t_dynamic_block_prune where _block_name in (
+    select block_location from fuse_block('default', 't_dynamic_block_prune')
+    order by block_location limit 1
+);
+----
+1
+
+query I
+select count(*) from t_dynamic_block_prune where _block_name in (
+    select selected.block_location
+    from (
+        select block_location from fuse_block('default', 't_dynamic_block_prune')
+        order by block_location limit 1
+    ) as selected, numbers(2)
+);
+----
+1
+
+query I
+select count(*) from t_dynamic_block_prune where _block_name in (
+    select block_location from fuse_block('default', 't_dynamic_block_prune') where false
+);
+----
+0
+
+query I
+select count(*) from t_dynamic_block_prune where _block_name in (
+    select cast(null as string) from numbers(1)
+);
+----
+0
+
+statement ok
+drop table t_dynamic_block_prune;
