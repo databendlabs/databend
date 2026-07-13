@@ -335,6 +335,7 @@ impl FuseTable {
             &push_downs,
             cluster_key_meta,
             cluster_keys,
+            None,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

@@ -23,6 +23,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
 use databend_storages_common_index::PageIndex;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use goldenfile::Mint;
@@ -64,6 +65,48 @@ fn test_page_index() -> anyhow::Result<()> {
     run_text(file, "to_int16(a::int8) = 1+2", stats);
 
     Ok(())
+}
+
+#[test]
+fn test_page_index_string_prefix() {
+    let columns = [
+        ("p", Int32Type::data_type()),
+        ("addr", StringType::data_type()),
+    ];
+    let filter = parse_expr(
+        "p = 14 and addr = '0x97bbda765cf177c5e1d60d41140fcbb064abed7f'",
+        &columns,
+    );
+
+    let tuple = |prefix: &str| {
+        Scalar::Tuple(vec![
+            Scalar::Number(14i32.into()),
+            Scalar::String(prefix.to_string()),
+        ])
+    };
+    let stats = Some(ClusterStatistics {
+        cluster_key_id: 7,
+        min: tuple("0x970000").as_tuple().unwrap().clone(),
+        max: tuple("0x990000").as_tuple().unwrap().clone(),
+        level: 0,
+        pages: Some(vec![
+            tuple("0x970000"),
+            tuple("0x978000"),
+            tuple("0x97c000"),
+            tuple("0x980000"),
+        ]),
+    });
+
+    for address_key in ["addr", "substr(addr, 1, 8)"] {
+        let cluster_keys = vec![
+            parse_expr("p", &columns).as_remote_expr(),
+            parse_expr(address_key, &columns).as_remote_expr(),
+        ];
+        let index =
+            PageIndex::try_create_with_exprs(FunctionContext::default(), 7, &cluster_keys, &filter)
+                .unwrap();
+        assert_eq!(index.apply(&stats).unwrap(), (true, Some(1..2)));
+    }
 }
 
 fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>) {

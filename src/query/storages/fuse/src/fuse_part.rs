@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -45,11 +46,15 @@ pub struct FuseBlockPartInfo {
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
+    #[serde(default)]
+    pub file_size: u64,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
+    #[serde(default)]
+    pub cluster_stats: Option<ClusterStatistics>,
     pub block_meta_index: Option<BlockMetaIndex>,
 }
 
@@ -83,10 +88,12 @@ impl FuseBlockPartInfo {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         rows_count: u64,
+        file_size: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
+        cluster_stats: Option<ClusterStatistics>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
@@ -96,9 +103,11 @@ impl FuseBlockPartInfo {
             bloom_filter_index_size,
             create_on,
             columns_meta,
+            file_size,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
+            cluster_stats,
             block_meta_index,
             columns_stat,
         }))

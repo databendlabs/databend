@@ -105,6 +105,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let bloom_index_location_col = segment.col_by_name(&[BLOOM_FILTER_INDEX_LOCATION]).unwrap();
         let bloom_index_size_col = segment.bloom_filter_index_size_col();
         let block_size_col = segment.block_size_col();
+        let file_size_col = segment.file_size_col();
         let row_count_col = segment.row_count_col();
 
         let pruning_runtime = &self.block_pruner.pruning_ctx.pruning_runtime;
@@ -136,6 +137,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let location_path = location_path.clone();
             let compression_col = compression_col.clone();
             let block_size_col = block_size_col.clone();
+            let file_size_col = file_size_col.clone();
             let row_count_col = row_count_col.clone();
             let create_on_col = create_on_col.clone();
             let bloom_index_location_col = bloom_index_location_col.clone();
@@ -191,6 +193,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                     let compression = Compression::from_u8(compression_col[block_idx]);
                     let block_size = block_size_col[block_idx];
+                    let file_size = file_size_col[block_idx];
                     let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
                     let bloom_filter_index_location = match location_scalar {
                         ScalarRef::Null => None,
@@ -282,10 +285,12 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         bloom_filter_index_location,
                         bloom_filter_index_size,
                         row_count,
+                        file_size,
                         columns_meta,
                         Some(columns_stat),
                         compression,
                         None, // TODO(Sky): sort_min_max
+                        None, // TODO: column-oriented pruning does not load cluster stats yet.
                         Some(block_meta_index),
                         create_on,
                     );

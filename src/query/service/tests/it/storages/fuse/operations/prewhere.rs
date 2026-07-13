@@ -336,6 +336,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         columns_stat: None,
         compression,
         sort_min_max: None,
+        cluster_stats: None,
         block_meta_index: None,
     };
 

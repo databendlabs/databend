@@ -91,6 +91,7 @@ pub struct PruningContext {
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+    pub page_size: Option<usize>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
@@ -109,6 +110,7 @@ impl PruningContext {
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        page_size: Option<usize>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -246,6 +248,7 @@ impl PruningContext {
             range_pruner,
             bloom_pruner,
             page_pruner,
+            page_size,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
@@ -286,6 +289,7 @@ impl FusePruner {
             push_down,
             None,
             vec![],
+            None,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -294,6 +298,7 @@ impl FusePruner {
     }
 
     // Create fuse pruner with pages.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
@@ -301,6 +306,7 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        page_size: Option<usize>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -313,6 +319,7 @@ impl FusePruner {
             push_down,
             cluster_key_meta,
             cluster_keys,
+            page_size,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -328,6 +335,7 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        page_size: Option<usize>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -358,6 +366,7 @@ impl FusePruner {
             push_down,
             cluster_key_meta,
             cluster_keys,
+            page_size,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

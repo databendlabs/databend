@@ -24,6 +24,8 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::utils::SlicesIterator;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -195,15 +197,25 @@ impl ReadState {
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let page_bitmap = BlockReader::page_range_bitmap(part);
+        let page_row_selection = page_bitmap.as_ref().map(RowSelection::from);
+        let preread_num_rows = page_row_selection
+            .as_ref()
+            .map(|selection| selection.selected_rows)
+            .unwrap_or(part.nums_rows);
+
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        let mut preread_block = self
-            .pre_reader
-            .deserialize_part(part, pre_columns_chunks, None)?;
+        let mut preread_block = self.pre_reader.deserialize_part(
+            part,
+            pre_columns_chunks,
+            page_row_selection.as_ref(),
+        )?;
 
-        let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
-        let runtime_filter_bitmap = self.runtime_filter(&preread_block, part.nums_rows)?;
+        let filter_bitmap = self.filter(&preread_block, preread_num_rows)?;
+        let runtime_filter_bitmap = self.runtime_filter(&preread_block, preread_num_rows)?;
 
-        let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
+        let preread_bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap)
+        {
             (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
                 let rhs: Bitmap = runtime_filter_bitmap.into();
                 Some((filter_bitmap & &rhs).into())
@@ -212,10 +224,11 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-
+        let bitmap_selection =
+            Self::restore_page_range_bitmap(preread_bitmap_selection.clone(), page_bitmap)?;
         let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
 
-        if let Some(ref bitmap) = bitmap_selection {
+        if let Some(ref bitmap) = preread_bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
         }
 
@@ -226,7 +239,11 @@ impl ReadState {
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
         let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
-            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
+            part.range().is_some()
+                || should_push_down_row_selection(
+                    row_selection,
+                    self.prewhere_selectivity_threshold,
+                )
         });
 
         let mut remain_block = self.remain_reader.deserialize_part(
@@ -253,6 +270,40 @@ impl ReadState {
         Ok((data_block, row_selection, bitmap_selection))
     }
 
+    pub fn filter_page_range_block(
+        &self,
+        mut block: DataBlock,
+        part: &FuseBlockPartInfo,
+    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let selected_rows = block.num_rows();
+        let preread_block = block
+            .clone()
+            .resort(&self.output_schema, &self.pre_reader.data_schema())?;
+        let filter_bitmap = self.filter(&preread_block, selected_rows)?;
+        let runtime_filter_bitmap = self.runtime_filter(&preread_block, selected_rows)?;
+
+        let selected_bitmap: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
+            (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
+                let rhs: Bitmap = runtime_filter_bitmap.into();
+                Some((filter_bitmap & &rhs).into())
+            }
+            (Some(filter_bitmap), None) => Some(filter_bitmap.into()),
+            (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
+            (None, None) => None,
+        };
+
+        let page_bitmap = BlockReader::page_range_bitmap(part);
+        let bitmap_selection =
+            Self::restore_page_range_bitmap(selected_bitmap.clone(), page_bitmap)?;
+        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+
+        if let Some(bitmap) = selected_bitmap.as_ref() {
+            block = block.filter_with_bitmap(bitmap)?;
+        }
+
+        Ok((block, row_selection, bitmap_selection))
+    }
+
     fn filter_column_chunks<'a>(
         columns_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
         column_ids: &'a HashSet<ColumnId>,
@@ -264,6 +315,45 @@ impl ReadState {
             }
         }
         Ok(filtered_columns_chunks)
+    }
+
+    fn restore_page_range_bitmap(
+        bitmap_selection: Option<Bitmap>,
+        page_bitmap: Option<Bitmap>,
+    ) -> Result<Option<Bitmap>> {
+        let Some(page_bitmap) = page_bitmap else {
+            return Ok(bitmap_selection);
+        };
+        let Some(bitmap_selection) = bitmap_selection else {
+            return Ok(Some(page_bitmap));
+        };
+
+        let mut page_ranges = SlicesIterator::new(&page_bitmap);
+        let Some((page_start, page_rows)) = page_ranges.next() else {
+            if bitmap_selection.is_empty() {
+                return Ok(Some(page_bitmap));
+            }
+            return Err(ErrorCode::Internal(format!(
+                "page selection has 0 rows but filter bitmap has {} rows",
+                bitmap_selection.len()
+            )));
+        };
+        if page_ranges.next().is_some() {
+            return Err(ErrorCode::Internal(
+                "page selection must be a contiguous row range",
+            ));
+        }
+        if bitmap_selection.len() != page_rows {
+            return Err(ErrorCode::Internal(format!(
+                "page selection has {page_rows} rows but filter bitmap has {} rows",
+                bitmap_selection.len()
+            )));
+        }
+        let mut restored = MutableBitmap::with_capacity(page_bitmap.len());
+        restored.extend_constant(page_start, false);
+        restored.extend_from_bitmap(&bitmap_selection);
+        restored.extend_constant(page_bitmap.len() - page_start - page_rows, false);
+        Ok(Some(restored.into()))
     }
 }
 
@@ -306,5 +396,28 @@ mod tests {
         let sparse_selection = RowSelection::from(&sparse_bitmap);
 
         assert!(!should_push_down_row_selection(&sparse_selection, 0));
+    }
+
+    #[test]
+    fn test_restore_page_range_bitmap() {
+        let mut page_bitmap = MutableBitmap::from_len_zeroed(8);
+        for row in 2..5 {
+            page_bitmap.set(row, true);
+        }
+        let page_bitmap: Bitmap = page_bitmap.into();
+
+        let mut filter_bitmap = MutableBitmap::from_len_set(3);
+        filter_bitmap.set(1, false);
+        let filter_bitmap: Bitmap = filter_bitmap.into();
+
+        let merged = ReadState::restore_page_range_bitmap(Some(filter_bitmap), Some(page_bitmap))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(merged.len(), 8);
+        assert!(merged.get_bit(2));
+        assert!(!merged.get_bit(3));
+        assert!(merged.get_bit(4));
+        assert_eq!(merged.null_count(), 6);
     }
 }

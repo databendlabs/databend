@@ -83,6 +83,7 @@ use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
+use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
@@ -920,11 +921,23 @@ impl FuseTable {
         let spatial_index_columns =
             Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
-        let pruner = FusePruner::create(
+        let page_size = match self.get_option(FUSE_OPT_KEY_DATA_PAGE_ROWS, 0usize) {
+            0 => None,
+            value => Some(value),
+        };
+        let cluster_keys = page_size
+            .map(|_| self.linear_cluster_keys(ctx.clone()))
+            .unwrap_or_default();
+        let cluster_key_meta = page_size.and(self.table_info.cluster_key());
+
+        let pruner = FusePruner::create_with_pages(
             &ctx,
             dal,
             table_schema.clone(),
             &push_downs,
+            cluster_key_meta,
+            cluster_keys,
+            page_size,
             self.bloom_index_cols(),
             ngram_args,
             spatial_index_columns,
@@ -1420,10 +1433,12 @@ impl FuseTable {
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
             rows_count,
+            meta.file_size,
             columns_meta,
             Some(columns_stats),
             meta.compression(),
             sort_min_max,
+            meta.cluster_stats.clone(),
             block_meta_index.to_owned(),
             create_on,
         )
@@ -1478,10 +1493,12 @@ impl FuseTable {
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
             rows_count,
+            meta.file_size,
             columns_meta,
             Some(columns_stat),
             meta.compression(),
             sort_min_max,
+            meta.cluster_stats.clone(),
             block_meta_index.to_owned(),
             create_on,
         )

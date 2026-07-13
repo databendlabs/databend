@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
+use crate::ColumnIndex;
 use crate::Expr;
 use crate::Function;
 use crate::FunctionID;
@@ -257,7 +258,7 @@ impl SelectExprBuilder {
     // If a function may be use for filter short-circuiting, we can not perform filter reorder,
     // for example, for predicates `a != 0 and 3 / a > 1`，if we swap `a != 0` and `3 / a > 1`,
     // there will be a divide by zero error.
-    pub fn can_reorder(expr: &Expr) -> bool {
+    pub fn can_reorder<Index: ColumnIndex>(expr: &Expr<Index>) -> bool {
         match expr {
             Expr::FunctionCall(FunctionCall { function, args, .. }) => {
                 let func_name = function.signature.name.as_str();

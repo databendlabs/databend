@@ -25,6 +25,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -211,6 +212,58 @@ impl Processor for DeserializeDataTransform {
 
                     self.output_data = Some(block);
                 }
+                ParquetDataSource::PageRange(data_block) => {
+                    let start = Instant::now();
+                    let part = FuseBlockPartInfo::from_part(&part)?;
+                    if self.read_state.is_none() {
+                        self.read_state = Some(ReadState::create(
+                            self.ctx.clone(),
+                            self.scan_id,
+                            self.prewhere_info.as_ref(),
+                            self.block_reader.clone(),
+                        )?);
+                    }
+
+                    let (data_block, _, bitmap_selection) = self
+                        .read_state
+                        .as_ref()
+                        .unwrap()
+                        .filter_page_range_block(data_block, part)?;
+
+                    metrics_inc_remote_io_deserialize_milliseconds(
+                        start.elapsed().as_millis() as u64
+                    );
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
+
+                    let mut data_block =
+                        data_block.resort(&self.src_schema, &self.output_schema)?;
+                    let offsets = if self.block_meta_options.query_internal_columns {
+                        bitmap_selection.as_ref().map(|bitmap| {
+                            RoaringTreemap::from_sorted_iter(
+                                TrueIdxIter::new(bitmap.len(), Some(bitmap)).map(|i| i as u64),
+                            )
+                            .unwrap()
+                        })
+                    } else {
+                        None
+                    };
+                    data_block = add_data_block_meta(
+                        data_block,
+                        part,
+                        offsets,
+                        self.base_block_ids.clone(),
+                        &self.block_meta_options,
+                    )?;
+                    self.output_data = Some(data_block);
+                }
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
@@ -264,9 +317,7 @@ impl Processor for DeserializeDataTransform {
                     let offsets = if self.block_meta_options.query_internal_columns {
                         bitmap_selection.as_ref().map(|bitmap| {
                             RoaringTreemap::from_sorted_iter(
-                                (0..bitmap.len())
-                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                    .map(|i| i as u64),
+                                TrueIdxIter::new(bitmap.len(), Some(bitmap)).map(|i| i as u64),
                             )
                             .unwrap()
                         })

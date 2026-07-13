@@ -455,6 +455,7 @@ impl FuseTable {
             push_down,
             None,
             vec![],
+            None,
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),

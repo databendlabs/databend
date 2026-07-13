@@ -68,7 +68,7 @@ impl PagePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
-        schema: &'a TableSchemaRef,
+        _schema: &'a TableSchemaRef,
         filter_expr: Option<&'a Expr<String>>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
@@ -80,17 +80,17 @@ impl PagePrunerCreator {
         // ClusterStatistics min/max/pages are stored as scalar-only tuples.
         // Drop vector keys here so PageIndex fields stay aligned with those tuples;
         // vector pruning uses BlockMeta.vector_stats instead of page stats.
-        let mut scalar_cluster_keys = Vec::with_capacity(cluster_keys.len());
-        for expr in cluster_keys {
-            match expr {
-                RemoteExpr::ColumnRef { id, data_type, .. } => {
-                    if !matches!(data_type.remove_nullable(), DataType::Vector(_)) {
-                        scalar_cluster_keys.push(id.to_string());
-                    }
-                }
-                _ => return Ok(Arc::new(KeepTrue)),
-            }
-        }
+        let scalar_cluster_keys = cluster_keys
+            .into_iter()
+            .filter(|expr| {
+                !matches!(
+                    expr.as_expr(&databend_common_functions::BUILTIN_FUNCTIONS)
+                        .data_type()
+                        .remove_nullable(),
+                    DataType::Vector(_)
+                )
+            })
+            .collect::<Vec<_>>();
         if scalar_cluster_keys.is_empty() {
             return Ok(Arc::new(KeepTrue));
         }
@@ -99,12 +99,11 @@ impl PagePrunerCreator {
 
         Ok(match filter_expr {
             Some(expr) => {
-                let page_filter = PageIndex::try_create(
+                let page_filter = PageIndex::try_create_with_exprs(
                     func_ctx,
                     cluster_key_meta.0,
-                    scalar_cluster_keys,
+                    &scalar_cluster_keys,
                     expr,
-                    schema.clone(),
                 )?;
                 match page_filter.try_apply_const() {
                     Ok(v) => {
