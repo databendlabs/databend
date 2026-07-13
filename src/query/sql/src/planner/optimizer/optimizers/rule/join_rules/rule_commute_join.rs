@@ -64,7 +64,7 @@ impl Rule for RuleCommuteJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut join: Join = s_expr.plan().clone().try_into()?;
 
-        if join.build_side_cache_info.is_some() {
+        if join.build_side_cache_info.is_some() || join.dynamic_block_prune.is_some() {
             return Ok(());
         }
 
