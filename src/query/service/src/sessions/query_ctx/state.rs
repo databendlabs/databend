@@ -213,6 +213,18 @@ impl TableContextPartitionStats for QueryContext {
 }
 
 impl TableContextRuntimeFilter for QueryContext {
+    fn set_dynamic_block_prune_filter(&self, scan_id: usize, filter: Arc<DynamicBlockPruneFilter>) {
+        self.shared
+            .runtime_filter_state
+            .set_dynamic_block_prune_filter(scan_id, filter);
+    }
+
+    fn get_dynamic_block_prune_filters(&self, scan_id: usize) -> Vec<Arc<DynamicBlockPruneFilter>> {
+        self.shared
+            .runtime_filter_state
+            .get_dynamic_block_prune_filters(scan_id)
+    }
+
     fn clear_runtime_filter(&self) {
         self.shared.runtime_filter_state.clear();
     }

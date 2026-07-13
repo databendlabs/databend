@@ -97,6 +97,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             Some(context) => context.runtime_stats_pruner().await?,
             None => None,
         };
+        let dynamic_block_locations = match self.runtime_filter_prune_context.as_ref() {
+            Some(context) => context.dynamic_block_locations().await?,
+            None => Vec::new(),
+        };
 
         let block_num = segment.block_metas.num_rows();
         let location_path_col = segment.location_path_col();
@@ -111,9 +115,18 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let pruning_semaphore = &self.block_pruner.pruning_ctx.pruning_semaphore;
 
         let mut pruning_tasks = Vec::with_capacity(block_num);
+        let mut blocks_after_dynamic_prune = 0;
 
         for block_idx in 0..block_num {
             let location_path = location_path_col.index(block_idx).unwrap().to_string();
+
+            if !dynamic_block_locations
+                .iter()
+                .all(|locations| locations.contains(&location_path))
+            {
+                continue;
+            }
+            blocks_after_dynamic_prune += 1;
 
             // Skip blocks that don't pass internal column pruning
             if self
@@ -294,6 +307,14 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     Ok(())
                 })
             });
+        }
+
+        if let Some(context) = self.runtime_filter_prune_context.as_ref() {
+            context.log_dynamic_block_prune(
+                segment_location.segment_idx,
+                block_num,
+                blocks_after_dynamic_prune,
+            );
         }
 
         // Execute all pruning tasks in parallel

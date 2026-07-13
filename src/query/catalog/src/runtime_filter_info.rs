@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -27,6 +28,32 @@ use tokio::sync::watch::Sender;
 use crate::sbbf::Sbbf;
 
 pub type RuntimeBloomFilter = Arc<Sbbf>;
+
+/// An exact set of block locations produced by a subquery. Unlike a regular
+/// runtime filter this has no false positives, so a matching semi join can be
+/// removed once the set is applied while enumerating Fuse blocks.
+pub struct DynamicBlockPruneFilter {
+    sender: Sender<Option<Arc<HashSet<String>>>>,
+    _dummy_receiver: Receiver<Option<Arc<HashSet<String>>>>,
+}
+
+impl DynamicBlockPruneFilter {
+    pub fn create() -> Arc<Self> {
+        let (sender, dummy_receiver) = watch::channel(None);
+        Arc::new(Self {
+            sender,
+            _dummy_receiver: dummy_receiver,
+        })
+    }
+
+    pub fn publish(&self, locations: HashSet<String>) {
+        self.sender.send_replace(Some(Arc::new(locations)));
+    }
+
+    pub fn subscribe(&self) -> Receiver<Option<Arc<HashSet<String>>>> {
+        self.sender.subscribe()
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {
@@ -217,5 +244,21 @@ mod tests {
         let ready = RuntimeFilterReady::for_statistics_probe_exprs(false, [&probe_expr]);
         assert!(ready.statistics_column_names().is_empty());
         assert!(!ready.has_statistics_pruning());
+    }
+
+    #[test]
+    fn dynamic_block_prune_filter_publishes_exact_locations() {
+        let filter = DynamicBlockPruneFilter::create();
+        let receiver = filter.subscribe();
+        assert!(receiver.borrow().is_none());
+
+        filter.publish(HashSet::from([
+            "block-a".to_string(),
+            "block-b".to_string(),
+        ]));
+        let locations = receiver.borrow().as_ref().unwrap().clone();
+        assert_eq!(locations.len(), 2);
+        assert!(locations.contains("block-a"));
+        assert!(locations.contains("block-b"));
     }
 }
