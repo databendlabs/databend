@@ -62,6 +62,13 @@ impl Rule for RuleCommuteJoinBaseTable {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut join: Join = s_expr.plan().clone().try_into()?;
+
+        // Dynamic block pruning is directional: the annotated Fuse scan must
+        // remain on the probe (left) side and the subquery on the build side.
+        if join.dynamic_block_prune.is_some() {
+            return Ok(());
+        }
+
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 

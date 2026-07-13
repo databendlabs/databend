@@ -61,6 +61,10 @@ impl Rule for RuleSemiToInnerJoin {
             return Ok(());
         }
 
+        if join.dynamic_block_prune.is_some() {
+            return Ok(());
+        }
+
         if join.equi_conditions.is_empty() {
             return Ok(());
         }
