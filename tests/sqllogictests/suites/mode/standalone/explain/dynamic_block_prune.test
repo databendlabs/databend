@@ -1,0 +1,74 @@
+# Physical-plan regression for local dynamic `_block_name` pruning.
+
+statement ok
+drop table if exists t_dynamic_block_prune_explain;
+
+statement ok
+create table t_dynamic_block_prune_explain(a Int64);
+
+query T nosort
+explain select count(*) from t_dynamic_block_prune_explain where _block_name in (
+    select block_location from fuse_block('default', 't_dynamic_block_prune_explain')
+    order by block_location limit 1
+);
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#1)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── DynamicBlockPrune
+        ├── TableScan
+        │   ├── table: default.default.t_dynamic_block_prune_explain
+        │   ├── scan id: 0
+        │   ├── output columns: []
+        │   ├── read rows: 0
+        │   ├── read size: 0
+        │   ├── partitions total: 0
+        │   ├── partitions scanned: 0
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 0.00
+        └── Limit
+            ├── output columns: [fuse_block.block_location (#5)]
+            ├── limit: 1
+            ├── offset: 0
+            ├── estimated rows: 0.00
+            └── Sort(Single)
+                ├── output columns: [fuse_block.block_location (#5)]
+                ├── sort keys: [block_location ASC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.system.fuse_block
+                    ├── scan id: 1
+                    ├── output columns: [block_location (#5)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: 1]
+                    └── estimated rows: 0.00
+
+statement ok
+alter table t_dynamic_block_prune_explain set options(row_per_block = 2, block_per_segment = 10);
+
+statement ok
+insert into t_dynamic_block_prune_explain values (1), (2), (3), (4);
+
+# A TopN on the probe side must retain the semi hash join. Applying the block
+# filter before TopN would incorrectly turn this result from zero into one.
+query I
+select count(*) from (
+    select _block_name from t_dynamic_block_prune_explain order by _block_name limit 1
+) as limited where _block_name in (
+    select block_location from fuse_block('default', 't_dynamic_block_prune_explain')
+    order by block_location desc limit 1
+);
+----
+0
+
+statement ok
+drop table t_dynamic_block_prune_explain;

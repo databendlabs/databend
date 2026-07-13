@@ -48,6 +48,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::DynamicBlockPruneFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -725,6 +726,7 @@ pub struct LiteTableContext {
     read_block_thresholds: ReadBlockThresholdsState,
     result_cache_state: ResultCacheState,
     variables: RwLock<HashMap<String, Scalar>>,
+    dynamic_block_prune_filters: RwLock<HashMap<usize, Vec<Arc<DynamicBlockPruneFilter>>>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     written_segment_locations: SegmentLocationsState,
     selected_segment_locations: SegmentLocationsState,
@@ -967,6 +969,7 @@ impl LiteTableContext {
             read_block_thresholds: Default::default(),
             result_cache_state: Default::default(),
             variables: RwLock::new(HashMap::new()),
+            dynamic_block_prune_filters: RwLock::new(HashMap::new()),
             runtime_filter_ready: RwLock::new(HashMap::new()),
             written_segment_locations: Default::default(),
             selected_segment_locations: Default::default(),
@@ -1944,6 +1947,24 @@ impl TableContextPartitionStats for LiteTableContext {
 }
 
 impl TableContextRuntimeFilter for LiteTableContext {
+    fn set_dynamic_block_prune_filter(&self, scan_id: usize, filter: Arc<DynamicBlockPruneFilter>) {
+        self.dynamic_block_prune_filters
+            .write()
+            .unwrap()
+            .entry(scan_id)
+            .or_default()
+            .push(filter);
+    }
+
+    fn get_dynamic_block_prune_filters(&self, scan_id: usize) -> Vec<Arc<DynamicBlockPruneFilter>> {
+        self.dynamic_block_prune_filters
+            .read()
+            .unwrap()
+            .get(&scan_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
         self.runtime_filter_ready
             .write()
@@ -1963,6 +1984,7 @@ impl TableContextRuntimeFilter for LiteTableContext {
     }
 
     fn clear_runtime_filter(&self) {
+        self.dynamic_block_prune_filters.write().unwrap().clear();
         self.runtime_filter_ready.write().unwrap().clear();
     }
 
@@ -2066,6 +2088,21 @@ export function finish(state) {
 }
 $$
 "#
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_dynamic_block_prune_filter_state() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        let filter = DynamicBlockPruneFilter::create();
+
+        ctx.set_dynamic_block_prune_filter(7, filter.clone());
+        let filters = ctx.get_dynamic_block_prune_filters(7);
+        assert_eq!(filters.len(), 1);
+        assert!(Arc::ptr_eq(&filters[0], &filter));
+
+        ctx.clear_runtime_filter();
+        assert!(ctx.get_dynamic_block_prune_filters(7).is_empty());
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

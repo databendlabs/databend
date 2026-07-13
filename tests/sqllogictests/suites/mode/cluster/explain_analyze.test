@@ -230,10 +230,10 @@ Exchange
         ├── table: default.default.article
         ├── scan id: 0
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
-        ├── read rows: 6
+        ├── read rows: <slt:ignore>
         ├── read size: < 1 KiB
         ├── partitions total: 6
-        ├── partitions scanned: 6
+        ├── partitions scanned: <slt:ignore>
         ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]

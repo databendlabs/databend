@@ -272,9 +272,10 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if pruning_mode == ReadPartitionsPruningMode::Normal
-                    && (self.is_column_oriented()
-                        || (segment_len > nodes_num && distributed_pruning))
+                if pruning_mode == ReadPartitionsPruningMode::DynamicBlockPrune
+                    || (pruning_mode == ReadPartitionsPruningMode::Normal
+                        && (self.is_column_oriented()
+                            || (segment_len > nodes_num && distributed_pruning)))
                 {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
@@ -361,7 +362,13 @@ impl FuseTable {
                     )
                 });
 
-        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        // Dynamic block locations are query-specific and are not represented in
+        // the deterministic prune-cache key. Always run the prune pipeline so
+        // cached parts cannot bypass their intersection with the exact set.
+        let has_dynamic_block_prune = push_downs.as_ref().is_some_and(|push_downs| {
+            push_downs.read_partitions_pruning_mode == ReadPartitionsPruningMode::DynamicBlockPrune
+        });
+        let enable_prune_cache = enable_prune_cache_for_query(&ctx)? && !has_dynamic_block_prune;
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
@@ -646,16 +653,21 @@ impl FuseTable {
             })?;
         }
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let enable_dynamic_block_prune = pruner.push_down.as_ref().is_some_and(|push_down| {
+            push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::DynamicBlockPrune
+        });
         let runtime_filter_prune_context = RuntimeFilterPruneContext::try_create(
             ctx.clone(),
             scan_id,
             pruner.table_schema.clone(),
+            enable_dynamic_block_prune,
         )?;
         let runtime_filter_prune_context_for_block = runtime_filter_prune_context.clone();
         if pruner.pruning_ctx.bloom_pruner.is_some()
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
             || pruner.pruning_ctx.spatial_index_pruner.is_some()
             || pruner.pruning_ctx.virtual_column_pruner.is_some()
+            || runtime_filter_prune_context_for_block.is_some()
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {
@@ -780,8 +792,15 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let push_down = &pruner.push_down;
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
-        let runtime_filter_prune_context =
-            RuntimeFilterPruneContext::try_create(ctx.clone(), scan_id, table_schema.clone())?;
+        let enable_dynamic_block_prune = push_down.as_ref().is_some_and(|push_down| {
+            push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::DynamicBlockPrune
+        });
+        let runtime_filter_prune_context = RuntimeFilterPruneContext::try_create(
+            ctx.clone(),
+            scan_id,
+            table_schema.clone(),
+            enable_dynamic_block_prune,
+        )?;
 
         // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
         let projection_column_ids = {

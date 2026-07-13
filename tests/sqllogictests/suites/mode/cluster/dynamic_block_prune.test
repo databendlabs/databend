@@ -1,0 +1,70 @@
+# Physical-plan regression for distributed dynamic `_block_name` pruning.
+# The build side must be broadcast so every node can prune its local Fuse scan.
+
+statement ok
+drop table if exists t_dynamic_block_prune_explain;
+
+statement ok
+create table t_dynamic_block_prune_explain(a Int64);
+
+query T nosort
+explain select count(*) from t_dynamic_block_prune_explain where _block_name in (
+    select block_location from fuse_block('default', 't_dynamic_block_prune_explain')
+    order by block_location limit 1
+);
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#1)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [COUNT(*) (#1)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── DynamicBlockPrune
+            ├── TableScan
+            │   ├── table: default.default.t_dynamic_block_prune_explain
+            │   ├── scan id: 0
+            │   ├── output columns: []
+            │   ├── read rows: 0
+            │   ├── read size: 0
+            │   ├── partitions total: 0
+            │   ├── partitions scanned: 0
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 0.00
+            └── Exchange
+                ├── output columns: [fuse_block.block_location (#5)]
+                ├── exchange type: Broadcast
+                └── Limit
+                    ├── output columns: [fuse_block.block_location (#5)]
+                    ├── limit: 1
+                    ├── offset: 0
+                    ├── estimated rows: 0.00
+                    └── Sort(Final)
+                        ├── output columns: [fuse_block.block_location (#5)]
+                        ├── sort keys: [block_location ASC NULLS LAST]
+                        ├── estimated rows: 0.00
+                        └── Exchange
+                            ├── output columns: [fuse_block.block_location (#5)]
+                            ├── exchange type: Merge
+                            └── Sort(Partial)
+                                ├── output columns: [fuse_block.block_location (#5)]
+                                ├── sort keys: [block_location ASC NULLS LAST]
+                                ├── estimated rows: 0.00
+                                └── TableScan
+                                    ├── table: default.system.fuse_block
+                                    ├── scan id: 1
+                                    ├── output columns: [block_location (#5)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: 1]
+                                    └── estimated rows: 0.00
+
+statement ok
+drop table t_dynamic_block_prune_explain;

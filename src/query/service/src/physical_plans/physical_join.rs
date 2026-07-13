@@ -14,16 +14,21 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
+use databend_common_sql::plans::RelOperator;
 
+use crate::physical_plans::DynamicBlockPrune;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 
@@ -143,6 +148,40 @@ impl PhysicalPlanBuilder {
             .cloned()
             .collect();
         let left_required: ColumnSet = left_required.union(&others_required).cloned().collect();
+
+        if self.ctx.get_settings().get_enable_prune_pipeline()?
+            && let Some(dynamic_block_prune) = &join.dynamic_block_prune
+            && join.equi_conditions.len() == 1
+            && let Some(scan_id) =
+                find_pushdown_safe_scan_id(s_expr.left_child(), dynamic_block_prune.table_index)
+        {
+            let inserted = self.dynamic_block_prune_scan_ids.insert(scan_id);
+            let probe = self.build(s_expr.left_child(), required).await;
+            if inserted {
+                self.dynamic_block_prune_scan_ids.remove(&scan_id);
+            }
+            let probe = probe?;
+            let build = self.build(s_expr.right_child(), right_required).await?;
+            let build_schema = build.output_schema()?;
+            let condition = &join.equi_conditions[0];
+            let build_expr = condition
+                .right
+                .type_check(build_schema.as_ref())?
+                .project_column_ref(|index| build_schema.index_of(&index.to_string()))?;
+            if build_expr.data_type().remove_nullable() != DataType::String {
+                return Err(ErrorCode::Internal(
+                    "dynamic block prune build key must have String type",
+                ));
+            }
+            return Ok(PhysicalPlan::new(DynamicBlockPrune {
+                meta: PhysicalPlanMeta::new("DynamicBlockPrune"),
+                build,
+                probe,
+                build_key: build_expr.as_remote_expr(),
+                scan_id,
+                stat_info: Some(stat_info),
+            }));
+        }
         let right_required: ColumnSet = right_required.union(&others_required).cloned().collect();
 
         // 2. Try Build physical spatial join plan.
@@ -245,5 +284,27 @@ impl PhysicalPlanBuilder {
                 }
             }
         }
+    }
+}
+
+fn find_pushdown_safe_scan_id(s_expr: &SExpr, table_index: usize) -> Option<usize> {
+    // Dynamic block pruning replaces the semi join with a scan-level filter.
+    // Only cross local operators through which that filter can be pushed safely.
+    // An Exchange starts a fragment with a different QueryContext, which cannot
+    // see the dynamic filter registered by this pipeline.
+    // Change scans use a separate partition path that does not install it either.
+    match s_expr.plan() {
+        RelOperator::Scan(scan)
+            if scan.table_index == table_index && scan.change_type.is_none() =>
+        {
+            Some(scan.scan_id)
+        }
+        RelOperator::EvalScalar(_) | RelOperator::Filter(_) => {
+            find_pushdown_safe_scan_id(s_expr.child(0).ok()?, table_index)
+        }
+        RelOperator::Sort(sort) if sort.limit.is_none() => {
+            find_pushdown_safe_scan_id(s_expr.child(0).ok()?, table_index)
+        }
+        _ => None,
     }
 }
