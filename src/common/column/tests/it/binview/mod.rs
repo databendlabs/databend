@@ -190,4 +190,19 @@ fn test_compare() {
 
     assert_eq!(min, min_expect);
     assert_eq!(max, max_expect);
+    assert_eq!(array.min_max(), Some((min, max)));
+    assert_eq!(Utf8ViewColumn::new_empty().min_max(), None);
+
+    // Equal view prefixes must fall back to comparing the complete strings.
+    let same_prefix: Utf8ViewColumn = [
+        "same-prefix-middle",
+        "same-prefix-maximum",
+        "same-prefix-minimum",
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        same_prefix.min_max(),
+        Some(("same-prefix-maximum", "same-prefix-minimum"))
+    );
 }

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::OwnedDistribution;
@@ -122,13 +121,7 @@ impl EvalScalar {
         // `ColumnStat` has no representation for an all-NULL column because its
         // min/max fields are non-optional. Do not retain the shadowed input stat
         // in that case; unknown is safer than a stale non-NULL distribution.
-        let value_domain = match &stat.domain {
-            Domain::Nullable(domain) => domain.value.as_deref()?,
-            domain => domain,
-        };
-        let (min, max) = value_domain.to_minmax();
-        let min = min.to_datum()?;
-        let max = max.to_datum()?;
+        let (min, max) = stat.domain.histogram_bounds().ok()?.into_parts();
         let histogram = match stat.distribution {
             OwnedDistribution::Histogram(histogram) => Some(histogram),
             OwnedDistribution::Unknown | OwnedDistribution::Boolean(_) => None,

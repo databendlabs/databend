@@ -53,9 +53,11 @@ use serde::de::Visitor;
 use string::StringColumnBuilder;
 
 use crate::BlockEntry;
+use crate::ColumnMinMax;
 use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
+use crate::property::MinMax;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -117,6 +119,7 @@ use crate::with_opaque_size_mapped;
 use crate::with_opaque_type;
 
 pub const LARGE_STRING_BYTES_THRESHOLD: usize = 256;
+mod domain;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: AccessType> {
@@ -1380,109 +1383,6 @@ impl Column {
             column: self,
             index: 0,
             len: self.len(),
-        }
-    }
-
-    pub fn domain(&self) -> Domain {
-        if self.len() == 0 {
-            if matches!(self, Column::Array(_)) {
-                return Domain::Array(None);
-            }
-            if matches!(self, Column::Map(_)) {
-                return Domain::Map(None);
-            }
-            return Domain::full(&self.data_type());
-        }
-
-        match self {
-            Column::Null { .. } => Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            }),
-            Column::EmptyArray { .. } => Domain::Array(None),
-            Column::EmptyMap { .. } => Domain::Map(None),
-
-            Column::Number(col) => Domain::Number(col.domain()),
-            Column::Decimal(col) => Domain::Decimal(col.domain()),
-            Column::Boolean(col) => Domain::Boolean(BooleanDomain {
-                has_false: col.null_count() > 0,
-                has_true: col.len() - col.null_count() > 0,
-            }),
-            Column::String(col) => {
-                let (min, max) = StringType::iter_column(col).minmax().into_option().unwrap();
-                Domain::String(StringDomain {
-                    min: min.to_string(),
-                    max: Some(max.to_string()),
-                })
-            }
-            Column::Timestamp(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Timestamp(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            Column::TimestampTz(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::TimestampTz(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            Column::Date(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Date(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            Column::Interval(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Interval(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            Column::Array(col) => {
-                if col.len() == 0 {
-                    Domain::Array(None)
-                } else {
-                    let inner_domain = col.underlying_column().domain();
-                    Domain::Array(Some(Box::new(inner_domain)))
-                }
-            }
-            Column::Map(col) => {
-                if col.len() == 0 {
-                    Domain::Map(None)
-                } else {
-                    let inner_domain = col.underlying_column().domain();
-                    Domain::Map(Some(Box::new(inner_domain)))
-                }
-            }
-            Column::Nullable(col) => {
-                let inner_domain = if col.validity.null_count() > 0 {
-                    // goes into the slower path, we will create a new column without nulls
-                    let inner = col.column.clone().filter(&col.validity);
-                    inner.domain()
-                } else {
-                    col.column.domain()
-                };
-                Domain::Nullable(NullableDomain {
-                    has_null: col.validity.null_count() > 0,
-                    value: Some(Box::new(inner_domain)),
-                })
-            }
-            Column::Tuple(fields) => {
-                let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
-                Domain::Tuple(domains)
-            }
-            Column::Binary(_)
-            | Column::Bitmap(_)
-            | Column::Variant(_)
-            | Column::Geometry(_)
-            | Column::Geography(_)
-            | Column::Vector(_)
-            | Column::Opaque(_) => Domain::Undefined,
         }
     }
 

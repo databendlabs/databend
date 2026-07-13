@@ -15,7 +15,11 @@
 use std::sync::LazyLock;
 
 use databend_common_column::types::timestamp_tz;
-use databend_common_exception::Result;
+use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::date_from_days;
+use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
@@ -33,50 +37,6 @@ use jiff::civil::date;
 use jiff::civil::datetime;
 use jiff::tz::TimeZone;
 use num_traits::AsPrimitive;
-
-use crate::types::date::clamp_date;
-use crate::types::timestamp::MICROS_PER_SEC;
-use crate::types::timestamp::clamp_timestamp;
-
-// jiff's `Timestamp` only accepts UTC seconds in
-// [-377705023201, 253402207200] so that any ±25:59:59 offset still
-// yields a valid civil datetime. Clamp after splitting into seconds
-// and sub-second nanoseconds to avoid constructing out-of-range values.
-const JIFF_TIMESTAMP_MIN_SEC: i64 = -377705023201;
-const JIFF_TIMESTAMP_MAX_SEC: i64 = 253402207200;
-
-pub trait DateConverter {
-    fn to_date(&self, tz: &TimeZone) -> Date;
-    fn to_timestamp(&self, tz: &TimeZone) -> Zoned;
-}
-
-impl<T> DateConverter for T
-where T: AsPrimitive<i64>
-{
-    fn to_date(&self, _tz: &TimeZone) -> Date {
-        let dur = SignedDuration::from_hours(self.as_() * 24);
-        date(1970, 1, 1).checked_add(dur).unwrap()
-    }
-
-    fn to_timestamp(&self, tz: &TimeZone) -> Zoned {
-        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
-        let micros = self.as_();
-        let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
-        if nanos < 0 {
-            secs -= 1;
-            nanos += 1_000_000_000;
-        }
-        if secs > JIFF_TIMESTAMP_MAX_SEC {
-            secs = JIFF_TIMESTAMP_MAX_SEC;
-            nanos = 0;
-        } else if secs < JIFF_TIMESTAMP_MIN_SEC {
-            secs = JIFF_TIMESTAMP_MIN_SEC;
-            nanos = 0;
-        }
-        let ts = Timestamp::new(secs, nanos as i32).unwrap();
-        ts.to_zoned(tz.clone())
-    }
-}
 
 pub const MICROSECS_PER_DAY: i64 = 86_400_000_000;
 
@@ -153,11 +113,10 @@ macro_rules! impl_interval_year_month {
         impl $name {
             pub fn eval_date(
                 date: i32,
-                tz: &TimeZone,
                 delta: impl AsPrimitive<i64>,
                 add_months: bool,
             ) -> std::result::Result<i32, String> {
-                let date = date.to_date(tz);
+                let date = date_from_days(date);
                 let new_date = $op(
                     date.year(),
                     date.month(),
@@ -180,7 +139,7 @@ macro_rules! impl_interval_year_month {
                 delta: impl AsPrimitive<i64>,
                 add_months: bool,
             ) -> std::result::Result<i64, String> {
-                let ts = us.to_timestamp(tz);
+                let ts = timestamp_from_micros(us, tz);
                 let original_offset = ts.offset().seconds();
 
                 if let Some(components) = fast_components_from_timestamp(us, tz) {
@@ -284,22 +243,22 @@ fn datetime_from_components(c: &DateTimeComponents) -> Option<DateTime> {
 }
 
 impl EvalYearsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
         (date_end.year() - date_start.year()) as i32
     }
 
-    pub fn eval_date_between(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
+    pub fn eval_date_between(date_start: i32, date_end: i32) -> i32 {
         if date_start == date_end {
             return 0;
         }
         if date_start > date_end {
-            return -Self::eval_date_between(date_end, date_start, tz);
+            return -Self::eval_date_between(date_end, date_start);
         }
 
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
 
         let mut years = date_end.year() - date_start.year();
 
@@ -322,8 +281,8 @@ impl EvalYearsImpl {
         ) {
             return (end.year as i64) - (start.year as i64);
         }
-        let date_start = date_start.to_timestamp(tz);
-        let date_end = date_end.to_timestamp(tz);
+        let date_start = timestamp_from_micros(date_start, tz);
+        let date_end = timestamp_from_micros(date_end, tz);
         date_end.year() as i64 - date_start.year() as i64
     }
 
@@ -351,8 +310,8 @@ impl EvalYearsImpl {
             }
             return years as i64;
         }
-        let start = date_start.to_timestamp(tz);
-        let end = date_end.to_timestamp(tz);
+        let start = timestamp_from_micros(date_start, tz);
+        let end = timestamp_from_micros(date_end, tz);
 
         let mut years = end.year() - start.year();
 
@@ -383,21 +342,21 @@ impl EvalYearsImpl {
 
 pub struct EvalISOYearsImpl;
 impl EvalISOYearsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
         date_end.iso_week_date().year() as i32 - date_start.iso_week_date().year() as i32
     }
 
-    pub fn eval_date_between(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
+    pub fn eval_date_between(date_start: i32, date_end: i32) -> i32 {
         if date_start == date_end {
             return 0;
         }
         if date_start > date_end {
-            return -Self::eval_date_between(date_end, date_start, tz);
+            return -Self::eval_date_between(date_end, date_start);
         }
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
         let mut years = date_end.iso_week_date().year() - date_start.iso_week_date().year();
         if (date_end.month() < date_start.month())
             || (date_end.month() == date_start.month() && date_end.day() < date_start.day())
@@ -417,8 +376,8 @@ impl EvalISOYearsImpl {
             let (end_year, _) = end.iso_year_week();
             return (end_year - start_year) as i64;
         }
-        let date_start = date_start.to_timestamp(tz);
-        let date_end = date_end.to_timestamp(tz);
+        let date_start = timestamp_from_micros(date_start, tz);
+        let date_end = timestamp_from_micros(date_end, tz);
         date_end.date().iso_week_date().year() as i64 - date_start.iso_week_date().year() as i64
     }
 
@@ -447,8 +406,8 @@ impl EvalISOYearsImpl {
             return years as i64;
         }
 
-        let start = date_start.to_timestamp(tz);
-        let end = date_end.to_timestamp(tz);
+        let start = timestamp_from_micros(date_start, tz);
+        let end = timestamp_from_micros(date_end, tz);
         let mut years =
             end.date().iso_week_date().year() as i64 - start.date().iso_week_date().year() as i64;
         let start_month = start.month();
@@ -485,9 +444,9 @@ impl EvalYearWeeksImpl {
         year * 100 + week as i32
     }
 
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
         let end = Self::yearweek(date_end);
         let start = Self::yearweek(date_start);
 
@@ -503,8 +462,8 @@ impl EvalYearWeeksImpl {
             let end_yw = Self::yearweek_from_components(&end) as i64;
             return end_yw - start_yw;
         }
-        let date_start = date_start.to_timestamp(tz);
-        let date_end = date_end.to_timestamp(tz);
+        let date_start = timestamp_from_micros(date_start, tz);
+        let date_end = timestamp_from_micros(date_end, tz);
         let end = Self::yearweek(date_end.date()) as i64;
         let start = Self::yearweek(date_start.date()) as i64;
 
@@ -530,8 +489,8 @@ impl EvalYearWeeksImpl {
     // (end, start, -1)
     // };
     //
-    // let earlier = earlier.to_date(tz);
-    // let later = later.to_date(tz);
+    // let earlier = date_from_days(earlier);
+    // let later = date_from_days(later);
     //
     // let start_yw = Self::yearweek(earlier);
     // let end_yw = Self::yearweek(later);
@@ -556,8 +515,8 @@ impl EvalYearWeeksImpl {
     // (end, start, -1)
     // };
     //
-    // let earlier = earlier.to_timestamp(tz);
-    // let later = later.to_timestamp(tz);
+    // let earlier = timestamp_from_micros(earlier, tz);
+    // let later = timestamp_from_micros(later, tz);
     //
     // let start_yw = Self::yearweek(earlier.date());
     // let end_yw = Self::yearweek(later.date());
@@ -576,12 +535,12 @@ impl EvalYearWeeksImpl {
 pub struct EvalQuartersImpl;
 
 impl EvalQuartersImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
-        EvalQuartersImpl::eval_timestamp_diff(
-            date_start as i64 * MICROSECS_PER_DAY,
-            date_end as i64 * MICROSECS_PER_DAY,
-            tz,
-        ) as i32
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
+        let start_quarter = (date_start.month() as i32 - 1) / 3 + 1;
+        let end_quarter = (date_end.month() as i32 - 1) / 3 + 1;
+        (date_end.year() - date_start.year()) as i32 * 4 + end_quarter - start_quarter
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: &TimeZone) -> i64 {
@@ -593,8 +552,8 @@ impl EvalQuartersImpl {
             let end_quarter = ((end.month as i64 - 1) / 3) + 1;
             return (end.year as i64 - start.year as i64) * 4 + end_quarter - start_quarter;
         }
-        let date_start = date_start.to_timestamp(tz);
-        let date_end = date_end.to_timestamp(tz);
+        let date_start = timestamp_from_micros(date_start, tz);
+        let date_end = timestamp_from_micros(date_end, tz);
         (date_end.year() - date_start.year()) as i64 * 4 + ToQuarter::to_number(&date_end) as i64
             - ToQuarter::to_number(&date_start) as i64
     }
@@ -622,8 +581,8 @@ impl EvalQuartersImpl {
     // (end, start, -1)
     // };
     //
-    // let earlier = earlier.to_date(tz);
-    // let later = later.to_date(tz);
+    // let earlier = date_from_days(earlier);
+    // let later = date_from_days(later);
     //
     // let start_year = earlier.year();
     // let start_quarter = Self::quarter(earlier.month());
@@ -655,8 +614,8 @@ impl EvalQuartersImpl {
     // (end, start, -1)
     // };
     //
-    // let earlier = earlier.to_timestamp(tz);
-    // let later = later.to_timestamp(tz);
+    // let earlier = timestamp_from_micros(earlier, tz);
+    // let later = timestamp_from_micros(later, tz);
     //
     // let start_year = earlier.year();
     // let start_quarter = Self::quarter(earlier.month());
@@ -679,23 +638,23 @@ impl EvalQuartersImpl {
 }
 
 impl EvalMonthsImpl {
-    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: &TimeZone) -> i32 {
-        let date_start = date_start.to_date(tz);
-        let date_end = date_end.to_date(tz);
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        let date_start = date_from_days(date_start);
+        let date_end = date_from_days(date_end);
         (date_end.year() - date_start.year()) as i32 * 12 + date_end.month() as i32
             - date_start.month() as i32
     }
 
-    pub fn eval_date_between(start: i32, end: i32, tz: &TimeZone) -> i32 {
+    pub fn eval_date_between(start: i32, end: i32) -> i32 {
         if start == end {
             return 0;
         }
         if start > end {
-            return -Self::eval_date_between(end, start, tz);
+            return -Self::eval_date_between(end, start);
         }
 
-        let start = start.to_date(tz);
-        let end = end.to_date(tz);
+        let start = date_from_days(start);
+        let end = date_from_days(end);
 
         let year_diff = end.year() - start.year();
         let month_diff = end.month() as i32 - start.month() as i32;
@@ -708,11 +667,10 @@ impl EvalMonthsImpl {
         months
     }
 
-    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: &TimeZone) -> i64 {
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
         EvalMonthsImpl::eval_date_diff(
             (date_start / MICROSECS_PER_DAY) as i32,
             (date_end / MICROSECS_PER_DAY) as i32,
-            tz,
         ) as i64
     }
 
@@ -738,8 +696,8 @@ impl EvalMonthsImpl {
             return months;
         }
 
-        let start = start.to_timestamp(tz);
-        let end = end.to_timestamp(tz);
+        let start = timestamp_from_micros(start, tz);
+        let end = timestamp_from_micros(end, tz);
         let year_diff = end.year() - start.year();
         let month_diff = end.month() as i64 - start.month() as i64;
         let mut months = year_diff as i64 * 12 + month_diff;
@@ -849,16 +807,16 @@ impl EvalWeeksImpl {
         weeks
     }
 
-    pub fn eval_date_between(start: i32, end: i32, tz: &TimeZone) -> i32 {
+    pub fn eval_date_between(start: i32, end: i32) -> i32 {
         if start == end {
             return 0;
         }
         if start > end {
-            return -Self::eval_date_between(end, start, tz);
+            return -Self::eval_date_between(end, start);
         }
 
-        let earlier = start.to_date(tz);
-        let later = end.to_date(tz);
+        let earlier = date_from_days(start);
+        let later = date_from_days(end);
         let mut weeks = Self::calculate_weeks_between_years(
             earlier.year() as i32,
             later.year() as i32,
@@ -911,8 +869,8 @@ impl EvalWeeksImpl {
             }
         }
 
-        let earlier = start.to_timestamp(tz);
-        let later = end.to_timestamp(tz);
+        let earlier = timestamp_from_micros(start, tz);
+        let later = timestamp_from_micros(end, tz);
 
         let mut weeks = Self::calculate_weeks_between_years(
             earlier.year() as i32,
@@ -967,8 +925,8 @@ impl EvalDaysImpl {
             return -Self::eval_timestamp_between(end, start, tz);
         }
 
-        let start = start.to_timestamp(tz);
-        let end = end.to_timestamp(tz);
+        let start = timestamp_from_micros(start, tz);
+        let end = timestamp_from_micros(end, tz);
         let mut full_days = (end.date() - start.date())
             .to_duration(SpanRelativeTo::days_are_24_hours())
             .unwrap()
@@ -1038,7 +996,7 @@ pub fn today_date(now: &Zoned, tz: &TimeZone) -> i32 {
 // The working hours of all departments of The State Council are from 8 a.m. to 12 p.m. and from 1:30 p.m. to 5:30 p.m. The winter working hours will be implemented after September 17th.
 pub fn calc_date_to_timestamp(val: i32, tz: &TimeZone) -> std::result::Result<i64, String> {
     let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
-    let local_date = val.to_date(tz);
+    let local_date = date_from_days(val);
     let year = i32::from(local_date.year());
     let month = local_date.month() as u8;
     let day = local_date.day() as u8;
@@ -1095,12 +1053,12 @@ impl ToNumberImpl {
                 return value;
             }
         }
-        let dt = us.to_timestamp(tz);
+        let dt = timestamp_from_micros(us, tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: DateToNumber<R>, R>(date: i32, tz: &TimeZone) -> Result<R> {
-        Ok(T::to_number_from_date(&date.to_date(tz)))
+    pub fn eval_date<T: DateToNumber<R>, R>(days: i32) -> R {
+        T::to_number_from_date(&date_from_days(days as i64))
     }
 }
 
@@ -1425,7 +1383,7 @@ pub enum Round {
 }
 
 pub fn round_timestamp(ts: i64, tz: &TimeZone, round: Round) -> i64 {
-    let dtz = ts.to_timestamp(tz);
+    let dtz = timestamp_from_micros(ts, tz);
     let res = match round {
         Round::Second => tz
             .to_zoned(datetime(
@@ -1611,7 +1569,7 @@ pub fn time_slice_timestamp(
 ) -> i64 {
     let slice_length = slice_length as i64;
 
-    let ts = ts.to_timestamp(tz);
+    let ts = timestamp_from_micros(ts, tz);
     let dt = ts.datetime();
 
     let start = match part {
@@ -1759,12 +1717,12 @@ pub struct DateRounder;
 
 impl DateRounder {
     pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: &TimeZone) -> i32 {
-        let dt = us.to_timestamp(tz);
+        let dt = timestamp_from_micros(us, tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: DateToNumber<i32>>(date: i32, tz: &TimeZone) -> Result<i32> {
-        Ok(T::to_number_from_date(&date.to_date(tz)))
+    pub fn eval_date<T: DateToNumber<i32>>(date: i32) -> i32 {
+        T::to_number_from_date(&date_from_days(date))
     }
 }
 

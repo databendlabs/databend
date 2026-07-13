@@ -206,7 +206,7 @@ fn fold(expr: &Expr<usize>) -> Expr<usize> {
 }
 
 #[test]
-fn test_monotonic_nullable_domain_rejects_boundary_probe() {
+fn test_monotonic_nullable_domain_probes_non_null_boundaries() {
     let mut registry = FunctionRegistry::empty();
     registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _>(
         "identity",
@@ -215,7 +215,8 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
     );
     registry.properties.insert(
         "identity".to_string(),
-        FunctionProperty::default().monotonicity(),
+        FunctionProperty::default()
+            .monotonicity_type(DataType::Number(NumberDataType::UInt64).wrap_nullable()),
     );
 
     let data_type = DataType::Number(NumberDataType::UInt64).wrap_nullable();
@@ -247,7 +248,72 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
     );
 
     assert_eq!(folded, expr);
-    assert_eq!(output_domain, None);
+    assert_eq!(
+        output_domain,
+        Some(Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Number(NumberDomain::UInt64(
+                SimpleDomain { min: 10, max: 20 },
+            )))),
+        }))
+    );
+}
+
+#[test]
+fn test_monotonic_domain_preserves_successful_boundary_on_error() {
+    let mut registry = FunctionRegistry::empty();
+    registry.register_1_arg::<UInt64Type, UInt64Type, _>(
+        "fallible_identity",
+        |_, _| FunctionDomain::Full,
+        |value, ctx| {
+            if value == 10 {
+                ctx.set_error(0, "lower boundary failed");
+            }
+            value
+        },
+    );
+    registry.properties.insert(
+        "fallible_identity".to_string(),
+        FunctionProperty::default().monotonicity(),
+    );
+
+    let data_type = DataType::Number(NumberDataType::UInt64).wrap_nullable();
+    let expr = databend_common_expression::type_check::check_function(
+        None,
+        "fallible_identity",
+        &[],
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type,
+            display_name: "a".to_string(),
+        })],
+        &registry,
+    )
+    .unwrap();
+    let input_domain = Domain::Nullable(NullableDomain {
+        has_null: false,
+        value: Some(Box::new(Domain::Number(NumberDomain::UInt64(
+            SimpleDomain { min: 10, max: 20 },
+        )))),
+    });
+
+    let (_, output_domain) = ConstantFolder::fold_with_domain(
+        &expr,
+        &HashMap::from([(0, input_domain)]),
+        &FunctionContext::default(),
+        &registry,
+    );
+
+    assert_eq!(
+        output_domain,
+        Some(Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Number(NumberDomain::UInt64(
+                SimpleDomain { min: 0, max: 20 },
+            )))),
+        }))
+    );
 }
 
 #[test]

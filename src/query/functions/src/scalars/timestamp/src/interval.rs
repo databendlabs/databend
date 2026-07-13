@@ -19,12 +19,6 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
-use databend_common_expression::date_helper::DateConverter;
-use databend_common_expression::date_helper::EvalDaysImpl;
-use databend_common_expression::date_helper::EvalMonthsImpl;
-use databend_common_expression::date_helper::calc_date_to_timestamp;
-use databend_common_expression::date_helper::timestamp_tz_components_via_lut;
-use databend_common_expression::date_helper::today_date;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DateType;
@@ -35,6 +29,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -45,6 +40,12 @@ use jiff::Timestamp;
 use jiff::Zoned;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
+
+use crate::date_helper::EvalDaysImpl;
+use crate::date_helper::EvalMonthsImpl;
+use crate::date_helper::calc_date_to_timestamp;
+use crate::date_helper::timestamp_tz_components_via_lut;
+use crate::date_helper::today_date;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS interval)
@@ -333,8 +334,8 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     ) {
                         output.push(calc_age_from_components(&c1, &c2, is_negative));
                     } else {
-                        let t1 = t1.to_timestamp(tz);
-                        let t2 = t2.to_timestamp(tz);
+                        let t1 = timestamp_from_micros(t1, tz);
+                        let t2 = timestamp_from_micros(t2, tz);
                         output.push(calc_age(t1, t2, is_negative));
                     }
                 },
@@ -435,8 +436,8 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         ) {
                             output.push(calc_age_from_components(&c1, &c2, is_negative));
                         } else {
-                            let mut t1 = t1.to_timestamp(tz);
-                            let mut t2 = t2_val.to_timestamp(tz);
+                            let mut t1 = timestamp_from_micros(t1, tz);
+                            let mut t2 = timestamp_from_micros(t2_val, tz);
 
                             if t1 < t2 {
                                 std::mem::swap(&mut t1, &mut t2);
@@ -597,7 +598,7 @@ fn eval_date_plus(
     output: &mut Vec<i32>,
     ctx: &mut EvalContext,
 ) {
-    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, true) {
+    match apply_interval_to_date(date, interval, true) {
         Ok(result) => output.push(result),
         Err(err) => {
             ctx.set_error(output.len(), err);
@@ -612,7 +613,7 @@ fn eval_date_minus(
     output: &mut Vec<i32>,
     ctx: &mut EvalContext,
 ) {
-    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, false) {
+    match apply_interval_to_date(date, interval, false) {
         Ok(result) => output.push(result),
         Err(err) => {
             ctx.set_error(output.len(), err);
@@ -624,7 +625,6 @@ fn eval_date_minus(
 fn apply_interval_to_date(
     mut date: i32,
     interval: months_days_micros,
-    tz: &TimeZone,
     is_addition: bool,
 ) -> std::result::Result<i32, String> {
     if interval.microseconds() != 0 {
@@ -643,7 +643,7 @@ fn apply_interval_to_date(
         date = EvalDaysImpl::eval_date(date, days);
     }
     if months != 0 {
-        date = EvalMonthsImpl::eval_date(date, tz, months, false)?;
+        date = EvalMonthsImpl::eval_date(date, months, false)?;
     }
 
     Ok(date)

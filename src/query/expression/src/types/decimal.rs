@@ -460,7 +460,7 @@ pub enum DecimalColumnBuilder {
     Decimal256(Vec<i256>, DecimalSize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumAsInner)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
 pub enum DecimalDomain {
     Decimal64(SimpleDomain<i64>, DecimalSize),
     Decimal128(SimpleDomain<i128>, DecimalSize),
@@ -468,6 +468,26 @@ pub enum DecimalDomain {
 }
 
 impl DecimalDomain {
+    pub fn merge(&mut self, other: &Self) -> Result<()> {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+            (
+                DecimalDomain::DECIMAL_TYPE(lhs, lhs_size),
+                DecimalDomain::DECIMAL_TYPE(rhs, rhs_size),
+            ) => {
+                if lhs_size != rhs_size {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "cannot merge decimal domains with sizes {lhs_size:?} and {rhs_size:?}"
+                    )));
+                }
+                lhs.merge(rhs);
+                Ok(())
+            }
+            (lhs, rhs) => Err(ErrorCode::InvalidArgument(format!(
+                "cannot merge decimal domains {lhs:?} and {rhs:?}"
+            ))),
+        })
+    }
+
     pub fn decimal_size(&self) -> DecimalSize {
         with_decimal_type!(|DECIMAL| match self {
             DecimalDomain::DECIMAL(_, size) => *size,
