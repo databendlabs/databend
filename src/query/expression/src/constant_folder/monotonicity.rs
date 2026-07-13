@@ -19,7 +19,6 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
 use crate::EvalContext;
-use crate::Expr;
 use crate::Value;
 use crate::function::ScalarFunction;
 use crate::property::Domain;
@@ -29,27 +28,48 @@ use crate::types::string::StringDomain;
 use crate::types::*;
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
-    pub(super) fn is_monotonic(&self, function_name: &str, args: &[Expr<Index>]) -> bool {
-        self.fn_registry
-            .properties
-            .get(function_name)
-            .is_some_and(|property| {
-                if let [arg] = args {
-                    property.monotonicity || property.monotonicity_by_type.contains(arg.data_type())
-                } else {
-                    false
-                }
-            })
+    pub(super) fn monotonicity_argument(
+        &self,
+        function_name: &str,
+        argument_types: &[DataType],
+        argument_domains: &[Domain],
+    ) -> Option<usize> {
+        let property = self.fn_registry.properties.get(function_name)?;
+        // Static properties only describe unary functions. Range-sensitive
+        // checks may instead select one argument from a multi-argument call.
+        if let [argument_type] = argument_types
+            && (property.monotonicity || property.monotonicity_by_type.contains(argument_type))
+        {
+            return Some(0);
+        }
+
+        property
+            .monotonicity_check
+            .and_then(|check| check(self.func_ctx, argument_domains))
+            .filter(|argument| *argument < argument_domains.len())
     }
 
     pub(super) fn calculate_monotonicity_domain(
         &self,
         return_type: &DataType,
-        input_domain: &Domain,
+        argument_domains: &[Domain],
+        monotonicity_argument: usize,
         generics: &[DataType],
         eval: &dyn ScalarFunction,
     ) -> Option<Domain> {
-        let input = input_domain.boundary_column()?;
+        let arguments = argument_domains
+            .iter()
+            .enumerate()
+            .map(|(index, domain)| {
+                // Probe the selected argument at both endpoints while keeping
+                // every other argument fixed at its singleton value.
+                if index == monotonicity_argument {
+                    domain.boundary_column().map(Value::Column)
+                } else {
+                    domain.as_singleton().map(Value::Scalar)
+                }
+            })
+            .collect::<Option<Vec<_>>>()?;
         let mut ctx = EvalContext {
             generics,
             num_rows: 2,
@@ -59,7 +79,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             suppress_error: false,
             strict_eval: true,
         };
-        let Value::Column(col) = eval.eval(&[Value::Column(input)], &mut ctx) else {
+        let Value::Column(col) = eval.eval(&arguments, &mut ctx) else {
             return None;
         };
 
