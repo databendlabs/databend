@@ -3,6 +3,7 @@
 set -e
 
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
+: "${QUERY_DATABEND_ENTERPRISE_LICENSE:?QUERY_DATABEND_ENTERPRISE_LICENSE must be set}"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
@@ -81,8 +82,7 @@ query_sql_with_auth() {
     curl -s -u "$auth" -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "$(jq -nc --arg sql "$sql" '{sql: $sql}')"
 }
 
-license_sql=$(head -n 1 scripts/test-bend-tests/setup.sql)
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"$license_sql\"}")
+response=$(query_sql_with_auth "root:" "SET GLOBAL enterprise_license = '${QUERY_DATABEND_ENTERPRISE_LICENSE}'")
 check_response_error "$response"
 echo "Set enterprise license for private task tests"
 

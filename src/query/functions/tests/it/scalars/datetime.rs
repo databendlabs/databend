@@ -15,8 +15,11 @@
 use std::io::Write;
 use std::str::FromStr;
 
+use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
@@ -43,6 +46,7 @@ fn test_datetime() {
     test_timestamp_date_add_sub(file);
     test_date_arith(file);
     test_timestamp_arith(file);
+    test_date_domain_overflow(file);
     test_to_number(file);
     test_rounder_functions(file);
     test_date_date_diff(file);
@@ -468,6 +472,161 @@ fn test_timestamp_arith(file: &mut impl Write) {
         ("a", TimestampType::from_data(vec![-100, 0, 100])),
         ("b", Int32Type::from_data(vec![1, 2, 3])),
     ]);
+}
+
+// Regression test for issue #20134: date/timestamp domain calculation with overflow
+fn test_date_domain_overflow(file: &mut impl Write) {
+    // Date plus: domain crosses upper valid date range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![1, 1, 1]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, 2147483647]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 1, max: 1 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: 2147483647,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date plus: domain entirely above valid range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![100]).into()),
+            ("b", Int64Type::from_data(vec![2932897]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 100, max: 100 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: 2932897,
+                    max: 2932897,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date minus: domain crosses lower valid date range
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, 2147483647]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Date(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: 2147483647,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Timestamp plus: domain crosses upper valid range
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", TimestampType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, i64::MAX]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Timestamp(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Timestamp minus: domain crosses lower valid range
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", TimestampType::from_data(vec![0, 0, 0]).into()),
+            ("b", Int64Type::from_data(vec![-1, 0, i64::MAX]).into()),
+        ],
+        input_domains: Some(&[
+            ("a", Domain::Timestamp(SimpleDomain { min: 0, max: 0 })),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: -1,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
+    run_ast_with_context(file, "a + b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![-719162]).into()),
+            ("b", Int64Type::from_data(vec![719162]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "a",
+                Domain::Date(SimpleDomain {
+                    min: -719162,
+                    max: -719162,
+                }),
+            ),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: i64::MIN,
+                    max: 719162,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+
+    // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
+    run_ast_with_context(file, "a - b", TestContext {
+        entries: &[
+            ("a", DateType::from_data(vec![-719162]).into()),
+            ("b", Int64Type::from_data(vec![0]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "a",
+                Domain::Date(SimpleDomain {
+                    min: -719162,
+                    max: -719162,
+                }),
+            ),
+            (
+                "b",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: 0,
+                    max: i64::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
 }
 
 fn test_to_number(file: &mut impl Write) {

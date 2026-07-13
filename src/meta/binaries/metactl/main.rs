@@ -551,7 +551,7 @@ enum CtlCommand {
     ///
     /// Sample Lua script:
     ///   local client = metactl.new_grpc_client("127.0.0.1:9191")
-    ///   local result, err = client:get_kv("mykey")
+    ///   local result, err = client:get("mykey")
     ///   if err then print("error:", err) else print(result) end
     Lua(LuaArgs),
 
