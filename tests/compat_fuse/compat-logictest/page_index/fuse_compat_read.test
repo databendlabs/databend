@@ -1,5 +1,5 @@
 # Read side of the sparse page index forward-compat test. The reader may be an older version that
-# does not understand the page-index sidecar; it must still return correct results by reading whole
+# does not understand the page-index marks file; it must still return correct results by reading whole
 # blocks. The current reader additionally exercises the granule-narrowing read path.
 
 query I

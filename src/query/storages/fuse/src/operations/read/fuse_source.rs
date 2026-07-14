@@ -98,7 +98,7 @@ pub fn build_fuse_source_pipeline(
     // (see `BlockReadResult`/`BlockReadPlan.start_row`), which the deserializer adds back when it
     // builds `_row_id`/`_base_row_id` offsets and `_origin_block_row_num`; merge-into's reserved
     // block index is block-level (whole-block deletes), so it is unaffected. Virtual columns are
-    // the exception: they live in a separate sidecar read as a whole and aligned row-for-row with
+    // the exception: they are read separately as a whole and aligned row-for-row with the main
     // the main block, so narrowing would misalign them — disable narrowing only in that case.
     let allow_granule_index_skip = virtual_reader.as_ref().is_none();
 

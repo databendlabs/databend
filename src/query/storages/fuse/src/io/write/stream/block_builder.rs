@@ -50,6 +50,7 @@ use uuid::Uuid;
 
 use super::super::fuse_block_writer::FuseBlockOutput;
 use super::super::fuse_block_writer::FuseBlockWriter;
+use super::super::fuse_block_writer::GranuleWriteSettings;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
@@ -245,27 +246,30 @@ impl StreamBlockBuilder {
             data_page_rows,
             write_settings.data_page_bytes,
         ));
-        let func_ctx = self.properties.ctx.get_function_context()?;
-        let granule_index_builders = self
-            .properties
-            .granule_index_specs
-            .iter()
-            .map(|spec| {
-                spec.new_builder(
-                    func_ctx.clone(),
-                    &self.properties.source_schema,
-                    &self.block_location.0,
-                    self.properties.operator.clone(),
-                )
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let granule = if let Some(rows) = write_settings.index_granularity {
+            let func_ctx = self.properties.ctx.get_function_context()?;
+            let builders = self
+                .properties
+                .granule_index_specs
+                .iter()
+                .map(|spec| {
+                    spec.new_builder(
+                        func_ctx.clone(),
+                        &self.properties.source_schema,
+                        &self.block_location.0,
+                        self.properties.operator.clone(),
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // Stream blocks are not linearly cluster-key sorted, so this is an offset-only index.
+            Some(GranuleWriteSettings::new(rows, builders, None, None))
+        } else {
+            None
+        };
         Ok(FuseBlockWriter::new(
             props,
             self.properties.source_schema.clone(),
-            write_settings.index_granularity,
-            granule_index_builders,
-            None, // offset-only: no cluster-key mins on the stream path
-            None,
+            granule,
         ))
     }
 

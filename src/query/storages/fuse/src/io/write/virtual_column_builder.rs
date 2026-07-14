@@ -946,14 +946,7 @@ impl VirtualColumnBuilder {
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
         ));
-        let mut writer = FuseBlockWriter::new(
-            props,
-            virtual_block_schema.clone(),
-            None,
-            Vec::new(),
-            None,
-            None,
-        );
+        let mut writer = FuseBlockWriter::new(props, virtual_block_schema.clone(), None);
         writer.write(virtual_block)?;
         let SerializedParquet {
             payload,

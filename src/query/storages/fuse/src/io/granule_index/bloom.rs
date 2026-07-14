@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Bloom granule-level index: one payload parquet file per indexed column, one data page per granule
-//! (a granule's `FilterImpl` bytes serialized into a single-column Binary parquet). Per-granule
-//! page byte offsets are captured from the writer's page layout and returned as sidecar offset
-//! columns (`gbloom_{ver}_off/len_{col_id}`); the payload never has to be reopened at prune time.
+//! Granule Bloom index with one payload Parquet file per indexed column.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -38,7 +35,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_blocks::BulkParquetFileWriter;
 use databend_storages_common_blocks::BulkParquetLeafWriter;
@@ -54,7 +50,6 @@ use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -66,16 +61,13 @@ use super::GranuleIndexBuildOutput;
 use super::GranuleIndexBuilder;
 use super::GranuleIndexPruner;
 use super::GranuleIndexSpec;
+use super::GranuleMark;
 use super::NoopGranuleIndexBuilder;
+use crate::io::GranulePruningReadContext;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::compact_index_version;
-use crate::io::load_u64_columns;
-use crate::io::num_granules_of;
 
-/// Names of the `(off, len)` sidecar offset columns for one indexed column. Keyed by compacted index
-/// version and column id so several indexes on the same column — or a recreated index — never
-/// collide in the shared `_pidx` sidecar.
-fn sidecar_offset_col_names(index_version: &str, col_id: u32) -> (String, String) {
+fn bloom_mark_names(index_version: &str, col_id: u32) -> (String, String) {
     let ver = compact_index_version(index_version);
     (
         format!("gbloom_{ver}_off_{col_id}"),
@@ -83,32 +75,23 @@ fn sidecar_offset_col_names(index_version: &str, col_id: u32) -> (String, String
     )
 }
 
-/// Column name of the single Binary column in a payload parquet file.
 const PAYLOAD_FILTER_COL: &str = "f";
 
-/// Factory for one `TYPE bloom` table index, resolved once from `TableMeta.indexes`.
 #[derive(Clone)]
 pub struct BloomGranuleIndexSpec {
     index_name: String,
     index_version: String,
     bloom_index_type: BloomIndexType,
-    /// Stable IDs from the index definition. Concrete `FieldIndex` values and fields are bound
-    /// against the exact schema of each writer or query.
     column_ids: Vec<ColumnId>,
 }
 
 impl BloomGranuleIndexSpec {
-    /// Resolve a `TYPE bloom` index entry into a spec, or `None` when none of its columns have a
-    /// bloom-supported type.
     pub fn try_create(
         index_name: &str,
         index: &TableIndex,
         schema: &TableSchema,
         bloom_index_type: BloomIndexType,
     ) -> Result<Option<Self>> {
-        // Resolve the complete declaration against the table schema, but retain only stable IDs.
-        // Missing or unsupported fields make the declaration invalid; a later mismatch against the
-        // physical write schema is handled by the no-op builder in `new_builder`.
         let all_columns_valid = index.column_ids.iter().all(|column_id| {
             schema
                 .fields()
@@ -127,9 +110,6 @@ impl BloomGranuleIndexSpec {
         }))
     }
 
-    /// Bind every indexed column to the physical block schema. As with vector and spatial indexes,
-    /// partial binding is rejected: callers use a no-op builder rather than materializing an
-    /// incomplete index.
     fn bind_columns(&self, physical_schema: &TableSchema) -> Option<Vec<(FieldIndex, TableField)>> {
         self.column_ids
             .iter()
@@ -199,8 +179,6 @@ impl GranuleIndexSpec for BloomGranuleIndexSpec {
     }
 }
 
-/// Single-column payload parquet schema: one nullable Binary column. A row's value is a granule's
-/// `FilterImpl::to_bytes()`, or NULL when that granule produced no filter.
 fn payload_table_schema() -> TableSchema {
     TableSchema::new(vec![TableField::new(
         PAYLOAD_FILTER_COL,
@@ -208,15 +186,11 @@ fn payload_table_schema() -> TableSchema {
     )])
 }
 
-/// The single (nullable Binary) arrow field the payload leaf is driven with.
 fn payload_arrow_field() -> Arc<arrow_schema::Field> {
     let arrow_schema: arrow_schema::Schema = (&payload_table_schema()).into();
     arrow_schema.fields()[0].clone()
 }
 
-/// A payload writer streaming into `sink`: PLAIN, no dictionary and no compression. Granule
-/// boundaries are forced explicitly with `BulkParquetLeafWriter::flush_page`; dictionary remains
-/// disabled so every completed page is forwarded immediately to the streaming sink.
 fn new_payload_writer(
     sink: StreamingUploadSink,
 ) -> Result<BulkParquetFileWriter<StreamingUploadSink>> {
@@ -235,9 +209,6 @@ fn new_payload_writer(
     BulkParquetFileWriter::create(sink, arrow_schema, props)
 }
 
-/// Per-block, per-column payload state. Only the current granule's Bloom builder is retained; when
-/// the granule seals, its filter is encoded into the persistent single-leaf Parquet writer and the
-/// page is flushed immediately into the bounded async upload sink.
 struct ColumnPayloadState {
     field_index: FieldIndex,
     field: TableField,
@@ -269,8 +240,6 @@ impl ColumnPayloadState {
         })
     }
 
-    /// A single-column bloom builder for the current granule. The block fed to it is a one-column
-    /// block (the indexed column projected out), so the builder's field index is 0.
     fn ensure_current(&mut self, func_ctx: &FunctionContext, ty: BloomIndexType) -> Result<()> {
         if self.current.is_none() {
             let mut cols = std::collections::BTreeMap::new();
@@ -298,7 +267,6 @@ impl ColumnPayloadState {
     }
 }
 
-/// Per-block bloom builder: one `ColumnPayloadState` per indexed column.
 pub struct BloomGranuleIndexBuilder {
     func_ctx: FunctionContext,
     bloom_index_type: BloomIndexType,
@@ -315,8 +283,6 @@ impl GranuleIndexBuilder for BloomGranuleIndexBuilder {
         let func_ctx = self.func_ctx.clone();
         for col in self.columns.iter_mut() {
             col.ensure_current(&func_ctx, ty)?;
-            // Project the indexed column into a one-column block sliced to `range`; add_block
-            // accumulates incrementally.
             let entry = block.get_by_offset(col.field_index).clone();
             let sub = DataBlock::new(vec![entry], block.num_rows()).slice(range.clone());
             col.current
@@ -329,7 +295,6 @@ impl GranuleIndexBuilder for BloomGranuleIndexBuilder {
 
     fn finalize_granule(&mut self) -> Result<()> {
         for col in self.columns.iter_mut() {
-            // A granule with no pushed rows (should not happen on the write path) yields NULL.
             let filter_bytes = match col.current.take() {
                 Some(mut builder) => match builder.finalize()? {
                     Some(bloom) if !bloom.filters.is_empty() => Some(bloom.filters[0].to_bytes()?),
@@ -343,7 +308,6 @@ impl GranuleIndexBuilder for BloomGranuleIndexBuilder {
     }
 
     fn finalize(mut self: Box<Self>) -> Result<GranuleIndexBuildOutput> {
-        // Seal a trailing unsealed granule if push_rows happened without a final finalize_granule.
         let has_open = self.columns.iter().any(|c| c.current.is_some());
         if has_open {
             self.finalize_granule()?;
@@ -354,48 +318,30 @@ impl GranuleIndexBuilder for BloomGranuleIndexBuilder {
         }
 
         let index_version = self.index_version;
-        let mut sidecar_fields = Vec::with_capacity(self.columns.len() * 2);
-        let mut sidecar_columns = Vec::with_capacity(self.columns.len() * 2);
+        let mut marks = Vec::with_capacity(self.columns.len() * 2);
 
         for mut col in self.columns {
             let granules = col.granules_written;
             let leaf = col.payload_writer.take().expect("payload writer");
             let writer = leaf.finish()?;
-            // Close the row group + footer, read page offsets, then finish the opendal upload.
             let (metadata, sink) = writer.finish()?;
             let (offs, lens) = page_offsets_from_metadata(&metadata, granules)?;
             sink.close()?;
 
-            let (off_name, len_name) = sidecar_offset_col_names(&index_version, col.col_id);
-            sidecar_fields.push(TableField::new(
-                &off_name,
-                TableDataType::Number(databend_common_expression::types::NumberDataType::UInt64),
-            ));
-            sidecar_columns.push(UInt64Type::from_data(offs));
-            sidecar_fields.push(TableField::new(
-                &len_name,
-                TableDataType::Number(databend_common_expression::types::NumberDataType::UInt64),
-            ));
-            sidecar_columns.push(UInt64Type::from_data(lens));
+            let (off_name, len_name) = bloom_mark_names(&index_version, col.col_id);
+            marks.push(GranuleMark::create(&off_name, offs));
+            marks.push(GranuleMark::create(&len_name, lens));
         }
 
-        Ok(GranuleIndexBuildOutput {
-            sidecar_fields,
-            sidecar_columns,
-        })
+        Ok(GranuleIndexBuildOutput { marks })
     }
 }
 
-/// Build a one-row nullable-Binary column holding this granule's filter bytes (or NULL).
 fn build_single_binary_column(filter_bytes: Option<Vec<u8>>) -> Column {
     use databend_common_expression::types::BinaryType;
     BinaryType::from_opt_data(vec![filter_bytes])
 }
 
-/// Extract each payload page's absolute `(offset, len)` from the finished file's `OffsetIndex`.
-/// The single column's page locations are in write order, one explicitly flushed page per granule;
-/// `offset` is absolute in the file and `compressed_page_size` includes the page header, so the
-/// pruner can fetch a page by that exact byte range.
 fn page_offsets_from_metadata(
     metadata: &parquet::file::metadata::ParquetMetaData,
     granules: usize,
@@ -403,7 +349,6 @@ fn page_offsets_from_metadata(
     let offset_index = metadata.offset_index().ok_or_else(|| {
         ErrorCode::Internal("granule bloom payload has no offset index in metadata")
     })?;
-    // Single row group, single column.
     let pages = offset_index
         .first()
         .and_then(|rg| rg.first())
@@ -426,20 +371,15 @@ fn page_offsets_from_metadata(
     Ok((offs, lens))
 }
 
-/// One indexed column the filter expression touches: enough to locate its payload file and to name
-/// its filter in the per-granule `BloomIndex`.
 struct MatchedColumn {
     field: TableField,
     index_name: String,
     index_version: String,
 }
 
-/// Read-side bloom pruner: for each surviving granule, evaluates the filter against that granule's
-/// per-column bloom filters and drops granules the filter proves cannot match.
 pub struct BloomGranuleIndexPruner {
     func_ctx: FunctionContext,
     filter_expr: Expr<String>,
-    /// Pre-computed eq-condition scalar digests, reused across all granules.
     eq_scalar_map: HashMap<Scalar, u64>,
     matched_columns: Vec<MatchedColumn>,
     data_schema: TableSchemaRef,
@@ -448,8 +388,16 @@ pub struct BloomGranuleIndexPruner {
 }
 
 impl BloomGranuleIndexPruner {
-    /// Build a pruner for one spec, or `None` when it cannot apply: no filter, or the filter touches
-    /// none of this index's bloom-supported columns.
+    fn required_mark_names(&self) -> Vec<String> {
+        let mut names = Vec::with_capacity(self.matched_columns.len() * 2);
+        for col in &self.matched_columns {
+            let (off_name, len_name) = bloom_mark_names(&col.index_version, col.field.column_id());
+            names.push(off_name);
+            names.push(len_name);
+        }
+        names
+    }
+
     fn try_create(
         spec: &BloomGranuleIndexSpec,
         func_ctx: FunctionContext,
@@ -514,58 +462,42 @@ impl BloomGranuleIndexPruner {
     async fn try_prune(
         &self,
         block_meta: &BlockMeta,
-        granule_index: &GranuleIndexLayout,
-        input_ranges: Option<&[Range<usize>]>,
-    ) -> Result<Option<Vec<Range<usize>>>> {
-        let num_granules = num_granules_of(
-            block_meta.row_count as usize,
-            granule_index.granule_rows as usize,
-        );
+        input_ranges: &[Range<usize>],
+        read_ctx: &GranulePruningReadContext,
+    ) -> Result<Vec<Range<usize>>> {
+        let num_granules = read_ctx.num_granules();
+
         if num_granules == 0 {
-            return Ok(None);
+            return Ok(input_ranges.to_vec());
         }
 
-        // The survivor set to evaluate: the previous stage's output, or all granules.
-        let survivors: Vec<usize> = match input_ranges {
-            Some(ranges) => ranges.iter().flat_map(|r| r.clone()).collect(),
-            None => (0..num_granules).collect(),
-        };
+        let survivors = input_ranges
+            .iter()
+            .flat_map(|range| range.clone())
+            .collect::<Vec<_>>();
         if survivors.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
 
-        // Recover each matched column's per-granule payload (offset, len) columns from the offsets
-        // sidecar via the recorded byte ranges (no footer). Columns absent from the layout (block
-        // predates this index) are simply missing and their column is skipped below.
-        let mut wanted_names = Vec::with_capacity(self.matched_columns.len() * 2);
-        for col in &self.matched_columns {
-            let (off_name, len_name) =
-                sidecar_offset_col_names(&col.index_version, col.field.column_id());
-            wanted_names.push(off_name);
-            wanted_names.push(len_name);
+        let wanted_names = self.required_mark_names();
+        let mut marks = HashMap::with_capacity(wanted_names.len());
+        for name in &wanted_names {
+            if let Some(mark) = read_ctx.mark(name) {
+                marks.insert(name.clone(), mark);
+            }
         }
-        let u64_columns = load_u64_columns(
-            &self.dal,
-            &self.settings,
-            &granule_index.offsets,
-            &wanted_names,
-            num_granules,
-        )
-        .await?;
 
         let empty_stats = StatisticsOfColumns::new();
         let column_stats = block_meta.col_stats.clone();
 
-        // granule -> (filter field, filter) contributions across all matched columns.
         let mut per_granule_filters: HashMap<usize, Vec<(TableField, Arc<FilterImpl>)>> =
             HashMap::new();
         let mut any_column_has_payload = false;
 
         for col in &self.matched_columns {
             let col_id = col.field.column_id();
-            let (off_name, len_name) = sidecar_offset_col_names(&col.index_version, col_id);
-            let (Some(offs), Some(lens)) = (u64_columns.get(&off_name), u64_columns.get(&len_name))
-            else {
+            let (off_name, len_name) = bloom_mark_names(&col.index_version, col_id);
+            let (Some(offs), Some(lens)) = (marks.get(&off_name), marks.get(&len_name)) else {
                 continue;
             };
             any_column_has_payload = true;
@@ -578,8 +510,6 @@ impl BloomGranuleIndexPruner {
                     col_id,
                 );
 
-            // Fetch only surviving granules' pages. The merge-io "column id" is reused here as the
-            // granule index tag.
             let mut raw_ranges = Vec::with_capacity(survivors.len());
             for &g in &survivors {
                 let (start, len) = (offs[g], lens[g]);
@@ -615,9 +545,10 @@ impl BloomGranuleIndexPruner {
             }
         }
 
-        // No matched column has a payload here (e.g. block predates the index) -> not applicable.
         if !any_column_has_payload {
-            return Ok(None);
+            return Err(ErrorCode::Internal(
+                "granule bloom payload marks are missing for this block",
+            ));
         }
 
         let stats = if column_stats.is_empty() {
@@ -626,7 +557,6 @@ impl BloomGranuleIndexPruner {
             &column_stats
         };
 
-        // Evaluate each surviving granule; keep it unless a filter proves the predicate false.
         let mut kept = Vec::with_capacity(survivors.len());
         for &g in &survivors {
             let keep = match per_granule_filters.get(&g) {
@@ -648,7 +578,6 @@ impl BloomGranuleIndexPruner {
                         self.data_schema.clone(),
                     )? != FilterEvalResult::MustFalse
                 }
-                // No filter contributions for this granule -> cannot prove false, keep it.
                 _ => true,
             };
             if keep {
@@ -656,34 +585,30 @@ impl BloomGranuleIndexPruner {
             }
         }
 
-        Ok(Some(coalesce(&kept)))
+        Ok(coalesce(&kept))
     }
 }
 
 #[async_trait::async_trait]
 impl GranuleIndexPruner for BloomGranuleIndexPruner {
+    fn name(&self) -> &'static str {
+        super::GRANULE_BLOOM_INDEX_NAME
+    }
+
+    fn required_marks(&self) -> Vec<String> {
+        self.required_mark_names()
+    }
+
     async fn prune_granules(
         &self,
         block_meta: &BlockMeta,
-        input: Option<&[Range<usize>]>,
-    ) -> Option<Vec<Range<usize>>> {
-        let granule_index = block_meta.granule_index.as_ref()?;
-
-        match self.try_prune(block_meta, granule_index, input).await {
-            Ok(ranges) => ranges,
-            Err(e) => {
-                log::warn!(
-                    "[FUSE-PRUNER] granule bloom pruning failed for {}, keeping block: {e}",
-                    block_meta.location.0
-                );
-                None
-            }
-        }
+        input: &[Range<usize>],
+        read_ctx: &GranulePruningReadContext,
+    ) -> Result<Vec<Range<usize>>> {
+        self.try_prune(block_meta, input, read_ctx).await
     }
 }
 
-/// Decode one payload data page (a 1-row single-column nullable-Binary parquet chunk) back into its
-/// `FilterImpl`, or `None` when the granule stored NULL (no filter built).
 fn decode_filter_from_page(bytes: Buffer) -> Result<Option<FilterImpl>> {
     use databend_storages_common_table_meta::meta::Compression;
 
@@ -708,7 +633,6 @@ fn decode_filter_from_page(bytes: Buffer) -> Result<Option<FilterImpl>> {
     }
 }
 
-/// Coalesce a sorted list of granule indices into maximally-merged `[start, end)` ranges.
 fn coalesce(granules: &[usize]) -> Vec<Range<usize>> {
     let mut ranges: Vec<Range<usize>> = Vec::new();
     for &g in granules {
@@ -720,7 +644,6 @@ fn coalesce(granules: &[usize]) -> Vec<Range<usize>> {
     ranges
 }
 
-/// Whether a column type can be indexed by a bloom filter (mirrors `Xor8Filter::supported_type`).
 fn is_bloom_supported_type(data_type: &TableDataType) -> bool {
     let inner = data_type.remove_nullable();
     if let TableDataType::Map(inner_ty) = &inner {
@@ -761,9 +684,6 @@ mod tests {
 
     use super::*;
 
-    /// Decode one payload data page back into its `FilterImpl`, or `None` if the granule stored
-    /// NULL. A single page is a raw column chunk (no parquet footer), so it must be decoded via the
-    /// row-group column-chunk path — exactly what the pruner does.
     fn decode_page(bytes: &[u8]) -> Option<FilterImpl> {
         use std::collections::HashMap;
 
@@ -822,7 +742,6 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        // Serialization removes the virtual field, shifting indexed_col from offset 1 to offset 0.
         let physical_schema =
             TableSchema::new_from_column_ids(vec![indexed_field.clone()], Default::default(), 21);
         let bound = spec.bind_columns(&physical_schema).unwrap();
@@ -871,8 +790,21 @@ mod tests {
         builder.finalize_granule().unwrap();
         let output = builder.finalize().unwrap();
 
-        assert!(output.sidecar_fields.is_empty());
-        assert!(output.sidecar_columns.is_empty());
+        assert!(output.marks.is_empty());
+    }
+
+    #[test]
+    fn test_granule_index_output_rejects_duplicate_marks() {
+        let mark = |name: &str| GranuleMark::create(name, vec![1]);
+        let mut output = GranuleIndexBuildOutput {
+            marks: vec![mark("duplicate")],
+        };
+        let error = output
+            .merge(GranuleIndexBuildOutput {
+                marks: vec![mark("duplicate")],
+            })
+            .unwrap_err();
+        assert!(error.message().contains("duplicate granule mark"));
     }
 
     #[test]
@@ -900,8 +832,7 @@ mod tests {
             .unwrap()
             .finalize()
             .unwrap();
-        assert!(out.sidecar_fields.is_empty());
-        assert!(out.sidecar_columns.is_empty());
+        assert!(out.marks.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -918,8 +849,6 @@ mod tests {
             column_ids: vec![field.column_id()],
         };
 
-        // The payload starts streaming at each granule boundary, so give the builder an in-memory
-        // operator and read the finished file back to verify.
         let dal = Operator::new(opendal::services::Memory::default())
             .unwrap()
             .finish();
@@ -932,7 +861,6 @@ mod tests {
                 field.column_id(),
             );
 
-        // Two granules of two rows each: [1,2] then [3,4].
         let block = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![1i64, 2, 3, 4])]);
         let schema = TableSchema::new(vec![field.clone()]);
         let mut builder = spec
@@ -944,19 +872,15 @@ mod tests {
 
         let out = builder.finalize().unwrap();
 
-        // Payloads are streamed to storage, not returned; two offset columns (off + len) remain.
-        assert_eq!(out.sidecar_fields.len(), 2);
-        assert_eq!(out.sidecar_columns.len(), 2);
+        assert_eq!(out.marks.len(), 2);
 
-        // Extract the two granule page ranges from the offset columns.
-        let offs = out.sidecar_columns[0].clone();
-        let lens = out.sidecar_columns[1].clone();
+        let offs = out.marks[0].values.clone();
+        let lens = out.marks[1].values.clone();
         let offs = offs.into_number().unwrap().into_u_int64().unwrap();
         let lens = lens.into_number().unwrap().into_u_int64().unwrap();
         assert_eq!(offs.len(), 2);
         assert_eq!(lens.len(), 2);
 
-        // Read the streamed payload file back from storage.
         let payload = dal.read(&payload_loc).await.unwrap().to_bytes();
         let digest = |v: i64| {
             BloomIndex::calculate_scalar_digest(
@@ -967,7 +891,6 @@ mod tests {
             .unwrap()
         };
 
-        // Granule 0 contains 1,2 but not 3,4; granule 1 the reverse.
         let g0 = decode_page(&payload[offs[0] as usize..(offs[0] + lens[0]) as usize]).unwrap();
         assert!(g0.contains_digest(digest(1)));
         assert!(g0.contains_digest(digest(2)));

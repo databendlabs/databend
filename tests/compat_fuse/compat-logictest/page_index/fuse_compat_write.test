@@ -1,6 +1,6 @@
-# Sparse page index forward-compat: current writer emits the page-index sidecar files and the new
+# Sparse page index forward-compat: current writer emits the page-index marks files and the new
 # BlockMeta fields (page_index_location/page_index_size); an older reader must still read the data
-# correctly by ignoring the unknown sidecar and falling back to whole-block reads.
+# correctly by ignoring the unknown marks file and falling back to whole-block reads.
 
 statement ok
 set global timezone = 'UTC';

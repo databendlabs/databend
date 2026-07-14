@@ -105,12 +105,6 @@ impl ReadBlockContext {
         Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
     }
 
-    /// Attempt a sparse-granule-index narrowed read for `fuse_part`. Returns `None` when narrowing
-    /// does not apply (no granule ranges carried, or no sidecar index), so the caller falls back to
-    /// a full-block read. A failure to load/decode the sidecar degrades to `None` as well.
-    ///
-    /// On success, returns one `BlockReadResult` per `max_block_size`-bounded sub-run so the
-    /// deserializer emits several row-bounded `DataBlock`s instead of one oversized block.
     async fn try_read_data_by_granule_index(
         &self,
         fuse_part: &FuseBlockPartInfo,
@@ -125,8 +119,6 @@ impl ReadBlockContext {
             return Ok(None);
         };
 
-        // The part carries metadata only for projected leaf columns; every one must have a valid
-        // offset column or the narrowed read falls back to a full-block read.
         let index = match crate::io::OffsetsIndex::load(
             self.block_read_ctx.operator(),
             &self.read_settings,

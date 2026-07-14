@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Granule-level skip-index framework: a skip index that narrows within a block at granule
-//! granularity, layered on the sparse granule index. On write, each index emits one payload parquet
-//! file per indexed column plus per-granule offset columns in the block's `_pidx` sidecar; at prune
-//! time the offsets locate each granule's payload page directly.
+//! Granule-level indexes narrow a block's sparse-index survivor ranges before data-page reads.
 
 mod bloom;
 
@@ -23,14 +20,19 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_storages_common_index::BloomIndexType;
@@ -38,43 +40,55 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use opendal::Operator;
 
-/// Output of a finalized builder for one block: the offset columns to append to the `_pidx`
-/// sidecar. Payload files are streamed to storage during the build. `sidecar_fields`/
-/// `sidecar_columns` are paired; each column has `num_granules` rows and a name chosen by the
-/// implementation.
-#[derive(Default)]
-pub struct GranuleIndexBuildOutput {
-    pub sidecar_fields: Vec<TableField>,
-    pub sidecar_columns: Vec<Column>,
+use crate::io::GranulePruningReadContext;
+
+pub struct GranuleMark {
+    pub field: TableField,
+    pub values: Column,
 }
 
-impl GranuleIndexBuildOutput {
-    /// Fold another index's output into this one; the offsets sidecar concatenates every index's
-    /// columns.
-    pub fn merge(&mut self, other: GranuleIndexBuildOutput) {
-        self.sidecar_fields.extend(other.sidecar_fields);
-        self.sidecar_columns.extend(other.sidecar_columns);
+impl GranuleMark {
+    pub fn create(name: &str, values: Vec<u64>) -> Self {
+        Self {
+            field: TableField::new(name, TableDataType::Number(NumberDataType::UInt64)),
+            values: UInt64Type::from_data(values),
+        }
     }
 }
 
-/// Builds a granule-level index for one block. Granule boundaries are independent of `push_rows`
-/// slice boundaries; the caller must call `finalize_granule` at each granule boundary, matching the
-/// sparse granule index.
+#[derive(Default)]
+pub struct GranuleIndexBuildOutput {
+    pub marks: Vec<GranuleMark>,
+}
+
+impl GranuleIndexBuildOutput {
+    pub fn merge(&mut self, other: GranuleIndexBuildOutput) -> Result<()> {
+        for mark in other.marks {
+            if self
+                .marks
+                .iter()
+                .any(|existing| existing.field.name() == mark.field.name())
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "duplicate granule mark {}",
+                    mark.field.name()
+                )));
+            }
+            self.marks.push(mark);
+        }
+        Ok(())
+    }
+}
+
+/// The caller must finalize each granule boundary independently of `push_rows` slice boundaries.
 pub trait GranuleIndexBuilder: Send {
     fn push_rows(&mut self, block: &DataBlock, range: Range<usize>) -> Result<()>;
 
-    /// Seal the current granule (flush its payload page, record its offset) and reset for the next.
     fn finalize_granule(&mut self) -> Result<()>;
 
-    /// Finish the block, returning the sidecar offset columns. Payload files were already streamed
-    /// to storage during the build (locations were fixed at construction), so nothing is returned
-    /// for them here.
     fn finalize(self: Box<Self>) -> Result<GranuleIndexBuildOutput>;
 }
 
-/// Builder used when an index definition cannot be fully bound to the physical write schema.
-/// Keeping this behind the normal builder trait lets callers remain branch-free while ensuring an
-/// incomplete index never materializes partial payloads or sidecar columns.
 pub(super) struct NoopGranuleIndexBuilder;
 
 impl GranuleIndexBuilder for NoopGranuleIndexBuilder {
@@ -91,29 +105,26 @@ impl GranuleIndexBuilder for NoopGranuleIndexBuilder {
     }
 }
 
-/// Read-side counterpart of [`GranuleIndexBuilder`]. `block_pruner` folds every active pruner over
-/// the survivor set without knowing the concrete type.
+pub const GRANULE_BLOOM_INDEX_NAME: &str = "bloom";
+
 #[async_trait::async_trait]
 pub trait GranuleIndexPruner: Send + Sync {
-    /// Narrow `input` (survivor granule runs, or `None` = all granules) for `block_meta`. `None` =
-    /// index does not apply (leave `input` unchanged); `Some(ranges)` = narrowed set, `Some(vec![])`
-    /// = drop the block. Must degrade to `None` on any load/decode error.
+    fn name(&self) -> &'static str;
+
+    fn required_marks(&self) -> Vec<String>;
+
     async fn prune_granules(
         &self,
         block_meta: &BlockMeta,
-        input: Option<&[Range<usize>]>,
-    ) -> Option<Vec<Range<usize>>>;
+        input: &[Range<usize>],
+        read_ctx: &GranulePruningReadContext,
+    ) -> Result<Vec<Range<usize>>>;
 }
 
-/// Factory for one granule-level index, resolved from a `TableMeta.indexes` entry. The decoupling
-/// seam: write/read paths ask each spec for a builder/pruner without knowing the index kind.
+/// Factory shared by granule-index write and read paths.
 pub trait GranuleIndexSpec: Send + Sync {
-    /// `physical_schema` is the exact schema of the `DataBlock`s fed to the builder. Implementations
-    /// must bind stable column IDs to positions against this schema rather than retaining positions
-    /// from the table schema, because serialization may remove virtual fields or add stream fields.
-    /// `block_location` and `dal` are needed up front: the builder streams its payload files to
-    /// storage as granules seal, so payload locations (derived from `block_location`) must be known
-    /// at construction rather than at `finalize`.
+    /// Builders bind stable IDs against the physical write schema. Payload locations must be known
+    /// at construction because builders stream data before `finalize`.
     fn new_builder(
         &self,
         func_ctx: FunctionContext,
@@ -122,7 +133,6 @@ pub trait GranuleIndexSpec: Send + Sync {
         dal: Operator,
     ) -> Result<Box<dyn GranuleIndexBuilder>>;
 
-    /// Per-query pruner, or `None` when this index cannot narrow the given filter.
     fn new_pruner(
         &self,
         func_ctx: FunctionContext,
@@ -133,9 +143,6 @@ pub trait GranuleIndexSpec: Send + Sync {
     ) -> Result<Option<Arc<dyn GranuleIndexPruner>>>;
 }
 
-/// Resolve every granule-level index in `indexes` into a factory spec — the single place mapping a
-/// `TableIndexType` to a concrete implementation. Called by both the write and read paths so one
-/// index declaration drives both sides.
 pub fn build_granule_index_specs(
     indexes: &BTreeMap<String, TableIndex>,
     schema: &TableSchema,
@@ -143,7 +150,6 @@ pub fn build_granule_index_specs(
 ) -> Result<Vec<Arc<dyn GranuleIndexSpec>>> {
     let mut specs: Vec<Arc<dyn GranuleIndexSpec>> = Vec::new();
     for (name, index) in indexes.iter() {
-        // Only bloom is granule-level today; other index types are ignored here.
         if index.index_type == TableIndexType::Bloom {
             if let Some(spec) =
                 bloom::BloomGranuleIndexSpec::try_create(name, index, schema, bloom_index_type)?

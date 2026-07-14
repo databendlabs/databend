@@ -27,38 +27,22 @@ use databend_storages_common_index::GranuleIndex as GranuleIndexEvaluator;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use opendal::Operator;
 
 use crate::io::load_granule_mins;
 use crate::io::num_granules_of;
 
-/// Prune-time evaluator for the sparse granule index. For a clustered table with a cluster-key
-/// predicate, it loads each block's `mins` sidecar (via the byte ranges recorded in block meta — no
-/// footer parse), decodes the per-granule cluster-key mins, and narrows them to the surviving
-/// granule runs (maximally-coalesced `[start, end)`) that may satisfy the predicate.
-///
-/// The selected runs are stashed in `BlockMetaIndex.granule_ranges` and consumed at read time
-/// to fetch only the matching granules' byte ranges. Reuses the battle-tested predicate evaluator
-/// in [`GranuleIndexEvaluator`] (the same one the legacy inline-`pages` path uses).
+/// Applies cluster-key predicates to per-granule mins.
 pub struct SparseGranuleIndexPruner {
     evaluator: GranuleIndexEvaluator,
     dal: Operator,
     read_settings: ReadSettings,
-    /// Cluster-key element types (tuple order), derived from the table schema. Replaces the footer
-    /// `cluster_key_types`: since we only narrow blocks whose cluster-key id matches the table's,
-    /// the block's mins were written under exactly these element types.
     cluster_key_types: Vec<DataType>,
-    /// The table's *current* cluster-key id. After `ALTER TABLE ... CLUSTER BY`, the table's
-    /// cluster-key seq is bumped, but already-written blocks keep their old id and old-key-sorted
-    /// granule mins. Narrowing such a block with the new-key predicate would be wrong, so we only
-    /// narrow blocks whose cluster-key id still matches this.
     table_cluster_key_id: u32,
 }
 
 impl SparseGranuleIndexPruner {
-    /// Create the pruner, or `None` when sparse-page narrowing cannot apply: no cluster key, no
-    /// filter, the cluster keys are not plain column refs, or the filter does not touch the
-    /// cluster key.
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         func_ctx: FunctionContext,
@@ -91,9 +75,6 @@ impl SparseGranuleIndexPruner {
             })
             .collect::<Vec<_>>();
 
-        // Cluster-key element types, in tuple order, derived from the table schema. The mins for a
-        // block whose cluster-key id matches the table's were written with these element types
-        // (nullable-wrapped at load time), so this replaces the old footer `cluster_key_types`.
         let data_schema = DataSchema::from(schema.as_ref());
         let cluster_key_types = cluster_keys
             .iter()
@@ -121,46 +102,18 @@ impl SparseGranuleIndexPruner {
         })))
     }
 
-    /// Select the surviving granule runs to read for `block_meta`. Returns:
-    /// - `Ok(Some(ranges))`: the granule index applied. `ranges` is the maximally-coalesced set of
-    ///   surviving granule runs (an explicit set, so a later index can intersect against it):
-    ///   `vec![0..N]` = all granules survive; `vec![]` = every granule pruned (drop the block);
-    ///   `vec![r0, r1, ...]` = only these granules survive.
-    /// - `Ok(None)`: the granule index does not apply (no sidecar index, or a cluster-key-id mismatch)
-    ///   — read the whole block.
-    ///
-    /// A corrupt or unreadable index also degrades to `None` so queries never fail.
-    pub async fn select_granule_ranges(&self, block_meta: &BlockMeta) -> Option<Vec<Range<usize>>> {
-        let granule_index = block_meta.granule_index.as_ref()?;
-        let cluster_stats = block_meta.cluster_stats.as_ref()?;
-
-        match self
-            .try_select(block_meta, granule_index, cluster_stats.cluster_key_id)
-            .await
-        {
-            Ok(ranges) => ranges,
-            Err(e) => {
-                log::warn!(
-                    "[FUSE-PRUNER] sparse granule index pruning failed for {}, reading whole block: {e}",
-                    block_meta.location.0
-                );
-                None
-            }
-        }
-    }
-
-    async fn try_select(
+    pub async fn select_granule_ranges(
         &self,
         block_meta: &BlockMeta,
-        granule_index: &databend_storages_common_table_meta::meta::GranuleIndexLayout,
-        block_cluster_key_id: u32,
-    ) -> Result<Option<Vec<Range<usize>>>> {
-        // The block was written/clustered under `block_cluster_key_id`. If the table's current
-        // cluster key differs (an `ALTER TABLE ... CLUSTER BY` bumped the seq and this block has
-        // not been reclustered yet), the granule mins are sorted by the *old* key and have the old
-        // arity, so the new-key predicate must not narrow them. Read the whole block instead.
-        if self.table_cluster_key_id != block_cluster_key_id {
-            return Ok(None);
+        granule_index: &GranuleIndexLayout,
+        input: &[Range<usize>],
+    ) -> Result<Vec<Range<usize>>> {
+        let Some(cluster_stats) = block_meta.cluster_stats.as_ref() else {
+            return Ok(input.to_vec());
+        };
+
+        if self.table_cluster_key_id != cluster_stats.cluster_key_id {
+            return Ok(input.to_vec());
         }
 
         let num_granules = num_granules_of(
@@ -168,19 +121,13 @@ impl SparseGranuleIndexPruner {
             granule_index.granule_rows as usize,
         );
         if num_granules == 0 {
-            return Ok(None);
+            return Ok(input.to_vec());
         }
 
-        // An offset-only index (no cluster key / no mins file) cannot prune: every granule survives,
-        // but the read still goes page-wise. Return the full survivor set so the read path uses the
-        // page layout instead of falling back to a whole-block read.
         let Some(mins_layout) = granule_index.mins.as_ref() else {
-            #[allow(clippy::single_range_in_vec_init)]
-            return Ok(Some(vec![0..num_granules]));
+            return Ok(input.to_vec());
         };
 
-        // Load the per-granule mins from the mins sidecar via the recorded byte ranges (no footer).
-        // Cluster-key element types come from the table schema (ids match), not from any footer.
         let granule_mins = load_granule_mins(
             &self.dal,
             &self.read_settings,
@@ -190,12 +137,38 @@ impl SparseGranuleIndexPruner {
         )
         .await?;
 
-        let cluster_stats = block_meta.cluster_stats.as_ref().unwrap();
         let block_max = Scalar::Tuple(cluster_stats.max().clone());
-
-        // The evaluator returns the surviving granule runs directly: `vec![]` means every granule
-        // was pruned (the reader drops the block), a non-empty vec is the survivor set.
         let ranges = self.evaluator.apply(&granule_mins, &block_max)?;
-        Ok(Some(ranges))
+        Ok(intersect_ranges(input, &ranges))
+    }
+}
+
+fn intersect_ranges(left: &[Range<usize>], right: &[Range<usize>]) -> Vec<Range<usize>> {
+    let mut result = Vec::new();
+    let (mut l, mut r) = (0, 0);
+    while l < left.len() && r < right.len() {
+        let start = left[l].start.max(right[r].start);
+        let end = left[l].end.min(right[r].end);
+        if start < end {
+            result.push(start..end);
+        }
+        if left[l].end <= right[r].end {
+            l += 1;
+        } else {
+            r += 1;
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::intersect_ranges;
+
+    #[test]
+    fn test_intersect_ranges() {
+        let left = vec![0..3, 5..9];
+        let right = vec![1..6, 7..8, 10..12];
+        assert_eq!(intersect_ranges(&left, &right), vec![1..3, 5..6, 7..8]);
     }
 }

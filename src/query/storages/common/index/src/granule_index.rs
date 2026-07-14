@@ -98,7 +98,7 @@ impl GranuleIndex {
     }
 
     /// Apply the granule index with explicitly provided granule mins and block max.
-    /// Used by the sparse granule index pruner which loads mins from a sidecar file.
+    /// Used by the sparse granule index pruner which loads mins from a marks file.
     pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
         let pages = min_values.len();
         if pages == 0 {

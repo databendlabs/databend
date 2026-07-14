@@ -98,6 +98,7 @@ pub struct PruningContext {
     /// Granule-level index pruners, each narrowing the surviving granule set in turn. Empty when none
     /// applies to the query.
     pub granule_index_pruners: Vec<Arc<dyn GranuleIndexPruner>>,
+    pub granule_read_settings: ReadSettings,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
@@ -214,10 +215,10 @@ impl PruningContext {
 
         // Granule-level index pruners: ask every spec for a pruner and keep the ones that apply to
         // this query, so the call site stays agnostic of the index kind.
+        let granule_read_settings = ReadSettings::from_ctx(ctx)?;
         let granule_index_pruners = if lightweight_pruning {
             Vec::new()
         } else {
-            let settings = ReadSettings::from_ctx(ctx)?;
             let specs = build_granule_index_specs(&indexes, &table_schema, bloom_index_type)?;
             let mut pruners = Vec::with_capacity(specs.len());
             for spec in specs {
@@ -226,7 +227,7 @@ impl PruningContext {
                     &table_schema,
                     filter_expr.as_ref(),
                     dal.clone(),
-                    settings,
+                    granule_read_settings,
                 )? {
                     pruners.push(pruner);
                 }
@@ -285,6 +286,7 @@ impl PruningContext {
             bloom_pruner,
             sparse_granule_index_pruner,
             granule_index_pruners,
+            granule_read_settings,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,

@@ -1,6 +1,6 @@
 # Granule-level bloom index: verify equality/IN predicates over a table written with a
 # `TYPE bloom` index and `index_granularity` return correct results. Exercises the write path
-# (per-granule filter payloads + sidecar offset columns) and the read path (per-granule bloom
+# (per-granule filter payloads + offset marks) and the read path (per-granule bloom
 # narrowing of the surviving granule set) end to end.
 
 statement ok
@@ -109,7 +109,7 @@ statement ok
 DROP TABLE pb_ck
 
 # An index created AFTER data is written applies to blocks written afterwards; older blocks have no
-# granule bloom sidecar columns and must degrade to a full (correct) read.
+# granule bloom mark columns and must degrade to a full (correct) read.
 statement ok
 CREATE TABLE pb_late(a int) index_granularity = 100
 

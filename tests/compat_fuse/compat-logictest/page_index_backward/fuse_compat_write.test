@@ -1,6 +1,6 @@
 # Backward compat for cluster-key page pruning: an OLD writer writes a clustered table with
 # `row_per_page` set, producing inline per-page cluster-key mins (`ClusterStatistics.pages`) and no
-# page-index sidecar. The CURRENT reader removed the legacy `page_pruner` and reworked the pruning
+# page-index marks file. The CURRENT reader removed the legacy `page_pruner` and reworked the pruning
 # main path; it must still read this old data correctly, falling back to whole-block reads since it
 # no longer consumes inline `pages`.
 

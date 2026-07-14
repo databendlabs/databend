@@ -429,7 +429,7 @@ const BASE62_ALPHABET: &[u8; 62] =
 
 /// Compact a per-CREATE index `version` (a `Uuid::simple()` hex string) into a short base-62 token.
 /// Parsing the full 128-bit value keeps it collision-free (unlike truncating to a hex prefix), so
-/// distinct versions never alias in payload paths or sidecar column names. Non-UUID input is returned
+/// distinct versions never alias in payload paths or mark column names. Non-UUID input is returned
 /// unchanged.
 pub fn compact_index_version(version: &str) -> String {
     let Ok(uuid) = Uuid::parse_str(version) else {

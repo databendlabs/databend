@@ -61,6 +61,7 @@ use opendal::Operator;
 use super::fuse_block_writer::FuseBlockOutput;
 use super::fuse_block_writer::FuseBlockWriter;
 use super::fuse_block_writer::GranuleMins;
+use super::fuse_block_writer::GranuleWriteSettings;
 use crate::FuseStorageFormat;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
@@ -108,8 +109,7 @@ pub fn serialize_block_with_column_stats(
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
             ));
-            let mut writer =
-                FuseBlockWriter::new(props, schema.clone(), None, Vec::new(), None, None);
+            let mut writer = FuseBlockWriter::new(props, schema.clone(), None);
             writer.write(block)?;
             let SerializedParquet {
                 payload, metadata, ..
@@ -268,11 +268,7 @@ impl BlockBuilder {
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
 
         let num_rows = data_block.num_rows();
-        // Only index blocks spanning >= 2 granules; block-level min/max already covers a single one.
-        let granule_rows = self
-            .write_settings
-            .index_granularity
-            .filter(|g| num_rows > *g);
+        let granule_rows = self.write_settings.index_granularity;
 
         let (mins, cluster_key_id) = match granule_rows {
             Some(_) if !self.cluster_stats_gen.cluster_key_index.is_empty() => (
@@ -313,14 +309,10 @@ impl BlockBuilder {
             self.write_settings.data_page_rows,
             self.write_settings.data_page_bytes,
         ));
-        let mut block_writer = FuseBlockWriter::new(
-            props,
-            self.source_schema.clone(),
-            granule_rows,
-            granule_index_builders,
-            mins,
-            cluster_key_id,
-        );
+        let granule = granule_rows.map(|rows| {
+            GranuleWriteSettings::new(rows, granule_index_builders, mins, cluster_key_id)
+        });
+        let mut block_writer = FuseBlockWriter::new(props, self.source_schema.clone(), granule);
         block_writer.write(data_block)?;
 
         let mins_location = self.meta_locations.block_granule_index_location();

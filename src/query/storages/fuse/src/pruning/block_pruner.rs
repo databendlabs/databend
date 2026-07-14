@@ -33,6 +33,9 @@ use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
+use crate::io::GranulePruningReadContext;
+use crate::io::granule_index::GRANULE_BLOOM_INDEX_NAME;
+use crate::io::num_granules_of;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
 use crate::pruning::RuntimeStatsPruner;
@@ -57,6 +60,8 @@ impl BlockPruner {
 
         // Apply block pruning.
         if self.pruning_ctx.bloom_pruner.is_some()
+            || self.pruning_ctx.sparse_granule_index_pruner.is_some()
+            || !self.pruning_ctx.granule_index_pruners.is_empty()
             || self.pruning_ctx.inverted_index_pruner.is_some()
             || self.pruning_ctx.spatial_index_pruner.is_some()
             || self.pruning_ctx.virtual_column_pruner.is_some()
@@ -76,6 +81,8 @@ impl BlockPruner {
         block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if self.pruning_ctx.bloom_pruner.is_none()
+            && self.pruning_ctx.sparse_granule_index_pruner.is_none()
+            && self.pruning_ctx.granule_index_pruners.is_empty()
             && self.pruning_ctx.inverted_index_pruner.is_none()
             && self.pruning_ctx.spatial_index_pruner.is_none()
             && self.pruning_ctx.virtual_column_pruner.is_none()
@@ -318,64 +325,168 @@ impl BlockPruner {
             return Ok(prune_result);
         }
 
+        let pruning_cost = pruning_ctx.pruning_cost.clone();
+        let sparse_granule_index_pruner = pruning_ctx.sparse_granule_index_pruner.clone();
+        let granule_index_pruners = pruning_ctx.granule_index_pruners.clone();
+
+        let has_granule_pipeline = sparse_granule_index_pruner.is_some()
+            || !granule_index_pruners.is_empty()
+            || prune_result.granule_ranges.is_some();
+        let Some(granule_index) = block_meta
+            .granule_index
+            .as_ref()
+            .filter(|_| has_granule_pipeline)
+        else {
+            return Self::prune_after_granule_indexes(
+                prune_result,
+                &block_meta,
+                row_count,
+                limit_before_bloom,
+                false,
+                pruning_ctx,
+            )
+            .await;
+        };
+        let num_granules = num_granules_of(
+            block_meta.row_count as usize,
+            granule_index.granule_rows as usize,
+        );
+        if num_granules == 0 {
+            return Self::prune_after_granule_indexes(
+                prune_result,
+                &block_meta,
+                row_count,
+                limit_before_bloom,
+                false,
+                pruning_ctx,
+            )
+            .await;
+        }
+
+        #[allow(clippy::single_range_in_vec_init)]
+        let all_granules = vec![0..num_granules];
+        let mut survivors = match prune_result.granule_ranges.take() {
+            Some(ranges) => ranges,
+            None => all_granules,
+        };
+
+        if let Some(pruner) = sparse_granule_index_pruner {
+            match pruning_cost
+                .measure_async(
+                    PruningCostKind::BlocksRange,
+                    pruner.select_granule_ranges(&block_meta, granule_index, &survivors),
+                )
+                .await
+            {
+                Ok(ranges) => survivors = ranges,
+                Err(e) => log::warn!(
+                    "[FUSE-PRUNER] sparse granule pruning failed for {}, preserving input ranges: {e}",
+                    block_meta.location.0
+                ),
+            }
+            if survivors.is_empty() {
+                prune_result.keep = false;
+                return Ok(prune_result);
+            }
+        }
+
+        let mut granule_bloom_applied = false;
+        if !granule_index_pruners.is_empty() {
+            let mark_names = granule_index_pruners
+                .iter()
+                .flat_map(|pruner| pruner.required_marks())
+                .collect::<Vec<_>>();
+            let read_ctx = match GranulePruningReadContext::load(
+                &pruning_ctx.dal,
+                &pruning_ctx.granule_read_settings,
+                &granule_index.offsets,
+                &mark_names,
+                num_granules,
+            )
+            .await
+            {
+                Ok(ctx) => ctx,
+                Err(e) => {
+                    log::warn!(
+                        "[FUSE-PRUNER] granule marks load failed for {}, preserving input ranges: {e}",
+                        block_meta.location.0
+                    );
+                    prune_result.granule_ranges = Some(survivors);
+                    return Self::prune_after_granule_indexes(
+                        prune_result,
+                        &block_meta,
+                        row_count,
+                        limit_before_bloom,
+                        false,
+                        pruning_ctx,
+                    )
+                    .await;
+                }
+            };
+
+            for pruner in &granule_index_pruners {
+                match pruning_cost
+                    .measure_async(
+                        PruningCostKind::BlocksRange,
+                        pruner.prune_granules(&block_meta, &survivors, &read_ctx),
+                    )
+                    .await
+                {
+                    Ok(ranges) => {
+                        granule_bloom_applied |= pruner.name() == GRANULE_BLOOM_INDEX_NAME;
+                        survivors = ranges;
+                    }
+                    Err(e) => log::warn!(
+                        "[FUSE-PRUNER] granule index {} failed for {}, preserving input ranges: {e}",
+                        pruner.name(),
+                        block_meta.location.0
+                    ),
+                }
+                if survivors.is_empty() {
+                    prune_result.keep = false;
+                    return Ok(prune_result);
+                }
+            }
+        }
+        prune_result.granule_ranges = Some(survivors);
+
+        Self::prune_after_granule_indexes(
+            prune_result,
+            &block_meta,
+            row_count,
+            limit_before_bloom,
+            granule_bloom_applied,
+            pruning_ctx,
+        )
+        .await
+    }
+
+    async fn prune_after_granule_indexes(
+        mut prune_result: BlockPruneResult,
+        block_meta: &BlockMeta,
+        row_count: u64,
+        limit_before_bloom: bool,
+        granule_bloom_applied: bool,
+        pruning_ctx: Arc<PruningContext>,
+    ) -> Result<BlockPruneResult> {
         let pruning_stats = pruning_ctx.pruning_stats.clone();
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
-        let sparse_granule_index_pruner = pruning_ctx.sparse_granule_index_pruner.clone();
-        let granule_index_pruners = pruning_ctx.granule_index_pruners.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
-
-        // Sparse granule index narrowing (parquet format, `index_granularity` set), run *before* the
-        // bloom filter: it is a cheap, precise cluster-key filter, so when its survivor set is empty
-        // (no granule can satisfy the predicate) the whole block is dropped here and we skip the
-        // more expensive bloom-filter IO entirely. A non-empty survivor set is stashed for the
-        // reader to fetch only those granules' byte ranges. Independent of the native-format page
-        // pruner.
-        if let Some(sparse_granule_index_pruner) = sparse_granule_index_pruner {
-            let ranges = pruning_cost
-                .measure_async(
-                    PruningCostKind::BlocksRange,
-                    sparse_granule_index_pruner.select_granule_ranges(&block_meta),
-                )
-                .await;
-            // `Some(empty)` = the index applied and pruned every granule -> drop the block.
-            // `Some(non-empty)` = survivors to narrow the read. `None` = index not applicable.
-            if ranges.as_ref().is_some_and(|r| r.is_empty()) {
-                prune_result.keep = false;
-                return Ok(prune_result);
-            }
-            prune_result.granule_ranges = ranges;
-        }
-
-        // Fold every granule-level pruner over the running survivor set (from the sparse pruner, or
-        // all granules), before the block-level bloom filter so an empty set drops the block early.
-        // `None` from a pruner means it does not apply and leaves the set unchanged.
-        for pruner in &granule_index_pruners {
-            let input = prune_result.granule_ranges.as_deref();
-            let ranges = pruning_cost
-                .measure_async(
-                    PruningCostKind::BlocksRange,
-                    pruner.prune_granules(&block_meta, input),
-                )
-                .await;
-            if let Some(ranges) = ranges {
-                if ranges.is_empty() {
-                    prune_result.keep = false;
-                    return Ok(prune_result);
-                }
-                prune_result.granule_ranges = Some(ranges);
-            }
-        }
 
         if limit_before_bloom {
             prune_result.keep = limit_pruner.within_limit(row_count);
         }
 
         if prune_result.keep {
-            if let Some(bloom_pruner) = bloom_pruner {
+            if granule_bloom_applied {
+                if !limit_before_bloom {
+                    prune_result.keep = limit_pruner.within_limit(row_count);
+                }
+            } else if let Some(bloom_pruner) = bloom_pruner {
                 metrics_inc_blocks_bloom_pruning_before(1);
                 metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
                 pruning_stats.set_blocks_bloom_pruning_before(1);
@@ -389,7 +500,7 @@ impl BlockPruner {
                             block_meta.bloom_filter_index_size,
                             &block_meta.col_stats,
                             column_ids,
-                            &block_meta.as_ref().into(),
+                            &block_meta.into(),
                         ),
                     )
                     .await;
@@ -450,7 +561,7 @@ impl BlockPruner {
                 let should_prune = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksSpatial,
-                        spatial_index_pruner.should_prune(&block_meta),
+                        spatial_index_pruner.should_prune(block_meta),
                     )
                     .await?;
                 let elapsed = start.elapsed();
