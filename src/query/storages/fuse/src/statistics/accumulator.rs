@@ -33,7 +33,6 @@ use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
-use databend_storages_common_table_meta::meta::SegmentTopN;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::encode_column_hll;
@@ -199,8 +198,8 @@ impl ColumnHLLAccumulator {
         Ok(())
     }
 
-    pub fn build(&mut self, top_n: Option<SegmentTopN>) -> SegmentStatistics {
-        SegmentStatistics::new(std::mem::take(&mut self.hlls), top_n)
+    pub fn build(&mut self) -> SegmentStatistics {
+        SegmentStatistics::new(std::mem::take(&mut self.hlls))
     }
 
     pub fn is_empty(&self) -> bool {

@@ -262,7 +262,8 @@ impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
 impl From<SegmentStatistics> for CacheValue<SegmentStatistics> {
     fn from(value: SegmentStatistics) -> Self {
         CacheValue {
-            mem_bytes: value.memory_size(),
+            mem_bytes: std::mem::size_of::<SegmentStatistics>()
+                + value.block_hlls.iter().map(|v| v.len()).sum::<usize>(),
             inner: Arc::new(value),
         }
     }
