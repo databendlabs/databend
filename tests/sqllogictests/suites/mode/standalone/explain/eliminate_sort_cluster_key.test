@@ -2,6 +2,12 @@ statement ok
 set max_threads = 4
 
 statement ok
+set lazy_read_threshold = 0
+
+statement ok
+set cluster_key_ordered_topk_lazy_read_threshold = 0
+
+statement ok
 set enable_parallel_multi_merge_sort = 0
 
 statement ok
@@ -21,7 +27,7 @@ CREATE TABLE test_cluster_sort_elide_string(
     a int null,
     s string null,
     b bigint null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, s, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, s, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide_string VALUES
@@ -57,7 +63,7 @@ CREATE TABLE test_cluster_sort_elide(
     d int not null,
     e int not null,
     f int not null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, b, -c, d) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, b, -c, d) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide VALUES
@@ -81,7 +87,7 @@ CREATE TABLE test_cluster_sort_elide_single(
     a int not null,
     b int not null,
     payload int not null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide_single VALUES
@@ -98,7 +104,7 @@ CREATE TABLE test_cluster_sort_elide_mixed(
     a int not null,
     b int not null,
     payload int not null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide_mixed VALUES
@@ -117,7 +123,7 @@ statement ok
 CREATE TABLE test_cluster_sort_elide_overlap(
     a int not null,
     b int not null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 2 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide_overlap VALUES
@@ -207,7 +213,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 5
         ├── partitions scanned: 5
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8 and test_cluster_sort_elide.d (#3) = 4], limit: 3]
         └── estimated rows: 3.67
 
@@ -235,7 +241,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 5
         ├── partitions scanned: 5
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 4]
         └── estimated rows: 5.50
 
@@ -262,7 +268,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [], limit: 5]
         └── estimated rows: 7.00
 
@@ -290,7 +296,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide_single.a (#0) = 1], limit: 2]
         └── estimated rows: 2.00
 
@@ -317,7 +323,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [], limit: 3]
         └── estimated rows: 6.00
 
@@ -345,7 +351,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 5
         ├── partitions scanned: 5
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 3]
         └── estimated rows: 5.50
 
@@ -373,7 +379,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 5
         ├── partitions scanned: 5
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8], limit: 3]
         └── estimated rows: 5.50
 
@@ -395,7 +401,7 @@ Sort(Single)
     ├── read size: < 1 KiB
     ├── partitions total: 5
     ├── partitions scanned: 5
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, bloom pruning: 5 to 5 cost: <slt:ignore>>]
+    ├── pruning stats: <slt:ignore>
     ├── push downs: [filters: [test_cluster_sort_elide.a (#0) = 1 and test_cluster_sort_elide.b (#1) = 2 and test_cluster_sort_elide.e (#4) = 3 and test_cluster_sort_elide.f (#5) = 8 and test_cluster_sort_elide.d (#3) = 4], limit: NONE]
     └── estimated rows: 3.67
 
@@ -403,7 +409,7 @@ statement ok
 CREATE TABLE test_cluster_sort_elide_i64(
     a int not null,
     b bigint not null
-) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'native'
+) ENGINE = FUSE CLUSTER BY LINEAR(a, -b) ROW_PER_BLOCK = 100 STORAGE_FORMAT = 'parquet'
 
 statement ok
 INSERT INTO test_cluster_sort_elide_i64 VALUES
@@ -426,7 +432,7 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 2.00
-└── Sort(Single)
+└── Sort(PresortedMerge)
     ├── output columns: [test_cluster_sort_elide_i64.a (#0), test_cluster_sort_elide_i64.b (#1)]
     ├── sort keys: [b DESC NULLS LAST]
     ├── estimated rows: 3.00
@@ -438,7 +444,7 @@ Limit
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: <slt:ignore>
         ├── push downs: [filters: [test_cluster_sort_elide_i64.a (#0) = 1], limit: 2]
         └── estimated rows: 3.00
 
@@ -462,3 +468,12 @@ unset max_threads
 
 statement ok
 unset enable_parallel_multi_merge_sort
+
+statement ok
+unset lazy_read_threshold
+
+statement ok
+unset cluster_key_ordered_topk_lazy_read_threshold
+
+statement ok
+unset max_cluster_key_ordered_topk_overlap
