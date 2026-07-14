@@ -275,9 +275,12 @@ impl TableMutationAggregator {
             MutationLogEntry::AppendBlock {
                 block_meta,
                 insert_rows,
+                merge_hll,
             } => {
                 if insert_rows > 0 {
                     self.insert_rows += insert_rows;
+                }
+                if insert_rows > 0 || merge_hll {
                     BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
                 }
                 self.merged_blocks.push(block_meta);

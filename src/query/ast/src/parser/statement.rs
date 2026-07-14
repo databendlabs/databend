@@ -1138,9 +1138,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
+            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
-            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
         },
@@ -1154,9 +1154,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             source,
             engine,
             uri_location,
+            opt_partition_by,
             opt_cluster_by,
             opt_table_options,
-            opt_partition_by,
             opt_table_properties,
             opt_as_query,
         )| {

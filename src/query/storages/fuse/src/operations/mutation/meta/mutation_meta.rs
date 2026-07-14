@@ -28,6 +28,7 @@ use crate::operations::mutation::DeletedSegmentInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SerializeDataMeta {
     SerializeBlock(SerializeBlock),
+    SerializeAppend { insert_rows: u64 },
     DeletedSegment(DeletedSegmentInfo),
     CompactExtras(CompactExtraInfo),
 }

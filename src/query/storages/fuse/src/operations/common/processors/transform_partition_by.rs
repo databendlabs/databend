@@ -82,7 +82,24 @@ impl AccumulatingTransform for TransformPartitionBy {
         if let Some(meta) = replaced_block_meta {
             let meta = SerializeDataMeta::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("Invalid partitioned UPDATE block metadata"))?;
-            blocks.insert(0, DataBlock::empty_with_meta(Box::new(meta)));
+            let SerializeDataMeta::SerializeBlock(mut serialize_block) = meta else {
+                return Err(ErrorCode::Internal(
+                    "Invalid partitioned UPDATE block metadata",
+                ));
+            };
+            let mut insert_rows = serialize_block.insert_rows;
+            serialize_block.insert_rows = 0;
+            for block in &mut blocks {
+                block.replace_meta(Box::new(SerializeDataMeta::SerializeAppend {
+                    insert_rows: std::mem::take(&mut insert_rows),
+                }));
+            }
+            blocks.insert(
+                0,
+                DataBlock::empty_with_meta(Box::new(SerializeDataMeta::SerializeBlock(
+                    serialize_block,
+                ))),
+            );
         }
         Ok(blocks)
     }
@@ -133,8 +150,25 @@ mod tests {
 
         assert_eq!(blocks.len(), 4);
         assert!(blocks[0].is_empty());
-        assert!(SerializeDataMeta::downcast_from(blocks[0].take_meta().unwrap()).is_some());
-        assert!(blocks[1..].iter().all(|block| block.get_meta().is_none()));
+        assert!(matches!(
+            SerializeDataMeta::downcast_from(blocks[0].take_meta().unwrap()),
+            Some(SerializeDataMeta::SerializeBlock(SerializeBlock {
+                insert_rows: 0,
+                ..
+            }))
+        ));
+        assert_eq!(
+            blocks[1..]
+                .iter_mut()
+                .map(|block| {
+                    match SerializeDataMeta::downcast_from(block.take_meta().unwrap()).unwrap() {
+                        SerializeDataMeta::SerializeAppend { insert_rows } => insert_rows,
+                        _ => unreachable!(),
+                    }
+                })
+                .collect::<Vec<_>>(),
+            vec![2, 0, 0]
+        );
         assert_eq!(
             blocks[1..]
                 .iter()
@@ -151,10 +185,14 @@ mod tests {
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1])])
             .add_meta(Some(Box::new(meta)))?;
         let mut transform = TransformPartitionBy::new_for_update(Arc::from([0]));
-        let blocks = transform.transform(block)?;
+        let mut blocks = transform.transform(block)?;
         assert_eq!(blocks.len(), 2);
         assert!(blocks[0].is_empty());
         assert_eq!(blocks[1].num_rows(), 1);
+        assert!(matches!(
+            SerializeDataMeta::downcast_from(blocks[1].take_meta().unwrap()),
+            Some(SerializeDataMeta::SerializeAppend { insert_rows: 1 })
+        ));
         Ok(())
     }
 }

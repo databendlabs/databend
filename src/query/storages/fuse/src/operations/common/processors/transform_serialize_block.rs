@@ -78,6 +78,7 @@ pub struct TransformSerializeBlock {
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
     pending_insert_rows: u64,
+    pending_merge_hll: bool,
 }
 
 impl TransformSerializeBlock {
@@ -217,6 +218,7 @@ impl TransformSerializeBlock {
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
             pending_insert_rows: 0,
+            pending_merge_hll: false,
         })
     }
 
@@ -317,6 +319,16 @@ impl Processor for TransformSerializeBlock {
                         Ok(Event::Sync)
                     }
                 }
+                SerializeDataMeta::SerializeAppend { insert_rows } => {
+                    self.pending_insert_rows = insert_rows;
+                    self.pending_merge_hll = true;
+                    self.state = State::NeedSerialize {
+                        block: input_data,
+                        stats_type: ClusterStatsGenType::Generally,
+                        index: None,
+                    };
+                    Ok(Event::Sync)
+                }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras
                     let data_block = Self::mutation_logs(MutationLogEntry::CompactExtras {
@@ -382,6 +394,7 @@ impl Processor for TransformSerializeBlock {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
                 let insert_rows = std::mem::take(&mut self.pending_insert_rows);
+                let merge_hll = std::mem::take(&mut self.pending_merge_hll);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
                 let bytes = if let Some(draft_virtual_block_meta) =
@@ -431,6 +444,7 @@ impl Processor for TransformSerializeBlock {
                         Self::mutation_logs(MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
                             insert_rows,
+                            merge_hll,
                         })
                     }
                 };

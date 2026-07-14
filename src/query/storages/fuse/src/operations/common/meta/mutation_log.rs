@@ -46,6 +46,7 @@ pub enum MutationLogEntry {
     AppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,
         insert_rows: u64,
+        merge_hll: bool,
     },
     DeletedBlock {
         index: BlockMetaIndex,

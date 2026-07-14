@@ -295,6 +295,7 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                         entries: vec![MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
                             insert_rows: 0,
+                            merge_hll: false,
                         }],
                     }))
                 };

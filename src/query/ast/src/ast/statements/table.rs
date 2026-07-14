@@ -238,6 +238,12 @@ impl Display for CreateTableStmt {
             write!(f, " {uri_location}")?;
         }
 
+        if let Some(partition_by) = &self.partition_by {
+            write!(f, " PARTITION BY(")?;
+            write_comma_separated_list(f, partition_by)?;
+            write!(f, ")")?;
+        }
+
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
         }
@@ -246,12 +252,6 @@ impl Display for CreateTableStmt {
         if !self.table_options.is_empty() {
             write!(f, " ")?;
             write_space_separated_string_map(f, &self.table_options)?;
-        }
-
-        if let Some(partition_by) = &self.partition_by {
-            write!(f, " PARTITION BY(")?;
-            write_comma_separated_list(f, partition_by)?;
-            write!(f, ")")?;
         }
 
         if let Some(table_properties) = &self.table_properties {
