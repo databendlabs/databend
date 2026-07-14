@@ -10,6 +10,7 @@ edition = { workspace = true }
 [dependencies]
 databend-common-meta-process = { workspace = true }
 databend-common-tracing = { workspace = true }
+log = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-client = { workspace = true }
