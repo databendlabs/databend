@@ -398,7 +398,7 @@ impl TableMutationAggregator {
                     .into_iter()
                     .map(|x| x.unwrap_or_default())
                     .collect::<Vec<_>>();
-                Some(SegmentStatistics::new(hlls).to_bytes()?)
+                Some(SegmentStatistics::new(hlls, Vec::new()).to_bytes()?)
             };
             let all_perfect = new_blocks.len() > 1;
 
@@ -967,7 +967,7 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
         Ok(None)
     } else {
         let blocks = hlls.into_iter().map(|x| x.unwrap_or_default()).collect();
-        let data = SegmentStatistics::new(blocks).to_bytes()?;
+        let data = SegmentStatistics::new(blocks, Vec::new()).to_bytes()?;
         Ok(Some(data))
     }
 }

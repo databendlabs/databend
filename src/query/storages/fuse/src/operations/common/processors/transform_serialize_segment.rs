@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -78,6 +79,8 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     segment_builder: B,
     virtual_column_accumulator: Option<VirtualColumnAccumulator>,
     hll_accumulator: ColumnHLLAccumulator,
+    block_top_n_template: Option<BlockTopN>,
+    block_top_ns: Vec<BlockTopN>,
     top_n: BlockTopN,
     state: State<B>,
 
@@ -99,14 +102,24 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         thresholds: BlockThresholds,
         segment_builder: B,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Self {
+    ) -> Result<Self> {
         let table_meta = &table.table_info.meta;
         let virtual_column_accumulator =
             VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
 
         let default_cluster_key_id = table.cluster_key_id();
 
-        TransformSerializeSegment {
+        let block_top_n_template =
+            table
+                .append_top_n_columns(table.schema())?
+                .map(|(columns, capacity)| {
+                    columns
+                        .into_values()
+                        .map(|field| (field.column_id(), ColumnTopN::with_capacity(capacity)))
+                        .collect()
+                });
+
+        Ok(TransformSerializeSegment {
             input,
             output,
             output_data: None,
@@ -116,12 +129,14 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             segment_builder,
             virtual_column_accumulator,
             hll_accumulator: ColumnHLLAccumulator::default(),
+            block_top_n_template,
+            block_top_ns: Vec::new(),
             top_n: HashMap::new(),
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
             is_column_oriented: table.is_column_oriented(),
-        }
+        })
     }
 }
 
@@ -141,7 +156,7 @@ pub fn new_serialize_segment_processor(
                 thresholds,
                 RowOrientedSegmentBuilder::default(),
                 table_meta_timestamps,
-            );
+            )?;
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
         FuseSegmentFormat::Column => {
@@ -152,7 +167,7 @@ pub fn new_serialize_segment_processor(
                 thresholds,
                 ColumnOrientedSegmentBuilder::new(table.schema(), thresholds.block_per_segment),
                 table_meta_timestamps,
-            );
+            )?;
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
     }
@@ -259,9 +274,12 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             if let Some(hll) = extended_block_meta.column_hlls {
                 self.hll_accumulator.add_hll(hll)?;
             }
+            let mut block_top_n = self.block_top_n_template.clone().unwrap_or_default();
             if let Some(top_n) = extended_block_meta.column_top_n {
-                merge_column_top_n_mut(&mut self.top_n, top_n)?;
+                merge_column_top_n_mut(&mut block_top_n, top_n)?;
             }
+            merge_column_top_n_mut(&mut self.top_n, block_top_n.clone())?;
+            self.block_top_ns.push(block_top_n);
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
@@ -281,9 +299,15 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 let mut additional_stats_meta = None;
                 let mut stats = None;
-                if !self.hll_accumulator.is_empty() {
+                let block_top_ns = std::mem::take(&mut self.block_top_ns);
+                let has_top_n = block_top_ns.iter().any(|top_n| !top_n.is_empty());
+                if !self.hll_accumulator.is_empty() || has_top_n {
                     let segment_stats_location = TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(location.as_str());
-                    let stats_data = self.hll_accumulator.build().to_bytes()?;
+                    let block_top_ns = has_top_n.then_some(block_top_ns).unwrap_or_default();
+                    let stats_data = self
+                        .hll_accumulator
+                        .build_segment_statistics(block_top_ns)
+                        .to_bytes()?;
                     let stats_summary = self.hll_accumulator.take_summary();
                     additional_stats_meta = Some(AdditionalStatsMeta {
                         size: stats_data.len() as u64,
@@ -292,7 +316,8 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     });
                     stats = Some((segment_stats_location, stats_data, stats_summary));
                 }
-                let top_n = std::mem::take(&mut self.top_n);
+                let mut top_n = std::mem::take(&mut self.top_n);
+                top_n.retain(|_, column_top_n| !column_top_n.values.is_empty());
 
                 let segment_info = self.segment_builder.build(
                     self.thresholds,

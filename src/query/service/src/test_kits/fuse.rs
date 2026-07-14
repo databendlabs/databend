@@ -220,7 +220,7 @@ async fn generate_blocks(
         block_metas.push(Arc::new(block_meta));
         hlls.push(hll);
     }
-    let stats = SegmentStatistics::new(hlls).to_bytes()?;
+    let stats = SegmentStatistics::new(hlls, Vec::new()).to_bytes()?;
     Ok((block_metas, stats))
 }
 
