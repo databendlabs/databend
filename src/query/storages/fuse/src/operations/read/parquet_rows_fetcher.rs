@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::sync::Arc;
@@ -40,7 +41,6 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use futures_util::future;
 use itertools::Itertools;
 
 use super::fuse_rows_fetcher::RowsFetchMetadata;
@@ -78,6 +78,10 @@ pub(super) struct ParquetRowsFetcher {
     settings: ReadSettings,
 
     reader: Arc<BlockReader>,
+    // Max number of block-fetch tasks kept in flight concurrently.
+    // Bounds peak memory (each in-flight task holds one decoded column chunk)
+    // while preserving parallelism regardless of per-block size.
+    max_threads: usize,
 
     segment_reader: CompactSegmentInfoReader,
     block_meta_lru_cache: InMemoryLruCache<RowsFetchMetadataImpl>,
@@ -168,29 +172,37 @@ impl RowsFetcher for ParquetRowsFetcher {
             }
         }
 
-        let mut tasks_handle = Vec::with_capacity(tasks_indices.len());
-        let mut blocks_bytes = 0;
         let mut final_blocks = HashMap::with_capacity(tasks_indices.len());
-        let mut tasks_indices = tasks_indices.into_iter().peekable();
-        while let Some((block_id, task_indices)) = tasks_indices.next() {
-            let metadata = &metadata[&block_id];
-            blocks_bytes += metadata.block_bytes;
 
-            let final_take_index = final_block_index[&block_id];
-            let join_handle =
-                spawn(self.fetch_block(metadata.clone(), final_take_index, task_indices));
-            tasks_handle.push(join_handle);
-
-            // To prevent excessive memory usage, we need to perform a join when the threshold is reached.
-            if blocks_bytes >= 50 * 1024 * 1024 || tasks_indices.peek().is_none() {
-                let tasks_handle = std::mem::take(&mut tasks_handle);
-                let tasks_block = future::try_join_all(tasks_handle).await.unwrap();
-                blocks_bytes = 0;
-                for task_block in tasks_block {
-                    let (final_index, block) = task_block?;
-                    final_blocks.insert(final_index, block);
-                }
+        // Bound concurrency by the number of in-flight fetch tasks (not by an
+        // accumulated byte budget). Each in-flight task decodes one column chunk,
+        // so peak memory is `max_concurrency * one_chunk`. Capping by bytes used
+        // to collapse to a single task whenever one block's chunk already exceeded
+        // the budget (common for wide/long string columns), which serialized the
+        // whole fetch; capping by task count keeps `max_threads`-wide parallelism
+        // regardless of per-block size. See #19677 and the row-fetch perf regression.
+        let max_concurrency = self.max_threads.max(1);
+        let mut tasks_handle = VecDeque::with_capacity(max_concurrency);
+        let mut tasks_indices = tasks_indices.into_iter();
+        loop {
+            // Keep the in-flight window full.
+            while tasks_handle.len() < max_concurrency {
+                let Some((block_id, task_indices)) = tasks_indices.next() else {
+                    break;
+                };
+                let metadata = &metadata[&block_id];
+                let final_take_index = final_block_index[&block_id];
+                let join_handle =
+                    spawn(self.fetch_block(metadata.clone(), final_take_index, task_indices));
+                tasks_handle.push_back(join_handle);
             }
+
+            // Drain the oldest completed task to make room for the next block.
+            let Some(handle) = tasks_handle.pop_front() else {
+                break;
+            };
+            let (final_index, block) = handle.await.unwrap()?;
+            final_blocks.insert(final_index, block);
         }
 
         let final_blocks = final_blocks
@@ -222,6 +234,7 @@ impl ParquetRowsFetcher {
         projection: Projection,
         reader: Arc<BlockReader>,
         settings: ReadSettings,
+        max_threads: usize,
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
@@ -234,6 +247,7 @@ impl ParquetRowsFetcher {
             schema,
             reader,
             settings,
+            max_threads: max_threads.max(1),
             block_meta_lru_cache: InMemoryLruCache::with_items_capacity(
                 String::from("RowFetchBlockMetaCache"),
                 128,
