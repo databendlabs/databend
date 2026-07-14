@@ -323,8 +323,8 @@ impl TableContextSettings for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        if self.shared.query_settings.is_changed()
-            && self.shared.query_settings.query_level_change()
+        if self.shared.query_settings.query_level_change()
+            && self.shared.query_settings.is_changed()
         {
             let shared_settings = self.shared.query_settings.changes();
             if self.get_session_settings().is_changed() {
@@ -342,10 +342,10 @@ impl TableContextSettings for QueryContext {
                 }
             }
         } else {
-            unsafe {
+            self.session_settings_initialized.call_once(|| unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(self.get_session_settings().changes())
-            }
+                    .unchecked_apply_changes(self.get_session_settings().changes());
+            });
         }
 
         self.query_settings.clone()

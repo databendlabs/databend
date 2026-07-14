@@ -153,9 +153,11 @@ impl InterpreterFactory {
                 error!("Access.denied(v2): {:?}", e);
             }
         })?;
-        let mut access_logger = AccessLogger::create(ctx.clone());
-        access_logger.log(plan);
-        access_logger.output();
+        if log::log_enabled!(target: "databend::log::access", log::Level::Info) {
+            let mut access_logger = AccessLogger::create(ctx.clone());
+            access_logger.log(plan);
+            access_logger.output();
+        }
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
 
