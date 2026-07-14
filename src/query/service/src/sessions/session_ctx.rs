@@ -37,6 +37,48 @@ use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
 
+#[derive(Default)]
+struct QueryIdsResults {
+    entries: Vec<(String, Option<String>)>,
+    indices: HashMap<String, usize>,
+}
+
+impl QueryIdsResults {
+    fn get(&self, query_id: &str) -> Option<String> {
+        let index = self.indices.get(&query_id.to_ascii_lowercase())?;
+        self.entries.get(*index)?.1.clone()
+    }
+
+    fn update(&mut self, query_id: String, value: Option<String>) {
+        let normalized_id = query_id.to_ascii_lowercase();
+        if let Some(index) = self.indices.get(&normalized_id).copied() {
+            if let Some(value) = value {
+                self.entries[index] = (query_id, Some(value));
+            }
+            return;
+        }
+
+        let index = self.entries.len();
+        self.entries.push((query_id, value));
+        self.indices.insert(normalized_id, index);
+    }
+
+    fn last(&self, index: i32) -> Option<String> {
+        let len = self.entries.len();
+        let index = if index < 0 { len as i32 + index } else { index };
+
+        if len < 1 || index < 0 || index > (len - 1) as i32 {
+            return None;
+        }
+
+        Some(self.entries[index as usize].0.clone())
+    }
+
+    fn ids(&self) -> HashSet<String> {
+        HashSet::from_iter(self.entries.iter().map(|result| result.0.clone()))
+    }
+}
+
 pub struct SessionContext {
     abort: AtomicBool,
     settings: Arc<Settings>,
@@ -71,7 +113,7 @@ pub struct SessionContext {
     query_context_shared: RwLock<Weak<QueryContextShared>>,
     /// We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     /// query result through previous query_id easily.
-    query_ids_results: RwLock<Vec<(String, Option<String>)>>,
+    query_ids_results: RwLock<QueryIdsResults>,
     // Used in set variables inside session
     variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
@@ -306,49 +348,19 @@ impl SessionContext {
     }
 
     pub fn get_query_result_cache_key(&self, query_id: &str) -> Option<String> {
-        let lock = self.query_ids_results.read();
-        for (qid, result_cache_key) in (*lock).iter().rev() {
-            if qid.eq_ignore_ascii_case(query_id) {
-                return result_cache_key.clone();
-            }
-        }
-        None
+        self.query_ids_results.read().get(query_id)
     }
 
     pub fn update_query_ids_results(&self, query_id: String, value: Option<String>) {
-        let mut lock = self.query_ids_results.write();
-        // Here we use reverse iteration, as it is not common to modify elements from earlier.
-        for (idx, (qid, _)) in (*lock).iter().rev().enumerate() {
-            if qid.eq_ignore_ascii_case(&query_id) {
-                // update value iff value is some.
-                if let Some(v) = value {
-                    (*lock)[idx] = (query_id, Some(v))
-                }
-                return;
-            }
-        }
-        lock.push((query_id, value))
+        self.query_ids_results.write().update(query_id, value)
     }
 
     pub fn get_last_query_id(&self, index: i32) -> Option<String> {
-        let lock = self.query_ids_results.read();
-        let query_ids_len = lock.len();
-        let idx = if index < 0 {
-            query_ids_len as i32 + index
-        } else {
-            index
-        };
-
-        if query_ids_len < 1 || idx < 0 || idx > (query_ids_len - 1) as i32 {
-            return None;
-        }
-
-        Some((*lock)[idx as usize].0.clone())
+        self.query_ids_results.read().last(index)
     }
 
     pub fn get_query_id_history(&self) -> HashSet<String> {
-        let lock = self.query_ids_results.read();
-        HashSet::from_iter(lock.iter().map(|result| result.clone().0))
+        self.query_ids_results.read().ids()
     }
 
     pub fn txn_mgr(&self) -> TxnManagerRef {
@@ -412,5 +424,33 @@ impl SessionContext {
             return;
         }
         *self.current_workload_group.write() = Some(workload_group)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::QueryIdsResults;
+
+    #[test]
+    fn test_query_ids_results_updates_the_matching_entry() {
+        let mut history = QueryIdsResults::default();
+        history.update("first".to_string(), None);
+        history.update("second".to_string(), None);
+        history.update("SECOND".to_string(), Some("cache-key".to_string()));
+
+        assert_eq!(history.entries.len(), 2);
+        assert_eq!(history.get("second"), Some("cache-key".to_string()));
+        assert_eq!(history.last(-1), Some("SECOND".to_string()));
+        assert_eq!(history.last(0), Some("first".to_string()));
+    }
+
+    #[test]
+    fn test_query_ids_results_ignores_none_for_an_existing_entry() {
+        let mut history = QueryIdsResults::default();
+        history.update("query".to_string(), Some("existing-cache-key".to_string()));
+        history.update("QUERY".to_string(), None);
+
+        assert_eq!(history.entries.len(), 1);
+        assert_eq!(history.get("query"), Some("existing-cache-key".to_string()));
     }
 }
