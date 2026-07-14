@@ -148,7 +148,9 @@ impl BlockStatsBuilder {
                     }
                 }
                 BlockEntry::Column(col) => {
-                    if let Some(hll) = &mut column_builder.hll {
+                    if col.check_large_string() {
+                        column_builder.hll = None;
+                    } else if let Some(hll) = &mut column_builder.hll {
                         hll.update_column(col);
                     }
                     if column_builder.top_n.is_some() || column_builder.count_min_sketch.is_some() {
@@ -451,7 +453,8 @@ mod tests {
     }
 
     #[test]
-    fn test_block_stats_builder_keeps_hll_and_cms_for_large_string_without_top_n() -> Result<()> {
+    fn test_block_stats_builder_skips_hll_and_keeps_cms_for_large_string_without_top_n()
+    -> Result<()> {
         let ndv_columns_map = string_columns_map();
         let column_id = ndv_columns_map.get(&0).unwrap().column_id();
         let mut builder =
@@ -459,11 +462,10 @@ mod tests {
         builder.add_block(&large_string_block())?;
 
         let stats = builder.finalize_with_top_n()?.unwrap();
-        assert_eq!(stats.hll.len(), 1);
-        assert!(stats.hll.contains_key(&column_id));
+        assert!(stats.hll.is_empty());
         assert!(stats.top_n.is_empty());
-        assert_eq!(stats.count_min_sketch.len(), 1);
         assert!(stats.dropped_top_n.is_empty());
+        assert!(stats.count_min_sketch.contains_key(&column_id));
         Ok(())
     }
 }

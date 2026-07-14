@@ -494,10 +494,13 @@ impl FuseTable {
             return Ok(None);
         }
 
-        // Append commits only refresh TopN here. Histograms and Count-Min sketches would
-        // be stale unless merged with the appended rows, so drop them from the refreshed
-        // table stats.
-        let histograms = HashMap::new();
+        // Histograms are allowed to remain stale across appends, as they still describe the
+        // existing value distribution and are expensive to rebuild.
+        let histograms = fresh_prev_stats
+            .map(|(_, stats)| stats.histograms.clone())
+            .unwrap_or_default();
+        // Count-Min sketches are row-count aligned. Carrying an old sketch into the refreshed
+        // statistics would incorrectly mark it as covering the appended rows.
         let count_min_sketch = HashMap::new();
         let stats_hll = if hll.is_empty() {
             fresh_prev_stats

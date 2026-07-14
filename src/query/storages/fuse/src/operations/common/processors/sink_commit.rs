@@ -328,15 +328,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_virtual_schema_mode = virtual_schema_mode;
 
         if should_preserve_insert_rows {
-            let binding = self.ctx.mutation_state().mutation_status();
-            let status = binding.read().unwrap();
-            // CommitMeta::insert_rows is append row count only for append commits; rewrite
-            // mutations may carry rewritten block rows here.
-            self.insert_rows = if is_append_only_txn && insert_rows > 0 {
-                insert_rows
-            } else {
-                status.insert_rows + status.update_rows
-            };
+            self.insert_rows = insert_rows;
             self.insert_hll = hll;
             self.insert_top_n = top_n;
         }

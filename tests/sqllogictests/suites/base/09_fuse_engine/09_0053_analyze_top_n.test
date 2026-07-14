@@ -208,7 +208,7 @@ EXPLAIN SELECT * FROM t_append_cms_stale WHERE a = 2
 ----
 table: default.db_09_0053.t_append_cms_stale<slt:ignore>estimated rows: 16.67
 
-# Refreshing append TopN should not carry stale histogram stats.
+# Refreshing append TopN should preserve existing histogram stats.
 statement ok
 set enable_analyze_histogram = 1
 
@@ -234,7 +234,7 @@ SELECT 1000::int FROM numbers(100)
 query I
 SELECT count(*) FROM fuse_statistic('db_09_0053', 't_append_histogram_stale') WHERE column_name = 'a' AND histogram != ''
 ----
-0
+1
 
 statement ok
 set enable_analyze_histogram = 0

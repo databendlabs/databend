@@ -303,7 +303,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 let has_top_n = block_top_ns.iter().any(|top_n| !top_n.is_empty());
                 if !self.hll_accumulator.is_empty() || has_top_n {
                     let segment_stats_location = TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(location.as_str());
-                    let block_top_ns = has_top_n.then_some(block_top_ns).unwrap_or_default();
+                    let block_top_ns = if has_top_n { block_top_ns } else { Vec::new() };
                     let stats_data = self
                         .hll_accumulator
                         .build_segment_statistics(block_top_ns)
