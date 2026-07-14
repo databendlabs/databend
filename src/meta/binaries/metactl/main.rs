@@ -672,9 +672,16 @@ enum CtlCommand {
 ///   ["raft_log",{"Logs":{"key":0,"value":{"log_id":{"leader_id":{"term":0,"node_id":0},"index":0},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}}]
 ///   ["raft_log",{"Logs":{"key":1,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":1},"payload":"Blank"}}}]
 ///   ```
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+#[allow(clippy::disallowed_methods, clippy::disallowed_types)]
+fn main() -> anyhow::Result<()> {
     let app = App::parse();
+
+    let mut builder = tokio::runtime::Builder::new_current_thread();
+    builder.enable_all();
+    builder.build()?.block_on(run(app))
+}
+
+async fn run(app: App) -> anyhow::Result<()> {
     let client_config = app.client_config.load()?;
 
     let log_config = LogConfig {
