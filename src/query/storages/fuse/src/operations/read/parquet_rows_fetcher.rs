@@ -44,6 +44,7 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::stream::StreamExt;
 use itertools::Itertools;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
 use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
@@ -53,6 +54,38 @@ use crate::FuseTable;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
+
+struct AbortOnDropTasks<T> {
+    inner: FuturesUnordered<JoinHandle<T>>,
+}
+
+impl<T> AbortOnDropTasks<T> {
+    fn new() -> Self {
+        Self {
+            inner: FuturesUnordered::new(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn push(&self, task: JoinHandle<T>) {
+        self.inner.push(task);
+    }
+
+    async fn next(&mut self) -> Option<std::result::Result<T, tokio::task::JoinError>> {
+        self.inner.next().await
+    }
+}
+
+impl<T> Drop for AbortOnDropTasks<T> {
+    fn drop(&mut self) {
+        for task in self.inner.iter() {
+            task.abort();
+        }
+    }
+}
 
 pub struct RowsFetchMetadataImpl {
     // Average bytes per row
@@ -196,7 +229,7 @@ impl RowsFetcher for ParquetRowsFetcher {
         //      memory stays bounded even when a mutation plan fans RowFetch out to
         //      `max_threads` lanes.
         let max_concurrency = self.max_threads.max(1);
-        let mut in_flight = FuturesUnordered::new();
+        let mut in_flight = AbortOnDropTasks::new();
         let mut tasks_indices = tasks_indices.into_iter();
         loop {
             // Fill the window up to max_concurrency.
@@ -219,14 +252,7 @@ impl RowsFetcher for ParquetRowsFetcher {
             };
             let (final_index, block) = match result.expect("row-fetch task panicked") {
                 Ok(v) => v,
-                Err(e) => {
-                    // Abort remaining in-flight tasks so they don't continue
-                    // consuming I/O, memory, and semaphore permits after failure.
-                    for handle in in_flight.iter() {
-                        handle.abort();
-                    }
-                    return Err(e);
-                }
+                Err(e) => return Err(e),
             };
             final_blocks.insert(final_index, block);
         }
@@ -386,5 +412,73 @@ impl ParquetRowsFetcher {
 impl From<RowsFetchMetadataImpl> for CacheValue<RowsFetchMetadataImpl> {
     fn from(value: RowsFetchMetadataImpl) -> Self {
         CacheValue::new(value, 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::pending;
+    use std::time::Duration;
+
+    use tokio::sync::oneshot;
+    use tokio::time::timeout;
+
+    use super::*;
+
+    struct DropSignal(Option<oneshot::Sender<()>>);
+
+    impl Drop for DropSignal {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn aborts_running_and_waiting_tasks_on_drop() {
+        let semaphore = Arc::new(Semaphore::new(1));
+        let tasks = AbortOnDropTasks::new();
+
+        let (running_started_tx, running_started_rx) = oneshot::channel();
+        let (running_dropped_tx, running_dropped_rx) = oneshot::channel();
+        let running_semaphore = semaphore.clone();
+        tasks.push(spawn(async move {
+            let _drop_signal = DropSignal(Some(running_dropped_tx));
+            let _permit = running_semaphore.acquire_owned().await.unwrap();
+            running_started_tx.send(()).unwrap();
+            pending::<()>().await;
+        }));
+
+        running_started_rx.await.unwrap();
+
+        let (waiting_started_tx, waiting_started_rx) = oneshot::channel();
+        let (waiting_dropped_tx, waiting_dropped_rx) = oneshot::channel();
+        let waiting_semaphore = semaphore.clone();
+        tasks.push(spawn(async move {
+            let _drop_signal = DropSignal(Some(waiting_dropped_tx));
+            waiting_started_tx.send(()).unwrap();
+            let _permit = waiting_semaphore.acquire_owned().await.unwrap();
+            pending::<()>().await;
+        }));
+
+        waiting_started_rx.await.unwrap();
+        drop(tasks);
+
+        timeout(Duration::from_secs(1), running_dropped_rx)
+            .await
+            .expect("running task should be aborted")
+            .unwrap();
+        timeout(Duration::from_secs(1), waiting_dropped_rx)
+            .await
+            .expect("task waiting for a permit should be aborted")
+            .unwrap();
+
+        let permit = timeout(Duration::from_secs(1), semaphore.acquire())
+            .await
+            .expect("aborted task should release its permit")
+            .unwrap();
+        drop(permit);
+        assert_eq!(semaphore.available_permits(), 1);
     }
 }

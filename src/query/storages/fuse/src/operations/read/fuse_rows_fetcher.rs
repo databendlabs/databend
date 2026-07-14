@@ -51,6 +51,7 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
+    io_semaphore: Arc<Semaphore>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
@@ -72,12 +73,6 @@ pub fn row_fetch_processor(
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
-            // Shared by every RowFetch lane this plan builds (the row-fetch builder
-            // closure below is invoked once per output lane). A single query-wide
-            // semaphore caps the aggregate number of decoded column chunks in
-            // flight at `max_threads`, so a plan that fans RowFetch out to
-            // `max_threads` lanes cannot reach `max_threads * lanes` chunks and OOM.
-            let io_semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
             let block_threshold = BlockThreshold {
                 max_rows: ctx.get_settings().get_max_block_size()? as usize,
                 max_bytes: ctx.get_settings().get_max_block_bytes()? as usize,

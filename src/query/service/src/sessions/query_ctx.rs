@@ -159,6 +159,7 @@ use log::debug;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
@@ -959,6 +960,10 @@ impl QueryContext {
 }
 
 impl QueryContext {
+    pub(crate) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
+        self.shared.get_row_fetch_io_semaphore(max_threads)
+    }
+
     /// Tries to spawn a new asynchronous task, returning a JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     #[track_caller]
@@ -986,9 +991,28 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use databend_common_base::runtime::IoStatsSnapshot;
 
+    use super::QueryContext;
     use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn row_fetch_io_semaphore_is_shared_by_child_contexts()
+    -> databend_common_exception::Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let child_ctx = QueryContext::create_from(&ctx);
+
+        let semaphore = ctx.get_row_fetch_io_semaphore(2);
+        let child_semaphore = child_ctx.get_row_fetch_io_semaphore(8);
+
+        assert!(Arc::ptr_eq(&semaphore, &child_semaphore));
+        assert_eq!(semaphore.available_permits(), 2);
+
+        Ok(())
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn io_stats_merge() -> databend_common_exception::Result<()> {
