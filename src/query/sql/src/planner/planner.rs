@@ -250,44 +250,133 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let plan_cache_context =
-            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?;
+        let enable_distributed_optimization = !force_disable_distributed_optimization
+            && !self.ctx.get_cluster().is_empty()
+            && !settings.get_enforce_local()?;
+        let mut plan_cache_context = self.build_plan_cache_context(
+            name_resolution_ctx.clone(),
+            stmt,
+            enable_distributed_optimization,
+        )?;
+        let formatted_ast = settings
+            .get_enable_query_result_cache()?
+            .then(|| stmt.to_string());
 
+        let mut bound_plan = None;
+        let mut fresh_metadata = None;
+        let mut parameterized_cache_failed = false;
         if let Some(cache_ctx) = &plan_cache_context {
-            if let Some(plan) = self.get_cache(cache_ctx) {
-                info!(
-                    "Logical plan retrieved from cache, elapsed: {:?}",
-                    start.elapsed()
-                );
+            if let Some(plan_item) = self.get_optimized_cache(cache_ctx) {
                 // update for clickhouse handler
                 self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-                return Ok(plan.plan);
+                info!(
+                    "Optimized logical plan retrieved from cache, elapsed: {:?}",
+                    start.elapsed()
+                );
+                return Ok(plan_item.plan);
             }
         }
 
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let binder = Binder::new(
-            self.ctx.clone(),
-            CatalogManager::instance(),
-            name_resolution_ctx,
-            metadata.clone(),
-        )
-        .with_subquery_executor(self.query_executor.clone());
+        if let Some(cache_ctx) = &mut plan_cache_context {
+            self.prepare_parameterized_cache_context(cache_ctx, stmt)?;
+            if cache_ctx.is_parameterized() {
+                if let Some(plan_item) = self.get_parameterized_cache(cache_ctx) {
+                    // update for clickhouse handler
+                    self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+                    match self.instantiate_cached_plan(
+                        cache_ctx,
+                        &plan_item.plan,
+                        formatted_ast.clone(),
+                    ) {
+                        Ok(plan) => {
+                            bound_plan = Some(plan);
+                            info!(
+                                "Parameterized bound plan retrieved from cache, elapsed: {:?}",
+                                start.elapsed()
+                            );
+                        }
+                        Err(error) => {
+                            warn!("Ignoring invalid parameterized planner-cache entry: {error}");
+                            self.evict_parameterized_cache(cache_ctx);
+                            parameterized_cache_failed = true;
+                        }
+                    }
+                }
+            }
+        }
 
-        // must attach before bind, because ParquetRSTable::create used it.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        let plan = binder.bind(stmt).await?;
-        // attach again to avoid the query kind is overwritten by the subquery
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        let plan = match bound_plan {
+            Some(plan) => plan,
+            None => {
+                let metadata = Arc::new(RwLock::new(Metadata::default()));
+                fresh_metadata = Some(metadata.clone());
+                let binder = Binder::new(
+                    self.ctx.clone(),
+                    CatalogManager::instance(),
+                    name_resolution_ctx.clone(),
+                    metadata,
+                )
+                .with_subquery_executor(self.query_executor.clone());
+
+                // must attach before bind, because ParquetRSTable::create used it.
+                self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+                let bind_parameterized_template = !parameterized_cache_failed
+                    && plan_cache_context
+                        .as_ref()
+                        .is_some_and(|cache_ctx| cache_ctx.is_parameterized());
+                let bind_stmt = plan_cache_context
+                    .as_ref()
+                    .filter(|_| bind_parameterized_template)
+                    .map_or(stmt, |cache_ctx| cache_ctx.bind_statement(stmt));
+                let plan = binder.bind(bind_stmt).await?;
+                // attach again to avoid the query kind is overwritten by the subquery
+                self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+
+                if !bind_parameterized_template {
+                    plan
+                } else {
+                    let cache_ctx = plan_cache_context
+                        .as_ref()
+                        .expect("parameterized template requires a cache context");
+                    match self.instantiate_cached_plan(cache_ctx, &plan, formatted_ast.clone()) {
+                        Ok(instantiated) => {
+                            self.set_parameterized_cache(cache_ctx, plan);
+                            instantiated
+                        }
+                        Err(error) => {
+                            warn!(
+                                "Falling back from unsupported parameterized plan template: {error}"
+                            );
+                            let metadata = Arc::new(RwLock::new(Metadata::default()));
+                            fresh_metadata = Some(metadata.clone());
+                            let binder = Binder::new(
+                                self.ctx.clone(),
+                                CatalogManager::instance(),
+                                name_resolution_ctx,
+                                metadata,
+                            )
+                            .with_subquery_executor(self.query_executor.clone());
+                            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+                            let plan = binder.bind(stmt).await?;
+                            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+                            plan
+                        }
+                    }
+                }
+            }
+        };
+
+        let metadata = match &plan {
+            Plan::Query { metadata, .. } => metadata.clone(),
+            _ => fresh_metadata.ok_or_else(|| {
+                ErrorCode::Internal("freshly bound plan is missing planner metadata".to_string())
+            })?,
+        };
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
         let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
             .with_settings(&settings)?
-            .set_enable_distributed_optimization(
-                !force_disable_distributed_optimization
-                    && !self.ctx.get_cluster().is_empty()
-                    && !settings.get_enforce_local()?,
-            )
+            .set_enable_distributed_optimization(enable_distributed_optimization)
             .set_sample_executor(self.query_executor.clone())
             .clone();
 
@@ -309,9 +398,10 @@ impl Planner {
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
-        if let Some(cache_ctx) = plan_cache_context {
-            self.set_cache(cache_ctx, optimized_plan.clone());
-        }
+        let optimized_plan = match plan_cache_context {
+            Some(cache_ctx) => self.set_cache(cache_ctx, optimized_plan),
+            None => optimized_plan,
+        };
 
         info!(
             "Logical plan construction completed, elapsed: {:?}",

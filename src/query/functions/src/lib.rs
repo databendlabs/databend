@@ -28,6 +28,8 @@ mod cast_rules;
 pub mod scalars;
 pub mod srfs;
 
+pub const PLAN_PARAMETER_FUNCTION: &str = "__plan_parameter";
+
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);
     BUILTIN_FUNCTIONS.contains(name.into_inner())

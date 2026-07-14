@@ -87,6 +87,12 @@ impl Operator for EvalScalar {
         Box::new(self.items.iter().map(|expr| &expr.scalar))
     }
 
+    fn visit_scalar_expr_mut(&mut self, visitor: &mut dyn FnMut(&mut ScalarExpr)) {
+        for item in &mut self.items {
+            visitor(&mut item.scalar);
+        }
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 

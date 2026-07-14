@@ -37,6 +37,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::PLAN_PARAMETER_FUNCTION;
 use simsearch::SimSearch;
 use smallvec::SmallVec;
 use unicase::Ascii;
@@ -616,7 +617,9 @@ where A: TypeCheckAdapter
             _ => args,
         };
 
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        if !func_name.eq_ignore_ascii_case(PLAN_PARAMETER_FUNCTION)
+            && !expr.is_deterministic(&BUILTIN_FUNCTIONS)
+        {
             self.adapter.set_result_cache_uncacheable();
         }
 
