@@ -376,10 +376,21 @@ impl<'a> SegmentCompactor<'a> {
                 max_threads,
             )
             .await?;
-            for stats in segment_stats {
+            let mut top_n = segment_stats.first().and_then(|stats| stats.top_n.clone());
+            for stats in &segment_stats {
                 block_hlls.append(&mut stats.block_hlls.clone());
             }
-            let stats_data = SegmentStatistics::new(block_hlls).to_bytes()?;
+            for stats in segment_stats.iter().skip(1) {
+                let compatible = match (&mut top_n, stats.top_n.clone()) {
+                    (Some(top_n), Some(other)) => top_n.merge_if_compatible(other)?,
+                    _ => false,
+                };
+                if !compatible {
+                    top_n = None;
+                    break;
+                }
+            }
+            let stats_data = SegmentStatistics::new(block_hlls, top_n).to_bytes()?;
             let segment_stats_location =
                 TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                     location.as_str(),

@@ -170,6 +170,19 @@ FROM (SELECT snapshot FROM fuse_dump_snapshots('db_09_0053', 't_append') LIMIT 2
 ----
 1
 
+# Full ANALYZE can merge the TopN cached in each segment statistics file.
+statement ok
+ANALYZE TABLE t_append
+
+# Repeating ANALYZE exercises the segment-statistics reuse path again.
+statement ok
+ANALYZE TABLE t_append
+
+query T
+EXPLAIN SELECT * FROM t_append WHERE a = 1
+----
+table: default.db_09_0053.t_append<slt:ignore>estimated rows: 100.00
+
 # Refreshing append TopN should not carry stale Count-Min Sketch stats.
 statement ok
 CREATE TABLE t_append_cms_stale(a int) approx_distinct_columns = '' analyze_frequency_columns = 'a' analyze_top_n_size = 1 analyze_count_min_sketch_error_rate = '0.001'

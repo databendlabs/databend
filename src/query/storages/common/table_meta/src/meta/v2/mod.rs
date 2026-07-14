@@ -27,6 +27,7 @@ pub use segment::SegmentInfo;
 pub use segment::VirtualBlockMeta;
 pub use segment::VirtualColumnMeta;
 pub use segment_statistics::SegmentStatistics;
+pub use segment_statistics::SegmentTopN;
 pub use snapshot::TableSnapshot;
 pub use statistics::AdditionalStatsMeta;
 pub use statistics::ClusterStatistics;
