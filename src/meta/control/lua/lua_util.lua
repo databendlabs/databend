@@ -25,6 +25,27 @@ local function normalize_value(value)
     return value
 end
 
+local string_escapes = {
+    [8] = "\\b",
+    [9] = "\\t",
+    [10] = "\\n",
+    [12] = "\\f",
+    [13] = "\\r",
+    [34] = '\\"',
+    [92] = "\\\\"
+}
+
+local function quote_string(value)
+    local result = {}
+    for i = 1, #value do
+        local byte = string.byte(value, i)
+        result[i] = string_escapes[byte]
+            or (byte >= 32 and byte <= 126 and string.char(byte))
+            or string.format("\\x%02X", byte)
+    end
+    return '"' .. table.concat(result) .. '"'
+end
+
 -- Function to check if a table represents a bytes vector and convert it to string
 local function bytes_vector_to_string(value)
     -- Check if table represents a bytes vector (integer indices starting from 1, u8 values)
@@ -53,7 +74,7 @@ local function bytes_vector_to_string(value)
         if actual_length == expected_length then
             -- Check size limit to prevent memory exhaustion (max 1MB)
             if max_index > 1048576 then
-                return '"<bytes vector too large: ' .. max_index .. ' bytes>"'
+                return quote_string("<bytes vector too large: " .. max_index .. " bytes>")
             end
 
             -- Convert bytes vector to string
@@ -61,7 +82,7 @@ local function bytes_vector_to_string(value)
             for i = 1, max_index do
                 chars[i] = string.char(value[i])
             end
-            return '"' .. table.concat(chars) .. '"'
+            return quote_string(table.concat(chars))
         end
     end
 
@@ -87,8 +108,7 @@ local function to_string(value)
     end
 
     if type(value) == "string" then
-        -- Escape quotes in the string
-        return '"' .. string.gsub(value, '"', '\\"') .. '"'
+        return quote_string(value)
     end
 
     if type(value) == "table" then
@@ -141,7 +161,7 @@ local function to_string(value)
 
                 local key_str
                 if type(k) == "string" then
-                    key_str = '"' .. string.gsub(k, '"', '\\"') .. '"'
+                    key_str = quote_string(k)
                 else
                     key_str = "[" .. tostring(k) .. "]"
                 end
@@ -158,5 +178,56 @@ local function to_string(value)
     return "<" .. type(value) .. ">"
 end
 
--- Register to_string function in metactl namespace
+local function eq_seq(key, seq)
+    return {key = key, op = "eq_seq", value = seq}
+end
+
+local function ge_seq(key, seq)
+    return {key = key, op = "ge_seq", value = seq}
+end
+
+local function eq_value(key, value)
+    return {key = key, op = "eq_value", value = value}
+end
+
+local function put_op(key, value, ttl)
+    local op = {op = "put", key = key, value = value}
+    if ttl ~= nil then
+        op.ttl = ttl
+    end
+    return op
+end
+
+local function get_op(key)
+    return {op = "get", key = key}
+end
+
+local function delete_op(key)
+    return {op = "delete", key = key}
+end
+
+local function new_txn(conditions, then_ops, else_ops)
+    if conditions == nil then
+        conditions = {}
+    end
+    if then_ops == nil then
+        then_ops = {}
+    end
+    if else_ops == nil then
+        else_ops = {}
+    end
+    return {
+        conditions = conditions,
+        ["then"] = then_ops,
+        ["else"] = else_ops
+    }
+end
+
 metactl.to_string = to_string
+metactl.eq_seq = eq_seq
+metactl.ge_seq = ge_seq
+metactl.eq_value = eq_value
+metactl.put_op = put_op
+metactl.get_op = get_op
+metactl.delete_op = delete_op
+metactl.new_txn = new_txn
