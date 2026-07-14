@@ -19,11 +19,10 @@ use databend_common_exception::Result;
 use databend_common_expression::Column as ExprColumn;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_formats::field_encoder::FieldEncoderBytes;
 use databend_common_io::prelude::OutputFormatSettings;
 use futures_util::StreamExt;
@@ -73,7 +72,7 @@ pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     session: Arc<Session>,
 }
 
-fn write_field<W: AsyncWrite + Unpin>(
+fn write_encoded_field<W: AsyncWrite + Unpin>(
     row_writer: &mut RowWriter<W>,
     column: &ExprColumn,
     encoder: &FieldEncoderBytes,
@@ -83,6 +82,63 @@ fn write_field<W: AsyncWrite + Unpin>(
     buf.clear();
     encoder.write_field(column, row_index, buf, false)?;
     row_writer.write_col(&buf[..])?;
+    Ok(())
+}
+
+fn write_mysql_field<W: AsyncWrite + Unpin>(
+    row_writer: &mut RowWriter<W>,
+    column: &ExprColumn,
+    encoder: &FieldEncoderBytes,
+    buf: &mut Vec<u8>,
+    row_index: usize,
+) -> Result<()> {
+    match column {
+        ExprColumn::Null { .. } => row_writer.write_col(None::<u8>)?,
+        ExprColumn::Nullable(column) => {
+            if column.validity.get_bit(row_index) {
+                write_mysql_field(row_writer, &column.column, encoder, buf, row_index)?;
+            } else {
+                row_writer.write_col(None::<u8>)?;
+            }
+        }
+        ExprColumn::Boolean(column) => {
+            row_writer.write_col(column.get_bit(row_index) as u8)?;
+        }
+        ExprColumn::Number(number) => match number {
+            NumberColumn::UInt8(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::UInt16(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::UInt32(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::UInt64(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::Int8(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::Int16(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::Int32(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            NumberColumn::Int64(column) => {
+                row_writer.write_col(unsafe { *column.get_unchecked(row_index) })?
+            }
+            _ => write_encoded_field(row_writer, column, encoder, buf, row_index)?,
+        },
+        ExprColumn::String(column) => {
+            row_writer.write_col(unsafe { column.index_unchecked(row_index).as_bytes() })?;
+        }
+        ExprColumn::Bitmap(_) => {
+            row_writer.write_col("<bitmap binary>".as_bytes())?;
+        }
+        _ => write_encoded_field(row_writer, column, encoder, buf, row_index)?,
+    }
     Ok(())
 }
 
@@ -314,61 +370,13 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
                     for row_index in 0..num_rows {
                         for column in columns.iter() {
-                            let value = unsafe { column.index_unchecked(row_index) };
-                            match value {
-                                ScalarRef::Null => {
-                                    row_writer.write_col(None::<u8>)?;
-                                }
-                                ScalarRef::Boolean(v) => {
-                                    row_writer.write_col(v as u8)?;
-                                }
-                                ScalarRef::Number(number) => match number {
-                                    NumberScalar::UInt8(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::UInt16(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::UInt32(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::UInt64(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::Int8(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::Int16(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::Int32(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    NumberScalar::Int64(v) => {
-                                        row_writer.write_col(v)?;
-                                    }
-                                    _ => {
-                                        write_field(
-                                            &mut row_writer,
-                                            column,
-                                            &encoder,
-                                            &mut buf,
-                                            row_index,
-                                        )?;
-                                    }
-                                },
-                                ScalarRef::Bitmap(_) => {
-                                    let bitmap_result = "<bitmap binary>".as_bytes();
-                                    row_writer.write_col(bitmap_result)?;
-                                }
-                                _ => write_field(
-                                    &mut row_writer,
-                                    column,
-                                    &encoder,
-                                    &mut buf,
-                                    row_index,
-                                )?,
-                            }
+                            write_mysql_field(
+                                &mut row_writer,
+                                column,
+                                &encoder,
+                                &mut buf,
+                                row_index,
+                            )?;
                         }
                         row_writer.end_row().await?;
                     }
