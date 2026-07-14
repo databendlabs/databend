@@ -496,13 +496,17 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let res = calc_domain.domain_eval(self.func_ctx, &domains);
                     match (res, is_monotonicity) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
-                            let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();
+                            let domain = domains.first().unwrap();
+                            if args[0].data_type().is_nullable_or_null() {
+                                return None;
+                            }
 
-                            if (min.is_null() || max.is_null())
-                                && !args[0].data_type().is_nullable_or_null()
+                            let (min, max) = domain.to_minmax();
+                            if min.is_null() || max.is_null() {
+                                return None;
+                            }
+
                             {
-                                None
-                            } else {
                                 let mut ctx = EvalContext {
                                     generics,
                                     num_rows: 2,
@@ -550,8 +554,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     } else {
                                         result.as_column().unwrap().domain()
                                     };
-                                    let (min, max) = d.to_minmax();
-                                    Some(Domain::from_min_max(min, max, return_type))
+                                    Some(d)
                                 }
                             }
                         }
