@@ -34,15 +34,17 @@
 
 mod block;
 mod bulk;
+mod streaming_sink;
 
 use bytes::Bytes;
 use parquet::file::metadata::ParquetMetaData;
 
 pub use self::block::ParquetFileWriter;
 pub use self::bulk::BulkParquetFileWriter;
+pub use self::bulk::BulkParquetLeafWriter;
 pub use self::bulk::ChunkedWriteBuffer;
 pub use self::bulk::DEFAULT_CHUNK_SIZE;
-pub use self::bulk::LeafColumnWriter;
+pub use self::streaming_sink::StreamingUploadSink;
 
 /// Result of finishing a [`BulkParquetFileWriter`] / [`ParquetFileWriter`]: the serialized
 /// single-row-group Parquet bytes plus the file metadata.
@@ -326,7 +328,7 @@ pub(crate) mod test_util {
                 for fragment in &leaves_per_fragment {
                     leaf.write(&fragment[leaf_idx]).unwrap();
                 }
-                leaf.close().unwrap();
+                writer = leaf.finish().unwrap();
             }
         }
         let (metadata, sink) = writer.finish().unwrap();
@@ -349,6 +351,67 @@ mod tests {
     use super::test_util::sample_block;
     use super::test_util::sample_schema;
     use super::*;
+
+    // Low-level manual page flushing must define boundaries independently of writer row limits.
+    #[test]
+    fn test_bulk_manual_page_flush() {
+        use arrow_array::ArrayRef;
+        use databend_common_expression::FromData;
+        use databend_common_expression::TableDataType;
+        use databend_common_expression::TableField;
+        use databend_common_expression::TableSchema;
+        use databend_common_expression::types::Int64Type;
+        use databend_common_expression::types::NumberDataType;
+        use parquet::arrow::arrow_writer::compute_leaves;
+
+        let schema = TableSchema::new(vec![TableField::new(
+            "i",
+            TableDataType::Number(NumberDataType::Int64),
+        )]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        // Default properties have no one-row page limit: the explicit flush calls below must be what
+        // creates the three pages.
+        let writer = BulkParquetFileWriter::new(arrow_schema.clone(), props(&schema)).unwrap();
+        let mut leaf_writer = writer.next_leaf().unwrap();
+        for value in [10i64, 20, 30] {
+            let column = Int64Type::from_data(vec![value]);
+            let array = ArrayRef::from(&column);
+            let leaves = compute_leaves(&arrow_schema.fields()[0], &array).unwrap();
+            assert_eq!(leaves.len(), 1);
+            leaf_writer.write(&leaves[0]).unwrap();
+            leaf_writer.flush_page().unwrap();
+        }
+        let writer = leaf_writer.finish().unwrap();
+        let (metadata, sink) = writer.finish().unwrap();
+
+        let pages = metadata.offset_index().unwrap()[0][0].page_locations();
+        assert_eq!(pages.len(), 3);
+        assert_eq!(pages[0].first_row_index, 0);
+        assert_eq!(pages[1].first_row_index, 1);
+        assert_eq!(pages[2].first_row_index, 2);
+
+        let bytes = sink.into_chunks().concat();
+        let (blocks, _) = read_back(bytes);
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_eq!(
+            got.get_by_offset(0).to_column(),
+            Int64Type::from_data(vec![10i64, 20, 30])
+        );
+    }
+
+    // Finishing before all schema leaves have been written must fail rather than emit a malformed
+    // row group.
+    #[test]
+    fn test_bulk_finish_requires_all_leaves() {
+        let schema = sample_schema();
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let writer = BulkParquetFileWriter::new(arrow_schema, props(&schema)).unwrap();
+        let error = match writer.finish() {
+            Ok(_) => panic!("finishing an incomplete parquet file must fail"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("cannot finish parquet file"));
+    }
 
     // Both writers must produce semantically identical files: same decoded data when read back.
     #[test]

@@ -35,7 +35,6 @@ use parquet::file::properties::WriterPropertiesPtr;
 
 use crate::io::granule_index::GranuleIndexBuildOutput;
 use crate::io::granule_index::GranuleIndexBuilder;
-use crate::io::granule_index::GranuleIndexPayload;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::GranuleIndexWriter;
 use crate::operations::column_parquet_metas;
@@ -44,7 +43,6 @@ pub(super) struct FuseBlockOutput {
     pub(super) data: Buffer,
     pub(super) col_metas: HashMap<ColumnId, ColumnMeta>,
     pub(super) granule_index_state: Option<GranuleIndexState>,
-    pub(super) granule_index_payloads: Vec<GranuleIndexPayload>,
 }
 
 pub(super) struct FuseBlockWriter {
@@ -179,7 +177,6 @@ impl FuseBlockWriter {
 
     pub(super) fn finish(
         self,
-        block_location: &str,
         mins_location: Location,
         offsets_location: Location,
     ) -> Result<FuseBlockOutput> {
@@ -193,14 +190,14 @@ impl FuseBlockWriter {
         let mut granule_output = GranuleIndexBuildOutput::default();
 
         for b in self.granule_index_builders {
-            granule_output.merge(b.finalize(block_location)?);
+            granule_output.merge(b.finalize()?);
         }
 
         let serialized = self.inner.finish()?;
         let col_metas = column_parquet_metas(&serialized.metadata, &schema)?;
         let data = Buffer::from(serialized.payload);
 
-        let (granule_index_state, granule_index_payloads) = match serialized.page_layout {
+        let granule_index_state = match serialized.page_layout {
             Some(page_layout) => {
                 let writer = GranuleIndexWriter::new(
                     cluster_key_id,
@@ -216,17 +213,17 @@ impl FuseBlockWriter {
                     granule_output.sidecar_fields,
                     granule_output.sidecar_columns,
                 )?;
-                (Some(state), granule_output.payloads)
+                Some(state)
             }
-            // Single-granule block: no sidecar to attach offsets to, so payloads are dropped too.
-            None => (None, Vec::new()),
+            // No page layout means granule indexing was off, so there are no builders and nothing
+            // was streamed — no sidecar to build.
+            None => None,
         };
 
         Ok(FuseBlockOutput {
             data,
             col_metas,
             granule_index_state,
-            granule_index_payloads,
         })
     }
 

@@ -181,21 +181,19 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 /// (the physical columns: a nested top-level field expands to several leaves), mirroring the
 /// read side's `RowGroupReader::get_column_*`.
 ///
-/// Drive it leaf by leaf: [`Self::next_leaf`] yields the next leaf (in parquet leaf order), feed
-/// it its `ArrowLeafColumn`s via [`LeafColumnWriter::write`], then [`LeafColumnWriter::close`] it
-/// before the next; finally [`Self::finish`] for the bytes + metadata. Each `write` encodes
-/// straight into the open leaf's page writer, flushing pages to the sink as they fill — no
-/// per-column chunk buffer (unlike `ArrowWriter`). Only one leaf may be open at a time; the
-/// borrow checker enforces it (the leaf borrows `&mut self`). Leaf expansion (`compute_leaves`)
-/// is the caller's job, so the caller fully controls how/where each leaf's arrays come from —
-/// this is the primitive the vertical-merge path drives directly, leaf-for-leaf against the
-/// reader.
+/// Drive it leaf by leaf: [`Self::next_leaf`] consumes the file writer and returns an owning
+/// [`BulkParquetLeafWriter`]. Feed it `ArrowLeafColumn`s via
+/// [`BulkParquetLeafWriter::write`], then finish the leaf to recover the file writer before opening
+/// the next; finally [`Self::finish`] writes the footer. Each write encodes straight into the open
+/// leaf's page writer, flushing pages to the sink as they fill — no per-column chunk buffer
+/// (unlike `ArrowWriter`). The consuming API encodes the "one open leaf at a time" rule in the
+/// type state and lets an active leaf live across caller method boundaries.
 ///
-/// SAFETY invariant: `row_group` borrows `*file_writer`. `file_writer` is boxed so its address
-/// is stable across moves of this struct, and is declared after `row_group` so it is dropped
-/// last (Rust drops fields top-to-bottom). While `row_group` is `Some`, nothing else may touch
-/// `*file_writer`; [`Self::finish`] takes and closes `row_group` before reclaiming the file
-/// writer.
+/// SAFETY invariant: `row_group` borrows `*file_writer`. Both are boxed so their addresses remain
+/// stable when the owning state moves. While `row_group` is present, nothing else may touch
+/// `*file_writer`; [`Self::finish`] closes it before reclaiming the file writer. An active
+/// [`BulkParquetLeafWriter`] additionally borrows the boxed row group and is always dropped or
+/// finished before its parent, preserving `leaf -> row_group -> file_writer` destruction order.
 ///
 /// Generic over the sink `W`: callers pass any `io::Write` (e.g. an in-memory buffer, or a
 /// streaming IO writer). [`Self::new`] defaults to the chunked in-memory buffer;
@@ -204,7 +202,7 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 pub struct BulkParquetFileWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
     leaf_kinds: Vec<LeafEncoderKind>,
     next_leaf: usize,
-    row_group: Option<SerializedRowGroupWriter<'static, W>>,
+    row_group: Option<Box<SerializedRowGroupWriter<'static, W>>>,
     file_writer: Box<SerializedFileWriter<W>>,
 }
 
@@ -252,7 +250,7 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         Ok(Self {
             leaf_kinds,
             next_leaf: 0,
-            row_group: Some(row_group),
+            row_group: Some(Box::new(row_group)),
             file_writer,
         })
     }
@@ -262,13 +260,10 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         self.leaf_kinds.len()
     }
 
-    /// Open the next leaf column, or `None` once all declared leaves have been written. The
-    /// returned writer borrows `&mut self`, so it must be closed/dropped before calling again —
-    /// which is exactly the parquet "one open leaf at a time" rule, enforced at compile time.
-    ///
-    /// Errors if called more than [`Self::num_leaves`] times — the caller drives a known number
-    /// of leaves, so overrunning is a programming error rather than a normal end-of-iteration.
-    pub fn next_leaf(&mut self) -> Result<LeafColumnWriter<'_>> {
+    /// Consume this file state and open the next leaf column. Finishing the returned leaf hands the
+    /// file state back, making it impossible to open another leaf or finish the file while a leaf is
+    /// active.
+    pub fn next_leaf(mut self) -> Result<BulkParquetLeafWriter<W>> {
         if self.next_leaf >= self.leaf_kinds.len() {
             return Err(ErrorCode::Internal(format!(
                 "next_leaf called {} times but the schema declares only {} leaf columns",
@@ -283,10 +278,10 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
             .as_mut()
             .expect("row group stays open until finish");
 
-        let writer = row_group
+        let leaf = row_group
             .next_column_with_factory(move |descr, props, page_writer, on_close| {
                 Ok(match kind {
-                    LeafEncoderKind::ByteArray => LeafColumnWriter::ByteArray {
+                    LeafEncoderKind::ByteArray => RawLeafColumnWriter::ByteArray {
                         writer: GenericColumnWriter::<ByteArrayEncoder>::new(
                             descr,
                             props,
@@ -294,7 +289,7 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
                         ),
                         on_close,
                     },
-                    LeafEncoderKind::Column => LeafColumnWriter::Column {
+                    LeafEncoderKind::Column => RawLeafColumnWriter::Column {
                         writer: get_column_writer(descr, props, page_writer),
                         on_close,
                     },
@@ -306,14 +301,32 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
                 )
             })?;
 
+        // SAFETY: `leaf` borrows the boxed row group (and, through its page writer, the boxed file
+        // writer). Both boxes move with `self` without moving their allocations. The owning leaf
+        // state declares `leaf` before `parent`, so the borrow is destroyed first; its public API
+        // cannot expose either owner while the leaf is alive.
+        let leaf = unsafe {
+            std::mem::transmute::<RawLeafColumnWriter<'_>, RawLeafColumnWriter<'static>>(leaf)
+        };
         self.next_leaf += 1;
-        Ok(writer)
+        Ok(BulkParquetLeafWriter {
+            leaf: Some(leaf),
+            parent: Some(self),
+        })
     }
 
     /// Close the row group, write the footer, and return the parquet metadata plus the sink moved
     /// back out. The sink now holds the complete serialized parquet file; the caller reads the
     /// bytes from it (e.g. [`ChunkedWriteBuffer::into_chunks`]).
     pub fn finish(mut self) -> Result<(ParquetMetaData, W)> {
+        if self.next_leaf != self.leaf_kinds.len() {
+            return Err(ErrorCode::Internal(format!(
+                "cannot finish parquet file: wrote {} of {} leaf columns",
+                self.next_leaf,
+                self.leaf_kinds.len()
+            )));
+        }
+
         // Close the row group first: this ends its borrow of `*file_writer` (and flushes the
         // row group metadata into it), making the file writer safe to access again.
         if let Some(row_group) = self.row_group.take() {
@@ -326,11 +339,9 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
     }
 }
 
-/// A single open parquet leaf column. [`Self::write`] encodes an `ArrowLeafColumn` directly
-/// into the leaf's page writer (pages flushed to the sink as they fill, no chunk buffer);
-/// [`Self::close`] finalizes the column chunk. Picks the specialized [`ByteArrayEncoder`] or
-/// the generic column encoder per the schema's leaf classification.
-pub enum LeafColumnWriter<'a> {
+/// Internal borrowed leaf state. It is wrapped by [`BulkParquetLeafWriter`] so callers interact
+/// with an owning typestate rather than a self-referential borrow.
+enum RawLeafColumnWriter<'a> {
     ByteArray {
         writer: GenericColumnWriter<'a, ByteArrayEncoder>,
         on_close: OnCloseColumnChunk<'a>,
@@ -341,28 +352,66 @@ pub enum LeafColumnWriter<'a> {
     },
 }
 
-impl LeafColumnWriter<'_> {
-    /// Encode one `ArrowLeafColumn` fragment into this leaf. Call repeatedly to stream multiple
-    /// fragments (e.g. one per source block) into the same column.
-    pub fn write(&mut self, leaf: &ArrowLeafColumn) -> Result<()> {
+impl RawLeafColumnWriter<'_> {
+    fn write(&mut self, leaf: &ArrowLeafColumn) -> Result<()> {
         match self {
-            LeafColumnWriter::ByteArray { writer, .. } => {
+            RawLeafColumnWriter::ByteArray { writer, .. } => {
                 write_byte_array_column(writer, leaf)?;
             }
-            LeafColumnWriter::Column { writer, .. } => {
+            RawLeafColumnWriter::Column { writer, .. } => {
                 write_leaf_column(writer, leaf)?;
             }
         }
         Ok(())
     }
 
-    /// Close this leaf, flushing its column chunk into the row group.
-    pub fn close(self) -> Result<()> {
+    fn flush_page(&mut self) -> Result<()> {
         match self {
-            LeafColumnWriter::ByteArray { writer, on_close } => on_close(writer.close()?)?,
-            LeafColumnWriter::Column { writer, on_close } => on_close(writer.close()?)?,
+            RawLeafColumnWriter::ByteArray { writer, .. } => writer.flush_data_page()?,
+            RawLeafColumnWriter::Column { writer, .. } => writer.flush_data_page()?,
         }
         Ok(())
+    }
+
+    fn finish(self) -> Result<()> {
+        match self {
+            RawLeafColumnWriter::ByteArray { writer, on_close } => on_close(writer.close()?)?,
+            RawLeafColumnWriter::Column { writer, on_close } => on_close(writer.close()?)?,
+        }
+        Ok(())
+    }
+}
+
+/// Owning active-leaf state returned by [`BulkParquetFileWriter::next_leaf`]. Finish it to recover
+/// the parent file writer. This allows an incremental producer to retain the active leaf and flush
+/// explicit page boundaries across calls without exposing self-referential lifetimes.
+pub struct BulkParquetLeafWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
+    // Drop order is significant: the active leaf borrows allocations owned by `parent`.
+    leaf: Option<RawLeafColumnWriter<'static>>,
+    parent: Option<BulkParquetFileWriter<W>>,
+}
+
+// SAFETY: `RawLeafColumnWriter`'s erased close callback only mutates row-group metadata owned by the
+// boxed parent. The leaf has exclusive access, both borrowed allocations are stable across moves,
+// and field/drop order destroys the leaf before the parent. All other components are `Send` when W
+// is `Send`.
+unsafe impl<W: io::Write + Send + Default + 'static> Send for BulkParquetLeafWriter<W> {}
+
+impl<W: io::Write + Send + Default + 'static> BulkParquetLeafWriter<W> {
+    /// Encode one `ArrowLeafColumn` fragment into this leaf.
+    pub fn write(&mut self, leaf: &ArrowLeafColumn) -> Result<()> {
+        self.leaf.as_mut().expect("active leaf").write(leaf)
+    }
+
+    /// Force the values buffered since the previous boundary into one data page. No-op when empty.
+    pub fn flush_page(&mut self) -> Result<()> {
+        self.leaf.as_mut().expect("active leaf").flush_page()
+    }
+
+    /// Close this column chunk and return the parent file state.
+    pub fn finish(mut self) -> Result<BulkParquetFileWriter<W>> {
+        self.leaf.take().expect("active leaf").finish()?;
+        Ok(self.parent.take().expect("parent writer"))
     }
 }
 

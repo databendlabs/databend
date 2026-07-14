@@ -9,10 +9,13 @@ edition = { workspace = true }
 [dependencies]
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
+async-channel = { workspace = true }
 bytes = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 tokio = { workspace = true }

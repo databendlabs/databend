@@ -120,6 +120,7 @@ impl FuseTable {
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
+            operator: self.get_operator(),
             meta_locations: self.meta_location_generator().clone(),
             source_schema: new_schema,
             write_settings: self.get_write_settings(),

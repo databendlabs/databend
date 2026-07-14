@@ -6602,10 +6602,13 @@ version = "0.1.0"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-schema 58.1.0",
+ "async-channel",
  "bytes",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "opendal 0.54.1",
  "parking_lot 0.12.3",
  "parquet 58.1.0",
  "tokio",

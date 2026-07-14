@@ -65,7 +65,6 @@ use crate::FuseStorageFormat;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
-use crate::io::granule_index::GranuleIndexPayload;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::InvertedIndexBuilder;
@@ -146,9 +145,6 @@ pub struct BlockSerialization {
     pub spatial_index_state: Option<SpatialIndexState>,
     pub granule_index_state: Option<GranuleIndexState>,
     pub column_hlls: Option<BlockHLLState>,
-    /// Granule-level index payload files (one per indexed column per declared index). Written down
-    /// alongside the block; their per-granule offsets live in the `_pidx` sidecar.
-    pub granule_index_payloads: Vec<GranuleIndexPayload>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -159,6 +155,7 @@ impl BlockMetaInfo for BlockSerialization {}
 #[derive(Clone)]
 pub struct BlockBuilder {
     pub ctx: Arc<dyn TableContext>,
+    pub operator: Operator,
     pub meta_locations: TableMetaLocationGenerator,
     pub source_schema: TableSchemaRef,
     pub write_settings: WriteSettings,
@@ -293,7 +290,14 @@ impl BlockBuilder {
         let granule_index_builders = if granule_rows.is_some() {
             self.granule_index_specs
                 .iter()
-                .map(|spec| spec.new_builder(func_ctx.clone()))
+                .map(|spec| {
+                    spec.new_builder(
+                        func_ctx.clone(),
+                        &self.source_schema,
+                        &block_location.0,
+                        self.operator.clone(),
+                    )
+                })
                 .collect::<Result<Vec<_>>>()?
         } else {
             Vec::new()
@@ -325,8 +329,7 @@ impl BlockBuilder {
             data: buffer,
             col_metas,
             granule_index_state,
-            granule_index_payloads,
-        } = block_writer.finish(&block_location.0, mins_location, offsets_location)?;
+        } = block_writer.finish(mins_location, offsets_location)?;
 
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
@@ -385,7 +388,6 @@ impl BlockBuilder {
             spatial_index_state,
             granule_index_state,
             column_hlls,
-            granule_index_payloads,
         };
         Ok(serialized)
     }
@@ -424,21 +426,10 @@ impl BlockWriter {
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
         Self::write_down_granule_index_state(dal, serialized.granule_index_state).await?;
-        Self::write_down_granule_index_payloads(dal, serialized.granule_index_payloads).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
         Ok(extended_block_meta)
-    }
-
-    async fn write_down_granule_index_payloads(
-        dal: &Operator,
-        payloads: Vec<GranuleIndexPayload>,
-    ) -> Result<()> {
-        for payload in payloads {
-            write_data(payload.data, dal, &payload.location).await?;
-        }
-        Ok(())
     }
 
     pub async fn write_down_data_block(

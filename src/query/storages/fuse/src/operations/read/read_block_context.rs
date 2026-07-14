@@ -125,16 +125,15 @@ impl ReadBlockContext {
             return Ok(None);
         };
 
-        // Leaf column ids this query projects; only those need per-granule offsets loaded.
-        let column_ids: Vec<u32> = fuse_part.columns_meta.keys().copied().collect();
-
+        // The part carries metadata only for projected leaf columns; every one must have a valid
+        // offset column or the narrowed read falls back to a full-block read.
         let index = match crate::io::OffsetsIndex::load(
             self.block_read_ctx.operator(),
             &self.read_settings,
             &granule_index.offsets,
             granule_index.granule_rows as usize,
             fuse_part.nums_rows,
-            &column_ids,
+            &fuse_part.columns_meta,
         )
         .await
         {

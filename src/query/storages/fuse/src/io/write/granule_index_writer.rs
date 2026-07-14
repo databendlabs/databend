@@ -506,27 +506,56 @@ pub struct OffsetsIndex {
 
 impl OffsetsIndex {
     /// Load the offsets for `column_ids` from the offsets sidecar (partial reads over the byte
-    /// ranges recorded in `layout`; no footer parse). `block_rows`/`granule_rows` derive the
-    /// granule count.
+    /// ranges recorded in `layout`; no footer parse). Every requested projected leaf must be
+    /// present and contain exactly one valid, monotonically increasing offset per granule. Missing
+    /// or malformed columns return an error so the caller can fall back to a full-block read.
+    /// `block_rows`/`granule_rows` derive the granule count.
     pub async fn load(
         dal: &Operator,
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
         granule_rows: usize,
         block_rows: usize,
-        column_ids: &[ColumnId],
+        col_metas: &HashMap<ColumnId, ColumnMeta>,
     ) -> Result<Self> {
         let num_granules = num_granules_of(block_rows, granule_rows);
-        let names: Vec<String> = column_ids
-            .iter()
+        if num_granules == 0 {
+            return Err(ErrorCode::Internal(
+                "granule index offsets cannot be loaded for zero granules",
+            ));
+        }
+        let names: Vec<String> = col_metas
+            .keys()
             .map(|id| format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}"))
             .collect();
         let mut buffers = fetch_sidecar_columns(dal, settings, layout, &names).await?;
-        let mut offsets = HashMap::with_capacity(column_ids.len());
-        for (id, name) in column_ids.iter().zip(names.iter()) {
-            if let Some(bytes) = buffers.remove(name) {
-                offsets.insert(*id, decode_u64_column(bytes, num_granules)?);
+        let mut offsets = HashMap::with_capacity(col_metas.len());
+        for (id, meta) in col_metas {
+            let name = format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}");
+            let bytes = buffers.remove(&name).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "granule index offsets missing projected leaf column {name}"
+                ))
+            })?;
+            let values = decode_u64_column(bytes, num_granules)?;
+            let (chunk_start, chunk_len) = meta.offset_length();
+            let chunk_end = chunk_start.checked_add(chunk_len).ok_or_else(|| {
+                ErrorCode::Internal(format!("granule index column {id} chunk range overflows"))
+            })?;
+            if values
+                .iter()
+                .any(|offset| *offset < chunk_start || *offset >= chunk_end)
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "granule index offsets for column {id} fall outside chunk {chunk_start}..{chunk_end}"
+                )));
             }
+            if values.windows(2).any(|pair| pair[0] >= pair[1]) {
+                return Err(ErrorCode::Internal(format!(
+                    "granule index offsets for column {id} are not strictly increasing"
+                )));
+            }
+            offsets.insert(*id, values);
         }
         Ok(OffsetsIndex {
             granule_rows,
@@ -713,12 +742,75 @@ mod tests {
         assert_eq!(mins, granule_mins);
 
         // Offsets round-trip: g_7 / g_9 first-data-page offsets at granule boundaries 0/100/200.
-        let offsets =
-            OffsetsIndex::load(&op, &settings, &layout.offsets, granule_rows, 300, &[7, 9])
-                .await
-                .unwrap();
+        let mut col_metas = HashMap::new();
+        col_metas.insert(
+            7,
+            ColumnMeta::Parquet(SingleColumnMeta {
+                offset: 100,
+                len: 900,
+                num_values: 300,
+            }),
+        );
+        col_metas.insert(
+            9,
+            ColumnMeta::Parquet(SingleColumnMeta {
+                offset: 10,
+                len: 1990,
+                num_values: 300,
+            }),
+        );
+        let offsets = OffsetsIndex::load(
+            &op,
+            &settings,
+            &layout.offsets,
+            granule_rows,
+            300,
+            &col_metas,
+        )
+        .await
+        .unwrap();
         assert_eq!(offsets.offsets.get(&7).unwrap(), &vec![100, 260, 480]);
         assert_eq!(offsets.offsets.get(&9).unwrap(), &vec![50, 600, 1500]);
+    }
+
+    #[tokio::test]
+    async fn test_offsets_index_rejects_missing_projected_column() {
+        let op = Operator::new(Memory::default()).unwrap().finish();
+        let settings = test_settings();
+        let state = GranuleIndexWriter::new(None, 100, vec![7])
+            .build_with_extra_columns(
+                &[layout(None, 1000, &[(0, 100), (100, 260)])],
+                &[],
+                ("mins".to_string(), 0),
+                ("offsets".to_string(), 0),
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        persist(&op, &state).await;
+
+        let mut col_metas = HashMap::new();
+        col_metas.insert(
+            7,
+            ColumnMeta::Parquet(SingleColumnMeta {
+                offset: 100,
+                len: 900,
+                num_values: 200,
+            }),
+        );
+        col_metas.insert(
+            9,
+            ColumnMeta::Parquet(SingleColumnMeta {
+                offset: 10,
+                len: 990,
+                num_values: 200,
+            }),
+        );
+        let err = OffsetsIndex::load(&op, &settings, &state.offsets.layout, 100, 200, &col_metas)
+            .await
+            .err()
+            .unwrap();
+        assert!(err.message().contains("g_9"), "{err}");
     }
 
     // Byte-range plan: chunk boundaries come from col_metas, dict range from the gap before the

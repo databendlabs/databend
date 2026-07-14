@@ -36,31 +36,22 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use opendal::Buffer;
 use opendal::Operator;
 
-/// One indexed column's payload file: the parquet bytes plus the location they must be written to.
-#[derive(Debug)]
-pub struct GranuleIndexPayload {
-    pub location: String,
-    pub data: Buffer,
-}
-
-/// Output of a finalized builder for one block: per-column payload files plus the offset columns to
-/// append to the `_pidx` sidecar. `sidecar_fields`/`sidecar_columns` are paired; each column has
-/// `num_granules` rows and a name chosen by the implementation.
+/// Output of a finalized builder for one block: the offset columns to append to the `_pidx`
+/// sidecar. Payload files are streamed to storage during the build. `sidecar_fields`/
+/// `sidecar_columns` are paired; each column has `num_granules` rows and a name chosen by the
+/// implementation.
 #[derive(Default)]
 pub struct GranuleIndexBuildOutput {
-    pub payloads: Vec<GranuleIndexPayload>,
     pub sidecar_fields: Vec<TableField>,
     pub sidecar_columns: Vec<Column>,
 }
 
 impl GranuleIndexBuildOutput {
     /// Fold another index's output into this one; the offsets sidecar concatenates every index's
-    /// columns, and payload files are collected across all indexes.
+    /// columns.
     pub fn merge(&mut self, other: GranuleIndexBuildOutput) {
-        self.payloads.extend(other.payloads);
         self.sidecar_fields.extend(other.sidecar_fields);
         self.sidecar_columns.extend(other.sidecar_columns);
     }
@@ -75,9 +66,29 @@ pub trait GranuleIndexBuilder: Send {
     /// Seal the current granule (flush its payload page, record its offset) and reset for the next.
     fn finalize_granule(&mut self) -> Result<()>;
 
-    /// Finish the block, returning payload files and sidecar offset columns. `block_location` derives
-    /// each payload's path; it is only known at finish on the streaming write path.
-    fn finalize(self: Box<Self>, block_location: &str) -> Result<GranuleIndexBuildOutput>;
+    /// Finish the block, returning the sidecar offset columns. Payload files were already streamed
+    /// to storage during the build (locations were fixed at construction), so nothing is returned
+    /// for them here.
+    fn finalize(self: Box<Self>) -> Result<GranuleIndexBuildOutput>;
+}
+
+/// Builder used when an index definition cannot be fully bound to the physical write schema.
+/// Keeping this behind the normal builder trait lets callers remain branch-free while ensuring an
+/// incomplete index never materializes partial payloads or sidecar columns.
+pub(super) struct NoopGranuleIndexBuilder;
+
+impl GranuleIndexBuilder for NoopGranuleIndexBuilder {
+    fn push_rows(&mut self, _block: &DataBlock, _range: Range<usize>) -> Result<()> {
+        Ok(())
+    }
+
+    fn finalize_granule(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn finalize(self: Box<Self>) -> Result<GranuleIndexBuildOutput> {
+        Ok(GranuleIndexBuildOutput::default())
+    }
 }
 
 /// Read-side counterpart of [`GranuleIndexBuilder`]. `block_pruner` folds every active pruner over
@@ -97,7 +108,19 @@ pub trait GranuleIndexPruner: Send + Sync {
 /// Factory for one granule-level index, resolved from a `TableMeta.indexes` entry. The decoupling
 /// seam: write/read paths ask each spec for a builder/pruner without knowing the index kind.
 pub trait GranuleIndexSpec: Send + Sync {
-    fn new_builder(&self, func_ctx: FunctionContext) -> Result<Box<dyn GranuleIndexBuilder>>;
+    /// `physical_schema` is the exact schema of the `DataBlock`s fed to the builder. Implementations
+    /// must bind stable column IDs to positions against this schema rather than retaining positions
+    /// from the table schema, because serialization may remove virtual fields or add stream fields.
+    /// `block_location` and `dal` are needed up front: the builder streams its payload files to
+    /// storage as granules seal, so payload locations (derived from `block_location`) must be known
+    /// at construction rather than at `finalize`.
+    fn new_builder(
+        &self,
+        func_ctx: FunctionContext,
+        physical_schema: &TableSchema,
+        block_location: &str,
+        dal: Operator,
+    ) -> Result<Box<dyn GranuleIndexBuilder>>;
 
     /// Per-query pruner, or `None` when this index cannot narrow the given filter.
     fn new_pruner(

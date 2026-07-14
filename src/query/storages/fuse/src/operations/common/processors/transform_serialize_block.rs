@@ -199,6 +199,7 @@ impl TransformSerializeBlock {
 
         let block_builder = BlockBuilder {
             ctx,
+            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             source_schema,
             write_settings: table.get_write_settings(),

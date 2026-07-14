@@ -42,8 +42,11 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Buffer;
+use opendal::Operator;
+use uuid::Uuid;
 
 use super::super::fuse_block_writer::FuseBlockOutput;
 use super::super::fuse_block_writer::FuseBlockWriter;
@@ -85,6 +88,11 @@ impl NdvProvider for ColumnsNdvInfo {
 
 pub struct StreamBlockBuilder {
     properties: Arc<StreamBlockProperties>,
+    /// The block's location, fixed at construction (not at `finish`): granule-index builders stream
+    /// their payload files to storage as granules seal, so payload paths — derived from this — must
+    /// exist before the first block is written.
+    block_location: Location,
+    block_id: Uuid,
     /// `None` until the first block arrives: props depend on first-block NDV, so creation is
     /// deferred to `write`.
     block_writer: Option<FuseBlockWriter>,
@@ -111,6 +119,10 @@ impl StreamBlockBuilder {
         ) {
             return Err(crate::unsupported_storage_format_error());
         }
+
+        let (block_location, block_id) = properties
+            .meta_locations
+            .gen_block_location(properties.table_meta_timestamps);
 
         let inverted_index_writers = properties
             .inverted_index_builders
@@ -148,6 +160,8 @@ impl StreamBlockBuilder {
         );
         Ok(StreamBlockBuilder {
             properties,
+            block_location,
+            block_id,
             block_writer: None,
             inverted_index_writers,
             bloom_index_builder,
@@ -236,7 +250,14 @@ impl StreamBlockBuilder {
             .properties
             .granule_index_specs
             .iter()
-            .map(|spec| spec.new_builder(func_ctx.clone()))
+            .map(|spec| {
+                spec.new_builder(
+                    func_ctx.clone(),
+                    &self.properties.source_schema,
+                    &self.block_location.0,
+                    self.properties.operator.clone(),
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(FuseBlockWriter::new(
             props,
@@ -249,10 +270,8 @@ impl StreamBlockBuilder {
     }
 
     pub fn finish(mut self) -> Result<BlockSerialization> {
-        let (block_location, block_id) = self
-            .properties
-            .meta_locations
-            .gen_block_location(self.properties.table_meta_timestamps);
+        let block_location = self.block_location.clone();
+        let block_id = self.block_id;
 
         let bloom_index_location = self
             .properties
@@ -347,15 +366,13 @@ impl StreamBlockBuilder {
             data: block_raw_data,
             col_metas,
             granule_index_state,
-            granule_index_payloads,
         } = match self.block_writer.take() {
-            Some(w) => w.finish(&block_location.0, mins_location, offsets_location)?,
+            Some(w) => w.finish(mins_location, offsets_location)?,
             // Empty builder: no block was ever written.
             None => FuseBlockOutput {
                 data: Buffer::new(),
                 col_metas: HashMap::new(),
                 granule_index_state: None,
-                granule_index_payloads: Vec::new(),
             },
         };
         let granule_index = granule_index_state.as_ref().map(|s| s.layout());
@@ -410,7 +427,6 @@ impl StreamBlockBuilder {
             spatial_index_state,
             granule_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
-            granule_index_payloads,
         };
         Ok(serialized)
     }
@@ -418,6 +434,7 @@ impl StreamBlockBuilder {
 
 pub struct StreamBlockProperties {
     pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) operator: Operator,
     pub(crate) write_settings: WriteSettings,
     pub(crate) block_thresholds: BlockThresholds,
 
@@ -512,6 +529,7 @@ impl StreamBlockProperties {
         let table_indexes = table.table_info.meta.indexes.clone();
         Ok(Arc::new(StreamBlockProperties {
             ctx,
+            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             block_thresholds: table.get_block_thresholds(),
             source_schema,
