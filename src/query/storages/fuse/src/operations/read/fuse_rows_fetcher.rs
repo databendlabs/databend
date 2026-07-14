@@ -37,6 +37,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_io::ReadSettings;
+use tokio::sync::Semaphore;
 
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::FuseStorageFormat;
@@ -70,6 +71,13 @@ pub fn row_fetch_processor(
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            // Shared by every RowFetch lane this plan builds (the row-fetch builder
+            // closure below is invoked once per output lane). A single query-wide
+            // semaphore caps the aggregate number of decoded column chunks in
+            // flight at `max_threads`, so a plan that fans RowFetch out to
+            // `max_threads` lanes cannot reach `max_threads * lanes` chunks and OOM.
+            let io_semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
             let block_threshold = BlockThreshold {
                 max_rows: ctx.get_settings().get_max_block_size()? as usize,
                 max_bytes: ctx.get_settings().get_max_block_bytes()? as usize,
@@ -87,6 +95,8 @@ pub fn row_fetch_processor(
                         projection.clone(),
                         block_reader.clone(),
                         read_settings,
+                        max_threads,
+                        io_semaphore.clone(),
                     ),
                     need_wrap_nullable,
                     fetched_data_types.clone(),
