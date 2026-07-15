@@ -1383,6 +1383,29 @@ fn test_file_format_trim_space_option() {
 }
 
 #[test]
+fn test_create_iceberg_table_options_before_partition_by() {
+    let cases = [
+        "CREATE TABLE t(c INT) ENGINE=ICEBERG LOCATION='s3://bucket/path' CONNECTION_NAME='conn' PARTITION BY (c)",
+        "CREATE TABLE iceberg.db.t(c INT) LOCATION='s3://bucket/path' PARTITION BY (c)",
+    ];
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+        let displayed = stmt.to_string();
+        let displayed_uppercase = displayed.to_uppercase();
+        let partition_pos = displayed_uppercase.find("PARTITION BY").unwrap();
+        assert!(partition_pos < displayed_uppercase.find("LOCATION").unwrap());
+        if let Some(connection_pos) = displayed_uppercase.find("CONNECTION_NAME") {
+            assert!(partition_pos < connection_pos);
+        }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
 fn test_stage_local_filesystem_uri_errors() {
     let cases = [
         (

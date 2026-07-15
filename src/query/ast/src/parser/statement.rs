@@ -1131,6 +1131,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let create_table_partition_by = map(
+        rule! {
+            #table_option ~ PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(table_options, _, _, _, exprs, _)| (table_options, exprs),
+    );
     let create_table = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1138,7 +1144,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ #create_table_partition_by?
             ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( PROPERTIES ~  #connection_options )?
@@ -1168,6 +1174,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
                 _ => unreachable!(),
             };
+            let (mut table_options, partition_by) = opt_partition_by
+                .map(|(options, exprs)| (options, Some(exprs)))
+                .unwrap_or_default();
+            if !table_options.is_empty() && engine.is_some_and(|engine| engine != Engine::Iceberg) {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "table options before PARTITION BY are only supported for ICEBERG tables",
+                )));
+            }
+            table_options.extend(opt_table_options.unwrap_or_default());
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -1180,8 +1195,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     cluster_type: typ.unwrap_or(ClusterType::Linear),
                     cluster_exprs: exprs,
                 }),
-                table_options: opt_table_options.unwrap_or_default(),
-                partition_by: opt_partition_by.map(|(_, _, _, exprs, _)| exprs),
+                table_options,
+                partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
