@@ -287,7 +287,9 @@ impl TaskService {
                                             let committed_at = Utc::now();
                                             task.next_scheduled_at = Some(committed_at + duration);
                                             task.updated_at = committed_at;
-                                            task_mgr.update_task(task.clone()).await??;
+                                            if !task_mgr.update_task(task.clone()).await?? {
+                                                return Ok(());
+                                            }
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
@@ -297,7 +299,9 @@ impl TaskService {
                                                         let committed_at = Utc::now();
                                                         task.next_scheduled_at = Some(committed_at + duration);
                                                         task.updated_at = committed_at;
-                                                        task_mgr.update_task(task.clone()).await??;
+                                                        if !task_mgr.update_task(task.clone()).await?? {
+                                                            break;
+                                                        }
                                                         if task_service.has_executing_task_run(&task.task_name).await? {
                                                             task_service.record_overlapping_skip(&task).await?;
                                                             continue;
@@ -344,18 +348,23 @@ impl TaskService {
 
                                                 task.next_scheduled_at = Some(next_time.with_timezone(&Utc));
                                                 task.updated_at = now;
-                                                task_mgr.update_task(task.clone()).await??;
+                                                if !task_mgr.update_task(task.clone()).await?? {
+                                                    break;
+                                                }
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
                                                         let committed_at = Utc::now();
-                                                        task.next_scheduled_at = upcoming
+                                                        let next_scheduled_at = upcoming
                                                             .peek()
                                                             .map(|next| next.with_timezone(&Utc));
+                                                        task.next_scheduled_at = next_scheduled_at;
                                                         task.updated_at = committed_at;
-                                                        task_mgr.update_task(task.clone()).await??;
+                                                        if !task_mgr.update_task(task.clone()).await?? {
+                                                            break;
+                                                        }
                                                         if task_service.has_executing_task_run(&task.task_name).await? {
                                                             task_service.record_overlapping_skip(&task).await?;
                                                             continue;
