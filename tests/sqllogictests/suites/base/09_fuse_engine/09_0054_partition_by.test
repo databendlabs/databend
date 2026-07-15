@@ -242,6 +242,47 @@ SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'merge_partit
 ----
 2 2
 
+# Recluster overlapping cluster-key ranges inside each partition without ever
+# selecting or rewriting blocks across the physical partition boundary.
+statement ok
+CREATE TABLE recluster_partitioned(p INT, c INT) PARTITION BY (p % 2) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO recluster_partitioned VALUES (0, 30), (1, 30), (2, 10), (3, 10)
+
+statement ok
+INSERT INTO recluster_partitioned VALUES (4, 31), (5, 31), (6, 11), (7, 11)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'recluster_partitioned') LIMIT 1
+----
+4 4
+
+statement ok
+ALTER TABLE recluster_partitioned RECLUSTER FINAL
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'recluster_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, c FROM recluster_partitioned
+----
+0 30
+1 30
+2 10
+3 10
+4 31
+5 31
+6 11
+7 11
+
+query T
+EXPLAIN SELECT p, c FROM recluster_partitioned WHERE p % 2 = 1
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
 statement error PARTITION BY expression `a \+ b` is invalid
