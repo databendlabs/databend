@@ -253,9 +253,6 @@ impl CreateTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        self.check_replace_type_conflict(catalog.as_ref(), &tenant)
-            .await?;
-
         let mut req = self.build_request(None)?;
 
         // create a dropped table first.
@@ -371,9 +368,6 @@ impl CreateTableInterpreter {
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        self.check_replace_type_conflict(catalog.as_ref(), &self.plan.tenant)
-            .await?;
-
         let mut stat = None;
         if !GlobalConfig::instance().query.common.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
@@ -433,43 +427,6 @@ impl CreateTableInterpreter {
         }
 
         Ok(PipelineBuildResult::create())
-    }
-
-    async fn check_replace_type_conflict(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-    ) -> Result<()> {
-        if self.plan.create_option != CreateOption::CreateOrReplace {
-            return Ok(());
-        }
-
-        let existing = match catalog
-            .get_table(tenant, &self.plan.database, &self.plan.table)
-            .await
-        {
-            Ok(table) => Some(table),
-            Err(e) if e.code() == ErrorCode::UNKNOWN_TABLE => None,
-            Err(e) => return Err(e),
-        };
-        if let Some(existing) = existing {
-            let is_existing_mv = is_materialized_view_engine(existing.engine());
-            let is_new_mv = is_materialized_view_engine(&self.plan.engine.to_string());
-            if is_existing_mv && !is_new_mv {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW` first",
-                    &self.plan.database, &self.plan.table
-                )));
-            }
-            if !is_existing_mv && is_new_mv {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} already exists as a non-materialized-view object, drop it first",
-                    &self.plan.database, &self.plan.table
-                )));
-            }
-        }
-
-        Ok(())
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.

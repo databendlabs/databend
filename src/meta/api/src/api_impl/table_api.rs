@@ -28,6 +28,7 @@ use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
+use databend_common_meta_app::app_error::MaterializedViewReplacementConflict;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
@@ -97,7 +98,6 @@ use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
-use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::MetaId;
@@ -136,7 +136,6 @@ use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
-use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_get;
@@ -200,6 +199,48 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
         ));
     }
     Ok(())
+}
+
+/// Validate a replacement that crosses the MATERIALIZED VIEW boundary and
+/// return the existing TableMeta sequence to guard the decision in a txn.
+///
+/// This check must live in the Meta API. A query-layer lookup can become stale
+/// before the metadata transaction commits. If an MV appears in that window, a
+/// generic replacement could overwrite its name mapping without removing its
+/// MVMeta, definition, or source index. The caller must therefore guard both
+/// the returned TableMeta sequence and the name mapping sequence in the same
+/// transaction that performs the replacement.
+async fn materialized_view_replacement_guard(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    table_name: &str,
+    existing_table_id: u64,
+    replacement_engine: &str,
+) -> Result<(TableId, u64), KVAppError> {
+    let existing_ident = TableId::new(existing_table_id);
+    let existing_meta = kv_api.get_pb(&existing_ident).await?.ok_or_else(|| {
+        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+            existing_table_id,
+            format!("replace {table_name}: existing TableMeta does not exist"),
+        )))
+    })?;
+
+    let existing_is_mv = is_materialized_view_engine(&existing_meta.data.engine);
+    let replacement_is_mv = is_materialized_view_engine(replacement_engine);
+    // An interpreter-side lookup can not safely enforce this boundary because
+    // it is not part of the metadata transaction.
+    let crosses_mv_boundary = existing_is_mv ^ replacement_is_mv;
+    if crosses_mv_boundary {
+        return Err(KVAppError::AppError(
+            MaterializedViewReplacementConflict::new(
+                table_name,
+                existing_meta.data.engine,
+                replacement_engine,
+            )
+            .into(),
+        ));
+    }
+
+    Ok((existing_ident, existing_meta.seq))
 }
 
 /// TableApi defines APIs for table lifecycle and metadata management.
@@ -355,6 +396,17 @@ where
                             });
                         }
                         CreateOption::CreateOrReplace => {
+                            let (existing_ident, existing_meta_seq) =
+                                materialized_view_replacement_guard(
+                                    self,
+                                    &req.name_ident.table_name,
+                                    *id.data,
+                                    &req.table_meta.engine,
+                                )
+                                .await?;
+                            txn.condition
+                                .push(txn_cond_eq_seq(&existing_ident, existing_meta_seq));
+
                             if req.as_dropped {
                                 // If the table is being created as a dropped table, we do not
                                 // need to combine with drop_table_txn operations, just return
@@ -440,11 +492,11 @@ where
                 txn.condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
-                    txn_cond_seq(&key_dbid, Eq, db_meta.seq),
+                    txn_cond_eq_seq(&key_dbid, db_meta.seq),
                     // no other table with the same name is inserted.
-                    txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
+                    txn_cond_eq_seq(&key_dbid_tbname, dbid_tbname_seq),
                     // no other table id with the same name is append.
-                    txn_cond_seq(&save_key_table_id_list, Eq, tb_id_list_seq),
+                    txn_cond_eq_seq(&save_key_table_id_list, tb_id_list_seq),
                 ]);
 
                 txn.if_then.extend(vec![
@@ -699,16 +751,16 @@ where
                     vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&seq_db_id.data, Eq, db_meta.seq),
-                        txn_cond_seq(&new_seq_db_id.data, Eq, new_db_meta.seq),
+                        txn_cond_eq_seq(&seq_db_id.data, db_meta.seq),
+                        txn_cond_eq_seq(&new_seq_db_id.data, new_db_meta.seq),
                         // table_name->table_id does not change.
                         // Updating the table meta is ok.
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                        txn_cond_seq(&newdbid_newtbname, Eq, 0),
+                        txn_cond_eq_seq(&dbid_tbname, tb_id_seq),
+                        txn_cond_eq_seq(&newdbid_newtbname, 0),
                         // no other table id with the same name is append.
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
-                        txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq),
-                        txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
+                        txn_cond_eq_seq(&dbid_tbname_idlist, tb_id_list_seq),
+                        txn_cond_eq_seq(&new_dbid_tbname_idlist, new_tb_id_list_seq),
+                        txn_cond_eq_seq(&table_id_to_name_key, table_id_to_name_seq),
                     ],
                     vec![
                         txn_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
@@ -864,16 +916,16 @@ where
                 let txn = TxnRequest::new(
                     vec![
                         // Ensure databases haven't changed
-                        txn_cond_seq(&seq_db_id_left.data, Eq, db_meta_left.seq),
+                        txn_cond_eq_seq(&seq_db_id_left.data, db_meta_left.seq),
                         // Ensure table name->table_id mappings haven't changed
-                        txn_cond_seq(&dbid_tbname_left, Eq, tb_id_seq_left),
-                        txn_cond_seq(&dbid_tbname_right, Eq, tb_id_seq_right),
+                        txn_cond_eq_seq(&dbid_tbname_left, tb_id_seq_left),
+                        txn_cond_eq_seq(&dbid_tbname_right, tb_id_seq_right),
                         // Ensure table history lists haven't changed
-                        txn_cond_seq(&dbid_tbname_idlist_left, Eq, tb_id_list_seq_left),
-                        txn_cond_seq(&dbid_tbname_idlist_right, Eq, tb_id_list_seq_right),
+                        txn_cond_eq_seq(&dbid_tbname_idlist_left, tb_id_list_seq_left),
+                        txn_cond_eq_seq(&dbid_tbname_idlist_right, tb_id_list_seq_right),
                         // Ensure table_id->name mappings haven't changed
-                        txn_cond_seq(&table_id_to_name_key_left, Eq, table_id_to_name_seq_left),
-                        txn_cond_seq(&table_id_to_name_key_right, Eq, table_id_to_name_seq_right),
+                        txn_cond_eq_seq(&table_id_to_name_key_left, table_id_to_name_seq_left),
+                        txn_cond_eq_seq(&table_id_to_name_key_right, table_id_to_name_seq_right),
                     ],
                     vec![
                         // Swap table name->table_id mappings
@@ -1012,7 +1064,8 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (dbid_tbname_seq, _table_id) = self.get_pb_seq_and_value(&dbid_tbname).await?;
+            let (dbid_tbname_seq, current_table_id) =
+                self.get_pb_seq_and_value(&dbid_tbname).await?;
 
             // get table id list from _fd_table_id_list/db_id/table_name
 
@@ -1105,17 +1158,17 @@ where
                 }
                 tb_meta.drop_on = None;
 
-                let txn_req = TxnRequest::new(
+                let mut txn_req = TxnRequest::new(
                     vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                        txn_cond_eq_seq(&DatabaseId { db_id }, db_meta_seq),
                         // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
+                        txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
                         // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
+                        txn_cond_eq_seq(&tbid, tb_meta_seq),
+                        txn_cond_eq_seq(&orphan_dbid_tbname_idlist, orphan_tb_id_list.seq),
+                        txn_cond_eq_seq(&dbid_tbname_idlist, tb_id_list.seq),
                     ],
                     vec![
                         // Changing a table in a db has to update the seq of db_meta,
@@ -1128,6 +1181,21 @@ where
                         txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     ],
                 );
+                if let Some(current) =
+                    current_table_id.filter(|current| current.table_id != table_id)
+                {
+                    let (current_ident, current_meta_seq) = materialized_view_replacement_guard(
+                        self,
+                        &tenant_dbname_tbname.table_name,
+                        current.table_id,
+                        &tb_meta.engine,
+                    )
+                    .await?;
+
+                    txn_req
+                        .condition
+                        .push(txn_cond_eq_seq(&current_ident, current_meta_seq));
+                }
 
                 let txn_response = txn_sender.send_txn(self, txn_req).await?;
                 let succ = match txn_response {
@@ -1223,7 +1291,7 @@ where
             let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
-            txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
+            txn.condition.push(txn_cond_eq_seq(&tbid, *tb_meta_seq));
 
             // Add LVT check if provided
             if let Some(check) = req.lvt_check.as_ref() {
@@ -1247,7 +1315,7 @@ where
                     }
                 }
                 // no other one has updated LVT since we read it
-                txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
+                txn.condition.push(txn_cond_eq_seq(&lvt_ident, seq));
             }
 
             txn.if_then.push(txn_put_pb(&tbid, &new_table_meta));
@@ -1334,7 +1402,7 @@ where
             new_stream_meta.updated_on = Utc::now();
 
             txn.condition
-                .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+                .push(txn_cond_eq_seq(&stream_id, stream_meta_seq));
             txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta));
         }
 

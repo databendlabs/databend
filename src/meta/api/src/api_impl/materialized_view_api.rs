@@ -38,7 +38,6 @@ use databend_common_meta_app::schema::materialized_view::mv_meta_ident;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::kvapi;
-use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::InvalidReply;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
@@ -47,7 +46,7 @@ use databend_meta_client::types::TxnRequest;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_put_pb;
@@ -151,14 +150,14 @@ where
 
     let mut txn = TxnRequest::new(
         vec![
-            txn_cond_seq(&source_ident, Eq, source_seq), // source unchanged
-            txn_cond_seq(mv_meta_ident, Eq, 0),          // MVMeta absent
-            txn_cond_seq(&definition_ident, Eq, 0),      // definition absent
-            txn_cond_seq(&source_index_ident, Eq, 0),    // source index absent
-            txn_cond_seq(&db_ident, Eq, db_meta.seq),    // database unchanged
-            txn_cond_seq(&db_id_mv_name, Eq, mv_name_seq), // live MV name unchanged
-            txn_cond_seq(&mv_ident, Eq, staged_mv_table_meta.seq), // staged MV unchanged
-            txn_cond_seq(orphan_ident, Eq, orphan_history.seq), // orphan unchanged
+            txn_cond_eq_seq(&source_ident, source_seq), // source unchanged
+            txn_cond_eq_seq(mv_meta_ident, 0),          // MVMeta absent
+            txn_cond_eq_seq(&definition_ident, 0),      // definition absent
+            txn_cond_eq_seq(&source_index_ident, 0),    // source index absent
+            txn_cond_eq_seq(&db_ident, db_meta.seq),    // database unchanged
+            txn_cond_eq_seq(&db_id_mv_name, mv_name_seq), // live MV name unchanged
+            txn_cond_eq_seq(&mv_ident, staged_mv_table_meta.seq), // staged MV unchanged
+            txn_cond_eq_seq(orphan_ident, orphan_history.seq), // orphan unchanged
         ],
         vec![
             txn_put_pb(&db_ident, &db_meta.data), // DatabaseId -> DatabaseMeta; bump seq
@@ -202,9 +201,9 @@ where
         );
 
         txn.condition.extend([
-            txn_cond_seq(&prev_ident, Eq, prev_meta.seq), // old MVMeta unchanged
-            txn_cond_seq(&prev_definition_ident, Eq, prev_definition.seq), // old definition unchanged
-            txn_cond_seq(&prev_mv_ident, Eq, prev_mv_table_meta.seq), // old MV unchanged
+            txn_cond_eq_seq(&prev_ident, prev_meta.seq), // old MVMeta unchanged
+            txn_cond_eq_seq(&prev_definition_ident, prev_definition.seq), // old definition unchanged
+            txn_cond_eq_seq(&prev_mv_ident, prev_mv_table_meta.seq), // old MV unchanged
         ]);
         txn.if_then.extend([
             txn_del(&prev_ident),                                    // delete old MVMeta
@@ -283,11 +282,11 @@ where
 
     Ok(Ok(TxnRequest::new(
         vec![
-            txn_cond_seq(mv_meta_ident, Eq, mv_meta.seq),
-            txn_cond_seq(&definition_ident, Eq, definition.seq),
-            txn_cond_seq(&mv_ident, Eq, mv_table_meta.seq),
-            txn_cond_seq(&db_id_mv_name, Eq, mv_name_seq),
-            txn_cond_seq(&db_ident, Eq, db_meta.seq),
+            txn_cond_eq_seq(mv_meta_ident, mv_meta.seq),
+            txn_cond_eq_seq(&definition_ident, definition.seq),
+            txn_cond_eq_seq(&mv_ident, mv_table_meta.seq),
+            txn_cond_eq_seq(&db_id_mv_name, mv_name_seq),
+            txn_cond_eq_seq(&db_ident, db_meta.seq),
         ],
         vec![
             txn_put_pb(&db_ident, &db_meta.data),

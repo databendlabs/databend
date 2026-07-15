@@ -1777,6 +1777,181 @@ impl SchemaApiTestSuite {
             "CREATE MATERIALIZED VIEW must not create table history"
         );
 
+        // Generic CREATE OR REPLACE must not cross the MATERIALIZED VIEW
+        // boundary. This check lives in TableApi so an interpreter-side lookup
+        // can not be invalidated before the metadata transaction commits.
+        let replace_mv_with_table_err = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: mv_name_ident.clone(),
+                table_meta: TableMeta {
+                    schema: util.schema(),
+                    engine: "FUSE".to_string(),
+                    ..TableMeta::default()
+                },
+                as_dropped: false,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await
+            .expect_err("a generic table transaction must not replace an MV");
+        assert!(matches!(
+            replace_mv_with_table_err,
+            KVAppError::AppError(AppError::MaterializedViewReplacementConflict(_))
+        ));
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, util.db_name(), mv_name))
+                .await?
+                .ident
+                .table_id,
+            mv_create.table_id
+        );
+        assert!(mt.get_pb(&mv_meta_ident).await?.is_some());
+        assert!(mt.get_pb(&definition_ident).await?.is_some());
+        assert!(mt.get_pb(&source_index_ident).await?.is_some());
+
+        let regular_name = "regular_table";
+        let regular_name_ident = TableNameIdent::new(&tenant, util.db_name(), regular_name);
+        let regular_create = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::Create,
+                catalog_name: None,
+                name_ident: regular_name_ident.clone(),
+                table_meta: TableMeta {
+                    schema: util.schema(),
+                    engine: "FUSE".to_string(),
+                    ..TableMeta::default()
+                },
+                as_dropped: false,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await?;
+        let replace_table_with_mv_err = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: regular_name_ident.clone(),
+                table_meta: TableMeta {
+                    schema: util.schema(),
+                    engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                    drop_on: Some(Utc::now()),
+                    ..TableMeta::default()
+                },
+                as_dropped: true,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await
+            .expect_err("an MV transaction must not replace a regular table");
+        assert!(matches!(
+            replace_table_with_mv_err,
+            KVAppError::AppError(AppError::MaterializedViewReplacementConflict(_))
+        ));
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, util.db_name(), regular_name))
+                .await?
+                .ident
+                .table_id,
+            regular_create.table_id
+        );
+
+        // Reproduce the CTAS race deterministically: stage a regular table,
+        // publish an MV with the same name, then try to publish the staged
+        // regular table. The final commit must reject the cross-type replace.
+        let ctas_race_name = "ctas_race_mv";
+        let ctas_race_name_ident = TableNameIdent::new(&tenant, util.db_name(), ctas_race_name);
+        let staged_table = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: ctas_race_name_ident.clone(),
+                table_meta: TableMeta {
+                    schema: util.schema(),
+                    engine: "FUSE".to_string(),
+                    drop_on: Some(Utc::now()),
+                    ..TableMeta::default()
+                },
+                as_dropped: true,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await?;
+        let racing_mv = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::Create,
+                catalog_name: None,
+                name_ident: ctas_race_name_ident.clone(),
+                table_meta: TableMeta {
+                    schema: util.schema(),
+                    engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                    drop_on: Some(Utc::now()),
+                    ..TableMeta::default()
+                },
+                as_dropped: true,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await?;
+        let racing_mv_id = MVId::new(racing_mv.table_id);
+        let racing_mv_ident = MVMetaIdent::new_generic(tenant.clone(), racing_mv_id);
+        let racing_mv_definition_ident =
+            MVDefinitionIdent::new_generic(tenant.clone(), racing_mv_id);
+        let racing_mv_source_index_ident = MVSourceIndexIdent::new_generic(
+            tenant.clone(),
+            MVSourceIndex::new(source_table_id, racing_mv_id),
+        );
+        let racing_mv_orphan_ident = TableIdHistoryIdent {
+            database_id: db_id,
+            table_name: racing_mv
+                .orphan_table_name
+                .clone()
+                .expect("MV CTAS must have an orphan cleanup record"),
+        };
+        mt.commit_materialized_view(
+            &racing_mv_ident,
+            racing_mv.prev_table_id.map(MVId::new),
+            &racing_mv_orphan_ident,
+            &mv_meta,
+            &definition,
+        )
+        .await??;
+
+        let staged_table_orphan_ident = TableIdHistoryIdent {
+            database_id: db_id,
+            table_name: staged_table
+                .orphan_table_name
+                .clone()
+                .expect("regular CTAS must have an orphan cleanup record"),
+        };
+        let ctas_commit_err = mt
+            .commit_table_meta(CommitTableMetaReq {
+                name_ident: ctas_race_name_ident,
+                db_id,
+                table_id: staged_table.table_id,
+                prev_table_id: staged_table.prev_table_id,
+                orphan_table_name: staged_table.orphan_table_name,
+            })
+            .await
+            .expect_err("CTAS commit must not replace an MV published after staging");
+        assert!(matches!(
+            ctas_commit_err,
+            KVAppError::AppError(AppError::MaterializedViewReplacementConflict(_))
+        ));
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, util.db_name(), ctas_race_name))
+                .await?
+                .ident
+                .table_id,
+            racing_mv.table_id
+        );
+        assert!(mt.get_pb(&racing_mv_ident).await?.is_some());
+        assert!(mt.get_pb(&racing_mv_definition_ident).await?.is_some());
+        assert!(mt.get_pb(&racing_mv_source_index_ident).await?.is_some());
+        assert!(mt.get_pb(&staged_table_orphan_ident).await?.is_some());
+        mt.drop_materialized_view(&racing_mv_ident).await??;
+
         let replacement = mt
             .create_table(CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,

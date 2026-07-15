@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
@@ -115,20 +114,6 @@ impl Interpreter for CreateViewInterpreter {
             )
         };
         options.insert(QUERY.to_string(), subquery);
-
-        if self.plan.create_option.is_overriding() {
-            if let Ok(existing) = catalog
-                .get_table(&tenant, &self.plan.database, &self.plan.view_name)
-                .await
-            {
-                if is_materialized_view_engine(existing.engine()) {
-                    return Err(ErrorCode::TableEngineNotSupported(format!(
-                        "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW` first",
-                        &self.plan.database, &self.plan.view_name
-                    )));
-                }
-            }
-        }
 
         let plan = CreateTableReq {
             create_option: self.plan.create_option,
