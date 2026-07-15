@@ -35,6 +35,15 @@ async fn explain_text(fixture: &TestFixture, query: &str) -> anyhow::Result<Stri
     Ok(lines.join("\n"))
 }
 
+fn extract_one_u64(blocks: Vec<DataBlock>) -> u64 {
+    let block = DataBlock::concat(&blocks).expect("concat result blocks");
+    assert_eq!(block.num_rows(), 1);
+    match block.get_by_offset(0).index(0) {
+        Some(ScalarRef::Number(NumberScalar::UInt64(v))) => v,
+        other => panic!("unexpected count scalar: {other:?}"),
+    }
+}
+
 /// A single-row side of an inequality join (here a scalar/no-group-by aggregate, whose
 /// `precise_cardinality` is deterministically 1) must never end up driving a merge
 /// RANGE JOIN. The merge algorithm assumes the build side is the larger one and, for
@@ -89,14 +98,46 @@ async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Re
             .await?
             .try_collect::<Vec<DataBlock>>()
             .await?;
-        let block = DataBlock::concat(&blocks).expect("concat result blocks");
-        assert_eq!(block.num_rows(), 1);
-        let count = match block.get_by_offset(0).index(0) {
-            Some(ScalarRef::Number(NumberScalar::UInt64(v))) => v,
-            other => panic!("unexpected count scalar: {other:?}"),
-        };
-        assert_eq!(count, 1000, "query: {query}");
+        assert_eq!(extract_one_u64(blocks), 1000, "query: {query}");
     }
+
+    Ok(())
+}
+
+/// Force the exact CROSS JOIN + FILTER shape that used to report a false scalar-subquery
+/// cardinality violation. The pushed-down expression is true for all four rows, but its
+/// estimated selectivity places the four-row table on the build side and the exact-one-row
+/// scalar aggregate on the probe side. The hash join must apply the inequality filter without
+/// treating the four cross-product candidates as four scalar-subquery rows.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_scalar_aggregate_probe_cross_join_filter() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.four_rows(ts INT) AS SELECT number FROM numbers(4)"
+        ))
+        .await?;
+
+    let query = format!(
+        "SELECT count(*) \
+         FROM (SELECT ts FROM {db}.four_rows WHERE length(to_string(ts)) > 0) b \
+         WHERE b.ts >= (SELECT min(number) FROM numbers(1))"
+    );
+
+    let plan = explain_text(&fixture, &query).await?;
+    assert!(plan.contains("HashJoin"), "plan was:\n{plan}");
+    assert!(plan.contains("TableScan(Build)"), "plan was:\n{plan}");
+    assert!(plan.contains("AggregateFinal(Probe)"), "plan was:\n{plan}");
+
+    let blocks = fixture
+        .execute_query(&query)
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    assert_eq!(extract_one_u64(blocks), 4);
 
     Ok(())
 }
