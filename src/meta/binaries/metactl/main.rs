@@ -33,6 +33,7 @@ use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::KeysLayoutArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::LuaScript;
 use databend_common_meta_control::args::MemberListArgs;
 use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
@@ -269,22 +270,23 @@ impl App {
         // Setup Lua environment with gRPC client support
         lua_support::setup_lua_environment(&lua)?;
 
-        let script = match &args.file {
-            Some(path) => std::fs::read_to_string(path)?,
-            None => {
-                let mut buffer = String::new();
-                io::stdin().read_to_string(&mut buffer)?;
-                buffer
-            }
-        };
-
         #[allow(clippy::disallowed_types)]
         let local = tokio::task::LocalSet::new();
-        let res = local.run_until(lua.load(&script).exec_async()).await;
 
-        if let Err(e) = res {
-            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        if args.scripts.is_empty() {
+            let mut script = String::new();
+            io::stdin().read_to_string(&mut script)?;
+            return execute_lua_script(&lua, &local, &script).await;
         }
+
+        for source in &args.scripts {
+            let script = match source {
+                LuaScript::File(path) => std::fs::read_to_string(path)?,
+                LuaScript::Inline(script) => script.clone(),
+            };
+            execute_lua_script(&lua, &local, &script).await?;
+        }
+
         Ok(())
     }
 
@@ -325,6 +327,18 @@ return metrics, nil
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         lua_support::new_grpc_client(addresses)
     }
+}
+
+#[allow(clippy::disallowed_types)]
+async fn execute_lua_script(
+    lua: &Lua,
+    local: &tokio::task::LocalSet,
+    script: &str,
+) -> anyhow::Result<()> {
+    local
+        .run_until(lua.load(script).exec_async())
+        .await
+        .map_err(|e| anyhow::anyhow!("Lua execution error: {}", e))
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
@@ -546,12 +560,18 @@ enum CtlCommand {
     /// Example (from file):
     ///   metactl lua --file script.lua
     ///
+    /// Example (inline):
+    ///   metactl lua --script 'print("hello")'
+    ///
+    /// Sources run in command-line order:
+    ///   metactl lua --file define.lua --script 'callit()' --file cleanup.lua
+    ///
     /// Example (from stdin):
     ///   echo 'print("hello")' | metactl lua
     ///
     /// Sample Lua script:
     ///   local client = metactl.new_grpc_client("127.0.0.1:9191")
-    ///   local result, err = client:get_kv("mykey")
+    ///   local result, err = client:get("mykey")
     ///   if err then print("error:", err) else print(result) end
     Lua(LuaArgs),
 

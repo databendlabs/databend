@@ -73,7 +73,7 @@ pub struct ExpressionScanContext {
     // Derived column indexes for each expression scan.
     pub derived_indexes: Vec<HashMap<Symbol, Symbol>>,
     // Original column indexes for each expression scan.
-    pub originnal_columns: Vec<HashMap<Symbol, Symbol>>,
+    pub original_columns: Vec<HashMap<Symbol, Symbol>>,
 }
 
 impl Default for ExpressionScanContext {
@@ -90,14 +90,14 @@ impl ExpressionScanContext {
             used_cache_indexes: HashSet::new(),
             used_column_indexes: vec![],
             derived_indexes: vec![],
-            originnal_columns: vec![],
+            original_columns: vec![],
         }
     }
 
     // Add expression scan and return expression scan index.
     pub fn add_expression_scan(&mut self) -> usize {
         self.derived_indexes.push(HashMap::new());
-        self.originnal_columns.push(HashMap::new());
+        self.original_columns.push(HashMap::new());
         self.derived_indexes.len() - 1
     }
 
@@ -109,7 +109,7 @@ impl ExpressionScanContext {
     ) {
         self.derived_indexes[expression_scan_index]
             .insert(original_column_index, derived_column_index);
-        self.originnal_columns[expression_scan_index]
+        self.original_columns[expression_scan_index]
             .insert(derived_column_index, original_column_index);
     }
 
@@ -125,7 +125,7 @@ impl ExpressionScanContext {
         expression_scan_index: usize,
         column_index: Symbol,
     ) -> Symbol {
-        self.originnal_columns[expression_scan_index]
+        self.original_columns[expression_scan_index]
             .get(&column_index)
             .cloned()
             .unwrap()
@@ -141,7 +141,7 @@ impl ExpressionScanContext {
         self.column_indexes.push(column_indexes);
         self.used_column_indexes.push(HashSet::new());
         self.derived_indexes.push(HashMap::new());
-        self.originnal_columns.push(HashMap::new());
+        self.original_columns.push(HashMap::new());
         self.cache_columns.len() - 1
     }
 

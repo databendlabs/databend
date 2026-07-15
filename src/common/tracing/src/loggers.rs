@@ -184,7 +184,15 @@ pub struct KvWriter<'a>(pub &'a mut Vec<u8>);
 
 impl<'kvs> VisitSource<'kvs> for KvWriter<'_> {
     fn visit_pair(&mut self, key: Key<'kvs>, value: Value<'kvs>) -> Result<(), log::kv::Error> {
-        write!(self.0, " {key}={value}")?;
+        match serde_json::to_string(&value) {
+            Ok(json_value) => {
+                write!(self.0, " {key}={json_value}")?;
+            }
+            Err(_) => {
+                // fallback to debug format
+                write!(self.0, " {key}={value}")?;
+            }
+        }
         Ok(())
     }
 }
@@ -355,7 +363,7 @@ mod tests {
                     ])
                     .build(),
                 expected_text_output: format!(
-                    "{timestamp}  INFO test::module: test_file.rs:42 user action user_id=123 action=login"
+                    "{timestamp}  INFO test::module: test_file.rs:42 user action user_id=123 action=\"login\""
                 ),
                 expected_json_output: format!(
                     r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":"user action","user_id":123,"action":"login"}}}}"#
@@ -378,7 +386,7 @@ mod tests {
                     ])
                     .build(),
                 expected_text_output: format!(
-                    "{timestamp} ERROR test::module: test_file.rs:42 database connection failed error_code=500 retry_count=3 host=localhost"
+                    "{timestamp} ERROR test::module: test_file.rs:42 database connection failed error_code=500 retry_count=3 host=\"localhost\""
                 ),
                 expected_json_output: format!(
                     r#"{{"timestamp":"{timestamp}","level":"ERROR","fields":{{"message":"database connection failed","error_code":500,"retry_count":3,"host":"localhost"}}}}"#
@@ -416,7 +424,7 @@ mod tests {
             let result = layout.format(&test_case.record, &diagnostics).unwrap();
             let output = String::from_utf8(result).unwrap();
 
-            assert_eq!(output, test_case.expected_text_output,);
+            assert_eq!(output, test_case.expected_text_output);
         }
     }
 

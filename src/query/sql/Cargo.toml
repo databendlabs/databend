@@ -81,6 +81,7 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-expression-test-support = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-store = { workspace = true }

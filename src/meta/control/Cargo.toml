@@ -31,6 +31,7 @@ url = { workspace = true }
 chrono = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-proto-conv = { workspace = true }
+databend-meta-test-harness = { workspace = true }
 prost = { workspace = true }
 tempfile = { workspace = true }
 

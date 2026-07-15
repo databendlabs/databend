@@ -65,6 +65,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::DoExchangeParams;
 use crate::servers::flight::FlightClient;
@@ -204,6 +205,36 @@ impl DataExchangeManager {
                     query_id.clone(),
                     executor.get_inner().get_query_execution_stats(),
                 )
+            })
+            .collect()
+    }
+
+    pub fn get_queries_top_memory_plan_nodes(
+        &self,
+        limit: usize,
+    ) -> Vec<(String, Vec<PlanNodeMemoryUsage>)> {
+        let mut executors = Vec::new();
+        {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            for (query_id, query_coordinator) in queries_coordinator.iter() {
+                if let Some(info) = &query_coordinator.info {
+                    if let Some(executor) = info.query_executor.clone() {
+                        executors.push((query_id.clone(), executor));
+                    }
+                }
+            }
+        }
+
+        executors
+            .into_iter()
+            .filter_map(|(query_id, executor)| {
+                let plan_nodes = executor.get_inner().top_memory_plan_nodes(limit);
+                if plan_nodes.is_empty() {
+                    None
+                } else {
+                    Some((query_id, plan_nodes))
+                }
             })
             .collect()
     }

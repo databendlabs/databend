@@ -423,6 +423,21 @@ select to_yyyymm(to_date(18875))  =  202109
 ----
 1
 
+# A nullable argument to a monotonic function must not be folded to NULL.
+statement ok
+create or replace table nullable_date_domain(a date null)
+
+statement ok
+insert into nullable_date_domain values (null), (today())
+
+query I
+select count(*) from nullable_date_domain where to_yyyymm(a) > to_yyyymm(date_sub(month, 24, today()))
+----
+1
+
+statement ok
+drop table nullable_date_domain
+
 query ?
 select time_slot(to_datetime(1630320462000000))
 ----

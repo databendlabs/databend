@@ -61,7 +61,7 @@ mod tuple;
 mod variant;
 mod vector;
 
-pub use databend_common_sql_test_support as parser;
+pub use databend_common_expression_test_support as parser;
 
 #[derive(Clone)]
 pub struct TestContext<'a> {

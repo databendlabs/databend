@@ -1,10 +1,12 @@
 """Common utilities for Databend services."""
 
 import os
+import signal
 import subprocess
 import socket
 import time
 import toml
+import psutil
 from typing import Optional, Dict, Any
 
 
@@ -108,9 +110,16 @@ class ProcessManager:
 
     @staticmethod
     def start_process(
-        cmd: list, service_name: str, log_dir: Optional[str] = None
+        cmd: list,
+        service_name: str,
+        log_dir: Optional[str] = None,
+        pid_file: Optional[str] = None,
     ) -> subprocess.Popen:
-        """Start a subprocess with common configuration."""
+        """Start a subprocess with common configuration.
+
+        If `pid_file` is given, the child pid is written there so that a later
+        invocation (a different Python process) can stop or inspect it.
+        """
         from .progress import ProgressReporter
 
         ProgressReporter.print_message(f"🔧 Executing: {' '.join(cmd)}")
@@ -126,7 +135,83 @@ class ProcessManager:
 
         proc = subprocess.Popen(cmd, stdout=stdout_file, stderr=stderr_file, text=True)
         proc._log_files = (stdout_file, stderr_file)  # Store for cleanup
+
+        if pid_file is not None:
+            pid_dir = os.path.dirname(pid_file)
+            if pid_dir:
+                os.makedirs(pid_dir, exist_ok=True)
+            with open(pid_file, "w") as f:
+                f.write(str(proc.pid))
+
         return proc
+
+    @staticmethod
+    def read_pid_file(pid_file: str) -> Optional[int]:
+        """Read a pid from a pid file; None if missing or malformed."""
+        try:
+            with open(pid_file) as f:
+                return int(f.read().strip())
+        except (FileNotFoundError, ValueError):
+            return None
+
+    @staticmethod
+    def remove_pid_file(pid_file: str) -> None:
+        """Remove a pid file, tolerating a missing file."""
+        try:
+            os.remove(pid_file)
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
+    def is_pid_running(pid: Optional[int]) -> bool:
+        """Check if a pid refers to a live process."""
+        if pid is None:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    @staticmethod
+    def is_pid_command(pid: Optional[int], command: str) -> bool:
+        """Check if `pid` is a live process whose executable is named `command`.
+
+        Guards against pid reuse: once a process exits, the OS may recycle its
+        pid for an unrelated process. Matching the executable name keeps a
+        stale pid file from being mistaken for the original service.
+        """
+        if pid is None:
+            return False
+        try:
+            return psutil.Process(pid).name() == command
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
+    @staticmethod
+    def stop_pid(pid: int, service_name: str, timeout: int = 10) -> None:
+        """Stop a process by pid: SIGTERM, then SIGKILL after `timeout` seconds."""
+        from .progress import ProgressReporter
+
+        ProgressReporter.print_stop_info(f"databend-{service_name}")
+
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not ProcessManager.is_pid_running(pid):
+                return
+            time.sleep(0.3)
+
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
     @staticmethod
     def stop_process(process: subprocess.Popen, service_name: str) -> None:

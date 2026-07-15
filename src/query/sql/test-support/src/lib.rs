@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expr_parser;
+mod lite_context;
 pub mod optimizer;
 
-pub use expr_parser::parse_raw_expr;
+pub use lite_context::FrequencyStatsMap;
+pub use lite_context::LiteTableContext;
+pub use lite_context::init_testing_globals;
 pub use optimizer::*;
