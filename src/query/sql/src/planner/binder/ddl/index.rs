@@ -474,6 +474,12 @@ impl Binder {
             index_options,
         } = stmt;
 
+        if matches!(index_type, AstTableIndexType::Bloom) && !sync_creation {
+            return Err(ErrorCode::UnsupportedIndex(
+                "ASYNC BLOOM INDEX is not supported".to_string(),
+            ));
+        }
+
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 

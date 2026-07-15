@@ -910,16 +910,20 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
     let mut acc_block_size = 0;
     let mut acc_file_size = 0;
     let mut acc_bloom_filter_index_size = 0;
+    let mut acc_granule_index_size = 0;
     for _ in 0..size {
         let row_count = rng.r#gen::<u64>() / size;
         let block_size = rng.r#gen::<u64>() / size;
         let file_size = rng.r#gen::<u64>() / size;
-        let bloom_filter_index_size = rng.r#gen::<u64>() / size;
+        let bloom_filter_index_size = rng.r#gen::<u64>() / size / 3;
+        let granule_mins_size = rng.r#gen::<u64>() / size / 6;
+        let granule_offsets_size = rng.r#gen::<u64>() / size / 6;
         acc_row_count += row_count;
         acc_block_size += block_size;
         acc_file_size += file_size;
         acc_bloom_filter_index_size += bloom_filter_index_size;
-        let block_meta = BlockMeta::new(
+        acc_granule_index_size += granule_mins_size + granule_offsets_size;
+        let mut block_meta = BlockMeta::new(
             row_count,
             block_size,
             file_size,
@@ -940,6 +944,23 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
+        block_meta.granule_index = Some(
+            databend_storages_common_table_meta::meta::GranuleIndexLayout {
+                granule_rows: 100,
+                mins: Some(
+                    databend_storages_common_table_meta::meta::GranuleIndexFileLayout {
+                        location: ("mins".to_string(), 0),
+                        size: granule_mins_size,
+                        columns: HashMap::new(),
+                    },
+                ),
+                offsets: databend_storages_common_table_meta::meta::GranuleIndexFileLayout {
+                    location: ("offsets".to_string(), 0),
+                    size: granule_offsets_size,
+                    columns: HashMap::new(),
+                },
+            },
+        );
         blocks.push(block_meta);
     }
 
@@ -948,7 +969,10 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);
     assert_eq!(acc_file_size, stats.compressed_byte_size);
-    assert_eq!(acc_bloom_filter_index_size, stats.index_size);
+    assert_eq!(
+        acc_bloom_filter_index_size + acc_granule_index_size,
+        stats.index_size
+    );
 
     Ok(())
 }

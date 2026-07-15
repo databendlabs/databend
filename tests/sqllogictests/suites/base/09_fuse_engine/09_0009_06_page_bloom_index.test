@@ -12,6 +12,29 @@ CREATE DATABASE db_09_0009_06
 statement ok
 USE db_09_0009_06
 
+# Granule Bloom indexes are built on the write path; async backfill is not supported.
+statement error 1601
+CREATE ASYNC BLOOM INDEX pb_async_idx ON pb_t_missing(a)
+
+statement error 1601
+CREATE TABLE pb_async_t(a int, ASYNC BLOOM INDEX pb_async_idx(a)) index_granularity = 100
+
+# Column-oriented segments currently cannot preserve granule-index metadata.
+statement error 1301
+CREATE TABLE pb_column_segment(a int) index_granularity = 100 segment_format = 'column_oriented'
+
+statement ok
+CREATE TABLE pb_column_segment(a int) segment_format = 'column_oriented'
+
+statement error 1301
+ALTER TABLE pb_column_segment SET OPTIONS(index_granularity = '100')
+
+statement ok
+DROP TABLE pb_column_segment
+
+statement error 1301
+CREATE TABLE pb_invalid_granularity(a int) index_granularity = 4294967296
+
 # Small granule so a single block spans many granules; index created before insert so the write path
 # builds per-granule payloads.
 statement ok

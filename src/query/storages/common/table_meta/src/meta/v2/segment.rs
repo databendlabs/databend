@@ -233,6 +233,12 @@ pub struct GranuleIndexLayout {
     pub offsets: GranuleIndexFileLayout,
 }
 
+impl GranuleIndexLayout {
+    pub fn size(&self) -> u64 {
+        self.mins.as_ref().map_or(0, |mins| mins.size) + self.offsets.size
+    }
+}
+
 impl BlockMeta {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

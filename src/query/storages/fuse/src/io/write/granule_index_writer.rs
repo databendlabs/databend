@@ -102,10 +102,18 @@ impl GranuleIndexWriter {
         page_layout: &[LeafPageLayout],
         num_granules: usize,
         granule_mins: &[Scalar],
+        cluster_key_types: &[DataType],
         mins_location: Location,
         offsets_location: Location,
         extra_marks: Vec<GranuleMark>,
     ) -> Result<GranuleIndexState> {
+        let granule_rows = u32::try_from(self.granule_rows).map_err(|_| {
+            ErrorCode::Internal(format!(
+                "granule index rows {} exceed metadata limit {}",
+                self.granule_rows,
+                u32::MAX
+            ))
+        })?;
         if page_layout.len() != self.leaf_column_ids.len() {
             return Err(ErrorCode::Internal(format!(
                 "granule index: layout leaves {} != leaf column ids {}",
@@ -125,6 +133,13 @@ impl GranuleIndexWriter {
                 granule_mins.len()
             )));
         }
+        if granule_mins.is_empty() != cluster_key_types.is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "granule index has {} mins but {} cluster key types",
+                granule_mins.len(),
+                cluster_key_types.len()
+            )));
+        }
         let has_mins = !granule_mins.is_empty();
 
         let mut offset_marks = Vec::with_capacity(self.leaf_column_ids.len() + extra_marks.len());
@@ -138,13 +153,16 @@ impl GranuleIndexWriter {
         let offsets = serialize_marks(offset_marks, num_granules, offsets_location)?;
 
         let mins = if has_mins {
-            let (types, columns) = build_min_columns(granule_mins)?;
-            let fields = types
+            let columns = build_min_columns(granule_mins, cluster_key_types)?;
+            let fields = cluster_key_types
                 .iter()
                 .enumerate()
                 .map(|(i, ty)| {
                     let name = format!("{GRANULE_INDEX_MIN_COL_PREFIX}{i}");
-                    Ok(TableField::new(&name, infer_schema_type(ty)?))
+                    Ok(TableField::new(
+                        &name,
+                        infer_schema_type(&ty.wrap_nullable())?,
+                    ))
                 })
                 .collect::<Result<Vec<_>>>()?;
             Some(serialize_columns(
@@ -162,7 +180,7 @@ impl GranuleIndexWriter {
         let _ = self.cluster_key_id;
 
         Ok(GranuleIndexState {
-            granule_rows: self.granule_rows as u32,
+            granule_rows,
             mins,
             offsets,
         })
@@ -262,39 +280,38 @@ fn serialize_columns(
     })
 }
 
-fn build_min_columns(granule_mins: &[Scalar]) -> Result<(Vec<DataType>, Vec<Column>)> {
-    let first = granule_mins[0]
-        .as_tuple()
-        .ok_or_else(|| ErrorCode::Internal("granule index: granule min must be a tuple scalar"))?;
-    let arity = first.len();
-
-    let cluster_key_types: Vec<DataType> = first
-        .iter()
-        .map(|s| s.as_ref().infer_data_type().wrap_nullable())
-        .collect();
-
+fn build_min_columns(
+    granule_mins: &[Scalar],
+    cluster_key_types: &[DataType],
+) -> Result<Vec<Column>> {
     let mut builders: Vec<ColumnBuilder> = cluster_key_types
         .iter()
-        .map(|ty| ColumnBuilder::with_capacity(ty, granule_mins.len()))
+        .map(|ty| ColumnBuilder::with_capacity(&ty.wrap_nullable(), granule_mins.len()))
         .collect();
 
     for m in granule_mins {
         let tuple = m.as_tuple().ok_or_else(|| {
             ErrorCode::Internal("granule index: granule min must be a tuple scalar")
         })?;
-        if tuple.len() != arity {
+        if tuple.len() != cluster_key_types.len() {
             return Err(ErrorCode::Internal(format!(
-                "granule index: granule min arity {} != expected {arity}",
-                tuple.len()
+                "granule index: granule min arity {} != expected {}",
+                tuple.len(),
+                cluster_key_types.len()
             )));
         }
         for (i, elem) in tuple.iter().enumerate() {
+            if !elem.as_ref().is_value_of_type(&cluster_key_types[i]) {
+                return Err(ErrorCode::Internal(format!(
+                    "granule index: min element {i} has value {elem:?}, expected type {:?}",
+                    cluster_key_types[i]
+                )));
+            }
             builders[i].push(elem.as_ref());
         }
     }
 
-    let columns = builders.into_iter().map(|b| b.build()).collect();
-    Ok((cluster_key_types, columns))
+    Ok(builders.into_iter().map(|b| b.build()).collect())
 }
 
 // ============================ read path ============================
@@ -683,6 +700,7 @@ mod tests {
                 &page_layout,
                 3,
                 &granule_mins,
+                &[DataType::Number(NumberDataType::Int64)],
                 ("mins.parquet".to_string(), 0),
                 ("offs.parquet".to_string(), 0),
                 vec![],
@@ -737,12 +755,62 @@ mod tests {
         assert_eq!(offsets.offsets.get(&9).unwrap(), &vec![50, 600, 1500]);
     }
 
+    #[tokio::test]
+    async fn test_nullable_min_type_does_not_depend_on_first_value() {
+        let granule_mins = vec![
+            Scalar::Tuple(vec![Scalar::Null]),
+            Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(100))]),
+        ];
+        let element_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let state = GranuleIndexWriter::new(Some(42), 100, vec![7])
+            .build_with_extra_marks(
+                &[layout(None, 1000, &[(0, 100), (100, 260)])],
+                2,
+                &granule_mins,
+                std::slice::from_ref(&element_type),
+                ("mins.parquet".to_string(), 0),
+                ("offs.parquet".to_string(), 0),
+                vec![],
+            )
+            .unwrap();
+
+        let op = Operator::new(Memory::default()).unwrap().finish();
+        persist(&op, &state).await;
+        let mins = load_granule_mins(
+            &op,
+            &test_settings(),
+            state.layout().mins.as_ref().unwrap(),
+            &[element_type],
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(mins, granule_mins);
+    }
+
+    #[test]
+    fn test_rejects_granule_rows_above_metadata_limit() {
+        let error = GranuleIndexWriter::new(None, u32::MAX as usize + 1, vec![7])
+            .build_with_extra_marks(
+                &[],
+                1,
+                &[],
+                &[],
+                ("mins".to_string(), 0),
+                ("offsets".to_string(), 0),
+                vec![],
+            )
+            .unwrap_err();
+        assert!(error.message().contains("exceed metadata limit"));
+    }
+
     #[test]
     fn test_offset_only_granule_count_is_not_page_count() {
         let state = GranuleIndexWriter::new(None, 100, vec![7])
             .build_with_extra_marks(
                 &[layout(None, 1000, &[(0, 100), (50, 180)])],
                 1,
+                &[],
                 &[],
                 ("mins".to_string(), 0),
                 ("offsets".to_string(), 0),
@@ -760,6 +828,7 @@ mod tests {
             .build_with_extra_marks(
                 &[layout(None, 1000, &[(0, 100), (100, 260)])],
                 2,
+                &[],
                 &[],
                 ("mins".to_string(), 0),
                 ("offsets".to_string(), 0),

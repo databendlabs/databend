@@ -120,7 +120,6 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
         is_valid_data_page_rows(&self.plan.set_options)?;
         is_valid_data_page_bytes(&self.plan.set_options)?;
-        is_valid_index_granularity(&self.plan.set_options)?;
         is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
         is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
         is_valid_analyze_top_n_size(&self.plan.set_options)?;
@@ -172,6 +171,9 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+        let mut effective_options = table.get_table_info().meta.options.clone();
+        effective_options.extend(self.plan.set_options.clone());
+        is_valid_index_granularity(&effective_options)?;
 
         let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {

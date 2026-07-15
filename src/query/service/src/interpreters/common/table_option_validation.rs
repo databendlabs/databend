@@ -462,17 +462,29 @@ pub fn is_valid_data_page_bytes(
 pub fn is_valid_index_granularity(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    if let Some(val) = options.get(FUSE_OPT_KEY_INDEX_GRANULARITY) {
-        let v = val.parse::<usize>().map_err(|_| {
+    let granularity = options.get(FUSE_OPT_KEY_INDEX_GRANULARITY);
+    if let Some(val) = granularity {
+        let v = val.parse::<u32>().map_err(|_| {
             ErrorCode::TableOptionInvalid(format!(
-                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be a positive integer, got: {val}"
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be an integer between 1 and {}, got: {val}",
+                u32::MAX
             ))
         })?;
         if v == 0 {
             return Err(ErrorCode::TableOptionInvalid(format!(
-                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be >= 1"
+                "{FUSE_OPT_KEY_INDEX_GRANULARITY} must be between 1 and {}",
+                u32::MAX
             )));
         }
+    }
+    if granularity.is_some()
+        && options
+            .get(OPT_KEY_SEGMENT_FORMAT)
+            .is_some_and(|format| format.eq_ignore_ascii_case("column_oriented"))
+    {
+        return Err(ErrorCode::TableOptionInvalid(format!(
+            "{FUSE_OPT_KEY_INDEX_GRANULARITY} is not supported with column-oriented segments"
+        )));
     }
     Ok(())
 }

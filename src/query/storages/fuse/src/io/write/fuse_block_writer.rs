@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_blocks::ParquetFileWriter;
 use databend_storages_common_blocks::SerializedParquet;
@@ -81,6 +82,7 @@ pub(super) struct GranuleMins {
     cluster_key_index: Vec<usize>,
     operators: Vec<BlockOperator>,
     func_ctx: FunctionContext,
+    types: Option<Vec<DataType>>,
     mins: Vec<Scalar>,
 }
 
@@ -94,6 +96,7 @@ impl GranuleMins {
             cluster_key_index,
             operators,
             func_ctx,
+            types: None,
             mins: Vec::new(),
         }
     }
@@ -104,6 +107,21 @@ impl GranuleMins {
             .iter()
             .try_fold(block.clone(), |input, op| op.execute(&self.func_ctx, input))?;
 
+        let types = self
+            .cluster_key_index
+            .iter()
+            .map(|&i| evaluated.get_by_offset(i).data_type())
+            .collect::<Vec<_>>();
+        if let Some(expected) = &self.types {
+            if expected != &types {
+                return Err(ErrorCode::Internal(format!(
+                    "granule cluster key types changed from {expected:?} to {types:?}"
+                )));
+            }
+        } else {
+            self.types = Some(types);
+        }
+
         let key = self
             .cluster_key_index
             .iter()
@@ -113,6 +131,10 @@ impl GranuleMins {
         self.mins.push(Scalar::Tuple(key));
 
         Ok(())
+    }
+
+    fn finish(self) -> (Vec<Scalar>, Vec<DataType>) {
+        (self.mins, self.types.unwrap_or_default())
     }
 }
 
@@ -194,7 +216,8 @@ impl FuseBlockWriter {
         let granule_index_state = match granule {
             Some(granule) => {
                 let num_granules = self.total_rows.div_ceil(granule.rows);
-                let granule_mins = granule.mins.map(|mins| mins.mins).unwrap_or_default();
+                let (granule_mins, cluster_key_types) =
+                    granule.mins.map(GranuleMins::finish).unwrap_or_default();
                 let mut output = GranuleIndexBuildOutput::default();
                 for builder in granule.builders {
                     output.merge(builder.finalize()?)?;
@@ -214,6 +237,7 @@ impl FuseBlockWriter {
                     page_layout,
                     num_granules,
                     &granule_mins,
+                    &cluster_key_types,
                     mins_location,
                     offsets_location,
                     output.marks,
