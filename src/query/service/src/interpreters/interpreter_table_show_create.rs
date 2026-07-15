@@ -288,6 +288,21 @@ impl ShowCreateTableInterpreter {
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
+        if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+            let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
+            let mut normalizer = ClusterKeyNormalizer {
+                force_quoted_ident,
+                unquoted_ident_case_sensitive,
+                quoted_ident_case_sensitive,
+                sql_dialect,
+            };
+            for expr in exprs.iter_mut() {
+                expr.drive_mut(&mut normalizer);
+            }
+            let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
+            table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
+        }
+
         if let Some(cluster_keys_str) = table_info.meta.cluster_key_str() {
             let cluster_type = table_info
                 .options()
@@ -322,21 +337,6 @@ impl ShowCreateTableInterpreter {
                 .collect::<Vec<_>>()
                 .join("");
             table_create_sql.push_str(&s);
-        }
-
-        if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
-            let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
-            for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
-            }
-            let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
-            table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
         }
 
         if engine != "ICEBERG" && engine != "DELTA" {

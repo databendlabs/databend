@@ -11,6 +11,18 @@ statement ok
 CREATE TABLE t(p INT, c INT, v STRING) PARTITION BY (p % 3) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
+SET hide_options_in_show_create_table=0
+
+# SHOW CREATE TABLE must emit clauses in the same order accepted by CREATE TABLE.
+query TT
+SHOW CREATE TABLE t
+----
+t <slt:ignore>PARTITION BY (p % 3)<slt:ignore>CLUSTER BY linear(c)<slt:ignore>BLOCK_PER_SEGMENT='1000'<slt:ignore>ROW_PER_BLOCK='1000'<slt:ignore>
+
+statement ok
+SET hide_options_in_show_create_table=1
+
+statement ok
 INSERT INTO t VALUES (0, 30, 'a0'), (1, 20, 'a1'), (2, 10, 'a2')
 
 statement ok
