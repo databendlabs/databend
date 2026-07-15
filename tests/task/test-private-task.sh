@@ -706,6 +706,32 @@ else
     exit 1
 fi
 
+response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'SKIPPED', error_code = 0, error_message = 'OVERLAPPING_EXECUTION: test', completed_at = to_timestamp(4102444800) WHERE task_name = 'fanout_root'")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "EXECUTE TASK fanout_root")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM fanout_sink")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" = "6" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual" = "6" ]; then
+    echo "✅ Overlap skips do not mask successful parent runs"
+else
+    echo "❌ Expected successful parent run to release all successors after an overlap skip"
+    echo "Expected: 6"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')

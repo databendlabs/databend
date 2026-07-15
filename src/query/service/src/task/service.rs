@@ -858,6 +858,7 @@ impl TaskService {
             completed_at,
             ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn
         FROM system_task.task_run
+        WHERE NOT (state = 'SKIPPED' AND COALESCE(error_message, '') LIKE 'OVERLAPPING_EXECUTION:%')
     ) ranked
     WHERE rn = 1
 ),
