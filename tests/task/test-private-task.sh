@@ -376,6 +376,17 @@ else
     exit 1
 fi
 
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'when_false_task', ERROR_ONLY => TRUE)")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Skipped task runs are excluded from error-only history"
+else
+    echo "❌ Expected error-only history to exclude skipped task runs"
+    echo "Actual: $actual"
+    exit 1
+fi
+
 response=$(query_sql_with_auth "root:" "SELECT count_if(c1 = 99) FROM t1")
 check_response_error "$response"
 actual=$(echo "$response" | jq -r '.data[0][0]')
