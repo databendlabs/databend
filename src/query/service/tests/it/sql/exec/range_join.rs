@@ -44,14 +44,9 @@ fn extract_one_u64(blocks: Vec<DataBlock>) -> u64 {
     }
 }
 
-/// A single-row side of an inequality join (here a scalar/no-group-by aggregate, whose
-/// `precise_cardinality` is deterministically 1) must never end up driving a merge
-/// RANGE JOIN. The merge algorithm assumes the build side is the larger one and, for
-/// every driving-side row, materializes the whole matching span of the other side; when
-/// `RuleCommuteJoin` swaps children based on a corrupted cardinality estimate, a large
-/// table can land on the driving side against a single-row build side and blow up memory
-/// into a per-row cartesian product. The planner must instead pick CROSS JOIN + FILTER
-/// (a hash join) regardless of which side the single-row relation is placed on.
+/// An inequality join with a precise-one-row aggregate side should use CROSS JOIN + FILTER
+/// instead of RangeJoin. Exercise both equivalent predicate operand orders and verify the
+/// selected physical operator and query result.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -74,9 +69,7 @@ async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Re
         "SELECT count(*) FROM {db}.big b \
          WHERE b.ts >= (SELECT min(ts) FROM {db}.threshold)"
     );
-    // Scalar subquery on the left side of the inequality (operands flipped). The optimizer
-    // may commute children so the single-row aggregate becomes the driving side; the guard
-    // must still avoid a merge range join.
+    // Equivalent predicate with the scalar subquery written on the left.
     let q_left = format!(
         "SELECT count(*) FROM {db}.big b \
          WHERE (SELECT min(ts) FROM {db}.threshold) <= b.ts"
@@ -90,8 +83,7 @@ async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Re
         );
     }
 
-    // And the rewritten plan must still produce the correct result (all 1000 rows match
-    // `ts >= min(ts)`).
+    // Both forms must produce the correct result: all 1000 rows match `ts >= min(ts)`.
     for query in [&q_right, &q_left] {
         let blocks = fixture
             .execute_query(query)
@@ -107,8 +99,8 @@ async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Re
 /// Force the exact CROSS JOIN + FILTER shape that used to report a false scalar-subquery
 /// cardinality violation. The pushed-down expression is true for all four rows, but its
 /// estimated selectivity places the four-row table on the build side and the exact-one-row
-/// scalar aggregate on the probe side. The hash join must apply the inequality filter without
-/// treating the four cross-product candidates as four scalar-subquery rows.
+/// scalar aggregate on the probe side. The CROSS JOIN + FILTER execution must not treat the
+/// four cross-product candidates as four scalar-subquery rows.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_scalar_aggregate_probe_cross_join_filter() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
