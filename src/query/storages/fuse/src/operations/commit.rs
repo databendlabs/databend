@@ -356,7 +356,7 @@ impl FuseTable {
 
         // Initialize a new HLL with commit-local HLL.
         let mut new_hll = insert_hll.clone();
-        let next_stats_meta = if insert_hll.is_empty() {
+        let mut next_stats_meta = if insert_hll.is_empty() {
             prev_stats_meta.cloned()
         } else {
             None
@@ -441,6 +441,18 @@ impl FuseTable {
         };
         if let Some(stats) = &table_statistics {
             prev_stats_location = Some(self.new_table_statistics_location(stats)?);
+            if stats.hll.is_empty()
+                && match next_stats_meta.as_ref().and_then(|meta| meta.hll.as_ref()) {
+                    Some(hll) => decode_column_hll(hll)?.is_none_or(|hll| hll.is_empty()),
+                    None => true,
+                }
+            {
+                // The refreshed table-statistics file is authoritative for a TopN-only append.
+                // Do not let metadata without any HLL values keep its pre-append row count.
+                if let Some(meta) = &mut next_stats_meta {
+                    meta.row_count = stats.row_count;
+                }
+            }
         }
 
         Ok(TableStatsGenerator::new(

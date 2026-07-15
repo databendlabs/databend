@@ -497,6 +497,14 @@ statement ok
 INSERT INTO t_analyzed
 SELECT number::int, 1::int FROM numbers(900)
 
+# TopN-only appends must refresh the row count used to scale statistics for other columns.
+query II
+SELECT stats_row_count, actual_row_count
+FROM system.statistics
+WHERE database = 'db_09_0053' AND table = 't_analyzed' AND column_name = 'id'
+----
+1000 1000
+
 query T
 EXPLAIN SELECT * FROM t_analyzed WHERE a = 1
 ----
