@@ -250,9 +250,9 @@ impl PhysicalPlanBuilder {
                     // equi-conditions, the hash join executes as a cross join + filter.
                     // The single-join runtime check can fire during the cross-product
                     // matching phase before the filter is applied. It is only safe to
-                    // clear that marker when the scalar side itself is proven to produce
-                    // exactly one row; an exact one-row non-scalar side says nothing
-                    // about the scalar subquery's cardinality.
+                    // clear the marker when the scalar side itself is proven to produce
+                    // exactly one row. A precise one-row cardinality on the other input
+                    // does not prove that.
                     let join = if join.equi_conditions.is_empty()
                         && join.single_to_inner.is_some()
                         && single_join_scalar_side_is_precise_single_row(join, s_expr)?
