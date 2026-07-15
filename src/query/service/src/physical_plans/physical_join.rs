@@ -27,9 +27,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 
-fn has_precise_or_estimated_cardinality_one(
-    stat_info: &databend_common_sql::optimizer::ir::StatInfo,
-) -> bool {
+fn is_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
     matches!(stat_info.statistics.precise_cardinality, Some(1)) || stat_info.cardinality == 1.0
 }
 
@@ -102,9 +100,7 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if has_precise_or_estimated_cardinality_one(&left_stat_info)
-        || has_precise_or_estimated_cardinality_one(&right_stat_info)
-    {
+    if is_single_row(&left_stat_info) || is_single_row(&right_stat_info) {
         // Prefer CROSS JOIN + FILTER when statistics prove or estimate one side at one row.
         // HashJoin remains correct if the estimate is wrong and avoids the result-block
         // overhead that RangeJoin can incur for this shape after join commutation.
