@@ -371,13 +371,9 @@ impl BlockPruner {
         };
 
         if let Some(pruner) = sparse_granule_index_pruner {
-            match pruning_cost
-                .measure_async(
-                    PruningCostKind::BlocksRange,
-                    pruner.select_granule_ranges(&block_meta, granule_index, &survivors),
-                )
-                .await
-            {
+            match pruning_cost.measure(PruningCostKind::BlocksRange, || {
+                pruner.select_granule_ranges(&block_meta, granule_index, &survivors)
+            }) {
                 Ok(ranges) => survivors = ranges,
                 Err(e) => log::warn!(
                     "[FUSE-PRUNER] sparse granule pruning failed for {}, preserving input ranges: {e}",
@@ -402,9 +398,7 @@ impl BlockPruner {
                 &granule_index.offsets,
                 &mark_names,
                 num_granules,
-            )
-            .await
-            {
+            ) {
                 Ok(ctx) => ctx,
                 Err(e) => {
                     log::warn!(
@@ -425,13 +419,9 @@ impl BlockPruner {
             };
 
             for pruner in &granule_index_pruners {
-                match pruning_cost
-                    .measure_async(
-                        PruningCostKind::BlocksRange,
-                        pruner.prune_granules(&block_meta, &survivors, &read_ctx),
-                    )
-                    .await
-                {
+                match pruning_cost.measure(PruningCostKind::BlocksRange, || {
+                    pruner.prune_granules(&block_meta, &survivors, &read_ctx)
+                }) {
                     Ok(ranges) => {
                         granule_bloom_applied |= pruner.name() == GRANULE_BLOOM_INDEX_NAME;
                         survivors = ranges;

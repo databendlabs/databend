@@ -126,9 +126,7 @@ impl ReadBlockContext {
             granule_index.granule_rows as usize,
             fuse_part.nums_rows,
             &fuse_part.columns_meta,
-        )
-        .await
-        {
+        ) {
             Ok(index) => index,
             Err(e) => {
                 debug!(

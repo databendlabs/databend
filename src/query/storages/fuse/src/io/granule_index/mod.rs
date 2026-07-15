@@ -107,13 +107,12 @@ impl GranuleIndexBuilder for NoopGranuleIndexBuilder {
 
 pub const GRANULE_BLOOM_INDEX_NAME: &str = "bloom";
 
-#[async_trait::async_trait]
 pub trait GranuleIndexPruner: Send + Sync {
     fn name(&self) -> &'static str;
 
     fn required_marks(&self) -> Vec<String>;
 
-    async fn prune_granules(
+    fn prune_granules(
         &self,
         block_meta: &BlockMeta,
         input: &[Range<usize>],

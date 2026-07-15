@@ -32,7 +32,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_blocks::LeafPageLayout;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BytesRange;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -325,52 +325,55 @@ pub fn num_granules_of(block_rows: usize, granule_rows: usize) -> usize {
     block_rows.div_ceil(granule_rows)
 }
 
-/// Fetch requested columns with one merged read; missing names are omitted for old blocks.
-async fn fetch_granule_marks(
+fn fetch_granule_marks(
     dal: &Operator,
     settings: &ReadSettings,
     layout: &GranuleIndexFileLayout,
     names: &[String],
 ) -> Result<HashMap<String, Buffer>> {
-    let mut ranges: Vec<(ColumnId, Range<u64>)> = Vec::new();
-    let mut plan: Vec<(u32, String)> = Vec::new();
-    let mut next_id: u32 = 0;
+    let (byte_ranges, plan) = granule_mark_read_plan(layout, names);
+    if byte_ranges.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut reader = OperatorRangeReader::create(
+        settings,
+        dal.clone(),
+        layout.location.0.clone(),
+        &byte_ranges,
+        1,
+    )?;
+    let mut per_mark: HashMap<String, Vec<u8>> = HashMap::new();
+    for name in plan {
+        let data = reader.read()?;
+        per_mark
+            .entry(name)
+            .or_default()
+            .extend_from_slice(&data.to_bytes());
+    }
+    Ok(per_mark
+        .into_iter()
+        .map(|(name, bytes)| (name, Buffer::from(bytes)))
+        .collect())
+}
+
+type GranuleMarkReadPlan = (Vec<Range<u64>>, Vec<String>);
+
+fn granule_mark_read_plan(
+    layout: &GranuleIndexFileLayout,
+    names: &[String],
+) -> GranuleMarkReadPlan {
+    let mut byte_ranges = Vec::new();
+    let mut plan = Vec::new();
     for name in names {
         let Some(spans) = layout.columns.get(name) else {
             continue;
         };
         for span in spans {
-            ranges.push((next_id, span.offset..span.offset + span.len));
-            plan.push((next_id, name.clone()));
-            next_id += 1;
+            byte_ranges.push(span.offset..span.offset + span.len);
+            plan.push(name.clone());
         }
     }
-    if ranges.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let read =
-        MergeIOReader::merge_io_read(settings, dal.clone(), &layout.location.0, &ranges).await?;
-
-    let mut per_mark: HashMap<String, Vec<u8>> = HashMap::new();
-    for (synth_id, name) in &plan {
-        let (chunk_idx, byte_range) =
-            read.columns_chunk_offsets.get(synth_id).ok_or_else(|| {
-                ErrorCode::Internal(format!("granule index marks file missing range {synth_id}"))
-            })?;
-        let chunk = read
-            .owner_memory
-            .get_chunk(*chunk_idx, &layout.location.0)?;
-        let bytes = chunk.slice(byte_range.clone());
-        per_mark
-            .entry(name.clone())
-            .or_default()
-            .extend_from_slice(&bytes.to_bytes());
-    }
-    Ok(per_mark
-        .into_iter()
-        .map(|(k, v)| (k, Buffer::from(v)))
-        .collect())
+    (byte_ranges, plan)
 }
 
 fn decode_single_column(bytes: Buffer, ty: &DataType, num_rows: usize) -> Result<Column> {
@@ -409,7 +412,7 @@ pub struct GranulePruningReadContext {
 }
 
 impl GranulePruningReadContext {
-    pub async fn load(
+    pub fn load(
         dal: &Operator,
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
@@ -424,7 +427,7 @@ impl GranulePruningReadContext {
             }
         }
 
-        let raw_marks = fetch_granule_marks(dal, settings, layout, &unique_names).await?;
+        let raw_marks = fetch_granule_marks(dal, settings, layout, &unique_names)?;
         let mut marks = HashMap::with_capacity(raw_marks.len());
         for (name, raw) in raw_marks {
             marks.insert(name, decode_u64_column(raw, num_granules)?);
@@ -444,7 +447,7 @@ impl GranulePruningReadContext {
     }
 }
 
-pub async fn load_granule_mins(
+pub fn load_granule_mins(
     dal: &Operator,
     settings: &ReadSettings,
     layout: &GranuleIndexFileLayout,
@@ -454,7 +457,7 @@ pub async fn load_granule_mins(
     let names: Vec<String> = (0..element_types.len())
         .map(|i| format!("{GRANULE_INDEX_MIN_COL_PREFIX}{i}"))
         .collect();
-    let mut buffers = fetch_granule_marks(dal, settings, layout, &names).await?;
+    let mut buffers = fetch_granule_marks(dal, settings, layout, &names)?;
 
     let mut element_cols: Vec<Column> = Vec::with_capacity(element_types.len());
     for (i, ty) in element_types.iter().enumerate() {
@@ -502,7 +505,7 @@ pub struct OffsetsIndex {
 }
 
 impl OffsetsIndex {
-    pub async fn load(
+    pub fn load(
         dal: &Operator,
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
@@ -520,7 +523,7 @@ impl OffsetsIndex {
             .keys()
             .map(|id| format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}"))
             .collect();
-        let mut buffers = fetch_granule_marks(dal, settings, layout, &names).await?;
+        let mut buffers = fetch_granule_marks(dal, settings, layout, &names)?;
         let mut offsets = HashMap::with_capacity(col_metas.len());
         for (id, meta) in col_metas {
             let name = format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}");
@@ -683,6 +686,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_two_file_roundtrip() {
+        crate::test_utils::init_test_globals().unwrap();
         let granule_rows = 100;
         let leaf_a = layout(None, 1000, &[(0, 100), (50, 150), (100, 260), (200, 480)]);
         let leaf_b = layout(Some((10, 40)), 2000, &[(0, 50), (100, 600), (200, 1500)]);
@@ -720,7 +724,6 @@ mod tests {
             &element_types,
             3,
         )
-        .await
         .unwrap();
         assert_eq!(mins, granule_mins);
 
@@ -749,7 +752,6 @@ mod tests {
             300,
             &col_metas,
         )
-        .await
         .unwrap();
         assert_eq!(offsets.offsets.get(&7).unwrap(), &vec![100, 260, 480]);
         assert_eq!(offsets.offsets.get(&9).unwrap(), &vec![50, 600, 1500]);
@@ -757,6 +759,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nullable_min_type_does_not_depend_on_first_value() {
+        crate::test_utils::init_test_globals().unwrap();
         let granule_mins = vec![
             Scalar::Tuple(vec![Scalar::Null]),
             Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(100))]),
@@ -783,7 +786,6 @@ mod tests {
             &[element_type],
             2,
         )
-        .await
         .unwrap();
         assert_eq!(mins, granule_mins);
     }
@@ -822,6 +824,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_offsets_index_rejects_missing_projected_column() {
+        crate::test_utils::init_test_globals().unwrap();
         let op = Operator::new(Memory::default()).unwrap().finish();
         let settings = test_settings();
         let state = GranuleIndexWriter::new(None, 100, vec![7])
@@ -855,7 +858,6 @@ mod tests {
             }),
         );
         let err = OffsetsIndex::load(&op, &settings, &state.offsets.layout, 100, 200, &col_metas)
-            .await
             .err()
             .unwrap();
         assert!(err.message().contains("g_9"), "{err}");
@@ -863,6 +865,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pruning_context_loads_only_requested_marks() {
+        crate::test_utils::init_test_globals().unwrap();
         let state = serialize_marks(
             vec![
                 GranuleMark::create("needed_a", vec![1, 2]),
@@ -885,7 +888,6 @@ mod tests {
         ];
         let context =
             GranulePruningReadContext::load(&op, &test_settings(), &state.layout, &requested, 2)
-                .await
                 .unwrap();
 
         assert_eq!(context.mark("needed_a"), Some([1, 2].as_slice()));

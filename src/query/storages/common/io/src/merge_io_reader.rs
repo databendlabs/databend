@@ -42,9 +42,9 @@ impl MergeIOReader {
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
-        raw_ranges: &[(ColumnId, Range<u64>)],
+        byte_ranges: &[(ColumnId, Range<u64>)],
     ) -> Result<MergeIOReadResult> {
-        if raw_ranges.is_empty() {
+        if byte_ranges.is_empty() {
             // shortcut
             let read_res = MergeIOReadResult::create(
                 OwnerMemory::create(vec![]),
@@ -55,7 +55,7 @@ impl MergeIOReader {
         }
 
         // Build merged read ranges.
-        let ranges = raw_ranges
+        let ranges = byte_ranges
             .iter()
             .map(|(_, r)| r.clone())
             .collect::<Vec<_>>();
@@ -90,9 +90,9 @@ impl MergeIOReader {
             metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
         }
 
-        let mut columns_chunk_offsets = HashMap::with_capacity(raw_ranges.len());
-        for (raw_idx, raw_range) in raw_ranges {
-            let column_range = raw_range.start..raw_range.end;
+        let mut columns_chunk_offsets = HashMap::with_capacity(byte_ranges.len());
+        for (column_id, byte_range) in byte_ranges {
+            let column_range = byte_range.start..byte_range.end;
 
             // Find the range index and Range from merged ranges.
             let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(|| ErrorCode::Internal(format!(
@@ -103,7 +103,7 @@ impl MergeIOReader {
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
             let end = (column_range.end - merged_range.start) as usize;
-            let column_id = *raw_idx as ColumnId;
+            let column_id = *column_id as ColumnId;
             let range = start..end;
             columns_chunk_offsets.insert(column_id, (merged_range_idx, range));
         }

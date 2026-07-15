@@ -34,7 +34,6 @@
 
 mod block;
 mod bulk;
-mod streaming_sink;
 
 use bytes::Bytes;
 use parquet::file::metadata::ParquetMetaData;
@@ -44,7 +43,6 @@ pub use self::bulk::BulkParquetFileWriter;
 pub use self::bulk::BulkParquetLeafWriter;
 pub use self::bulk::ChunkedWriteBuffer;
 pub use self::bulk::DEFAULT_CHUNK_SIZE;
-pub use self::streaming_sink::StreamingUploadSink;
 
 /// Result of finishing a [`BulkParquetFileWriter`] / [`ParquetFileWriter`]: the serialized
 /// single-row-group Parquet bytes plus the file metadata.

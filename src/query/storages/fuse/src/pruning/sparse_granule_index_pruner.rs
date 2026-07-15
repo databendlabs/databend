@@ -102,7 +102,7 @@ impl SparseGranuleIndexPruner {
         })))
     }
 
-    pub async fn select_granule_ranges(
+    pub fn select_granule_ranges(
         &self,
         block_meta: &BlockMeta,
         granule_index: &GranuleIndexLayout,
@@ -134,8 +134,7 @@ impl SparseGranuleIndexPruner {
             mins_layout,
             &self.cluster_key_types,
             num_granules,
-        )
-        .await?;
+        )?;
 
         let block_max = Scalar::Tuple(cluster_stats.max().clone());
         let ranges = self.evaluator.apply(&granule_mins, &block_max)?;

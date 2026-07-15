@@ -38,7 +38,6 @@ use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_blocks::BulkParquetFileWriter;
 use databend_storages_common_blocks::BulkParquetLeafWriter;
-use databend_storages_common_blocks::StreamingUploadSink;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -47,7 +46,8 @@ use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
-use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::BlockingOperatorWriter;
+use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -192,8 +192,8 @@ fn payload_arrow_field() -> Arc<arrow_schema::Field> {
 }
 
 fn new_payload_writer(
-    sink: StreamingUploadSink,
-) -> Result<BulkParquetFileWriter<StreamingUploadSink>> {
+    sink: BlockingOperatorWriter,
+) -> Result<BulkParquetFileWriter<BlockingOperatorWriter>> {
     let table_schema = payload_table_schema();
     let arrow_schema = Arc::new((&table_schema).into());
     let props = Arc::new(build_parquet_writer_properties(
@@ -214,7 +214,7 @@ struct ColumnPayloadState {
     field: TableField,
     col_id: u32,
     payload_field: Arc<arrow_schema::Field>,
-    payload_writer: Option<BulkParquetLeafWriter<StreamingUploadSink>>,
+    payload_writer: Option<BulkParquetLeafWriter<BlockingOperatorWriter>>,
     granules_written: usize,
     current: Option<BloomIndexBuilder>,
 }
@@ -227,7 +227,7 @@ impl ColumnPayloadState {
         dal: Operator,
     ) -> Result<Self> {
         let col_id = field.column_id();
-        let sink = StreamingUploadSink::create(dal, location, 2);
+        let sink = BlockingOperatorWriter::create(dal, location, 2);
         let payload_writer = new_payload_writer(sink)?.next_leaf()?;
         Ok(Self {
             field_index,
@@ -377,6 +377,24 @@ struct MatchedColumn {
     index_version: String,
 }
 
+struct BloomPayloadReader {
+    filter_field: TableField,
+    reader: OperatorRangeReader,
+}
+
+type LoadedBloomFilters = Vec<(TableField, Arc<FilterImpl>)>;
+type BloomSurvivor = (usize, LoadedBloomFilters);
+
+impl BloomPayloadReader {
+    fn next_filter(&mut self) -> Result<Option<FilterImpl>> {
+        let page = self.reader.read()?;
+        if page.is_empty() {
+            return Ok(None);
+        }
+        decode_filter_from_page(page)
+    }
+}
+
 pub struct BloomGranuleIndexPruner {
     func_ctx: FunctionContext,
     filter_expr: Expr<String>,
@@ -459,7 +477,7 @@ impl BloomGranuleIndexPruner {
         })))
     }
 
-    async fn try_prune(
+    fn try_prune(
         &self,
         block_meta: &BlockMeta,
         input_ranges: &[Range<usize>],
@@ -489,9 +507,15 @@ impl BloomGranuleIndexPruner {
 
         let empty_stats = StatisticsOfColumns::new();
         let column_stats = block_meta.col_stats.clone();
-
-        let mut per_granule_filters: HashMap<usize, Vec<(TableField, Arc<FilterImpl>)>> =
-            HashMap::new();
+        let stats = if column_stats.is_empty() {
+            &empty_stats
+        } else {
+            &column_stats
+        };
+        let mut survivors = survivors
+            .into_iter()
+            .map(|granule| (granule, Vec::new()))
+            .collect::<Vec<BloomSurvivor>>();
         let mut any_column_has_payload = false;
 
         for col in &self.matched_columns {
@@ -502,46 +526,10 @@ impl BloomGranuleIndexPruner {
             };
             any_column_has_payload = true;
 
-            let payload_loc =
-                TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
-                    &block_meta.location.0,
-                    &col.index_name,
-                    &col.index_version,
-                    col_id,
-                );
-
-            let mut raw_ranges = Vec::with_capacity(survivors.len());
-            for &g in &survivors {
-                let (start, len) = (offs[g], lens[g]);
-                if len > 0 {
-                    raw_ranges.push((g as u32, start..start + len));
-                }
-            }
-            if raw_ranges.is_empty() {
-                continue;
-            }
-
-            let read = MergeIOReader::merge_io_read(
-                &self.settings,
-                self.dal.clone(),
-                &payload_loc,
-                &raw_ranges,
-            )
-            .await?;
-
-            let filter_name =
-                BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, &col.field)?;
-            let filter_field = TableField::new(&filter_name, TableDataType::Binary);
-
-            for (g_tag, (chunk_idx, byte_range)) in read.columns_chunk_offsets.iter() {
-                let chunk = read.owner_memory.get_chunk(*chunk_idx, &payload_loc)?;
-                let page_bytes = chunk.slice(byte_range.clone());
-                if let Some(filter) = decode_filter_from_page(page_bytes)? {
-                    per_granule_filters
-                        .entry(*g_tag as usize)
-                        .or_default()
-                        .push((filter_field.clone(), Arc::new(filter)));
-                }
+            survivors =
+                self.prune_column(&block_meta.location.0, col, offs, lens, survivors, stats)?;
+            if survivors.is_empty() {
+                break;
             }
         }
 
@@ -551,45 +539,83 @@ impl BloomGranuleIndexPruner {
             ));
         }
 
-        let stats = if column_stats.is_empty() {
-            &empty_stats
-        } else {
-            &column_stats
-        };
+        Ok(coalesce(
+            &survivors
+                .into_iter()
+                .map(|(granule, _)| granule)
+                .collect::<Vec<_>>(),
+        ))
+    }
 
-        let mut kept = Vec::with_capacity(survivors.len());
-        for &g in &survivors {
-            let keep = match per_granule_filters.get(&g) {
-                Some(contribs) if !contribs.is_empty() => {
-                    let (fields, filters): (Vec<_>, Vec<_>) = contribs.iter().cloned().unzip();
-                    let filter_schema = Arc::new(TableSchema::new(fields));
-                    let bloom_index = BloomIndex::from_filter_block(
-                        self.func_ctx.clone(),
-                        filter_schema,
-                        filters,
-                        BlockFilter::VERSION,
-                    )?;
-                    bloom_index.apply(
-                        self.filter_expr.clone(),
-                        &self.eq_scalar_map,
-                        &HashMap::new(),
-                        &[],
-                        stats,
-                        self.data_schema.clone(),
-                    )? != FilterEvalResult::MustFalse
-                }
-                _ => true,
-            };
-            if keep {
-                kept.push(g);
-            }
+    fn prune_column(
+        &self,
+        block_location: &str,
+        col: &MatchedColumn,
+        offsets: &[u64],
+        lengths: &[u64],
+        survivors: Vec<BloomSurvivor>,
+        stats: &StatisticsOfColumns,
+    ) -> Result<Vec<BloomSurvivor>> {
+        let byte_ranges = bloom_byte_ranges(&survivors, offsets, lengths);
+        if byte_ranges.iter().all(Range::is_empty) {
+            return Ok(survivors);
         }
 
-        Ok(coalesce(&kept))
+        let payload_loc =
+            TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
+                block_location,
+                &col.index_name,
+                &col.index_version,
+                col.field.column_id(),
+            );
+        let reader = OperatorRangeReader::create(
+            &self.settings,
+            self.dal.clone(),
+            payload_loc,
+            &byte_ranges,
+            1,
+        )?;
+        let filter_name = BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, &col.field)?;
+        let mut reader = BloomPayloadReader {
+            filter_field: TableField::new(&filter_name, TableDataType::Binary),
+            reader,
+        };
+
+        let mut next_survivors = Vec::with_capacity(survivors.len());
+        for (granule, mut loaded_filters) in survivors {
+            if let Some(filter) = reader.next_filter()? {
+                loaded_filters.push((reader.filter_field.clone(), Arc::new(filter)));
+            }
+            if loaded_filters.is_empty() || self.may_match(&loaded_filters, stats)? {
+                next_survivors.push((granule, loaded_filters));
+            }
+        }
+        Ok(next_survivors)
+    }
+
+    fn may_match(
+        &self,
+        loaded_filters: &[(TableField, Arc<FilterImpl>)],
+        stats: &StatisticsOfColumns,
+    ) -> Result<bool> {
+        let (fields, filters): (Vec<_>, Vec<_>) = loaded_filters.iter().cloned().unzip();
+        let bloom_index = BloomIndex::from_filter_block(
+            self.func_ctx.clone(),
+            Arc::new(TableSchema::new(fields)),
+            filters,
+            BlockFilter::VERSION,
+        )?;
+        Ok(bloom_index.apply(
+            self.filter_expr.clone(),
+            &self.eq_scalar_map,
+            &HashMap::new(),
+            &[],
+            stats,
+            self.data_schema.clone(),
+        )? != FilterEvalResult::MustFalse)
     }
 }
 
-#[async_trait::async_trait]
 impl GranuleIndexPruner for BloomGranuleIndexPruner {
     fn name(&self) -> &'static str {
         super::GRANULE_BLOOM_INDEX_NAME
@@ -599,14 +625,28 @@ impl GranuleIndexPruner for BloomGranuleIndexPruner {
         self.required_mark_names()
     }
 
-    async fn prune_granules(
+    fn prune_granules(
         &self,
         block_meta: &BlockMeta,
         input: &[Range<usize>],
         read_ctx: &GranulePruningReadContext,
     ) -> Result<Vec<Range<usize>>> {
-        self.try_prune(block_meta, input, read_ctx).await
+        self.try_prune(block_meta, input, read_ctx)
     }
+}
+
+fn bloom_byte_ranges(
+    survivors: &[BloomSurvivor],
+    offsets: &[u64],
+    lengths: &[u64],
+) -> Vec<Range<u64>> {
+    survivors
+        .iter()
+        .map(|(granule, _)| {
+            let (start, len) = (offsets[*granule], lengths[*granule]);
+            start..start + len
+        })
+        .collect()
 }
 
 fn decode_filter_from_page(bytes: Buffer) -> Result<Option<FilterImpl>> {
@@ -710,6 +750,18 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    #[test]
+    fn test_next_column_ranges_only_include_current_survivors() {
+        let survivors = vec![(1, Vec::new()), (3, Vec::new())];
+        let offsets = [0, 10, 20, 30, 40];
+        let lengths = [1, 2, 3, 4, 5];
+
+        assert_eq!(bloom_byte_ranges(&survivors, &offsets, &lengths), vec![
+            10..12,
+            30..34
+        ]);
     }
 
     #[test]
@@ -898,5 +950,49 @@ mod tests {
         let g1 = decode_page(&payload[offs[1] as usize..(offs[1] + lens[1]) as usize]).unwrap();
         assert!(g1.contains_digest(digest(3)));
         assert!(g1.contains_digest(digest(4)));
+
+        let settings = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 1024 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        let ranges = vec![
+            offs[0]..offs[0] + lens[0],
+            offs[1]..offs[1],
+            offs[1]..offs[1] + lens[1],
+        ];
+        let new_reader = || BloomPayloadReader {
+            filter_field: TableField::new("f", TableDataType::Binary),
+            reader: OperatorRangeReader::create(
+                &settings,
+                dal.clone(),
+                payload_loc.clone(),
+                &ranges,
+                1,
+            )
+            .unwrap(),
+        };
+        let mut first_column = new_reader();
+        let mut second_column = new_reader();
+        for expected in [Some([1, 2]), None, Some([3, 4])] {
+            let first = first_column.next_filter().unwrap();
+            let second = second_column.next_filter().unwrap();
+            match expected {
+                Some(values) => {
+                    let first = first.unwrap();
+                    let second = second.unwrap();
+                    for value in values {
+                        assert!(first.contains_digest(digest(value)));
+                        assert!(second.contains_digest(digest(value)));
+                    }
+                }
+                None => {
+                    assert!(first.is_none());
+                    assert!(second.is_none());
+                }
+            }
+        }
+        assert!(first_column.reader.read().is_err());
+        assert!(second_column.reader.read().is_err());
     }
 }
