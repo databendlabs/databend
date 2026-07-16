@@ -477,7 +477,7 @@ impl Table for StreamTable {
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         let table_desc =
             format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
-        fuse_table
+        let changes_query = fuse_table
             .get_changes_query(
                 ctx,
                 &self.mode(),
@@ -485,7 +485,8 @@ impl Table for StreamTable {
                 table_desc,
                 self.offset()?,
             )
-            .await
+            .await?;
+        Ok(changes_query.query)
     }
 }
 

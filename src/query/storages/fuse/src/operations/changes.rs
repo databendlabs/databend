@@ -61,6 +61,12 @@ pub struct ChangesDesc {
     pub desc: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangesQuery {
+    pub query: String,
+    pub mode: StreamMode,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StreamBacklog {
     // Physical rows in latest-only endpoint blocks.
@@ -73,6 +79,12 @@ pub struct StreamBacklog {
 }
 
 impl FuseTable {
+    pub fn with_changes_desc(&self, changes_desc: ChangesDesc) -> Self {
+        let mut table = self.clone();
+        table.changes_desc = Some(changes_desc);
+        table
+    }
+
     pub async fn get_change_descriptor(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -135,11 +147,11 @@ impl FuseTable {
         base_location: &Option<String>,
         table_desc: String,
         seq: u64,
-    ) -> Result<String> {
+    ) -> Result<ChangesQuery> {
         let suffix = format!("{:08x}", Utc::now().timestamp());
 
         let optimized_mode = self.optimize_stream_mode(mode, base_location).await?;
-        let query = match optimized_mode {
+        let query = match &optimized_mode {
             StreamMode::AppendOnly => {
                 let append_alias = format!("_change_append${}", suffix);
                 format!(
@@ -229,7 +241,10 @@ impl FuseTable {
                 )
             }
         };
-        Ok(query)
+        Ok(ChangesQuery {
+            query,
+            mode: optimized_mode,
+        })
     }
 
     async fn optimize_stream_mode(
@@ -568,12 +583,24 @@ impl FuseTable {
 
     pub async fn changes_table_statistics(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         base_location: &Option<String>,
         change_type: ChangeType,
     ) -> Result<Option<TableStatistics>> {
         let Some(base_location) = base_location else {
-            return self.table_statistics(ctx, true, None).await;
+            // No base snapshot means this changes scan covers the full range from an empty
+            // endpoint to the attached latest snapshot (the first MV refresh uses this form).
+            // Do not call `table_statistics` recursively here: `self` is still an attached
+            // changes source, so re-entering it either loses the scan-level `ChangeType` or
+            // recurses back into this method. Derive the endpoint statistics directly instead.
+            let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+                return Ok(None);
+            };
+            let num_rows = match change_type {
+                ChangeType::Append | ChangeType::Insert => latest_snapshot.summary.row_count,
+                ChangeType::Delete => 0,
+            };
+            return Ok(Some(scale_snapshot_statistics(&latest_snapshot, num_rows)));
         };
 
         let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;

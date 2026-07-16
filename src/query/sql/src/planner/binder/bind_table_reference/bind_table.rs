@@ -27,6 +27,7 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -37,7 +38,6 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 impl Binder {
-    /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn bind_table(
@@ -186,8 +186,15 @@ impl Binder {
 
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
             || table_meta.is_stream()
+            || table_meta.has_changes_source()
         {
             let change_type = get_change_type(&table_name_alias);
+            if table_meta.has_changes_source() && change_type.is_none() {
+                return Err(ErrorCode::Internal(format!(
+                    "CHANGE_TRACKING source '{}' is missing a valid changes alias",
+                    table_name
+                )));
+            }
             if change_type.is_some() {
                 let table_index = self.metadata.write().add_table(
                     catalog,
@@ -314,6 +321,17 @@ impl Binder {
                     )
                 }
             }
+            MATERIALIZED_VIEW_ENGINE => self.bind_materialized_view(
+                bind_context,
+                &catalog,
+                &database,
+                &self.normalize_identifier(table).name,
+                table_name_alias,
+                table_meta,
+                alias,
+                sample,
+                cte_suffix_name,
+            ),
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog.clone(),

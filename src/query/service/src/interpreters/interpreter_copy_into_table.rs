@@ -289,6 +289,7 @@ impl CopyIntoTableInterpreter {
                     stat_info: None,
                     table_index: None,
                     internal_column: None,
+                    materialized_view: None,
                     source: Box::new(data_source_plan),
                     meta: PhysicalPlanMeta::new("TableScan"),
                 })),

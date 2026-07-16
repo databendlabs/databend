@@ -66,6 +66,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -1038,6 +1039,10 @@ impl Table for FuseTable {
         self.get_option(OPT_KEY_CHANGE_TRACKING, false)
     }
 
+    fn has_changes_source(&self) -> bool {
+        self.changes_desc.is_some()
+    }
+
     fn stream_columns(&self) -> Vec<StreamColumn> {
         if self.change_tracking_enabled() {
             vec![
@@ -1178,9 +1183,14 @@ impl Table for FuseTable {
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         if let Some(desc) = &self.changes_desc {
-            assert!(change_type.is_some());
+            let change_type = change_type.ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "CHANGE_TRACKING table {} is missing its scan change type",
+                    self.table_info.desc
+                ))
+            })?;
             return self
-                .changes_table_statistics(ctx, &desc.location, change_type.unwrap())
+                .changes_table_statistics(ctx, &desc.location, change_type)
                 .await;
         }
 
@@ -1443,14 +1453,16 @@ impl Table for FuseTable {
 
         self.check_changes_valid(&db_tb_name, *seq)?;
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
-        self.get_changes_query(
-            ctx,
-            mode,
-            location,
-            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
-            *seq,
-        )
-        .await
+        let changes_query = self
+            .get_changes_query(
+                ctx,
+                mode,
+                location,
+                format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
+                *seq,
+            )
+            .await?;
+        Ok(changes_query.query)
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
@@ -1515,7 +1527,7 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly()
+        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
     }
 
     fn use_own_sample_block(&self) -> bool {

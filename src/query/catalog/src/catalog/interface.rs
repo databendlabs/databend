@@ -81,6 +81,8 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -264,6 +266,43 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
+
+    /// Get a materialized-view definition by its table ID.
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_mv_definition' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    /// List all materialized views that depend on a source table.
+    async fn list_mvs_by_source_table_id(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<Vec<MVInfo>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_mvs_by_source_table_id' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    /// List materialized views valid for the caller's source binding generation.
+    async fn list_valid_mvs_by_source_table_id(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _expected_source_generation: u64,
+    ) -> Result<Vec<MVInfo>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_valid_mvs_by_source_table_id' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
