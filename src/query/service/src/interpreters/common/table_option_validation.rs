@@ -63,6 +63,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_P
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
@@ -121,6 +122,15 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
+
+/// Table option keys that can occur in 'create materialized view statement'.
+pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| {
+        let mut r = HashSet::new();
+        r.insert(OPT_KEY_DATABASE_ID);
+        r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+        r
+    });
 
 pub static CREATE_LAKE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
@@ -195,6 +205,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
         Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
+        Engine::MaterializedView => CREATE_MATERIALIZED_VIEW_OPTIONS.contains(opt_key),
     }
 }
 

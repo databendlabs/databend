@@ -5,6 +5,7 @@ select "Engine" as engine from system.engines order by engine
 DELTA
 FUSE
 ICEBERG
+MATERIALIZED_VIEW
 MEMORY
 NULL
 PAIMON

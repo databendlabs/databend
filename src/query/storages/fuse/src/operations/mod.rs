@@ -45,6 +45,7 @@ pub use agg_index_sink::AggIndexSink;
 pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
+pub use changes::ChangesQuery;
 pub use changes::StreamBacklog;
 pub use common::*;
 pub use compact::CompactOptions;

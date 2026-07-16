@@ -33,6 +33,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::Constraint;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
@@ -252,11 +253,28 @@ fn values_to_constant_scan(
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: Insert,
+    materialized_view_refresh_target: Option<u64>,
 }
 
 impl InsertInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Insert) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertInterpreter { ctx, plan }))
+        Ok(Arc::new(InsertInterpreter {
+            ctx,
+            plan,
+            materialized_view_refresh_target: None,
+        }))
+    }
+
+    pub(crate) fn try_create_materialized_view_refresh(
+        ctx: Arc<QueryContext>,
+        plan: Insert,
+        target_table_id: u64,
+    ) -> Result<InterpreterPtr> {
+        Ok(Arc::new(InsertInterpreter {
+            ctx,
+            plan,
+            materialized_view_refresh_target: Some(target_table_id),
+        }))
     }
 
     fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
@@ -312,8 +330,12 @@ impl Interpreter for InsertInterpreter {
 
         let mut table_constraints = Vec::new();
         // check mutability
-        table.check_mutable()?;
-        let table_meta_timestamps = if table.engine() == "FUSE" {
+        if self.materialized_view_refresh_target != Some(table.get_id()) {
+            table.check_mutable()?;
+        }
+
+        let is_fuse_backed = table.engine() == "FUSE" || table.engine() == MATERIALIZED_VIEW_ENGINE;
+        let table_meta_timestamps = if is_fuse_backed {
             let fuse_table =
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
 
