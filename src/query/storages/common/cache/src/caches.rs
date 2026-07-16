@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
+use databend_common_expression::DataBlock;
 
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
@@ -69,10 +70,53 @@ pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
 pub type IcebergTableCache = InMemoryLruCache<(Arc<dyn Table>, AtomicBool, Instant)>;
 
-/// In memory object cache of table column array
-pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
-pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (ArrayRef, ArrayRawDataUncompressedSize);
+/// In-memory cache of decoded table data.
+pub type TableDataCache = InMemoryLruCache<TableDataCacheEntry>;
+
+pub enum TableDataCacheValue {
+    ColumnArray(ArrayRef),
+    DataBlock(DataBlock),
+}
+
+pub struct TableDataCacheEntry {
+    value: TableDataCacheValue,
+    memory_size: usize,
+}
+
+impl TableDataCacheEntry {
+    pub fn from_column_array(value: ArrayRef, memory_size: usize) -> Self {
+        Self {
+            value: TableDataCacheValue::ColumnArray(value),
+            memory_size,
+        }
+    }
+
+    pub fn from_data_block(value: DataBlock) -> Self {
+        let memory_size = value.memory_size();
+        Self {
+            value: TableDataCacheValue::DataBlock(value),
+            memory_size,
+        }
+    }
+
+    pub fn as_column_array(&self) -> Option<&ArrayRef> {
+        match &self.value {
+            TableDataCacheValue::ColumnArray(value) => Some(value),
+            TableDataCacheValue::DataBlock(_) => None,
+        }
+    }
+
+    pub fn as_data_block(&self) -> Option<&DataBlock> {
+        match &self.value {
+            TableDataCacheValue::ColumnArray(_) => None,
+            TableDataCacheValue::DataBlock(value) => Some(value),
+        }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.memory_size
+    }
+}
 
 // Bind Type of cached objects to Caches
 //
@@ -359,10 +403,10 @@ impl From<(PartStatistics, Partitions)> for CacheValue<(PartStatistics, Partitio
     }
 }
 
-impl From<SizedColumnArray> for CacheValue<SizedColumnArray> {
-    fn from(value: SizedColumnArray) -> Self {
+impl From<TableDataCacheEntry> for CacheValue<TableDataCacheEntry> {
+    fn from(value: TableDataCacheEntry) -> Self {
         CacheValue {
-            mem_bytes: value.1,
+            mem_bytes: value.memory_size,
             inner: Arc::new(value),
         }
     }
@@ -382,5 +426,37 @@ impl From<FileSize> for CacheValue<FileSize> {
 impl<T> MemSized for CacheValue<T> {
     fn mem_bytes(&self) -> usize {
         self.mem_bytes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use arrow::array::Int32Array;
+
+    use super::*;
+    use crate::CacheAccessor;
+
+    #[test]
+    fn test_table_data_cache_mixed_entries() {
+        let cache = TableDataCache::with_bytes_capacity("test_table_data".to_string(), 1024);
+
+        let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3]));
+        cache.insert(
+            "column".to_string(),
+            TableDataCacheEntry::from_column_array(array.clone(), 128),
+        );
+        let cached_array = cache.get("column").unwrap();
+        assert!(cached_array.as_data_block().is_none());
+        assert_eq!(cached_array.as_column_array().unwrap().len(), array.len());
+        assert_eq!(cached_array.memory_size(), 128);
+
+        cache.insert(
+            "block".to_string(),
+            TableDataCacheEntry::from_data_block(DataBlock::empty_with_rows(3)),
+        );
+        let cached_block = cache.get("block").unwrap();
+        assert!(cached_block.as_column_array().is_none());
+        assert_eq!(cached_block.as_data_block().unwrap().num_rows(), 3);
+        assert_eq!(cached_block.memory_size(), 0);
     }
 }

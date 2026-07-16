@@ -14,11 +14,25 @@
 
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_storages_parquet::InMemoryRowGroup;
+use databend_common_storages_parquet::ParquetFileReader;
+use databend_common_storages_parquet::ReadSettings as ParquetReadSettings;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
+use parquet::arrow::ProjectionMask;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::file::metadata::PageIndexPolicy;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 use super::block_format::FuseParquetBlockFormat;
 use super::parquet_data_source::ParquetDataSource;
@@ -26,6 +40,8 @@ use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
+use crate::io::BlockReader;
+use crate::io::RowSelection;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
@@ -167,4 +183,120 @@ impl ReadBlockContext {
             )
             .await
     }
+}
+
+pub(crate) async fn read_parquet_page_range_data(
+    block_reader: &Arc<BlockReader>,
+    read_settings: &ReadSettings,
+    part: &FuseBlockPartInfo,
+) -> Result<Option<DataBlock>> {
+    let page_cache_key = block_reader.page_range_data_cache_key(part);
+    if let Some(data_block) = page_cache_key
+        .as_deref()
+        .and_then(|key| block_reader.cached_page_range_data(key))
+    {
+        return Ok(Some(data_block));
+    }
+
+    let block_read_ctx = block_reader.read_context();
+    let metadata = parquet_metadata_with_offset_indexes(&block_read_ctx, part).await?;
+    if metadata.num_row_groups() != 1 {
+        return Ok(None);
+    }
+    let Some(offset_indexes) = metadata.offset_index().and_then(|v| v.first()) else {
+        return Ok(None);
+    };
+
+    let schema_descr = metadata.file_metadata().schema_descr();
+    let projection_indices = block_read_ctx
+        .project_indices()
+        .iter()
+        .filter_map(|(index, (column_id, ..))| {
+            part.columns_meta.contains_key(column_id).then_some(*index)
+        })
+        .collect::<Vec<_>>();
+    if projection_indices.is_empty()
+        || projection_indices
+            .iter()
+            .any(|index| *index >= schema_descr.num_columns())
+    {
+        return Ok(None);
+    }
+
+    let page_bitmap = BlockReader::page_range_bitmap(part)
+        .ok_or_else(|| ErrorCode::Internal("page range is missing"))?;
+    let parquet_selection = RowSelection::from(&page_bitmap).selection;
+    let page_locations = offset_indexes
+        .iter()
+        .map(|index| index.page_locations().to_vec())
+        .collect::<Vec<_>>();
+    if page_locations.len() != schema_descr.num_columns() {
+        return Ok(None);
+    }
+
+    let projection = ProjectionMask::leaves(schema_descr, projection_indices);
+    let parquet_read_settings = ParquetReadSettings {
+        max_gap_size: read_settings.max_gap_size,
+        max_range_size: read_settings.max_range_size,
+        parquet_fast_read_bytes: read_settings.parquet_fast_read_bytes,
+        enable_cache: true,
+    };
+    let mut row_group = InMemoryRowGroup::new(
+        &part.location,
+        block_read_ctx.operator().clone(),
+        metadata.row_group(0),
+        Some(page_locations),
+        parquet_read_settings,
+    );
+    row_group
+        .fetch(&projection, Some(&parquet_selection))
+        .await?;
+
+    let arrow_schema = Schema::from(block_reader.original_schema.as_ref());
+    let field_levels =
+        parquet_to_arrow_field_levels(schema_descr, projection, Some(arrow_schema.fields()))?;
+    let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
+        &field_levels,
+        &row_group,
+        part.nums_rows,
+        Some(parquet_selection),
+    )?;
+    let record_batch = reader
+        .next()
+        .ok_or_else(|| ErrorCode::Internal("selected parquet range returned no rows"))??;
+    debug_assert!(reader.next().is_none());
+
+    let data_block = block_reader.deserialize_parquet_record_batch(part, &record_batch)?;
+    Ok(Some(match page_cache_key {
+        Some(key) => block_reader.cache_page_range_data(key, data_block),
+        None => data_block,
+    }))
+}
+
+async fn parquet_metadata_with_offset_indexes(
+    block_read_ctx: &BlockReadContext,
+    part: &FuseBlockPartInfo,
+) -> Result<Arc<ParquetMetaData>> {
+    let cache = CacheManager::instance().get_parquet_meta_data_cache();
+    let cache_key = format!(
+        "{}{}",
+        block_read_ctx.operator().info().root(),
+        part.location
+    );
+    if let Some(metadata) = cache.as_ref().and_then(|cache| cache.get(&cache_key)) {
+        if metadata.offset_index().is_some() {
+            return Ok(metadata);
+        }
+    }
+
+    let op_reader = block_read_ctx.operator().reader(&part.location).await?;
+    let mut file_reader = ParquetFileReader::new(op_reader, part.file_size);
+    let metadata = ParquetMetaDataReader::new()
+        .with_offset_index_policy(PageIndexPolicy::Required)
+        .load_and_finish(&mut file_reader, part.file_size)
+        .await?;
+    Ok(match cache {
+        Some(cache) => cache.insert(cache_key, metadata),
+        None => Arc::new(metadata),
+    })
 }
