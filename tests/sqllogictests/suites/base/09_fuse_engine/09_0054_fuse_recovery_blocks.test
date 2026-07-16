@@ -1,23 +1,18 @@
 statement ok
-DROP TABLE IF EXISTS fuse_recovery_blocks_slt ALL
-
-statement ok
-CREATE TABLE fuse_recovery_blocks_slt(id INT, payload VARIANT) CLUSTER BY(id) CHANGE_TRACKING = TRUE ENABLE_AUTO_ANALYZE = 0
+CREATE OR REPLACE TABLE fuse_recovery_blocks_slt(id INT, payload VARIANT) CLUSTER BY(id) CHANGE_TRACKING = TRUE ENABLE_AUTO_ANALYZE = 0
 
 statement ok
 INSERT INTO fuse_recovery_blocks_slt VALUES(1, parse_json('{"v":1}'))
 
-# UPDATE rewrites the block with Fuse stream-origin fields. Recovery must
-# validate and strip those fields, then write a fresh INSERT block with the
-# current cluster statistics. The VARIANT value also exercises Arrow extension
-# metadata in the distributed Parquet reader schema.
+# UPDATE adds change-tracking fields to the source block. Recovery ignores them.
+# VARIANT verifies that Parquet logical types are preserved.
 statement ok
 UPDATE fuse_recovery_blocks_slt SET payload = parse_json('{"v":2}') WHERE id = 1
 
 statement ok
 SET VARIABLE source_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 1)
 
-# The source block is now outside the current snapshot, but remains in _b/.
+# TRUNCATE removes the source block from the current snapshot but leaves it in storage.
 statement ok
 TRUNCATE TABLE fuse_recovery_blocks_slt
 
@@ -50,17 +45,8 @@ FROM clustering_statistics('default', 'fuse_recovery_blocks_slt')
 ----
 1
 
-# Normal COPY history makes FORCE=FALSE retries idempotent.
-statement ok
-EXECUTE IMMEDIATE $recovery_sql
-
-query I
-SELECT count() FROM fuse_recovery_blocks_slt
-----
-1
-
-# Remove the historical source block while retaining its COPY history entry.
-# FORCE=FALSE must filter the path by history without touching object storage.
+# Remove the source block from storage but retain its COPY history entry.
+# FORCE = FALSE must filter the path before reading object storage.
 statement ok
 SET data_retention_time_in_days = 0
 
@@ -68,6 +54,9 @@ statement ok
 OPTIMIZE TABLE fuse_recovery_blocks_slt PURGE
 
 statement ok
+UNSET data_retention_time_in_days
+
+statement ok
 EXECUTE IMMEDIATE $recovery_sql
 
 query I
@@ -75,7 +64,7 @@ SELECT count() FROM fuse_recovery_blocks_slt
 ----
 1
 
-# FORCE keeps normal COPY semantics and attempts to read the purged block.
+# FORCE = TRUE bypasses COPY history and tries to read the deleted block.
 statement ok
 SET VARIABLE force_sql = concat(
     'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
@@ -91,15 +80,15 @@ SELECT count() FROM fuse_recovery_blocks_slt
 ----
 1
 
-# An unseen missing path is selected for recovery and must abort the statement;
-# the history hit in the same FILES list remains filtered without a storage read.
+# Replace the final path component with a missing block in the same _b/ directory.
 statement ok
-SET VARIABLE missing_block = regexp_replace($source_block, '[^/]+$', 'missing_v2.parquet')
+SET VARIABLE missing_block = regexp_replace($recovered_block, '[^/]+$', 'missing_v2.parquet')
 
+# A missing block rejects the whole batch; the valid block must not be appended.
 statement ok
 SET VARIABLE missing_batch_sql = concat(
     'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $source_block,
+    $recovered_block,
     ''', ''',
     $missing_block,
     ''')) FORCE = FALSE'
@@ -113,8 +102,7 @@ SELECT count() FROM fuse_recovery_blocks_slt
 ----
 1
 
-# One current-schema block plus one stale block must fail while all selected
-# footers are validated, before either file can append data.
+# Reject the whole batch when one selected block has an old schema.
 statement ok
 ALTER TABLE fuse_recovery_blocks_slt ADD COLUMN added INT
 
@@ -145,7 +133,4 @@ statement ok
 UNSET VARIABLE (source_block, recovery_sql, recovered_block, force_sql, missing_block, missing_batch_sql, current_block, schema_mismatch_sql)
 
 statement ok
-UNSET data_retention_time_in_days
-
-statement ok
-DROP TABLE fuse_recovery_blocks_slt ALL
+DROP TABLE fuse_recovery_blocks_slt

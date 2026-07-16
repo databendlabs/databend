@@ -12,14 +12,13 @@ echo "insert into $DATABASE.base values(1)" | bendsql_connect_root_null
 BLOCK=$(echo "select _block_name from $DATABASE.base" | bendsql_connect_root)
 
 echo "truncate table $DATABASE.base" | bendsql_connect_root_null
-echo "create stream $DATABASE.recovered on table $DATABASE.base append_only=true" | bendsql_connect_root_null
+echo "create stream $DATABASE.stream_recovered_data on table $DATABASE.base append_only=true" | bendsql_connect_root_null
 
-# Keep a MinIO/S3 smoke test for reading a managed block directly and exposing
-# the recovery as a new append-only stream INSERT. Detailed behavior is covered
-# by the EE sqllogictest suite.
+# Smoke-test recovery from managed MinIO/S3 storage. Detailed stream behavior is
+# covered by the EE sqllogictest.
 echo "copy into $DATABASE.base from FUSE_RECOVERY_BLOCKS(FILES => ('$BLOCK')) force = false" | bendsql_connect_root_null
-echo "select id, change\$action, change\$is_update from $DATABASE.recovered" | bendsql_connect_root
+echo "select id, change\$action, change\$is_update from $DATABASE.stream_recovered_data" | bendsql_connect_root
 
-echo "drop stream $DATABASE.recovered" | bendsql_connect_root_null
+echo "drop stream $DATABASE.stream_recovered_data" | bendsql_connect_root_null
 echo "drop table $DATABASE.base all" | bendsql_connect_root_null
 echo "drop database $DATABASE" | bendsql_connect_root_null

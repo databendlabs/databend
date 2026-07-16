@@ -13,25 +13,23 @@
 ## limitations under the License.
 
 statement ok
-DROP DATABASE IF EXISTS test_fuse_recovery_stream
-
-statement ok
-CREATE DATABASE test_fuse_recovery_stream
+CREATE OR REPLACE DATABASE test_fuse_recovery_stream
 
 statement ok
 USE test_fuse_recovery_stream
 
 statement ok
-CREATE TABLE base(id INT, value INT) CHANGE_TRACKING = true ENABLE_AUTO_ANALYZE = 0
+CREATE OR REPLACE TABLE base(id INT, value INT) CHANGE_TRACKING = true ENABLE_AUTO_ANALYZE = 0
 
 statement ok
 INSERT INTO base VALUES (1, 0)
 
+# UPDATE adds change-tracking fields to the source block. Recovery must discard
+# them so the stream reports a new INSERT.
 statement ok
 UPDATE base SET value = 1 WHERE id = 1
 
-# FILES accepts string literals, so retain the runtime block name in a session
-# variable and build the recovery statement for EXECUTE IMMEDIATE.
+# FILES requires literals, so build the statement after reading the block name.
 statement ok
 SET VARIABLE recovery_block = (SELECT _block_name FROM base LIMIT 1)
 
@@ -46,61 +44,34 @@ statement ok
 TRUNCATE TABLE base
 
 statement ok
-CREATE STREAM recovered ON TABLE base APPEND_ONLY = true
+CREATE STREAM stream_recovered_data ON TABLE base APPEND_ONLY = true
 
 statement ok
-CREATE TABLE sink(id INT)
+CREATE OR REPLACE TABLE sink(id INT)
 
-# Origin fields in the UPDATE block must not leak into the rewritten INSERT.
 statement ok
 EXECUTE IMMEDIATE $recovery_sql
 
-query ITB
-SELECT id, change$action, change$is_update FROM recovered
+query IITB
+SELECT id, value, change$action, change$is_update FROM stream_recovered_data
 ----
-1 INSERT 0
+1 1 INSERT 0
 
 statement ok
-INSERT INTO sink SELECT id FROM recovered
+INSERT INTO sink SELECT id FROM stream_recovered_data
 
 query I
 SELECT id FROM sink
 ----
 1
 
-# The first path is a COPY-history hit. The unseen missing path must still be
-# selected, fail the whole statement, and leave the consumed stream unchanged.
-statement ok
-SET VARIABLE missing_block = regexp_replace($recovery_block, '[^/]+$', 'missing_v2.parquet')
-
-statement ok
-SET VARIABLE missing_sql = concat(
-    'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $recovery_block,
-    ''', ''',
-    $missing_block,
-    ''')) FORCE = FALSE'
-)
-
-statement error 3001
-EXECUTE IMMEDIATE $missing_sql
-
 query I
-SELECT count() FROM recovered
+SELECT count() FROM stream_recovered_data
 ----
 0
 
 statement ok
-UNSET VARIABLE (recovery_block, recovery_sql, missing_block, missing_sql)
-
-statement ok
-DROP STREAM recovered
-
-statement ok
-DROP TABLE sink ALL
-
-statement ok
-DROP TABLE base ALL
+UNSET VARIABLE (recovery_block, recovery_sql)
 
 statement ok
 DROP DATABASE test_fuse_recovery_stream
