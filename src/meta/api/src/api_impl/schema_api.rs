@@ -41,10 +41,12 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMVIdsIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -57,6 +59,7 @@ use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -87,6 +90,7 @@ use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
 use super::lock_api2::LockApi2;
+use super::materialized_view_api::MaterializedViewApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
@@ -97,6 +101,7 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_replace_exact;
 use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
@@ -111,6 +116,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -132,6 +138,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -162,6 +169,91 @@ pub async fn get_history_table_metas(
     }
 
     Ok(tb_metas)
+}
+
+/// Fill in transaction conditions and operations to remove an MV from its source table index.
+///
+/// This function does not submit the transaction.
+async fn remove_mv_from_source_table_index(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    txn: &mut TxnRequest,
+    tenant: &Tenant,
+    source_table_id: u64,
+    mv_table_id: u64,
+) -> Result<(), KVAppError> {
+    let source_table_mv_ids_ident = SourceTableMVIdsIdent::new(tenant, source_table_id);
+    let (source_table_mv_ids_seq, source_mv_ids_opt) = kv_api
+        .get_pb_seq_and_value(&source_table_mv_ids_ident)
+        .await?;
+    let Some(mut source_mv_ids) = source_mv_ids_opt else {
+        return Ok(());
+    };
+
+    // Keep the index even when empty; source table GC owns its deletion.
+    source_mv_ids.remove(mv_table_id);
+
+    txn_replace_exact(
+        txn,
+        &source_table_mv_ids_ident,
+        source_table_mv_ids_seq,
+        &source_mv_ids,
+    )?;
+
+    Ok(())
+}
+
+/// Fill in transaction conditions and operations to publish an MV in its source table index.
+///
+/// For CREATE OR REPLACE, this also removes the previous MV from its source table index.
+/// This function does not submit the transaction.
+pub(crate) async fn publish_mv_to_source_table_index(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    txn: &mut TxnRequest,
+    tenant: &Tenant,
+    source_table_id: u64,
+    mv_table_id: u64,
+    previous_table_id: Option<u64>,
+) -> Result<(), KVAppError> {
+    let source_table_mv_ids_ident = SourceTableMVIdsIdent::new(tenant, source_table_id);
+    let (source_table_mv_ids_seq, source_mv_ids_opt) = kv_api
+        .get_pb_seq_and_value(&source_table_mv_ids_ident)
+        .await?;
+    let mut source_mv_ids = source_mv_ids_opt.unwrap_or_default();
+
+    if let Some(previous_table_id) = previous_table_id {
+        let (_, previous_table_meta) = kv_api
+            .get_pb_seq_and_value(&TableId::new(previous_table_id))
+            .await?;
+        let previous_source_table_id = previous_table_meta
+            .filter(|table_meta| is_materialized_view_engine(&table_meta.engine))
+            .map(|table_meta| table_meta.materialized_view_source_table_id())
+            .transpose()?;
+
+        if let Some(previous_source_table_id) = previous_source_table_id {
+            if previous_source_table_id == source_table_id {
+                source_mv_ids.remove(previous_table_id);
+            } else {
+                remove_mv_from_source_table_index(
+                    kv_api,
+                    txn,
+                    tenant,
+                    previous_source_table_id,
+                    previous_table_id,
+                )
+                .await?;
+            }
+        }
+    }
+
+    source_mv_ids.add(mv_table_id);
+    txn_replace_exact(
+        txn,
+        &source_table_mv_ids_ident,
+        source_table_mv_ids_seq,
+        &source_mv_ids,
+    )?;
+
+    Ok(())
 }
 
 pub async fn construct_drop_table_txn_operations(
@@ -275,6 +367,13 @@ pub async fn construct_drop_table_txn_operations(
                     table_id,
                 },
             )));
+    }
+
+    if is_materialized_view_engine(&tb_meta.engine) {
+        let source_table_id = tb_meta.materialized_view_source_table_id()?;
+        let def_ident = MVDefinitionIdent::new(tenant, table_id);
+        txn.if_then.push(txn_del(&def_ident));
+        remove_mv_from_source_table_index(kv_api, txn, tenant, source_table_id, table_id).await?;
     }
 
     // There must NOT be concurrent txn(b) that list-then-delete tables:

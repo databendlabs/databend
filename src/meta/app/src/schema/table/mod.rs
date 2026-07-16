@@ -42,6 +42,7 @@ use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::materialized_view::MVDefinition;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -526,6 +527,9 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Definition stored with a materialized view created as a hidden table.
+    pub mv_definition: Option<MVDefinition>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,

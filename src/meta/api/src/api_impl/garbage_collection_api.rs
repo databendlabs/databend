@@ -38,8 +38,10 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMVIdsIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -51,6 +53,7 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -772,6 +775,14 @@ async fn remove_data_for_dropped_table(
     //     warn!("{}", err);
     //     return Ok(Err(err));
     // }
+    if is_materialized_view_engine(&seq_meta.data.engine) {
+        let def_ident = MVDefinitionIdent::new(tenant, table_id.table_id);
+        txn.if_then.push(txn_del(&def_ident));
+    }
+
+    let source_table_mv_ids_ident = SourceTableMVIdsIdent::new(tenant, table_id.table_id);
+    txn.if_then.push(txn_del(&source_table_mv_ids_ident));
+
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping

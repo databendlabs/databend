@@ -191,6 +191,7 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             },
             table_meta: table_meta.clone(),
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };
@@ -217,6 +218,7 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             },
             table_meta: table_meta.clone(),
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };

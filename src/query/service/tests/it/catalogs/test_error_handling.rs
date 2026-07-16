@@ -89,6 +89,7 @@ async fn test_get_table_error_handling() -> anyhow::Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
+        mv_definition: None,
         table_properties: None,
         table_partition: None,
     };
@@ -223,6 +224,7 @@ async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
+        mv_definition: None,
         table_properties: None,
         table_partition: None,
     };

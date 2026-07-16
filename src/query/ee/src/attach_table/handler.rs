@@ -122,6 +122,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             },
             table_meta,
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };

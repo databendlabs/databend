@@ -37,6 +37,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -115,7 +116,10 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -304,6 +308,7 @@ impl SchemaApiTestSuite {
             + DatabaseApi
             + TableApi
             + GarbageCollectionApi
+            + MaterializedViewApi
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
@@ -311,6 +316,7 @@ impl SchemaApiTestSuite {
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         self.table_create_get_drop(&b.build().await).await?;
+        self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
         self.list_db_without_db_id_list(&b.build().await).await?;
@@ -1648,6 +1654,383 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn materialized_view_lifecycle<
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + MaterializedViewApi
+            + TableApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let mut util =
+            DbTableHarness::new(mt, "tenant_mv_meta", "db_mv_meta", "source_table", "FUSE");
+        util.create_db().await?;
+        let (source_table_id, _) = util.create_table().await?;
+
+        let tenant = util.tenant();
+        let db_name = util.db_name();
+        let source_table_name = util.tbl_name();
+        let replacement_source_name = "replacement_source";
+        let replacement_source_table_id = {
+            let mut replacement_source = DbTableHarness::new(
+                mt,
+                tenant.tenant_name(),
+                &db_name,
+                replacement_source_name,
+                "FUSE",
+            );
+            replacement_source.create_table().await?.0
+        };
+        let mv_name = "mv_table";
+        let new_definition = |source_table_name: &str| MVDefinition {
+            original_query: format!("SELECT number FROM {source_table_name}"),
+            query: format!("SELECT number FROM default.{db_name}.{source_table_name}"),
+            schema: TableSchema::empty(),
+        };
+        let definition = new_definition(&source_table_name);
+        let replacement_definition = new_definition(replacement_source_name);
+        let new_mv_req = |name, create_option, source_table_id: u64, definition: &MVDefinition| {
+            let mut table_meta = TableMeta {
+                schema: util.schema(),
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                drop_on: Some(Utc::now()),
+                ..TableMeta::default()
+            };
+            table_meta.options.insert(
+                OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID.to_string(),
+                source_table_id.to_string(),
+            );
+
+            CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, &db_name, name),
+                table_meta,
+                as_dropped: true,
+                mv_definition: Some(definition.clone()),
+                table_properties: None,
+                table_partition: None,
+            }
+        };
+        let commit_req = |name: &str, created: &CreateTableReply| CommitTableMetaReq {
+            name_ident: TableNameIdent::new(&tenant, &db_name, name),
+            db_id: created.db_id,
+            table_id: created.table_id,
+            prev_table_id: created.prev_table_id,
+            orphan_table_name: created.orphan_table_name.clone(),
+        };
+        // Creating a hidden MV writes its definition without publishing a source index entry.
+        let created = {
+            let created = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::Create,
+                    source_table_id,
+                    &definition,
+                ))
+                .await?;
+            assert!(created.table_id_seq.is_some());
+
+            assert_eq!(
+                mt.get_mv_definition(&tenant, created.table_id)
+                    .await?
+                    .expect("MV definition must exist")
+                    .data,
+                definition
+            );
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .is_none()
+            );
+            created
+        };
+        let mv_id = created.table_id;
+
+        // Publishing the MV name and source index entry is one atomic commit.
+        {
+            mt.commit_table_meta(commit_req(mv_name, &created)).await?;
+
+            let published_table = mt
+                .get_pb(&TableId::new(mv_id))
+                .await?
+                .expect("MV TableMeta must exist");
+            assert!(published_table.data.drop_on.is_none());
+
+            let mv_ids = mt
+                .get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                .await?
+                .expect("source index must exist");
+            assert_eq!(mv_ids.data.mv_ids(), &[mv_id]);
+
+            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
+            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+                panic!("one complete MV must be returned");
+            };
+            assert_eq!(*got_mv_id, mv_id);
+            assert_eq!(got_definition.data, definition);
+            assert_eq!(got_table_meta, &published_table);
+        }
+
+        // Replacing an MV keeps the old definition for GC and leaves only the new MV ID in the source index.
+        let replacement = {
+            let replacement = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::CreateOrReplace,
+                    source_table_id,
+                    &definition,
+                ))
+                .await?;
+            mt.commit_table_meta(commit_req(mv_name, &replacement))
+                .await?;
+
+            assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_some());
+            let mv_ids = mt
+                .get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                .await?
+                .expect("source index must exist");
+            assert_eq!(mv_ids.data.mv_ids(), &[replacement.table_id]);
+
+            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
+            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+                panic!("the replacement MV must be returned");
+            };
+            assert_eq!(*got_mv_id, replacement.table_id);
+            assert_eq!(got_definition.data, definition);
+            assert!(got_table_meta.data.drop_on.is_none());
+            replacement
+        };
+
+        // Replacing with another source empties the old source index and adds the new one.
+        let new_source_replacement = {
+            let new_source_replacement = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::CreateOrReplace,
+                    replacement_source_table_id,
+                    &replacement_definition,
+                ))
+                .await?;
+            mt.commit_table_meta(commit_req(mv_name, &new_source_replacement))
+                .await?;
+
+            assert!(
+                mt.get_mv_definition(&tenant, replacement.table_id)
+                    .await?
+                    .is_some()
+            );
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .expect("old source index must exist")
+                    .data
+                    .mv_ids()
+                    .is_empty()
+            );
+            let mv_ids = mt
+                .get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                .await?
+                .expect("replacement source index must exist");
+            assert_eq!(mv_ids.data.mv_ids(), &[new_source_replacement.table_id]);
+
+            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
+            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+                panic!("the new-source replacement MV must be returned");
+            };
+            assert_eq!(*got_mv_id, new_source_replacement.table_id);
+            assert_eq!(got_definition.data, replacement_definition);
+            assert!(got_table_meta.data.drop_on.is_none());
+
+            new_source_replacement
+        };
+
+        // Explicit DROP removes the MV definition and its membership from an existing source index.
+        {
+            let explicit_drop_name = "mv_explicit_drop";
+            let explicit_drop = mt
+                .create_table(new_mv_req(
+                    explicit_drop_name,
+                    CreateOption::Create,
+                    source_table_id,
+                    &definition,
+                ))
+                .await?;
+            mt.commit_table_meta(commit_req(explicit_drop_name, &explicit_drop))
+                .await?;
+
+            assert_eq!(
+                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .expect("old source index must exist")
+                    .data
+                    .mv_ids(),
+                &[explicit_drop.table_id]
+            );
+
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: explicit_drop.db_id,
+                table_name: explicit_drop_name.to_string(),
+                tb_id: explicit_drop.table_id,
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+
+            assert!(
+                mt.get_mv_definition(&tenant, explicit_drop.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .expect("old source index must exist")
+                    .data
+                    .mv_ids()
+                    .is_empty()
+            );
+        }
+
+        // GC removes the retained definitions without changing the current source index.
+        {
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: vec![
+                    DroppedId::new_table(replacement.db_id, mv_id, mv_name),
+                    DroppedId::new_table(
+                        new_source_replacement.db_id,
+                        replacement.table_id,
+                        mv_name,
+                    ),
+                ],
+            })
+            .await?;
+            assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_none());
+            assert!(
+                mt.get_mv_definition(&tenant, replacement.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .expect("old source index must exist")
+                    .data
+                    .mv_ids()
+                    .is_empty()
+            );
+            assert_eq!(
+                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                    .await?
+                    .expect("new source index must exist")
+                    .data
+                    .mv_ids(),
+                &[new_source_replacement.table_id]
+            );
+        }
+
+        // GC of an unpublished MV removes its definition.
+        {
+            let unpublished = mt
+                .create_table(new_mv_req(
+                    "mv_unpublished",
+                    CreateOption::Create,
+                    source_table_id,
+                    &definition,
+                ))
+                .await?;
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: vec![DroppedId::new_table(
+                    unpublished.db_id,
+                    unpublished.table_id,
+                    unpublished.orphan_table_name.unwrap(),
+                )],
+            })
+            .await?;
+            assert!(
+                mt.get_mv_definition(&tenant, unpublished.table_id)
+                    .await?
+                    .is_none()
+            );
+        }
+
+        // Dropping a source keeps its index; GC of the source removes the index.
+        {
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: new_source_replacement.db_id,
+                table_name: replacement_source_name.to_string(),
+                tb_id: replacement_source_table_id,
+                engine: util.engine(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                    .await?
+                    .is_some()
+            );
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: vec![DroppedId::new_table(
+                    new_source_replacement.db_id,
+                    replacement_source_table_id,
+                    replacement_source_name,
+                )],
+            })
+            .await?;
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                    .await?
+                    .is_none()
+            );
+        }
+
+        // Source GC has already removed the index. DROP MV still removes its definition without recreating the index.
+        {
+            assert!(
+                mt.get_mv_definition(&tenant, new_source_replacement.table_id)
+                    .await?
+                    .is_some()
+            );
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: new_source_replacement.db_id,
+                table_name: mv_name.to_string(),
+                tb_id: new_source_replacement.table_id,
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                temp_prefix: "".to_string(),
+                db_name,
+            })
+            .await?;
+            assert!(
+                mt.get_mv_definition(&tenant, new_source_replacement.table_id)
+                    .await?
+                    .is_none()
+            );
+            assert!(
+                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                    .await?
+                    .is_none()
+            );
+        }
+
+        Ok(())
+    }
+
     async fn table_create_get_drop<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -1694,6 +2077,7 @@ impl SchemaApiTestSuite {
 
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -1811,6 +2195,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -2062,6 +2447,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: tbl_meta,
                 as_dropped: true,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -4361,6 +4747,7 @@ impl SchemaApiTestSuite {
             name_ident,
             table_meta: create_table_meta.clone(),
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };
@@ -5188,6 +5575,7 @@ impl SchemaApiTestSuite {
 
                     table_meta: table_meta(created_on),
                     as_dropped: false,
+                    mv_definition: None,
                     table_properties: None,
                     table_partition: None,
                 };
@@ -5676,6 +6064,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };
@@ -5796,6 +6185,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: true,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5816,6 +6206,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5852,6 +6243,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                mv_definition: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5945,6 +6337,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         };

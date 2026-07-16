@@ -459,6 +459,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         })
@@ -513,6 +514,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         })
@@ -590,6 +592,7 @@ async fn benchmark_create_tables(
             },
             table_meta,
             as_dropped: false,
+            mv_definition: None,
             table_properties: None,
             table_partition: None,
         })
