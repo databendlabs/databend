@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
@@ -49,14 +50,12 @@ struct SExprTypeValidator<'a> {
 
 impl SExprVisitor for SExprTypeValidator<'_> {
     fn visit(&mut self, s_expr: &SExpr) -> Result<VisitAction> {
-        for scalar in s_expr.plan().scalar_expr_iter() {
-            // Resolve the complete expression first, then validate all embedded
-            // symbol and aggregate declarations.
-            scalar.data_type()?;
-            ScalarTypeValidator {
-                metadata: self.metadata,
+        if let RelOperator::Scan(scan) = s_expr.plan() {
+            self.validate_scan_scalars(scan)?;
+        } else {
+            for scalar in s_expr.plan().scalar_expr_iter() {
+                self.validate_scalar(scalar, SymbolTypeSource::Metadata(self.metadata))?;
             }
-            .visit(scalar)?;
         }
 
         match s_expr.plan() {
@@ -153,16 +152,104 @@ impl SExprTypeValidator<'_> {
     fn validate_window_function(&self, function: &WindowFuncType) -> Result<()> {
         if let WindowFuncType::Aggregate(aggregate) = function {
             ScalarTypeValidator {
-                metadata: self.metadata,
+                symbol_types: SymbolTypeSource::Metadata(self.metadata),
             }
             .validate_aggregate_function(aggregate)?;
+        }
+        Ok(())
+    }
+
+    fn validate_scan_scalars(&self, scan: &crate::plans::Scan) -> Result<()> {
+        let metadata_symbols = SymbolTypeSource::Metadata(self.metadata);
+        for scalar in scan
+            .push_down_predicates
+            .iter()
+            .flatten()
+            .chain(scan.secure_predicates.iter().flatten())
+            .chain(
+                scan.prewhere
+                    .iter()
+                    .flat_map(|prewhere| prewhere.predicates.iter()),
+            )
+        {
+            self.validate_scalar(scalar, metadata_symbols)?;
+        }
+
+        if let Some(agg_index) = &scan.agg_index {
+            let index_symbols = SymbolTypeSource::Schema(&agg_index.schema);
+            for scalar in agg_index
+                .selection
+                .iter()
+                .map(|item| &item.scalar)
+                .chain(&agg_index.predicates)
+            {
+                self.validate_scalar(scalar, index_symbols)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_scalar(&self, scalar: &ScalarExpr, symbol_types: SymbolTypeSource) -> Result<()> {
+        // Resolve the complete expression first, then validate all embedded
+        // symbol and aggregate declarations.
+        scalar.data_type()?;
+        ScalarTypeValidator { symbol_types }.visit(scalar)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SymbolTypeSource<'a> {
+    Metadata(&'a MetadataRef),
+    Schema(&'a TableSchema),
+}
+
+impl SymbolTypeSource<'_> {
+    fn validate(&self, index: Symbol, actual: &DataType) -> Result<()> {
+        let (expected, ignore_nullability) = match self {
+            SymbolTypeSource::Metadata(metadata) => {
+                let metadata = metadata.read();
+                (
+                    metadata
+                        .columns()
+                        .get(index.as_usize())
+                        .map(|column| column.data_type())
+                        .ok_or_else(|| {
+                            ErrorCode::Internal(format!(
+                                "SExpr references unknown metadata symbol {index}"
+                            ))
+                        })?,
+                    true,
+                )
+            }
+            SymbolTypeSource::Schema(schema) => (
+                schema
+                    .fields()
+                    .get(index.as_usize())
+                    .map(|field| DataType::from(field.data_type()))
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "SExpr references unknown local schema symbol {index}"
+                        ))
+                    })?,
+                false,
+            ),
+        };
+        let types_match = if ignore_nullability {
+            expected.remove_nullable() == actual.remove_nullable()
+        } else {
+            expected == *actual
+        };
+        if !types_match {
+            return Err(ErrorCode::Internal(format!(
+                "SExpr bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}"
+            )));
         }
         Ok(())
     }
 }
 
 struct ScalarTypeValidator<'a> {
-    metadata: &'a MetadataRef,
+    symbol_types: SymbolTypeSource<'a>,
 }
 
 impl ScalarTypeValidator<'_> {
@@ -197,14 +284,8 @@ impl ScalarTypeValidator<'_> {
 
 impl ScalarExprVisitor<'_> for ScalarTypeValidator<'_> {
     fn visit_bound_column_ref(&mut self, column: &BoundColumnRef) -> Result<()> {
-        SExprTypeValidator {
-            metadata: self.metadata,
-        }
-        .validate_symbol_type(
-            column.column.index,
-            &column.column.data_type,
-            "bound column",
-        )
+        self.symbol_types
+            .validate(column.column.index, &column.column.data_type)
     }
 
     fn visit_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<()> {
