@@ -768,12 +768,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -800,12 +801,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -820,12 +822,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = 
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -840,12 +843,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -860,12 +864,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -880,12 +885,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -900,12 +906,13 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -920,12 +927,13 @@ error:
   --> SQL:1:19
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TEXT field_delimiter = '\t' skip_headerx = 0);
-  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, `FUSE_RECOVERY_BLOCKS`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -949,6 +957,7 @@ error:
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
@@ -1305,6 +1314,7 @@ error:
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]

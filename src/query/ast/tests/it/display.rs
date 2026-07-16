@@ -41,7 +41,7 @@ fn test_multi_table_insert_display() {
 
 #[test]
 fn test_fuse_recovery_blocks_display() {
-    let sql = "COPY INTO db.t FROM FUSE_RECOVERY_BLOCKS(FILES => ('1/2/_b/a_v2.parquet', '1/2/_b/b_v2.parquet')) FORCE = FALSE";
+    let sql = "COPY INTO db.t FROM FuSe_ReCoVeRy_BlOcKs(FILES => ('1/2/_b/a_v2.parquet', '1/2/_b/b_v2.parquet')) FORCE = FALSE";
     let tokens = tokenize_sql(sql).unwrap();
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     let Statement::CopyIntoTable(copy) = &stmt else {
@@ -52,6 +52,24 @@ fn test_fuse_recovery_blocks_display() {
     };
     assert_eq!(files, &["1/2/_b/a_v2.parquet", "1/2/_b/b_v2.parquet"]);
     test_stmt_display(sql);
+}
+
+#[test]
+fn test_fuse_recovery_blocks_requires_exact_unquoted_name() {
+    for sql in [
+        r#"COPY INTO db.t FROM "FUSE_RECOVERY_BLOCKS"(FILES => ('a.parquet'))"#,
+        "COPY INTO db.t FROM `FUSE_RECOVERY_BLOCKS`(FILES => ('a.parquet'))",
+        "COPY INTO db.t FROM IDENTIFIER($FUSE_RECOVERY_BLOCKS)(FILES => ('a.parquet'))",
+        "COPY INTO db.t FROM OTHER(FILES => ('a.parquet'))",
+        "COPY INTO db.t FROM FUSE_RECOVERY_BLOCKS_EXTRA(FILES => ('a.parquet'))",
+        "COPY INTO db.t FROM FUSE_RECOVERY_BLOCKS(FILE => ('a.parquet'))",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(
+            parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+            "unexpectedly accepted {sql}"
+        );
+    }
 }
 
 #[test]

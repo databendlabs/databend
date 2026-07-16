@@ -29,6 +29,7 @@ use crate::ast::Identifier;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
+use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::Input;
 use crate::parser::common::IResult;
@@ -48,20 +49,24 @@ use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
 
+fn fuse_recovery_blocks_name(i: Input) -> IResult<()> {
+    match i.tokens.first().filter(|token| {
+        token.kind == Ident && token.text().eq_ignore_ascii_case("fuse_recovery_blocks")
+    }) {
+        Some(_) => Ok((i.slice(1..), ())),
+        None => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectText("FUSE_RECOVERY_BLOCKS"),
+        ))),
+    }
+}
+
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
-    let fuse_recovery_blocks = map_res(
+    let fuse_recovery_blocks = map(
         rule! {
-            #ident ~ "(" ~ FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list1(literal_string) ~ ^")" ~ ^")"
+            #fuse_recovery_blocks_name ~ ^"(" ~ ^FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list1(literal_string) ~ ^")" ~ ^")"
         },
-        |(name, _, _, _, _, files, _, _)| {
-            if name.name.eq_ignore_ascii_case("fuse_recovery_blocks") {
-                Ok(CopyIntoTableSource::FuseRecoveryBlocks { files })
-            } else {
-                Err(nom::Err::Failure(ErrorKind::other(
-                    "expected FUSE_RECOVERY_BLOCKS",
-                )))
-            }
-        },
+        |(_, _, _, _, _, files, _, _)| CopyIntoTableSource::FuseRecoveryBlocks { files },
     );
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
