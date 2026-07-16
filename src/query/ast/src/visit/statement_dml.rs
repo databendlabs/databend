@@ -32,7 +32,7 @@ impl Walk for CopyIntoTableStmt {
             try_walk!(with.walk(visitor));
         }
         match &self.src {
-            CopyIntoTableSource::Location(_) => {}
+            CopyIntoTableSource::Location(_) | CopyIntoTableSource::FuseRecoveryBlocks { .. } => {}
             CopyIntoTableSource::Query {
                 select_list,
                 alias_name,
@@ -96,7 +96,7 @@ impl WalkMut for CopyIntoTableStmt {
             try_walk!(with.walk_mut(visitor));
         }
         match &mut self.src {
-            CopyIntoTableSource::Location(_) => {}
+            CopyIntoTableSource::Location(_) | CopyIntoTableSource::FuseRecoveryBlocks { .. } => {}
             CopyIntoTableSource::Query {
                 select_list,
                 alias_name,

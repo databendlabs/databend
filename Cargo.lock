@@ -3970,6 +3970,7 @@ dependencies = [
  "jsonb",
  "log",
  "maplit",
+ "opendal 0.54.1",
  "parking_lot 0.12.3",
  "parquet 58.1.0",
  "rand 0.8.5",

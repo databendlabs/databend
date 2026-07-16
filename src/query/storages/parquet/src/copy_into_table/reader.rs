@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
@@ -28,6 +29,7 @@ use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_storages_common_stage::project_columnar;
 use opendal::Operator;
 use parquet::file::metadata::FileMetaData;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::parquet_reader::InMemoryRowGroup;
 use crate::parquet_reader::ParquetReaderBuilder;
@@ -75,6 +77,33 @@ impl RowGroupReaderForCopy {
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
+        Self::try_create_with_schema(
+            location,
+            ctx,
+            op,
+            arrow_schema,
+            schema_descr,
+            output_schema,
+            default_exprs,
+            missing_as,
+            case_sensitive,
+            use_logic_type,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create_with_schema(
+        location: &str,
+        ctx: Arc<dyn TableContext>,
+        op: Operator,
+        arrow_schema: ArrowSchema,
+        schema_descr: SchemaDescPtr,
+        output_schema: TableSchemaRef,
+        default_exprs: Option<Vec<RemoteDefaultExpr>>,
+        missing_as: &NullAs,
+        case_sensitive: bool,
+        use_logic_type: bool,
+    ) -> Result<RowGroupReaderForCopy> {
         let parquet_table_schema = Arc::new(arrow_to_table_schema(
             &arrow_schema,
             case_sensitive,

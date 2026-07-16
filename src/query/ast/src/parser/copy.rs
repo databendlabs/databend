@@ -49,8 +49,23 @@ use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
+    let fuse_recovery_blocks = map_res(
+        rule! {
+            #ident ~ "(" ~ FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list1(literal_string) ~ ^")" ~ ^")"
+        },
+        |(name, _, _, _, _, files, _, _)| {
+            if name.name.eq_ignore_ascii_case("fuse_recovery_blocks") {
+                Ok(CopyIntoTableSource::FuseRecoveryBlocks { files })
+            } else {
+                Err(nom::Err::Failure(ErrorKind::other(
+                    "expected FUSE_RECOVERY_BLOCKS",
+                )))
+            }
+        },
+    );
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
+        fuse_recovery_blocks,
         map(
             rule! { "(" ~ SELECT ~ #comma_separated_list1(select_target) ~ FROM ~ #file_location ~  #alias_name? ~ ")" },
             |(_, _, select_list, _, from, alias_name, _)| CopyIntoTableSource::Query {
@@ -158,6 +173,7 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -29,12 +30,14 @@ use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::LiteralStringOrVariable;
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::Walk;
+use databend_common_catalog::plan::FuseRecoveryBlocksInfo;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
@@ -55,10 +58,12 @@ use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use log::warn;
@@ -77,6 +82,82 @@ use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
+
+fn validate_fuse_recovery_copy_options(options: &CopyIntoTableOptions) -> Result<()> {
+    if options.purge {
+        return Err(ErrorCode::BadArguments(
+            "PURGE is forbidden for FUSE_RECOVERY_BLOCKS".to_string(),
+        ));
+    }
+    if options.max_files != 0
+        || options.size_limit != 0
+        || options.split_size != 0
+        || !options.validation_mode.is_empty()
+        || options.schema_evolution.is_some()
+        || options.disable_variant_check
+    {
+        return Err(ErrorCode::BadArguments(
+            "FUSE_RECOVERY_BLOCKS does not support MAX_FILES, SIZE_LIMIT, SPLIT_SIZE, VALIDATION_MODE, SCHEMA_EVOLUTION, or DISABLE_VARIANT_CHECK"
+                .to_string(),
+        ));
+    }
+    if options.on_error != OnErrorMode::AbortNum(1) {
+        return Err(ErrorCode::BadArguments(
+            "FUSE_RECOVERY_BLOCKS requires ON_ERROR = ABORT".to_string(),
+        ));
+    }
+    if options
+        .column_match_mode
+        .as_ref()
+        .is_some_and(|mode| mode != &ColumnMatchMode::CaseSensitive)
+    {
+        return Err(ErrorCode::BadArguments(
+            "FUSE_RECOVERY_BLOCKS requires COLUMN_MATCH_MODE = CASE_SENSITIVE".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_fuse_recovery_block_files(block_prefix: &str, files: &[String]) -> Result<Vec<String>> {
+    if files.is_empty() || files.len() > COPY_MAX_FILES_PER_COMMIT {
+        return Err(ErrorCode::BadArguments(format!(
+            "FUSE_RECOVERY_BLOCKS requires between 1 and {COPY_MAX_FILES_PER_COMMIT} FILES entries"
+        )));
+    }
+
+    let mut seen = HashSet::with_capacity(files.len());
+    let mut basenames = Vec::with_capacity(files.len());
+    for file in files {
+        if file.starts_with('/')
+            || file
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "invalid FUSE_RECOVERY_BLOCKS path '{file}'"
+            )));
+        }
+        let Some(basename) = file.strip_prefix(block_prefix) else {
+            return Err(ErrorCode::BadArguments(format!(
+                "FUSE_RECOVERY_BLOCKS path '{}' must be a direct child of '{}'",
+                file, block_prefix
+            )));
+        };
+        if basename.is_empty() || basename.contains('/') || !basename.ends_with(".parquet") {
+            return Err(ErrorCode::BadArguments(format!(
+                "FUSE_RECOVERY_BLOCKS path '{}' must name a Parquet block directly under '{}'",
+                file, block_prefix
+            )));
+        }
+        if !seen.insert(file.as_str()) {
+            return Err(ErrorCode::BadArguments(format!(
+                "duplicate FUSE_RECOVERY_BLOCKS path '{file}'"
+            )));
+        }
+        basenames.push(basename.to_string());
+    }
+    Ok(basenames)
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -121,7 +202,117 @@ impl Binder {
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, &alias)
                     .await
             }
+            CopyIntoTableSource::FuseRecoveryBlocks { files } => {
+                let mut plan = self
+                    .bind_copy_from_fuse_recovery_blocks(stmt, files)
+                    .await?;
+                plan.collect_files(self.ctx.as_ref()).await?;
+                Ok(Plan::CopyIntoTable(Box::new(plan)))
+            }
         }
+    }
+
+    async fn bind_copy_from_fuse_recovery_blocks(
+        &mut self,
+        stmt: &CopyIntoTableStmt,
+        files: &[String],
+    ) -> Result<CopyIntoTablePlan> {
+        if stmt.dst_columns.is_some() {
+            return Err(ErrorCode::BadArguments(
+                "FUSE_RECOVERY_BLOCKS does not support a target column list".to_string(),
+            ));
+        }
+        if stmt.files.is_some() || stmt.pattern.is_some() || !stmt.file_format.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "FUSE_RECOVERY_BLOCKS accepts FILES only inside the function and does not accept PATTERN or FILE_FORMAT"
+                    .to_string(),
+            ));
+        }
+        validate_fuse_recovery_copy_options(&stmt.options)?;
+
+        let (catalog_name, database_name, table_name) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        let catalog_info = catalog.info();
+        let table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
+        if table.engine() != "FUSE" || !table.storage_format_as_parquet() {
+            return Err(ErrorCode::BadArguments(format!(
+                "FUSE_RECOVERY_BLOCKS requires a Parquet FUSE target table, but {} uses {}",
+                table.get_table_info().desc,
+                table.engine()
+            )));
+        }
+        if table.get_table_info().meta.storage_params.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "FUSE_RECOVERY_BLOCKS currently supports managed FUSE tables only".to_string(),
+            ));
+        }
+
+        let table_info = table.get_table_info().clone();
+        let storage_prefix = parse_storage_prefix(table_info.options(), table_info.ident.table_id)?;
+        let block_prefix = format!("{storage_prefix}/_b/");
+        let basenames = validate_fuse_recovery_block_files(&block_prefix, files)?;
+
+        let mut stage_info = StageInfo {
+            stage_name: "FUSE_RECOVERY_BLOCKS".to_string(),
+            is_temporary: true,
+            file_format_params: FileFormatParams::Parquet(ParquetFileFormatParams::default()),
+            ..Default::default()
+        };
+        let mut copy_options = stmt.options.clone();
+        copy_options.column_match_mode = Some(ColumnMatchMode::CaseSensitive);
+        copy_options.schema_evolution = None;
+        stage_info.copy_options.on_error = copy_options.on_error.clone();
+
+        let files_info = StageFilesInfo {
+            path: block_prefix.clone(),
+            files: Some(basenames),
+            pattern: None,
+        };
+        let required_values_table_schema = self.schema_project(
+            &table.schema(),
+            &[],
+            &format!("{database_name}.{table_name}"),
+        )?;
+        let required_values_schema: DataSchemaRef =
+            Arc::new(required_values_table_schema.clone().into());
+
+        Ok(CopyIntoTablePlan {
+            catalog_info,
+            database_name,
+            table_name,
+            validation_mode: ValidationMode::None,
+            is_transform: false,
+            dedup_full_path: true,
+            enable_schema_evolution: false,
+            path_prefix: None,
+            no_file_to_copy: false,
+            from_attachment: false,
+            stage_table_info: StageTableInfo {
+                schema: required_values_table_schema,
+                files_info,
+                stage_info,
+                is_select: false,
+                default_exprs: None,
+                copy_into_table_options: copy_options,
+                is_variant: false,
+                fuse_recovery: Some(FuseRecoveryBlocksInfo {
+                    table_info,
+                    block_prefix,
+                }),
+                ..Default::default()
+            },
+            values_consts: vec![],
+            required_source_schema: required_values_schema.clone(),
+            required_values_schema,
+            write_mode: CopyIntoTableMode::Copy,
+            query: None,
+            enable_distributed: false,
+            files_collected: false,
+        })
     }
 
     pub(crate) fn resolve_copy_pattern(
@@ -650,5 +841,129 @@ impl Binder {
             )
             .await?;
         Ok((Arc::new(TableSchema::new(attachment_fields)), const_values))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::CopySchemaEvolutionOptions;
+
+    use super::*;
+
+    const BLOCK_PREFIX: &str = "1/2/_b/";
+
+    fn files(paths: &[&str]) -> Vec<String> {
+        paths.iter().map(|path| (*path).to_string()).collect()
+    }
+
+    fn expect_path_error(paths: &[&str], expected: &str) {
+        let err = validate_fuse_recovery_block_files(BLOCK_PREFIX, &files(paths))
+            .expect_err("path must be rejected");
+        assert!(
+            err.message().contains(expected),
+            "unexpected error: {}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_valid() {
+        let basenames = validate_fuse_recovery_block_files(
+            BLOCK_PREFIX,
+            &files(&["1/2/_b/aaa_v2.parquet", "1/2/_b/bbb_v2.parquet"]),
+        )
+        .unwrap();
+
+        assert_eq!(basenames, ["aaa_v2.parquet", "bbb_v2.parquet"]);
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_duplicate() {
+        expect_path_error(
+            &["1/2/_b/aaa_v2.parquet", "1/2/_b/aaa_v2.parquet"],
+            "duplicate FUSE_RECOVERY_BLOCKS path",
+        );
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_absolute() {
+        expect_path_error(&["/1/2/_b/aaa_v2.parquet"], "invalid");
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_dot_components() {
+        expect_path_error(&["1/2/_b/./aaa_v2.parquet"], "invalid");
+        expect_path_error(&["1/2/_b/../aaa_v2.parquet"], "invalid");
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_wrong_table_prefix() {
+        expect_path_error(
+            &["1/3/_b/aaa_v2.parquet"],
+            "must be a direct child of '1/2/_b/'",
+        );
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_block_files_nested() {
+        expect_path_error(
+            &["1/2/_b/nested/aaa_v2.parquet"],
+            "must name a Parquet block directly under '1/2/_b/'",
+        );
+    }
+
+    fn expect_option_error(update: impl FnOnce(&mut CopyIntoTableOptions), expected: &str) {
+        let mut options = CopyIntoTableOptions::default();
+        update(&mut options);
+        let err = validate_fuse_recovery_copy_options(&options)
+            .expect_err("COPY option must be rejected");
+        assert!(
+            err.message().contains(expected),
+            "unexpected error: {}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_copy_options_allowed() {
+        let mut options = CopyIntoTableOptions {
+            force: true,
+            ..Default::default()
+        };
+        validate_fuse_recovery_copy_options(&options).unwrap();
+
+        options.column_match_mode = Some(ColumnMatchMode::CaseSensitive);
+        validate_fuse_recovery_copy_options(&options).unwrap();
+    }
+
+    #[test]
+    fn test_validate_fuse_recovery_copy_options_forbidden() {
+        expect_option_error(|options| options.purge = true, "PURGE is forbidden");
+        expect_option_error(
+            |options| options.max_files = 1,
+            "does not support MAX_FILES",
+        );
+        expect_option_error(|options| options.size_limit = 1, "SIZE_LIMIT");
+        expect_option_error(|options| options.split_size = 1, "SPLIT_SIZE");
+        expect_option_error(
+            |options| options.validation_mode = "RETURN_ERRORS".to_string(),
+            "VALIDATION_MODE",
+        );
+        expect_option_error(
+            |options| options.schema_evolution = Some(CopySchemaEvolutionOptions::default()),
+            "SCHEMA_EVOLUTION",
+        );
+        expect_option_error(
+            |options| options.disable_variant_check = true,
+            "DISABLE_VARIANT_CHECK",
+        );
+        expect_option_error(
+            |options| options.on_error = OnErrorMode::Continue,
+            "requires ON_ERROR = ABORT",
+        );
+        expect_option_error(
+            |options| options.column_match_mode = Some(ColumnMatchMode::Position),
+            "requires COLUMN_MATCH_MODE = CASE_SENSITIVE",
+        );
     }
 }

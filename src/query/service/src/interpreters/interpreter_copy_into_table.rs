@@ -56,6 +56,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
 use databend_query_storage_stage_support::StageTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -261,6 +262,25 @@ impl CopyIntoTableInterpreter {
             )
         } else {
             let mut stage_table_info = plan.stage_table_info.clone();
+            if let Some(recovery) = &mut stage_table_info.fuse_recovery {
+                if recovery.table_info.ident.table_id != table_info.ident.table_id {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS target table was replaced while the statement was being planned"
+                            .to_string(),
+                    ));
+                }
+                if recovery.table_info.schema() != table_info.schema() {
+                    return Err(ErrorCode::TableSchemaMismatch(
+                        "FUSE_RECOVERY_BLOCKS target schema changed while the statement was being planned; retry the statement"
+                            .to_string(),
+                    ));
+                }
+                // Use current non-schema table metadata (for example the cluster key and
+                // change-tracking option) when rebuilding recovered rows.
+                recovery.table_info = table_info.clone();
+            }
+            ParquetTableForCopy::prepare_fuse_recovery(&mut stage_table_info, self.ctx.clone())
+                .await?;
             if plan.enable_schema_evolution {
                 stage_table_info
                     .copy_into_table_options

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
 use databend_common_ast::ast::Statement;
@@ -36,6 +37,21 @@ fn test_multi_table_insert_display() {
     for sql in sqls.split(';').filter(|s| !s.is_empty()) {
         test_stmt_display(sql);
     }
+}
+
+#[test]
+fn test_fuse_recovery_blocks_display() {
+    let sql = "COPY INTO db.t FROM FUSE_RECOVERY_BLOCKS(FILES => ('1/2/_b/a_v2.parquet', '1/2/_b/b_v2.parquet')) FORCE = FALSE";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let Statement::CopyIntoTable(copy) = &stmt else {
+        panic!("expected COPY INTO TABLE");
+    };
+    let CopyIntoTableSource::FuseRecoveryBlocks { files } = &copy.src else {
+        panic!("expected FUSE_RECOVERY_BLOCKS source");
+    };
+    assert_eq!(files, &["1/2/_b/a_v2.parquet", "1/2/_b/b_v2.parquet"]);
+    test_stmt_display(sql);
 }
 
 #[test]

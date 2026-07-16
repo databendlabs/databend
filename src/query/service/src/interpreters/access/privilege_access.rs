@@ -1900,7 +1900,17 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
+                if plan.stage_table_info.fuse_recovery.is_some() {
+                    self.validate_access(
+                        &GrantObject::Global,
+                        UserPrivilegeType::Super,
+                        false,
+                        false,
+                    )
+                    .await?;
+                } else {
+                    self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
+                }
                 self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
                 if plan.enable_schema_evolution && plan.query.is_none() && !plan.no_file_to_copy {
                     self.validate_table_access(

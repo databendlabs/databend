@@ -50,6 +50,54 @@ pub struct FullParquetMeta {
     pub row_group_level_stats: Option<Vec<HashMap<ColumnId, ColumnStatistics>>>,
 }
 
+/// A complete Parquet schema prepared on the coordinator for COPY workers.
+///
+/// Keeping the Arrow schema is required for logical extension types encoded in
+/// Parquet key-value metadata. Reconstructing a `FileMetaData` from only the
+/// physical schema descriptor loses that information.
+#[derive(Clone, Debug)]
+pub struct ParquetCopySchema {
+    pub arrow_schema: ArrowSchema,
+    pub schema_descr: SchemaDescPtr,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ParquetCopySchemaSerde {
+    arrow_schema: ArrowSchema,
+    schema_descr_bytes: Vec<u8>,
+    schema_descr_root: String,
+}
+
+impl Serialize for ParquetCopySchema {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        ParquetCopySchemaSerde {
+            arrow_schema: self.arrow_schema.clone(),
+            schema_descr_bytes: schema_to_bytes(&self.schema_descr),
+            schema_descr_root: self.schema_descr.root_schema().name().to_string(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ParquetCopySchema {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let helper = ParquetCopySchemaSerde::deserialize(deserializer)?;
+        let schema_descr = schema_from_bytes(&helper.schema_descr_bytes).or_else(|_| {
+            ArrowSchemaConverter::new()
+                .schema_root(&helper.schema_descr_root)
+                .convert(&helper.arrow_schema)
+                .map(Arc::new)
+        });
+        let schema_descr = schema_descr.map_err(|e| serde::de::Error::custom(e.to_string()))?;
+        Ok(Self {
+            arrow_schema: helper.arrow_schema,
+            schema_descr,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ParquetTableInfo {
     pub read_options: ParquetReadOptions,
@@ -162,7 +210,13 @@ mod tests {
     use std::sync::Arc;
 
     use arrow_schema::Schema as ArrowSchema;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
+    use databend_common_expression::converts::arrow::EXTENSION_KEY;
     use databend_common_storage::StageFilesInfo;
+    use parquet::arrow::ArrowSchemaConverter;
     use parquet::arrow::parquet_to_arrow_schema;
     use parquet::basic::ConvertedType;
     use parquet::basic::Repetition;
@@ -174,6 +228,7 @@ mod tests {
     use parquet::schema::types::SchemaDescriptor;
     use parquet::schema::types::Type;
 
+    use super::ParquetCopySchema;
     use super::ParquetTableInfo;
 
     fn make_desc() -> Result<SchemaDescPtr, ParquetError> {
@@ -314,5 +369,34 @@ mod tests {
             schema_descr.column(0).physical_type(),
             info.schema_descr.column(0).physical_type()
         );
+    }
+
+    #[test]
+    fn test_parquet_copy_schema_serde_preserves_arrow_extension_metadata() {
+        let table_schema = TableSchema::new(vec![
+            TableField::new("variant", TableDataType::Variant),
+            TableField::new(
+                "nullable_variant",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+        ]);
+        let arrow_schema = ArrowSchema::from(&table_schema);
+        let schema_descr = Arc::new(ArrowSchemaConverter::new().convert(&arrow_schema).unwrap());
+        let copy_schema = ParquetCopySchema {
+            arrow_schema: arrow_schema.clone(),
+            schema_descr: schema_descr.clone(),
+        };
+
+        let encoded = serde_json::to_string(&copy_schema).unwrap();
+        let decoded: ParquetCopySchema = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded.arrow_schema, arrow_schema);
+        assert_eq!(decoded.schema_descr, schema_descr);
+        for field in decoded.arrow_schema.fields() {
+            assert_eq!(
+                field.metadata().get(EXTENSION_KEY).map(String::as_str),
+                Some(ARROW_EXT_TYPE_VARIANT)
+            );
+        }
     }
 }
