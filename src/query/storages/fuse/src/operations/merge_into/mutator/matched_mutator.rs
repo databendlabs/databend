@@ -163,10 +163,7 @@ impl MatchedAggregator {
                         "unexpected mutation log in matched aggregator",
                     ));
                 }
-                self.target_build_updated_rows = self
-                    .target_build_updated_rows
-                    .checked_add(logs.logical_updated_rows)
-                    .ok_or_else(|| ErrorCode::Internal("logical updated rows overflow"))?;
+                self.target_build_updated_rows += logs.logical_updated_rows;
                 return Ok(());
             }
             if let Some(meta_index) = BlockMetaIndex::downcast_ref_from(meta) {
@@ -319,20 +316,14 @@ impl MatchedAggregator {
             }));
         }
 
-        let logical_updated_rows =
-            self.block_mutation_row_offset
-                .values()
-                .try_fold(0_u64, |rows, (updates, _)| {
-                    rows.checked_add(updates.len() as u64)
-                        .ok_or_else(|| ErrorCode::Internal("logical updated rows overflow"))
-                })?;
-        let logical_deleted_rows =
-            self.block_mutation_row_offset
-                .values()
-                .try_fold(0_u64, |rows, (_, deletes)| {
-                    rows.checked_add(deletes.len() as u64)
-                        .ok_or_else(|| ErrorCode::Internal("logical deleted rows overflow"))
-                })?;
+        let logical_updated_rows = self
+            .block_mutation_row_offset
+            .values()
+            .fold(0_u64, |rows, (updates, _)| rows + updates.len() as u64);
+        let logical_deleted_rows = self
+            .block_mutation_row_offset
+            .values()
+            .fold(0_u64, |rows, (_, deletes)| rows + deletes.len() as u64);
 
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());

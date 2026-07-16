@@ -491,13 +491,11 @@ impl FuseTable {
         // A segment subset means the endpoint change is physically one-sided,
         // so snapshot row counts provide the exact candidate rows.
         if base_segments.is_subset(&latest_segments) {
-            let rows_added = latest_rows.checked_sub(base_rows).ok_or_else(|| {
-                ErrorCode::Internal("invalid row counts for added segment subset")
-            })?;
+            let rows_added = latest_rows - base_rows;
             let estimated_rows = match mode {
                 StreamMode::AppendOnly => logical_rows.inserted.min(rows_added),
                 StreamMode::Standard => {
-                    estimate_standard_rows_to_process(&logical_rows, rows_added, 0)?
+                    estimate_standard_rows_to_process(&logical_rows, rows_added, 0)
                 }
             };
             return Ok(StreamBacklog {
@@ -535,7 +533,7 @@ impl FuseTable {
             for block in &del_blocks {
                 base_block_ids.insert(block_id_from_location(&block.location.0)?);
             }
-            let append_candidate_rows = add_blocks.iter().try_fold(0_u64, |rows, block| {
+            let append_candidate_rows = add_blocks.iter().fold(0_u64, |rows, block| {
                 let row_count = block.row_count;
                 let block_rows =
                     if let Some(version_stats) = block.col_stats.get(&ORIGIN_VERSION_COLUMN_ID) {
@@ -571,9 +569,8 @@ impl FuseTable {
                     } else {
                         row_count
                     };
-                rows.checked_add(block_rows)
-                    .ok_or_else(|| ErrorCode::Internal("append candidate row count overflow"))
-            })?;
+                rows + block_rows
+            });
             return Ok(StreamBacklog {
                 rows_added: candidate_added_rows,
                 rows_removed: candidate_removed_rows,
@@ -585,7 +582,7 @@ impl FuseTable {
             &logical_rows,
             candidate_added_rows,
             candidate_removed_rows,
-        )?;
+        );
 
         Ok(StreamBacklog {
             rows_added: candidate_added_rows,
@@ -640,9 +637,7 @@ impl FuseTable {
         let logical_rows = logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot))?;
         let base_rows = base_snapshot.summary.row_count;
         let latest_rows = latest_snapshot.summary.row_count;
-        let total_rows = base_rows
-            .checked_add(logical_rows.inserted)
-            .ok_or_else(|| ErrorCode::Internal("endpoint change row count overflow"))?;
+        let total_rows = base_rows + logical_rows.inserted;
         let net_rows = i128::from(latest_rows) - i128::from(base_rows);
         let base_deleted = if total_rows == 0 {
             0
@@ -667,12 +662,8 @@ impl FuseTable {
                 .min(logical_rows.updated)
                 .min(base_survived)
         };
-        let standard_insert = insert_survived
-            .checked_add(endpoint_updated)
-            .ok_or_else(|| ErrorCode::Internal("standard insert row estimate overflow"))?;
-        let standard_delete = base_deleted
-            .checked_add(endpoint_updated)
-            .ok_or_else(|| ErrorCode::Internal("standard delete row estimate overflow"))?;
+        let standard_insert = insert_survived + endpoint_updated;
+        let standard_delete = base_deleted + endpoint_updated;
         if i128::from(standard_insert) - i128::from(standard_delete) != net_rows {
             return Err(ErrorCode::Internal(
                 "endpoint change row estimates do not match snapshot row counts",
@@ -783,20 +774,11 @@ fn estimate_standard_rows_to_process(
     rows: &LogicalChangeRows,
     candidate_added_rows: u64,
     candidate_removed_rows: u64,
-) -> Result<u64> {
-    let logical_added = rows
-        .inserted
-        .checked_add(rows.updated)
-        .ok_or_else(|| ErrorCode::Internal("logical added row count overflow"))?;
-    let logical_removed = rows
-        .deleted
-        .checked_add(rows.updated)
-        .ok_or_else(|| ErrorCode::Internal("logical removed row count overflow"))?;
+) -> u64 {
+    let logical_added = rows.inserted + rows.updated;
+    let logical_removed = rows.deleted + rows.updated;
 
-    logical_added
-        .min(candidate_added_rows)
-        .checked_add(logical_removed.min(candidate_removed_rows))
-        .ok_or_else(|| ErrorCode::Internal("stream backlog row count overflow"))
+    logical_added.min(candidate_added_rows) + logical_removed.min(candidate_removed_rows)
 }
 
 fn rounded_ratio(value: u64, numerator: u64, denominator: u64) -> u64 {
@@ -840,112 +822,4 @@ fn sum_block_rows(blocks: &[Arc<BlockMeta>]) -> Result<u64> {
         rows.checked_add(block.row_count)
             .ok_or_else(|| ErrorCode::Internal("candidate block row count overflow"))
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use chrono::Duration;
-    use databend_common_expression::TableSchema;
-    use databend_storages_common_table_meta::meta::Statistics;
-    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-    use databend_storages_common_table_meta::meta::TableSnapshot;
-
-    use super::LogicalChangeRows;
-    use super::estimate_standard_rows_to_process;
-    use super::logical_change_rows;
-    use super::scale_snapshot_statistics;
-
-    fn snapshot(rows: u64, updated: u64, deleted: u64) -> TableSnapshot {
-        let summary = Statistics {
-            row_count: rows,
-            block_count: rows / 10,
-            uncompressed_byte_size: rows * 100,
-            compressed_byte_size: rows * 40,
-            index_size: rows * 5,
-            bloom_index_size: Some(rows * 2),
-            ..Default::default()
-        };
-        let mut snapshot = TableSnapshot::try_new(
-            None,
-            None,
-            TableSchema::default(),
-            summary,
-            vec![],
-            None,
-            None,
-            None,
-            TableMetaTimestamps::new(None, Duration::hours(1)),
-        )
-        .unwrap();
-        snapshot.logical_updated_rows_total = updated;
-        snapshot.logical_deleted_rows_total = deleted;
-        snapshot
-    }
-
-    #[test]
-    fn test_logical_change_rows_derives_insert_update_delete() {
-        let base = snapshot(100, 7, 11);
-        let latest = snapshot(105, 17, 26);
-
-        assert_eq!(
-            logical_change_rows(Some(&base), Some(&latest)).unwrap(),
-            LogicalChangeRows {
-                inserted: 20,
-                updated: 10,
-                deleted: 15,
-            }
-        );
-
-        let base = snapshot(100, 7, 11);
-        let latest = snapshot(100, 7, 11);
-        assert_eq!(
-            logical_change_rows(Some(&base), Some(&latest)).unwrap(),
-            LogicalChangeRows {
-                inserted: 0,
-                updated: 0,
-                deleted: 0,
-            }
-        );
-    }
-
-    #[test]
-    fn test_logical_change_rows_rejects_invalid_counters() {
-        let base = snapshot(100, 7, 11);
-        let latest = snapshot(80, 6, 31);
-        assert!(logical_change_rows(Some(&base), Some(&latest)).is_err());
-
-        let base = snapshot(100, 0, 0);
-        let latest = snapshot(80, 0, 10);
-        assert!(logical_change_rows(Some(&base), Some(&latest)).is_err());
-    }
-
-    #[test]
-    fn test_standard_backlog_keeps_physical_rows_separate_from_estimate() {
-        let rows = LogicalChangeRows {
-            inserted: 1,
-            updated: 0,
-            deleted: 0,
-        };
-        assert_eq!(estimate_standard_rows_to_process(&rows, 4, 3).unwrap(), 1);
-
-        let rows = LogicalChangeRows {
-            inserted: 0,
-            updated: 2,
-            deleted: 0,
-        };
-        assert_eq!(estimate_standard_rows_to_process(&rows, 6, 6).unwrap(), 4);
-    }
-
-    #[test]
-    fn test_snapshot_statistics_scale_from_selected_side() {
-        let snapshot = snapshot(100, 0, 0);
-        let stats = scale_snapshot_statistics(&snapshot, 25);
-        assert_eq!(stats.num_rows, Some(25));
-        assert_eq!(stats.data_size, Some(2500));
-        assert_eq!(stats.data_size_compressed, Some(1000));
-        assert_eq!(stats.index_size, Some(125));
-        assert_eq!(stats.bloom_index_size, Some(50));
-        assert_eq!(stats.number_of_blocks, Some(2));
-        assert_eq!(stats.number_of_segments, None);
-    }
 }

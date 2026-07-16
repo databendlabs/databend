@@ -309,10 +309,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let has_new_segments = !new_segment_locs.is_empty();
         let has_virtual_schema =
             virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
-        let statistics_rows = conflict_resolve_context
-            .logical_insert_rows(logical_deleted_rows)
-            .checked_add(logical_updated_rows)
-            .ok_or_else(|| ErrorCode::Internal("statistics row count overflow"))?;
+        let statistics_rows = conflict_resolve_context.logical_insert_rows(logical_deleted_rows)
+            + logical_updated_rows;
         let has_hll = statistics_rows > 0 && !hll.is_empty();
 
         self.new_segment_locs = new_segment_locs;

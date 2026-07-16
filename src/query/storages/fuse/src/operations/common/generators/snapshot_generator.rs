@@ -61,7 +61,6 @@ pub trait SnapshotGenerator {
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
-        let (updated_rows, deleted_rows) = self.logical_change_delta(&previous);
         let mut snapshot = self.do_generate_new_snapshot(
             table_info,
             cluster_key_meta,
@@ -70,7 +69,8 @@ pub trait SnapshotGenerator {
             table_meta_timestamps,
             table_stats_gen,
         )?;
-        snapshot.add_logical_change_delta(updated_rows, deleted_rows)?;
+        let (updated_rows, deleted_rows) = self.logical_change_delta(&previous);
+        snapshot.add_logical_change_delta(updated_rows, deleted_rows);
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_info.ident.table_id)?;
         Ok(snapshot)
     }

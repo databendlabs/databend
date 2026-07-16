@@ -254,14 +254,8 @@ impl TransformMergeCommitMeta {
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
-            logical_updated_rows: l
-                .logical_updated_rows
-                .checked_add(r.logical_updated_rows)
-                .ok_or_else(|| ErrorCode::Internal("logical updated rows overflow"))?,
-            logical_deleted_rows: l
-                .logical_deleted_rows
-                .checked_add(r.logical_deleted_rows)
-                .ok_or_else(|| ErrorCode::Internal("logical deleted rows overflow"))?,
+            logical_updated_rows: l.logical_updated_rows + r.logical_updated_rows,
+            logical_deleted_rows: l.logical_deleted_rows + r.logical_deleted_rows,
             virtual_schema,
             virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),

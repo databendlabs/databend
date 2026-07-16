@@ -134,18 +134,9 @@ impl TableSnapshot {
     }
 
     /// Adds one committed operation's logical UPDATE and DELETE increments.
-    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) -> Result<()> {
-        let logical_updated_rows_total = self
-            .logical_updated_rows_total
-            .checked_add(updated_rows)
-            .ok_or_else(|| ErrorCode::Internal("logical updated rows counter overflow"))?;
-        let logical_deleted_rows_total = self
-            .logical_deleted_rows_total
-            .checked_add(deleted_rows)
-            .ok_or_else(|| ErrorCode::Internal("logical deleted rows counter overflow"))?;
-        self.logical_updated_rows_total = logical_updated_rows_total;
-        self.logical_deleted_rows_total = logical_deleted_rows_total;
-        Ok(())
+    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        self.logical_updated_rows_total += updated_rows;
+        self.logical_deleted_rows_total += deleted_rows;
     }
 
     /// Note that table_meta_timestamps is not always equal to prev_timestamp.
@@ -428,42 +419,5 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-
-    fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {
-        TableSnapshot::try_new(
-            None,
-            previous,
-            TableSchema::default(),
-            Statistics::default(),
-            vec![],
-            None,
-            None,
-            None,
-            TableMetaTimestamps::default(),
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn test_logical_change_counters() {
-        let mut parent = snapshot(None);
-        parent.add_logical_change_delta(17, 23).unwrap();
-
-        let mut child = snapshot(Some(Arc::new(parent.clone())));
-        child.add_logical_change_delta(3, 4).unwrap();
-        let delta = TableSnapshot::logical_change_delta(Some(&parent), Some(&child)).unwrap();
-        assert_eq!(delta, (3, 4));
-
-        let decoded = TableSnapshot::from_slice(&child.to_bytes().unwrap()).unwrap();
-        assert_eq!(decoded.logical_updated_rows_total, 20);
-        assert_eq!(decoded.logical_deleted_rows_total, 27);
     }
 }

@@ -390,9 +390,7 @@ impl ReplaceIntoOperationAggregator {
         let mut logical_deleted_rows = 0_u64;
         for maybe_log_entry in log_entries {
             let (maybe_log_entry, deleted_rows) = maybe_log_entry?;
-            logical_deleted_rows = logical_deleted_rows
-                .checked_add(deleted_rows)
-                .ok_or_else(|| ErrorCode::Internal("logical deleted rows overflow"))?;
+            logical_deleted_rows += deleted_rows;
             if let Some(segment_mutation_log) = maybe_log_entry {
                 mutation_logs.push(segment_mutation_log);
             }

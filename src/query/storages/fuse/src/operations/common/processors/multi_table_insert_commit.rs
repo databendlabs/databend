@@ -285,9 +285,7 @@ impl AsyncSink for CommitMultiTableInsert {
             .logical_insert_rows(meta.logical_deleted_rows);
         match self.insert_rows.get_mut(&meta.table_id) {
             Some(rows) => {
-                *rows = rows
-                    .checked_add(insert_rows)
-                    .ok_or_else(|| ErrorCode::Internal("statistics row count overflow"))?;
+                *rows += insert_rows;
             }
             None => {
                 self.insert_rows.insert(meta.table_id, insert_rows);

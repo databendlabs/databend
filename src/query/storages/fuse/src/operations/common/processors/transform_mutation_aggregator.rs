@@ -22,7 +22,6 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
@@ -109,14 +108,8 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
-        self.logical_updated_rows = self
-            .logical_updated_rows
-            .checked_add(mutation_logs.logical_updated_rows)
-            .ok_or_else(|| ErrorCode::Internal("logical updated rows overflow"))?;
-        self.logical_deleted_rows = self
-            .logical_deleted_rows
-            .checked_add(mutation_logs.logical_deleted_rows)
-            .ok_or_else(|| ErrorCode::Internal("logical deleted rows overflow"))?;
+        self.logical_updated_rows += mutation_logs.logical_updated_rows;
+        self.logical_deleted_rows += mutation_logs.logical_deleted_rows;
         self.processed_log_entries += mutation_logs.entries.len();
         for entry in mutation_logs.entries {
             match entry {

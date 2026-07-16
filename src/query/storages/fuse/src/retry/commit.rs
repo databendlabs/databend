@@ -322,7 +322,7 @@ async fn try_rebuild_req(
             latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;
-        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows)?;
+        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows);
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot
