@@ -274,6 +274,7 @@ impl FuseTable {
                 copied_files: copied_files_req,
                 deduplicated_labels: deduplicated_label.into_iter().collect(),
                 update_temp_tables,
+                ..Default::default()
             })
             .await?;
 

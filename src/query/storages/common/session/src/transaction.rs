@@ -20,10 +20,12 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::MVSourceIndexCondition;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::UpdateMVMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -70,6 +72,8 @@ pub struct TxnBuffer {
     lvt_check: HashMap<u64, Option<TableLvtCheck>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
+    update_mv_meta: HashMap<u64, UpdateMVMetaReq>,
+    mv_source_index_conditions: HashMap<u64, MVSourceIndexCondition>,
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
@@ -126,6 +130,21 @@ impl TxnBuffer {
         }
 
         self.update_stream_metas(&req.update_stream_metas);
+
+        for mv_meta in req.update_mv_metas {
+            let mv_id = **mv_meta.ident.name();
+            self.update_mv_meta
+                .entry(mv_id)
+                .and_modify(|buffered| buffered.new_mv_meta = mv_meta.new_mv_meta.clone())
+                .or_insert(mv_meta);
+        }
+
+        for condition in req.mv_source_index_conditions {
+            let source_table_id = *condition.ident.name();
+            self.mv_source_index_conditions
+                .entry(source_table_id)
+                .or_insert(condition);
+        }
 
         self.deduplicated_labels.extend(req.deduplicated_labels);
 
@@ -343,6 +362,13 @@ impl TxnManager {
                         info.clone(),
                     )
                 })
+                .collect(),
+            update_mv_metas: self.txn_buffer.update_mv_meta.values().cloned().collect(),
+            mv_source_index_conditions: self
+                .txn_buffer
+                .mv_source_index_conditions
+                .values()
+                .cloned()
                 .collect(),
             copied_files,
             update_stream_metas: self

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::ops::Range;
@@ -38,6 +39,13 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVId;
+use databend_common_meta_app::schema::MVMetaIdent;
+use databend_common_meta_app::schema::MVSourceIndex;
+use databend_common_meta_app::schema::MVSourceIndexIdent;
+use databend_common_meta_app::schema::MarkedDeletedMVId;
+use databend_common_meta_app::schema::MarkedDeletedMVIdent;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -51,6 +59,7 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -245,47 +254,72 @@ async fn remove_copied_files_for_dropped_table(
     unreachable!()
 }
 
-/// Lists all dropped and non-dropped tables belonging to a Database,
-/// returns those tables that are eligible for garbage collection,
-/// i.e., whose dropped time is in the specified range.
+/// Return table backing objects that are eligible for garbage collection.
+///
+/// Historical table versions are discovered from table history. Individually
+/// dropped or replaced materialized views are discovered from their tombstones.
+/// When the database itself is dropped, its live name mappings supply all
+/// current objects, including materialized views that do not retain table
+/// history.
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
-pub async fn get_history_tables_for_gc(
+pub async fn get_tables_for_gc(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
     drop_time_range: Range<Option<DateTime<Utc>>>,
     db_id: u64,
     limit: usize,
     db_is_dropped: bool,
 ) -> Result<Vec<TableNIV>, KVAppError> {
-    info!(
-        "get_history_tables_for_gc: db_id {}, limit {}",
-        db_id, limit
-    );
+    if limit == 0 {
+        return Ok(vec![]);
+    }
 
-    let ident = TableIdHistoryIdent {
+    info!("get_tables_for_gc: db_id {}, limit {}", db_id, limit);
+
+    let mut candidate_ids = HashSet::new();
+    let mut candidates = vec![];
+
+    // Table and MV backing ids reach GC through different metadata:
+    // ```
+    // create or replace table t ...;             // history: [a], live: [a]
+    // create or replace table t ...;             // history: [a, b], live: [b]
+    // drop table t;                               // history: [a, b], no live
+    //
+    // create materialized view mv ...;            // live: [m]
+    // create or replace materialized view mv ...; // live: [n], tombstone: [m]
+    // drop materialized view mv;                   // tombstone: [m, n]
+    // ```
+    // In a live database, the last table history id is protected only when its
+    // TableMeta has no drop_on. Replaced ids are filtered by updated_on, while
+    // explicitly dropped ids are filtered by drop_on. Dropping a database
+    // disables that protection and retains live mappings for all current
+    // objects; this is also how a live MV without table history is discovered.
+
+    // A dropped database retains its live name mappings for UNDROP. Use them
+    // as the authoritative source for all current objects in the database.
+    if db_is_dropped {
+        let ident = DBIdTableName::new(db_id, "dummy");
+        let name_mappings = kv_api
+            .list_pb_vec(ListOptions::unlimited(&DirName::new_with_level(ident, 1)))
+            .await?;
+        for (name, table_id) in name_mappings {
+            if candidate_ids.insert(table_id.data.table_id) {
+                candidates.push((table_id.data, name));
+            }
+        }
+    }
+
+    let history_ident = TableIdHistoryIdent {
         database_id: db_id,
         table_name: "dummy".to_string(),
     };
-    let dir_name = DirName::new(ident);
+    let dir_name = DirName::new(history_ident);
     let table_history_kvs = kv_api
         .list_pb_vec(ListOptions::unlimited(&dir_name))
         .await?;
 
-    let mut args = vec![];
-
-    // For table ids of each table with the same name, we keep the last one, e.g.
-    // ```
-    //  create or replace table t ... ; -- table_id a
-    //  create or replace table t ... ; -- table_id b
-    // ```
-    // table_id `b` will be kept for table t,
-    //
-    // Please note that the largest table id might be dropped, e.g.
-    // ```
-    //  create or replace table t ... ; -- table_id 1
-    //  ...
-    //  drop table t ... ;
-    // ```
+    // Track the last history id for the live-database protection described above.
 
     let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
 
@@ -294,31 +328,64 @@ pub async fn get_history_tables_for_gc(
         if let Some(last_id) = id_list.last() {
             latest_table_ids.insert(*last_id);
             for table_id in id_list.iter() {
-                args.push((TableId::new(*table_id), ident.table_name.clone()));
+                if candidate_ids.insert(*table_id) {
+                    candidates.push((
+                        TableId::new(*table_id),
+                        DBIdTableName::new(db_id, ident.table_name.clone()),
+                    ));
+                }
             }
+        }
+    }
+
+    // Add backing ids for individually dropped or replaced materialized views.
+    let tombstone_ident =
+        MarkedDeletedMVIdent::new_generic(tenant, MarkedDeletedMVId::new(db_id, MVId::new(0)));
+    let tombstones = kv_api
+        .list_pb_vec(ListOptions::unlimited(&DirName::new(tombstone_ident)))
+        .await?;
+    let dropped_mv_ids = tombstones
+        .into_iter()
+        .map(|(ident, _)| TableId::new(*ident.name().mv_id))
+        .collect::<Vec<_>>();
+    let dropped_mv_names = kv_api
+        .get_pb_values_vec(dropped_mv_ids.iter().map(|id| TableIdToName {
+            table_id: id.table_id,
+        }))
+        .await?;
+    for (table_id, table_name) in dropped_mv_ids.into_iter().zip(dropped_mv_names) {
+        if candidate_ids.insert(table_id.table_id) {
+            let name = table_name.map(|v| v.data).unwrap_or_else(|| {
+                warn!(
+                    "cannot find TableIdToName for dropped MV {}",
+                    table_id.table_id
+                );
+                DBIdTableName::new(db_id, format!("__dropped_mv_{}", table_id.table_id))
+            });
+            candidates.push((table_id, name));
         }
     }
 
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
 
-    let args_len = args.len();
+    let candidates_len = candidates.len();
     let mut num_out_of_time_range = 0;
     let mut num_processed = 0;
 
     info!(
-        "get_history_tables_for_gc: {} items to process in db {}",
-        args_len, db_id
+        "get_tables_for_gc: {} items to process in db {}",
+        candidates_len, db_id
     );
 
     // Process in batches to avoid performance issues
-    for chunk in args.chunks(BATCH_SIZE) {
+    for chunk in candidates.chunks(BATCH_SIZE) {
         // Get table metadata for current batch
         let table_id_idents = chunk.iter().map(|(table_id, _)| table_id.clone());
         let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
         // Filter by drop_time_range for current batch
-        for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
+        for (seq_meta, (table_id, name)) in seq_metas.into_iter().zip(chunk.iter()) {
             let Some(seq_meta) = seq_meta else {
                 warn!(
                     "batch_filter_table_info cannot find {:?} table_meta",
@@ -336,7 +403,7 @@ pub async fn get_history_tables_for_gc(
                     if is_visible_last_active_table {
                         debug!(
                             "Table id {:?} of {} is the last visible one, not available for vacuum",
-                            table_id, table_name,
+                            table_id, name.table_name,
                         );
                         num_out_of_time_range += 1;
                         continue;
@@ -362,16 +429,12 @@ pub async fn get_history_tables_for_gc(
                 }
             }
 
-            filter_tb_infos.push(TableNIV::new(
-                DBIdTableName::new(db_id, table_name.clone()),
-                table_id.clone(),
-                seq_meta,
-            ));
+            filter_tb_infos.push(TableNIV::new(name.clone(), table_id.clone(), seq_meta));
 
             // Check if we have reached the limit
             if filter_tb_infos.len() >= limit {
                 info!(
-                    "get_history_tables_for_gc: reach limit {}, so far collected {}",
+                    "get_tables_for_gc: reach limit {}, so far collected {}",
                     limit,
                     filter_tb_infos.len()
                 );
@@ -381,8 +444,8 @@ pub async fn get_history_tables_for_gc(
 
         num_processed += chunk.len();
         info!(
-            "get_history_tables_for_gc: process: {}/{}, {} items filtered by time range condition",
-            num_processed, args_len, num_out_of_time_range
+            "get_tables_for_gc: process: {}/{}, {} items filtered by time range condition",
+            num_processed, candidates_len, num_out_of_time_range
         );
     }
 
@@ -528,6 +591,7 @@ async fn gc_dropped_db_by_id(
         .await?;
 
     let mut txn = TxnRequest::default();
+    let mut mv_source_indexes = HashMap::new();
 
     for (ident, table_history) in table_history_items {
         for tb_id in table_history.id_list.iter() {
@@ -542,6 +606,7 @@ async fn gc_dropped_db_by_id(
                 db_id,
                 &table_id_ident,
                 &mut txn,
+                &mut mv_source_indexes,
             )
             .await?;
             num_meta_keys_removed += num_removed_copied_files;
@@ -551,6 +616,8 @@ async fn gc_dropped_db_by_id(
             .push(txn_cond_eq_seq(&ident, table_history.seq));
         txn.if_then.push(txn_del(&ident));
     }
+
+    append_mv_source_index_updates(&mut txn, mv_source_indexes);
 
     txn.condition
         .push(txn_cond_eq_seq(&db_id_history_ident, seq_dbid_list.seq));
@@ -633,6 +700,7 @@ async fn gc_dropped_table_by_id(
         trials.next().unwrap()?.await;
 
         let mut txn = TxnRequest::default();
+        let mut mv_source_indexes = HashMap::new();
 
         // 1)
         let _ = remove_data_for_dropped_table(
@@ -642,8 +710,10 @@ async fn gc_dropped_table_by_id(
             db_id_table_name.db_id,
             table_id_ident,
             &mut txn,
+            &mut mv_source_indexes,
         )
         .await?;
+        append_mv_source_index_updates(&mut txn, mv_source_indexes);
 
         // 2)
         let table_id_history_ident = TableIdHistoryIdent {
@@ -757,6 +827,7 @@ async fn remove_data_for_dropped_table(
     db_id: u64,
     table_id: &TableId,
     txn: &mut TxnRequest,
+    mv_source_indexes: &mut HashMap<MVSourceIndexIdent, (u64, MVSourceIndex)>,
 ) -> Result<Result<(), String>, MetaError> {
     let seq_meta = kv_api.get_pb(table_id).await?;
 
@@ -772,6 +843,32 @@ async fn remove_data_for_dropped_table(
     //     warn!("{}", err);
     //     return Ok(Err(err));
     // }
+    if is_materialized_view_engine(&seq_meta.data.engine) {
+        let mv_id = MVId::new(table_id.table_id);
+        let mv_meta_ident = MVMetaIdent::new_generic(tenant, mv_id);
+        if let Some(mv_meta) = kv_api.get_pb(&mv_meta_ident).await? {
+            txn_delete_exact(txn, &mv_meta_ident, mv_meta.seq);
+            let source_index_ident =
+                MVSourceIndexIdent::new_generic(tenant, mv_meta.data.source_table_id);
+            if !mv_source_indexes.contains_key(&source_index_ident) {
+                if let Some(source_index) = kv_api.get_pb(&source_index_ident).await? {
+                    mv_source_indexes.insert(
+                        source_index_ident.clone(),
+                        (source_index.seq, source_index.data),
+                    );
+                }
+            }
+            if let Some((_, source_index)) = mv_source_indexes.get_mut(&source_index_ident) {
+                source_index.remove(mv_id);
+            }
+        }
+        txn.if_then
+            .push(txn_del(&MVDefinitionIdent::new_generic(tenant, mv_id)));
+        txn.if_then.push(txn_del(&MarkedDeletedMVIdent::new_generic(
+            tenant,
+            MarkedDeletedMVId::new(db_id, mv_id),
+        )));
+    }
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping
@@ -896,6 +993,20 @@ async fn remove_data_for_dropped_table(
     }
 
     Ok(Ok(()))
+}
+
+fn append_mv_source_index_updates(
+    txn: &mut TxnRequest,
+    mv_source_indexes: HashMap<MVSourceIndexIdent, (u64, MVSourceIndex)>,
+) {
+    for (ident, (seq, mv_source_index)) in mv_source_indexes {
+        txn.condition.push(txn_cond_eq_seq(&ident, seq));
+        if mv_source_index.is_empty() {
+            txn.if_then.push(txn_del(&ident));
+        } else {
+            txn.if_then.push(txn_put_pb(&ident, &mv_source_index));
+        }
+    }
 }
 
 async fn remove_index_for_dropped_table(

@@ -209,6 +209,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats"),
     (178, "2026-06-22: Add: config.proto StorageConfig variants for StorageParams::{Azblob,Ftp,Http,Ipfs,Memory}"),
     (179, "2026-07-06: Add: task.proto/TaskMessage.DeleteTask.task_id"),
+    (180, "2026-07-10: Add: materialized_view.proto/MVMeta, MVDefinition and MVSourceIndex"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

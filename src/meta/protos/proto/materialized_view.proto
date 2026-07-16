@@ -1,0 +1,79 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+// Current lifecycle state of a materialized view.
+enum MVState {
+  // The materialized data matches the recorded source progress.
+  MV_STATE_VALID = 0;
+  // The source has changed since the last materialization.
+  MV_STATE_STALE = 1;
+  // A refresh is in progress.
+  MV_STATE_REFRESHING = 2;
+  // The last refresh failed.
+  MV_STATE_FAILED = 3;
+}
+
+// Source position included in the materialized data.
+message SourceProgress {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Sequence of the source TableMeta.
+  uint64 table_meta_seq = 1;
+  // Fuse snapshot included in the materialized data.
+  optional string snapshot_location = 2;
+}
+
+// Mutable metadata of a materialized view.
+message MVMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Source table ID.
+  uint64 source_table_id = 1;
+  // Source position included in the materialized data.
+  SourceProgress source_progress = 2;
+  // Current lifecycle state.
+  MVState state = 3;
+  // Time of the most recent successful materialization.
+  optional string last_refresh_time = 4;
+  // Error from the most recent failed refresh.
+  optional string last_refresh_error = 5;
+}
+
+// Immutable SQL definition of a materialized view.
+message MVDefinition {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // SQL text submitted by the user.
+  string original_query = 1;
+  // Fully qualified SQL used by Databend.
+  string query = 2;
+}
+
+// Reverse dependency index from a source table to its materialized views.
+// Stored as one KV entry per source table; the entry sequence guards
+// membership changes.
+message MVSourceIndex {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // IDs of materialized views that depend on the source table.
+  repeated uint64 mv_ids = 1;
+}

@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 use tokio::time::sleep;
 
@@ -346,6 +347,45 @@ async fn try_rebuild_req(
             lvt_check: None,
         };
         *update_table_meta_req = req;
+    }
+
+    // Rebuilding a source TableMeta changes both its resulting sequence and
+    // snapshot location. Keep the MV synchronization progress aligned with
+    // the final source update before retrying the atomic transaction.
+    for update_mv_meta_req in &mut req.update_mv_metas {
+        let source_table_id = update_mv_meta_req.new_mv_meta.source_table_id;
+        let Some((source_req, _)) = req
+            .update_table_metas
+            .iter()
+            .find(|(table_req, _)| table_req.table_id == source_table_id)
+        else {
+            continue;
+        };
+
+        let MatchSeq::Exact(source_seq) = source_req.seq else {
+            return Err(ErrorCode::Internal(format!(
+                "Expected exact source table sequence while retrying MV update for table {}",
+                source_table_id
+            )));
+        };
+        let committed_source_seq = source_seq.checked_add(1).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Source table sequence overflow while retrying MV update for table {}",
+                source_table_id
+            ))
+        })?;
+        update_mv_meta_req
+            .new_mv_meta
+            .source_progress
+            .table_meta_seq = committed_source_seq;
+        update_mv_meta_req
+            .new_mv_meta
+            .source_progress
+            .snapshot_location = source_req
+            .new_table_meta
+            .options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            .cloned();
     }
     Ok(())
 }

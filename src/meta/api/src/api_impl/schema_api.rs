@@ -87,6 +87,7 @@ use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
 use super::lock_api2::LockApi2;
+use super::materialized_view_api::MaterializedViewApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
@@ -111,6 +112,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -132,6 +134,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {

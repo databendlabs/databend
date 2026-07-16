@@ -150,6 +150,30 @@ impl CommitTableMetaError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "MaterializedViewReplacementConflict: can not replace {table_name} from engine {existing_engine} to {replacement_engine}"
+)]
+pub struct MaterializedViewReplacementConflict {
+    table_name: String,
+    existing_engine: String,
+    replacement_engine: String,
+}
+
+impl MaterializedViewReplacementConflict {
+    pub fn new(
+        table_name: impl Into<String>,
+        existing_engine: impl Into<String>,
+        replacement_engine: impl Into<String>,
+    ) -> Self {
+        Self {
+            table_name: table_name.into(),
+            existing_engine: existing_engine.into(),
+            replacement_engine: replacement_engine.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -857,6 +881,9 @@ pub enum AppError {
     CommitTableMetaError(#[from] CommitTableMetaError),
 
     #[error(transparent)]
+    MaterializedViewReplacementConflict(#[from] MaterializedViewReplacementConflict),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -1149,6 +1176,15 @@ impl AppErrorMessage for CommitTableMetaError {
     }
 }
 
+impl AppErrorMessage for MaterializedViewReplacementConflict {
+    fn message(&self) -> String {
+        format!(
+            "Cannot replace '{}' across the MATERIALIZED VIEW boundary ({} -> {}); drop the existing object first",
+            self.table_name, self.existing_engine, self.replacement_engine
+        )
+    }
+}
+
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
@@ -1361,6 +1397,9 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
+            AppError::MaterializedViewReplacementConflict(err) => {
+                ErrorCode::TableEngineNotSupported(err.message())
+            }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {

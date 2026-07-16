@@ -46,6 +46,21 @@ use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 
+pub const FUSE_ENGINE: &str = "FUSE";
+pub const MATERIALIZED_VIEW_ENGINE: &str = "MATERIALIZED_VIEW";
+
+pub fn is_fuse_engine(engine: &str) -> bool {
+    engine.eq_ignore_ascii_case(FUSE_ENGINE)
+}
+
+pub fn is_materialized_view_engine(engine: &str) -> bool {
+    engine.eq_ignore_ascii_case(MATERIALIZED_VIEW_ENGINE)
+}
+
+pub fn is_fuse_backed_engine(engine: &str) -> bool {
+    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+}
+
 mod ident;
 mod ops;
 mod refs;
@@ -101,7 +116,7 @@ pub struct TableInfo {
 
 impl TableInfo {
     pub fn database_name(&self) -> Result<&str> {
-        if self.engine() != "FUSE" {
+        if !is_fuse_backed_engine(self.engine()) {
             return Err(ErrorCode::Internal(format!(
                 "Invalid engine: {}",
                 self.engine()
@@ -392,7 +407,7 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(TableSchema::empty()),
-            engine: "FUSE".to_string(),
+            engine: FUSE_ENGINE.to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,
             part_prefix: "".to_string(),
@@ -809,6 +824,8 @@ pub struct UpdateTempTableReq {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
+    pub update_mv_metas: Vec<super::UpdateMVMetaReq>,
+    pub mv_source_index_conditions: Vec<super::MVSourceIndexCondition>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
@@ -818,6 +835,8 @@ pub struct UpdateMultiTableMetaReq {
 impl UpdateMultiTableMetaReq {
     pub fn is_empty(&self) -> bool {
         self.update_table_metas.is_empty()
+            && self.update_mv_metas.is_empty()
+            && self.mv_source_index_conditions.is_empty()
             && self.copied_files.is_empty()
             && self.update_stream_metas.is_empty()
             && self.deduplicated_labels.is_empty()

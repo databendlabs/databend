@@ -311,10 +311,9 @@ fn build_non_temp_update_multi_table_meta_req(
 ) -> UpdateMultiTableMetaReq {
     UpdateMultiTableMetaReq {
         update_table_metas,
-        copied_files: vec![],
         update_stream_metas,
         deduplicated_labels: deduplicated_label.into_iter().collect(),
-        update_temp_tables: vec![],
+        ..Default::default()
     }
 }
 
