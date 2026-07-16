@@ -306,6 +306,25 @@ EXPLAIN SELECT p, c FROM recluster_partitioned WHERE p % 2 = 1
 ----
 <slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
 
+# Partition splitting is local to each sorted input block. Fragmented multi-block
+# input may therefore produce several blocks for the same physical partition.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=2
+
+statement ok
+CREATE TABLE fragmented_input(p INT) PARTITION BY (p % 2) ROW_PER_BLOCK=4 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO fragmented_input SELECT number FROM numbers(12)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
+----
+6 6
+
 # Like CLUSTER BY, each physical key expression may reference only one source
 # column. Composite partitioning is expressed as PARTITION BY (a, b).
 statement error PARTITION BY expression `a \+ b` is invalid

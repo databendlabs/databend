@@ -30,6 +30,9 @@ use crate::operations::mutation::SerializeDataMeta;
 
 /// Splits a block that is already sorted by the physical Fuse key into blocks
 /// whose partition-key prefix is constant.
+///
+/// This is a per-block boundary invariant; fragments of the same partition from
+/// different input blocks are not merged here.
 pub struct TransformPartitionBy {
     partition_key_indices: Arc<[usize]>,
     rewrite_replaced_block: bool,
