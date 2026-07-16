@@ -18,6 +18,113 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
+async fn explain_text(fixture: &TestFixture, query: &str) -> anyhow::Result<String> {
+    let blocks = fixture
+        .execute_query(&format!("EXPLAIN {query}"))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let block = DataBlock::concat(&blocks).expect("concat explain blocks");
+    let column = block.get_by_offset(0);
+    let mut lines = Vec::with_capacity(block.num_rows());
+    for row in 0..block.num_rows() {
+        if let Some(ScalarRef::String(line)) = column.index(row) {
+            lines.push(line.to_string());
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+/// A single-row side of an inequality join (here a scalar/no-group-by aggregate, whose
+/// `precise_cardinality` is deterministically 1) must never end up driving a merge
+/// RANGE JOIN. The merge algorithm assumes the build side is the larger one and, for
+/// every driving-side row, materializes the whole matching span of the other side; when
+/// `RuleCommuteJoin` swaps children based on a corrupted cardinality estimate, a large
+/// table can land on the driving side against a single-row build side and blow up memory
+/// into a per-row cartesian product. The planner must instead pick CROSS JOIN + FILTER
+/// (a hash join) regardless of which side the single-row relation is placed on.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.big(ts INT) AS SELECT number FROM numbers(1000)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.threshold(ts INT) AS SELECT number FROM numbers(1000)"
+        ))
+        .await?;
+
+    // Scalar subquery on the right side of the inequality.
+    let q_right = format!(
+        "SELECT count(*) FROM {db}.big b \
+         WHERE b.ts >= (SELECT min(ts) FROM {db}.threshold)"
+    );
+    // Scalar subquery on the left side of the inequality (operands flipped). The optimizer
+    // may commute children so the single-row aggregate becomes the driving side; the guard
+    // must still avoid a merge range join.
+    let q_left = format!(
+        "SELECT count(*) FROM {db}.big b \
+         WHERE (SELECT min(ts) FROM {db}.threshold) <= b.ts"
+    );
+
+    for query in [&q_right, &q_left] {
+        let plan = explain_text(&fixture, query).await?;
+        assert!(
+            !plan.contains("RangeJoin"),
+            "single-row inequality side must not produce a RangeJoin, plan was:\n{plan}"
+        );
+    }
+
+    // And the rewritten plan must still produce the correct result (all 1000 rows match
+    // `ts >= min(ts)`).
+    for query in [&q_right, &q_left] {
+        let blocks = fixture
+            .execute_query(query)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        let block = DataBlock::concat(&blocks).expect("concat result blocks");
+        assert_eq!(block.num_rows(), 1);
+        let count = match block.get_by_offset(0).index(0) {
+            Some(ScalarRef::Number(NumberScalar::UInt64(v))) => v,
+            other => panic!("unexpected count scalar: {other:?}"),
+        };
+        assert_eq!(count, 1000, "query: {query}");
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_scalar_subquery_guard_with_one_row_outer() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let result = fixture
+        .execute_query("SELECT 1 WHERE (SELECT number FROM numbers(2)) >= 0")
+        .await;
+    let err = match result {
+        Ok(stream) => stream
+            .try_collect::<Vec<DataBlock>>()
+            .await
+            .expect_err("multi-row scalar subquery should fail"),
+        Err(err) => err,
+    };
+    assert!(
+        err.message()
+            .contains("Scalar subquery can't return more than one row"),
+        "unexpected error: {err:?}"
+    );
+
+    Ok(())
+}
+
 fn extract_two_u64(blocks: Vec<DataBlock>) -> (u64, u64) {
     let block = DataBlock::concat(&blocks).expect("concat blocks");
     assert_eq!(block.num_rows(), 1, "unexpected rows: {}", block.num_rows());
