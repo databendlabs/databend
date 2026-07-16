@@ -1,0 +1,106 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_fuse_recovery_stream
+
+statement ok
+CREATE DATABASE test_fuse_recovery_stream
+
+statement ok
+USE test_fuse_recovery_stream
+
+statement ok
+CREATE TABLE base(id INT, value INT) CHANGE_TRACKING = true ENABLE_AUTO_ANALYZE = 0
+
+statement ok
+INSERT INTO base VALUES (1, 0)
+
+statement ok
+UPDATE base SET value = 1 WHERE id = 1
+
+# FILES accepts string literals, so retain the runtime block name in a session
+# variable and build the recovery statement for EXECUTE IMMEDIATE.
+statement ok
+SET VARIABLE recovery_block = (SELECT _block_name FROM base LIMIT 1)
+
+statement ok
+SET VARIABLE recovery_sql = concat(
+    'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $recovery_block,
+    ''')) FORCE = FALSE'
+)
+
+statement ok
+TRUNCATE TABLE base
+
+statement ok
+CREATE STREAM recovered ON TABLE base APPEND_ONLY = true
+
+statement ok
+CREATE TABLE sink(id INT)
+
+# Origin fields in the UPDATE block must not leak into the rewritten INSERT.
+statement ok
+EXECUTE IMMEDIATE $recovery_sql
+
+query ITB
+SELECT id, change$action, change$is_update FROM recovered
+----
+1 INSERT 0
+
+statement ok
+INSERT INTO sink SELECT id FROM recovered
+
+query I
+SELECT id FROM sink
+----
+1
+
+# The first path is a COPY-history hit. The unseen missing path must still be
+# selected, fail the whole statement, and leave the consumed stream unchanged.
+statement ok
+SET VARIABLE missing_block = regexp_replace($recovery_block, '[^/]+$', 'missing_v2.parquet')
+
+statement ok
+SET VARIABLE missing_sql = concat(
+    'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $recovery_block,
+    ''', ''',
+    $missing_block,
+    ''')) FORCE = FALSE'
+)
+
+statement error 3001
+EXECUTE IMMEDIATE $missing_sql
+
+query I
+SELECT count() FROM recovered
+----
+0
+
+statement ok
+UNSET VARIABLE (recovery_block, recovery_sql, missing_block, missing_sql)
+
+statement ok
+DROP STREAM recovered
+
+statement ok
+DROP TABLE sink ALL
+
+statement ok
+DROP TABLE base ALL
+
+statement ok
+DROP DATABASE test_fuse_recovery_stream

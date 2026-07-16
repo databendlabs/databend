@@ -1,0 +1,151 @@
+statement ok
+DROP TABLE IF EXISTS fuse_recovery_blocks_slt ALL
+
+statement ok
+CREATE TABLE fuse_recovery_blocks_slt(id INT, payload VARIANT) CLUSTER BY(id) CHANGE_TRACKING = TRUE ENABLE_AUTO_ANALYZE = 0
+
+statement ok
+INSERT INTO fuse_recovery_blocks_slt VALUES(1, parse_json('{"v":1}'))
+
+# UPDATE rewrites the block with Fuse stream-origin fields. Recovery must
+# validate and strip those fields, then write a fresh INSERT block with the
+# current cluster statistics. The VARIANT value also exercises Arrow extension
+# metadata in the distributed Parquet reader schema.
+statement ok
+UPDATE fuse_recovery_blocks_slt SET payload = parse_json('{"v":2}') WHERE id = 1
+
+statement ok
+SET VARIABLE source_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 1)
+
+# The source block is now outside the current snapshot, but remains in _b/.
+statement ok
+TRUNCATE TABLE fuse_recovery_blocks_slt
+
+statement ok
+SET VARIABLE recovery_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $source_block,
+    ''')) FORCE = FALSE'
+)
+
+statement ok
+EXECUTE IMMEDIATE $recovery_sql
+
+query III
+SELECT count(), sum(id), max(payload['v']::INT) FROM fuse_recovery_blocks_slt
+----
+1 1 2
+
+query B
+SELECT count() = 1 AND min(content_length) > 0 FROM copy_history('fuse_recovery_blocks_slt')
+----
+1
+
+statement ok
+SET VARIABLE recovered_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 1)
+
+query B
+SELECT count() > 0 AND count_if(level IS NOT NULL) = count()
+FROM clustering_statistics('default', 'fuse_recovery_blocks_slt')
+----
+1
+
+# Normal COPY history makes FORCE=FALSE retries idempotent.
+statement ok
+EXECUTE IMMEDIATE $recovery_sql
+
+query I
+SELECT count() FROM fuse_recovery_blocks_slt
+----
+1
+
+# Remove the historical source block while retaining its COPY history entry.
+# FORCE=FALSE must filter the path by history without touching object storage.
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+OPTIMIZE TABLE fuse_recovery_blocks_slt PURGE
+
+statement ok
+EXECUTE IMMEDIATE $recovery_sql
+
+query I
+SELECT count() FROM fuse_recovery_blocks_slt
+----
+1
+
+# FORCE keeps normal COPY semantics and attempts to read the purged block.
+statement ok
+SET VARIABLE force_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $source_block,
+    ''')) FORCE = TRUE'
+)
+
+statement error 3001
+EXECUTE IMMEDIATE $force_sql
+
+query I
+SELECT count() FROM fuse_recovery_blocks_slt
+----
+1
+
+# An unseen missing path is selected for recovery and must abort the statement;
+# the history hit in the same FILES list remains filtered without a storage read.
+statement ok
+SET VARIABLE missing_block = regexp_replace($source_block, '[^/]+$', 'missing_v2.parquet')
+
+statement ok
+SET VARIABLE missing_batch_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $source_block,
+    ''', ''',
+    $missing_block,
+    ''')) FORCE = FALSE'
+)
+
+statement error 3001
+EXECUTE IMMEDIATE $missing_batch_sql
+
+query I
+SELECT count() FROM fuse_recovery_blocks_slt
+----
+1
+
+# One current-schema block plus one stale block must fail while all selected
+# footers are validated, before either file can append data.
+statement ok
+ALTER TABLE fuse_recovery_blocks_slt ADD COLUMN added INT
+
+statement ok
+INSERT INTO fuse_recovery_blocks_slt(id, payload, added) VALUES(2, parse_json('{"v":3}'), 2)
+
+statement ok
+SET VARIABLE current_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 2)
+
+statement ok
+SET VARIABLE schema_mismatch_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $current_block,
+    ''', ''',
+    $recovered_block,
+    ''')) FORCE = TRUE'
+)
+
+statement error 1303.*FUSE_RECOVERY_BLOCKS schema mismatch
+EXECUTE IMMEDIATE $schema_mismatch_sql
+
+query I
+SELECT count() FROM fuse_recovery_blocks_slt
+----
+2
+
+statement ok
+UNSET VARIABLE (source_block, recovery_sql, recovered_block, force_sql, missing_block, missing_batch_sql, current_block, schema_mismatch_sql)
+
+statement ok
+UNSET data_retention_time_in_days
+
+statement ok
+DROP TABLE fuse_recovery_blocks_slt ALL
