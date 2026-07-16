@@ -33,6 +33,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
@@ -86,7 +87,11 @@ impl MaterializedCteSpilledPayload {
         )?;
 
         let mut blocks = Vec::new();
-        while let Some(block) = reader.read()? {
+        loop {
+            check_interrupt()?;
+            let Some(block) = reader.read()? else {
+                break;
+            };
             blocks.push(block);
         }
 
@@ -163,6 +168,7 @@ impl MaterializedCteSink {
         let mut row_group_ranges = Vec::with_capacity(data_blocks.len());
         let mut next_row_group = 0;
         for block in data_blocks {
+            check_interrupt()?;
             writer.write(block)?;
             let row_group_count = writer.flush_row_groups()?;
             row_group_ranges.push(next_row_group..row_group_count);

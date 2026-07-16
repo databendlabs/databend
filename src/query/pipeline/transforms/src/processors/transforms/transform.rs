@@ -181,8 +181,6 @@ pub trait BlockMetaTransform<B: BlockMetaInfo>: Send + 'static {
     fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
-
-    fn interrupt(&self) {}
 }
 
 pub struct BlockMetaTransformer<B: BlockMetaInfo, T: BlockMetaTransform<B>> {
@@ -316,9 +314,5 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
         }
 
         Ok(())
-    }
-
-    fn interrupt(&self) {
-        self.transform.interrupt();
     }
 }
