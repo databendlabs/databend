@@ -23,11 +23,29 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
 
 use crate::plan::FullParquetMeta;
+use crate::plan::ParquetCopySchema;
+
+/// Metadata for the intentionally dangerous Fuse block recovery COPY source.
+///
+/// # Safety contract
+///
+/// Snapshot and segment metadata may be unavailable, so recovery maps physical
+/// Parquet fields by their exact name and complete logical type. That is sound
+/// only when the table has never dropped and re-added a column with the same
+/// name, and no rename chain has returned to the same final name and physical
+/// schema. A block footer cannot detect either history.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct FuseRecoveryBlocksInfo {
+    pub table_info: TableInfo,
+    pub block_prefix: String,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct StageTableInfo {
@@ -49,6 +67,14 @@ pub struct StageTableInfo {
     pub copy_into_table_options: CopyIntoTableOptions,
     pub is_variant: bool,
 
+    /// Complete schemas prepared for Parquet COPY readers on remote workers.
+    #[serde(default)]
+    pub parquet_copy_schemas: Vec<ParquetCopySchema>,
+
+    /// Present only for `COPY ... FROM FUSE_RECOVERY_BLOCKS(...)`.
+    #[serde(default)]
+    pub fuse_recovery: Option<FuseRecoveryBlocksInfo>,
+
     // temp work round, when enable_schema_evolution, set it before read partition,
     // then the StageTableInfo will be dropped, so no need to free it
     #[serde(skip)]
@@ -58,6 +84,8 @@ pub struct StageTableInfo {
 impl PartialEq for StageTableInfo {
     fn eq(&self, other: &Self) -> bool {
         self.stage_info == other.stage_info
+            && self.fuse_recovery.as_ref().map(|v| &v.block_prefix)
+                == other.fuse_recovery.as_ref().map(|v| &v.block_prefix)
     }
 }
 
@@ -69,7 +97,18 @@ impl StageTableInfo {
     }
 
     pub fn desc(&self) -> String {
+        if let Some(recovery) = &self.fuse_recovery {
+            return format!("FUSE_RECOVERY_BLOCKS {}", recovery.block_prefix);
+        }
         self.stage_info.stage_name.clone()
+    }
+
+    /// Return the source operator used by this stage-like scan.
+    pub fn operator(&self) -> Result<opendal::Operator> {
+        if self.fuse_recovery.is_some() {
+            return Ok(DataOperator::instance().operator());
+        }
+        init_stage_operator(&self.stage_info)
     }
 
     #[async_backtrace::framed]
@@ -78,8 +117,8 @@ impl StageTableInfo {
         thread_num: usize,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
-        let infos =
-            list_stage_files(&self.stage_info, &self.files_info, thread_num, max_files).await?;
+        let op = self.operator()?;
+        let infos = self.files_info.list(&op, thread_num, max_files).await?;
         Ok(infos)
     }
 }
@@ -109,6 +148,9 @@ impl Debug for StageTableInfo {
 impl Display for StageTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if let Some(recovery) = &self.fuse_recovery {
+            return write!(f, "FUSE_RECOVERY_BLOCKS Prefix {}", recovery.block_prefix);
+        }
         write!(f, "StageName {}", self.stage_info.stage_name)?;
         write!(f, "StageType {}", self.stage_info.stage_type)?;
         write!(f, "StageParam {}", self.stage_info.stage_params.storage)?;

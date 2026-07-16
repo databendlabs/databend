@@ -33,6 +33,7 @@ databend-storages-common-table-meta = { workspace = true }
 dyn-clone = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
+opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }

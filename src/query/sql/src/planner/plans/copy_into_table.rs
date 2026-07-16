@@ -35,7 +35,6 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_metrics::storage::*;
-use databend_common_storage::init_stage_operator;
 use log::info;
 use opendal::Operator;
 
@@ -178,7 +177,7 @@ impl CopyIntoTablePlan {
         };
 
         let thread_num = ctx.get_settings().get_max_threads()? as usize;
-        let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let operator = stage_table_info.operator()?;
         let options = &stage_table_info.copy_into_table_options;
         let all_source_file_infos = if options.force {
             stage_table_info
