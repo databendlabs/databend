@@ -1177,11 +1177,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             let (mut table_options, partition_by) = opt_partition_by
                 .map(|(options, exprs)| (options, Some(exprs)))
                 .unwrap_or_default();
-            if !table_options.is_empty() && engine.is_some_and(|engine| engine != Engine::Iceberg) {
-                return Err(nom::Err::Failure(ErrorKind::other(
-                    "table options before PARTITION BY are only supported for ICEBERG tables",
-                )));
-            }
             table_options.extend(opt_table_options.unwrap_or_default());
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,

@@ -7,6 +7,17 @@ CREATE DATABASE db_09_0054
 statement ok
 USE db_09_0054
 
+# Keep accepting table options before PARTITION BY for both explicit and default Fuse.
+statement ok
+CREATE TABLE explicit_fuse_option_order(a INT) ENGINE=FUSE ROW_PER_BLOCK=1 PARTITION BY (a)
+
+statement ok
+CREATE TABLE default_fuse_option_order(a INT) ROW_PER_BLOCK=1 PARTITION BY (a)
+
+# partition_by is internal metadata and cannot be supplied as a raw table option.
+statement error table option partition_by reserved
+CREATE TABLE raw_partition_option(a INT) PARTITION_BY='(a)'
+
 statement ok
 CREATE TABLE t(p INT, c INT, v STRING) PARTITION BY (p % 3) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
