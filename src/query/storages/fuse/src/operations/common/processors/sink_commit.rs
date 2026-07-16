@@ -115,8 +115,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
     new_virtual_schema_mode: VirtualSchemaMode,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
-    insert_hll: BlockHLL,
-    insert_rows: u64,
+    statistics_hll: BlockHLL,
+    statistics_rows: u64,
     enable_auto_analyze: bool,
 
     change_tracking: bool,
@@ -180,8 +180,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
             new_segment_locs: vec![],
             new_virtual_schema: None,
             new_virtual_schema_mode: VirtualSchemaMode::Merge,
-            insert_hll: HashMap::new(),
-            insert_rows: 0,
+            statistics_hll: HashMap::new(),
+            statistics_rows: 0,
             start_time: Instant::now(),
             enable_auto_analyze,
             prev_snapshot_id,
@@ -300,7 +300,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
             new_segment_locs,
             virtual_schema,
             virtual_schema_mode,
-            insert_rows,
+            logical_updated_rows,
+            logical_deleted_rows,
             hll,
             ..
         } = meta;
@@ -308,7 +309,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let has_new_segments = !new_segment_locs.is_empty();
         let has_virtual_schema =
             virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
-        let has_hll = !hll.is_empty();
+        let statistics_rows = conflict_resolve_context
+            .logical_insert_rows(logical_deleted_rows)
+            .checked_add(logical_updated_rows)
+            .ok_or_else(|| ErrorCode::Internal("statistics row count overflow"))?;
+        let has_hll = statistics_rows > 0 && !hll.is_empty();
 
         self.new_segment_locs = new_segment_locs;
 
@@ -316,8 +321,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_virtual_schema_mode = virtual_schema_mode;
 
         if has_hll {
-            self.insert_rows = insert_rows;
-            self.insert_hll = hll;
+            self.statistics_rows = statistics_rows;
+            self.statistics_hll = hll;
         }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
@@ -335,6 +340,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         self.snapshot_gen
             .set_conflict_resolve_context(conflict_resolve_context);
+        self.snapshot_gen
+            .set_logical_change_delta(logical_updated_rows, logical_deleted_rows);
 
         self.state = State::FillDefault;
 
@@ -604,7 +611,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         .fill_default_values(&schema, &previous)
                         .await?;
                     let table_stats_gen = fuse_table
-                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                        .generate_table_stats(&previous, &self.statistics_hll, self.statistics_rows)
                         .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
@@ -780,7 +787,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let table_stats_gen = fuse_table
-                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                    .generate_table_stats(&previous, &self.statistics_hll, self.statistics_rows)
                     .await?;
 
                 // save current table info when commit to meta server

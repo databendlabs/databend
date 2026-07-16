@@ -48,7 +48,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("6bef7be1")]
+#[frozen_api("75e54926")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -98,9 +98,56 @@ pub struct TableSnapshot {
     pub cluster_type: Option<ClusterType>,
     // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
+
+    // Upgrade compatibility boundary: v4 snapshots written before these counters
+    // deserialize missing fields as zero. Exact backlog across that boundary is
+    // intentionally unsupported; it resumes once both endpoints are counter-aware.
+    // Keep plain u64 counters: do not add a persistent presence marker or Option.
+    /// Cumulative number of rows affected by logical UPDATE operations.
+    #[serde(default)]
+    pub logical_updated_rows_total: u64,
+
+    /// Cumulative number of rows removed by logical DELETE operations.
+    /// UPDATE before-images are tracked separately by `logical_updated_rows_total`.
+    #[serde(default)]
+    pub logical_deleted_rows_total: u64,
 }
 
 impl TableSnapshot {
+    /// Returns the logical UPDATE and DELETE increments between two snapshots.
+    ///
+    /// Both endpoints are expected to have been written by counter-aware versions.
+    /// Legacy snapshots deliberately use zero as their compatibility default.
+    pub fn logical_change_delta(
+        base: Option<&TableSnapshot>,
+        latest: Option<&TableSnapshot>,
+    ) -> Result<(u64, u64)> {
+        let updated_rows = latest
+            .map_or(0, |snapshot| snapshot.logical_updated_rows_total)
+            .checked_sub(base.map_or(0, |snapshot| snapshot.logical_updated_rows_total))
+            .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
+        let deleted_rows = latest
+            .map_or(0, |snapshot| snapshot.logical_deleted_rows_total)
+            .checked_sub(base.map_or(0, |snapshot| snapshot.logical_deleted_rows_total))
+            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
+        Ok((updated_rows, deleted_rows))
+    }
+
+    /// Adds one committed operation's logical UPDATE and DELETE increments.
+    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) -> Result<()> {
+        let logical_updated_rows_total = self
+            .logical_updated_rows_total
+            .checked_add(updated_rows)
+            .ok_or_else(|| ErrorCode::Internal("logical updated rows counter overflow"))?;
+        let logical_deleted_rows_total = self
+            .logical_deleted_rows_total
+            .checked_add(deleted_rows)
+            .ok_or_else(|| ErrorCode::Internal("logical deleted rows counter overflow"))?;
+        self.logical_updated_rows_total = logical_updated_rows_total;
+        self.logical_deleted_rows_total = logical_deleted_rows_total;
+        Ok(())
+    }
+
     /// Note that table_meta_timestamps is not always equal to prev_timestamp.
     pub fn try_new(
         prev_table_seq: Option<u64>,
@@ -150,6 +197,13 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        let logical_updated_rows_total = prev_snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.logical_updated_rows_total);
+        let logical_deleted_rows_total = prev_snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.logical_deleted_rows_total);
+
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -162,6 +216,8 @@ impl TableSnapshot {
             cluster_key_meta,
             cluster_type,
             table_statistics_location,
+            logical_updated_rows_total,
+            logical_deleted_rows_total,
         })
     }
 
@@ -299,6 +355,8 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_updated_rows_total: 0,
+            logical_deleted_rows_total: 0,
         }
     }
 }
@@ -324,6 +382,8 @@ where T: Into<v3::TableSnapshot>
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_updated_rows_total: 0,
+            logical_deleted_rows_total: 0,
         }
     }
 }
@@ -368,5 +428,42 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+
+    fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {
+        TableSnapshot::try_new(
+            None,
+            previous,
+            TableSchema::default(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_logical_change_counters() {
+        let mut parent = snapshot(None);
+        parent.add_logical_change_delta(17, 23).unwrap();
+
+        let mut child = snapshot(Some(Arc::new(parent.clone())));
+        child.add_logical_change_delta(3, 4).unwrap();
+        let delta = TableSnapshot::logical_change_delta(Some(&parent), Some(&child)).unwrap();
+        assert_eq!(delta, (3, 4));
+
+        let decoded = TableSnapshot::from_slice(&child.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.logical_updated_rows_total, 20);
+        assert_eq!(decoded.logical_deleted_rows_total, 27);
     }
 }

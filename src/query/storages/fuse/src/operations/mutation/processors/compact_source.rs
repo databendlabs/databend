@@ -188,6 +188,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     index,
                     ClusterStatsGenType::Generally,
                     0,
+                    0,
                 )));
                 let new_block = block.add_meta(Some(meta))?;
                 Ok(vec![new_block])

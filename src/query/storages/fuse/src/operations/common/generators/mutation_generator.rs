@@ -39,6 +39,7 @@ pub struct MutationGenerator {
     conflict_resolve_ctx: ConflictResolveContext,
 
     pub(crate) mutation_kind: MutationKind,
+    logical_change_delta: (u64, u64),
 }
 
 impl MutationGenerator {
@@ -47,6 +48,7 @@ impl MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
+            logical_change_delta: (0, 0),
         }
     }
 }
@@ -58,6 +60,14 @@ impl SnapshotGenerator for MutationGenerator {
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
         self.conflict_resolve_ctx = ctx;
+    }
+
+    fn set_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        self.logical_change_delta = (updated_rows, deleted_rows);
+    }
+
+    fn logical_change_delta(&self, _previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        self.logical_change_delta
     }
 
     fn do_generate_new_snapshot(

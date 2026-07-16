@@ -90,6 +90,7 @@ pub struct MutationSource {
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
     update_rows: u64,
+    deleted_rows: u64,
 }
 
 impl MutationSource {
@@ -119,6 +120,7 @@ impl MutationSource {
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
             update_rows: 0,
+            deleted_rows: 0,
         })))
     }
 }
@@ -223,6 +225,7 @@ impl Processor for MutationSource {
                                             self.index.clone(),
                                             self.stats_type.clone(),
                                             0,
+                                            affect_rows as u64,
                                         ),
                                     ));
                                     self.state = State::Output(
@@ -315,6 +318,7 @@ impl Processor for MutationSource {
             }
             State::PerformOperator(data_block, path) => {
                 let update_rows = std::mem::take(&mut self.update_rows);
+                let deleted_rows = std::mem::take(&mut self.deleted_rows);
                 let func_ctx = self.ctx.get_function_context()?;
                 let block = self
                     .operators
@@ -325,6 +329,7 @@ impl Processor for MutationSource {
                         self.index.clone(),
                         self.stats_type.clone(),
                         update_rows,
+                        deleted_rows,
                     )));
                 let meta: BlockMetaInfoPtr = if self.update_stream_columns {
                     Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
@@ -376,6 +381,7 @@ impl Processor for MutationSource {
                                     self.index.clone(),
                                     self.stats_type.clone(),
                                     0,
+                                    fuse_part.nums_rows as u64,
                                 ),
                             ));
                             self.state = State::Output(
@@ -436,6 +442,7 @@ impl MutationSource {
             self.update_rows = num_rows as u64;
             (num_rows as u64, 0)
         } else {
+            self.deleted_rows = num_rows as u64;
             (0, num_rows as u64)
         };
         self.ctx

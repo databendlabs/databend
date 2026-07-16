@@ -294,8 +294,8 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                     DataBlock::empty_with_meta(Box::new(MutationLogs {
                         entries: vec![MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
-                            insert_rows: 0,
                         }],
+                        ..Default::default()
                     }))
                 };
 

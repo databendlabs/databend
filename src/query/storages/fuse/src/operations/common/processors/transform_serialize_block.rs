@@ -77,7 +77,7 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
-    pending_insert_rows: u64,
+    pending_logical_change: (u64, u64),
 }
 
 impl TransformSerializeBlock {
@@ -216,7 +216,7 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
-            pending_insert_rows: 0,
+            pending_logical_change: (0, 0),
         })
     }
 
@@ -235,9 +235,15 @@ impl TransformSerializeBlock {
         self.block_builder.clone()
     }
 
-    fn mutation_logs(entry: MutationLogEntry) -> DataBlock {
+    fn mutation_logs(
+        entry: MutationLogEntry,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
+    ) -> DataBlock {
         let meta = MutationLogs {
             entries: vec![entry],
+            logical_updated_rows,
+            logical_deleted_rows,
         };
         DataBlock::empty_with_meta(Box::new(meta))
     }
@@ -293,22 +299,33 @@ impl Processor for TransformSerializeBlock {
             match meta {
                 SerializeDataMeta::DeletedSegment(deleted_segment) => {
                     // delete a whole segment, segment level
-                    let data_block =
-                        Self::mutation_logs(MutationLogEntry::DeletedSegment { deleted_segment });
+                    let logical_deleted_rows = deleted_segment.summary.row_count;
+                    let data_block = Self::mutation_logs(
+                        MutationLogEntry::DeletedSegment { deleted_segment },
+                        0,
+                        logical_deleted_rows,
+                    );
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 SerializeDataMeta::SerializeBlock(serialize_block) => {
                     if input_data.is_empty() {
                         // delete a whole block, block level
-                        let data_block = Self::mutation_logs(MutationLogEntry::DeletedBlock {
-                            index: serialize_block.index,
-                        });
+                        let data_block = Self::mutation_logs(
+                            MutationLogEntry::DeletedBlock {
+                                index: serialize_block.index,
+                            },
+                            serialize_block.logical_updated_rows,
+                            serialize_block.logical_deleted_rows,
+                        );
                         self.output.push_data(Ok(data_block));
                         Ok(Event::NeedConsume)
                     } else {
                         // replace the old block
-                        self.pending_insert_rows = serialize_block.insert_rows;
+                        self.pending_logical_change = (
+                            serialize_block.logical_updated_rows,
+                            serialize_block.logical_deleted_rows,
+                        );
                         self.state = State::NeedSerialize {
                             block: input_data,
                             stats_type: serialize_block.stats_type,
@@ -319,27 +336,23 @@ impl Processor for TransformSerializeBlock {
                 }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras
-                    let data_block = Self::mutation_logs(MutationLogEntry::CompactExtras {
-                        extras: compact_extras,
-                    });
+                    let data_block = Self::mutation_logs(
+                        MutationLogEntry::CompactExtras {
+                            extras: compact_extras,
+                        },
+                        0,
+                        0,
+                    );
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
             }
         } else if input_data.is_empty() {
             // do nothing
-            let data_block = Self::mutation_logs(MutationLogEntry::DoNothing);
+            let data_block = Self::mutation_logs(MutationLogEntry::DoNothing, 0, 0);
             self.output.push_data(Ok(data_block));
             Ok(Event::NeedConsume)
         } else {
-            // UPDATE carries exact affected rows in SerializeDataMeta::SerializeBlock.
-            // A no-meta UPDATE block may still contain unchanged rows.
-            self.pending_insert_rows =
-                if matches!(self.kind, MutationKind::Replace | MutationKind::MergeInto) {
-                    input_data.num_rows() as u64
-                } else {
-                    0
-                };
             self.state = State::NeedSerialize {
                 block: input_data,
                 stats_type: ClusterStatsGenType::Generally,
@@ -381,7 +394,8 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
-                let insert_rows = std::mem::take(&mut self.pending_insert_rows);
+                let (logical_updated_rows, logical_deleted_rows) =
+                    std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
                 let bytes = if let Some(draft_virtual_block_meta) =
@@ -403,11 +417,14 @@ impl Processor for TransformSerializeBlock {
 
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`
-                    Self::mutation_logs(MutationLogEntry::ReplacedBlock {
-                        index,
-                        block_meta: Arc::new(extended_block_meta),
-                        insert_rows,
-                    })
+                    Self::mutation_logs(
+                        MutationLogEntry::ReplacedBlock {
+                            index,
+                            block_meta: Arc::new(extended_block_meta),
+                        },
+                        logical_updated_rows,
+                        logical_deleted_rows,
+                    )
                 } else {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
@@ -428,10 +445,13 @@ impl Processor for TransformSerializeBlock {
                         if matches!(self.kind, MutationKind::Recluster) {
                             metrics_inc_recluster_write_block_nums();
                         }
-                        Self::mutation_logs(MutationLogEntry::AppendBlock {
-                            block_meta: Arc::new(extended_block_meta),
-                            insert_rows,
-                        })
+                        Self::mutation_logs(
+                            MutationLogEntry::AppendBlock {
+                                block_meta: Arc::new(extended_block_meta),
+                            },
+                            logical_updated_rows,
+                            logical_deleted_rows,
+                        )
                     }
                 };
                 self.output_data = Some(mutation_log_data_block);

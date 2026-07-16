@@ -221,6 +221,8 @@ async fn try_rebuild_req(
                 ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
             })?
             .clone();
+        let (logical_updated_rows, logical_deleted_rows) =
+            TableSnapshot::logical_change_delta(base_snapshot.as_deref(), new_snapshot.as_deref())?;
 
         let s = merge_statistics(
             new_snapshot.summary(),
@@ -309,7 +311,7 @@ async fn try_rebuild_req(
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(latest_table.as_ref(), latest_snapshot.clone())?;
-        let merged_snapshot = TableSnapshot::try_new(
+        let mut merged_snapshot = TableSnapshot::try_new(
             Some(seq),
             latest_snapshot.clone(),
             latest_table.schema().as_ref().clone(),
@@ -320,6 +322,7 @@ async fn try_rebuild_req(
             latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;
+        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows)?;
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot
