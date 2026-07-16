@@ -16,8 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::types::NumberColumn;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 
 use crate::operations::mutation::SerializeDataMeta;
@@ -45,11 +51,95 @@ impl TransformPartitionBy {
             rewrite_replaced_block: true,
         }
     }
+}
 
-    fn same_partition(&self, block: &DataBlock, left: usize, right: usize) -> bool {
-        self.partition_key_indices.iter().all(|index| {
-            block.get_by_offset(*index).index(left) == block.get_by_offset(*index).index(right)
-        })
+fn partition_boundaries(block: &DataBlock, indices: &[usize]) -> Vec<usize> {
+    let rows = block.num_rows();
+    if rows <= 1 || indices.is_empty() {
+        return Vec::new();
+    }
+
+    let mut changed = vec![false; rows];
+    for index in indices {
+        mark_column_boundaries(block.get_by_offset(*index), &mut changed);
+    }
+
+    changed
+        .into_iter()
+        .enumerate()
+        .skip(1)
+        .filter_map(|(row, changed)| changed.then_some(row))
+        .collect()
+}
+
+fn mark_column_boundaries(entry: &BlockEntry, changed: &mut [bool]) {
+    if let BlockEntry::Column(column) = entry {
+        mark_column_boundaries_inner(column, changed);
+    }
+}
+
+fn mark_column_boundaries_inner(column: &Column, changed: &mut [bool]) {
+    match column {
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
+        Column::Number(column) => mark_number_boundaries(column, changed),
+        Column::Decimal(column) => mark_decimal_boundaries(column, changed),
+        Column::Boolean(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::String(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::Timestamp(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::TimestampTz(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::Date(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::Nullable(column) => mark_nullable_boundaries(column, changed),
+        _ => mark_iter_boundaries(column.iter(), changed),
+    }
+}
+
+fn mark_number_boundaries(column: &NumberColumn, changed: &mut [bool]) {
+    match column {
+        NumberColumn::UInt8(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::UInt16(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::UInt32(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::UInt64(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Int8(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Int16(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Int32(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Int64(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Float32(column) => mark_iter_boundaries(column.iter(), changed),
+        NumberColumn::Float64(column) => mark_iter_boundaries(column.iter(), changed),
+    }
+}
+
+fn mark_decimal_boundaries(column: &DecimalColumn, changed: &mut [bool]) {
+    match column {
+        DecimalColumn::Decimal64(column, _) => mark_iter_boundaries(column.iter(), changed),
+        DecimalColumn::Decimal128(column, _) => mark_iter_boundaries(column.iter(), changed),
+        DecimalColumn::Decimal256(column, _) => mark_iter_boundaries(column.iter(), changed),
+    }
+}
+
+fn mark_nullable_boundaries(column: &NullableColumn<AnyType>, changed: &mut [bool]) {
+    let mut value_changed = vec![false; changed.len()];
+    mark_column_boundaries_inner(&column.column, &mut value_changed);
+
+    let mut validity = column.validity.iter();
+    let Some(mut previous_valid) = validity.next() else {
+        return;
+    };
+    for (offset, valid) in validity.enumerate() {
+        let row = offset + 1;
+        changed[row] |= valid != previous_valid || valid && value_changed[row];
+        previous_valid = valid;
+    }
+}
+
+fn mark_iter_boundaries<T: PartialEq>(values: impl Iterator<Item = T>, changed: &mut [bool]) {
+    let mut values = values;
+    let Some(mut previous) = values.next() else {
+        return;
+    };
+    for (offset, value) in values.enumerate() {
+        let row = offset + 1;
+        changed[row] |= value != previous;
+        previous = value;
     }
 }
 
@@ -69,13 +159,12 @@ impl AccumulatingTransform for TransformPartitionBy {
         } else {
             None
         };
-        let mut blocks = Vec::with_capacity(2);
+        let boundaries = partition_boundaries(&block, &self.partition_key_indices);
+        let mut blocks = Vec::with_capacity(boundaries.len() + 1);
         let mut start = 0;
-        for row in 1..block.num_rows() {
-            if !self.same_partition(&block, row - 1, row) {
-                blocks.push(block.slice(start..row));
-                start = row;
-            }
+        for end in boundaries {
+            blocks.push(block.slice(start..end));
+            start = end;
         }
         blocks.push(block.slice(start..block.num_rows()));
 
@@ -110,11 +199,30 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
 
     use super::*;
     use crate::operations::common::BlockMetaIndex;
     use crate::operations::mutation::ClusterStatsGenType;
     use crate::operations::mutation::SerializeBlock;
+
+    #[test]
+    fn test_partition_boundaries() {
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![0, 0, 1, 1, 1]),
+            StringType::from_data(vec!["a", "a", "a", "b", "b"]),
+        ]);
+        assert_eq!(partition_boundaries(&block, &[0, 1]), vec![2, 3]);
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_opt_data(vec![
+            None,
+            None,
+            Some(1),
+            Some(1),
+            Some(2),
+        ])]);
+        assert_eq!(partition_boundaries(&block, &[0]), vec![2, 4]);
+    }
 
     #[test]
     fn test_split_sorted_block_by_partition_prefix() -> Result<()> {
