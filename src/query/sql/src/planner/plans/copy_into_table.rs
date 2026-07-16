@@ -35,6 +35,8 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_metrics::storage::*;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFileStatus;
 use log::info;
 use opendal::Operator;
 
@@ -179,7 +181,27 @@ impl CopyIntoTablePlan {
         let thread_num = ctx.get_settings().get_max_threads()? as usize;
         let operator = stage_table_info.operator()?;
         let options = &stage_table_info.copy_into_table_options;
-        let all_source_file_infos = if options.force {
+        let all_source_file_infos = if stage_table_info.fuse_recovery.is_some() {
+            // Recovery FILES are validated physical paths. Build path-only entries so copied-file
+            // history can be checked without issuing a HEAD request for every named object first.
+            // Footer loading fills in the actual size for files that still need to be copied.
+            Ok(stage_table_info
+                .files_info
+                .files
+                .as_ref()
+                .expect("FUSE_RECOVERY_BLOCKS requires an explicit FILES list")
+                .iter()
+                .map(|file| StageFileInfo {
+                    path: format!("{}{}", stage_table_info.files_info.path, file),
+                    size: 0,
+                    md5: None,
+                    last_modified: None,
+                    etag: None,
+                    status: StageFileStatus::NeedCopy,
+                    creator: None,
+                })
+                .collect::<Vec<_>>())
+        } else if options.force {
             stage_table_info
                 .files_info
                 .list(&operator, thread_num, max_files)

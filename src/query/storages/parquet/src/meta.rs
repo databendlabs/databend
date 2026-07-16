@@ -132,6 +132,36 @@ pub async fn read_metas_in_parallel_for_copy(
     num_threads: usize,
     max_memory_usage: u64,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
+    let file_infos = file_infos
+        .iter()
+        .map(|(location, size)| (location.clone(), Some(*size)))
+        .collect::<Vec<_>>();
+    read_metas_in_parallel_for_copy_impl(op, &file_infos, num_threads, max_memory_usage).await
+}
+
+/// Read COPY Parquet metadata for paths whose object sizes are not known yet.
+///
+/// Parquet footer range reads require the object size. This delays the size lookup until after
+/// copied-file history filtering and returns it in [`FullParquetMeta::size`].
+pub async fn read_metas_in_parallel_for_copy_by_paths(
+    op: &Operator,
+    locations: &[String],
+    num_threads: usize,
+    max_memory_usage: u64,
+) -> Result<Vec<Arc<FullParquetMeta>>> {
+    let file_infos = locations
+        .iter()
+        .map(|location| (location.clone(), None))
+        .collect::<Vec<_>>();
+    read_metas_in_parallel_for_copy_impl(op, &file_infos, num_threads, max_memory_usage).await
+}
+
+async fn read_metas_in_parallel_for_copy_impl(
+    op: &Operator,
+    file_infos: &[(String, Option<u64>)],
+    num_threads: usize,
+    max_memory_usage: u64,
+) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
     }
@@ -236,12 +266,16 @@ pub async fn read_parquet_metas_batch(
 }
 
 pub async fn read_parquet_metas_batch_for_copy(
-    file_infos: Vec<(String, u64)>,
+    file_infos: Vec<(String, Option<u64>)>,
     op: Operator,
     max_memory_usage: u64,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (location, size) in file_infos {
+        let size = match size {
+            Some(size) => size,
+            None => op.stat(&location).await?.content_length(),
+        };
         let meta = Arc::new(read_metadata_async(&location, &op, Some(size)).await?);
         if unlikely(meta.file_metadata().num_rows() == 0) {
             // Don't collect empty files
@@ -293,5 +327,52 @@ impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
             None => self.0.stat(location).await?.content_length(),
         };
         read_metadata_async(location, &self.0, Some(size)).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use arrow_array::Int64Array;
+    use arrow_array::RecordBatch;
+    use arrow_schema::DataType;
+    use arrow_schema::Field;
+    use arrow_schema::Schema;
+    use bytes::Bytes;
+    use opendal::Operator;
+    use opendal::services::Memory;
+    use parquet::arrow::ArrowWriter;
+
+    use super::read_metas_in_parallel_for_copy_by_paths;
+
+    #[tokio::test]
+    async fn test_read_copy_meta_by_path_discovers_object_size() {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "value",
+            DataType::Int64,
+            false,
+        )]));
+        let batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(Int64Array::from(vec![
+            1_i64,
+        ]))])
+        .unwrap();
+        let mut data = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut data, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+
+        let expected_size = data.len() as u64;
+        let path = "block.parquet";
+        let op = Operator::new(Memory::default()).unwrap().finish();
+        op.write(path, Bytes::from(data)).await.unwrap();
+
+        let metas = read_metas_in_parallel_for_copy_by_paths(&op, &[path.to_string()], 1, u64::MAX)
+            .await
+            .unwrap();
+
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].location, path);
+        assert_eq!(metas[0].size, expected_size);
     }
 }

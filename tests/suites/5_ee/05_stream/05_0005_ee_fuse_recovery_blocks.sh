@@ -21,7 +21,8 @@ echo "copy into $DATABASE.base from FUSE_RECOVERY_BLOCKS(FILES => ('$BLOCK')) fo
 echo "recovery is a new stream insert"
 echo "select id, change\$action, change\$is_update from $DATABASE.recovered" | bendsql_connect_root
 
-# Consume the stream, then verify an aborted recovery batch does not advance it.
+# Consume the stream, then verify that an unseen missing file still aborts the
+# batch after the already-copied block is filtered out by COPY history.
 echo "insert into $DATABASE.sink select id from $DATABASE.recovered" | bendsql_connect_root_null
 MISSING="${BLOCK%/*}/missing_v2.parquet"
 if echo "copy into $DATABASE.base from FUSE_RECOVERY_BLOCKS(FILES => ('$BLOCK', '$MISSING')) force = false" | bendsql_connect_root_null >/dev/null 2>&1; then

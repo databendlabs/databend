@@ -241,9 +241,11 @@ impl CopyIntoTableInterpreter {
         PhysicalPlan,
         Vec<UpdateStreamMetaReq>,
         Option<TableSchemaRef>,
+        Vec<StageFileInfo>,
     )> {
         let mut new_schema = None;
         let mut update_stream_meta_reqs = vec![];
+        let mut prepared_stage_table_info = plan.stage_table_info.clone();
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
                 query.remove_exchange_for_select()
@@ -261,8 +263,7 @@ impl CopyIntoTableInterpreter {
                 Some(result_columns),
             )
         } else {
-            let mut stage_table_info = plan.stage_table_info.clone();
-            if let Some(recovery) = &mut stage_table_info.fuse_recovery {
+            if let Some(recovery) = &mut prepared_stage_table_info.fuse_recovery {
                 if recovery.table_info.ident.table_id != table_info.ident.table_id {
                     return Err(ErrorCode::TableVersionMismatched(
                         "FUSE_RECOVERY_BLOCKS target table was replaced while the statement was being planned"
@@ -279,19 +280,22 @@ impl CopyIntoTableInterpreter {
                 // change-tracking option) when rebuilding recovered rows.
                 recovery.table_info = table_info.clone();
             }
-            ParquetTableForCopy::prepare_fuse_recovery(&mut stage_table_info, self.ctx.clone())
-                .await?;
+            ParquetTableForCopy::prepare_fuse_recovery(
+                &mut prepared_stage_table_info,
+                self.ctx.clone(),
+            )
+            .await?;
             if plan.enable_schema_evolution {
-                stage_table_info
+                prepared_stage_table_info
                     .copy_into_table_options
                     .schema_evolution
                     .get_or_insert_default();
-                new_schema = Self::infer_schema(&mut stage_table_info, self.ctx.clone())
+                new_schema = Self::infer_schema(&mut prepared_stage_table_info, self.ctx.clone())
                     .await
                     .map_err(|e| e.with_context("infer_schema"))?;
             }
 
-            let stage_table = StageTable::try_create(stage_table_info)?;
+            let stage_table = StageTable::try_create(prepared_stage_table_info.clone())?;
 
             let data_source_plan = stage_table
                 .read_plan(self.ctx.clone(), None, None, false, false)
@@ -329,7 +333,7 @@ impl CopyIntoTableInterpreter {
             required_values_schema,
             values_consts: plan.values_consts.clone(),
             required_source_schema,
-            stage_table_info: plan.stage_table_info.clone(),
+            stage_table_info: prepared_stage_table_info.clone(),
             table_info,
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
@@ -354,7 +358,8 @@ impl CopyIntoTableInterpreter {
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
 
-        Ok((root, update_stream_meta_reqs, new_schema))
+        let files_to_copy = prepared_stage_table_info.files_to_copy.unwrap_or_default();
+        Ok((root, update_stream_meta_reqs, new_schema, files_to_copy))
     }
 
     async fn infer_schema(
@@ -1011,7 +1016,7 @@ impl Interpreter for CopyIntoTableInterpreter {
             .ctx
             .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
 
-        let (physical_plan, update_stream_meta, new_schema) = self
+        let (physical_plan, update_stream_meta, new_schema, files_to_copy) = self
             .build_physical_plan(
                 to_table.get_table_info().clone(),
                 &self.plan,
@@ -1024,13 +1029,6 @@ impl Interpreter for CopyIntoTableInterpreter {
 
         // Build commit insertion pipeline.
         {
-            let files_to_copy = self
-                .plan
-                .stage_table_info
-                .files_to_copy
-                .clone()
-                .unwrap_or_default();
-
             let duplicated_files_detected =
                 self.plan.stage_table_info.duplicated_files_detected.clone();
 

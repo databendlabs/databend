@@ -419,14 +419,14 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _, _) = interpreter
+                    let (physical_plan, _, _, files_to_copy) = interpreter
                         .build_physical_plan(_table_info, &copy_plan, _table_meta_timestamps)
                         .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
                     *_purge_info = Some((
-                        copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
+                        files_to_copy,
                         copy_plan.stage_table_info.stage_info.clone(),
                         copy_plan.stage_table_info.copy_into_table_options.clone(),
                     ));

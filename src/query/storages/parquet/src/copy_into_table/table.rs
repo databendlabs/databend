@@ -47,6 +47,7 @@ use crate::ParquetPart;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::copy_into_table::source::ParquetCopySource;
 use crate::meta::read_metas_in_parallel_for_copy;
+use crate::meta::read_metas_in_parallel_for_copy_by_paths;
 use crate::partition::ParquetRowGroupPart;
 use crate::schema::arrow_to_table_schema;
 
@@ -62,38 +63,38 @@ impl ParquetTableForCopy {
         let Some(recovery) = &stage_table_info.fuse_recovery else {
             return Ok(());
         };
-        let files = stage_table_info
+        let expected_schema = recovery
+            .table_info
+            .schema()
+            .remove_virtual_computed_fields();
+        let file_paths = stage_table_info
             .files_to_copy
             .as_ref()
-            .expect("ParquetTableForCopy::prepare_fuse_recovery requires files_to_copy");
-        if let Some(file) = files.iter().find(|file| file.size == 0) {
-            return Err(ErrorCode::BadBytes(format!(
-                "FUSE_RECOVERY_BLOCKS source '{}' is empty",
-                file.path
-            )));
-        }
-
-        let file_infos = files
+            .expect("ParquetTableForCopy::prepare_fuse_recovery requires files_to_copy")
             .iter()
-            .map(|file| (file.path.clone(), file.size))
+            .map(|file| file.path.clone())
             .collect::<Vec<_>>();
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
         let operator = stage_table_info.operator()?;
-        let metas =
-            read_metas_in_parallel_for_copy(&operator, &file_infos, max_threads, max_memory_usage)
-                .await?;
+        let metas = read_metas_in_parallel_for_copy_by_paths(
+            &operator,
+            &file_paths,
+            max_threads,
+            max_memory_usage,
+        )
+        .await?;
 
-        if metas.len() != files.len() {
+        if metas.len() != file_paths.len() {
             let loaded = metas
                 .iter()
                 .map(|meta| meta.location.as_str())
                 .collect::<HashSet<_>>();
-            let missing = files
+            let missing = file_paths
                 .iter()
-                .filter(|file| !loaded.contains(file.path.as_str()))
-                .map(|file| file.path.as_str())
+                .filter(|path| !loaded.contains(path.as_str()))
+                .map(String::as_str)
                 .collect::<Vec<_>>();
             return Err(ErrorCode::BadBytes(format!(
                 "FUSE_RECOVERY_BLOCKS requires a non-empty Parquet block for every FILES entry; invalid files: {}",
@@ -101,10 +102,20 @@ impl ParquetTableForCopy {
             )));
         }
 
-        let expected_schema = recovery
-            .table_info
-            .schema()
-            .remove_virtual_computed_fields();
+        let sizes = metas
+            .iter()
+            .map(|meta| (meta.location.as_str(), meta.size))
+            .collect::<HashMap<_, _>>();
+        for file in stage_table_info
+            .files_to_copy
+            .as_mut()
+            .expect("ParquetTableForCopy::prepare_fuse_recovery requires files_to_copy")
+        {
+            file.size = *sizes
+                .get(file.path.as_str())
+                .expect("each recovery file must have prepared Parquet metadata");
+        }
+
         let mut copy_schemas: Vec<ParquetCopySchema> = Vec::new();
         for meta in &metas {
             if meta.meta.row_groups().len() != 1 || meta.meta.file_metadata().num_rows() <= 0 {
