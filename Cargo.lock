@@ -5697,6 +5697,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-expression-domain-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "databend-common-column",
+ "databend-common-expression",
+ "libfuzzer-sys",
+]
+
+[[package]]
 name = "databend-functions-scalar-arithmetic"
 version = "0.1.0"
 dependencies = [
@@ -11724,6 +11734,16 @@ dependencies = [
  "core2",
  "hashbrown 0.14.5",
  "rle-decode-fast",
+]
+
+[[package]]
+name = "libfuzzer-sys"
+version = "0.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2"
+dependencies = [
+ "arbitrary",
+ "cc",
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+[package]
+name = "databend-expression-domain-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = "1.4"
+databend-common-column = { path = "../../../common/column" }
+databend-common-expression = { path = ".." }
+libfuzzer-sys = "0.4"
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "column_domain"
+path = "fuzz_targets/column_domain.rs"
+test = false
+doc = false
+bench = false

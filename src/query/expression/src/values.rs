@@ -1437,12 +1437,13 @@ impl Column {
             Column::Geography(x) => Ok(x.check_valid()?),
             Column::Bitmap(x) => Ok(x.check_valid()?),
             Column::Map(x) => {
-                for y in x.iter() {
-                    y.check_valid()?;
-                }
-                Ok(())
+                x.check_valid()?;
+                x.values().check_valid()
             }
-            Column::Array(x) => x.check_valid(),
+            Column::Array(x) => {
+                x.check_valid()?;
+                x.values().check_valid()
+            }
             Column::Nullable(x) => {
                 if x.column.len() != x.validity.len() {
                     return Err(ErrorCode::Internal(
