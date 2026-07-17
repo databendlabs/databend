@@ -41,7 +41,7 @@ fn test_multi_table_insert_display() {
 
 #[test]
 fn test_fuse_recovery_blocks_display() {
-    let sql = "COPY INTO db.t FROM FuSe_ReCoVeRy_BlOcKs(FILES => ('1/2/_b/a_v2.parquet', '1/2/_b/b_v2.parquet')) FORCE = FALSE";
+    let sql = "COPY INTO db.t FROM FuSe_ReCoVeRy_BlOcKs(FILES => ('a_v2.parquet', 'b_v2.parquet')) FORCE = FALSE";
     let tokens = tokenize_sql(sql).unwrap();
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     let Statement::CopyIntoTable(copy) = &stmt else {
@@ -50,7 +50,7 @@ fn test_fuse_recovery_blocks_display() {
     let CopyIntoTableSource::FuseRecoveryBlocks { files } = &copy.src else {
         panic!("expected FUSE_RECOVERY_BLOCKS source");
     };
-    assert_eq!(files, &["1/2/_b/a_v2.parquet", "1/2/_b/b_v2.parquet"]);
+    assert_eq!(files, &["a_v2.parquet", "b_v2.parquet"]);
     test_stmt_display(sql);
 }
 

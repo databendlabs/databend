@@ -178,7 +178,7 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
-                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_name>' [ , '<block_name>' ... ]))
+                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_basename>' [ , '<block_basename>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]

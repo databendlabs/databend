@@ -151,7 +151,7 @@ pub struct CopyIntoTablePlan {
     pub enable_schema_evolution: bool,
 }
 
-fn get_path_prefix(op: &Operator) -> String {
+pub fn copy_source_path_prefix(op: &Operator) -> String {
     let info = op.info();
     let p = format!("{}://{}{}", info.scheme(), info.name(), info.root());
     if p.ends_with('/') {
@@ -182,9 +182,8 @@ impl CopyIntoTablePlan {
         let operator = stage_table_info.operator()?;
         let options = &stage_table_info.copy_into_table_options;
         let all_source_file_infos = if stage_table_info.fuse_recovery.is_some() {
-            // Recovery FILES are validated physical paths. Build path-only entries so copied-file
-            // history can be checked without issuing a HEAD request for every named object first.
-            // Footer loading fills in the actual size for files that still need to be copied.
+            // Resolve the basenames under the target block prefix without HEAD requests, so COPY
+            // history is checked before Parquet footers are read.
             Ok(stage_table_info
                 .files_info
                 .files
@@ -243,7 +242,7 @@ impl CopyIntoTablePlan {
 
             let filter_start = Instant::now();
             if self.dedup_full_path {
-                let prefix = get_path_prefix(&operator);
+                let prefix = copy_source_path_prefix(&operator);
                 self.path_prefix = Some(prefix.clone());
             };
             let FilteredCopyFiles {

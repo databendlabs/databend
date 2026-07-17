@@ -25,8 +25,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::DataOperator;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storage::init_stage_operator;
 
 use crate::plan::FullParquetMeta;
@@ -105,7 +107,13 @@ impl StageTableInfo {
 
     /// Return the source operator used by this stage-like scan.
     pub fn operator(&self) -> Result<opendal::Operator> {
-        if self.fuse_recovery.is_some() {
+        if let Some(recovery) = &self.fuse_recovery {
+            if let Some(storage_params) = &recovery.table_info.meta.storage_params {
+                return Ok(init_operator_with_policy_scope(
+                    storage_params,
+                    EndpointPolicyScope::External,
+                )?);
+            }
             return Ok(DataOperator::instance().operator());
         }
         init_stage_operator(&self.stage_info)

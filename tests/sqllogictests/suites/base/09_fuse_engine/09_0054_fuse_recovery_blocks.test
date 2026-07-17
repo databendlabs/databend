@@ -12,6 +12,31 @@ UPDATE fuse_recovery_blocks_slt SET payload = parse_json('{"v":2}') WHERE id = 1
 statement ok
 SET VARIABLE source_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 1)
 
+statement ok
+SET VARIABLE source_file = (SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_blocks_slt WHERE id = 1)
+
+# FILES accepts block basenames, not paths.
+statement ok
+SET VARIABLE invalid_path_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $source_block,
+    '''))'
+)
+
+statement error 1006.*must be a Parquet block basename
+EXECUTE IMMEDIATE $invalid_path_sql
+
+# FORCE = TRUE is rejected.
+statement ok
+SET VARIABLE force_sql = concat(
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $source_file,
+    ''')) FORCE = TRUE'
+)
+
+statement error 1006.*requires FORCE = FALSE
+EXECUTE IMMEDIATE $force_sql
+
 # TRUNCATE removes the source block from the current snapshot but leaves it in storage.
 statement ok
 TRUNCATE TABLE fuse_recovery_blocks_slt
@@ -19,8 +44,8 @@ TRUNCATE TABLE fuse_recovery_blocks_slt
 statement ok
 SET VARIABLE recovery_sql = concat(
     'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $source_block,
-    ''')) FORCE = FALSE'
+    $source_file,
+    '''))'
 )
 
 statement ok
@@ -37,7 +62,7 @@ SELECT count() = 1 AND min(content_length) > 0 FROM copy_history('fuse_recovery_
 1
 
 statement ok
-SET VARIABLE recovered_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 1)
+SET VARIABLE recovered_file = (SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_blocks_slt WHERE id = 1)
 
 query B
 SELECT count() > 0 AND count_if(level IS NOT NULL) = count()
@@ -46,7 +71,7 @@ FROM clustering_statistics('default', 'fuse_recovery_blocks_slt')
 1
 
 # Remove the source block from storage but retain its COPY history entry.
-# FORCE = FALSE must filter the path before reading object storage.
+# The default FORCE = FALSE filters the history hit before reading object storage.
 statement ok
 SET data_retention_time_in_days = 0
 
@@ -64,34 +89,18 @@ SELECT count() FROM fuse_recovery_blocks_slt
 ----
 1
 
-# FORCE = TRUE bypasses COPY history and tries to read the deleted block.
+# The basename is resolved in the target table's _b/ directory.
 statement ok
-SET VARIABLE force_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $source_block,
-    ''')) FORCE = TRUE'
-)
-
-statement error 3001
-EXECUTE IMMEDIATE $force_sql
-
-query I
-SELECT count() FROM fuse_recovery_blocks_slt
-----
-1
-
-# Replace the final path component with a missing block in the same _b/ directory.
-statement ok
-SET VARIABLE missing_block = regexp_replace($recovered_block, '[^/]+$', 'missing_v2.parquet')
+SET VARIABLE missing_file = 'missing_v2.parquet'
 
 # A missing block rejects the whole batch; the valid block must not be appended.
 statement ok
 SET VARIABLE missing_batch_sql = concat(
     'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $recovered_block,
+    $recovered_file,
     ''', ''',
-    $missing_block,
-    ''')) FORCE = FALSE'
+    $missing_file,
+    '''))'
 )
 
 statement error 3001
@@ -110,15 +119,15 @@ statement ok
 INSERT INTO fuse_recovery_blocks_slt(id, payload, added) VALUES(2, parse_json('{"v":3}'), 2)
 
 statement ok
-SET VARIABLE current_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WHERE id = 2)
+SET VARIABLE current_file = (SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_blocks_slt WHERE id = 2)
 
 statement ok
 SET VARIABLE schema_mismatch_sql = concat(
     'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $current_block,
+    $current_file,
     ''', ''',
-    $recovered_block,
-    ''')) FORCE = TRUE'
+    $recovered_file,
+    '''))'
 )
 
 statement error 1303.*FUSE_RECOVERY_BLOCKS schema mismatch
@@ -130,7 +139,58 @@ SELECT count() FROM fuse_recovery_blocks_slt
 2
 
 statement ok
-UNSET VARIABLE (source_block, recovery_sql, recovered_block, force_sql, missing_block, missing_batch_sql, current_block, schema_mismatch_sql)
+UNSET VARIABLE (source_block, source_file, invalid_path_sql, force_sql, recovery_sql, recovered_file, missing_file, missing_batch_sql, current_file, schema_mismatch_sql)
 
 statement ok
 DROP TABLE fuse_recovery_blocks_slt
+
+# A table can inherit its external storage from the database.
+statement ok
+CREATE OR REPLACE CONNECTION fuse_recovery_external_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE OR REPLACE DATABASE fuse_recovery_external_db OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'fuse_recovery_external_conn',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/fuse_recovery_blocks_external/'
+)
+
+statement ok
+CREATE OR REPLACE TABLE fuse_recovery_external_db.t(id INT) ENABLE_AUTO_ANALYZE = 0
+
+statement ok
+INSERT INTO fuse_recovery_external_db.t VALUES(7)
+
+statement ok
+SET VARIABLE external_file = (
+    SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_external_db.t
+)
+
+statement ok
+TRUNCATE TABLE fuse_recovery_external_db.t
+
+statement ok
+SET VARIABLE external_recovery_sql = concat(
+    'COPY INTO fuse_recovery_external_db.t FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    $external_file,
+    '''))'
+)
+
+statement ok
+EXECUTE IMMEDIATE $external_recovery_sql
+
+query II
+SELECT count(), sum(id) FROM fuse_recovery_external_db.t
+----
+1 7
+
+statement ok
+UNSET VARIABLE (external_file, external_recovery_sql)
+
+statement ok
+DROP TABLE fuse_recovery_external_db.t
+
+statement ok
+DROP DATABASE fuse_recovery_external_db
+
+statement ok
+DROP CONNECTION fuse_recovery_external_conn

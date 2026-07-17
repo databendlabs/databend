@@ -29,15 +29,15 @@ INSERT INTO base VALUES (1, 0)
 statement ok
 UPDATE base SET value = 1 WHERE id = 1
 
-# FILES requires literals, so build the statement after reading the block name.
+# FILES accepts literals, so build the statement after reading the block basename.
 statement ok
-SET VARIABLE recovery_block = (SELECT _block_name FROM base LIMIT 1)
+SET VARIABLE recovery_file = (SELECT split_part(_block_name, '/', -1) FROM base LIMIT 1)
 
 statement ok
 SET VARIABLE recovery_sql = concat(
     'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
-    $recovery_block,
-    ''')) FORCE = FALSE'
+    $recovery_file,
+    '''))'
 )
 
 statement ok
@@ -71,7 +71,7 @@ SELECT count() FROM stream_recovered_data
 0
 
 statement ok
-UNSET VARIABLE (recovery_block, recovery_sql)
+UNSET VARIABLE (recovery_file, recovery_sql)
 
 statement ok
 DROP DATABASE test_fuse_recovery_stream

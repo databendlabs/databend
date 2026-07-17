@@ -84,6 +84,11 @@ use crate::plans::Plan;
 use crate::plans::ValidationMode;
 
 fn validate_fuse_recovery_copy_options(options: &CopyIntoTableOptions) -> Result<()> {
+    if options.force {
+        return Err(ErrorCode::BadArguments(
+            "FUSE_RECOVERY_BLOCKS requires FORCE = FALSE".to_string(),
+        ));
+    }
     if options.purge {
         return Err(ErrorCode::BadArguments(
             "PURGE is forbidden for FUSE_RECOVERY_BLOCKS".to_string(),
@@ -118,7 +123,7 @@ fn validate_fuse_recovery_copy_options(options: &CopyIntoTableOptions) -> Result
     Ok(())
 }
 
-fn validate_fuse_recovery_block_files(block_prefix: &str, files: &[String]) -> Result<Vec<String>> {
+fn validate_fuse_recovery_block_files(files: &[String]) -> Result<Vec<String>> {
     if files.is_empty() || files.len() > COPY_MAX_FILES_PER_COMMIT {
         return Err(ErrorCode::BadArguments(format!(
             "FUSE_RECOVERY_BLOCKS requires between 1 and {COPY_MAX_FILES_PER_COMMIT} FILES entries"
@@ -126,37 +131,23 @@ fn validate_fuse_recovery_block_files(block_prefix: &str, files: &[String]) -> R
     }
 
     let mut seen = HashSet::with_capacity(files.len());
-    let mut basenames = Vec::with_capacity(files.len());
     for file in files {
-        if file.starts_with('/')
-            || file
-                .split('/')
-                .any(|part| part.is_empty() || part == "." || part == "..")
+        if file.is_empty()
+            || file.contains('/')
+            || file.contains('\\')
+            || !file.ends_with(".parquet")
         {
             return Err(ErrorCode::BadArguments(format!(
-                "invalid FUSE_RECOVERY_BLOCKS path '{file}'"
-            )));
-        }
-        let Some(basename) = file.strip_prefix(block_prefix) else {
-            return Err(ErrorCode::BadArguments(format!(
-                "FUSE_RECOVERY_BLOCKS path '{}' must be a direct child of '{}'",
-                file, block_prefix
-            )));
-        };
-        if basename.is_empty() || basename.contains('/') || !basename.ends_with(".parquet") {
-            return Err(ErrorCode::BadArguments(format!(
-                "FUSE_RECOVERY_BLOCKS path '{}' must name a Parquet block directly under '{}'",
-                file, block_prefix
+                "FUSE_RECOVERY_BLOCKS FILES entry '{file}' must be a Parquet block basename"
             )));
         }
         if !seen.insert(file.as_str()) {
             return Err(ErrorCode::BadArguments(format!(
-                "duplicate FUSE_RECOVERY_BLOCKS path '{file}'"
+                "duplicate FUSE_RECOVERY_BLOCKS FILES entry '{file}'"
             )));
         }
-        basenames.push(basename.to_string());
     }
-    Ok(basenames)
+    Ok(files.to_vec())
 }
 
 impl Binder {
@@ -245,16 +236,17 @@ impl Binder {
                 table.engine()
             )));
         }
-        if table.get_table_info().meta.storage_params.is_some() {
-            return Err(ErrorCode::Unimplemented(
-                "FUSE_RECOVERY_BLOCKS currently supports managed FUSE tables only".to_string(),
-            ));
+        if table.is_read_only() {
+            return Err(ErrorCode::InvalidOperation(format!(
+                "FUSE_RECOVERY_BLOCKS requires a writable target table, but {} is read only",
+                table.get_table_info().desc
+            )));
         }
 
         let table_info = table.get_table_info().clone();
         let storage_prefix = parse_storage_prefix(table_info.options(), table_info.ident.table_id)?;
         let block_prefix = format!("{storage_prefix}/_b/");
-        let basenames = validate_fuse_recovery_block_files(&block_prefix, files)?;
+        let basenames = validate_fuse_recovery_block_files(files)?;
 
         let mut stage_info = StageInfo {
             stage_name: "FUSE_RECOVERY_BLOCKS".to_string(),
@@ -850,15 +842,13 @@ mod tests {
 
     use super::*;
 
-    const BLOCK_PREFIX: &str = "1/2/_b/";
-
-    fn files(paths: &[&str]) -> Vec<String> {
-        paths.iter().map(|path| (*path).to_string()).collect()
+    fn files(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| (*name).to_string()).collect()
     }
 
-    fn expect_path_error(paths: &[&str], expected: &str) {
-        let err = validate_fuse_recovery_block_files(BLOCK_PREFIX, &files(paths))
-            .expect_err("path must be rejected");
+    fn expect_file_error(names: &[&str], expected: &str) {
+        let err = validate_fuse_recovery_block_files(&files(names))
+            .expect_err("FILES entry must be rejected");
         assert!(
             err.message().contains(expected),
             "unexpected error: {}",
@@ -868,48 +858,32 @@ mod tests {
 
     #[test]
     fn test_validate_fuse_recovery_block_files_valid() {
-        let basenames = validate_fuse_recovery_block_files(
-            BLOCK_PREFIX,
-            &files(&["1/2/_b/aaa_v2.parquet", "1/2/_b/bbb_v2.parquet"]),
-        )
-        .unwrap();
+        let basenames =
+            validate_fuse_recovery_block_files(&files(&["aaa_v2.parquet", "bbb_v2.parquet"]))
+                .unwrap();
 
         assert_eq!(basenames, ["aaa_v2.parquet", "bbb_v2.parquet"]);
     }
 
     #[test]
     fn test_validate_fuse_recovery_block_files_duplicate() {
-        expect_path_error(
-            &["1/2/_b/aaa_v2.parquet", "1/2/_b/aaa_v2.parquet"],
-            "duplicate FUSE_RECOVERY_BLOCKS path",
+        expect_file_error(
+            &["aaa_v2.parquet", "aaa_v2.parquet"],
+            "duplicate FUSE_RECOVERY_BLOCKS FILES entry",
         );
     }
 
     #[test]
-    fn test_validate_fuse_recovery_block_files_absolute() {
-        expect_path_error(&["/1/2/_b/aaa_v2.parquet"], "invalid");
-    }
-
-    #[test]
-    fn test_validate_fuse_recovery_block_files_dot_components() {
-        expect_path_error(&["1/2/_b/./aaa_v2.parquet"], "invalid");
-        expect_path_error(&["1/2/_b/../aaa_v2.parquet"], "invalid");
-    }
-
-    #[test]
-    fn test_validate_fuse_recovery_block_files_wrong_table_prefix() {
-        expect_path_error(
-            &["1/3/_b/aaa_v2.parquet"],
-            "must be a direct child of '1/2/_b/'",
+    fn test_validate_fuse_recovery_block_files_invalid_basename() {
+        expect_file_error(
+            &["1/2/_b/aaa_v2.parquet"],
+            "must be a Parquet block basename",
         );
-    }
-
-    #[test]
-    fn test_validate_fuse_recovery_block_files_nested() {
-        expect_path_error(
-            &["1/2/_b/nested/aaa_v2.parquet"],
-            "must name a Parquet block directly under '1/2/_b/'",
+        expect_file_error(
+            &[r"1\2\_b\aaa_v2.parquet"],
+            "must be a Parquet block basename",
         );
+        expect_file_error(&["aaa_v2.json"], "must be a Parquet block basename");
     }
 
     fn expect_option_error(update: impl FnOnce(&mut CopyIntoTableOptions), expected: &str) {
@@ -926,10 +900,7 @@ mod tests {
 
     #[test]
     fn test_validate_fuse_recovery_copy_options_allowed() {
-        let mut options = CopyIntoTableOptions {
-            force: true,
-            ..Default::default()
-        };
+        let mut options = CopyIntoTableOptions::default();
         validate_fuse_recovery_copy_options(&options).unwrap();
 
         options.column_match_mode = Some(ColumnMatchMode::CaseSensitive);
@@ -938,6 +909,7 @@ mod tests {
 
     #[test]
     fn test_validate_fuse_recovery_copy_options_forbidden() {
+        expect_option_error(|options| options.force = true, "requires FORCE = FALSE");
         expect_option_error(|options| options.purge = true, "PURGE is forbidden");
         expect_option_error(
             |options| options.max_files = 1,

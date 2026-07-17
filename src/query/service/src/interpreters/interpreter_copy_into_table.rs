@@ -87,6 +87,7 @@ use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
+use crate::sql::plans::copy_source_path_prefix;
 use crate::stream::DataBlockStream;
 use crate::table_functions::infer_schema::InferSchemaSeparator;
 use crate::table_functions::infer_schema::InferredJsonSchema;
@@ -276,9 +277,28 @@ impl CopyIntoTableInterpreter {
                             .to_string(),
                     ));
                 }
-                // Use current non-schema table metadata (for example the cluster key and
-                // change-tracking option) when rebuilding recovered rows.
+                let current_block_prefix = format!(
+                    "{}/_b/",
+                    FuseTable::parse_storage_prefix_from_table_info(&table_info)?
+                );
+                if recovery.block_prefix != current_block_prefix {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS target storage prefix changed while the statement was being planned; retry the statement"
+                            .to_string(),
+                    ));
+                }
+                // Use the current table metadata when reading and rebuilding recovered rows.
                 recovery.table_info = table_info.clone();
+            }
+            if prepared_stage_table_info.fuse_recovery.is_some() {
+                let current_path_prefix =
+                    copy_source_path_prefix(&prepared_stage_table_info.operator()?);
+                if plan.path_prefix.as_deref() != Some(current_path_prefix.as_str()) {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS target storage location changed while the statement was being planned; retry the statement"
+                            .to_string(),
+                    ));
+                }
             }
             ParquetTableForCopy::prepare_fuse_recovery(
                 &mut prepared_stage_table_info,

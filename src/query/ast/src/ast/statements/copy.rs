@@ -394,7 +394,8 @@ impl CopyIntoLocationStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CopyIntoTableSource {
     Location(FileLocation),
-    /// Read trusted Fuse block objects directly from the target table storage.
+    /// Read trusted Fuse blocks from the target table's block directory.
+    /// `FILES` entries are block basenames.
     ///
     /// This source is intentionally only available to `COPY INTO TABLE`; it is
     /// not a general-purpose table function.
