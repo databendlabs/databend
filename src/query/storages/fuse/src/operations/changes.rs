@@ -240,25 +240,19 @@ impl FuseTable {
         match mode {
             StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
             StreamMode::Standard => {
-                if let Some(base_location) = base_location {
-                    if let Some(latest_snapshot) = self.read_table_snapshot().await? {
-                        if latest_snapshot.logical_change_counters().is_some() {
-                            let base_snapshot =
-                                self.changes_read_offset_snapshot(base_location).await?;
-                            if base_snapshot.logical_change_counters().is_some() {
-                                let logical_rows = logical_change_rows(
-                                    Some(&base_snapshot),
-                                    Some(&latest_snapshot),
-                                );
-                                if logical_rows.updated == 0 && logical_rows.deleted == 0 {
-                                    return Ok(StreamMode::AppendOnly);
-                                }
-                            }
-                        }
-                    }
-                    Ok(StreamMode::Standard)
-                } else {
+                let Some(base_location) = base_location else {
+                    return Ok(StreamMode::AppendOnly);
+                };
+                let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+                    return Ok(StreamMode::Standard);
+                };
+                let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
+                if logical_change_delta(Some(&base_snapshot), Some(&latest_snapshot))?
+                    .is_some_and(|delta| delta == (0, 0))
+                {
                     Ok(StreamMode::AppendOnly)
+                } else {
+                    Ok(StreamMode::Standard)
                 }
             }
         }
@@ -472,7 +466,19 @@ impl FuseTable {
         }
 
         let logical_rows =
-            logical_change_rows(base_snapshot.as_deref(), latest_snapshot.as_deref());
+            logical_change_rows(base_snapshot.as_deref(), latest_snapshot.as_deref())?;
+        if logical_rows
+            .as_ref()
+            .is_some_and(|rows| rows.inserted == 0 && rows.updated == 0 && rows.deleted == 0)
+        {
+            return Ok(StreamBacklog::default());
+        }
+        let latest_rows = latest_snapshot
+            .as_deref()
+            .map_or(0, |snapshot| snapshot.summary.row_count);
+        let base_rows = base_snapshot
+            .as_deref()
+            .map_or(0, |snapshot| snapshot.summary.row_count);
 
         // Segment set differences bound the candidate change area. Base-only
         // segments may contain deleted rows, latest-only segments may contain
@@ -494,20 +500,24 @@ impl FuseTable {
 
         // These physical block-level rows are the endpoint change candidates.
         // The stream may emit fewer rows after row-id joins and filtering.
-        let candidate_added_rows = sum_block_rows(&add_blocks)?;
-        let candidate_removed_rows = sum_block_rows(&del_blocks)?;
+        let candidate_added_rows = sum_block_rows(&add_blocks);
+        let candidate_removed_rows = sum_block_rows(&del_blocks);
 
         if matches!(mode, StreamMode::AppendOnly) {
             // UPDATE does not change append-only cardinality: an inserted row
             // that is later updated is still one appended endpoint row.
-            let estimated_rows = if logical_rows.deleted == 0 || del_blocks.is_empty() {
-                logical_rows.inserted.min(candidate_added_rows)
-            } else {
-                logical_rows.inserted.min(estimate_append_candidate_rows(
+            let estimated_rows = match &logical_rows {
+                Some(rows) if rows.deleted == 0 || del_blocks.is_empty() => {
+                    rows.inserted.min(candidate_added_rows)
+                }
+                Some(rows) => rows.inserted.min(estimate_append_candidate_rows(
                     seq,
                     &add_blocks,
                     &del_blocks,
-                )?)
+                )?),
+                // A legacy offset has no complete logical delta. Do not treat
+                // unknown counters as zero; fall back to endpoint metadata.
+                None => estimate_append_candidate_rows(seq, &add_blocks, &del_blocks)?,
             };
             return Ok(StreamBacklog {
                 rows_added: candidate_added_rows,
@@ -520,12 +530,16 @@ impl FuseTable {
             candidate_added_rows
         } else if add_blocks.is_empty() {
             candidate_removed_rows
+        } else if let Some(rows) = &logical_rows {
+            (rows.inserted + rows.updated).min(candidate_added_rows)
+                + (rows.deleted + rows.updated).min(candidate_removed_rows)
         } else {
-            estimate_standard_rows_to_process(
-                &logical_rows,
-                candidate_added_rows,
-                candidate_removed_rows,
-            )
+            let candidate_rows = candidate_added_rows + candidate_removed_rows;
+            let changed_blocks = add_blocks.len().max(del_blocks.len()) as u64;
+            latest_rows
+                .abs_diff(base_rows)
+                .max(changed_blocks)
+                .min(candidate_rows)
         };
 
         Ok(StreamBacklog {
@@ -580,7 +594,14 @@ impl FuseTable {
 
         let base_rows = base_snapshot.summary.row_count;
         let latest_rows = latest_snapshot.summary.row_count;
-        let logical_rows = logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot));
+        let logical_rows = logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot))?;
+        let Some(logical_rows) = logical_rows else {
+            return Ok(Some(legacy_changes_table_statistics(
+                &base_snapshot,
+                &latest_snapshot,
+                change_type,
+            )));
+        };
         let num_rows = if logical_rows.updated == 0 && logical_rows.deleted == 0 {
             match change_type {
                 ChangeType::Append | ChangeType::Insert => logical_rows.inserted,
@@ -694,36 +715,51 @@ struct LogicalChangeRows {
     deleted: u64,
 }
 
+fn logical_change_delta(
+    base: Option<&TableSnapshot>,
+    latest: Option<&TableSnapshot>,
+) -> Result<Option<(u64, u64)>> {
+    let Some((latest_updated, latest_deleted)) =
+        latest.and_then(TableSnapshot::logical_change_counters)
+    else {
+        return Ok(None);
+    };
+    let (base_updated, base_deleted) = match base {
+        Some(snapshot) => {
+            let Some(counters) = snapshot.logical_change_counters() else {
+                return Ok(None);
+            };
+            counters
+        }
+        None => (0, 0),
+    };
+
+    let updated = latest_updated
+        .checked_sub(base_updated)
+        .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
+    let deleted = latest_deleted
+        .checked_sub(base_deleted)
+        .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
+    Ok(Some((updated, deleted)))
+}
+
 fn logical_change_rows(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
-) -> LogicalChangeRows {
+) -> Result<Option<LogicalChangeRows>> {
+    let Some((updated, deleted)) = logical_change_delta(base, latest)? else {
+        return Ok(None);
+    };
     let base_rows = base.map_or(0, |snapshot| snapshot.summary.row_count);
     let latest_rows = latest.map_or(0, |snapshot| snapshot.summary.row_count);
-    let latest_counters = latest.and_then(|snapshot| snapshot.logical_change_counters());
-    let base_counters = base.and_then(|snapshot| snapshot.logical_change_counters());
-    let (updated, deleted) = match (base, base_counters, latest_counters) {
-        (None, _, Some(latest)) => latest,
-        (Some(_), Some(base), Some(latest)) => (latest.0 - base.0, latest.1 - base.1),
-        _ => (0, 0),
-    };
-    let inserted = (latest_rows + deleted).saturating_sub(base_rows);
-    LogicalChangeRows {
+    let inserted = (latest_rows + deleted)
+        .checked_sub(base_rows)
+        .ok_or_else(|| ErrorCode::Internal("invalid logical inserted row count"))?;
+    Ok(Some(LogicalChangeRows {
         inserted,
         updated,
         deleted,
-    }
-}
-
-fn estimate_standard_rows_to_process(
-    rows: &LogicalChangeRows,
-    candidate_added_rows: u64,
-    candidate_removed_rows: u64,
-) -> u64 {
-    let logical_added = rows.inserted + rows.updated;
-    let logical_removed = rows.deleted + rows.updated;
-
-    logical_added.min(candidate_added_rows) + logical_removed.min(candidate_removed_rows)
+    }))
 }
 
 fn estimate_append_candidate_rows(
@@ -783,6 +819,43 @@ fn rounded_ratio(value: u64, numerator: u64, denominator: u64) -> u64 {
     ((product + u128::from(denominator / 2)) / u128::from(denominator)) as u64
 }
 
+fn legacy_changes_table_statistics(
+    base: &TableSnapshot,
+    latest: &TableSnapshot,
+    change_type: ChangeType,
+) -> TableStatistics {
+    let base = &base.summary;
+    let latest = &latest.summary;
+    let divisor = match change_type {
+        ChangeType::Append => 1,
+        ChangeType::Insert if latest.row_count <= base.row_count => 2,
+        ChangeType::Delete if latest.row_count >= base.row_count => 2,
+        _ => 1,
+    };
+    let diff = |latest: u64, base: u64| latest.abs_diff(base) / divisor;
+    let optional_diff = |latest: Option<u64>, base: Option<u64>| match (latest, base) {
+        (Some(latest), base) => Some(diff(latest, base.unwrap_or_default())),
+        (None, base) => base.map(|value| value / divisor),
+    };
+
+    TableStatistics {
+        num_rows: Some(diff(latest.row_count, base.row_count)),
+        data_size: Some(diff(
+            latest.uncompressed_byte_size,
+            base.uncompressed_byte_size,
+        )),
+        data_size_compressed: Some(diff(latest.compressed_byte_size, base.compressed_byte_size)),
+        index_size: Some(diff(latest.index_size, base.index_size)),
+        bloom_index_size: optional_diff(latest.bloom_index_size, base.bloom_index_size),
+        ngram_index_size: optional_diff(latest.ngram_index_size, base.ngram_index_size),
+        inverted_index_size: optional_diff(latest.inverted_index_size, base.inverted_index_size),
+        vector_index_size: optional_diff(latest.vector_index_size, base.vector_index_size),
+        virtual_column_size: optional_diff(latest.virtual_column_size, base.virtual_column_size),
+        number_of_blocks: Some(diff(latest.block_count, base.block_count)),
+        number_of_segments: None,
+    }
+}
+
 fn scale_snapshot_statistics(snapshot: &TableSnapshot, rows: u64) -> TableStatistics {
     let summary = &snapshot.summary;
     let source_rows = summary.row_count;
@@ -809,9 +882,69 @@ fn scale_snapshot_statistics(snapshot: &TableSnapshot, rows: u64) -> TableStatis
     }
 }
 
-fn sum_block_rows(blocks: &[Arc<BlockMeta>]) -> Result<u64> {
-    blocks.iter().try_fold(0_u64, |rows, block| {
-        rows.checked_add(block.row_count)
-            .ok_or_else(|| ErrorCode::Internal("candidate block row count overflow"))
-    })
+fn sum_block_rows(blocks: &[Arc<BlockMeta>]) -> u64 {
+    blocks.iter().map(|block| block.row_count).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeDelta;
+    use databend_common_expression::TableSchema;
+    use databend_storages_common_table_meta::meta::Statistics;
+    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+
+    use super::*;
+
+    fn snapshot(rows: u64) -> TableSnapshot {
+        TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::default(),
+            Statistics {
+                row_count: rows,
+                ..Default::default()
+            },
+            vec![],
+            None,
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(1)),
+        )
+        .unwrap()
+    }
+
+    fn legacy_snapshot(rows: u64) -> TableSnapshot {
+        let snapshot = snapshot(rows);
+        let mut value = serde_json::to_value(snapshot).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("logical_change_counters");
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn test_logical_change_rows() {
+        let legacy = legacy_snapshot(10);
+        let base = snapshot(10);
+        let mut latest = snapshot(9);
+        latest.add_logical_change_delta(2, 3);
+
+        assert_eq!(
+            logical_change_rows(Some(&legacy), Some(&latest)).unwrap(),
+            None
+        );
+        assert_eq!(
+            logical_change_rows(Some(&base), Some(&latest)).unwrap(),
+            Some(LogicalChangeRows {
+                inserted: 2,
+                updated: 2,
+                deleted: 3,
+            })
+        );
+
+        let mut newer_base = snapshot(10);
+        newer_base.add_logical_change_delta(3, 0);
+        assert!(logical_change_rows(Some(&newer_base), Some(&latest)).is_err());
+    }
 }
