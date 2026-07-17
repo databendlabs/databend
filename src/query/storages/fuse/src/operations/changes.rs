@@ -242,16 +242,16 @@ impl FuseTable {
             StreamMode::Standard => {
                 if let Some(base_location) = base_location {
                     if let Some(latest_snapshot) = self.read_table_snapshot().await? {
-                        let latest_segments: HashSet<&Location> =
-                            HashSet::from_iter(&latest_snapshot.segments);
-
                         let base_snapshot =
                             self.changes_read_offset_snapshot(base_location).await?;
-                        let base_segments = HashSet::from_iter(&base_snapshot.segments);
-
-                        // If the base segments are a subset of the latest segments,
-                        // then the stream is treated as append only.
-                        if base_segments.is_subset(&latest_segments) {
+                        let counters_available = base_snapshot.logical_change_counters().is_some()
+                            && latest_snapshot.logical_change_counters().is_some();
+                        let logical_rows =
+                            logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot));
+                        if counters_available
+                            && logical_rows.updated == 0
+                            && logical_rows.deleted == 0
+                        {
                             Ok(StreamMode::AppendOnly)
                         } else {
                             Ok(StreamMode::Standard)
@@ -474,36 +474,7 @@ impl FuseTable {
         }
 
         let logical_rows =
-            logical_change_rows(base_snapshot.as_deref(), latest_snapshot.as_deref())?;
-        // Compaction, recluster, and other physical-only rewrites are not CDC
-        // backlog even when their endpoint block locations differ.
-        if logical_rows.inserted == 0 && logical_rows.updated == 0 && logical_rows.deleted == 0 {
-            return Ok(StreamBacklog::default());
-        }
-
-        let latest_rows = latest_snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.summary.row_count);
-        let base_rows = base_snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.summary.row_count);
-
-        // A segment subset means the endpoint change is physically one-sided,
-        // so snapshot row counts provide the exact candidate rows.
-        if base_segments.is_subset(&latest_segments) {
-            let rows_added = latest_rows - base_rows;
-            let estimated_rows = match mode {
-                StreamMode::AppendOnly => logical_rows.inserted.min(rows_added),
-                StreamMode::Standard => {
-                    estimate_standard_rows_to_process(&logical_rows, rows_added, 0)
-                }
-            };
-            return Ok(StreamBacklog {
-                rows_added,
-                rows_removed: 0,
-                estimated_rows,
-            });
-        }
+            logical_change_rows(base_snapshot.as_deref(), latest_snapshot.as_deref());
 
         // Segment set differences bound the candidate change area. Base-only
         // segments may contain deleted rows, latest-only segments may contain
@@ -529,60 +500,35 @@ impl FuseTable {
         let candidate_removed_rows = sum_block_rows(&del_blocks)?;
 
         if matches!(mode, StreamMode::AppendOnly) {
-            let mut base_block_ids = HashSet::with_capacity(del_blocks.len());
-            for block in &del_blocks {
-                base_block_ids.insert(block_id_from_location(&block.location.0)?);
-            }
-            let append_candidate_rows = add_blocks.iter().fold(0_u64, |rows, block| {
-                let row_count = block.row_count;
-                let block_rows =
-                    if let Some(version_stats) = block.col_stats.get(&ORIGIN_VERSION_COLUMN_ID) {
-                        let null_rows = version_stats.null_count.min(row_count);
-                        let origin_version_before_offset = matches!(
-                            &version_stats.max,
-                            Scalar::Number(NumberScalar::UInt64(max)) if *max < seq
-                        );
-                        let origin_block_from_base = block
-                            .col_stats
-                            .get(&ORIGIN_BLOCK_ID_COLUMN_ID)
-                            .is_some_and(|stats| {
-                                if stats.null_count > 0 {
-                                    return false;
-                                }
-                                let (
-                                    Scalar::Decimal(DecimalScalar::Decimal128(min, _)),
-                                    Scalar::Decimal(DecimalScalar::Decimal128(max, _)),
-                                ) = (&stats.min, &stats.max)
-                                else {
-                                    return false;
-                                };
-                                min == max && base_block_ids.contains(min)
-                            });
-                        if null_rows == row_count
-                            || origin_version_before_offset
-                            || origin_block_from_base
-                        {
-                            null_rows
-                        } else {
-                            row_count
-                        }
-                    } else {
-                        row_count
-                    };
-                rows + block_rows
-            });
+            // UPDATE does not change append-only cardinality: an inserted row
+            // that is later updated is still one appended endpoint row.
+            let estimated_rows = if logical_rows.deleted == 0 || del_blocks.is_empty() {
+                logical_rows.inserted.min(candidate_added_rows)
+            } else {
+                logical_rows.inserted.min(estimate_append_candidate_rows(
+                    seq,
+                    &add_blocks,
+                    &del_blocks,
+                )?)
+            };
             return Ok(StreamBacklog {
                 rows_added: candidate_added_rows,
                 rows_removed: candidate_removed_rows,
-                estimated_rows: logical_rows.inserted.min(append_candidate_rows),
+                estimated_rows,
             });
         }
 
-        let estimated_rows = estimate_standard_rows_to_process(
-            &logical_rows,
-            candidate_added_rows,
-            candidate_removed_rows,
-        );
+        let estimated_rows = if del_blocks.is_empty() {
+            candidate_added_rows
+        } else if add_blocks.is_empty() {
+            candidate_removed_rows
+        } else {
+            estimate_standard_rows_to_process(
+                &logical_rows,
+                candidate_added_rows,
+                candidate_removed_rows,
+            )
+        };
 
         Ok(StreamBacklog {
             rows_added: candidate_added_rows,
@@ -634,45 +580,43 @@ impl FuseTable {
             return Ok(Some(scale_snapshot_statistics(&latest_snapshot, 0)));
         }
 
-        let logical_rows = logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot))?;
         let base_rows = base_snapshot.summary.row_count;
         let latest_rows = latest_snapshot.summary.row_count;
-        let total_rows = base_rows + logical_rows.inserted;
-        let net_rows = i128::from(latest_rows) - i128::from(base_rows);
-        let base_deleted = if total_rows == 0 {
-            0
+        let logical_rows = logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot));
+        let num_rows = if logical_rows.updated == 0 && logical_rows.deleted == 0 {
+            match change_type {
+                ChangeType::Append | ChangeType::Insert => logical_rows.inserted,
+                ChangeType::Delete => 0,
+            }
+        } else if logical_rows.updated == 0 && logical_rows.inserted == 0 {
+            match change_type {
+                ChangeType::Append | ChangeType::Insert => 0,
+                ChangeType::Delete => logical_rows.deleted,
+            }
         } else {
-            rounded_ratio(logical_rows.deleted, base_rows, total_rows)
-                .max(base_rows.saturating_sub(latest_rows))
-                .min(logical_rows.deleted.min(base_rows))
-        };
-        let insert_survived = u64::try_from(net_rows + i128::from(base_deleted))
-            .map_err(|_| ErrorCode::Internal("invalid surviving inserted row estimate"))?;
-        if insert_survived > logical_rows.inserted || insert_survived > latest_rows {
-            return Err(ErrorCode::Internal(
-                "surviving inserted row estimate exceeds endpoint rows",
-            ));
-        }
-
-        let base_survived = base_rows - base_deleted;
-        let endpoint_updated = if total_rows == 0 {
-            0
-        } else {
-            rounded_ratio(logical_rows.updated, base_survived, total_rows)
-                .min(logical_rows.updated)
-                .min(base_survived)
-        };
-        let standard_insert = insert_survived + endpoint_updated;
-        let standard_delete = base_deleted + endpoint_updated;
-        if i128::from(standard_insert) - i128::from(standard_delete) != net_rows {
-            return Err(ErrorCode::Internal(
-                "endpoint change row estimates do not match snapshot row counts",
-            ));
-        }
-        let num_rows = match change_type {
-            ChangeType::Append => insert_survived,
-            ChangeType::Insert => standard_insert,
-            ChangeType::Delete => standard_delete,
+            let total_rows = base_rows + logical_rows.inserted;
+            let net_rows = i128::from(latest_rows) - i128::from(base_rows);
+            let base_deleted = if logical_rows.deleted == 0 || total_rows == 0 {
+                0
+            } else {
+                rounded_ratio(logical_rows.deleted, base_rows, total_rows)
+                    .max(base_rows.saturating_sub(latest_rows))
+                    .min(logical_rows.deleted.min(base_rows))
+            };
+            let insert_survived = (net_rows + i128::from(base_deleted)).max(0) as u64;
+            let base_survived = base_rows - base_deleted;
+            let endpoint_updated = if logical_rows.updated == 0 || total_rows == 0 {
+                0
+            } else {
+                rounded_ratio(logical_rows.updated, base_survived, total_rows)
+                    .min(logical_rows.updated)
+                    .min(base_survived)
+            };
+            match change_type {
+                ChangeType::Append => insert_survived,
+                ChangeType::Insert => insert_survived + endpoint_updated,
+                ChangeType::Delete => base_deleted + endpoint_updated,
+            }
         };
 
         let source = match change_type {
@@ -755,19 +699,22 @@ struct LogicalChangeRows {
 fn logical_change_rows(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
-) -> Result<LogicalChangeRows> {
+) -> LogicalChangeRows {
     let base_rows = base.map_or(0, |snapshot| snapshot.summary.row_count);
     let latest_rows = latest.map_or(0, |snapshot| snapshot.summary.row_count);
-    let (updated, deleted) = TableSnapshot::logical_change_delta(base, latest)?;
-
-    let net_rows = i128::from(latest_rows) - i128::from(base_rows);
-    let inserted = u64::try_from(net_rows + i128::from(deleted))
-        .map_err(|_| ErrorCode::Internal("invalid logical inserted row count"))?;
-    Ok(LogicalChangeRows {
+    let latest_counters = latest.and_then(|snapshot| snapshot.logical_change_counters());
+    let base_counters = base.and_then(|snapshot| snapshot.logical_change_counters());
+    let (updated, deleted) = match (base, base_counters, latest_counters) {
+        (None, _, Some(latest)) => latest,
+        (Some(_), Some(base), Some(latest)) => (latest.0 - base.0, latest.1 - base.1),
+        _ => (0, 0),
+    };
+    let inserted = (latest_rows + deleted).saturating_sub(base_rows);
+    LogicalChangeRows {
         inserted,
         updated,
         deleted,
-    })
+    }
 }
 
 fn estimate_standard_rows_to_process(
@@ -779,6 +726,53 @@ fn estimate_standard_rows_to_process(
     let logical_removed = rows.deleted + rows.updated;
 
     logical_added.min(candidate_added_rows) + logical_removed.min(candidate_removed_rows)
+}
+
+fn estimate_append_candidate_rows(
+    seq: u64,
+    add_blocks: &[Arc<BlockMeta>],
+    del_blocks: &[Arc<BlockMeta>],
+) -> Result<u64> {
+    let mut base_block_ids = HashSet::with_capacity(del_blocks.len());
+    for block in del_blocks {
+        base_block_ids.insert(block_id_from_location(&block.location.0)?);
+    }
+
+    Ok(add_blocks.iter().fold(0_u64, |rows, block| {
+        let row_count = block.row_count;
+        let block_rows = if let Some(version_stats) = block.col_stats.get(&ORIGIN_VERSION_COLUMN_ID)
+        {
+            let null_rows = version_stats.null_count.min(row_count);
+            let origin_version_before_offset = matches!(
+                &version_stats.max,
+                Scalar::Number(NumberScalar::UInt64(max)) if *max < seq
+            );
+            let origin_block_from_base = block
+                .col_stats
+                .get(&ORIGIN_BLOCK_ID_COLUMN_ID)
+                .is_some_and(|stats| {
+                    if stats.null_count > 0 {
+                        return false;
+                    }
+                    let (
+                        Scalar::Decimal(DecimalScalar::Decimal128(min, _)),
+                        Scalar::Decimal(DecimalScalar::Decimal128(max, _)),
+                    ) = (&stats.min, &stats.max)
+                    else {
+                        return false;
+                    };
+                    min == max && base_block_ids.contains(min)
+                });
+            if null_rows == row_count || origin_version_before_offset || origin_block_from_base {
+                null_rows
+            } else {
+                row_count
+            }
+        } else {
+            row_count
+        };
+        rows + block_rows
+    }))
 }
 
 fn rounded_ratio(value: u64, numerator: u64, denominator: u64) -> u64 {
