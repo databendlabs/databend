@@ -182,7 +182,7 @@ impl CopyIntoTablePlan {
         let operator = stage_table_info.operator()?;
         let options = &stage_table_info.copy_into_table_options;
         let all_source_file_infos = if stage_table_info.fuse_recovery.is_some() {
-            // Resolve the basenames under the target block prefix without HEAD requests, so COPY
+            // Resolve the basenames under the source block prefix without HEAD requests, so COPY
             // history is checked before Parquet footers are read.
             Ok(stage_table_info
                 .files_info

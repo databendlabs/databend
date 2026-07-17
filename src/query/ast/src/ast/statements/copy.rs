@@ -394,12 +394,15 @@ impl CopyIntoLocationStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CopyIntoTableSource {
     Location(FileLocation),
-    /// Read trusted Fuse blocks from the target table's block directory.
+    /// Read trusted Fuse blocks from the source table's block directory.
     /// `FILES` entries are block basenames.
     ///
     /// This source is intentionally only available to `COPY INTO TABLE`; it is
     /// not a general-purpose table function.
     FuseRecoveryBlocks {
+        source_catalog: Option<Identifier>,
+        source_database: Option<Identifier>,
+        source_table: Identifier,
         files: Vec<String>,
     },
     /// Load with Transform
@@ -416,8 +419,21 @@ impl Display for CopyIntoTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
-            CopyIntoTableSource::FuseRecoveryBlocks { files } => {
-                write!(f, "FUSE_RECOVERY_BLOCKS(FILES => (")?;
+            CopyIntoTableSource::FuseRecoveryBlocks {
+                source_catalog,
+                source_database,
+                source_table,
+                files,
+            } => {
+                write!(f, "FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => ")?;
+                write_dot_separated_list(
+                    f,
+                    source_catalog
+                        .iter()
+                        .chain(source_database.iter())
+                        .chain(Some(source_table)),
+                )?;
+                write!(f, ", FILES => (")?;
                 write_comma_separated_string_list(f, files)?;
                 write!(f, "))")
             }

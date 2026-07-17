@@ -39,13 +39,22 @@ use crate::plan::ParquetCopySchema;
 /// # Safety contract
 ///
 /// Snapshot and segment metadata may be unavailable, so recovery maps physical
-/// Parquet fields by their exact name and complete logical type. That is sound
-/// only when the table has never dropped and re-added a column with the same
-/// name, and no rename chain has returned to the same final name and physical
-/// schema. A block footer cannot detect either history.
+/// Parquet fields to the current target schema by exact name and complete logical
+/// type. The current source schema is deliberately not compared because selected
+/// blocks may predate source schema evolution.
+///
+/// Footer-only validation cannot prove column lineage or business semantics. The
+/// caller must ensure that matching source-block and target fields represent the
+/// same logical columns. In particular, a footer cannot detect same-name DROP+ADD,
+/// a rename chain that returns to the same final name and physical schema, or an
+/// unrelated same-name field in a different source and target table.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FuseRecoveryBlocksInfo {
-    pub table_info: TableInfo,
+    pub source_catalog_name: String,
+    pub source_database_name: String,
+    pub source_table_name: String,
+    pub source_table_info: TableInfo,
+    pub target_table_info: TableInfo,
     pub block_prefix: String,
 }
 
@@ -108,7 +117,7 @@ impl StageTableInfo {
     /// Return the source operator used by this stage-like scan.
     pub fn operator(&self) -> Result<opendal::Operator> {
         if let Some(recovery) = &self.fuse_recovery {
-            if let Some(storage_params) = &recovery.table_info.meta.storage_params {
+            if let Some(storage_params) = &recovery.source_table_info.meta.storage_params {
                 return Ok(init_operator_with_policy_scope(
                     storage_params,
                     EndpointPolicyScope::External,

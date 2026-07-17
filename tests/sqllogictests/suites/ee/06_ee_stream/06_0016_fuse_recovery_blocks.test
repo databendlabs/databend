@@ -35,7 +35,7 @@ SET VARIABLE recovery_file = (SELECT split_part(_block_name, '/', -1) FROM base 
 
 statement ok
 SET VARIABLE recovery_sql = concat(
-    'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO base FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.test_fuse_recovery_stream.base, FILES => (''',
     $recovery_file,
     '''))'
 )

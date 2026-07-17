@@ -64,7 +64,7 @@ impl ParquetTableForCopy {
             return Ok(());
         };
         let expected_schema = recovery
-            .table_info
+            .target_table_info
             .schema()
             .remove_virtual_computed_fields();
         let file_paths = stage_table_info
@@ -356,8 +356,9 @@ fn validate_fuse_recovery_schema(
 ) -> Result<()> {
     // SAFETY: Footer-only recovery has no stable ColumnId. Exact name/type matching
     // is sound only under the FuseRecoveryBlocksInfo safety contract documented in
-    // databend-common-catalog. In particular, same-name DROP+ADD and rename cycles
-    // that return to the same physical schema are not detectable from a footer.
+    // databend-common-catalog. The source table's current schema is not evidence for
+    // a historical block, and a footer cannot prove cross-table column lineage or
+    // business semantics.
     let mut source_fields = HashMap::with_capacity(source_schema.num_fields());
     for field in source_schema.fields() {
         if is_stream_column(field.name()) {

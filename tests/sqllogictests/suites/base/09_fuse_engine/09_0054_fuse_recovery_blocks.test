@@ -15,10 +15,14 @@ SET VARIABLE source_block = (SELECT _block_name FROM fuse_recovery_blocks_slt WH
 statement ok
 SET VARIABLE source_file = (SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_blocks_slt WHERE id = 1)
 
+# SOURCE_TABLE must identify its database explicitly.
+statement error 1006.*must be qualified as database.table
+COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => fuse_recovery_blocks_slt, FILES => ('missing_v2.parquet'))
+
 # FILES accepts block basenames, not paths.
 statement ok
 SET VARIABLE invalid_path_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_blocks_slt, FILES => (''',
     $source_block,
     '''))'
 )
@@ -29,7 +33,7 @@ EXECUTE IMMEDIATE $invalid_path_sql
 # FORCE = TRUE is rejected.
 statement ok
 SET VARIABLE force_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_blocks_slt, FILES => (''',
     $source_file,
     ''')) FORCE = TRUE'
 )
@@ -43,7 +47,7 @@ TRUNCATE TABLE fuse_recovery_blocks_slt
 
 statement ok
 SET VARIABLE recovery_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_blocks_slt, FILES => (''',
     $source_file,
     '''))'
 )
@@ -89,14 +93,14 @@ SELECT count() FROM fuse_recovery_blocks_slt
 ----
 1
 
-# The basename is resolved in the target table's _b/ directory.
+# The basename is resolved in the source table's _b/ directory.
 statement ok
 SET VARIABLE missing_file = 'missing_v2.parquet'
 
 # A missing block rejects the whole batch; the valid block must not be appended.
 statement ok
 SET VARIABLE missing_batch_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_blocks_slt, FILES => (''',
     $recovered_file,
     ''', ''',
     $missing_file,
@@ -123,7 +127,7 @@ SET VARIABLE current_file = (SELECT split_part(_block_name, '/', -1) FROM fuse_r
 
 statement ok
 SET VARIABLE schema_mismatch_sql = concat(
-    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_blocks_slt FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_blocks_slt, FILES => (''',
     $current_file,
     ''', ''',
     $recovered_file,
@@ -144,7 +148,7 @@ UNSET VARIABLE (source_block, source_file, invalid_path_sql, force_sql, recovery
 statement ok
 DROP TABLE fuse_recovery_blocks_slt
 
-# A table can inherit its external storage from the database.
+# Recover an older block after the external source schema changes.
 statement ok
 CREATE OR REPLACE CONNECTION fuse_recovery_external_conn STORAGE_TYPE = 'fs'
 
@@ -155,22 +159,28 @@ CREATE OR REPLACE DATABASE fuse_recovery_external_db OPTIONS (
 )
 
 statement ok
-CREATE OR REPLACE TABLE fuse_recovery_external_db.t(id INT) ENABLE_AUTO_ANALYZE = 0
+CREATE OR REPLACE TABLE fuse_recovery_external_db.source_t(id INT) ENABLE_AUTO_ANALYZE = 0
 
 statement ok
-INSERT INTO fuse_recovery_external_db.t VALUES(7)
+CREATE OR REPLACE TABLE fuse_recovery_external_target(id INT) ENABLE_AUTO_ANALYZE = 0
 
 statement ok
-SET VARIABLE external_file = (
-    SELECT split_part(_block_name, '/', -1) FROM fuse_recovery_external_db.t
+INSERT INTO fuse_recovery_external_db.source_t VALUES(7)
+
+statement ok
+SET VARIABLE external_block = (
+    SELECT _block_name FROM fuse_recovery_external_db.source_t
 )
 
 statement ok
-TRUNCATE TABLE fuse_recovery_external_db.t
+SET VARIABLE external_file = (SELECT split_part($external_block, '/', -1))
+
+statement ok
+ALTER TABLE fuse_recovery_external_db.source_t ADD COLUMN added INT
 
 statement ok
 SET VARIABLE external_recovery_sql = concat(
-    'COPY INTO fuse_recovery_external_db.t FROM FUSE_RECOVERY_BLOCKS(FILES => (''',
+    'COPY INTO fuse_recovery_external_target FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_external_db.source_t, FILES => (''',
     $external_file,
     '''))'
 )
@@ -178,16 +188,53 @@ SET VARIABLE external_recovery_sql = concat(
 statement ok
 EXECUTE IMMEDIATE $external_recovery_sql
 
+# History is stored on the target and identifies the full external source path.
+query B
+SELECT count() = 1
+    AND count_if(file_name LIKE '%fuse_recovery_blocks_external/%') = 1
+    AND count_if(file_name LIKE concat('%', $external_block)) = 1
+FROM copy_history('fuse_recovery_external_target')
+----
+1
+
+# The retry is skipped by target COPY history.
+statement ok
+EXECUTE IMMEDIATE $external_recovery_sql
+
+# A new block using the source's current schema does not match the target.
+statement ok
+INSERT INTO fuse_recovery_external_db.source_t VALUES(8, 8)
+
+statement ok
+SET VARIABLE external_current_file = (
+    SELECT split_part(_block_name, '/', -1)
+    FROM fuse_recovery_external_db.source_t
+    WHERE id = 8
+)
+
+statement ok
+SET VARIABLE external_schema_mismatch_sql = concat(
+    'COPY INTO fuse_recovery_external_target FROM FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => default.fuse_recovery_external_db.source_t, FILES => (''',
+    $external_current_file,
+    '''))'
+)
+
+statement error 1303.*FUSE_RECOVERY_BLOCKS schema mismatch
+EXECUTE IMMEDIATE $external_schema_mismatch_sql
+
 query II
-SELECT count(), sum(id) FROM fuse_recovery_external_db.t
+SELECT count(), sum(id) FROM fuse_recovery_external_target
 ----
 1 7
 
 statement ok
-UNSET VARIABLE (external_file, external_recovery_sql)
+UNSET VARIABLE (external_block, external_file, external_recovery_sql, external_current_file, external_schema_mismatch_sql)
 
 statement ok
-DROP TABLE fuse_recovery_external_db.t
+DROP TABLE fuse_recovery_external_target
+
+statement ok
+DROP TABLE fuse_recovery_external_db.source_t
 
 statement ok
 DROP DATABASE fuse_recovery_external_db

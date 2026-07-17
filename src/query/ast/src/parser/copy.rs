@@ -61,12 +61,35 @@ fn fuse_recovery_blocks_name(i: Input) -> IResult<()> {
     }
 }
 
+fn source_table_name(i: Input) -> IResult<()> {
+    match i
+        .tokens
+        .first()
+        .filter(|token| token.kind == Ident && token.text().eq_ignore_ascii_case("source_table"))
+    {
+        Some(_) => Ok((i.slice(1..), ())),
+        None => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectText("SOURCE_TABLE"),
+        ))),
+    }
+}
+
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let fuse_recovery_blocks = map(
         rule! {
-            #fuse_recovery_blocks_name ~ ^"(" ~ ^FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list1(literal_string) ~ ^")" ~ ^")"
+            #fuse_recovery_blocks_name ~ ^"("
+            ~ ^#source_table_name ~ ^"=>" ~ ^#dot_separated_idents_1_to_3 ~ ^","
+            ~ ^FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list1(literal_string) ~ ^")" ~ ^")"
         },
-        |(_, _, _, _, _, files, _, _)| CopyIntoTableSource::FuseRecoveryBlocks { files },
+        |(_, _, _, _, (source_catalog, source_database, source_table), _, _, _, _, files, _, _)| {
+            CopyIntoTableSource::FuseRecoveryBlocks {
+                source_catalog,
+                source_database,
+                source_table,
+                files,
+            }
+        },
     );
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
@@ -178,7 +201,7 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
-                    | FUSE_RECOVERY_BLOCKS(FILES => ('<block_basename>' [ , '<block_basename>' ... ]))
+                    | FUSE_RECOVERY_BLOCKS(SOURCE_TABLE => [<catalog_name>.]<database_name>.<table_name>, FILES => ('<block_basename>' [ , '<block_basename>' ... ]))
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]

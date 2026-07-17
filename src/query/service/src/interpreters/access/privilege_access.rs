@@ -1900,10 +1900,19 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                if plan.stage_table_info.fuse_recovery.is_some() {
+                if let Some(recovery) = &plan.stage_table_info.fuse_recovery {
                     self.validate_access(
                         &GrantObject::Global,
                         UserPrivilegeType::Super,
+                        false,
+                        false,
+                    )
+                    .await?;
+                    self.validate_table_access(
+                        &recovery.source_catalog_name,
+                        &recovery.source_database_name,
+                        &recovery.source_table_name,
+                        UserPrivilegeType::Select,
                         false,
                         false,
                     )

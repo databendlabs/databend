@@ -265,37 +265,78 @@ impl CopyIntoTableInterpreter {
             )
         } else {
             if let Some(recovery) = &mut prepared_stage_table_info.fuse_recovery {
-                if recovery.table_info.ident.table_id != table_info.ident.table_id {
+                if recovery.target_table_info.ident.table_id != table_info.ident.table_id {
                     return Err(ErrorCode::TableVersionMismatched(
                         "FUSE_RECOVERY_BLOCKS target table was replaced while the statement was being planned"
                             .to_string(),
                     ));
                 }
-                if recovery.table_info.schema() != table_info.schema() {
+                if recovery.target_table_info.schema() != table_info.schema() {
                     return Err(ErrorCode::TableSchemaMismatch(
                         "FUSE_RECOVERY_BLOCKS target schema changed while the statement was being planned; retry the statement"
                             .to_string(),
                     ));
                 }
+                let planned_target_block_prefix = format!(
+                    "{}/_b/",
+                    FuseTable::parse_storage_prefix_from_table_info(&recovery.target_table_info)?
+                );
                 let current_block_prefix = format!(
                     "{}/_b/",
                     FuseTable::parse_storage_prefix_from_table_info(&table_info)?
                 );
-                if recovery.block_prefix != current_block_prefix {
+                if planned_target_block_prefix != current_block_prefix {
                     return Err(ErrorCode::TableVersionMismatched(
                         "FUSE_RECOVERY_BLOCKS target storage prefix changed while the statement was being planned; retry the statement"
                             .to_string(),
                     ));
                 }
-                // Use the current table metadata when reading and rebuilding recovered rows.
-                recovery.table_info = table_info.clone();
+                recovery.target_table_info = table_info.clone();
             }
-            if prepared_stage_table_info.fuse_recovery.is_some() {
+
+            if let Some(recovery) = &prepared_stage_table_info.fuse_recovery {
+                let source_table = self
+                    .ctx
+                    .get_table(
+                        &recovery.source_catalog_name,
+                        &recovery.source_database_name,
+                        &recovery.source_table_name,
+                    )
+                    .await?;
+                if recovery.source_table_info.ident.table_id != source_table.get_id() {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS source table was replaced while the statement was being planned"
+                            .to_string(),
+                    ));
+                }
+                if source_table.engine() != "FUSE" || !source_table.storage_format_as_parquet() {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS source is no longer a Parquet FUSE table; retry the statement"
+                            .to_string(),
+                    ));
+                }
+                let current_source_table_info = source_table.get_table_info().clone();
+                let current_source_block_prefix = format!(
+                    "{}/_b/",
+                    FuseTable::parse_storage_prefix_from_table_info(&current_source_table_info)?
+                );
+                if recovery.block_prefix != current_source_block_prefix {
+                    return Err(ErrorCode::TableVersionMismatched(
+                        "FUSE_RECOVERY_BLOCKS source storage prefix changed while the statement was being planned; retry the statement"
+                            .to_string(),
+                    ));
+                }
+                prepared_stage_table_info
+                    .fuse_recovery
+                    .as_mut()
+                    .expect("FUSE recovery metadata must be present")
+                    .source_table_info = current_source_table_info;
+
                 let current_path_prefix =
                     copy_source_path_prefix(&prepared_stage_table_info.operator()?);
                 if plan.path_prefix.as_deref() != Some(current_path_prefix.as_str()) {
                     return Err(ErrorCode::TableVersionMismatched(
-                        "FUSE_RECOVERY_BLOCKS target storage location changed while the statement was being planned; retry the statement"
+                        "FUSE_RECOVERY_BLOCKS source storage location changed while the statement was being planned; retry the statement"
                             .to_string(),
                     ));
                 }

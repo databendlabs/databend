@@ -193,9 +193,20 @@ impl Binder {
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, &alias)
                     .await
             }
-            CopyIntoTableSource::FuseRecoveryBlocks { files } => {
+            CopyIntoTableSource::FuseRecoveryBlocks {
+                source_catalog,
+                source_database,
+                source_table,
+                files,
+            } => {
                 let mut plan = self
-                    .bind_copy_from_fuse_recovery_blocks(stmt, files)
+                    .bind_copy_from_fuse_recovery_blocks(
+                        stmt,
+                        source_catalog,
+                        source_database,
+                        source_table,
+                        files,
+                    )
                     .await?;
                 plan.collect_files(self.ctx.as_ref()).await?;
                 Ok(Plan::CopyIntoTable(Box::new(plan)))
@@ -206,6 +217,9 @@ impl Binder {
     async fn bind_copy_from_fuse_recovery_blocks(
         &mut self,
         stmt: &CopyIntoTableStmt,
+        source_catalog: &Option<Identifier>,
+        source_database: &Option<Identifier>,
+        source_table: &Identifier,
         files: &[String],
     ) -> Result<CopyIntoTablePlan> {
         if stmt.dst_columns.is_some() {
@@ -220,31 +234,59 @@ impl Binder {
             ));
         }
         validate_fuse_recovery_copy_options(&stmt.options)?;
+        if source_database.is_none() {
+            return Err(ErrorCode::BadArguments(
+                "FUSE_RECOVERY_BLOCKS SOURCE_TABLE must be qualified as database.table or catalog.database.table"
+                    .to_string(),
+            ));
+        }
 
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
-        let table = self
+        let target_table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        if table.engine() != "FUSE" || !table.storage_format_as_parquet() {
+        if target_table.engine() != "FUSE" || !target_table.storage_format_as_parquet() {
             return Err(ErrorCode::BadArguments(format!(
                 "FUSE_RECOVERY_BLOCKS requires a Parquet FUSE target table, but {} uses {}",
-                table.get_table_info().desc,
-                table.engine()
+                target_table.get_table_info().desc,
+                target_table.engine()
             )));
         }
-        if table.is_read_only() {
+        if target_table.is_read_only() {
             return Err(ErrorCode::InvalidOperation(format!(
                 "FUSE_RECOVERY_BLOCKS requires a writable target table, but {} is read only",
-                table.get_table_info().desc
+                target_table.get_table_info().desc
             )));
         }
 
-        let table_info = table.get_table_info().clone();
-        let storage_prefix = parse_storage_prefix(table_info.options(), table_info.ident.table_id)?;
+        let (source_catalog_name, source_database_name, source_table_name) =
+            self.normalize_object_identifier_triple(source_catalog, source_database, source_table);
+        let source_table = self
+            .ctx
+            .get_table(
+                &source_catalog_name,
+                &source_database_name,
+                &source_table_name,
+            )
+            .await?;
+        if source_table.engine() != "FUSE" || !source_table.storage_format_as_parquet() {
+            return Err(ErrorCode::BadArguments(format!(
+                "FUSE_RECOVERY_BLOCKS requires a Parquet FUSE source table, but {} uses {}",
+                source_table.get_table_info().desc,
+                source_table.engine()
+            )));
+        }
+
+        let target_table_info = target_table.get_table_info().clone();
+        let source_table_info = source_table.get_table_info().clone();
+        let storage_prefix = parse_storage_prefix(
+            source_table_info.options(),
+            source_table_info.ident.table_id,
+        )?;
         let block_prefix = format!("{storage_prefix}/_b/");
         let basenames = validate_fuse_recovery_block_files(files)?;
 
@@ -265,7 +307,7 @@ impl Binder {
             pattern: None,
         };
         let required_values_table_schema = self.schema_project(
-            &table.schema(),
+            &target_table.schema(),
             &[],
             &format!("{database_name}.{table_name}"),
         )?;
@@ -292,7 +334,11 @@ impl Binder {
                 copy_into_table_options: copy_options,
                 is_variant: false,
                 fuse_recovery: Some(FuseRecoveryBlocksInfo {
-                    table_info,
+                    source_catalog_name,
+                    source_database_name,
+                    source_table_name,
+                    source_table_info,
+                    target_table_info,
                     block_prefix,
                 }),
                 ..Default::default()
