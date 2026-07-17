@@ -242,23 +242,21 @@ impl FuseTable {
             StreamMode::Standard => {
                 if let Some(base_location) = base_location {
                     if let Some(latest_snapshot) = self.read_table_snapshot().await? {
-                        let base_snapshot =
-                            self.changes_read_offset_snapshot(base_location).await?;
-                        let counters_available = base_snapshot.logical_change_counters().is_some()
-                            && latest_snapshot.logical_change_counters().is_some();
-                        let logical_rows =
-                            logical_change_rows(Some(&base_snapshot), Some(&latest_snapshot));
-                        if counters_available
-                            && logical_rows.updated == 0
-                            && logical_rows.deleted == 0
-                        {
-                            Ok(StreamMode::AppendOnly)
-                        } else {
-                            Ok(StreamMode::Standard)
+                        if latest_snapshot.logical_change_counters().is_some() {
+                            let base_snapshot =
+                                self.changes_read_offset_snapshot(base_location).await?;
+                            if base_snapshot.logical_change_counters().is_some() {
+                                let logical_rows = logical_change_rows(
+                                    Some(&base_snapshot),
+                                    Some(&latest_snapshot),
+                                );
+                                if logical_rows.updated == 0 && logical_rows.deleted == 0 {
+                                    return Ok(StreamMode::AppendOnly);
+                                }
+                            }
                         }
-                    } else {
-                        Ok(StreamMode::Standard)
                     }
+                    Ok(StreamMode::Standard)
                 } else {
                     Ok(StreamMode::AppendOnly)
                 }
