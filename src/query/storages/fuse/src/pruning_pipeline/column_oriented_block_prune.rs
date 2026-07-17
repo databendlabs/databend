@@ -183,10 +183,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         return Ok::<_, ()>(());
                     }
 
-                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
-                        pruner.should_prune(Some(&columns_stat), row_count as usize)
-                    }) {
-                        return Ok(());
+                    if let Some(pruner) = runtime_stats_pruner.as_ref() {
+                        if pruner.should_prune(Some(&columns_stat), row_count as usize) {
+                            return Ok(());
+                        }
                     }
 
                     let compression = Compression::from_u8(compression_col[block_idx]);

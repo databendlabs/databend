@@ -95,12 +95,14 @@ use crate::pruning::SegmentPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
+use crate::pruning_pipeline::AsyncBlockIndexPruneTransform;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::RangeAndGranulePruneTransform;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
@@ -652,12 +654,29 @@ impl FuseTable {
             pruner.table_schema.clone(),
         )?;
         let runtime_filter_prune_context_for_block = runtime_filter_prune_context.clone();
-        if pruner.pruning_ctx.bloom_pruner.is_some()
-            || pruner.pruning_ctx.inverted_index_pruner.is_some()
-            || pruner.pruning_ctx.spatial_index_pruner.is_some()
-            || pruner.pruning_ctx.virtual_column_pruner.is_some()
-        {
-            // async pruning with bloom index or inverted index.
+        let has_granule_pruner = pruner.pruning_ctx.has_granule_pruner();
+        let has_async_block_pruner = pruner.pruning_ctx.has_async_block_pruner();
+        if has_granule_pruner {
+            // Runtime-filter readiness is awaited asynchronously, then range,
+            // runtime-statistics, and granule pruning run synchronously on the
+            // pipeline executor thread.
+            prune_pipeline.add_transform(|input, output| {
+                RangeAndGranulePruneTransform::create(
+                    input,
+                    output,
+                    block_pruner.clone(),
+                    runtime_filter_prune_context_for_block.clone(),
+                    has_async_block_pruner,
+                )
+            })?;
+
+            if has_async_block_pruner {
+                prune_pipeline.add_transform(|input, output| {
+                    AsyncBlockIndexPruneTransform::create(input, output, block_pruner.clone())
+                })?;
+            }
+        } else if has_async_block_pruner {
+            // Async pruning with ordinary bloom, inverted, spatial, or virtual indexes.
             prune_pipeline.add_transform(|input, output| {
                 AsyncBlockPruneTransform::create(
                     input,
@@ -667,7 +686,6 @@ impl FuseTable {
                 )
             })?;
         } else {
-            // sync pruning without a bloom index and inverted index.
             prune_pipeline.add_transform(|input, output| {
                 SyncBlockPruneTransform::create(input, output, block_pruner.clone())
             })?;

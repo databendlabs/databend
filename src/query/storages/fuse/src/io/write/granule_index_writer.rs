@@ -624,8 +624,10 @@ impl OffsetsIndex {
         if ranges.is_empty() {
             return vec![self.empty_plan(col_metas)];
         }
+
         let granules_per_plan = (max_block_rows / self.granule_rows.max(1)).max(1);
         let mut plans = Vec::new();
+
         for range in ranges {
             let mut s = range.start;
             while s < range.end {

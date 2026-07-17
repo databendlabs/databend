@@ -109,6 +109,17 @@ pub struct PruningContext {
 }
 
 impl PruningContext {
+    pub fn has_granule_pruner(&self) -> bool {
+        self.sparse_granule_index_pruner.is_some() || !self.granule_index_pruners.is_empty()
+    }
+
+    pub fn has_async_block_pruner(&self) -> bool {
+        self.bloom_pruner.is_some()
+            || self.inverted_index_pruner.is_some()
+            || self.spatial_index_pruner.is_some()
+            || self.virtual_column_pruner.is_some()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: &Arc<dyn TableContext>,

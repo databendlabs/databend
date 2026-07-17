@@ -112,9 +112,11 @@ impl ReadBlockContext {
         let Some(block_meta_index) = fuse_part.block_meta_index() else {
             return Ok(None);
         };
+
         let Some(granule_ranges) = block_meta_index.granule_ranges.clone() else {
             return Ok(None);
         };
+
         let Some(granule_index) = fuse_part.granule_index.as_ref() else {
             return Ok(None);
         };
@@ -143,6 +145,7 @@ impl ReadBlockContext {
             fuse_part.nums_rows,
             self.max_block_size,
         );
+
         let mut results = Vec::with_capacity(plans.len());
         for plan in &plans {
             let data = self
