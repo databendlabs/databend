@@ -286,16 +286,22 @@ impl QueryPipelineExecutor {
 
         self.start_executor_daemon()?;
 
-        // The caller already runs on a dedicated thread for pulling pipelines. Reuse it as one
-        // worker so short queries do not pay for an extra OS thread spawn and join.
-        let mut thread_join_handles = self.execute_threads(self.threads_num - 1);
+        // Pulling and complete pipelines call this from a dedicated OS thread, which can also act
+        // as one worker. Generic callers may invoke the executor from a Tokio runtime, where a
+        // processor using Tokio's blocking APIs would panic if it ran inline.
+        let execute_inline = tokio::runtime::Handle::try_current().is_err();
+        let spawned_threads = self.threads_num - usize::from(execute_inline);
+        let mut thread_join_handles = self.execute_threads(spawned_threads);
 
-        let inline_thread_num = self.threads_num - 1;
-        let inline_thread_name = format!("PipelineExecutor-{}", inline_thread_num);
-        let inline_span = Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
-            .with_property(|| ("thread_name", inline_thread_name));
-        let thread_res = self.execute_thread(inline_thread_num, inline_span);
-        self.check_thread_result(thread_res)?;
+        if execute_inline {
+            let inline_thread_num = spawned_threads;
+            let inline_thread_name = format!("PipelineExecutor-{}", inline_thread_num);
+            let inline_span =
+                Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
+                    .with_property(|| ("thread_name", inline_thread_name));
+            let thread_res = self.execute_thread(inline_thread_num, inline_span);
+            self.check_thread_result(thread_res)?;
+        }
 
         while let Some(join_handle) = thread_join_handles.pop() {
             let thread_res = join_handle.join().flatten();
