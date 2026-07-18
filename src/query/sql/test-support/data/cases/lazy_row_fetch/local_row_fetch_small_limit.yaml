@@ -1,0 +1,11 @@
+name: local_row_fetch_small_limit
+description: Keep small lazy RowFetch local in a cluster
+node_num: 3
+sql: |
+  SELECT a, b, c
+  FROM lazy_row_fetch
+  WHERE a > 0
+  ORDER BY a DESC
+  LIMIT 10
+tables:
+  lazy_row_fetch: lazy_row_fetch/lazy_row_fetch.sql

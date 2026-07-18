@@ -181,3 +181,36 @@ Limit
 
 statement ok
 drop table t_lazy
+
+# Exercise adaptive distributed RowFetch with more than the 128-block local threshold.
+statement ok
+set lazy_read_threshold = 200
+
+statement ok
+set max_block_size = 1
+
+statement ok
+create or replace table t_adaptive_row_fetch (id uint64 not null, payload string not null)
+
+statement ok
+insert into t_adaptive_row_fetch select number, to_string(number) from numbers(300)
+
+query I
+select count(distinct _block_name) from t_adaptive_row_fetch
+----
+300
+
+# Validate that fetched payloads remain paired with their row IDs after shuffle and merge.
+query IIII
+select count(), sum(if(payload = to_string(id), 1, 0)), min(id), max(id)
+from (
+    select id, payload
+    from t_adaptive_row_fetch
+    order by id desc
+    limit 150
+)
+----
+150 150 150 299
+
+statement ok
+drop table t_adaptive_row_fetch

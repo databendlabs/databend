@@ -32,7 +32,13 @@ use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_sql_test_support::run_test_case_core;
 use databend_meta_client::types::NodeInfo;
 use databend_query::clusters::ClusterHelper;
+use databend_query::physical_plans::ConstantTableScan;
+use databend_query::physical_plans::ExchangeSink;
 use databend_query::physical_plans::PhysicalPlanBuilder;
+use databend_query::physical_plans::PhysicalPlanCast;
+use databend_query::schedulers::Fragmenter;
+use databend_query::schedulers::QueryFragmentsActions;
+use databend_query::servers::flight::v1::exchange::DataExchange;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextCluster;
 use databend_query::sessions::TableContextSettings;
@@ -130,6 +136,96 @@ async fn test_optimizer() -> anyhow::Result<()> {
         println!("✅ {} test passed!", case.name);
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_merge_dependent_shuffle_runs_on_coordinator() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ctx.get_settings();
+    configure_optimizer_settings(settings.as_ref(), false)?;
+    settings.set_max_threads(16)?;
+    settings.set_setting("lazy_read_threshold".to_string(), "1000".to_string())?;
+
+    let mut nodes = vec![
+        create_node(&GlobalUniq::unique()),
+        create_node(&GlobalUniq::unique()),
+    ];
+    let local_id = GlobalUniq::unique();
+    nodes.push(create_node(&local_id));
+    ctx.set_cluster(Cluster::create(nodes, local_id.clone()));
+
+    execute_sql(
+        &ctx,
+        "CREATE TABLE lazy_row_fetch_fragment_test (a INT, b STRING) \
+         ENGINE = FUSE STORAGE_FORMAT = 'PARQUET'",
+    )
+    .await?;
+
+    let runner = ServiceRunner(ctx.clone());
+    let plan = runner
+        .bind_sql(
+            "SELECT a, b FROM lazy_row_fetch_fragment_test \
+             WHERE a > 0 ORDER BY a DESC LIMIT 1000",
+        )
+        .await?;
+    let optimized = runner.optimize_plan(plan).await?;
+    let Plan::Query {
+        metadata,
+        bind_context,
+        s_expr,
+        ..
+    } = &optimized
+    else {
+        unreachable!("expected query plan")
+    };
+
+    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+    let physical = builder.build(s_expr, bind_context.column_set()).await?;
+    let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&physical)?;
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+    for fragment in fragments {
+        fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    }
+
+    let shuffle_actions = fragments_actions
+        .fragments_actions
+        .iter()
+        .filter(|actions| {
+            matches!(
+                actions.data_exchange.as_ref(),
+                Some(DataExchange::NodeToNodeExchange(_))
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(shuffle_actions.len(), 1);
+    assert_eq!(shuffle_actions[0].fragment_actions.len(), 3);
+    let Some(DataExchange::NodeToNodeExchange(exchange)) =
+        shuffle_actions[0].data_exchange.as_ref()
+    else {
+        unreachable!("expected adaptive RowFetch shuffle")
+    };
+    let row_fetch = exchange
+        .row_fetch
+        .as_ref()
+        .expect("RowFetch shuffle must include adaptive routing");
+    assert_eq!(row_fetch.local_block_threshold, 128);
+
+    for action in &shuffle_actions[0].fragment_actions {
+        let exchange_sink = ExchangeSink::from_physical_plan(&action.physical_plan)
+            .expect("shuffle action must contain an ExchangeSink");
+
+        if action.executor == local_id {
+            assert!(!ConstantTableScan::check_physical_plan(
+                &exchange_sink.input
+            ));
+        } else {
+            assert!(ConstantTableScan::check_physical_plan(&exchange_sink.input));
+        }
+    }
+
+    execute_sql(&ctx, "DROP TABLE lazy_row_fetch_fragment_test").await?;
     Ok(())
 }
 

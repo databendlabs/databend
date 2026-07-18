@@ -23,6 +23,7 @@ use databend_common_expression::RemoteExpr;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::exchange::RowFetchExchange;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 #[derive(Clone)]
@@ -36,6 +37,7 @@ pub struct ShuffleExchangeParams {
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
     pub allow_adjust_parallelism: bool,
+    pub row_fetch: Option<RowFetchExchange>,
 }
 
 #[derive(Clone)]

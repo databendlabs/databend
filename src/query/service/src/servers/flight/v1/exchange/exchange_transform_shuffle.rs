@@ -34,11 +34,13 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 
 use super::exchange_params::ShuffleExchangeParams;
 use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_scatter::ScatterTransform;
+use super::row_fetch_exchange_coalescer::RowFetchExchangeCoalescer;
 use super::serde::ExchangeSerializeMeta;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -382,6 +384,13 @@ pub fn exchange_shuffle(
     params: &ShuffleExchangeParams,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
+    if params.row_fetch.is_some() {
+        pipeline.try_resize(1)?;
+        pipeline.add_accumulating_transformer(|| {
+            RowFetchExchangeCoalescer::create(params.query_id.clone())
+        });
+    }
+
     // append scatter transform
     pipeline.add_transform(|input, output| {
         Ok(ScatterTransform::create(

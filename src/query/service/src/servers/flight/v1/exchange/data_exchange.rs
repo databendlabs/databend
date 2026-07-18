@@ -87,6 +87,13 @@ pub struct NodeToNodeExchange {
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
     pub allow_adjust_parallelism: bool,
+    pub row_fetch: Option<RowFetchExchange>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RowFetchExchange {
+    pub row_id_col_offset: usize,
+    pub local_block_threshold: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
