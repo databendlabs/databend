@@ -16,19 +16,31 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataField;
+use databend_common_expression::Expr;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::Scalar;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::filters::TransformLimit;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::optimizer::ir::SExpr;
 
+use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::Sort;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::LimitFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -37,6 +49,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
+use crate::physical_plans::physical_sort::SortStep;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -130,6 +143,44 @@ impl IPhysicalPlan for Limit {
 }
 
 impl PhysicalPlanBuilder {
+    fn contains_merge_exchange(plan: &PhysicalPlan) -> bool {
+        if let Some(exchange) = Exchange::from_physical_plan(plan)
+            && exchange.kind == FragmentKind::Merge
+        {
+            return true;
+        }
+
+        plan.children().any(Self::contains_merge_exchange)
+    }
+
+    fn build_row_fetch_shuffle_key(
+        input_schema: &databend_common_expression::DataSchema,
+        row_id_col_offset: usize,
+    ) -> Result<databend_common_expression::RemoteExpr> {
+        let row_id_field = input_schema.field(row_id_col_offset);
+        let row_id_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: row_id_col_offset,
+            data_type: row_id_field.data_type().clone(),
+            display_name: row_id_field.name().to_string(),
+        });
+        let block_prefix = check_function(
+            None,
+            "bit_shift_right",
+            &[],
+            &[
+                row_id_expr,
+                Expr::Constant(Constant {
+                    span: None,
+                    scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                }),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        Ok(block_prefix.as_remote_expr())
+    }
+
     pub async fn build_limit(
         &mut self,
         s_expr: &SExpr,
@@ -164,6 +215,7 @@ impl PhysicalPlanBuilder {
         }
 
         // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
+        let order_by = Sort::from_physical_plan(&input_plan).map(|sort| sort.order_by.clone());
         let mut plan = PhysicalPlan::new(Limit {
             meta: PhysicalPlanMeta::new("Limit"),
             input: input_plan,
@@ -220,6 +272,16 @@ impl PhysicalPlanBuilder {
 
         let mut table_indexes: Vec<IndexType> = lazy_columns_by_table.keys().copied().collect();
         table_indexes.sort_unstable();
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        // A local RowFetch already reads up to `max_threads` blocks concurrently. Avoid a
+        // cluster round trip for small limits, where all possible blocks fit in only a few
+        // local I/O waves. The runtime metrics below let us tune this conservative guard.
+        let distribute_row_fetch = table_indexes.len() == 1
+            && limit
+                .limit
+                .is_some_and(|rows| rows > max_threads.saturating_mul(4))
+            && !self.ctx.get_cluster().is_empty()
+            && Self::contains_merge_exchange(&plan);
 
         let mut row_id_col_offsets = HashMap::new();
         for table_index in table_indexes.iter() {
@@ -288,6 +350,22 @@ impl PhysicalPlanBuilder {
                         ))
                     })?;
 
+            if distribute_row_fetch {
+                let shuffle_key =
+                    Self::build_row_fetch_shuffle_key(input_schema.as_ref(), row_id_col_offset)?;
+                plan = PhysicalPlan::new(Exchange {
+                    input: plan,
+                    kind: FragmentKind::RowFetch {
+                        row_id_col_offset,
+                        local_block_threshold: max_threads.saturating_mul(8).max(128),
+                    },
+                    keys: vec![shuffle_key],
+                    ignore_exchange: false,
+                    allow_adjust_parallelism: true,
+                    meta: PhysicalPlanMeta::new("Exchange"),
+                });
+            }
+
             plan = PhysicalPlan::new(RowFetch {
                 meta: PhysicalPlanMeta::new("RowFetch"),
                 input: plan,
@@ -299,6 +377,33 @@ impl PhysicalPlanBuilder {
                 enable_block_id_repartition: false,
                 stat_info: Some(stat_info.clone()),
             });
+
+            if distribute_row_fetch {
+                plan = PhysicalPlan::new(Exchange {
+                    input: plan,
+                    kind: FragmentKind::Merge,
+                    keys: vec![],
+                    ignore_exchange: false,
+                    allow_adjust_parallelism: true,
+                    meta: PhysicalPlanMeta::new("Exchange"),
+                });
+
+                if let Some(order_by) = order_by.clone()
+                    && !order_by.is_empty()
+                {
+                    plan = PhysicalPlan::new(Sort {
+                        input: plan,
+                        order_by,
+                        limit: None,
+                        step: SortStep::Single,
+                        pre_projection: None,
+                        broadcast_id: None,
+                        enable_fixed_rows: false,
+                        stat_info: Some(stat_info.clone()),
+                        meta: PhysicalPlanMeta::new("Sort"),
+                    });
+                }
+            }
         }
 
         Ok(plan)

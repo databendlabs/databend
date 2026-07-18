@@ -1,0 +1,16 @@
+Limit
+├── limit: [1000]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [lazy_row_fetch.a (#0) DESC NULLS LAST]
+    ├── limit: [1000]
+    └── Exchange(MergeSort)
+        └── Sort
+            ├── sort keys: [lazy_row_fetch.a (#0) DESC NULLS LAST]
+            ├── limit: [1000]
+            └── Scan
+                ├── table: default.lazy_row_fetch (#0)
+                ├── filters: [gt(lazy_row_fetch.a (#0), 0)]
+                ├── order by: [lazy_row_fetch.a (#0) DESC]
+                └── limit: 1000
+

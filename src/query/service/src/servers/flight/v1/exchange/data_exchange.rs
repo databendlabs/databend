@@ -87,6 +87,14 @@ pub struct NodeToNodeExchange {
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
     pub allow_adjust_parallelism: bool,
+    #[serde(default)]
+    pub row_fetch: Option<RowFetchExchange>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RowFetchExchange {
+    pub row_id_col_offset: usize,
+    pub local_block_threshold: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -135,5 +143,25 @@ impl BroadcastExchange {
             destination_ids,
             destination_channels,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_to_node_exchange_deserializes_without_row_fetch() {
+        let legacy_payload = r#"{
+            "id": "exchange-id",
+            "destination_ids": [],
+            "shuffle_keys": [],
+            "destination_channels": [],
+            "allow_adjust_parallelism": false
+        }"#;
+
+        let exchange: NodeToNodeExchange = serde_json::from_str(legacy_payload).unwrap();
+
+        assert!(exchange.row_fetch.is_none());
     }
 }

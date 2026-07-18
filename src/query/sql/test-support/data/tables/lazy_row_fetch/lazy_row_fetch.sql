@@ -1,0 +1,5 @@
+CREATE TABLE lazy_row_fetch (
+  a INT,
+  b STRING,
+  c STRING
+) ENGINE = FUSE STORAGE_FORMAT = 'PARQUET';

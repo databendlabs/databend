@@ -25,11 +25,13 @@ use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::exchange::serde::TransformExchangeDeserializer;
 use crate::servers::flight::v1::exchange::serde::TransformExchangeSerializer;
 use crate::servers::flight::v1::exchange::serde::TransformScatterExchangeSerializer;
+use crate::servers::flight::v1::scatter::AdaptiveRowFetchFlightScatter;
 use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 
 pub trait ExchangeInjector: Send + Sync + 'static {
@@ -95,12 +97,23 @@ impl ExchangeInjector for DefaultExchangeInjector {
                     .iter()
                     .position(|x| x == local_id)
                     .unwrap();
-                HashFlightScatter::try_create(
+                let hash_scatter = HashFlightScatter::try_create(
                     ctx.get_function_context()?,
                     exchange.shuffle_keys.clone(),
                     exchange.destination_ids.len(),
                     local_pos,
-                )?
+                )?;
+                match &exchange.row_fetch {
+                    Some(row_fetch) => AdaptiveRowFetchFlightScatter::create(
+                        hash_scatter,
+                        ctx.get_id(),
+                        row_fetch.row_id_col_offset,
+                        row_fetch.local_block_threshold,
+                        local_pos,
+                        exchange.destination_ids.len(),
+                    ),
+                    None => hash_scatter,
+                }
             }
         }))
     }

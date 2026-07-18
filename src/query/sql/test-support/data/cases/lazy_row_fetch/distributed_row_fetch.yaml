@@ -1,0 +1,11 @@
+name: distributed_row_fetch
+description: Distribute lazy RowFetch by physical block while preserving TopK order
+node_num: 3
+sql: |
+  SELECT a, b, c
+  FROM lazy_row_fetch
+  WHERE a > 0
+  ORDER BY a DESC
+  LIMIT 1000
+tables:
+  lazy_row_fetch: lazy_row_fetch/lazy_row_fetch.sql

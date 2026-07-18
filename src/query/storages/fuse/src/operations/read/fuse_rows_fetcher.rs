@@ -68,6 +68,7 @@ pub fn row_fetch_processor(
         .map(|field| DataType::from(field.data_type()))
         .collect::<Vec<_>>();
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection.clone(), true)?;
+    let query_id = ctx.get_id();
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {
@@ -92,6 +93,7 @@ pub fn row_fetch_processor(
                         read_settings,
                         max_threads,
                         io_semaphore.clone(),
+                        query_id.clone(),
                     ),
                     need_wrap_nullable,
                     fetched_data_types.clone(),
@@ -115,10 +117,14 @@ impl<T: RowsFetchMetadata> RowsFetchMetadata for Arc<T> {
 
 #[async_trait::async_trait]
 pub trait RowsFetcher {
-    type Metadata: RowsFetchMetadata;
+    type Metadata: RowsFetchMetadata + Clone;
 
     async fn initialize(&mut self) -> Result<()>;
     async fn fetch_metadata(&mut self, _block_id: u64) -> Result<Self::Metadata>;
+    async fn fetch_metadata_batch(
+        &mut self,
+        block_ids: &[u64],
+    ) -> Result<HashMap<u64, Self::Metadata>>;
 
     async fn fetch(
         &mut self,
@@ -237,13 +243,23 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
             match entry.data_type() {
                 DataType::Number(NumberDataType::UInt64) => {
                     let row_id_column = self.get_row_id_column(&data);
+                    let block_ids = row_id_column
+                        .iter()
+                        .map(|row_id| split_row_id(*row_id).0)
+                        .collect::<std::collections::HashSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    let prefetched_metadata = self.fetcher.fetch_metadata_batch(&block_ids).await?;
                     // Process the row id column in block batch
                     // Ensure that the same block would be processed in the same batch and threads
                     for (idx, row_id) in row_id_column.iter().enumerate() {
                         let (prefix, _) = split_row_id(*row_id);
 
                         if !self.metadata.contains_key(&prefix) {
-                            let metadata = self.fetcher.fetch_metadata(prefix).await?;
+                            let metadata = match prefetched_metadata.get(&prefix) {
+                                Some(metadata) => metadata.clone(),
+                                None => self.fetcher.fetch_metadata(prefix).await?,
+                            };
                             self.metadata.insert(prefix, metadata);
                         }
 
@@ -265,6 +281,15 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
                     let column = entry.to_column();
                     let value = column.into_nullable().unwrap();
                     let row_id_column = value.column.into_number().unwrap().into_u_int64().unwrap();
+                    let block_ids = row_id_column
+                        .iter()
+                        .zip(value.validity.iter())
+                        .filter(|(_, is_valid)| *is_valid)
+                        .map(|(row_id, _)| split_row_id(*row_id).0)
+                        .collect::<std::collections::HashSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    let prefetched_metadata = self.fetcher.fetch_metadata_batch(&block_ids).await?;
 
                     for (idx, (row_id, is_valid)) in
                         row_id_column.iter().zip(value.validity.iter()).enumerate()
@@ -280,7 +305,10 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
                         let (prefix, _) = split_row_id(*row_id);
 
                         if !self.metadata.contains_key(&prefix) {
-                            let metadata = self.fetcher.fetch_metadata(prefix).await?;
+                            let metadata = match prefetched_metadata.get(&prefix) {
+                                Some(metadata) => metadata.clone(),
+                                None => self.fetcher.fetch_metadata(prefix).await?,
+                            };
                             self.metadata.insert(prefix, metadata);
                         }
 
