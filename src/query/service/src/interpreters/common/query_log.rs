@@ -34,6 +34,7 @@ use log::info;
 use serde_json;
 use serde_json::Value;
 
+use super::query_log_enabled;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
@@ -124,7 +125,7 @@ fn resource_usage_query_log(stats: IoStatsSnapshot, profiles: &[PlanProfile]) ->
 
 impl InterpreterQueryLog {
     pub fn enabled() -> bool {
-        GlobalConfig::instance().log.query.on
+        query_log_enabled()
     }
 
     fn write_log(mut event: QueryLogElement) -> Result<()> {
