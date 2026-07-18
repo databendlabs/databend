@@ -256,3 +256,21 @@ EvalScalar
             └── limit: NONE
 
 
+=== grouping_sets_select_alias_with_grouping_func_does_not_shadow_column ===
+description: A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.
+sql: SELECT if(grouping(category_id)=1, 0, category_id) AS category_id, label, sum(amount) FROM events GROUP BY GROUPING SETS ((label), (category_id, label))
+status: ok
+EvalScalar
+├── scalars: [events.label (#1) AS (#1), sum(amount) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, events.category_id (#0)) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [events.label (#1) AS (#1), events.category_id (#0) AS (#0), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(events.amount (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [events.category_id (#0) AS (#0), events.label (#1) AS (#1), events.amount (#2) AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
