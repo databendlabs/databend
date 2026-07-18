@@ -292,7 +292,7 @@ async fn parquet_metadata_with_offset_indexes(
     let op_reader = block_read_ctx.operator().reader(&part.location).await?;
     let mut file_reader = ParquetFileReader::new(op_reader, part.file_size);
     let metadata = ParquetMetaDataReader::new()
-        .with_offset_index_policy(PageIndexPolicy::Required)
+        .with_offset_index_policy(PageIndexPolicy::Optional)
         .load_and_finish(&mut file_reader, part.file_size)
         .await?;
     Ok(match cache {
