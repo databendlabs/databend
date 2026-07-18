@@ -128,28 +128,26 @@ impl InterpreterQueryLog {
     }
 
     fn write_log(mut event: QueryLogElement) -> Result<()> {
-        if log::log_enabled!(target: "databend::log::query", log::Level::Info) {
-            // Log the query event in the system_history.query_history table.
-            let event_str = serde_json::to_string(&event)?;
-            info!(target: "databend::log::query", "{}", event_str);
-        }
+        // Normal callers are gated by `enabled()`. The log facade's target check is
+        // not specific enough to tell whether this query sink is configured.
+        let event_str = serde_json::to_string(&event)?;
+        info!(target: "databend::log::query", "{}", event_str);
 
-        if log::log_enabled!(target: "databend::log::query::file", log::Level::Info) {
-            // Remove verbose fields from the query-details file.
-            event.session_settings.clear();
-            event.sql_user_quota.clear();
-            event.sql_user_privileges.clear();
-            let event_str = serde_json::to_string(&event)?;
-            info!(target: "databend::log::query::file", "{}", event_str);
-        }
+        // Remove verbose fields from the query-details file.
+        event.session_settings.clear();
+        event.sql_user_quota.clear();
+        event.sql_user_privileges.clear();
+        let event_str = serde_json::to_string(&event)?;
+        info!(target: "databend::log::query::file", "{}", event_str);
 
-        if log::log_enabled!(log::Level::Info) {
-            info!("query: {} becomes {:?}", event.query_id, event.log_type);
-        }
+        info!("query: {} becomes {:?}", event.query_id, event.log_type);
         Ok(())
     }
 
     pub fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
+        if !Self::enabled() {
+            return;
+        }
         InterpreterQueryLog::log_start(&ctx, SystemTime::now(), Some(err))
             .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }
