@@ -484,19 +484,17 @@ pub fn load_granule_mins(
         .collect())
 }
 
-/// Byte ranges needed to reconstruct a selected leaf column.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ColumnReadPlan {
-    pub column_id: ColumnId,
-    pub dict_range: Option<Range<u64>>,
-    pub data_range: Range<u64>,
+pub(crate) struct ColumnReadPlan {
+    pub(crate) column_id: ColumnId,
+    pub(crate) dict_range: Option<Range<u64>>,
+    pub(crate) data_range: Range<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockReadPlan {
-    pub columns: Vec<ColumnReadPlan>,
-    pub num_rows: usize,
-    pub start_row: usize,
+pub(crate) struct BlockReadPlan {
+    pub(crate) columns: Vec<ColumnReadPlan>,
+    pub(crate) row_range: Range<usize>,
 }
 
 pub struct OffsetsIndex {
@@ -567,7 +565,6 @@ impl OffsetsIndex {
     ) -> BlockReadPlan {
         let run_start_row = s * self.granule_rows;
         let run_end_row = (e * self.granule_rows).min(block_rows);
-        let num_rows = run_end_row.saturating_sub(run_start_row);
 
         let mut columns = Vec::with_capacity(self.offsets.len());
         for (column_id, offs) in &self.offsets {
@@ -591,52 +588,23 @@ impl OffsetsIndex {
         }
         BlockReadPlan {
             columns,
-            num_rows,
-            start_row: run_start_row,
+            row_range: run_start_row..run_end_row,
         }
     }
 
-    fn empty_plan(&self, col_metas: &HashMap<ColumnId, ColumnMeta>) -> BlockReadPlan {
-        let columns = self
-            .offsets
-            .keys()
-            .filter(|id| col_metas.contains_key(id))
-            .map(|column_id| ColumnReadPlan {
-                column_id: *column_id,
-                dict_range: None,
-                data_range: 0..0,
-            })
-            .collect();
-        BlockReadPlan {
-            columns,
-            num_rows: 0,
-            start_row: 0,
-        }
-    }
-
-    pub fn read_plans_for_ranges(
+    pub(crate) fn read_plan_for_range(
         &self,
         col_metas: &HashMap<ColumnId, ColumnMeta>,
-        ranges: &[Range<usize>],
+        range: Range<usize>,
         block_rows: usize,
-        max_block_rows: usize,
-    ) -> Vec<BlockReadPlan> {
-        if ranges.is_empty() {
-            return vec![self.empty_plan(col_metas)];
+    ) -> Result<BlockReadPlan> {
+        let num_granules = num_granules_of(block_rows, self.granule_rows);
+        if range.start >= range.end || range.end > num_granules {
+            return Err(ErrorCode::Internal(format!(
+                "invalid granule data range {range:?} for {num_granules} granules"
+            )));
         }
-
-        let granules_per_plan = (max_block_rows / self.granule_rows.max(1)).max(1);
-        let mut plans = Vec::new();
-
-        for range in ranges {
-            let mut s = range.start;
-            while s < range.end {
-                let e = (s + granules_per_plan).min(range.end);
-                plans.push(self.plan_for_sub_run(col_metas, s, e, block_rows));
-                s = e;
-            }
-        }
-        plans
+        Ok(self.plan_for_sub_run(col_metas, range.start, range.end, block_rows))
     }
 }
 
@@ -942,8 +910,7 @@ mod tests {
 
         // Sub-run [1, 3): granules 1 and 2, rows 100..300.
         let plan = index.plan_for_sub_run(&col_metas, 1, 3, 300);
-        assert_eq!(plan.start_row, 100);
-        assert_eq!(plan.num_rows, 200);
+        assert_eq!(plan.row_range, 100..300);
 
         let get = |id: u32| plan.columns.iter().find(|c| c.column_id == id).unwrap();
         let c7 = get(7);

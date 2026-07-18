@@ -16,16 +16,21 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::block_format::FuseParquetBlockFormat;
+use super::granule_group::GranuleGroupsReadPlan;
+use super::granule_group::build_granule_groups;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
+use crate::io::GranuleDataReader;
+use crate::io::OffsetsIndex;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
@@ -37,9 +42,7 @@ pub struct ReadBlockContext {
     block_format: FuseParquetBlockFormat,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-
     max_block_size: usize,
-    allow_granule_index_skip: bool,
 }
 
 impl ReadBlockContext {
@@ -50,7 +53,6 @@ impl ReadBlockContext {
         block_format: FuseParquetBlockFormat,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
-        allow_granule_index_skip: bool,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             read_settings: ReadSettings::from_ctx(&ctx)?,
@@ -59,7 +61,6 @@ impl ReadBlockContext {
             block_format,
             index_reader,
             virtual_reader,
-            allow_granule_index_skip,
             max_block_size: ctx.get_settings().get_max_block_size()? as usize,
         }))
     }
@@ -70,7 +71,7 @@ impl ReadBlockContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
+    pub(crate) async fn read_full_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
         if let Some(data_source) = self.read_agg_index_data(fuse_part).await? {
@@ -81,15 +82,6 @@ impl ReadBlockContext {
         let ignore_column_ids = virtual_source
             .as_ref()
             .and_then(|source| source.ignore_column_ids.clone());
-
-        // Sparse-granule-index narrowed read: when prune time selected a granule run and the query is
-        // eligible (no position-dependent columns) and no virtual columns are projected, fetch only
-        // the matching granules' byte ranges instead of the whole block.
-        if self.allow_granule_index_skip && ignore_column_ids.is_none() {
-            if let Some(data) = self.try_read_data_by_granule_index(fuse_part).await? {
-                return Ok(ParquetDataSource::Normal((data, virtual_source)));
-            }
-        }
 
         let data = self
             .block_format
@@ -105,56 +97,88 @@ impl ReadBlockContext {
         Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
     }
 
-    async fn try_read_data_by_granule_index(
+    pub(crate) fn build_granule_groups_if_subset(
         &self,
-        fuse_part: &FuseBlockPartInfo,
-    ) -> Result<Option<Vec<crate::io::BlockReadResult>>> {
-        let Some(block_meta_index) = fuse_part.block_meta_index() else {
+        part: &PartInfoPtr,
+    ) -> Result<Option<GranuleGroupsReadPlan>> {
+        if self.index_reader.is_some() || self.virtual_reader.is_some() {
             return Ok(None);
-        };
-
-        let Some(granule_ranges) = block_meta_index.granule_ranges.clone() else {
-            return Ok(None);
-        };
-
+        }
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let Some(granule_index) = fuse_part.granule_index.as_ref() else {
             return Ok(None);
         };
+        let Some(ranges) = fuse_part
+            .block_meta_index()
+            .and_then(|index| index.granule_ranges.as_ref())
+        else {
+            return Ok(None);
+        };
+        if ranges.is_empty() {
+            return Err(ErrorCode::Internal(
+                "granule-pruned part contains no ranges",
+            ));
+        }
 
-        let index = match crate::io::OffsetsIndex::load(
+        let num_granules =
+            crate::io::num_granules_of(fuse_part.nums_rows, granule_index.granule_rows as usize);
+        let mut selected = 0usize;
+        let mut previous_end = None;
+        for range in ranges {
+            if range.start >= range.end || range.end > num_granules {
+                return Err(ErrorCode::Internal(format!(
+                    "invalid granule range {range:?} for {num_granules} granules"
+                )));
+            }
+            if previous_end.is_some_and(|end| range.start < end) {
+                return Err(ErrorCode::Internal(format!(
+                    "overlapping or unordered granule ranges near {range:?}"
+                )));
+            }
+            selected = selected
+                .checked_add(range.end - range.start)
+                .ok_or_else(|| ErrorCode::Internal("selected granule count overflows"))?;
+            previous_end = Some(range.end);
+        }
+        if selected >= num_granules {
+            return Ok(None);
+        }
+
+        Ok(Some(GranuleGroupsReadPlan {
+            groups: build_granule_groups(
+                ranges,
+                granule_index.granule_rows as usize,
+                fuse_part.nums_rows,
+                self.max_block_size,
+            )?,
+        }))
+    }
+
+    pub(crate) fn create_granule_data_reader(
+        &self,
+        part: &PartInfoPtr,
+        plan: &GranuleGroupsReadPlan,
+    ) -> Result<GranuleDataReader> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let granule_index = fuse_part
+            .granule_index
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("granule index metadata is missing"))?;
+        let offsets = OffsetsIndex::load(
             self.block_read_ctx.operator(),
             &self.read_settings,
             &granule_index.offsets,
             granule_index.granule_rows as usize,
             fuse_part.nums_rows,
             &fuse_part.columns_meta,
-        ) {
-            Ok(index) => index,
-            Err(e) => {
-                debug!(
-                    "[FUSE-READ] granule index load failed for {}, reading whole block: {e}",
-                    fuse_part.location
-                );
-                return Ok(None);
-            }
-        };
-
-        let plans = index.read_plans_for_ranges(
-            &fuse_part.columns_meta,
-            &granule_ranges,
-            fuse_part.nums_rows,
-            self.max_block_size,
-        );
-
-        let mut results = Vec::with_capacity(plans.len());
-        for plan in &plans {
-            let data = self
-                .block_read_ctx
-                .read_columns_data_by_granule_index(&self.read_settings, &fuse_part.location, plan)
-                .await?;
-            results.push(data);
-        }
-        Ok(Some(results))
+        )?;
+        GranuleDataReader::create(
+            &self.block_read_ctx,
+            &self.read_settings,
+            fuse_part,
+            plan,
+            &offsets,
+        )
     }
 
     async fn read_agg_index_data(

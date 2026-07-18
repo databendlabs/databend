@@ -31,6 +31,7 @@ pub use block::BlockReadContext;
 pub use block::BlockReadResult;
 pub use block::BlockReader;
 pub use block::DataItem;
+pub(crate) use block::GranuleDataReader;
 pub use block::RowSelection;
 pub use block::column_chunks_to_record_batch;
 pub use bloom::BloomBlockFilterReader;

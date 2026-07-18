@@ -26,12 +26,14 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
@@ -41,30 +43,48 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
+use super::granule_group::GranuleGroup;
+use super::granule_group::GranuleGroupsReadPlan;
 use super::parquet_data_source::ParquetDataSource;
+use super::read_block_context::ReadBlockContext;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
+use crate::io::BlockReadResult;
 use crate::io::BlockReader;
+use crate::io::GranuleDataReader;
+use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+
+struct ActiveGranuleRead {
+    part: PartInfoPtr,
+    groups: VecDeque<GranuleGroup>,
+    reader: GranuleDataReader,
+}
+
+struct DecodedRange {
+    block: DataBlock,
+    offsets: Option<RoaringTreemap>,
+    start_row: usize,
+}
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
     scan_id: usize,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
+    read_block_context: Arc<ReadBlockContext>,
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    /// Decoded blocks awaiting emission. A plain read enqueues one block; a sparse-granule-index
-    /// narrowed read enqueues one block per `max_block_size`-bounded sub-run.
     output_data: VecDeque<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<ParquetDataSource>,
+    active_granule_read: Option<ActiveGranuleRead>,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -79,9 +99,11 @@ pub struct DeserializeDataTransform {
 unsafe impl Send for DeserializeDataTransform {}
 
 impl DeserializeDataTransform {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
+        read_block_context: Arc<ReadBlockContext>,
         plan: &DataSourcePlan,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -118,6 +140,7 @@ impl DeserializeDataTransform {
             scan_id: plan.scan_id,
             scan_progress,
             block_reader,
+            read_block_context,
             input,
             output,
             output_data: VecDeque::new(),
@@ -125,6 +148,7 @@ impl DeserializeDataTransform {
             output_schema,
             parts: vec![],
             chunks: vec![],
+            active_granule_read: None,
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -132,6 +156,205 @@ impl DeserializeDataTransform {
             prewhere_info,
             read_state: None,
         })))
+    }
+
+    fn ensure_read_state(&mut self) -> Result<()> {
+        if self.read_state.is_none() {
+            self.read_state = Some(ReadState::create(
+                self.ctx.clone(),
+                self.scan_id,
+                self.prewhere_info.as_ref(),
+                self.block_reader.clone(),
+            )?);
+        }
+        Ok(())
+    }
+
+    fn record_block_progress(&self, block: &DataBlock) {
+        self.scan_progress.incr(&ProgressValues {
+            rows: block.num_rows(),
+            bytes: block.memory_size(),
+        });
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, block.memory_size());
+    }
+
+    fn offsets_for_range(
+        start_row: usize,
+        num_rows: usize,
+        bitmap: Option<&Bitmap>,
+    ) -> RoaringTreemap {
+        let mut offsets = RoaringTreemap::new();
+        match bitmap {
+            Some(bitmap) => {
+                for index in 0..bitmap.len() {
+                    if unsafe { bitmap.get_bit_unchecked(index) } {
+                        offsets.insert((start_row + index) as u64);
+                    }
+                }
+            }
+            None => {
+                offsets.insert_range(start_row as u64..(start_row + num_rows) as u64);
+            }
+        }
+        offsets
+    }
+
+    fn decode_normal_range(
+        &mut self,
+        part: &FuseBlockPartInfo,
+        data: BlockReadResult,
+        virtual_data: Option<VirtualBlockReadResult>,
+    ) -> Result<DecodedRange> {
+        self.ensure_read_state()?;
+        let row_range = data.row_range();
+        let num_rows = row_range.map(|range| range.len()).unwrap_or(part.nums_rows);
+        let start_row = row_range.map(|range| range.start).unwrap_or(0);
+        let columns_chunks = data.columns_chunks()?;
+        let (mut block, row_selection, bitmap_selection) = self
+            .read_state
+            .as_ref()
+            .unwrap()
+            .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
+
+        if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+            block = virtual_reader.deserialize_virtual_columns(
+                block,
+                virtual_data,
+                row_selection
+                    .as_ref()
+                    .map(|selection| selection.selection.clone()),
+            )?;
+        }
+
+        block = block.resort(&self.src_schema, &self.output_schema)?;
+        let offsets = match self.block_meta_options.query_internal_columns {
+            false => None,
+            true => match bitmap_selection.as_ref() {
+                Some(bitmap) => Some(Self::offsets_for_range(start_row, num_rows, Some(bitmap))),
+                None if row_range.is_some() => {
+                    Some(Self::offsets_for_range(start_row, num_rows, None))
+                }
+                None => None,
+            },
+        };
+
+        Ok(DecodedRange {
+            block,
+            offsets,
+            start_row,
+        })
+    }
+
+    fn finalize_normal_range(
+        &self,
+        part: &FuseBlockPartInfo,
+        decoded: DecodedRange,
+    ) -> Result<DataBlock> {
+        let offsets = if self.block_meta_options.query_internal_columns {
+            decoded.offsets
+        } else {
+            None
+        };
+        add_data_block_meta(
+            decoded.block,
+            part,
+            offsets,
+            self.base_block_ids.clone(),
+            &self.block_meta_options,
+            decoded.start_row,
+        )
+    }
+
+    fn process_normal(
+        &mut self,
+        part: &PartInfoPtr,
+        results: Vec<BlockReadResult>,
+        virtual_data: Option<VirtualBlockReadResult>,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let mut virtual_data = virtual_data;
+        for data in results {
+            let decoded = self.decode_normal_range(fuse_part, data, virtual_data.take())?;
+            let block = self.finalize_normal_range(fuse_part, decoded)?;
+            self.record_block_progress(&block);
+            self.output_data.push_back(block);
+        }
+        metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        Ok(())
+    }
+
+    fn start_granule_read(&mut self, part: PartInfoPtr, plan: GranuleGroupsReadPlan) -> Result<()> {
+        let reader = self
+            .read_block_context
+            .create_granule_data_reader(&part, &plan)?;
+        self.active_granule_read = Some(ActiveGranuleRead {
+            part,
+            groups: plan.groups.into(),
+            reader,
+        });
+        Ok(())
+    }
+
+    fn process_granule_group(&mut self) -> Result<()> {
+        let mut active = self
+            .active_granule_read
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("missing active granule read"))?;
+        let Some(group) = active.groups.pop_front() else {
+            return Ok(());
+        };
+        let start = Instant::now();
+        let fuse_part = FuseBlockPartInfo::from_part(&active.part)?;
+        let mut decoded_ranges = Vec::with_capacity(group.ranges.len());
+        for expected_range in group.ranges {
+            let range_read = active.reader.read_next()?.ok_or_else(|| {
+                ErrorCode::Internal("granule data reader ended before group was complete")
+            })?;
+            if range_read.range != expected_range {
+                return Err(ErrorCode::Internal("granule read plan is out of sync"));
+            }
+            decoded_ranges.push(self.decode_normal_range(fuse_part, range_read.data, None)?);
+        }
+
+        if self.block_meta_options.update_stream_columns {
+            for decoded in decoded_ranges {
+                let block = self.finalize_normal_range(fuse_part, decoded)?;
+                self.record_block_progress(&block);
+                self.output_data.push_back(block);
+            }
+        } else {
+            let mut offsets = self
+                .block_meta_options
+                .query_internal_columns
+                .then(RoaringTreemap::new);
+            let blocks = decoded_ranges
+                .into_iter()
+                .map(|decoded| {
+                    if let (Some(offsets), Some(range_offsets)) = (&mut offsets, decoded.offsets) {
+                        *offsets |= range_offsets;
+                    }
+                    decoded.block
+                })
+                .collect::<Vec<_>>();
+            let block = DataBlock::concat(&blocks)?;
+            let block = add_data_block_meta(
+                block,
+                fuse_part,
+                offsets,
+                self.base_block_ids.clone(),
+                &self.block_meta_options,
+                0,
+            )?;
+            self.record_block_progress(&block);
+            self.output_data.push_back(block);
+        }
+        metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+
+        if !active.groups.is_empty() {
+            self.active_granule_read = Some(active);
+        }
+        Ok(())
     }
 }
 
@@ -148,6 +371,7 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.active_granule_read = None;
             return Ok(Event::Finished);
         }
 
@@ -161,27 +385,26 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.chunks.is_empty() {
+        if self.active_granule_read.is_some() || !self.chunks.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
-
             return Ok(Event::Sync);
         }
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(source_meta) = data_block.take_meta() {
-                if let Some(source_meta) =
+            if let Some(source_meta) = data_block.take_meta()
+                && let Some(source_meta) =
                     DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
-                {
-                    self.parts = source_meta.meta;
-                    self.chunks = source_meta.data;
-                    return Ok(Event::Sync);
-                }
+            {
+                self.parts = source_meta.meta;
+                self.chunks = source_meta.data;
+                return Ok(Event::Sync);
             }
-
-            unreachable!();
+            return Err(ErrorCode::Internal(
+                "DeserializeDataTransform got wrong meta data",
+            ));
         }
 
         if self.input.is_finished() {
@@ -194,133 +417,29 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        if self.active_granule_read.is_some() {
+            return self.process_granule_group();
+        }
+
         let part = self.parts.pop();
-        let chunks = self.chunks.pop();
-        if let Some((part, read_res)) = part.zip(chunks) {
-            match read_res {
+        let source = self.chunks.pop();
+        if let Some((part, source)) = part.zip(source) {
+            match source {
                 ParquetDataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
-
-                    let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        block.memory_size(),
-                    );
-
+                    self.record_block_progress(&block);
                     self.output_data.push_back(block);
                 }
                 ParquetDataSource::Normal((results, virtual_data)) => {
-                    let start = Instant::now();
-                    let part = FuseBlockPartInfo::from_part(&part)?;
-
-                    if self.read_state.is_none() {
-                        self.read_state = Some(ReadState::create(
-                            self.ctx.clone(),
-                            self.scan_id,
-                            self.prewhere_info.as_ref(),
-                            self.block_reader.clone(),
-                        )?);
-                    }
-
-                    // A narrowed read produces several sub-run results; a plain read has exactly
-                    // one. Virtual columns only ever accompany a single result (narrowing is
-                    // disabled whenever a virtual reader is present), so `virtual_data` is consumed
-                    // by the first (and only) block in that case.
-                    let mut virtual_data = virtual_data;
-                    for data in results {
-                        let num_rows_override = data.num_rows_override();
-                        let block_row_offset = data.block_row_offset();
-                        let columns_chunks = data.columns_chunks()?;
-
-                        let num_rows = num_rows_override.unwrap_or(part.nums_rows);
-                        let (mut data_block, row_selection, bitmap_selection) = self
-                            .read_state
-                            .as_ref()
-                            .unwrap()
-                            .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
-
-                        if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                            data_block = virtual_reader.deserialize_virtual_columns(
-                                data_block,
-                                virtual_data.take(),
-                                row_selection.as_ref().map(|s| s.selection.clone()),
-                            )?;
-                        }
-
-                        let progress_values = ProgressValues {
-                            rows: data_block.num_rows(),
-                            bytes: data_block.memory_size(),
-                        };
-                        self.scan_progress.incr(&progress_values);
-                        Profile::record_usize_profile(
-                            ProfileStatisticsName::ScanBytes,
-                            data_block.memory_size(),
-                        );
-
-                        let mut data_block =
-                            data_block.resort(&self.src_schema, &self.output_schema)?;
-
-                        // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                        // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                        //
-                        // `offsets` carries each surviving row's *block-relative* position so
-                        // position-dependent internal columns (`_row_id`, `_base_row_id`, …) number
-                        // rows correctly. A sparse-granule-index narrowed sub-run starts at
-                        // `block_row_offset`, so that base is added to every position:
-                        //  - with a prewhere filter: surviving sub-block-local bits, shifted by base;
-                        //  - no filter but narrowed (base > 0): the full contiguous run `base..base+n`;
-                        //  - no filter, full-block read (base == 0): `None`, so the reader falls back
-                        //    to `0..num_rows` exactly as before (narrowing stays transparent).
-                        let offsets = if self.block_meta_options.query_internal_columns {
-                            let base = block_row_offset as u64;
-                            match bitmap_selection.as_ref() {
-                                Some(bitmap) => Some(
-                                    RoaringTreemap::from_sorted_iter(
-                                        (0..bitmap.len())
-                                            .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                            .map(|i| i as u64 + base),
-                                    )
-                                    .unwrap(),
-                                ),
-                                None if base > 0 => Some(
-                                    RoaringTreemap::from_sorted_iter(
-                                        (0..data_block.num_rows() as u64).map(|i| i + base),
-                                    )
-                                    .unwrap(),
-                                ),
-                                None => None,
-                            }
-                        } else {
-                            None
-                        };
-
-                        data_block = add_data_block_meta(
-                            data_block,
-                            part,
-                            offsets,
-                            self.base_block_ids.clone(),
-                            &self.block_meta_options,
-                            block_row_offset,
-                        )?;
-
-                        self.output_data.push_back(data_block);
-                    }
-
-                    // Perf.
-                    {
-                        metrics_inc_remote_io_deserialize_milliseconds(
-                            start.elapsed().as_millis() as u64
-                        );
-                    }
+                    self.process_normal(&part, results, virtual_data)?;
+                }
+                ParquetDataSource::Granule(plan) => {
+                    self.start_granule_read(part, plan)?;
+                    self.process_granule_group()?;
                 }
             }
         }
-
         Ok(())
     }
 }

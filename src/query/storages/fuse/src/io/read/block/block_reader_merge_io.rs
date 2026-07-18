@@ -37,11 +37,7 @@ pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
     pub(crate) cached_column_data: CachedColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
-    /// When the read was narrowed to a contiguous run of sparse-granule-index granules, the number of
-    /// rows those granules contain (fewer than the block's total). `None` for a full-block read.
-    /// The deserializer uses this to size the decoded batch and the prewhere filter bitmap.
-    num_rows_override: Option<usize>,
-    block_row_offset: usize,
+    row_range: Option<std::ops::Range<usize>>,
 }
 
 impl BlockReadResult {
@@ -54,32 +50,24 @@ impl BlockReadResult {
             merge_io_result,
             cached_column_data,
             cached_column_array,
-            num_rows_override: None,
-            block_row_offset: 0,
+            row_range: None,
         }
     }
 
-    pub fn create_with_num_rows(
+    pub fn create_with_row_range(
         merge_io_result: MergeIOReadResult,
-        num_rows: usize,
-        block_row_offset: usize,
+        row_range: std::ops::Range<usize>,
     ) -> BlockReadResult {
         BlockReadResult {
             merge_io_result,
             cached_column_data: vec![],
             cached_column_array: vec![],
-            num_rows_override: Some(num_rows),
-            block_row_offset,
+            row_range: Some(row_range),
         }
     }
 
-    /// Number of rows the narrowed read covers, when sparse-granule-index skipping applied.
-    pub fn num_rows_override(&self) -> Option<usize> {
-        self.num_rows_override
-    }
-
-    pub fn block_row_offset(&self) -> usize {
-        self.block_row_offset
+    pub fn row_range(&self) -> Option<&std::ops::Range<usize>> {
+        self.row_range.as_ref()
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {

@@ -18,13 +18,12 @@ use databend_common_expression::BlockMetaInfo;
 use crate::io::BlockReadResult;
 use crate::io::VirtualBlockReadResult;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+use crate::operations::read::granule_group::GranuleGroupsReadPlan;
 
-pub enum ParquetDataSource {
+pub(crate) enum ParquetDataSource {
     AggIndex((PartInfoPtr, BlockReadResult)),
-    /// Normal block read. Carries one `BlockReadResult` per emitted `DataBlock`: a plain full-block
-    /// read has a single element, while a sparse-granule-index narrowed read splits the surviving
-    /// granules into several `max_block_size`-bounded sub-runs, one `BlockReadResult` each.
     Normal((Vec<BlockReadResult>, Option<VirtualBlockReadResult>)),
+    Granule(GranuleGroupsReadPlan),
 }
 
 #[typetag::serde(name = "fuse_data_source")]

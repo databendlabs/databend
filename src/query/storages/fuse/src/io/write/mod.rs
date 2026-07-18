@@ -36,7 +36,6 @@ pub use block_writer::write_data;
 pub use bloom_index_writer::BloomIndexRebuilder;
 pub use bloom_index_writer::BloomIndexState;
 pub(crate) use granule_index_writer::BlockReadPlan;
-pub(crate) use granule_index_writer::ColumnReadPlan;
 pub(crate) use granule_index_writer::GranuleIndexState;
 pub(crate) use granule_index_writer::GranuleIndexWriter;
 pub use granule_index_writer::GranulePruningReadContext;

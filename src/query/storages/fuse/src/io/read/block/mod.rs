@@ -17,11 +17,13 @@ mod block_reader_deserialize;
 pub mod block_reader_merge_io;
 mod block_reader_merge_io_async;
 mod block_reader_parquet_deserialize;
+mod granule_data_reader;
 pub mod parquet;
 
 pub use block_reader::BlockReadContext;
 pub use block_reader::BlockReader;
 pub use block_reader_merge_io::BlockReadResult;
 pub use block_reader_merge_io::DataItem;
+pub(crate) use granule_data_reader::GranuleDataReader;
 pub use parquet::RowSelection;
 pub use parquet::column_chunks_to_record_batch;
