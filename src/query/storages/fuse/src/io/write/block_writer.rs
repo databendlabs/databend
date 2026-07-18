@@ -321,7 +321,7 @@ impl BlockBuilder {
             data: buffer,
             col_metas,
             granule_index_state,
-        } = block_writer.finish(mins_location, offsets_location)?;
+        } = block_writer.finish(mins_location, offsets_location, &self.operator)?;
 
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
@@ -417,7 +417,6 @@ impl BlockWriter {
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
-        Self::write_down_granule_index_state(dal, serialized.granule_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
@@ -490,20 +489,6 @@ impl BlockWriter {
             metrics_inc_block_spatial_index_write_nums(1);
             metrics_inc_block_spatial_index_write_bytes(index_size);
             metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        Ok(())
-    }
-
-    pub async fn write_down_granule_index_state(
-        dal: &Operator,
-        granule_index_state: Option<GranuleIndexState>,
-    ) -> Result<()> {
-        if let Some(granule_index_state) = granule_index_state {
-            if let Some(mins) = granule_index_state.mins {
-                write_data(mins.data, dal, &mins.layout.location.0).await?;
-            }
-            let offsets = granule_index_state.offsets;
-            write_data(offsets.data, dal, &offsets.layout.location.0).await?;
         }
         Ok(())
     }

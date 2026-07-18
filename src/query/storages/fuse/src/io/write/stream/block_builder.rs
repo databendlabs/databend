@@ -371,7 +371,7 @@ impl StreamBlockBuilder {
             col_metas,
             granule_index_state,
         } = match self.block_writer.take() {
-            Some(w) => w.finish(mins_location, offsets_location)?,
+            Some(w) => w.finish(mins_location, offsets_location, &self.properties.operator)?,
             // Empty builder: no block was ever written.
             None => FuseBlockOutput {
                 data: Buffer::new(),

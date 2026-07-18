@@ -31,6 +31,7 @@ use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Buffer;
+use opendal::Operator;
 use parquet::file::properties::WriterPropertiesPtr;
 
 use crate::io::granule_index::GranuleIndexBuildOutput;
@@ -210,6 +211,7 @@ impl FuseBlockWriter {
         mut self,
         mins_location: Location,
         offsets_location: Location,
+        dal: &Operator,
     ) -> Result<FuseBlockOutput> {
         let granule = self.granule.take();
         let serialized = self.inner.finish()?;
@@ -241,6 +243,7 @@ impl FuseBlockWriter {
                     mins_location,
                     offsets_location,
                     output.marks,
+                    dal,
                 )?)
             }
             None => None,
@@ -300,10 +303,14 @@ mod tests {
             )]))
             .unwrap();
 
+        let dal = opendal::Operator::new(opendal::services::Memory::default())
+            .unwrap()
+            .finish();
         let output = writer
             .finish(
                 ("unused-mins".to_string(), 0),
                 ("unused-offsets".to_string(), 0),
+                &dal,
             )
             .unwrap();
 

@@ -32,6 +32,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_blocks::LeafPageLayout;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_io::BlockingOperatorWriter;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BytesRange;
@@ -60,19 +61,21 @@ pub struct GranuleIndexFileState {
     pub layout: GranuleIndexFileLayout,
 }
 
+/// After the refactor, granule index data is written inline via `BlockingOperatorWriter`
+/// during sync `process()`. This struct only retains the layout metadata.
 #[derive(Debug, Clone)]
 pub struct GranuleIndexState {
     pub granule_rows: u32,
-    pub mins: Option<GranuleIndexFileState>,
-    pub offsets: GranuleIndexFileState,
+    pub mins_layout: Option<GranuleIndexFileLayout>,
+    pub offsets_layout: GranuleIndexFileLayout,
 }
 
 impl GranuleIndexState {
     pub fn layout(&self) -> GranuleIndexLayout {
         GranuleIndexLayout {
             granule_rows: self.granule_rows,
-            mins: self.mins.as_ref().map(|f| f.layout.clone()),
-            offsets: self.offsets.layout.clone(),
+            mins: self.mins_layout.clone(),
+            offsets: self.offsets_layout.clone(),
         }
     }
 }
@@ -106,6 +109,7 @@ impl GranuleIndexWriter {
         mins_location: Location,
         offsets_location: Location,
         extra_marks: Vec<GranuleMark>,
+        dal: &Operator,
     ) -> Result<GranuleIndexState> {
         let granule_rows = u32::try_from(self.granule_rows).map_err(|_| {
             ErrorCode::Internal(format!(
@@ -150,9 +154,10 @@ impl GranuleIndexWriter {
             offset_marks.push(GranuleMark::create(&name, offsets));
         }
         offset_marks.extend(extra_marks);
-        let offsets = serialize_marks(offset_marks, num_granules, offsets_location)?;
+        let offsets_layout =
+            serialize_and_write_marks(offset_marks, num_granules, offsets_location, dal)?;
 
-        let mins = if has_mins {
+        let mins_layout = if has_mins {
             let columns = build_min_columns(granule_mins, cluster_key_types)?;
             let fields = cluster_key_types
                 .iter()
@@ -165,11 +170,12 @@ impl GranuleIndexWriter {
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Some(serialize_columns(
+            Some(serialize_and_write_columns(
                 fields,
                 columns,
                 num_granules,
                 mins_location,
+                dal,
             )?)
         } else {
             None
@@ -181,8 +187,8 @@ impl GranuleIndexWriter {
 
         Ok(GranuleIndexState {
             granule_rows,
-            mins,
-            offsets,
+            mins_layout,
+            offsets_layout,
         })
     }
 
@@ -204,6 +210,40 @@ impl GranuleIndexWriter {
         }
         Ok(offsets)
     }
+}
+
+fn serialize_and_write_marks(
+    marks: Vec<GranuleMark>,
+    num_granules: usize,
+    location: Location,
+    dal: &Operator,
+) -> Result<GranuleIndexFileLayout> {
+    let state = serialize_marks(marks, num_granules, location)?;
+    write_file_state(&state, dal)?;
+    Ok(state.layout)
+}
+
+fn serialize_and_write_columns(
+    fields: Vec<TableField>,
+    columns: Vec<Column>,
+    num_granules: usize,
+    location: Location,
+    dal: &Operator,
+) -> Result<GranuleIndexFileLayout> {
+    let state = serialize_columns(fields, columns, num_granules, location)?;
+    write_file_state(&state, dal)?;
+    Ok(state.layout)
+}
+
+fn write_file_state(state: &GranuleIndexFileState, dal: &Operator) -> Result<()> {
+    use std::io::Write;
+    let mut writer =
+        BlockingOperatorWriter::create(dal.clone(), state.layout.location.0.clone(), 2);
+    writer
+        .write_all(&state.data.to_bytes())
+        .map_err(|e| ErrorCode::Internal(format!("granule index blocking write failed: {e}")))?;
+    writer.close()?;
+    Ok(())
 }
 
 fn serialize_marks(
@@ -640,20 +680,6 @@ mod tests {
         }
     }
 
-    async fn persist(op: &Operator, state: &GranuleIndexState) {
-        if let Some(mins) = &state.mins {
-            op.write(&mins.layout.location.0, mins.data.to_bytes())
-                .await
-                .unwrap();
-        }
-        op.write(
-            &state.offsets.layout.location.0,
-            state.offsets.data.to_bytes(),
-        )
-        .await
-        .unwrap();
-    }
-
     #[tokio::test]
     async fn test_two_file_roundtrip() {
         crate::test_utils::init_test_globals().unwrap();
@@ -668,6 +694,7 @@ mod tests {
             Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(200))]),
         ];
 
+        let op = Operator::new(Memory::default()).unwrap().finish();
         let builder = GranuleIndexWriter::new(Some(42), granule_rows, vec![7, 9]);
         let state = builder
             .build_with_extra_marks(
@@ -678,11 +705,10 @@ mod tests {
                 ("mins.parquet".to_string(), 0),
                 ("offs.parquet".to_string(), 0),
                 vec![],
+                &op,
             )
             .unwrap();
 
-        let op = Operator::new(Memory::default()).unwrap().finish();
-        persist(&op, &state).await;
         let settings = test_settings();
         let layout = state.layout();
 
@@ -735,6 +761,7 @@ mod tests {
             Scalar::Tuple(vec![Scalar::Number(NumberScalar::Int64(100))]),
         ];
         let element_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let op = Operator::new(Memory::default()).unwrap().finish();
         let state = GranuleIndexWriter::new(Some(42), 100, vec![7])
             .build_with_extra_marks(
                 &[layout(None, 1000, &[(0, 100), (100, 260)])],
@@ -744,11 +771,10 @@ mod tests {
                 ("mins.parquet".to_string(), 0),
                 ("offs.parquet".to_string(), 0),
                 vec![],
+                &op,
             )
             .unwrap();
 
-        let op = Operator::new(Memory::default()).unwrap().finish();
-        persist(&op, &state).await;
         let mins = load_granule_mins(
             &op,
             &test_settings(),
@@ -762,6 +788,8 @@ mod tests {
 
     #[test]
     fn test_rejects_granule_rows_above_metadata_limit() {
+        crate::test_utils::init_test_globals().unwrap();
+        let op = Operator::new(Memory::default()).unwrap().finish();
         let error = GranuleIndexWriter::new(None, u32::MAX as usize + 1, vec![7])
             .build_with_extra_marks(
                 &[],
@@ -771,6 +799,7 @@ mod tests {
                 ("mins".to_string(), 0),
                 ("offsets".to_string(), 0),
                 vec![],
+                &op,
             )
             .unwrap_err();
         assert!(error.message().contains("exceed metadata limit"));
@@ -778,6 +807,8 @@ mod tests {
 
     #[test]
     fn test_offset_only_granule_count_is_not_page_count() {
+        crate::test_utils::init_test_globals().unwrap();
+        let op = Operator::new(Memory::default()).unwrap().finish();
         let state = GranuleIndexWriter::new(None, 100, vec![7])
             .build_with_extra_marks(
                 &[layout(None, 1000, &[(0, 100), (50, 180)])],
@@ -787,6 +818,7 @@ mod tests {
                 ("mins".to_string(), 0),
                 ("offsets".to_string(), 0),
                 vec![],
+                &op,
             )
             .unwrap();
         assert_eq!(state.granule_rows, 100);
@@ -806,9 +838,9 @@ mod tests {
                 ("mins".to_string(), 0),
                 ("offsets".to_string(), 0),
                 vec![],
+                &op,
             )
             .unwrap();
-        persist(&op, &state).await;
 
         let mut col_metas = HashMap::new();
         col_metas.insert(
@@ -827,7 +859,7 @@ mod tests {
                 num_values: 200,
             }),
         );
-        let err = OffsetsIndex::load(&op, &settings, &state.offsets.layout, 100, 200, &col_metas)
+        let err = OffsetsIndex::load(&op, &settings, &state.layout().offsets, 100, 200, &col_metas)
             .err()
             .unwrap();
         assert!(err.message().contains("g_9"), "{err}");
