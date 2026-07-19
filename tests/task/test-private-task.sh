@@ -706,6 +706,26 @@ else
     exit 1
 fi
 
+actual_child_success_count=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name IN ('fanout_child_a', 'fanout_child_b', 'fanout_child_c') AND state = 'SUCCEEDED' AND completed_at IS NOT NULL")
+    check_response_error "$response"
+    actual_child_success_count=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual_child_success_count" = "3" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual_child_success_count" = "3" ]; then
+    echo "✅ Private task fan-out child runs are terminal"
+else
+    echo "❌ Expected all private task fan-out child runs to be terminal"
+    echo "Expected: 3"
+    echo "Actual  : $actual_child_success_count"
+    exit 1
+fi
+
 response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'SKIPPED', error_code = 0, error_message = 'OVERLAPPING_EXECUTION: test', completed_at = to_timestamp(4102444800) WHERE task_name = 'fanout_root'")
 check_response_error "$response"
 
