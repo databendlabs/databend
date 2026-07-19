@@ -8436,21 +8436,21 @@ dependencies = [
 
 [[package]]
 name = "geojson"
-version = "0.24.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5d728c1df1fbf328d74151efe6cb0586f79ee813346ea981add69bd22c9241b"
+checksum = "510c094bfc76ea34d02eee00833254945b70491d79a9c0b050abed6eaa799ffb"
 dependencies = [
  "log",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
+ "tinyvec",
 ]
 
 [[package]]
 name = "geozero"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db5eda63aa99ac06160fd53328ed75c34f14e3196d3f56a3649e247ed796e54b"
+version = "0.14.0"
+source = "git+https://github.com/georust/geozero.git?rev=bda4d03#bda4d03ff5005f0dde3b666e74eb25ab97fce46c"
 dependencies = [
  "geo-types",
  "geojson",
@@ -17872,10 +17872,11 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.9.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71"
+checksum = "bb4ebadaa0af04fab11ae01eb5f9fdb5f9c5b875506e210e71c07873528baa7f"
 dependencies = [
+ "serde_core",
  "tinyvec_macros",
 ]
 
