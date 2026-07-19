@@ -356,6 +356,48 @@ select c from s_t_settings order by c;
 2
 3
 
+##########################################################
+# consume a stale stream through several snapshot batches #
+##########################################################
+
+statement ok
+create table t_forward_batch (c int);
+
+statement ok
+create stream s_forward_batch on table t_forward_batch append_only = true;
+
+statement ok
+insert into t_forward_batch values (1);
+
+statement ok
+insert into t_forward_batch values (2);
+
+statement ok
+insert into t_forward_batch values (3);
+
+statement ok
+insert into t_forward_batch values (4);
+
+statement ok
+insert into t_forward_batch values (5);
+
+query I
+select c from s_forward_batch with (consume = true, max_batch_size = 2) order by c;
+----
+1
+2
+
+query I
+select c from s_forward_batch with (consume = true, max_batch_size = 2) order by c;
+----
+3
+4
+
+query I
+select c from s_forward_batch order by c;
+----
+5
+
 
 statement ok
 DROP STREAM s;
