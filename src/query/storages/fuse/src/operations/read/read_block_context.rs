@@ -190,11 +190,10 @@ pub(crate) async fn read_parquet_page_range_data(
     read_settings: &ReadSettings,
     part: &FuseBlockPartInfo,
 ) -> Result<Option<DataBlock>> {
-    let page_cache_key = block_reader.page_range_data_cache_key(part);
-    if let Some(data_block) = page_cache_key
-        .as_deref()
-        .and_then(|key| block_reader.cached_page_range_data(key))
-    {
+    let Some(page_cache_key) = block_reader.page_range_data_cache_key(part) else {
+        return Ok(None);
+    };
+    if let Some(data_block) = block_reader.cached_page_range_data(&page_cache_key) {
         return Ok(Some(data_block));
     }
 
@@ -267,10 +266,9 @@ pub(crate) async fn read_parquet_page_range_data(
     debug_assert!(reader.next().is_none());
 
     let data_block = block_reader.deserialize_parquet_record_batch(part, &record_batch)?;
-    Ok(Some(match page_cache_key {
-        Some(key) => block_reader.cache_page_range_data(key, data_block),
-        None => data_block,
-    }))
+    Ok(Some(
+        block_reader.cache_page_range_data(page_cache_key, data_block),
+    ))
 }
 
 async fn parquet_metadata_with_offset_indexes(

@@ -510,24 +510,34 @@ impl ParquetRowsFetcher {
 }
 
 fn projection_cache_prefix(table: &FuseTable, projection: &Projection) -> String {
+    let table_ident = table.get_table_info().ident;
     metadata_cache_prefix(
         &table.get_operator_ref().info().root(),
+        table_ident.table_id,
+        table_ident.seq,
         &table.query_result_cache_id(),
+        table.get_option(FUSE_OPT_KEY_DATA_PAGE_ROWS, 0usize),
         projection,
     )
 }
 
 fn metadata_cache_prefix(
     operator_root: &str,
+    table_id: u64,
+    table_seq: u64,
     snapshot_cache_id: &str,
+    data_page_rows: usize,
     projection: &Projection,
 ) -> String {
     let mut key = format!(
-        "row-fetch-meta-v2|{}:{}|{}:{}|",
+        "row-fetch-meta-v3|{}:{}|{}|{}|{}:{}|{}|",
         operator_root.len(),
         operator_root,
+        table_id,
+        table_seq,
         snapshot_cache_id.len(),
         snapshot_cache_id,
+        data_page_rows,
     );
     match projection {
         Projection::Columns(indices) => {
@@ -672,19 +682,31 @@ mod tests {
     #[test]
     fn test_metadata_cache_prefix_isolates_storage_and_snapshot() {
         let projection = Projection::Columns(vec![1, 3]);
-        let base = metadata_cache_prefix("root-a", "snapshot-a", &projection);
+        let base = metadata_cache_prefix("root-a", 1, 2, "snapshot-a", 100, &projection);
 
         assert_ne!(
             base,
-            metadata_cache_prefix("root-b", "snapshot-a", &projection)
+            metadata_cache_prefix("root-b", 1, 2, "snapshot-a", 100, &projection)
         );
         assert_ne!(
             base,
-            metadata_cache_prefix("root-a", "snapshot-b", &projection)
+            metadata_cache_prefix("root-a", 1, 2, "snapshot-b", 100, &projection)
         );
         assert_ne!(
-            metadata_cache_prefix("ab", "c", &projection),
-            metadata_cache_prefix("a", "bc", &projection)
+            base,
+            metadata_cache_prefix("root-a", 2, 2, "snapshot-a", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 1, 3, "snapshot-a", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 1, 2, "snapshot-a", 200, &projection)
+        );
+        assert_ne!(
+            metadata_cache_prefix("ab", 1, 2, "c", 100, &projection),
+            metadata_cache_prefix("a", 1, 2, "bc", 100, &projection)
         );
     }
 
