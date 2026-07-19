@@ -97,6 +97,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
     r
 });
 

@@ -48,7 +48,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
-use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -82,7 +81,6 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
-    set_hilbert_level: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
@@ -190,17 +188,7 @@ impl TableMutationAggregator {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let cluster_type = table.cluster_type();
-        let set_hilbert_level = cluster_type.is_some_and(|v| matches!(v, ClusterType::Hilbert))
-            && matches!(
-                kind,
-                MutationKind::Delete
-                    | MutationKind::MergeInto
-                    | MutationKind::Replace
-                    | MutationKind::Recluster
-            );
-        let fill_missing_cluster_stats =
-            cluster_type.is_some_and(|v| matches!(v, ClusterType::Linear));
+        let fill_missing_cluster_stats = table.cluster_key_meta().is_some();
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
         let cluster_key_exprs = if fill_missing_cluster_stats {
@@ -228,7 +216,6 @@ impl TableMutationAggregator {
         };
         TableMutationAggregator {
             ctx,
-            set_hilbert_level,
             mutations: HashMap::new(),
             extended_mutations: HashMap::new(),
             appended_segments: vec![],
@@ -369,7 +356,6 @@ impl TableMutationAggregator {
         let segments_num =
             (merged_blocks.len() / self.write_segment_ctx.thresholds.block_per_segment).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
-        let set_hilbert_level = self.set_hilbert_level;
         for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
             let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
                 chunk.unzip();
@@ -385,10 +371,7 @@ impl TableMutationAggregator {
             let all_perfect = new_blocks.len() > 1;
 
             let ctx = self.write_segment_ctx.clone();
-            tasks.push(async move {
-                ctx.write_segment(new_blocks, new_hlls, all_perfect, set_hilbert_level)
-                    .await
-            });
+            tasks.push(async move { ctx.write_segment(new_blocks, new_hlls, all_perfect).await });
         }
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
@@ -498,7 +481,6 @@ impl TableMutationAggregator {
         &mut self,
         segment_indices: Vec<usize>,
     ) -> Result<Vec<SegmentLite>> {
-        let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
@@ -507,7 +489,6 @@ impl TableMutationAggregator {
 
             tasks.push(async move {
                 let mut all_perfect = false;
-                let mut set_level = false;
                 let (new_blocks, new_hlls, origin_summary) = if let Some(loc) = location {
                     // read the old segment
                     let compact_segment_info = SegmentsIO::read_compact_segment(
@@ -556,14 +537,6 @@ impl TableMutationAggregator {
 
                     // assign back the mutated blocks to segment
                     let (new_blocks, new_hlls) = block_editor.into_values().unzip();
-                    set_level = set_hilbert_level
-                        && segment_info
-                            .summary
-                            .cluster_stats
-                            .as_ref()
-                            .is_some_and(|v| {
-                                v.cluster_key_id == write_segment_ctx.default_cluster_key.unwrap()
-                            });
                     let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, Some(segment_info.summary))
                 } else {
@@ -583,7 +556,7 @@ impl TableMutationAggregator {
                 };
 
                 let new_segment_info = write_segment_ctx
-                    .write_segment(new_blocks, new_hlls, all_perfect, set_level)
+                    .write_segment(new_blocks, new_hlls, all_perfect)
                     .await?;
 
                 Ok(SegmentLite {
@@ -839,7 +812,6 @@ impl WriteSegmentCtx {
         blocks: Vec<Arc<BlockMeta>>,
         stats: Option<Vec<u8>>,
         all_perfect: bool,
-        set_hilbert_level: bool,
     ) -> Result<(String, Statistics)> {
         let location = self
             .location_gen
@@ -856,26 +828,7 @@ impl WriteSegmentCtx {
                 new_summary.perfect_block_count = new_summary.block_count;
             }
         }
-        if set_hilbert_level {
-            debug_assert!(new_summary.cluster_stats.is_none());
-            let level = if self.thresholds.check_perfect_segment(
-                new_summary.block_count as usize,
-                new_summary.row_count as usize,
-                new_summary.uncompressed_byte_size as usize,
-                new_summary.compressed_byte_size as usize,
-            ) {
-                -1
-            } else {
-                0
-            };
-            new_summary.cluster_stats = Some(ClusterStatistics {
-                cluster_key_id: self.default_cluster_key.unwrap(),
-                min: vec![],
-                max: vec![],
-                level,
-                pages: None,
-            });
-        } else if self.fill_missing_cluster_stats {
+        if self.fill_missing_cluster_stats {
             // Mutation paths may produce a new segment whose blocks do not all carry
             // block-level cluster_stats for the current cluster key yet. In that case
             // reduce_block_metas() leaves summary.cluster_stats empty. Reconstruct a

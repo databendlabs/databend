@@ -186,25 +186,13 @@ fn deterministic_prune_cache_key(
 }
 
 impl FuseTable {
-    async fn read_snapshot_info(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-    ) -> Result<Option<SnapshotReadInfo>> {
+    async fn read_snapshot_info(&self) -> Result<Option<SnapshotReadInfo>> {
         let snapshot = self.read_table_snapshot().await?;
         let Some(snapshot) = snapshot else {
             return Ok(None);
         };
 
-        // To optimize the Hilbert clustering logic, it is necessary to pre-set the selected segments.
-        // Since the recluster logic requires scanning the table twice, fetching the segments directly
-        // can avoid redundant selection logic and ensure that the same data is accessed during both scans.
-        // TODO(zhyass): refactor if necessary.
-        let selected_segment = ctx.selected_segment_locations().list();
-        let segment_locations = if !selected_segment.is_empty() {
-            selected_segment
-        } else {
-            snapshot.segments.clone()
-        };
+        let segment_locations = snapshot.segments.clone();
         let snapshot_location = self
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -253,7 +241,7 @@ impl FuseTable {
                 .map(|(statistics, partitions)| (statistics, partitions, None));
         }
 
-        let read_info = self.read_snapshot_info(&ctx).await?;
+        let read_info = self.read_snapshot_info().await?;
 
         info!(
             "Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::atomic;
-use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -24,17 +22,13 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
-use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
@@ -42,11 +36,9 @@ use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
-use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -54,10 +46,6 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::CompactStrategy;
-use crate::pipelines::processors::transforms::HilbertPartitionExchange;
-use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 
@@ -285,112 +273,5 @@ impl IPhysicalPlan for Recluster {
                 "A node can only execute one recluster task".to_string(),
             )),
         }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct HilbertPartition {
-    pub meta: PhysicalPlanMeta,
-    pub input: PhysicalPlan,
-    pub table_info: TableInfo,
-    pub num_partitions: usize,
-    pub table_meta_timestamps: TableMetaTimestamps,
-    pub rows_per_block: usize,
-}
-
-#[typetag::serde]
-impl IPhysicalPlan for HilbertPartition {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn get_meta(&self) -> &PhysicalPlanMeta {
-        &self.meta
-    }
-
-    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
-        &mut self.meta
-    }
-
-    #[recursive::recursive]
-    fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
-
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
-        Box::new(std::iter::once(&self.input))
-    }
-
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
-        Box::new(std::iter::once(&mut self.input))
-    }
-
-    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        assert_eq!(children.len(), 1);
-        let input = children.pop().unwrap();
-        PhysicalPlan::new(HilbertPartition {
-            meta: self.meta.clone(),
-            input,
-            table_info: self.table_info.clone(),
-            num_partitions: self.num_partitions,
-            table_meta_timestamps: self.table_meta_timestamps,
-            rows_per_block: self.rows_per_block,
-        })
-    }
-
-    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        self.input.build_pipeline(builder)?;
-
-        let num_processors = builder.main_pipeline.output_len();
-        let table = builder
-            .ctx
-            .build_table_by_table_info(&self.table_info, None)?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-
-        builder.main_pipeline.exchange(
-            num_processors,
-            HilbertPartitionExchange::create(self.num_partitions),
-        )?;
-
-        let settings = builder.settings.clone();
-
-        let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
-        let processor_id = AtomicUsize::new(0);
-        let max_bytes_per_block = std::cmp::min(
-            4 * table.get_option(
-                FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-                DEFAULT_BLOCK_BUFFER_SIZE,
-            ),
-            400 * 1024 * 1024,
-        );
-        builder.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Box::new(
-                TransformWindowPartitionCollect::new(
-                    builder.ctx.clone(),
-                    input,
-                    output,
-                    &settings,
-                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                    num_processors,
-                    self.num_partitions,
-                    window_spill_settings.clone(),
-                    CompactStrategy::new(self.rows_per_block, max_bytes_per_block),
-                )?,
-            )))
-        })?;
-
-        builder
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                let proc = TransformSerializeBlock::try_create(
-                    builder.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    table,
-                    ClusterStatsGenerator::default(),
-                    MutationKind::Recluster,
-                    self.table_meta_timestamps,
-                )?;
-                proc.into_processor()
-            })
     }
 }

@@ -506,7 +506,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
                     cluster_key_meta,
-                    self.table.cluster_type(),
                     previous,
                     self.ctx.txn_mgr(),
                     self.table_meta_timestamps,

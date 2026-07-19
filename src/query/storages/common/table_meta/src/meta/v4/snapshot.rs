@@ -109,7 +109,6 @@ impl TableSnapshot {
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -150,6 +149,7 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        let cluster_type = cluster_key_meta.as_ref().map(|_| ClusterType::Linear);
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -170,15 +170,22 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
+        let mut summary = previous.summary.clone();
+        let cluster_key_meta = match previous.cluster_type {
+            Some(ClusterType::Hilbert) => {
+                summary.cluster_stats = None;
+                None
+            }
+            _ => previous.cluster_key_meta.clone(),
+        };
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::try_new(
             prev_table_seq,
             Some(previous.clone()),
             previous.schema.clone(),
-            previous.summary.clone(),
+            summary,
             previous.segments.clone(),
-            previous.cluster_key_meta.clone(),
-            previous.cluster_type,
+            cluster_key_meta,
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
@@ -278,6 +285,45 @@ fn ensure_segments_unique(segments: &[Location]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableSchema;
+
+    use super::*;
+    use crate::meta::ClusterStatistics;
+
+    #[test]
+    fn test_try_from_previous_drops_legacy_hilbert_cluster_metadata() {
+        let mut previous = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+        previous.cluster_key_meta = Some((1, "(a, b)".to_string()));
+        previous.cluster_type = Some(ClusterType::Hilbert);
+        previous.summary.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0, None));
+
+        let snapshot = TableSnapshot::try_from_previous(
+            Arc::new(previous),
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.cluster_key_meta, None);
+        assert_eq!(snapshot.cluster_type, None);
+        assert_eq!(snapshot.summary.cluster_stats, None);
+    }
 }
 
 // use the chain of converters, for versions before v3

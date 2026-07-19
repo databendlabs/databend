@@ -23,7 +23,6 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
@@ -49,7 +48,6 @@ pub trait SnapshotGenerator {
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         previous: Option<Arc<TableSnapshot>>,
         txn_mgr: TxnManagerRef,
         table_meta_timestamps: TableMetaTimestamps,
@@ -58,7 +56,6 @@ pub trait SnapshotGenerator {
         let mut snapshot = self.do_generate_new_snapshot(
             table_info,
             cluster_key_meta,
-            cluster_type,
             &previous,
             table_meta_timestamps,
             table_stats_gen,
@@ -71,7 +68,6 @@ pub trait SnapshotGenerator {
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,

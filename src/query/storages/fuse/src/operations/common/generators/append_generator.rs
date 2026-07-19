@@ -31,7 +31,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 
 use crate::operations::common::ConflictResolveContext;
@@ -125,7 +124,6 @@ impl SnapshotGenerator for AppendGenerator {
         &self,
         table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
@@ -220,7 +218,6 @@ impl SnapshotGenerator for AppendGenerator {
             new_summary,
             new_segments,
             cluster_key_meta,
-            cluster_type,
             table_statistics_location,
             table_meta_timestamps,
         )

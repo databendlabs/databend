@@ -43,8 +43,6 @@ pub enum Feature {
     AttacheTable,
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
-    #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
-    HilbertClustering,
     #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
     SystemManagement,
     #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
@@ -83,7 +81,6 @@ impl fmt::Display for Feature {
             Feature::AttacheTable => write!(f, "attach_table"),
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
-            Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::PrivateTask => write!(f, "private_task"),
@@ -229,11 +226,6 @@ mod tests {
         );
 
         assert_eq!(
-            Feature::HilbertClustering,
-            serde_json::from_str::<Feature>("\"hilbert_clustering\"").unwrap()
-        );
-
-        assert_eq!(
             Feature::WorkloadGroup,
             serde_json::from_str::<Feature>("\"workload_group\"").unwrap()
         );
@@ -281,7 +273,6 @@ mod tests {
                 Feature::TableRef,
                 Feature::AttacheTable,
                 Feature::AmendTable,
-                Feature::HilbertClustering,
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
                 Feature::PrivateTask,
@@ -290,7 +281,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
             license_info.to_string()
         );
     }
@@ -309,7 +300,6 @@ mod tests {
             Feature::TableRef,
             Feature::AttacheTable,
             Feature::AmendTable,
-            Feature::HilbertClustering,
             Feature::WorkloadGroup,
             Feature::SystemHistory,
             Feature::PrivateTask,

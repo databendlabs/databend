@@ -5532,18 +5532,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-hilbert-clustering"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-storages-common-table-meta",
-]
-
-[[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
 
@@ -5562,15 +5550,11 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-io",
  "databend-common-license",
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-store",
- "databend-common-metrics",
- "databend-common-pipeline",
- "databend-common-pipeline-transforms",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
@@ -5580,7 +5564,6 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
- "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
@@ -6424,7 +6407,6 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
- "databend-enterprise-hilbert-clustering",
  "databend-enterprise-query",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",

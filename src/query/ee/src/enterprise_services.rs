@@ -20,7 +20,6 @@ use databend_query::sessions::BuildInfoRef;
 use crate::attach_table::RealAttachTableHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
-use crate::hilbert_clustering::RealHilbertClusteringHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::resource_management::init_resources_management;
 use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
@@ -43,7 +42,6 @@ impl EnterpriseServices {
         RealAttachTableHandler::init()?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg, version).await?;
-        RealHilbertClusteringHandler::init()?;
         Ok(())
     }
 }

@@ -29,7 +29,6 @@ use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_schedul
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
 use log::info;
 use log::warn;
@@ -66,7 +65,7 @@ impl FuseTable {
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
-        if self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
+        if self.cluster_key_meta().is_none() {
             return Ok(None);
         }
 

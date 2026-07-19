@@ -56,7 +56,6 @@ use super::aggregate_quantile_tdigest::aggregate_median_tdigest_function_desc;
 use super::aggregate_quantile_tdigest::aggregate_quantile_tdigest_function_desc;
 use super::aggregate_quantile_tdigest_weighted::aggregate_median_tdigest_weighted_function_desc;
 use super::aggregate_quantile_tdigest_weighted::aggregate_quantile_tdigest_weighted_function_desc;
-use super::aggregate_range_bound::aggregate_range_bound_function_desc;
 use super::aggregate_retention::aggregate_retention_function_desc;
 use super::aggregate_skewness::aggregate_skewness_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
@@ -142,8 +141,6 @@ impl Aggregators {
         factory.register("string_agg", aggregate_string_agg_function_desc());
         factory.register("listagg", aggregate_string_agg_function_desc());
         factory.register("group_concat", aggregate_string_agg_function_desc());
-
-        factory.register("range_bound", aggregate_range_bound_function_desc());
 
         factory.register_multi_names(
             &["bitmap_construct_agg", "group_bitmap"],

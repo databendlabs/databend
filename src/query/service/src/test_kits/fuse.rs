@@ -277,7 +277,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         locations,
         None,
         None,
-        None,
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
@@ -460,7 +459,6 @@ pub async fn generate_snapshot_v4(
         schema.as_ref().clone(),
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
-        None,
         None,
         None,
         TestFixture::default_table_meta_timestamps(),

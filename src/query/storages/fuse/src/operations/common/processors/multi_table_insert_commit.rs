@@ -405,7 +405,6 @@ async fn write_new_snapshot_and_build_table_meta(
     let snapshot = snapshot_generator.generate_new_snapshot(
         table_info,
         fuse_table.cluster_key_meta(),
-        fuse_table.cluster_type(),
         previous,
         txn_mgr,
         table_meta_timestamps,
