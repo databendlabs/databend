@@ -138,6 +138,7 @@ impl StreamTable {
         source_db_name: &str,
         source_tb_name: &str,
         batch_limit: Option<u64>,
+        enable_snapshot_forward_scan: bool,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
@@ -183,7 +184,7 @@ impl StreamTable {
             .and_then(|snapshot| snapshot.timestamp);
 
         let start = Instant::now();
-        if self.mode() == StreamMode::AppendOnly {
+        if enable_snapshot_forward_scan && self.mode() == StreamMode::AppendOnly {
             match fuse_table
                 .try_find_stream_batch_snapshot_v4(base_snapshot.as_deref(), batch_limit)
                 .await

@@ -361,6 +361,9 @@ select c from s_t_settings order by c;
 ##########################################################
 
 statement ok
+set enable_stream_batch_snapshot_forward_scan = 1;
+
+statement ok
 create table t_forward_batch (c int);
 
 statement ok
@@ -397,6 +400,9 @@ query I
 select c from s_forward_batch order by c;
 ----
 5
+
+statement ok
+set enable_stream_batch_snapshot_forward_scan = 0;
 
 
 statement ok

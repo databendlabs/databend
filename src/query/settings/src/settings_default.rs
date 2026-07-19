@@ -1507,6 +1507,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_stream_batch_snapshot_forward_scan", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable forward UUID-v7 snapshot scanning when applying a stream batch size hint.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("warehouse", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
                     desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",

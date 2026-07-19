@@ -1095,6 +1095,10 @@ impl Settings {
         Ok(if v == 0 { None } else { Some(v) })
     }
 
+    pub fn get_enable_stream_batch_snapshot_forward_scan(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_stream_batch_snapshot_forward_scan")? != 0)
+    }
+
     /// # Safety
     pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
         unsafe { self.unchecked_set_setting(String::from("warehouse"), warehouse) }
