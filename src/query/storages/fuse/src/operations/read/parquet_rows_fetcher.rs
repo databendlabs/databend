@@ -14,10 +14,14 @@
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::fmt::Write;
 use std::future::Future;
+use std::ops::Range;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use databend_common_base::runtime::spawn;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::block_idx_in_segment;
@@ -36,6 +40,7 @@ use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
@@ -48,7 +53,9 @@ use tokio::task::JoinHandle;
 
 use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
+use super::read_block_context::read_parquet_page_range_data;
 use crate::BlockReadResult;
+use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::io::BlockReader;
@@ -95,9 +102,19 @@ pub struct RowsFetchMetadataImpl {
 
     pub location: String,
     pub nums_rows: usize,
+    pub file_size: u64,
     pub compression: Compression,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub block_meta_index: Option<BlockMetaIndex>,
 }
+
+static ROW_FETCH_METADATA_CACHE: LazyLock<InMemoryLruCache<RowsFetchMetadataImpl>> =
+    LazyLock::new(|| {
+        InMemoryLruCache::with_items_capacity(
+            String::from("RowFetchProjectedBlockMetaCache"),
+            16_384,
+        )
+    });
 
 impl RowsFetchMetadata for RowsFetchMetadataImpl {
     fn row_bytes(&self) -> usize {
@@ -127,6 +144,8 @@ pub(super) struct ParquetRowsFetcher {
 
     segment_reader: CompactSegmentInfoReader,
     block_meta_lru_cache: InMemoryLruCache<RowsFetchMetadataImpl>,
+    source_block_meta_indexes: HashMap<u64, BlockMetaIndex>,
+    metadata_cache_prefix: String,
 }
 
 #[async_trait::async_trait]
@@ -135,16 +154,22 @@ impl RowsFetcher for ParquetRowsFetcher {
 
     #[async_backtrace::framed]
     async fn initialize(&mut self) -> Result<()> {
-        self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
     }
     async fn fetch_metadata(&mut self, block_id: u64) -> Result<Self::Metadata> {
+        let global_key = self.metadata_cache_key(block_id);
+        if let Some(metadata) = ROW_FETCH_METADATA_CACHE.get(&global_key) {
+            return Ok(metadata);
+        }
         if let Some(v) = self.block_meta_lru_cache.get(block_id.to_string()) {
             return Ok(v.clone());
         }
 
         // load metadata
         let (segment, block) = split_prefix(block_id);
+        if self.snapshot.is_none() {
+            self.snapshot = self.table.read_table_snapshot().await?;
+        }
         let snapshot = self.snapshot.as_ref().unwrap();
 
         let (location, ver) = snapshot.segments[segment as usize].clone();
@@ -166,18 +191,22 @@ impl RowsFetcher for ParquetRowsFetcher {
         cache_end = std::cmp::min(cache_end, blocks.len());
         let metadata = self.build_metadata(&blocks[cache_start..cache_end])?;
 
-        for (block_index, metadata) in (cache_start..cache_end).zip(metadata.into_iter()) {
+        for (block_index, mut metadata) in (cache_start..cache_end).zip(metadata.into_iter()) {
             let block_id = block_id_in_segment(blocks.len(), block_index);
             let block_id = compute_row_id_prefix(segment, block_id as u64);
-            self.block_meta_lru_cache
-                .insert(block_id.to_string(), metadata);
+            metadata.block_meta_index = self.source_block_meta_indexes.get(&block_id).cloned();
+            if metadata.block_meta_index.is_some() {
+                ROW_FETCH_METADATA_CACHE.insert(self.metadata_cache_key(block_id), metadata);
+            } else {
+                self.block_meta_lru_cache
+                    .insert(block_id.to_string(), metadata);
+            }
         }
 
-        Ok(self
-            .block_meta_lru_cache
-            .get(block_id.to_string())
-            .clone()
-            .unwrap())
+        ROW_FETCH_METADATA_CACHE
+            .get(global_key)
+            .or_else(|| self.block_meta_lru_cache.get(block_id.to_string()))
+            .ok_or_else(|| ErrorCode::Internal("Row fetch block metadata is missing"))
     }
 
     #[async_backtrace::framed]
@@ -288,10 +317,25 @@ impl ParquetRowsFetcher {
         settings: ReadSettings,
         max_threads: usize,
         io_semaphore: Arc<Semaphore>,
+        source_parts: &[PartInfoPtr],
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
         let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
+        let metadata_cache_prefix = projection_cache_prefix(&table, &projection);
+        let data_page_rows = table.get_option(FUSE_OPT_KEY_DATA_PAGE_ROWS, 0usize);
+        let source_block_meta_indexes = source_parts
+            .iter()
+            .filter_map(|part| FuseBlockPartInfo::from_part(part).ok())
+            .filter_map(|part| part.block_meta_index.clone())
+            .map(|mut index| {
+                if data_page_rows > 0 {
+                    index.page_size = data_page_rows;
+                }
+                let prefix = compute_row_id_prefix(index.segment_idx as u64, index.block_id as u64);
+                (prefix, index)
+            })
+            .collect();
         ParquetRowsFetcher {
             table,
             snapshot: None,
@@ -306,7 +350,13 @@ impl ParquetRowsFetcher {
                 String::from("RowFetchBlockMetaCache"),
                 128,
             ),
+            source_block_meta_indexes,
+            metadata_cache_prefix,
         }
+    }
+
+    fn metadata_cache_key(&self, block_id: u64) -> String {
+        format!("{}{}", self.metadata_cache_prefix, block_id)
     }
 
     fn fetch_block(
@@ -327,6 +377,13 @@ impl ParquetRowsFetcher {
                     .acquire_owned()
                     .await
                     .expect("row-fetch io semaphore never closed");
+                if let Some(block) =
+                    Self::fetch_page_range(&reader, &settings, &metadata, take_indices.as_slice())
+                        .await?
+                {
+                    return Ok((final_index, block));
+                }
+
                 let chunk = reader
                     .read_columns_data_by_merge_io(
                         &settings,
@@ -342,6 +399,47 @@ impl ParquetRowsFetcher {
                 ))
             }
         }
+    }
+
+    async fn fetch_page_range(
+        reader: &Arc<BlockReader>,
+        settings: &ReadSettings,
+        metadata: &RowsFetchMetadataImpl,
+        take_indices: &[u32],
+    ) -> Result<Option<DataBlock>> {
+        let Some(mut block_meta_index) = metadata.block_meta_index.clone() else {
+            return Ok(None);
+        };
+        let Some((range, range_start, relative_indices)) =
+            page_range_for_rows(take_indices, metadata.nums_rows, block_meta_index.page_size)?
+        else {
+            return Ok(None);
+        };
+
+        block_meta_index.range = Some(range);
+        let part = FuseBlockPartInfo {
+            location: metadata.location.clone(),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            create_on: None,
+            nums_rows: metadata.nums_rows,
+            file_size: metadata.file_size,
+            columns_meta: metadata.columns_meta.clone(),
+            columns_stat: None,
+            compression: metadata.compression,
+            sort_min_max: None,
+            block_meta_index: Some(block_meta_index),
+        };
+
+        let Some(block) = read_parquet_page_range_data(reader, settings, &part).await? else {
+            return Ok(None);
+        };
+        debug_assert!(
+            relative_indices
+                .iter()
+                .all(|index| *index as usize + range_start < metadata.nums_rows)
+        );
+        Ok(Some(block.take(relative_indices.as_slice())?))
     }
 
     fn build_metadata(&self, meta: &[Arc<BlockMeta>]) -> Result<Vec<RowsFetchMetadataImpl>> {
@@ -383,9 +481,11 @@ impl ParquetRowsFetcher {
                 row_bytes: average_bytes,
                 block_bytes,
                 nums_rows: fuse_part.nums_rows,
+                file_size: block_meta.file_size,
                 compression: fuse_part.compression,
                 location: fuse_part.location.clone(),
                 columns_meta: fuse_part.columns_meta.clone(),
+                block_meta_index: None,
             });
         }
 
@@ -407,6 +507,86 @@ impl ParquetRowsFetcher {
             None,
         )
     }
+}
+
+fn projection_cache_prefix(table: &FuseTable, projection: &Projection) -> String {
+    let table_ident = table.get_table_info().ident;
+    metadata_cache_prefix(
+        &table.get_operator_ref().info().root(),
+        table_ident.table_id,
+        table_ident.seq,
+        &table.query_result_cache_id(),
+        table.get_option(FUSE_OPT_KEY_DATA_PAGE_ROWS, 0usize),
+        projection,
+    )
+}
+
+fn metadata_cache_prefix(
+    operator_root: &str,
+    table_id: u64,
+    table_seq: u64,
+    snapshot_cache_id: &str,
+    data_page_rows: usize,
+    projection: &Projection,
+) -> String {
+    let mut key = format!(
+        "row-fetch-meta-v3|{}:{}|{}|{}|{}:{}|{}|",
+        operator_root.len(),
+        operator_root,
+        table_id,
+        table_seq,
+        snapshot_cache_id.len(),
+        snapshot_cache_id,
+        data_page_rows,
+    );
+    match projection {
+        Projection::Columns(indices) => {
+            key.push('c');
+            for index in indices {
+                write!(key, ":{index}").unwrap();
+            }
+        }
+        Projection::InnerColumns(paths) => {
+            key.push('i');
+            for (index, path) in paths {
+                write!(key, ":{index}=").unwrap();
+                for child in path {
+                    write!(key, "{child},").unwrap();
+                }
+            }
+        }
+    }
+    key.push(':');
+    key
+}
+
+type PageRangeSelection = (Range<usize>, usize, Vec<u32>);
+
+fn page_range_for_rows(
+    take_indices: &[u32],
+    nums_rows: usize,
+    page_size: usize,
+) -> Result<Option<PageRangeSelection>> {
+    if take_indices.is_empty() || page_size == 0 || page_size >= nums_rows {
+        return Ok(None);
+    }
+
+    let min_row = *take_indices.iter().min().unwrap() as usize;
+    let max_row = *take_indices.iter().max().unwrap() as usize;
+    if max_row >= nums_rows {
+        return Err(ErrorCode::Internal(format!(
+            "RowID index {max_row} is outside a block with {nums_rows} rows"
+        )));
+    }
+
+    let start_page = min_row / page_size;
+    let end_page = max_row / page_size + 1;
+    let range_start = start_page * page_size;
+    let relative_indices = take_indices
+        .iter()
+        .map(|index| *index - range_start as u32)
+        .collect();
+    Ok(Some((start_page..end_page, range_start, relative_indices)))
 }
 
 impl From<RowsFetchMetadataImpl> for CacheValue<RowsFetchMetadataImpl> {
@@ -480,5 +660,60 @@ mod tests {
             .unwrap();
         drop(permit);
         assert_eq!(semaphore.available_permits(), 1);
+    }
+
+    #[test]
+    fn test_page_range_for_rows_preserves_output_order() {
+        let (range, start, relative) = page_range_for_rows(&[4100, 4097, 8192, 4100], 12_000, 4096)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(range, 1..3);
+        assert_eq!(start, 4096);
+        assert_eq!(relative, vec![4, 1, 4096, 4]);
+    }
+
+    #[test]
+    fn test_page_range_for_rows_rejects_invalid_row_id() {
+        let err = page_range_for_rows(&[10], 10, 4).unwrap_err();
+        assert!(err.message().contains("outside a block"));
+    }
+
+    #[test]
+    fn test_metadata_cache_prefix_isolates_storage_and_snapshot() {
+        let projection = Projection::Columns(vec![1, 3]);
+        let base = metadata_cache_prefix("root-a", 1, 2, "snapshot-a", 100, &projection);
+
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-b", 1, 2, "snapshot-a", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 1, 2, "snapshot-b", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 2, 2, "snapshot-a", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 1, 3, "snapshot-a", 100, &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", 1, 2, "snapshot-a", 200, &projection)
+        );
+        assert_ne!(
+            metadata_cache_prefix("ab", 1, 2, "c", 100, &projection),
+            metadata_cache_prefix("a", 1, 2, "bc", 100, &projection)
+        );
+    }
+
+    #[test]
+    fn test_page_range_for_rows_skips_empty_or_unknown_pages() {
+        assert!(page_range_for_rows(&[], 10, 4).unwrap().is_none());
+        assert!(page_range_for_rows(&[1], 10, 0).unwrap().is_none());
+        assert!(page_range_for_rows(&[1], 10, 10).unwrap().is_none());
     }
 }

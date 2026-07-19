@@ -45,6 +45,8 @@ pub struct FuseBlockPartInfo {
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
+    #[serde(default)]
+    pub file_size: u64,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
@@ -96,6 +98,7 @@ impl FuseBlockPartInfo {
             bloom_filter_index_size,
             create_on,
             columns_meta,
+            file_size: 0,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
