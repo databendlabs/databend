@@ -26,6 +26,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::Once;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
@@ -192,6 +193,7 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
+    session_settings_initialized: Once,
     fragment_id: FragmentId,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: SegmentLocationsState,
@@ -219,6 +221,7 @@ impl QueryContext {
             mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             shared,
             query_settings,
+            session_settings_initialized: Once::new(),
             fragment_id: Default::default(),
             written_segment_locs: Default::default(),
             read_block_thresholds: Default::default(),

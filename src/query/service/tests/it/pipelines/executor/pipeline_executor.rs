@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -93,6 +95,59 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_execute_inside_and_outside_tokio_runtime() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ExecutorSettings {
+        query_id: Arc::new("worker-mode-test".to_string()),
+        max_execute_time_in_seconds: Default::default(),
+        enable_queries_executor: false,
+        max_threads: 1,
+        executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
+    };
+
+    let (tokio_finished, tokio_executor) =
+        create_closed_source_executor(ctx.clone(), settings.clone())?;
+    tokio_executor.execute()?;
+    assert_eq!(tokio_finished.load(Ordering::SeqCst), 1);
+
+    let (inline_finished, inline_executor) = create_closed_source_executor(ctx, settings)?;
+    Thread::spawn(move || inline_executor.execute())
+        .join()
+        .expect("inline executor thread must not panic")?;
+    assert_eq!(inline_finished.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+fn create_closed_source_executor(
+    ctx: Arc<QueryContext>,
+    settings: ExecutorSettings,
+) -> Result<(Arc<AtomicUsize>, Arc<QueryPipelineExecutor>)> {
+    let mut pipeline = Pipeline::create();
+    let (source_senders, source_pipe) = create_source_pipe(ctx, 1)?;
+    let (_sink_receivers, sink_pipe) = create_sink_pipe(1)?;
+    drop(source_senders);
+
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(sink_pipe);
+    pipeline.set_max_threads(1);
+
+    let finished = Arc::new(AtomicUsize::new(0));
+    pipeline.set_on_finished({
+        let finished = finished.clone();
+        move |_info: &ExecutionInfo| {
+            finished.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    });
+
+    let executor = QueryPipelineExecutor::create(pipeline, settings)?;
+    Ok((finished, executor))
 }
 
 fn create_pipeline() -> (Arc<AtomicBool>, Pipeline) {
