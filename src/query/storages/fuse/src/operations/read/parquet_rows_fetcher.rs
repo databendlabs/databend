@@ -510,8 +510,25 @@ impl ParquetRowsFetcher {
 }
 
 fn projection_cache_prefix(table: &FuseTable, projection: &Projection) -> String {
-    let table_info = table.get_table_info();
-    let mut key = format!("{}:{}:", table_info.ident.table_id, table_info.ident.seq);
+    metadata_cache_prefix(
+        &table.get_operator_ref().info().root(),
+        &table.query_result_cache_id(),
+        projection,
+    )
+}
+
+fn metadata_cache_prefix(
+    operator_root: &str,
+    snapshot_cache_id: &str,
+    projection: &Projection,
+) -> String {
+    let mut key = format!(
+        "row-fetch-meta-v2|{}:{}|{}:{}|",
+        operator_root.len(),
+        operator_root,
+        snapshot_cache_id.len(),
+        snapshot_cache_id,
+    );
     match projection {
         Projection::Columns(indices) => {
             key.push('c');
@@ -650,6 +667,25 @@ mod tests {
     fn test_page_range_for_rows_rejects_invalid_row_id() {
         let err = page_range_for_rows(&[10], 10, 4).unwrap_err();
         assert!(err.message().contains("outside a block"));
+    }
+
+    #[test]
+    fn test_metadata_cache_prefix_isolates_storage_and_snapshot() {
+        let projection = Projection::Columns(vec![1, 3]);
+        let base = metadata_cache_prefix("root-a", "snapshot-a", &projection);
+
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-b", "snapshot-a", &projection)
+        );
+        assert_ne!(
+            base,
+            metadata_cache_prefix("root-a", "snapshot-b", &projection)
+        );
+        assert_ne!(
+            metadata_cache_prefix("ab", "c", &projection),
+            metadata_cache_prefix("a", "bc", &projection)
+        );
     }
 
     #[test]
