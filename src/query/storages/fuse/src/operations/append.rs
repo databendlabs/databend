@@ -324,7 +324,6 @@ impl FuseTable {
             self.cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
-            None,
             level,
             block_thresholds,
             operators,

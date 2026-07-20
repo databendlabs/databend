@@ -255,13 +255,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-
-    /// Get the page size of the block.
-    ///
-    /// For the parquet format, the page size is its row count.
-    pub fn page_size(&self) -> u64 {
-        self.row_count
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]

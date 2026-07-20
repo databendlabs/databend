@@ -84,7 +84,6 @@ pub fn vector_cluster_info_from_column(
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
-    max_page_size: Option<usize>,
 
     level: i32,
     block_thresholds: BlockThresholds,
@@ -103,7 +102,6 @@ impl ClusterStatsGenerator {
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
         extra_key_num: usize,
-        max_page_size: Option<usize>,
         level: i32,
         block_thresholds: BlockThresholds,
         operators: Vec<BlockOperator>,
@@ -115,7 +113,6 @@ impl ClusterStatsGenerator {
             cluster_key_id,
             cluster_key_index,
             extra_key_num,
-            max_page_size,
             level,
             block_thresholds,
             operators,
@@ -242,28 +239,11 @@ impl ClusterStatsGenerator {
             level
         };
 
-        let pages = if let Some(max_page_size) = self.max_page_size {
-            let mut values = Vec::with_capacity(data_block.num_rows() / max_page_size + 1);
-            for start in (0..data_block.num_rows()).step_by(max_page_size) {
-                let mut tuple_values = Vec::with_capacity(scalar_cluster_key_index.len());
-                for (_, key) in scalar_cluster_key_index.iter().copied() {
-                    let val = data_block.get_by_offset(key);
-                    let left = unsafe { val.index_unchecked(start) };
-                    tuple_values.push(left.to_owned());
-                }
-                values.push(Scalar::Tuple(tuple_values));
-            }
-            Some(values)
-        } else {
-            None
-        };
-
         Ok(Some(ClusterStatistics::new(
             self.cluster_key_id,
             min,
             max,
             level,
-            pages,
         )))
     }
 

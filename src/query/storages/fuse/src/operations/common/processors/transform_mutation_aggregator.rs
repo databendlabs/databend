@@ -400,9 +400,9 @@ impl TableMutationAggregator {
             threads_nums * 2,
             "fuse-write-segments-worker".to_owned(),
         )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+            .await?
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
 
         for (location, stats) in new_segments {
             merge_statistics_mut(
@@ -516,7 +516,7 @@ impl TableMutationAggregator {
                         write_segment_ctx.schema.clone(),
                         false,
                     )
-                    .await?;
+                        .await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
                     let stats = match segment_info.summary.additional_stats_loc() {
@@ -594,9 +594,9 @@ impl TableMutationAggregator {
             threads_nums * 2,
             "fuse-req-segments-worker".to_owned(),
         )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()
+            .await?
+            .into_iter()
+            .collect::<Result<Vec<_>>>()
     }
 
     // Assign columnId to the virtual column in the mutation blocks and generate a new virtual schema.
@@ -913,7 +913,7 @@ fn fill_missing_segment_cluster_stats(
         None,
         Some(cluster_key_id),
     );
-    summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0, None));
+    summary.cluster_stats = Some(ClusterStatistics::new(cluster_key_id, min, max, 0));
 }
 
 fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u8>>> {

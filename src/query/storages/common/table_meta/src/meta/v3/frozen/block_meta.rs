@@ -141,26 +141,29 @@ pub struct ClusterStatistics {
     pub max: Vec<LegacyScalar>,
     pub level: i32,
 
-    // currently it's only used in native engine
+    // Removed from the current `ClusterStatistics`, but retained here to decode
+    // legacy bincode segment metadata without changing its positional layout.
     pub pages: Option<Vec<LegacyScalar>>,
 }
 
 impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
     fn from(value: ClusterStatistics) -> Self {
-        let min: Vec<_> = value.min.iter().map(|c| Scalar::from(c.clone())).collect();
-
-        let max: Vec<_> = value.max.iter().map(|c| Scalar::from(c.clone())).collect();
-
-        let pages = value
-            .pages
-            .map(|pages| pages.into_iter().map(Scalar::from).collect());
-
-        Self {
-            cluster_key_id: value.cluster_key_id,
+        let ClusterStatistics {
+            cluster_key_id,
             min,
             max,
-            level: value.level,
-            pages,
+            level,
+            pages: _,
+        } = value;
+        let min: Vec<_> = min.into_iter().map(Scalar::from).collect();
+
+        let max: Vec<_> = max.into_iter().map(Scalar::from).collect();
+
+        Self {
+            cluster_key_id,
+            min,
+            max,
+            level,
         }
     }
 }

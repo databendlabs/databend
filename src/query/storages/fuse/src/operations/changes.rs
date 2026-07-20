@@ -294,10 +294,6 @@ impl FuseTable {
         }
 
         let table_schema = self.schema_with_stream();
-        // Page-level cluster pruning was only used by the native format; for parquet
-        // tables there are no cluster keys or cluster key meta to push down here.
-        let cluster_keys = vec![];
-        let cluster_key_meta = None;
         let bloom_index_cols = self.bloom_index_cols();
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
@@ -309,13 +305,11 @@ impl FuseTable {
             ctx.get_cluster().local_id,
         );
 
-        let mut pruner = FusePruner::create_with_pages(
+        let mut pruner = FusePruner::create(
             &ctx,
             self.get_operator(),
             table_schema.clone(),
             &push_downs,
-            cluster_key_meta,
-            cluster_keys,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

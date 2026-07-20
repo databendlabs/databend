@@ -452,8 +452,6 @@ impl FuseTable {
             dal,
             schema.clone(),
             push_down,
-            None,
-            vec![],
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),

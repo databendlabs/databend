@@ -818,7 +818,7 @@ impl CompactSegmentTestFixture {
                             } else {
                                 0
                             };
-                            ClusterStatistics::new(v, left, right, level, None)
+                            ClusterStatistics::new(v, left, right, level)
                         })
                     };
 
