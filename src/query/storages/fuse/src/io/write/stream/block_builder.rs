@@ -65,8 +65,6 @@ use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
-use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
-use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::operations::column_parquet_metas;
 
 pub struct UninitializedArrowWriter {
@@ -179,7 +177,6 @@ pub struct StreamBlockBuilder {
     spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
 
-    cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
 
     row_count: usize,
@@ -229,8 +226,6 @@ impl StreamBlockBuilder {
             .as_ref()
             .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n, None)?;
-        let cluster_stats_state =
-            ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
             &properties.stats_columns,
             &properties.distinct_columns,
@@ -248,7 +243,6 @@ impl StreamBlockBuilder {
             row_count: 0,
             block_size: 0,
             column_stats_state,
-            cluster_stats_state,
         })
     }
 
@@ -271,7 +265,6 @@ impl StreamBlockBuilder {
 
         let had_existing_rows = self.row_count > 0;
 
-        let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
         self.bloom_index_builder.add_block(&block)?;
@@ -404,19 +397,15 @@ impl StreamBlockBuilder {
             .iter()
             .map(|v| v.size)
             .reduce(|a, b| a + b);
-        let perfect = self.properties.block_thresholds.check_perfect_block(
-            self.row_count,
-            self.block_size,
-            file_size,
-        );
-        let cluster_stats = self.cluster_stats_state.finalize(perfect)?;
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
             block_size: self.block_size as u64,
             file_size: file_size as u64,
             col_stats,
             col_metas,
-            cluster_stats,
+            // Stream block writing is only enabled for tables without a cluster key, so cluster
+            // statistics cannot be produced on this path.
+            cluster_stats: None,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
             bloom_filter_index_size: bloom_index_state
@@ -461,7 +450,6 @@ pub struct StreamBlockProperties {
     meta_locations: TableMetaLocationGenerator,
     source_schema: TableSchemaRef,
 
-    cluster_stats_builder: Arc<ClusterStatisticsBuilder>,
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
@@ -530,9 +518,6 @@ impl StreamBlockProperties {
             None
         };
 
-        let cluster_stats_builder =
-            ClusterStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?;
-
         let mut stats_columns = vec![];
         let mut distinct_columns = vec![];
         let leaf_fields = source_schema.leaf_fields();
@@ -553,7 +538,6 @@ impl StreamBlockProperties {
             block_thresholds: table.get_block_thresholds(),
             source_schema,
             write_settings,
-            cluster_stats_builder,
             virtual_column_builder,
             stats_columns,
             distinct_columns,
