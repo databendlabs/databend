@@ -611,15 +611,14 @@ impl KWayMergeCombinerProcessor {
                 None => block,
                 Some(limit) => {
                     let n = block.num_rows();
-                    if *limit >= n {
+                    if *limit > n {
                         *limit -= n;
                         block
                     } else {
                         let range = 0..*limit;
                         *limit = 0;
-                        // String views in a slice keep the source block's buffers alive. The
-                        // boundary block can be much larger than the remaining LIMIT, so compact
-                        // sparse views before sending the final Top-N block downstream.
+                        // String views in a sliced block keep the source buffers alive. Compact
+                        // the boundary block even when it exactly fills the remaining LIMIT.
                         block.slice(range).maybe_gc()
                     }
                 }

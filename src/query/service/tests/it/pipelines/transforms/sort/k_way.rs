@@ -183,25 +183,24 @@ async fn test_k_way_merge_sort_fuzz() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_k_way_merge_sort_limit_compacts_string_views() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-
+fn make_wide_block(start: i32, rows: i32) -> DataBlock {
     let payload_suffix = "x".repeat(256);
-    let make_block = |start: i32| {
-        let keys = (start..start + 2_000).collect::<Vec<_>>();
-        let payloads = keys
-            .iter()
-            .map(|key| format!("{key:08}-{payload_suffix}"))
-            .collect::<Vec<_>>();
-        DataBlock::new_from_columns(vec![
-            Int32Type::from_data(keys),
-            StringType::from_data(payloads),
-        ])
-    };
-    let data = vec![vec![make_block(0)], vec![make_block(2_000)]];
-    let limit = 10;
+    let keys = (start..start + rows).collect::<Vec<_>>();
+    let payloads = keys
+        .iter()
+        .map(|key| format!("{key:08}-{payload_suffix}"))
+        .collect::<Vec<_>>();
+    DataBlock::new_from_columns(vec![
+        Int32Type::from_data(keys),
+        StringType::from_data(payloads),
+    ])
+}
+
+async fn assert_limit_compacts_string_views(
+    ctx: Arc<QueryContext>,
+    data: Vec<Vec<DataBlock>>,
+    limit: usize,
+) -> anyhow::Result<()> {
     let (executor, mut rx) = create_pipeline(ctx, data, 2, 4_096, Some(limit), true)?;
 
     executor.execute()?;
@@ -229,4 +228,26 @@ async fn test_k_way_merge_sort_limit_compacts_string_views() -> anyhow::Result<(
     );
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_limit_compacts_string_views() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let first = make_wide_block(0, 2_000);
+    let second = make_wide_block(2_000, 2_000);
+    let data = vec![vec![first], vec![second]];
+
+    assert_limit_compacts_string_views(ctx, data, 10).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_exact_limit_compacts_string_views() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let first = make_wide_block(0, 2_000).slice(0..10);
+    let second = make_wide_block(2_000, 2_000);
+    let data = vec![vec![first], vec![second]];
+
+    assert_limit_compacts_string_views(ctx, data, 10).await
 }
