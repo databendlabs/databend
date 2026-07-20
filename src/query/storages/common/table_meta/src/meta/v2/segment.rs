@@ -32,6 +32,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::BlockHLLState;
+use crate::meta::BlockTopN;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
@@ -268,6 +269,8 @@ pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
     pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
     pub column_hlls: Option<BlockHLLState>,
+    #[serde(default)]
+    pub column_top_n: Option<BlockTopN>,
 }
 
 #[typetag::serde(name = "extended_block_meta")]

@@ -211,11 +211,18 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Creating new QueryContext instance");
 
-        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let query_config = &GlobalConfig::instance().query;
+        let tenant = query_config.tenant_id.clone();
         let query_settings = Settings::create(tenant);
+        let product_name = query_config.common.product_name.trim();
+        let version = if product_name.is_empty() {
+            shared.version.commit_detail.to_string()
+        } else {
+            format!("{} {}", product_name, shared.version.commit_detail)
+        };
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("Databend Query {}", shared.version.commit_detail),
+            version,
             mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             shared,
             query_settings,

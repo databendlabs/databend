@@ -400,6 +400,7 @@ impl<'a> SegmentCompactor<'a> {
             .gen_segment_info_location(self.table_meta_timestamps, false);
         // 2.2 merge hlls into new.
         let mut block_hlls = Vec::with_capacity(blocks.len());
+        let mut block_top_ns = Vec::with_capacity(blocks.len());
         if !hlls_has_none {
             let max_threads = (self.chunk_size / 4).max(10);
             let segment_stats = read_segment_stats_in_parallel(
@@ -410,8 +411,9 @@ impl<'a> SegmentCompactor<'a> {
             .await?;
             for stats in segment_stats {
                 block_hlls.append(&mut stats.block_hlls.clone());
+                block_top_ns.extend(stats.block_top_ns.iter().cloned());
             }
-            let stats_data = SegmentStatistics::new(block_hlls).to_bytes()?;
+            let stats_data = SegmentStatistics::new(block_hlls, block_top_ns).to_bytes()?;
             let segment_stats_location =
                 TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                     location.as_str(),

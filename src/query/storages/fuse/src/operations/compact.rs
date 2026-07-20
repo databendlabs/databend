@@ -121,6 +121,7 @@ impl FuseTable {
             None,
             VirtualSchemaMode::Merge,
             HashMap::new(),
+            HashMap::new(),
         );
         let block = DataBlock::empty_with_meta(Box::new(meta));
 

@@ -20,6 +20,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
@@ -42,6 +43,7 @@ pub struct CommitMeta {
     pub virtual_schema: Option<VirtualDataSchema>,
     pub virtual_schema_mode: VirtualSchemaMode,
     pub hll: BlockHLL,
+    pub top_n: BlockTopN,
 }
 
 impl CommitMeta {
@@ -57,6 +59,7 @@ impl CommitMeta {
             virtual_schema: None,
             virtual_schema_mode: VirtualSchemaMode::Merge,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
         }
     }
 
@@ -69,6 +72,7 @@ impl CommitMeta {
         virtual_schema: Option<VirtualDataSchema>,
         virtual_schema_mode: VirtualSchemaMode,
         hll: BlockHLL,
+        top_n: BlockTopN,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
@@ -79,6 +83,7 @@ impl CommitMeta {
             virtual_schema,
             virtual_schema_mode,
             hll,
+            top_n,
         }
     }
 }

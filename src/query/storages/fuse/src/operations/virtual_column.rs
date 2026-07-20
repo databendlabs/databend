@@ -329,6 +329,7 @@ pub async fn commit_refresh_virtual_column(
                 block_meta: Arc::unwrap_or_clone(block_meta.clone()),
                 draft_virtual_block_meta: Some(result.draft_virtual_block_meta.clone()),
                 column_hlls: result.column_hlls.clone().map(BlockHLLState::Serialized),
+                column_top_n: None,
             };
             let entry = MutationLogEntry::ReplacedBlock {
                 index: BlockMetaIndex {
@@ -628,6 +629,7 @@ async fn prepare_vacuum_virtual_column_mutations(
                         block_meta: new_block_meta,
                         draft_virtual_block_meta: None,
                         column_hlls: column_hlls.map(BlockHLLState::Serialized),
+                        column_top_n: None,
                     }),
                 });
 
