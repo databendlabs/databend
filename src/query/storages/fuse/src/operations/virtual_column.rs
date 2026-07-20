@@ -336,7 +336,6 @@ pub async fn commit_refresh_virtual_column(
                     block_idx,
                 },
                 block_meta: Arc::new(extended_block_meta),
-                insert_rows: 0,
             };
             mutation_entries.push(entry);
         }
@@ -357,6 +356,7 @@ pub async fn commit_refresh_virtual_column(
 
     let meta = MutationLogs {
         entries: mutation_entries,
+        ..Default::default()
     };
     let block = DataBlock::from(meta);
     pipeline.add_source(
@@ -434,6 +434,7 @@ pub async fn do_vacuum_virtual_column(
 
         let block = DataBlock::from(MutationLogs {
             entries: mutation_entries,
+            ..Default::default()
         });
         pipeline.add_source(
             move |output| OneBlockSource::create(output, block.clone()),
@@ -628,7 +629,6 @@ async fn prepare_vacuum_virtual_column_mutations(
                         draft_virtual_block_meta: None,
                         column_hlls: column_hlls.map(BlockHLLState::Serialized),
                     }),
-                    insert_rows: 0,
                 });
 
                 continue;

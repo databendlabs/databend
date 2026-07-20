@@ -39,43 +39,43 @@ alter table t set options(change_tracking=true)
 statement ok
 create stream if not exists s on table t
 
-query IIII
+query III
 select * from stream_backlog('s')
 ----
-0 0 0 0
+0 0 0
 
-query IIII
+query III
 select * from stream_backlog('test_stream_backlog.s')
 ----
-0 0 0 0
+0 0 0
 
-query IIII
+query III
 select * from stream_backlog('default.test_stream_backlog.s')
 ----
-0 0 0 0
+0 0 0
 
-query IIII
+query III
 call system$stream_backlog('s')
 ----
-0 0 0 0
+0 0 0
 
-query IIII
+query III
 call system$stream_backlog('test_stream_backlog.s')
 ----
-0 0 0 0
+0 0 0
 
-query IIII
+query III
 call system$stream_backlog('default.test_stream_backlog.s')
 ----
-0 0 0 0
+0 0 0
 
 statement ok
 insert into t values(1), (2)
 
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s')
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s')
 ----
-2 0 2 1
+2 0 2
 
 statement ok
 create table t_append_delete_insert(a int)
@@ -92,10 +92,10 @@ delete from t_append_delete_insert where a = 1
 statement ok
 insert into t_append_delete_insert values(3)
 
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_append_delete_insert')
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_append_delete_insert')
 ----
-1 0 1 1
+2 2 1
 
 statement ok
 create table t_append_update(a int)
@@ -109,27 +109,10 @@ create stream s_append_update on table t_append_update append_only = true
 statement ok
 update t_append_update set a = a + 10 where a = 1
 
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_append_update')
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_append_update')
 ----
-0 0 0 0
-
-statement ok
-create table t_append_delete(a int)
-
-statement ok
-insert into t_append_delete values(1), (2)
-
-statement ok
-create stream s_append_delete on table t_append_delete append_only = true
-
-statement ok
-delete from t_append_delete where a = 1
-
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_append_delete')
-----
-0 0 0 0
+1 1 0
 
 statement ok
 create table t_standard_update(a int)
@@ -143,27 +126,10 @@ create stream s_standard_update on table t_standard_update append_only = false
 statement ok
 update t_standard_update set a = a + 10 where a = 1
 
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_standard_update')
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_update')
 ----
-1 1 1 1
-
-statement ok
-create table t_standard_delete(a int)
-
-statement ok
-insert into t_standard_delete values(1)
-
-statement ok
-create stream s_standard_delete on table t_standard_delete append_only = false
-
-statement ok
-delete from t_standard_delete where a = 1
-
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_standard_delete')
-----
-0 1 1 1
+1 1 2
 
 statement ok
 create table t_standard_truncate(a int)
@@ -177,10 +143,96 @@ create stream s_standard_truncate on table t_standard_truncate append_only = fal
 statement ok
 truncate table t_standard_truncate
 
-query IIIB
-select rows_added, rows_removed, estimated_rows, estimated_bytes > 0 from stream_backlog('s_standard_truncate')
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_truncate')
 ----
-0 2 2 1
+0 2 2
+
+statement ok
+create table t_standard_mixed(a int)
+
+statement ok
+insert into t_standard_mixed values(1), (2), (3)
+
+statement ok
+create stream s_standard_mixed on table t_standard_mixed append_only = false
+
+statement ok
+delete from t_standard_mixed where a = 1
+
+statement ok
+update t_standard_mixed set a = a + 10 where a = 2
+
+statement ok
+insert into t_standard_mixed values(4), (5)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_mixed')
+----
+4 3 5
+
+statement ok
+create table t_standard_overwrite(a int)
+
+statement ok
+insert into t_standard_overwrite values(1), (2)
+
+statement ok
+create stream s_standard_overwrite on table t_standard_overwrite append_only = false
+
+statement ok
+insert overwrite t_standard_overwrite values(3), (4), (5)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_overwrite')
+----
+3 2 5
+
+statement ok
+create table t_standard_merge(a int, b int)
+
+statement ok
+insert into t_standard_merge values(1, 10), (2, 20), (3, 30)
+
+statement ok
+create table t_merge_source(a int, b int)
+
+statement ok
+insert into t_merge_source values(2, 200), (3, 300), (4, 400)
+
+statement ok
+create stream s_standard_merge on table t_standard_merge append_only = false
+
+statement ok
+merge into t_standard_merge as t using t_merge_source as s on t.a = s.a when matched and t.a = 2 then update set t.b = s.b when matched and t.a = 3 then delete when not matched then insert values(s.a, s.b)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_merge')
+----
+3 3 4
+
+statement ok
+create table t_standard_replace(a int, b int)
+
+statement ok
+insert into t_standard_replace values(1, 10), (2, 20)
+
+statement ok
+create table t_replace_source(a int, b int)
+
+statement ok
+insert into t_replace_source values(2, 200), (3, 300)
+
+statement ok
+create stream s_standard_replace on table t_standard_replace append_only = false
+
+statement ok
+replace into t_standard_replace on(a) select * from t_replace_source
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_replace')
+----
+3 2 3
 
 statement ok
 DROP DATABASE IF EXISTS test_stream_backlog

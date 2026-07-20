@@ -43,7 +43,6 @@ pub struct StreamBacklogResponse {
     rows_added: u64,
     rows_removed: u64,
     estimated_rows: u64,
-    estimated_bytes: u64,
 }
 
 impl From<StreamBacklog> for StreamBacklogResponse {
@@ -52,7 +51,6 @@ impl From<StreamBacklog> for StreamBacklogResponse {
             rows_added: value.rows_added,
             rows_removed: value.rows_removed,
             estimated_rows: value.estimated_rows,
-            estimated_bytes: value.estimated_bytes,
         }
     }
 }

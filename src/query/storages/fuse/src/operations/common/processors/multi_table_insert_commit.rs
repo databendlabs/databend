@@ -280,10 +280,15 @@ impl AsyncSink for CommitMultiTableInsert {
 
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
+        let insert_rows = meta
+            .conflict_resolve_context
+            .logical_insert_rows(meta.logical_deleted_rows);
         match self.insert_rows.get_mut(&meta.table_id) {
-            Some(rows) => *rows += meta.insert_rows,
+            Some(rows) => {
+                *rows += insert_rows;
+            }
             None => {
-                self.insert_rows.insert(meta.table_id, meta.insert_rows);
+                self.insert_rows.insert(meta.table_id, insert_rows);
             }
         }
         match self.commit_metas.get_mut(&meta.table_id) {

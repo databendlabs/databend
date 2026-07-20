@@ -409,6 +409,15 @@ impl Processor for MatchedSplitProcessor {
                         current_block.num_rows(),
                         Some(Box::new(RowIdKind::Update)),
                     ));
+                } else {
+                    // Local plans consume this in MatchedAggregator. Distributed
+                    // plans route it as a mutation log to the final aggregator.
+                    self.output_data_row_id_data
+                        .push(DataBlock::empty_with_meta(Box::new(MutationLogs {
+                            entries: vec![],
+                            logical_updated_rows: current_block.num_rows() as u64,
+                            logical_deleted_rows: 0,
+                        })));
                 }
 
                 let op = BlockOperator::Project {
