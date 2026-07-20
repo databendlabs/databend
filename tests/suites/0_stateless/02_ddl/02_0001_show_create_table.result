@@ -58,7 +58,7 @@ CREATE OR REPLACE TABLE test.d (a int not null) ENGINE=FUSE 'fs:///tmp/load/file
 >>>> SHOW CREATE TABLE test.d
 d	CREATE TABLE d (
   a INT NOT NULL
-) ENGINE=FUSE CLUSTER BY (a, a % 3) 'fs | root=/tmp/load/files/'
+) ENGINE=FUSE CLUSTER BY (a, a % 3) 'fs | root=/tmp/load/files/' 
 <<<<
 >>>> SHOW CREATE TABLE test.c
 c	CREATE TABLE c (
