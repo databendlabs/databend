@@ -706,23 +706,27 @@ else
     exit 1
 fi
 
+# Ensure the rerun parent completes in a later second than every previous child run.
 actual_child_success_count=0
+rerun_clock_ready=0
 for _ in {1..20}; do
-    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name IN ('fanout_child_a', 'fanout_child_b', 'fanout_child_c') AND state = 'SUCCEEDED' AND completed_at IS NOT NULL")
+    response=$(query_sql_with_auth "root:" "SELECT count(*), if(to_start_of_second(now()) > max(completed_at), 1, 0) FROM system_task.task_run WHERE task_name IN ('fanout_child_a', 'fanout_child_b', 'fanout_child_c') AND state = 'SUCCEEDED' AND completed_at IS NOT NULL")
     check_response_error "$response"
     actual_child_success_count=$(echo "$response" | jq -r '.data[0][0]')
-    if [ "$actual_child_success_count" = "3" ]; then
+    rerun_clock_ready=$(echo "$response" | jq -r '.data[0][1]')
+    if [ "$actual_child_success_count" = "3" ] && [ "$rerun_clock_ready" = "1" ]; then
         break
     fi
     sleep 1
 done
 
-if [ "$actual_child_success_count" = "3" ]; then
-    echo "✅ Private task fan-out child runs are terminal"
+if [ "$actual_child_success_count" = "3" ] && [ "$rerun_clock_ready" = "1" ]; then
+    echo "✅ Private task fan-out child runs are terminal and rerun clock is ready"
 else
-    echo "❌ Expected all private task fan-out child runs to be terminal"
-    echo "Expected: 3"
-    echo "Actual  : $actual_child_success_count"
+    echo "❌ Expected terminal private task fan-out children and a later rerun clock"
+    echo "Expected child successes: 3"
+    echo "Actual child successes  : $actual_child_success_count"
+    echo "Rerun clock ready       : $rerun_clock_ready"
     exit 1
 fi
 
