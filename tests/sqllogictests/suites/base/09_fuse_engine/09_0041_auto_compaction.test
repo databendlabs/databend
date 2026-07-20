@@ -58,20 +58,26 @@ replace into t on(c) values(2);
 query III
 select segment_count , block_count , row_count from fuse_snapshot('i15760', 't') limit 20;
 ----
-3 5 11
-2 4 10
-1 3 9
-4 5 9
-3 4 8
+1 3 11
+2 3 11
+1 2 10
+2 3 10
+1 2 9
+2 3 9
+1 2 8
+2 3 8
+1 2 7
 2 3 7
 1 2 6
-4 4 6
-3 3 5
+2 2 6
+1 1 5
+2 2 5
+1 1 4
 2 2 4
 1 1 3
-3 3 3
+2 2 3
+1 1 2
 2 2 2
-1 1 1
 
 
 #ISSUE 16498
@@ -98,7 +104,7 @@ select count() > 4 from fuse_snapshot('i15760', 't1');
 query T
 select info:average_depth from clustering_information('i15760', 't1')
 ----
-1.0
+2.0
 
 #ISSUE 18859
 statement ok
@@ -116,9 +122,7 @@ insert into t2 select number from numbers(2);
 query II
 select block_count, row_count from fuse_segment('i15760', 't2');
 ----
-1 2
-2 12
-1 1
+3 15
 
 statement ok
 insert into t2 select number from numbers(2);
@@ -152,6 +156,42 @@ query I
 select count() from fuse_segment('i15760', 't3');
 ----
 1
+
+# A zero compaction hint should still compact the newly written segment with its neighbor.
+statement ok
+create table zero_hint(a int) row_per_block=100 block_per_segment=100 auto_compaction_imperfect_blocks_threshold=100;
+
+statement ok
+insert into zero_hint values(1);
+
+statement ok
+insert into zero_hint values(2);
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('i15760', 'zero_hint') limit 1;
+----
+1 1 2
+
+# A zero compaction hint should not prevent reclustering a cluster key table.
+statement ok
+create table zero_hint_cluster(a int) cluster by(a) row_per_block=5 auto_compaction_imperfect_blocks_threshold=100;
+
+statement ok
+insert into zero_hint_cluster values(1),(2),(7);
+
+statement ok
+insert into zero_hint_cluster values(3),(5),(8);
+
+statement ok
+insert into zero_hint_cluster values(4),(6),(10),(11);
+
+statement ok
+insert into zero_hint_cluster values(0),(9),(12);
+
+query T
+select info:average_depth from clustering_information('i15760', 'zero_hint_cluster');
+----
+2.0
 
 statement ok
 set auto_compaction_imperfect_blocks_threshold = 1;

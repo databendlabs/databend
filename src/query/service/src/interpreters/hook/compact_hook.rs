@@ -29,6 +29,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -148,9 +149,11 @@ pub(crate) async fn execute_compact_hook(
         "Table {} requires compaction of {} blocks",
         compact_target.table, compaction_num_block_hint
     );
-    if compaction_num_block_hint == 0 {
+    if compaction_num_block_hint == 0 && auto_compaction_disabled(&ctx, &compact_target).await? {
         return Ok(());
     }
+    // A zero hint still lets the block compactor inspect the newly written segment and its
+    // neighbor. It also keeps the recluster step reachable for tables with a cluster key.
     let compaction_limits = CompactionLimits {
         segment_limit: None,
         block_limit: Some(compaction_num_block_hint as usize),
@@ -183,6 +186,30 @@ pub(crate) async fn execute_compact_hook(
     );
 
     Ok(())
+}
+
+async fn auto_compaction_disabled(
+    ctx: &Arc<QueryContext>,
+    compact_target: &CompactTargetTableDescription,
+) -> Result<bool> {
+    let table = ctx
+        .get_table(
+            &compact_target.catalog,
+            &compact_target.database,
+            &compact_target.table,
+        )
+        .await?;
+    let threshold = match table
+        .get_table_info()
+        .options()
+        .get(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD)
+    {
+        Some(value) => value.parse::<u64>()?,
+        None => ctx
+            .get_settings()
+            .get_auto_compaction_imperfect_blocks_threshold()?,
+    };
+    Ok(threshold == 0)
 }
 
 /// compact the target table, will do optimize table actions, including:
