@@ -397,21 +397,14 @@ impl FuseTable {
         }
     }
 
-    fn append_top_n_column_fields_from_options(
+    fn append_top_n_column_fields(
         table_schema: TableSchemaRef,
-        top_n_size: Option<usize>,
-        frequency_columns: Option<&str>,
-    ) -> Result<BTreeMap<FieldIndex, TableField>> {
-        let Some(_) = top_n_size else {
-            return Ok(BTreeMap::new());
-        };
-        let Some(columns) = frequency_columns else {
-            return Ok(BTreeMap::new());
-        };
+        columns: ApproxDistinctColumns,
+    ) -> BTreeMap<FieldIndex, TableField> {
         let source_schema = table_schema.remove_virtual_computed_fields();
         let mut fields_map = BTreeMap::new();
 
-        match columns.parse::<ApproxDistinctColumns>()? {
+        match columns {
             ApproxDistinctColumns::All => {
                 for (i, field) in source_schema.fields.into_iter().enumerate() {
                     if RangeIndex::supported_table_type(field.data_type()) {
@@ -433,26 +426,26 @@ impl FuseTable {
             ApproxDistinctColumns::None => {}
         }
 
-        Ok(fields_map)
+        fields_map
     }
 
     pub(crate) fn append_top_n_columns(
         &self,
         source_schema: TableSchemaRef,
     ) -> Result<Option<(BTreeMap<FieldIndex, TableField>, usize)>> {
-        let top_n_size = analyze_top_n_size_from_options(self.table_info.options())?;
-        let frequency_columns = self
+        let Some(top_n_size) = analyze_top_n_size_from_options(self.table_info.options())? else {
+            return Ok(None);
+        };
+        let Some(columns) = self
             .table_info
             .options()
             .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
-            .map(String::as_str);
-        let top_n_columns_map = Self::append_top_n_column_fields_from_options(
-            source_schema,
-            top_n_size,
-            frequency_columns,
-        )?;
-        Ok(top_n_size
-            .and_then(|size| (!top_n_columns_map.is_empty()).then_some((top_n_columns_map, size))))
+        else {
+            return Ok(None);
+        };
+        let columns = columns.parse::<ApproxDistinctColumns>()?;
+        let top_n_columns_map = Self::append_top_n_column_fields(source_schema, columns);
+        Ok((!top_n_columns_map.is_empty()).then_some((top_n_columns_map, top_n_size)))
     }
 
     pub fn enable_virtual_column(&self) -> bool {
@@ -1607,6 +1600,7 @@ mod tests {
     use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
     use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
+    use super::ApproxDistinctColumns;
     use super::FuseTable;
     use super::allow_credential_chain_for_s3;
     use super::is_system_history_table;
@@ -1699,12 +1693,14 @@ mod tests {
             TableField::new("nested", TableDataType::Variant),
         ]));
 
-        let fields = FuseTable::append_top_n_column_fields_from_options(
+        let fields = FuseTable::append_top_n_column_fields(
             schema,
-            Some(3),
-            Some("a, dropped, nested"),
-        )
-        .unwrap();
+            ApproxDistinctColumns::Specify(vec![
+                "a".to_string(),
+                "dropped".to_string(),
+                "nested".to_string(),
+            ]),
+        );
 
         assert_eq!(fields.len(), 1);
         assert_eq!(fields.values().next().unwrap().name(), "a");
