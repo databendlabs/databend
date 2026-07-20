@@ -53,6 +53,7 @@ pub struct DoExchangeParams {
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
+    local_node_id: String,
     remote_node_id: String,
 }
 
@@ -78,11 +79,13 @@ impl FlightOperation {
 pub(crate) fn add_flight_error_context(
     error: ErrorCode,
     operation: FlightOperation,
+    local_node_id: &str,
     remote_node_id: &str,
 ) -> ErrorCode {
     error.add_message_back(format!(
-        "(flight {}, node={})",
+        "(flight {}, client={}, service={})",
         operation.as_str(),
+        local_node_id,
         remote_node_id,
     ))
 }
@@ -91,6 +94,7 @@ pub(crate) fn add_flight_error_context(
 impl FlightClient {
     pub fn new(
         mut inner: FlightServiceClient<Channel>,
+        local_node_id: impl Into<String>,
         remote_node_id: impl Into<String>,
     ) -> FlightClient {
         inner = inner.max_decoding_message_size(usize::MAX);
@@ -98,6 +102,7 @@ impl FlightClient {
 
         FlightClient {
             inner,
+            local_node_id: local_node_id.into(),
             remote_node_id: remote_node_id.into(),
         }
     }
@@ -142,6 +147,7 @@ impl FlightClient {
             add_flight_error_context(
                 ErrorCode::from(status),
                 FlightOperation::DoAction,
+                &self.local_node_id,
                 &self.remote_node_id,
             )
         })?;
@@ -150,6 +156,7 @@ impl FlightClient {
             add_flight_error_context(
                 ErrorCode::from(status),
                 FlightOperation::DoAction,
+                &self.local_node_id,
                 &self.remote_node_id,
             )
         })?;
@@ -167,6 +174,7 @@ impl FlightClient {
                             path, cause
                         )),
                         FlightOperation::DoAction,
+                        &self.local_node_id,
                         &self.remote_node_id,
                     )
                 })
@@ -177,6 +185,7 @@ impl FlightClient {
                     path
                 )),
                 FlightOperation::DoAction,
+                &self.local_node_id,
                 &self.remote_node_id,
             )),
         }
@@ -198,7 +207,11 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming, self.remote_node_id.clone());
+        let (notify, rx) = Self::streaming_receiver(
+            streaming,
+            self.local_node_id.clone(),
+            self.remote_node_id.clone(),
+        );
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
@@ -214,12 +227,17 @@ impl FlightClient {
 
         let streaming = self.get_streaming(request).await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming, self.remote_node_id.clone());
+        let (notify, rx) = Self::streaming_receiver(
+            streaming,
+            self.local_node_id.clone(),
+            self.remote_node_id.clone(),
+        );
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
         mut streaming: Streaming<FlightData>,
+        local_node_id: String,
         remote_node_id: String,
     ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
@@ -249,6 +267,7 @@ impl FlightClient {
                                     let error = add_flight_error_context(
                                         ErrorCode::from(status),
                                         FlightOperation::DoGet,
+                                        &local_node_id,
                                         &remote_node_id,
                                     );
                                     let _ = tx.send(Err(error)).await;
@@ -277,6 +296,7 @@ impl FlightClient {
             Err(status) => Err(add_flight_error_context(
                 ErrorCode::from(status),
                 FlightOperation::DoGet,
+                &self.local_node_id,
                 &self.remote_node_id,
             )),
         }
@@ -304,6 +324,7 @@ impl FlightClient {
                 Err(status) => Err(add_flight_error_context(
                     ErrorCode::from(status),
                     FlightOperation::DoExchange,
+                    &self.local_node_id,
                     &self.remote_node_id,
                 )),
             }

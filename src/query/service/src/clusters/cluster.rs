@@ -1024,12 +1024,14 @@ pub async fn create_client(
         add_flight_error_context(
             ErrorCode::from(error),
             FlightOperation::Connect,
+            &config.query.node_id,
             remote_node_id,
         )
     })?;
 
     Ok(FlightClient::new(
         FlightServiceClient::new(channel),
+        &config.query.node_id,
         remote_node_id,
     ))
 }

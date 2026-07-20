@@ -196,14 +196,19 @@ impl Drop for ExchangeSinkBufferInner {
 }
 
 impl ExchangeSinkBufferSharedState {
-    fn status_to_error(status: Status, remote_node_id: &str) -> ErrorCode {
+    fn status_to_error(status: Status, local_node_id: &str, remote_node_id: &str) -> ErrorCode {
         let error = if status.code() == Code::Aborted {
             ErrorCode::AbortedQuery(status.message().to_string())
         } else {
             status.into()
         };
 
-        add_flight_error_context(error, FlightOperation::DoExchange, remote_node_id)
+        add_flight_error_context(
+            error,
+            FlightOperation::DoExchange,
+            local_node_id,
+            remote_node_id,
+        )
     }
 
     fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
@@ -225,6 +230,7 @@ impl ExchangeSinkBufferSharedState {
 
             state.close(Self::status_to_error(
                 status,
+                remote.exchange.local_node_id(),
                 remote.exchange.remote_node_id(),
             ));
             remote.exchange.ready_send();
@@ -233,6 +239,7 @@ impl ExchangeSinkBufferSharedState {
 
         state.close(Self::status_to_error(
             status,
+            remote.exchange.local_node_id(),
             remote.exchange.remote_node_id(),
         ));
     }
@@ -261,6 +268,7 @@ impl PingPongCallback for SinkBufferCallback {
         state.close(add_flight_error_context(
             ErrorCode::AbortedQuery(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE),
             FlightOperation::DoExchange,
+            remote.exchange.local_node_id(),
             remote.exchange.remote_node_id(),
         ));
     }
@@ -331,6 +339,7 @@ impl ExchangeSinkBuffer {
             Err(status) => {
                 let error = ExchangeSinkBufferSharedState::status_to_error(
                     status,
+                    remote.exchange.local_node_id(),
                     remote.exchange.remote_node_id(),
                 );
                 return Err(self.close_remote(dest_idx, error));
@@ -359,6 +368,7 @@ impl ExchangeSinkBuffer {
                 Err(status) => {
                     let error = ExchangeSinkBufferSharedState::status_to_error(
                         status,
+                        remote.exchange.local_node_id(),
                         remote.exchange.remote_node_id(),
                     );
                     remote.close_state_and_notify(&mut state, error.clone());
@@ -414,7 +424,13 @@ mod tests {
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx, "query-node-1");
+        let exchange = PingPongExchange::from_stream(
+            num_threads,
+            send_tx,
+            pong_rx,
+            "query-node-0",
+            "query-node-1",
+        );
         (exchange, send_rx, pong_tx)
     }
 
@@ -782,7 +798,7 @@ mod tests {
         assert_eq!(
             error.message(),
             format!(
-                "{}\n(flight do_exchange, node=query-node-1)",
+                "{}\n(flight do_exchange, client=query-node-0, service=query-node-1)",
                 REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE
             )
         );

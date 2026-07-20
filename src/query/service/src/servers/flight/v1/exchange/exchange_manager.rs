@@ -117,6 +117,7 @@ async fn create_flight_client(
     keep_alive: FlightKeepAliveParams,
 ) -> Result<FlightClient> {
     let config = GlobalConfig::instance();
+    let local_node_id = config.query.node_id.clone();
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let task = async move {
         let channel = match config.tls_query_cli_enabled() {
@@ -143,12 +144,14 @@ async fn create_flight_client(
             add_flight_error_context(
                 ErrorCode::from(error),
                 FlightOperation::Connect,
+                &local_node_id,
                 &remote_node_id,
             )
         })?;
 
         Ok(FlightClient::new(
             FlightServiceClient::new(channel),
+            local_node_id,
             remote_node_id,
         ))
     };
@@ -378,6 +381,7 @@ impl DataExchangeManager {
                     } = edge
                     {
                         let target_id = target.id.clone();
+                        let local_node_id = config.query.node_id.clone();
                         let query_id = env.query_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
@@ -415,6 +419,7 @@ impl DataExchangeManager {
                                     num_threads,
                                     send_tx,
                                     response_stream,
+                                    local_node_id,
                                     target_id.clone(),
                                 ),
                             })
@@ -558,6 +563,7 @@ impl DataExchangeManager {
         keep_alive: FlightKeepAliveParams,
     ) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
+        let local_node_id = config.query.node_id.clone();
         let address = address.to_string();
         let remote_node_id = remote_node_id.to_string();
         let keep_alive_config = build_keep_alive_config(keep_alive);
@@ -586,12 +592,14 @@ impl DataExchangeManager {
                 add_flight_error_context(
                     ErrorCode::from(error),
                     FlightOperation::Connect,
+                    &local_node_id,
                     &remote_node_id,
                 )
             })?;
 
             Ok(FlightClient::new(
                 FlightServiceClient::new(channel),
+                local_node_id,
                 remote_node_id,
             ))
         };
