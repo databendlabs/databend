@@ -107,7 +107,7 @@ impl BlockPruner {
                             prune_result,
                             block_meta.clone(),
                             block_meta.row_count,
-                            false,
+                            true,
                         )
                         .await?;
 

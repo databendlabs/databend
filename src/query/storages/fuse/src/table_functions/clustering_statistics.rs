@@ -62,6 +62,9 @@ impl TableMetaFunc for ClusteringStatistics {
                 TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
             ),
             TableField::new("block_depth", TableDataType::Number(NumberDataType::UInt64)),
+            // `pages` is intentionally removed from this public schema rather than kept as an
+            // always-NULL compatibility placeholder. It represented the removed Native-format
+            // page statistics, and retaining it would expose a capability that no longer exists.
         ])
     }
 
