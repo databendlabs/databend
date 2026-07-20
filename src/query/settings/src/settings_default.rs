@@ -1350,6 +1350,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("cluster_key_ordered_topk_lazy_read_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Sets the maximum LIMIT for top-k-specific lazy reads when max_cluster_key_ordered_topk_overlap is nonzero. 0 disables this lazy path.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_cluster_key_ordered_topk_overlap", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum overlapping cluster-key block streams for ordered top-k reads. 0 disables the optimization",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_fixed_rows_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable fixed rows sort serialize",

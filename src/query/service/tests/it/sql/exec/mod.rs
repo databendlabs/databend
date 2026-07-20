@@ -179,6 +179,7 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
             rewrite_kind: _rewrite_kind,
             formatted_ast: _formatted_ast,
             ignore_result: _ignore_result,
+            ..
         } = query_plan
         {
             let tbl_entries = {

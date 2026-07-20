@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write as _;
+
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use databend_common_base::base::OrderedFloat;
@@ -46,6 +48,8 @@ use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::display_decimal_128;
+use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -248,8 +252,29 @@ impl FieldEncoderBytes {
     }
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
-        let data = column.index(row_index).unwrap().to_string();
-        out_buf.extend_from_slice(data.as_bytes());
+        let result = match column {
+            DecimalColumn::Decimal64(values, size) => {
+                let value = unsafe { *values.get_unchecked(row_index) };
+                write!(
+                    out_buf,
+                    "{}",
+                    display_decimal_128(value as i128, size.scale())
+                )
+            }
+            DecimalColumn::Decimal128(values, size) => {
+                let value = unsafe { *values.get_unchecked(row_index) };
+                write!(out_buf, "{}", display_decimal_128(value, size.scale()))
+            }
+            DecimalColumn::Decimal256(values, size) => {
+                let value = unsafe { *values.get_unchecked(row_index) };
+                if let Ok(value) = i128::try_from(value.0) {
+                    write!(out_buf, "{}", display_decimal_128(value, size.scale()))
+                } else {
+                    write!(out_buf, "{}", display_decimal_256(value.0, size.scale()))
+                }
+            }
+        };
+        result.expect("writing a decimal to Vec<u8> cannot fail");
     }
 
     fn write_binary(
@@ -526,5 +551,57 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         let scalar = unsafe { column.index_unchecked(row_index) };
         let hex_bytes = hex::encode_upper(scalar.to_le_bytes());
         out_buf.extend_from_slice(hex_bytes.as_bytes());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::decimal::DecimalColumn;
+    use databend_common_expression::types::decimal::DecimalSize;
+    use databend_common_expression::types::decimal::i256;
+    use databend_common_io::prelude::OutputFormatSettings;
+
+    use super::FieldEncoderBytes;
+
+    #[test]
+    fn test_mysql_decimal_encoding_matches_display() {
+        let encoder = FieldEncoderBytes::create_for_mysql_handler(&OutputFormatSettings::default());
+        let columns = vec![
+            DecimalColumn::Decimal64(
+                vec![12345_i64, -1, 0].into(),
+                DecimalSize::new_unchecked(18, 2),
+            ),
+            DecimalColumn::Decimal128(
+                vec![12345_i128, -1, 0].into(),
+                DecimalSize::new_unchecked(38, 2),
+            ),
+            DecimalColumn::Decimal256(
+                vec![
+                    i256::new(12345),
+                    i256::new(-1),
+                    i256::ZERO,
+                    i256::from_words(1, 0),
+                ]
+                .into(),
+                DecimalSize::new_unchecked(65, 2),
+            ),
+        ];
+
+        for decimal_column in columns {
+            let expected = (0..decimal_column.len())
+                .map(|row_index| decimal_column.index(row_index).unwrap().to_string())
+                .collect::<Vec<_>>();
+            let column = Column::Decimal(decimal_column);
+
+            for (row_index, expected) in expected.iter().enumerate() {
+                let mut out = Vec::new();
+                encoder
+                    .write_field(&column, row_index, &mut out, false)
+                    .unwrap();
+
+                assert_eq!(out.as_slice(), expected.as_bytes());
+            }
+        }
     }
 }

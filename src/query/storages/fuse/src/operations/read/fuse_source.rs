@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -19,9 +20,11 @@ use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
@@ -57,13 +60,29 @@ pub fn build_fuse_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
+    let preserve_order = plan.parts.kind == PartitionsShuffleKind::PreserveOrder;
+    if preserve_order {
+        // Keep the original scan-stream count. Each stream reads its assigned
+        // subsequence in order; downstream PresortedMerge performs the only
+        // inter-stream merge.
+        max_io_requests = max_io_requests.min(max_threads);
+    }
+
     let waker = pipeline.get_waker();
-    let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+    let batch_size = if preserve_order {
+        1
+    } else {
+        ctx.get_settings().get_storage_fetch_part_num()? as usize
+    };
     let stream: Arc<dyn PartitionStream> = match receiver {
         Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
         None => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if preserve_order {
+                partitions.disable_steal();
+            }
 
             Arc::new(StealPartitionStream::new(partitions.clone(), batch_size))
         }
@@ -96,7 +115,7 @@ pub fn build_fuse_source_pipeline(
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),
         storage_format,
-        block_reader.read_context(),
+        block_reader.clone(),
         block_format,
         index_reader.clone(),
         virtual_reader.clone(),
@@ -119,7 +138,9 @@ pub fn build_fuse_source_pipeline(
         max_io_requests
     );
 
-    pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    if !preserve_order {
+        pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    }
 
     info!(
         "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
@@ -176,10 +197,57 @@ pub fn dispatch_partitions(
         return results;
     }
 
+    if plan.parts.kind == PartitionsShuffleKind::PreserveOrder {
+        return dispatch_presorted_partitions(partitions, max_streams).expect(
+            "presorted partitions must fit the stream count validated by the physical planner",
+        );
+    }
+
     for (i, part) in partitions.iter().enumerate() {
         results[i % max_streams].push_back(part.clone());
     }
     results
+}
+
+fn dispatch_presorted_partitions(
+    partitions: Vec<PartInfoPtr>,
+    max_streams: usize,
+) -> Option<Vec<VecDeque<PartInfoPtr>>> {
+    let mut results = vec![VecDeque::new(); max_streams];
+    let mut stream_maxes: Vec<Vec<Scalar>> = Vec::new();
+
+    for part in partitions {
+        let fuse_part = crate::FuseBlockPartInfo::from_part(&part).ok()?;
+        let stats = fuse_part.cluster_stats.as_ref()?;
+        let min = stats.min();
+        let max = stats.max();
+        let reusable_stream = stream_maxes
+            .iter()
+            .enumerate()
+            .min_by(|(_, left), (_, right)| compare_cluster_values(left, right))
+            .and_then(|(index, stream_max)| {
+                (compare_cluster_values(stream_max, min) != Ordering::Greater).then_some(index)
+            });
+
+        let stream_index = match reusable_stream {
+            Some(index) => index,
+            None if stream_maxes.len() < max_streams => {
+                stream_maxes.push(max.clone());
+                stream_maxes.len() - 1
+            }
+            None => return None,
+        };
+        stream_maxes[stream_index] = max.clone();
+        results[stream_index].push_back(part);
+    }
+
+    Some(results)
+}
+
+fn compare_cluster_values(left: &[Scalar], right: &[Scalar]) -> Ordering {
+    left.iter()
+        .map(Scalar::as_ref)
+        .cmp(right.iter().map(Scalar::as_ref))
 }
 
 pub fn adjust_threads_and_request(

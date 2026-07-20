@@ -984,6 +984,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
     }
 
+    pub fn get_cluster_key_ordered_topk_lazy_read_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("cluster_key_ordered_topk_lazy_read_threshold")? as usize)
+    }
+
+    pub fn get_max_cluster_key_ordered_topk_overlap(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_cluster_key_ordered_topk_overlap")? as usize)
+    }
+
     pub fn get_enable_fixed_rows_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
     }

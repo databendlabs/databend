@@ -40,6 +40,7 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FuseTable;
 use crate::io::StreamBlockProperties;
 use crate::operations::TransformBlockBuilder;
@@ -320,11 +321,16 @@ impl FuseTable {
             }
         }
 
+        let max_page_size = match self.get_option(FUSE_OPT_KEY_DATA_PAGE_ROWS, 0usize) {
+            0 => None,
+            value => Some(value),
+        };
+
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
-            None,
+            max_page_size,
             level,
             block_thresholds,
             operators,

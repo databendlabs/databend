@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_pipeline::core::PlanProfile;
 use log::error;
@@ -42,7 +43,9 @@ pub fn log_query_start(ctx: &QueryContext) {
         SessionManager::instance().status.write().query_start(now);
     }
 
-    if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
+    if InterpreterQueryLog::enabled()
+        && let Err(error) = InterpreterQueryLog::log_start(ctx, now, None)
+    {
         error!("Failed to log query start: {:?}", error)
     }
 }
@@ -52,6 +55,7 @@ pub fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
     InterpreterMetrics::record_query_finished(ctx, error.clone());
 
     let now = SystemTime::now();
+    ctx.set_finish_time(now);
     let session = ctx.get_current_session();
 
     session.get_status().write().query_finish();
@@ -72,11 +76,16 @@ pub fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
 
     info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
 
-    // databend::log::profile
-    let query_profiles = ctx.get_query_profiles();
+    let query_log_enabled = InterpreterQueryLog::enabled();
+    let profile_log_enabled = GlobalConfig::instance().log.profile.on;
+    let query_profiles = if query_log_enabled || profile_log_enabled {
+        ctx.get_query_profiles()
+    } else {
+        Vec::new()
+    };
     let has_profiles = !query_profiles.is_empty();
 
-    if has_profiles {
+    if has_profiles && profile_log_enabled {
         #[derive(serde::Serialize)]
         struct QueryProfiles {
             query_id: String,
@@ -98,9 +107,9 @@ pub fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
         }
     }
 
-    // databend::log::query
-    if let Err(error) =
-        InterpreterQueryLog::log_finish(ctx, now, error, has_profiles, &query_profiles)
+    if query_log_enabled
+        && let Err(error) =
+            InterpreterQueryLog::log_finish(ctx, now, error, has_profiles, &query_profiles)
     {
         error!("Failed to log query finish: {:?}", error)
     }

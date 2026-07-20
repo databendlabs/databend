@@ -756,6 +756,16 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
+        // Direct user grants do not require resolving an ownership object.
+        if self
+            .ctx
+            .get_current_user()?
+            .grants
+            .verify_privilege(grant_object, privilege)
+        {
+            return Ok(());
+        }
+
         let verify_ownership = match grant_object {
             GrantObject::Database(_, _)
             | GrantObject::Table(_, _, _)

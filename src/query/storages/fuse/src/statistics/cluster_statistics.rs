@@ -177,7 +177,11 @@ impl ClusterStatsGenerator {
         // For vector cluster keys, scalar keys after the vector key are aggregated from the
         // full block because the block is sorted by the injected vector sort key, not by
         // those scalar suffix keys.
-        if self.vector_operator.is_none() && !self.cluster_key_index.is_empty() {
+        // Page boundaries also require the full block instead of only its endpoints.
+        if self.max_page_size.is_none()
+            && self.vector_operator.is_none()
+            && !self.cluster_key_index.is_empty()
+        {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
             block = block.take(indices.as_slice())?;
         }
@@ -538,8 +542,10 @@ pub(crate) fn get_min_max_stats(
 #[cfg(test)]
 mod tests {
     use databend_common_expression::ColumnRef;
+    use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::number::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -622,5 +628,47 @@ mod tests {
 
         assert_eq!(min, vec![int32_scalar(i32::MIN)]);
         assert_eq!(max, vec![int32_scalar(i32::MAX)]);
+    }
+
+    #[test]
+    fn test_cluster_statistics_pages_keep_composite_key_boundaries() -> Result<()> {
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3]),
+            Int32Type::from_data(vec![10, 11, 12, 20, 21, 30, 31]),
+        ]);
+        let stats_gen = ClusterStatsGenerator::new(
+            0,
+            vec![0, 1],
+            0,
+            Some(3),
+            0,
+            BlockThresholds::default(),
+            vec![],
+            None,
+            vec![],
+            FunctionContext::default(),
+        );
+
+        let (stats, _) = stats_gen.gen_stats_for_append(block.clone())?;
+        let pages = stats.unwrap().pages.unwrap();
+        let expected_pages = vec![
+            Scalar::Tuple(vec![int32_scalar(1), int32_scalar(10)]),
+            Scalar::Tuple(vec![int32_scalar(2), int32_scalar(20)]),
+            Scalar::Tuple(vec![int32_scalar(3), int32_scalar(31)]),
+        ];
+        assert_eq!(pages, expected_pages);
+
+        let origin_stats = Some(ClusterStatistics::new(
+            0,
+            vec![int32_scalar(1), int32_scalar(10)],
+            vec![int32_scalar(3), int32_scalar(31)],
+            0,
+            None,
+        ));
+        let stats = stats_gen
+            .gen_with_origin_stats(&block, origin_stats)?
+            .unwrap();
+        assert_eq!(stats.pages.unwrap(), expected_pages);
+        Ok(())
     }
 }

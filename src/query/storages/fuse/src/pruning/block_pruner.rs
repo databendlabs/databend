@@ -277,13 +277,18 @@ impl BlockPruner {
                 let block = block_metas[prune_result.block_idx].clone();
 
                 debug_assert_eq!(prune_result.block_location, block.location.0);
+                let page_size = prune_result
+                    .range
+                    .as_ref()
+                    .and(self.pruning_ctx.page_size)
+                    .unwrap_or(block.page_size() as usize);
 
                 result.push((
                     BlockMetaIndex {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
-                        page_size: block.page_size() as usize,
+                        page_size,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
@@ -493,12 +498,16 @@ impl BlockPruner {
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
                 if keep {
+                    let page_size = range
+                        .as_ref()
+                        .and(self.pruning_ctx.page_size)
+                        .unwrap_or(block_meta.page_size() as usize);
                     result.push((
                         BlockMetaIndex {
                             segment_idx: segment_location.segment_idx,
                             block_idx,
                             range,
-                            page_size: block_meta.page_size() as usize,
+                            page_size,
                             block_id: block_id_in_segment(block_num, block_idx),
                             block_location: block_meta.as_ref().location.0.clone(),
                             segment_location: segment_location.location.0.clone(),

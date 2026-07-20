@@ -37,12 +37,14 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -188,7 +190,9 @@ impl IPhysicalPlan for TableScan {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
 
-        if builder.ctx.get_settings().get_enable_prune_pipeline()? {
+        if self.source.parts.kind != PartitionsShuffleKind::PreserveOrder
+            && builder.ctx.get_settings().get_enable_prune_pipeline()?
+        {
             if let Some(prune_pipeline) = table.build_prune_pipeline(
                 builder.ctx.clone(),
                 &self.source,
@@ -761,26 +765,31 @@ impl PhysicalPlanBuilder {
                     true,
                 );
 
-                let predicate = prewhere
+                let predicates = prewhere
                     .predicates
                     .iter()
-                    .cloned()
-                    .reduce(|lhs, rhs| {
-                        ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "and_filters".to_string(),
-                            params: vec![],
-                            arguments: vec![lhs, rhs],
-                        })
+                    .map(|predicate| {
+                        predicate
+                            .as_raw_expr()
+                            .type_check(&metadata)?
+                            .project_column_ref(|col| Ok(col.column_name.clone()))
                     })
-                    .expect("there should be at least one predicate in prewhere");
+                    .collect::<Result<Vec<_>>>()?;
+                let mut predicates = flatten_prewhere_predicates(predicates);
+                for predicate in &mut predicates {
+                    let (folded, _) =
+                        ConstantFolder::fold(predicate, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    *predicate = folded;
+                }
+                reorder_prewhere_predicates(&mut predicates);
 
-                let filter = cast_expr_to_non_null_boolean(
-                    predicate
-                        .as_raw_expr()
-                        .type_check(&metadata)?
-                        .project_column_ref(|col| Ok(col.column_name.clone()))?,
-                )?;
+                let predicate = predicates
+                    .into_iter()
+                    .try_reduce(|lhs, rhs| {
+                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    })?
+                    .expect("there should be at least one predicate in prewhere");
+                let filter = cast_expr_to_non_null_boolean(predicate)?;
                 let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
@@ -1104,5 +1113,178 @@ impl PhysicalPlanBuilder {
             }
             Projection::InnerColumns(col_indices)
         }
+    }
+}
+
+fn flatten_prewhere_predicates(predicates: Vec<Expr<String>>) -> Vec<Expr<String>> {
+    let mut flattened = Vec::with_capacity(predicates.len());
+    for predicate in predicates {
+        flatten_prewhere_predicate(predicate, &mut flattened);
+    }
+    flattened
+}
+
+fn flatten_prewhere_predicate(predicate: Expr<String>, flattened: &mut Vec<Expr<String>>) {
+    match predicate {
+        Expr::FunctionCall(call)
+            if matches!(call.function.signature.name.as_str(), "and" | "and_filters") =>
+        {
+            for argument in call.args {
+                flatten_prewhere_predicate(argument, flattened);
+            }
+        }
+        predicate => flattened.push(predicate),
+    }
+}
+
+fn reorder_prewhere_predicates(predicates: &mut [Expr<String>]) {
+    if predicates.iter().all(|predicate| {
+        predicate.is_deterministic(&BUILTIN_FUNCTIONS) && SelectExprBuilder::can_reorder(predicate)
+    }) {
+        predicates.sort_by_key(prewhere_predicate_cost);
+    }
+}
+
+fn prewhere_predicate_cost(predicate: &Expr<String>) -> u8 {
+    match predicate {
+        Expr::FunctionCall(call) => match call.function.signature.name.as_str() {
+            "is_null" | "is_not_null" => 0,
+            "eq" | "noteq" | "gt" | "lt" | "gte" | "lte" => call
+                .args
+                .iter()
+                .map(|argument| prewhere_data_type_cost(argument.data_type()))
+                .max()
+                .unwrap_or(4),
+            "not" if call.args.len() == 1 => prewhere_predicate_cost(&call.args[0]),
+            _ => 4,
+        },
+        _ => prewhere_data_type_cost(predicate.data_type()),
+    }
+}
+
+fn prewhere_data_type_cost(data_type: &DataType) -> u8 {
+    match data_type {
+        DataType::Nullable(inner) => prewhere_data_type_cost(inner),
+        DataType::Null
+        | DataType::Boolean
+        | DataType::Number(_)
+        | DataType::Timestamp
+        | DataType::TimestampTz
+        | DataType::Date => 0,
+        DataType::String => 2,
+        DataType::Decimal(_) => 3,
+        _ => 4,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Cast;
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Constant;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::number::NumberScalar;
+
+    use super::*;
+
+    fn column(name: &str, data_type: DataType) -> Expr<String> {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type,
+            display_name: name.to_string(),
+        })
+    }
+
+    #[test]
+    fn test_reorder_prewhere_predicates_by_evaluation_cost() {
+        let mut predicates = vec![
+            column(
+                "decimal",
+                DataType::Decimal(DecimalSize::new_unchecked(65, 30)),
+            ),
+            column("string", DataType::String),
+            column("number", DataType::Number(NumberDataType::Int8)),
+            column(
+                "nullable_number",
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            ),
+        ];
+
+        reorder_prewhere_predicates(&mut predicates);
+        let names = predicates
+            .iter()
+            .map(|predicate| match predicate {
+                Expr::ColumnRef(column) => column.id.as_str(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, ["number", "nullable_number", "string", "decimal"]);
+    }
+
+    #[test]
+    fn test_constant_fold_makes_safe_cast_reorderable() {
+        let casted_constant = Expr::Cast(Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Number(NumberScalar::Int8(1)),
+                data_type: DataType::Number(NumberDataType::Int8),
+            })),
+            dest_type: DataType::Number(NumberDataType::Int64),
+        });
+        let predicate = check_function(
+            None,
+            "eq",
+            &[],
+            &[
+                column("number", DataType::Number(NumberDataType::Int64)),
+                casted_constant,
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+
+        assert!(!SelectExprBuilder::can_reorder(&predicate));
+
+        let (folded, _) = ConstantFolder::fold(&predicate, &Default::default(), &BUILTIN_FUNCTIONS);
+
+        assert!(SelectExprBuilder::can_reorder(&folded));
+        let Expr::FunctionCall(call) = folded else {
+            unreachable!()
+        };
+        assert!(matches!(call.args[1], Expr::Constant(_)));
+    }
+
+    #[test]
+    fn test_flatten_nested_prewhere_conjunctions() {
+        let a = column("a", DataType::Boolean);
+        let b = column("b", DataType::Boolean);
+        let c = column("c", DataType::Boolean);
+        let nested = check_function(
+            None,
+            "and_filters",
+            &[],
+            &[
+                a,
+                check_function(None, "and_filters", &[], &[b, c], &BUILTIN_FUNCTIONS).unwrap(),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+
+        let flattened = flatten_prewhere_predicates(vec![nested]);
+        let names = flattened
+            .iter()
+            .map(|predicate| match predicate {
+                Expr::ColumnRef(column) => column.id.as_str(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["a", "b", "c"]);
     }
 }

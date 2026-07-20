@@ -25,10 +25,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionID;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::expr::*;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -46,6 +49,14 @@ pub struct PageIndex {
 
     // index of the cluster key inside the schema
     cluster_key_fields: Vec<DataField>,
+    cluster_key_sources: Vec<ClusterKeyDomainSource>,
+}
+
+#[derive(Clone)]
+enum ClusterKeyDomainSource {
+    None,
+    Column { name: String, data_type: DataType },
+    StringPrefix { name: String, data_type: DataType },
 }
 
 impl PageIndex {
@@ -62,10 +73,45 @@ impl PageIndex {
             .map(|name| data_schema.field_with_name(name.as_str()).unwrap().clone())
             .collect::<Vec<_>>();
 
+        let cluster_key_sources = cluster_key_fields
+            .iter()
+            .map(|field| ClusterKeyDomainSource::Column {
+                name: field.name().clone(),
+                data_type: field.data_type().clone(),
+            })
+            .collect();
+
         Ok(Self {
             column_refs: expr.column_refs(),
             expr: expr.clone(),
             cluster_key_fields,
+            cluster_key_sources,
+            cluster_key_id,
+            func_ctx,
+        })
+    }
+
+    pub fn try_create_with_exprs(
+        func_ctx: FunctionContext,
+        cluster_key_id: u32,
+        cluster_keys: &[RemoteExpr<String>],
+        expr: &Expr<String>,
+    ) -> Result<Self> {
+        let mut cluster_key_fields = Vec::with_capacity(cluster_keys.len());
+        let mut cluster_key_sources = Vec::with_capacity(cluster_keys.len());
+        for cluster_key in cluster_keys {
+            cluster_key_fields.push(DataField::new(
+                &cluster_key_field_name(cluster_key),
+                remote_expr_data_type(cluster_key).clone(),
+            ));
+            cluster_key_sources.push(cluster_key_domain_source(cluster_key));
+        }
+
+        Ok(Self {
+            column_refs: expr.column_refs(),
+            expr: expr.clone(),
+            cluster_key_fields,
+            cluster_key_sources,
             cluster_key_id,
             func_ctx,
         })
@@ -74,10 +120,12 @@ impl PageIndex {
     pub fn try_apply_const(&self) -> Result<bool> {
         // if the exprs did not contains the first cluster key, we should return true
         if self.cluster_key_fields.is_empty()
-            || !self
-                .column_refs
-                .iter()
-                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c.0))
+            || !self.column_refs.iter().any(|column| {
+                self.cluster_key_sources
+                    .iter()
+                    .filter_map(ClusterKeyDomainSource::column_name)
+                    .any(|source| source == column.0)
+            })
         {
             return Ok(true);
         }
@@ -97,16 +145,19 @@ impl PageIndex {
         let Some(stats) = stats else {
             return Ok((true, None));
         };
-        let min_values: Vec<Scalar> = match stats.pages {
-            Some(ref pages) => pages.clone(),
-            None => return Ok((true, None)),
-        };
-
-        let max_value = Scalar::Tuple(stats.max().clone());
 
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));
         }
+
+        let max_value = Scalar::Tuple(stats.max().clone());
+        let min_values: Vec<Scalar> = match stats.pages {
+            Some(ref pages) => pages.clone(),
+            None => {
+                let min_value = Scalar::Tuple(stats.min().clone());
+                return Ok((self.eval_single_page(&min_value, &max_value)?, None));
+            }
+        };
 
         if min_values.is_empty() {
             return Ok((true, None));
@@ -166,11 +217,10 @@ impl PageIndex {
 
         let mut input_domains = HashMap::with_capacity(self.cluster_key_fields.len());
         for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
-            let f = &self.cluster_key_fields[idx];
-            if self.column_refs.contains_key(f.name()) {
-                let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
-                let domain = statistics_to_domain(vec![&stat], f.data_type());
-                input_domains.insert(f.name().clone(), domain);
+            if let Some((column, domain)) = self.cluster_key_sources[idx].domain(min, max)
+                && self.column_refs.contains_key(&column)
+            {
+                input_domains.insert(column, domain);
             }
 
             // For Tuple scalars, if the first element is not equal, then the monotonically increasing property is broken.
@@ -217,4 +267,130 @@ impl PageIndex {
             })
         ))
     }
+}
+
+impl ClusterKeyDomainSource {
+    fn column_name(&self) -> Option<&str> {
+        match self {
+            ClusterKeyDomainSource::None => None,
+            ClusterKeyDomainSource::Column { name, .. }
+            | ClusterKeyDomainSource::StringPrefix { name, .. } => Some(name),
+        }
+    }
+
+    fn domain(&self, min: &Scalar, max: &Scalar) -> Option<(String, Domain)> {
+        match self {
+            ClusterKeyDomainSource::None => None,
+            ClusterKeyDomainSource::Column { name, data_type } => {
+                let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
+                Some((name.clone(), statistics_to_domain(vec![&stat], data_type)))
+            }
+            ClusterKeyDomainSource::StringPrefix { name, data_type } => {
+                let min = min.as_string()?;
+                let max = max.as_string()?;
+                let upper = string_prefix_upper_bound(max)?;
+                let stat = ColumnStatistics::new(
+                    Scalar::String(min.to_string()),
+                    Scalar::String(upper),
+                    1,
+                    0,
+                    None,
+                );
+                Some((name.clone(), statistics_to_domain(vec![&stat], data_type)))
+            }
+        }
+    }
+}
+
+fn cluster_key_field_name(expr: &RemoteExpr<String>) -> String {
+    match expr {
+        RemoteExpr::ColumnRef { id, .. } => id.clone(),
+        _ => expr.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+    }
+}
+
+fn cluster_key_domain_source(expr: &RemoteExpr<String>) -> ClusterKeyDomainSource {
+    match expr {
+        RemoteExpr::ColumnRef { id, data_type, .. } => {
+            if matches!(data_type.remove_nullable(), DataType::String) {
+                ClusterKeyDomainSource::StringPrefix {
+                    name: id.clone(),
+                    data_type: data_type.clone(),
+                }
+            } else {
+                ClusterKeyDomainSource::Column {
+                    name: id.clone(),
+                    data_type: data_type.clone(),
+                }
+            }
+        }
+        RemoteExpr::FunctionCall { id, args, .. }
+            if matches!(function_name(id), "substr" | "substring")
+                && args.len() == 3
+                && is_one(&args[1]) =>
+        {
+            match &args[0] {
+                RemoteExpr::ColumnRef { id, data_type, .. }
+                    if matches!(data_type.remove_nullable(), DataType::String) =>
+                {
+                    ClusterKeyDomainSource::StringPrefix {
+                        name: id.clone(),
+                        data_type: data_type.clone(),
+                    }
+                }
+                _ => ClusterKeyDomainSource::None,
+            }
+        }
+        _ => ClusterKeyDomainSource::None,
+    }
+}
+
+fn function_name(id: &FunctionID) -> &str {
+    match id {
+        FunctionID::Builtin { name, .. } | FunctionID::Factory { name, .. } => name,
+    }
+}
+
+fn is_one(expr: &RemoteExpr<String>) -> bool {
+    match expr {
+        RemoteExpr::Cast { expr, .. } => is_one(expr),
+        RemoteExpr::Constant {
+            scalar:
+                Scalar::Number(
+                    NumberScalar::UInt8(1)
+                    | NumberScalar::UInt16(1)
+                    | NumberScalar::UInt32(1)
+                    | NumberScalar::UInt64(1)
+                    | NumberScalar::Int8(1)
+                    | NumberScalar::Int16(1)
+                    | NumberScalar::Int32(1)
+                    | NumberScalar::Int64(1),
+                ),
+            ..
+        } => true,
+        _ => false,
+    }
+}
+
+fn remote_expr_data_type(expr: &RemoteExpr<String>) -> &DataType {
+    match expr {
+        RemoteExpr::Constant { data_type, .. } => data_type,
+        RemoteExpr::ColumnRef { data_type, .. } => data_type,
+        RemoteExpr::Cast { dest_type, .. } => dest_type,
+        RemoteExpr::FunctionCall { return_type, .. } => return_type,
+        RemoteExpr::LambdaFunctionCall { return_type, .. } => return_type,
+    }
+}
+
+fn string_prefix_upper_bound(prefix: &str) -> Option<String> {
+    let mut chars = prefix.chars().collect::<Vec<_>>();
+    for index in (0..chars.len()).rev() {
+        let codepoint = chars[index] as u32;
+        if let Some(next) = char::from_u32(codepoint.checked_add(1)?) {
+            chars[index] = next;
+            chars.truncate(index + 1);
+            return Some(chars.into_iter().collect());
+        }
+    }
+    None
 }

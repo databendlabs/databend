@@ -349,7 +349,16 @@ impl<Op: CmpOp> ScalarFunction for DecimalCmp<Op> {
                                     T::e(size_calc.scale() - b_type.scale()),
                                 );
 
-                                if (f_a == f_b) {
+                                let a_is_zero =
+                                    matches!(&a, Value::Scalar(value) if *value == T::zero());
+                                let b_is_zero =
+                                    matches!(&b, Value::Scalar(value) if *value == T::zero());
+
+                                if b_is_zero {
+                                    compare_decimal(a, b, |a, _, _| Op::is(a.cmp(&T::zero())), ctx)
+                                } else if a_is_zero {
+                                    compare_decimal(a, b, |_, b, _| Op::is(T::zero().cmp(&b)), ctx)
+                                } else if f_a == f_b {
                                     compare_decimal(a, b, |a, b, _| Op::is(a.cmp(&b)), ctx)
                                 } else {
                                     compare_decimal(
@@ -540,5 +549,51 @@ mod tests {
 
         assert!(large.scaled_value(1).is_none());
         assert_eq!(large.cmp_exact(&smaller), None);
+    }
+
+    #[test]
+    fn decimal_cmp_fast_path_handles_scalar_zero_on_either_side() {
+        let column = Decimal256Type::from_data_with_size(
+            vec![(-100).into(), i256::zero(), 100.into()],
+            Some(DecimalSize::new_unchecked(65, 30)),
+        );
+        let zero = Scalar::Decimal(DecimalScalar::Decimal64(
+            0,
+            DecimalSize::new_unchecked(1, 0),
+        ));
+        let func_ctx = FunctionContext::default();
+
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 3,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let result = DecimalCmp::<GtOp>::default().eval(
+            &[
+                Value::<AnyType>::Column(column.clone()),
+                Value::<AnyType>::Scalar(zero.clone()),
+            ],
+            &mut ctx,
+        );
+        let Value::Column(result) = result.try_downcast::<BooleanType>().unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(result.iter().collect::<Vec<_>>(), [false, false, true]);
+
+        let result = DecimalCmp::<LtOp>::default().eval(
+            &[
+                Value::<AnyType>::Scalar(zero),
+                Value::<AnyType>::Column(column),
+            ],
+            &mut ctx,
+        );
+        let Value::Column(result) = result.try_downcast::<BooleanType>().unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(result.iter().collect::<Vec<_>>(), [false, false, true]);
     }
 }

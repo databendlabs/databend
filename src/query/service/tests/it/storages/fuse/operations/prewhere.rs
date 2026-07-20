@@ -332,10 +332,12 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         bloom_filter_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
+        file_size: 0,
         columns_meta: column_metas.clone(),
         columns_stat: None,
         compression,
         sort_min_max: None,
+        cluster_stats: None,
         block_meta_index: None,
     };
 

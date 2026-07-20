@@ -105,5 +105,22 @@ select count(*) from t5;
 ----
 1000
 
+# data_page_rows also defines the cluster-stat page boundaries used for pruning
+statement ok
+create or replace table t6(a int, b int)
+cluster by linear(a, b)
+row_per_block=100
+data_page_rows=2
+storage_format='parquet';
+
+statement ok
+insert into t6 values (0, 0), (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);
+
+query II
+select count(*), count_if(pages is not null)
+from clustering_statistics('test_data_page_options', 't6');
+----
+1 1
+
 statement ok
 drop database test_data_page_options;
