@@ -70,9 +70,10 @@ use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::DoExchangeParams;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
+use crate::servers::flight::FlightOperation;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
-use crate::servers::flight::add_flight_node_context;
+use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -138,7 +139,13 @@ async fn create_flight_client(
                 .await
             }
         }
-        .map_err(|error| add_flight_node_context(ErrorCode::from(error), &remote_node_id))?;
+        .map_err(|error| {
+            add_flight_error_context(
+                ErrorCode::from(error),
+                FlightOperation::Connect,
+                &remote_node_id,
+            )
+        })?;
 
         Ok(FlightClient::new(
             FlightServiceClient::new(channel),
@@ -575,7 +582,13 @@ impl DataExchangeManager {
                     .await
                 }
             }
-            .map_err(|error| add_flight_node_context(ErrorCode::from(error), &remote_node_id))?;
+            .map_err(|error| {
+                add_flight_error_context(
+                    ErrorCode::from(error),
+                    FlightOperation::Connect,
+                    &remote_node_id,
+                )
+            })?;
 
             Ok(FlightClient::new(
                 FlightServiceClient::new(channel),

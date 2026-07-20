@@ -56,10 +56,34 @@ pub struct FlightClient {
     remote_node_id: String,
 }
 
-pub(crate) fn add_flight_node_context(error: ErrorCode, remote_node_id: &str) -> ErrorCode {
+#[derive(Clone, Copy)]
+pub(crate) enum FlightOperation {
+    Connect,
+    DoAction,
+    DoGet,
+    DoExchange,
+}
+
+impl FlightOperation {
+    fn as_str(self) -> &'static str {
+        match self {
+            FlightOperation::Connect => "connect",
+            FlightOperation::DoAction => "do_action",
+            FlightOperation::DoGet => "do_get",
+            FlightOperation::DoExchange => "do_exchange",
+        }
+    }
+}
+
+pub(crate) fn add_flight_error_context(
+    error: ErrorCode,
+    operation: FlightOperation,
+    remote_node_id: &str,
+) -> ErrorCode {
     error.add_message_back(format!(
-        "(while communicating with node {} via query flight)",
-        remote_node_id
+        "(flight {}, node={})",
+        operation.as_str(),
+        remote_node_id,
     ))
 }
 
@@ -115,11 +139,19 @@ impl FlightClient {
         );
 
         let response = self.inner.do_action(request).await.map_err(|status| {
-            add_flight_node_context(ErrorCode::from(status), &self.remote_node_id)
+            add_flight_error_context(
+                ErrorCode::from(status),
+                FlightOperation::DoAction,
+                &self.remote_node_id,
+            )
         })?;
 
         let response = response.into_inner().message().await.map_err(|status| {
-            add_flight_node_context(ErrorCode::from(status), &self.remote_node_id)
+            add_flight_error_context(
+                ErrorCode::from(status),
+                FlightOperation::DoAction,
+                &self.remote_node_id,
+            )
         })?;
 
         match response {
@@ -129,20 +161,22 @@ impl FlightClient {
                 let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
 
                 Res::deserialize(deserializer).map_err(|cause| {
-                    add_flight_node_context(
+                    add_flight_error_context(
                         ErrorCode::BadBytes(format!(
                             "Response payload deserialize error while in {:?}, cause: {}",
                             path, cause
                         )),
+                        FlightOperation::DoAction,
                         &self.remote_node_id,
                     )
                 })
             }
-            None => Err(add_flight_node_context(
+            None => Err(add_flight_error_context(
                 ErrorCode::EmptyDataFromServer(format!(
                     "Can not receive data from flight server, action: {:?}",
                     path
                 )),
+                FlightOperation::DoAction,
                 &self.remote_node_id,
             )),
         }
@@ -212,8 +246,9 @@ impl FlightClient {
                                     }
                                 }
                                 Err(status) => {
-                                    let error = add_flight_node_context(
+                                    let error = add_flight_error_context(
                                         ErrorCode::from(status),
+                                        FlightOperation::DoGet,
                                         &remote_node_id,
                                     );
                                     let _ = tx.send(Err(error)).await;
@@ -239,8 +274,9 @@ impl FlightClient {
     async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
         match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
-            Err(status) => Err(add_flight_node_context(
+            Err(status) => Err(add_flight_error_context(
                 ErrorCode::from(status),
+                FlightOperation::DoGet,
                 &self.remote_node_id,
             )),
         }
@@ -265,8 +301,9 @@ impl FlightClient {
 
             match self.inner.do_exchange(request).await {
                 Ok(response) => Ok(response.into_inner()),
-                Err(status) => Err(add_flight_node_context(
+                Err(status) => Err(add_flight_error_context(
                     ErrorCode::from(status),
+                    FlightOperation::DoExchange,
                     &self.remote_node_id,
                 )),
             }

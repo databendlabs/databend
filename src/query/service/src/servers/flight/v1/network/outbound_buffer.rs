@@ -31,7 +31,8 @@ use super::outbound_transport::PingPongCallback;
 use super::outbound_transport::PingPongExchange;
 use super::outbound_transport::PingPongResponse;
 use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
-use crate::servers::flight::add_flight_node_context;
+use crate::servers::flight::FlightOperation;
+use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
 
 /// Configuration for ExchangeSinkBuffer.
@@ -202,7 +203,7 @@ impl ExchangeSinkBufferSharedState {
             status.into()
         };
 
-        add_flight_node_context(error, remote_node_id)
+        add_flight_error_context(error, FlightOperation::DoExchange, remote_node_id)
     }
 
     fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
@@ -257,8 +258,9 @@ impl PingPongCallback for SinkBufferCallback {
     fn on_closed(&self) {
         let remote = &self.buffer.remotes[self.dest_idx];
         let mut state = remote.state.lock();
-        state.close(add_flight_node_context(
+        state.close(add_flight_error_context(
             ErrorCode::AbortedQuery(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE),
+            FlightOperation::DoExchange,
             remote.exchange.remote_node_id(),
         ));
     }
@@ -780,7 +782,7 @@ mod tests {
         assert_eq!(
             error.message(),
             format!(
-                "{}\n(while communicating with node query-node-1 via query flight)",
+                "{}\n(flight do_exchange, node=query-node-1)",
                 REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE
             )
         );
