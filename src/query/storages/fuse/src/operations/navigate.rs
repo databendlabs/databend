@@ -759,7 +759,7 @@ impl FuseTable {
         let cluster_key_meta = match snapshot.cluster_type {
             Some(ClusterType::Linear) => snapshot_cluster_key_meta,
             Some(ClusterType::Hilbert) => None,
-            None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 => {
+            None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_meta() => {
                 snapshot_cluster_key_meta
             }
             None => None,

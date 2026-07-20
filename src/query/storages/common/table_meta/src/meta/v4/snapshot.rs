@@ -117,7 +117,7 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
-        summary: Statistics,
+        mut summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
@@ -160,6 +160,14 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        let cluster_key_id = cluster_key_meta.as_ref().map(|(id, _)| *id);
+        if summary
+            .cluster_stats
+            .as_ref()
+            .is_some_and(|stats| Some(stats.cluster_key_id) != cluster_key_id)
+        {
+            summary.cluster_stats = None;
+        }
         let cluster_type = cluster_key_meta.as_ref().map(|_| ClusterType::Linear);
         let logical_change_counters = Some(
             prev_snapshot
@@ -189,16 +197,12 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        let mut summary = previous.summary.clone();
-        if target_cluster_key_meta.is_none() {
-            summary.cluster_stats = None;
-        }
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::try_new(
             prev_table_seq,
             Some(previous.clone()),
             previous.schema.clone(),
-            summary,
+            previous.summary.clone(),
             previous.segments.clone(),
             target_cluster_key_meta,
             previous.table_statistics_location.clone(),
