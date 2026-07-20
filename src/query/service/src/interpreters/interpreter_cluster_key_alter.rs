@@ -81,6 +81,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
                 if let Some(snapshot) = snapshot_opt {
                     snapshot.cluster_key_meta = cluster_key_meta.clone();
                     snapshot.cluster_type = Some(ClusterType::Linear);
+                    snapshot.summary.cluster_stats = None;
                 }
                 if plan.branch.is_none() {
                     meta.cluster_key_v2 = cluster_key_meta;

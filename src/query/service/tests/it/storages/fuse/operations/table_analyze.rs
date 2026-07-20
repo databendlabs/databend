@@ -274,6 +274,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let snapshot_0 = fuse_table.read_table_snapshot().await?.unwrap();
     let snapshot_1 = TableSnapshot::try_from_previous(
         snapshot_0.clone(),
+        fuse_table.cluster_key_meta(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -295,6 +296,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     // genenrate snapshot without prev_table_seq
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
+        fuse_table.cluster_key_meta(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
