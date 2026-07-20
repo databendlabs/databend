@@ -23,4 +23,5 @@ pub use flight_client::FlightClient;
 pub use flight_client::FlightExchange;
 pub use flight_client::FlightReceiver;
 pub use flight_client::FlightSender;
+pub(crate) use flight_client::add_flight_node_context;
 pub use flight_service::FlightService;

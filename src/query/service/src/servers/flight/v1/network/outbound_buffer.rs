@@ -31,6 +31,7 @@ use super::outbound_transport::PingPongCallback;
 use super::outbound_transport::PingPongExchange;
 use super::outbound_transport::PingPongResponse;
 use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use crate::servers::flight::add_flight_node_context;
 use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
 
 /// Configuration for ExchangeSinkBuffer.
@@ -194,12 +195,14 @@ impl Drop for ExchangeSinkBufferInner {
 }
 
 impl ExchangeSinkBufferSharedState {
-    fn status_to_error(status: Status) -> ErrorCode {
-        if status.code() == Code::Aborted {
-            return ErrorCode::AbortedQuery(status.message().to_string());
-        }
+    fn status_to_error(status: Status, remote_node_id: &str) -> ErrorCode {
+        let error = if status.code() == Code::Aborted {
+            ErrorCode::AbortedQuery(status.message().to_string())
+        } else {
+            status.into()
+        };
 
-        status.into()
+        add_flight_node_context(error, remote_node_id)
     }
 
     fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
@@ -219,12 +222,18 @@ impl ExchangeSinkBufferSharedState {
                 return;
             };
 
-            state.close(Self::status_to_error(status));
+            state.close(Self::status_to_error(
+                status,
+                remote.exchange.remote_node_id(),
+            ));
             remote.exchange.ready_send();
             return;
         };
 
-        state.close(Self::status_to_error(status));
+        state.close(Self::status_to_error(
+            status,
+            remote.exchange.remote_node_id(),
+        ));
     }
 }
 
@@ -248,8 +257,9 @@ impl PingPongCallback for SinkBufferCallback {
     fn on_closed(&self) {
         let remote = &self.buffer.remotes[self.dest_idx];
         let mut state = remote.state.lock();
-        state.close(ErrorCode::AbortedQuery(
-            REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE,
+        state.close(add_flight_node_context(
+            ErrorCode::AbortedQuery(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE),
+            remote.exchange.remote_node_id(),
         ));
     }
 }
@@ -317,7 +327,10 @@ impl ExchangeSinkBuffer {
             Ok(None) => return Ok(()),
             Ok(Some(data)) => data,
             Err(status) => {
-                let error = ExchangeSinkBufferSharedState::status_to_error(status);
+                let error = ExchangeSinkBufferSharedState::status_to_error(
+                    status,
+                    remote.exchange.remote_node_id(),
+                );
                 return Err(self.close_remote(dest_idx, error));
             }
         };
@@ -342,7 +355,10 @@ impl ExchangeSinkBuffer {
                     let _ = state.channels[tid].pending_queue.push(item);
                 }
                 Err(status) => {
-                    let error = ExchangeSinkBufferSharedState::status_to_error(status);
+                    let error = ExchangeSinkBufferSharedState::status_to_error(
+                        status,
+                        remote.exchange.remote_node_id(),
+                    );
                     remote.close_state_and_notify(&mut state, error.clone());
                     return Err(error);
                 }
@@ -396,7 +412,7 @@ mod tests {
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx);
+        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx, "query-node-1");
         (exchange, send_rx, pong_tx)
     }
 
@@ -761,7 +777,13 @@ mod tests {
             .await
             .expect_err("closed request channel should abort the exchange");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
-        assert_eq!(error.message(), REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE);
+        assert_eq!(
+            error.message(),
+            format!(
+                "{}\n(while communicating with node query-node-1 via query flight)",
+                REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE
+            )
+        );
         assert!(
             buffer.is_closed(0),
             "direct send failure should mark the remote as closed"

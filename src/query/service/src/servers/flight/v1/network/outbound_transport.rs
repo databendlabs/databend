@@ -51,6 +51,7 @@ pub struct PingPongExchangeInner {
     in_flight: AtomicBool,
     send_time: Mutex<Option<Instant>>,
     send_tx: Sender<FlightData>,
+    remote_node_id: String,
     pub shutdown: WatchNotify,
 }
 
@@ -128,19 +129,22 @@ impl PingPongExchange {
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
         response_stream: tonic::Streaming<FlightData>,
+        remote_node_id: String,
     ) -> Self {
-        Self::from_stream(num_threads, send_tx, response_stream)
+        Self::from_stream(num_threads, send_tx, response_stream, remote_node_id)
     }
 
     pub fn from_stream(
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
         stream: impl futures::Stream<Item = Result<FlightData, Status>> + Send + 'static,
+        remote_node_id: impl Into<String>,
     ) -> Self {
         let inner = Arc::new(PingPongExchangeInner {
             in_flight: AtomicBool::new(false),
             send_time: Mutex::new(None),
             send_tx,
+            remote_node_id: remote_node_id.into(),
             shutdown: WatchNotify::new(),
         });
 
@@ -149,6 +153,10 @@ impl PingPongExchange {
             num_threads,
             response_stream: Mutex::new(Some(Box::pin(stream))),
         }
+    }
+
+    pub fn remote_node_id(&self) -> &str {
+        &self.inner.remote_node_id
     }
 
     /// Start the receiver with the given callback.
@@ -223,7 +231,7 @@ mod tests {
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx);
+        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx, "query-node-1");
         (exchange, send_rx, pong_tx)
     }
 
