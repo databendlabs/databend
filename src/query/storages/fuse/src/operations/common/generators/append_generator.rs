@@ -103,6 +103,17 @@ impl SnapshotGenerator for AppendGenerator {
         self.conflict_resolve_ctx = ctx;
     }
 
+    fn logical_change_delta(&self, previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        let deleted_rows = if self.overwrite {
+            previous
+                .as_ref()
+                .map_or(0, |snapshot| snapshot.summary.row_count)
+        } else {
+            0
+        };
+        (0, deleted_rows)
+    }
+
     async fn fill_default_values(
         &mut self,
         schema: &TableSchema,

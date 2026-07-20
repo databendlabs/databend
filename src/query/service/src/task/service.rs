@@ -94,6 +94,10 @@ use crate::task::session::get_task_user;
 
 pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
 
+const OVERLAPPING_EXECUTION: &str = "OVERLAPPING_EXECUTION";
+const WHEN_CONDITION_EVALUATION_ERROR: &str = "WHEN_CONDITION_EVALUATION_ERROR";
+const WHEN_CONDITION_FALSE: &str = "WHEN_CONDITION_FALSE";
+
 /// Currently, query uses the watch in meta to imitate channel to obtain tasks. When task messages are sent to channels, they are stored in meta using TaskMessage::key.
 /// TaskMessage::key is divided into only 4 types of keys that will overwrite each other to avoid repeated storage and repeated processing.
 /// Whenever a new key is inserted for overwriting, each query will receive the corresponding key change and process it, thus realizing the channel
@@ -219,7 +223,18 @@ impl TaskService {
 
             // Delete cleanup updates shared metadata, so it must run even if the
             // task's assigned warehouse currently has no live query node.
-            if !matches!(&task_message, TaskMessage::DeleteTask(_, _, _)) {
+            let is_delete = matches!(&task_message, TaskMessage::DeleteTask(_, _, _));
+            if is_delete
+                && self
+                    .create_context(None)
+                    .await?
+                    .get_cluster()
+                    .get_warehouse_id()
+                    .is_err()
+            {
+                continue;
+            }
+            if !is_delete {
                 if let Some(WarehouseOptions {
                     warehouse: Some(warehouse),
                     ..
@@ -280,18 +295,29 @@ impl TaskService {
                                 runtime
                                     .spawn(async move {
                                         let mut fn_work = async move || {
-                                            task.next_scheduled_at = Some(Utc::now() + duration);
-                                            task_mgr.update_task(task.clone()).await??;
+                                            let committed_at = Utc::now();
+                                            task.next_scheduled_at = Some(committed_at + duration);
+                                            task.updated_at = committed_at;
+                                            if !task_mgr.update_task(task.clone()).await?? {
+                                                return Ok(());
+                                            }
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        let committed_at = Utc::now();
+                                                        task.next_scheduled_at = Some(committed_at + duration);
+                                                        task.updated_at = committed_at;
+                                                        if !task_mgr.update_task(task.clone()).await?? {
+                                                            break;
+                                                        }
                                                         if task_service.has_executing_task_run(&task.task_name).await? {
+                                                            task_service.record_overlapping_skip(&task).await?;
                                                             continue;
                                                         }
-                                                        if !Self::check_when(&task, &owner, &task_service).await? {
+                                                        if !Self::check_when_and_record(&task, &owner, &task_service).await? {
                                                             continue;
                                                         }
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
@@ -323,25 +349,38 @@ impl TaskService {
                                 runtime
                                     .spawn(async move {
                                         let mut fn_work = async move || {
-                                            let upcoming = schedule.upcoming(tz);
+                                            let mut upcoming = schedule.upcoming(tz).peekable();
 
-                                            for next_time in upcoming {
+                                            while let Some(next_time) = upcoming.next() {
                                                 let now = Utc::now();
                                                 let duration = (next_time.with_timezone(&Utc) - now)
                                                     .to_std()
                                                     .unwrap_or(Duration::ZERO);
 
-                                                task.next_scheduled_at = Some(Utc::now() + duration);
-                                                task_mgr.update_task(task.clone()).await??;
+                                                task.next_scheduled_at = Some(next_time.with_timezone(&Utc));
+                                                task.updated_at = now;
+                                                if !task_mgr.update_task(task.clone()).await?? {
+                                                    break;
+                                                }
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        let committed_at = Utc::now();
+                                                        let next_scheduled_at = upcoming
+                                                            .peek()
+                                                            .map(|next| next.with_timezone(&Utc));
+                                                        task.next_scheduled_at = next_scheduled_at;
+                                                        task.updated_at = committed_at;
+                                                        if !task_mgr.update_task(task.clone()).await?? {
+                                                            break;
+                                                        }
                                                         if task_service.has_executing_task_run(&task.task_name).await? {
+                                                            task_service.record_overlapping_skip(&task).await?;
                                                             continue;
                                                         }
-                                                        if !Self::check_when(&task, &owner, &task_service).await? {
+                                                        if !Self::check_when_and_record(&task, &owner, &task_service).await? {
                                                             continue;
                                                         }
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
@@ -387,6 +426,7 @@ impl TaskService {
                     };
 
                     if task_service.has_executing_task_run(&task_name).await? {
+                        task_service.record_overlapping_skip(&task).await?;
                         continue;
                     }
                     let mut task_run = Self::new_task_run(&task);
@@ -420,19 +460,22 @@ impl TaskService {
                                                 .ok_or_else(|| ErrorCode::UnknownTask(next_task))?;
                                             let next_owner =
                                                 Self::get_task_owner(&next_task, &tenant).await?;
-                                            if Self::check_when(
+                                            if task_service
+                                                .has_executing_task_run(&next_task.task_name)
+                                                .await?
+                                            {
+                                                task_service
+                                                    .record_overlapping_skip(&next_task)
+                                                    .await?;
+                                                continue;
+                                            }
+                                            if Self::check_when_and_record(
                                                 &next_task,
                                                 &next_owner,
                                                 &task_service,
                                             )
                                             .await?
                                             {
-                                                if task_service
-                                                    .has_executing_task_run(&next_task.task_name)
-                                                    .await?
-                                                {
-                                                    continue;
-                                                }
                                                 task_mgr
                                                     .send(TaskMessage::ExecuteTask(next_task))
                                                     .await
@@ -605,6 +648,58 @@ impl TaskService {
         }
     }
 
+    fn new_terminal_task_run(
+        task: &Task,
+        state: State,
+        error_code: i64,
+        error_message: String,
+    ) -> TaskRun {
+        let now = Utc::now();
+        TaskRun {
+            task: task.clone(),
+            run_id: Self::make_run_id(),
+            attempt_number: 0,
+            state,
+            scheduled_at: now,
+            completed_at: Some(now),
+            error_code,
+            error_message: Some(error_message),
+            root_task_id: EMPTY_TASK_ID,
+        }
+    }
+
+    async fn record_overlapping_skip(&self, task: &Task) -> Result<()> {
+        let reason = format!("{OVERLAPPING_EXECUTION}: previous task run is still executing");
+        let task_run = Self::new_terminal_task_run(task, State::Skipped, 0, reason);
+        self.update_or_create_task_run(&task_run).await?;
+        Ok(())
+    }
+
+    async fn check_when_and_record(
+        task: &Task,
+        user: &UserInfo,
+        task_service: &Arc<TaskService>,
+    ) -> Result<bool> {
+        match Self::check_when(task, user, task_service).await {
+            Ok(true) => Ok(true),
+            Ok(false) => {
+                let condition = task.when_condition.as_deref().unwrap_or_default();
+                let reason =
+                    format!("{WHEN_CONDITION_FALSE}: condition '{condition}' evaluated to false");
+                let task_run = Self::new_terminal_task_run(task, State::Skipped, 0, reason);
+                task_service.update_or_create_task_run(&task_run).await?;
+                Ok(false)
+            }
+            Err(err) => {
+                let reason = format!("{WHEN_CONDITION_EVALUATION_ERROR}: {}", err.message());
+                let task_run =
+                    Self::new_terminal_task_run(task, State::Failed, err.code() as i64, reason);
+                task_service.update_or_create_task_run(&task_run).await?;
+                Ok(false)
+            }
+        }
+    }
+
     async fn check_when(
         task: &Task,
         user: &UserInfo,
@@ -714,6 +809,7 @@ impl TaskService {
             State::Succeeded => "SUCCEEDED".to_string(),
             State::Failed => "FAILED".to_string(),
             State::Cancelled => "CANCELLED".to_string(),
+            State::Skipped => "SKIPPED".to_string(),
         };
         let scheduled_at = task_run.scheduled_at.timestamp();
         let completed_at = task_run
@@ -762,6 +858,7 @@ impl TaskService {
             completed_at,
             ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn
         FROM system_task.task_run
+        WHERE NOT (state = 'SKIPPED' AND COALESCE(error_message, '') LIKE 'OVERLAPPING_EXECUTION:%')
     ) ranked
     WHERE rn = 1
 ),
@@ -930,6 +1027,7 @@ WHERE ta.task_name = {task_name}
             State::Succeeded => "SUCCEEDED",
             State::Failed => "FAILED",
             State::Cancelled => "CANCELLED",
+            State::Skipped => "SKIPPED",
         });
         let error_message = Self::sql_optional_string(task_run.error_message.as_deref());
         let completed_at = task_run

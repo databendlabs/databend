@@ -47,6 +47,15 @@ impl SnapshotGenerator for TruncateGenerator {
         self
     }
 
+    fn logical_change_delta(&self, previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        (
+            0,
+            previous
+                .as_ref()
+                .map_or(0, |snapshot| snapshot.summary.row_count),
+        )
+    }
+
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,

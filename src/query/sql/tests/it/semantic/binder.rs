@@ -580,6 +580,14 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             setup_sqls: &["CREATE TABLE empsalary(empno UInt64, salary UInt64)"],
             sql: "SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) FROM empsalary",
         },
+        SqlTestCase {
+            name: "grouping_sets_select_alias_with_grouping_func_does_not_shadow_column",
+            description: "A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.",
+            setup_sqls: &[
+                "CREATE TABLE events(category_id UInt64, label String, amount Decimal(18,6))",
+            ],
+            sql: "SELECT if(grouping(category_id)=1, 0, category_id) AS category_id, label, sum(amount) FROM events GROUP BY GROUPING SETS ((label), (category_id, label))",
+        },
     ];
 
     run_binder_cases("binder_grouping.txt", &cases).await

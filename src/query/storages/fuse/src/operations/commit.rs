@@ -317,8 +317,8 @@ impl FuseTable {
     pub(crate) async fn generate_table_stats(
         &self,
         snapshot: &Option<Arc<TableSnapshot>>,
-        insert_hll: &BlockHLL,
-        insert_rows: u64,
+        statistics_hll: &BlockHLL,
+        statistics_rows: u64,
         insert_top_n: &BlockTopN,
         refresh_top_n: bool,
     ) -> Result<TableStatsGenerator> {
@@ -327,7 +327,7 @@ impl FuseTable {
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
         // Previous statistics file location (if any).
         let mut prev_stats_location = snapshot.table_statistics_location();
-        let top_n_columns = if refresh_top_n && insert_rows > 0 {
+        let top_n_columns = if refresh_top_n && statistics_rows > 0 {
             self.append_top_n_columns(self.schema())?
                 .map(|(columns, _)| {
                     columns
@@ -340,10 +340,10 @@ impl FuseTable {
             HashMap::new()
         };
         let has_top_n_update = !top_n_columns.is_empty();
-        let table_row_count = summary.row_count.saturating_add(insert_rows);
+        let table_row_count = summary.row_count.saturating_add(statistics_rows);
 
-        // If no new rows/statistics are inserted, just reuse previous statistics.
-        if insert_rows == 0 || (insert_hll.is_empty() && !has_top_n_update) {
+        // If no rows are covered by commit-local statistics, just reuse previous statistics.
+        if statistics_rows == 0 || (statistics_hll.is_empty() && !has_top_n_update) {
             return Ok(TableStatsGenerator::new(
                 prev_stats_meta.cloned(),
                 prev_stats_location,
@@ -355,20 +355,20 @@ impl FuseTable {
         }
 
         // Initialize a new HLL with commit-local HLL.
-        let mut new_hll = insert_hll.clone();
-        let mut next_stats_meta = if insert_hll.is_empty() {
+        let mut new_hll = statistics_hll.clone();
+        let mut next_stats_meta = if statistics_hll.is_empty() {
             prev_stats_meta.cloned()
         } else {
             None
         };
         // Calculate updated row_count
-        let (hll_row_count, unstats_rows) = match (!insert_hll.is_empty(), prev_stats_meta) {
+        let (hll_row_count, unstats_rows) = match (!statistics_hll.is_empty(), prev_stats_meta) {
             (false, _) => (0, 0),
             // Case 1: Previous stats exist and already contain HLL → merge directly
             (true, Some(v)) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
-                (v.row_count + insert_rows, v.unstats_rows)
+                (v.row_count + statistics_rows, v.unstats_rows)
             }
             // Case 2: Previous meta has no HLL → need to load from stats file
             (true, _) => {
@@ -402,27 +402,27 @@ impl FuseTable {
                             merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                             let prev_rows = prev.summary.row_count;
                             (
-                                prev_rows + insert_rows,
+                                prev_rows + statistics_rows,
                                 summary.row_count.saturating_sub(prev_rows),
                             )
                         } else {
                             // Could not load previous snapshot → old stats are invalid
                             // Drop prev_stats_location to mark stats as "reset",
-                            // and only use commit-local insert rows as the new base.
+                            // and only use commit-local statistics rows as the new base.
                             prev_stats_location = None;
-                            (insert_rows, summary.row_count)
+                            (statistics_rows, summary.row_count)
                         }
                     } else {
-                        // Normal case: accumulate old row_count + commit-local insert rows.
+                        // Normal case: accumulate old row_count + commit-local statistics rows.
                         merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                         (
-                            prev_stats.row_count + insert_rows,
+                            prev_stats.row_count + statistics_rows,
                             summary.row_count.saturating_sub(prev_stats.row_count),
                         )
                     }
                 } else {
                     // No previous stats available.
-                    (insert_rows, summary.row_count)
+                    (statistics_rows, summary.row_count)
                 }
             }
         };

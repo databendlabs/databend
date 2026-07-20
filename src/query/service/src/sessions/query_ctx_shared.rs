@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -64,6 +65,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -188,6 +190,10 @@ pub struct QueryContextShared {
     /// Cached full visibility checker (ignore_ownership=false, Object::All).
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Limits concurrent RowFetch reads and decodes across all pipelines and
+    /// QueryContext instances belonging to this query on the local node.
+    row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
 }
 
 impl QueryContextShared {
@@ -260,7 +266,14 @@ impl QueryContextShared {
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            row_fetch_io_semaphore: Default::default(),
         }))
+    }
+
+    pub(super) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
+        self.row_fetch_io_semaphore
+            .get_or_init(|| Arc::new(Semaphore::new(max_threads.max(1))))
+            .clone()
     }
 
     pub fn get_version(&self) -> &BuildInfoRef {

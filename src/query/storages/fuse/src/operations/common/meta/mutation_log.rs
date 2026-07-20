@@ -34,6 +34,10 @@ use crate::operations::mutation::SegmentIndex;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
     pub entries: Vec<MutationLogEntry>,
+    #[serde(default)]
+    pub logical_updated_rows: u64,
+    #[serde(default)]
+    pub logical_deleted_rows: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -47,7 +51,6 @@ pub enum MutationLogEntry {
     },
     AppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,
-        insert_rows: u64,
     },
     DeletedBlock {
         index: BlockMetaIndex,
@@ -58,7 +61,6 @@ pub enum MutationLogEntry {
     ReplacedBlock {
         index: BlockMetaIndex,
         block_meta: Arc<ExtendedBlockMeta>,
-        insert_rows: u64,
     },
     CompactExtras {
         extras: CompactExtraInfo,

@@ -387,8 +387,11 @@ impl ReplaceIntoOperationAggregator {
                     .add_message_back(e.to_string())
             })?;
 
+        let mut logical_deleted_rows = 0_u64;
         for maybe_log_entry in log_entries {
-            if let Some(segment_mutation_log) = maybe_log_entry? {
+            let (maybe_log_entry, deleted_rows) = maybe_log_entry?;
+            logical_deleted_rows += deleted_rows;
+            if let Some(segment_mutation_log) = maybe_log_entry {
                 mutation_logs.push(segment_mutation_log);
             }
         }
@@ -397,6 +400,8 @@ impl ReplaceIntoOperationAggregator {
 
         Ok(Some(MutationLogs {
             entries: mutation_logs,
+            logical_updated_rows: 0,
+            logical_deleted_rows,
         }))
     }
 }
@@ -409,7 +414,7 @@ impl AggregationContext {
         block_index: BlockIndex,
         block_meta: &BlockMeta,
         deleted_key_hashes: &(ahash::HashSet<UniqueKeyDigest>, Vec<Vec<u64>>),
-    ) -> Result<Option<MutationLogEntry>> {
+    ) -> Result<(Option<MutationLogEntry>, u64)> {
         let (deleted_key_hashes, bloom_hashes) = deleted_key_hashes;
         info!(
             "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
@@ -419,7 +424,7 @@ impl AggregationContext {
         );
 
         if block_meta.row_count == 0 {
-            return Ok(None);
+            return Ok((None, 0));
         }
 
         // apply bloom filter pruning if possible
@@ -430,7 +435,7 @@ impl AggregationContext {
         if pruned {
             // skip this block
             metrics_inc_replace_block_number_bloom_pruned(1);
-            return Ok(None);
+            return Ok((None, 0));
         }
 
         let key_columns_data = read_block(
@@ -481,7 +486,7 @@ impl AggregationContext {
             info!("nothing deleted");
             metrics_inc_replace_block_of_zero_row_deleted(1);
             // nothing to be deleted
-            return Ok(None);
+            return Ok((None, 0));
         }
 
         // shortcut: whole block deletion
@@ -498,7 +503,7 @@ impl AggregationContext {
                 },
             };
 
-            return Ok(Some(mutation));
+            return Ok((Some(mutation), delete_nums as u64));
         }
 
         let bitmap = bitmap.into();
@@ -584,10 +589,9 @@ impl AggregationContext {
                 block_idx: block_index,
             },
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
 
-        Ok(Some(mutation))
+        Ok((Some(mutation), delete_nums as u64))
     }
 
     fn overlapped(

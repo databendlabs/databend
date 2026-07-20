@@ -96,7 +96,8 @@ pub struct TableMutationAggregator {
     removed_statistics: Statistics,
     hll: BlockHLL,
     top_n: BlockTopN,
-    insert_rows: u64,
+    logical_updated_rows: u64,
+    logical_deleted_rows: u64,
     write_segment_ctx: WriteSegmentCtx,
 
     processed_log_entries: usize,
@@ -110,6 +111,8 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation_logs = MutationLogs::try_from(data)?;
+        self.logical_updated_rows += mutation_logs.logical_updated_rows;
+        self.logical_deleted_rows += mutation_logs.logical_deleted_rows;
         self.processed_log_entries += mutation_logs.entries.len();
         for entry in mutation_logs.entries {
             self.accumulate_log_entry(entry)?;
@@ -165,12 +168,12 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             }
             _ => self.apply_mutation(&mut new_segment_locs).await?,
         };
-
         let meta = CommitMeta::new(
             conflict_resolve_context,
             new_segment_locs,
             self.table_id,
-            self.insert_rows,
+            self.logical_updated_rows,
+            self.logical_deleted_rows,
             std::mem::take(&mut self.virtual_schema),
             self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
@@ -245,7 +248,8 @@ impl TableMutationAggregator {
             removed_statistics,
             hll: HashMap::new(),
             top_n: HashMap::new(),
-            insert_rows: 0,
+            logical_updated_rows: 0,
+            logical_deleted_rows: 0,
             write_segment_ctx,
             processed_log_entries: 0,
             table_id: table.get_id(),
@@ -263,13 +267,11 @@ impl TableMutationAggregator {
 
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) -> Result<()> {
         match log_entry {
-            MutationLogEntry::ReplacedBlock {
-                index,
-                block_meta,
-                insert_rows,
-            } => {
-                if insert_rows > 0 {
-                    self.insert_rows += insert_rows;
+            MutationLogEntry::ReplacedBlock { index, block_meta } => {
+                // UPDATE replacement blocks contain its after-images. MERGE/REPLACE
+                // replacement blocks only preserve unmatched rows; their added
+                // images arrive as AppendBlock entries.
+                if matches!(self.write_segment_ctx.kind, MutationKind::Update) {
                     BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
                 }
                 match self.extended_mutations.entry(index.segment_idx) {
@@ -284,12 +286,12 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::AppendBlock {
-                block_meta,
-                insert_rows,
-            } => {
-                if insert_rows > 0 {
-                    self.insert_rows += insert_rows;
+            MutationLogEntry::AppendBlock { block_meta } => {
+                // MERGE and REPLACE append logical INSERT/UPDATE after-images.
+                if matches!(
+                    self.write_segment_ctx.kind,
+                    MutationKind::MergeInto | MutationKind::Replace
+                ) {
                     BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
                 }
                 self.accumulate_top_n(block_meta.column_top_n.clone())?;
@@ -321,8 +323,7 @@ impl TableMutationAggregator {
                     &summary,
                     self.write_segment_ctx.default_cluster_key,
                 );
-                self.insert_rows += summary.row_count;
-                if !hll.is_empty() {
+                if matches!(self.write_segment_ctx.kind, MutationKind::Insert) && !hll.is_empty() {
                     merge_column_hll_mut(&mut self.hll, &hll);
                 }
                 self.accumulate_top_n(Some(top_n))?;
@@ -334,7 +335,7 @@ impl TableMutationAggregator {
                 virtual_schema,
                 mode,
             } => {
-                self.virtual_schema = virtual_schema.clone();
+                self.virtual_schema = virtual_schema;
                 self.virtual_schema_mode = mode;
             }
             MutationLogEntry::CompactExtras { extras } => {

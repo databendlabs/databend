@@ -822,10 +822,10 @@ impl AsyncTransform for NgramIndexTransform {
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)
@@ -917,10 +917,10 @@ impl AsyncTransform for VectorIndexTransform {
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)
@@ -1024,10 +1024,10 @@ impl AsyncTransform for SpatialIndexTransform {
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)

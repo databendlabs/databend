@@ -226,6 +226,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                             virtual_schema: Some(virtual_schema),
                             mode: VirtualSchemaMode::Merge,
                         }],
+                        ..Default::default()
                     };
                     let data_block = DataBlock::empty_with_meta(Box::new(meta));
                     self.output.push_data(Ok(data_block));
@@ -351,6 +352,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         hll,
                         top_n,
                     }],
+                    ..Default::default()
                 };
 
                 self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));

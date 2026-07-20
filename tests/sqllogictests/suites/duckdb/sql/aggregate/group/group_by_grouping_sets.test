@@ -346,3 +346,32 @@ drop table tt all;
 
 statement ok
 drop database grouping_sets;
+
+# Regression: SELECT alias containing grouping() must not shadow column in GROUPING SETS
+statement ok
+create database grouping_alias_regression;
+
+statement ok
+use grouping_alias_regression;
+
+statement ok
+create table events(category_id int, label string, amount int);
+
+statement ok
+insert into events values (1, 'A', 10), (1, 'B', 20), (2, 'A', 30), (2, 'B', 40);
+
+query IIT rowsort
+select if(grouping(category_id)=1, 0, category_id) as category_id, label, sum(amount) from events group by grouping sets ((label), (category_id, label));
+----
+0 A 40
+0 B 60
+1 A 10
+1 B 20
+2 A 30
+2 B 40
+
+statement ok
+drop table events all;
+
+statement ok
+drop database grouping_alias_regression;

@@ -76,9 +76,38 @@ impl TaskMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn update_task(&self, task: Task) -> Result<Result<(), TaskError>, TaskApiError> {
-        self.create_task_inner(task, &CreateOption::CreateOrReplace, true, None)
-            .await
+    pub async fn update_task(&self, task: Task) -> Result<Result<bool, TaskError>, TaskApiError> {
+        let key = TaskIdent::new(&self.tenant, &task.task_name);
+        loop {
+            let Some(seq_task) = self.kv_api.get_pb(&key).await? else {
+                return Ok(Err(TaskError::NotFound {
+                    tenant: self.tenant.tenant_name().to_string(),
+                    name: task.task_name,
+                    context: "while updating task schedule".to_string(),
+                }));
+            };
+
+            let seq = seq_task.seq;
+            let mut current_task = seq_task.data;
+            if current_task.task_id != task.task_id
+                || current_task.status != Status::Started
+                || current_task.schedule_options != task.schedule_options
+                || current_task.warehouse_options != task.warehouse_options
+            {
+                return Ok(Ok(false));
+            }
+
+            current_task.next_scheduled_at = task.next_scheduled_at;
+            if current_task.updated_at < task.updated_at {
+                current_task.updated_at = task.updated_at;
+            }
+
+            let req = UpsertPB::update(key.clone(), current_task).with(MatchSeq::Exact(seq));
+            let res = self.kv_api.upsert_pb(&req).await?;
+            if res.is_changed() {
+                return Ok(Ok(true));
+            }
+        }
     }
 
     #[async_backtrace::framed]

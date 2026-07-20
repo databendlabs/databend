@@ -37,6 +37,12 @@ pub trait SnapshotGenerator {
 
     fn set_conflict_resolve_context(&mut self, _ctx: ConflictResolveContext) {}
 
+    fn set_logical_change_delta(&mut self, _updated_rows: u64, _deleted_rows: u64) {}
+
+    fn logical_change_delta(&self, _previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        (0, 0)
+    }
+
     async fn fill_default_values(
         &mut self,
         _schema: &TableSchema,
@@ -63,6 +69,8 @@ pub trait SnapshotGenerator {
             table_meta_timestamps,
             table_stats_gen,
         )?;
+        let (updated_rows, deleted_rows) = self.logical_change_delta(&previous);
+        snapshot.add_logical_change_delta(updated_rows, deleted_rows);
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_info.ident.table_id)?;
         Ok(snapshot)
     }

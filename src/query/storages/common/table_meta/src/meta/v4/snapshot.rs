@@ -48,7 +48,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("6bef7be1")]
+#[frozen_api("9de02316")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -98,6 +98,17 @@ pub struct TableSnapshot {
     pub cluster_type: Option<ClusterType>,
     // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
+
+    /// Cumulative logical UPDATE and DELETE counters. `None` means this snapshot
+    /// was written by a version that did not track logical changes.
+    #[serde(default)]
+    logical_change_counters: Option<LogicalChangeCounters>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, FrozenAPI)]
+struct LogicalChangeCounters {
+    updated_rows_total: u64,
+    deleted_rows_total: u64,
 }
 
 impl TableSnapshot {
@@ -150,6 +161,13 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        let logical_change_counters = Some(
+            prev_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.logical_change_counters)
+                .unwrap_or_default(),
+        );
+
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -162,6 +180,7 @@ impl TableSnapshot {
             cluster_key_meta,
             cluster_type,
             table_statistics_location,
+            logical_change_counters,
         })
     }
 
@@ -260,6 +279,20 @@ impl TableSnapshot {
     pub fn ensure_segments_unique(&self) -> Result<()> {
         ensure_segments_unique(&self.segments)
     }
+
+    pub fn logical_change_counters(&self) -> Option<(u64, u64)> {
+        self.logical_change_counters
+            .map(|counters| (counters.updated_rows_total, counters.deleted_rows_total))
+    }
+
+    /// Adds one committed operation's logical UPDATE and DELETE increments.
+    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        let counters = self
+            .logical_change_counters
+            .get_or_insert_with(LogicalChangeCounters::default);
+        counters.updated_rows_total += updated_rows;
+        counters.deleted_rows_total += deleted_rows;
+    }
 }
 
 fn ensure_segments_unique(segments: &[Location]) -> Result<()> {
@@ -299,6 +332,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_change_counters: None,
         }
     }
 }
@@ -324,6 +358,7 @@ where T: Into<v3::TableSnapshot>
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_change_counters: None,
         }
     }
 }
@@ -368,5 +403,44 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {
+        TableSnapshot::try_new(
+            None,
+            previous,
+            TableSchema::default(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(1)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_logical_change_counter_compatibility_boundary() {
+        let mut aware = snapshot(None);
+        aware.add_logical_change_delta(17, 23);
+        let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.logical_change_counters(), Some((17, 23)));
+
+        let mut legacy_value = serde_json::to_value(decoded).unwrap();
+        legacy_value
+            .as_object_mut()
+            .unwrap()
+            .remove("logical_change_counters");
+        let legacy: TableSnapshot = serde_json::from_value(legacy_value).unwrap();
+        assert_eq!(legacy.logical_change_counters(), None);
+
+        let first_aware = snapshot(Some(Arc::new(legacy)));
+        assert_eq!(first_aware.logical_change_counters(), Some((0, 0)));
     }
 }
