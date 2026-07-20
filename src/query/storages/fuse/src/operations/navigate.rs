@@ -766,6 +766,7 @@ impl FuseTable {
         };
 
         table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        table_meta.cluster_key = None;
         table_meta.cluster_key_v2 = cluster_key_meta;
 
         let mut historical_schema = snapshot.schema.clone();
