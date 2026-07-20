@@ -436,7 +436,7 @@ mod tests {
         )
         .unwrap();
         let cluster_key_meta = Some((1, "(a, b)".to_string()));
-        let cluster_stats = ClusterStatistics::new(1, vec![], vec![], 0, None);
+        let cluster_stats = ClusterStatistics::new(1, vec![], vec![], 0);
         previous.cluster_key_meta = cluster_key_meta.clone();
         previous.cluster_type = None;
         previous.summary.cluster_stats = Some(cluster_stats.clone());
@@ -469,7 +469,7 @@ mod tests {
         .unwrap();
         previous.cluster_key_meta = Some((1, "(a, b)".to_string()));
         previous.cluster_type = Some(ClusterType::Hilbert);
-        previous.summary.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0, None));
+        previous.summary.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0));
 
         let snapshot = TableSnapshot::try_from_previous(
             Arc::new(previous),
