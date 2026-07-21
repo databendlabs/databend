@@ -138,6 +138,59 @@ digraph {
     17 -> 18 [ label = "" ]
 }
 
+# LIMIT 10000 is the inclusive boundary for the Top-N merge path.
+# Disable lazy read so this only verifies sort implementation selection.
+query T
+settings(lazy_read_threshold = 0) explain pipeline select a, b from t1 order by a limit 10000;
+----
+digraph {
+    0 [ label = "PartitionStreamSource" ]
+    1 [ label = "AsyncReadDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "Resize" ]
+    4 [ label = "SortPartialTransform" ]
+    5 [ label = "SortPartialTransform" ]
+    6 [ label = "SortPartialTransform" ]
+    7 [ label = "SortPartialTransform" ]
+    8 [ label = "TransformSortMergeLimit" ]
+    9 [ label = "TransformSortMergeLimit" ]
+    10 [ label = "TransformSortMergeLimit" ]
+    11 [ label = "TransformSortMergeLimit" ]
+    12 [ label = "KWayMergePartitioner" ]
+    13 [ label = "KWayMergeWorker" ]
+    14 [ label = "KWayMergeWorker" ]
+    15 [ label = "KWayMergeWorker" ]
+    16 [ label = "KWayMergeWorker" ]
+    17 [ label = "KWayMergeCombiner" ]
+    18 [ label = "LimitTransform" ]
+    19 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "from: 0, to: 0" ]
+    3 -> 5 [ label = "from: 1, to: 0" ]
+    3 -> 6 [ label = "from: 2, to: 0" ]
+    3 -> 7 [ label = "from: 3, to: 0" ]
+    4 -> 8 [ label = "" ]
+    5 -> 9 [ label = "" ]
+    6 -> 10 [ label = "" ]
+    7 -> 11 [ label = "" ]
+    8 -> 12 [ label = "from: 0, to: 0" ]
+    9 -> 12 [ label = "from: 0, to: 1" ]
+    10 -> 12 [ label = "from: 0, to: 2" ]
+    11 -> 12 [ label = "from: 0, to: 3" ]
+    12 -> 13 [ label = "from: 0, to: 0" ]
+    12 -> 14 [ label = "from: 1, to: 0" ]
+    12 -> 15 [ label = "from: 2, to: 0" ]
+    12 -> 16 [ label = "from: 3, to: 0" ]
+    13 -> 17 [ label = "from: 0, to: 0" ]
+    14 -> 17 [ label = "from: 0, to: 1" ]
+    15 -> 17 [ label = "from: 0, to: 2" ]
+    16 -> 17 [ label = "from: 0, to: 3" ]
+    17 -> 18 [ label = "" ]
+    18 -> 19 [ label = "" ]
+}
+
 
 # Sort spilling
 statement ok
