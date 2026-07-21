@@ -46,7 +46,19 @@ pub fn query(i: Input) -> IResult<Query> {
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    let (rest, mut set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    if set_operation_elements.len() == 1 {
+        let elem = set_operation_elements.pop().unwrap();
+        if matches!(
+            &elem.elem,
+            SetOperationElement::Group(_)
+                | SetOperationElement::SelectStmt { .. }
+                | SetOperationElement::Values(_)
+        ) {
+            return Ok((rest, set_operation_primary(elem)));
+        }
+        set_operation_elements.push(elem);
+    }
     run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
@@ -237,6 +249,45 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
 
 struct SetOperationParser;
 
+fn set_operation_primary(input: WithSpan<SetOperationElement>) -> SetExpr {
+    match input.elem {
+        SetOperationElement::Group(expr) => {
+            let mut query = expr.into_query();
+            query.span = transform_span(input.span.tokens);
+            SetExpr::Query(Box::new(query))
+        }
+        SetOperationElement::SelectStmt {
+            hints,
+            distinct,
+            top_n,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        } => SetExpr::Select(Box::new(SelectStmt {
+            span: transform_span(input.span.tokens),
+            hints,
+            top_n,
+            distinct,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        })),
+        SetOperationElement::Values(values) => SetExpr::Values {
+            span: transform_span(input.span.tokens),
+            values,
+        },
+        _ => unreachable!(),
+    }
+}
+
 impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     for SetOperationParser
 {
@@ -268,43 +319,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => {
-                let mut query = expr.into_query();
-                query.span = transform_span(input.span.tokens);
-                SetExpr::Query(Box::new(query))
-            }
-            SetOperationElement::SelectStmt {
-                hints,
-                distinct,
-                top_n,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.tokens),
-                hints,
-                top_n,
-                distinct,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            })),
-            SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.tokens),
-                values,
-            },
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
+        Ok(set_operation_primary(input))
     }
 
     fn infix(
@@ -790,7 +805,21 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    let (rest, mut table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    if table_reference_elements.len() == 1 {
+        let elem = table_reference_elements.pop().unwrap();
+        if matches!(
+            &elem.elem,
+            TableReferenceElement::Group(_)
+                | TableReferenceElement::Table { .. }
+                | TableReferenceElement::TableFunction { .. }
+                | TableReferenceElement::Subquery { .. }
+                | TableReferenceElement::Stage { .. }
+        ) {
+            return Ok((rest, table_reference_primary(elem)));
+        }
+        table_reference_elements.push(elem);
+    }
     run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }
 
@@ -1066,6 +1095,89 @@ fn get_table_sample(
 
 struct TableReferenceParser;
 
+fn table_reference_primary(input: WithSpan<TableReferenceElement>) -> TableReference {
+    match input.elem {
+        TableReferenceElement::Group(table_ref) => table_ref,
+        TableReferenceElement::Table {
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        } => TableReference::Table {
+            span: transform_span(input.span.tokens),
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        },
+        TableReferenceElement::TableFunction {
+            lateral,
+            name,
+            params,
+            alias,
+            sample,
+        } => {
+            let normal_params = params
+                .iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Normal(p) => Some(p.clone()),
+                    _ => None,
+                })
+                .collect();
+            let named_params = params
+                .into_iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Named { name, value } => Some((name, value)),
+                    _ => None,
+                })
+                .collect();
+            TableReference::TableFunction {
+                span: transform_span(input.span.tokens),
+                lateral,
+                name,
+                params: normal_params,
+                named_params,
+                alias,
+                sample,
+            }
+        }
+        TableReferenceElement::Subquery {
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        } => TableReference::Subquery {
+            span: transform_span(input.span.tokens),
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        },
+        TableReferenceElement::Stage {
+            location,
+            options,
+            alias,
+        } => {
+            let options = SelectStageOptions::from(options);
+            TableReference::Location {
+                span: transform_span(input.span.tokens),
+                location,
+                options,
+                alias,
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
 impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     for TableReferenceParser
 {
@@ -1083,87 +1195,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     }
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let table_ref = match input.elem {
-            TableReferenceElement::Group(table_ref) => table_ref,
-            TableReferenceElement::Table {
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            } => TableReference::Table {
-                span: transform_span(input.span.tokens),
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            },
-            TableReferenceElement::TableFunction {
-                lateral,
-                name,
-                params,
-                alias,
-                sample,
-            } => {
-                let normal_params = params
-                    .iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Normal(p) => Some(p.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                let named_params = params
-                    .into_iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Named { name, value } => Some((name, value)),
-                        _ => None,
-                    })
-                    .collect();
-                TableReference::TableFunction {
-                    span: transform_span(input.span.tokens),
-                    lateral,
-                    name,
-                    params: normal_params,
-                    named_params,
-                    alias,
-                    sample,
-                }
-            }
-            TableReferenceElement::Subquery {
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            } => TableReference::Subquery {
-                span: transform_span(input.span.tokens),
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            },
-            TableReferenceElement::Stage {
-                location,
-                options,
-                alias,
-            } => {
-                let options = SelectStageOptions::from(options);
-                TableReference::Location {
-                    span: transform_span(input.span.tokens),
-                    location,
-                    options,
-                    alias,
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(table_ref)
+        Ok(table_reference_primary(input))
     }
 
     fn infix(

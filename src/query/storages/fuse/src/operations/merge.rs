@@ -127,6 +127,7 @@ impl FuseTable {
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,
+            top_n: None,
             ngram_args,
             granule_index_specs,
             inverted_index_builders,

@@ -816,15 +816,16 @@ impl AsyncTransform for NgramIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)
@@ -910,15 +911,16 @@ impl AsyncTransform for VectorIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)
@@ -1016,15 +1018,16 @@ impl AsyncTransform for SpatialIndexTransform {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
             column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
+            column_top_n: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
             index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
-            insert_rows: 0,
         };
         let meta = MutationLogs {
             entries: vec![entry],
+            ..Default::default()
         };
         let new_block = DataBlock::empty_with_meta(Box::new(meta));
         Ok(new_block)

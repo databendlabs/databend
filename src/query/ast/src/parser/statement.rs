@@ -1138,7 +1138,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
@@ -1176,8 +1176,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by.map(|(_, _, typ, _, exprs, _)| ClusterOption {
-                    cluster_type: typ.unwrap_or(ClusterType::Linear),
+                cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
                     cluster_exprs: exprs,
                 }),
                 table_options: opt_table_options.unwrap_or_default(),
@@ -4951,13 +4950,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, typ, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
-            cluster_by: ClusterOption {
-                cluster_type: typ.unwrap_or(ClusterType::Linear),
-                cluster_exprs,
-            },
+        |(_, _, _, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
+            cluster_by: ClusterOption { cluster_exprs },
         },
     );
 
@@ -5576,14 +5572,6 @@ pub fn switch(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { ENABLE }),
         value(false, rule! { DISABLE }),
-    ))
-    .parse(i)
-}
-
-pub fn cluster_type(i: Input) -> IResult<ClusterType> {
-    alt((
-        value(ClusterType::Linear, rule! { LINEAR }),
-        value(ClusterType::Hilbert, rule! { HILBERT }),
     ))
     .parse(i)
 }

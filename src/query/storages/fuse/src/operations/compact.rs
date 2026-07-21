@@ -12,22 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::OneBlockSource;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
+use crate::operations::VirtualSchemaMode;
+use crate::operations::common::CommitMeta;
+use crate::operations::common::CommitSink;
+use crate::operations::common::ConflictResolveContext;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::SnapshotChanges;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::SegmentCompactMutator;
+use crate::operations::mutation::SegmentCompactionState;
 
 #[derive(Clone)]
 pub struct CompactOptions {
@@ -43,6 +55,7 @@ impl FuseTable {
     pub(crate) async fn do_compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         num_segment_limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self
@@ -70,7 +83,65 @@ impl FuseTable {
             return Ok(());
         }
 
-        segment_compactor.try_commit(self).await
+        let base_snapshot = segment_compactor.base_snapshot().clone();
+        let compaction = segment_compactor.into_compaction_state();
+        self.build_compact_segment_pipeline(
+            ctx,
+            pipeline,
+            compaction,
+            base_snapshot,
+            table_meta_timestamps,
+        )
+    }
+
+    pub fn build_compact_segment_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        compaction: SegmentCompactionState,
+        base_snapshot: Arc<TableSnapshot>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    ) -> Result<()> {
+        let snapshot_changes = SnapshotChanges {
+            appended_segments: vec![],
+            replaced_segments: compaction.replaced_segments,
+            removed_segment_indexes: compaction.removed_segment_indexes,
+            merged_statistics: compaction.removed_statistics.clone(),
+            removed_statistics: compaction.removed_statistics,
+        };
+
+        let conflict_resolve_ctx =
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(snapshot_changes);
+        let meta = CommitMeta::new(
+            conflict_resolve_ctx,
+            vec![],
+            self.get_id(),
+            0,
+            0,
+            None,
+            VirtualSchemaMode::Merge,
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let block = DataBlock::empty_with_meta(Box::new(meta));
+
+        pipeline.add_source(|output| OneBlockSource::create(output, block.clone()), 1)?;
+
+        let snapshot_gen = MutationGenerator::new(Some(base_snapshot), MutationKind::Compact);
+        pipeline.add_sink(|input| {
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                vec![],
+                snapshot_gen.clone(),
+                input,
+                None,
+                None,
+                None,
+                table_meta_timestamps,
+            )
+        })
     }
 
     #[async_backtrace::framed]

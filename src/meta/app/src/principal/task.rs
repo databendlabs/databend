@@ -38,6 +38,7 @@ pub enum State {
     Succeeded = 2,
     Failed = 3,
     Cancelled = 4,
+    Skipped = 5,
 }
 
 #[derive(Debug, Clone, PartialEq)]

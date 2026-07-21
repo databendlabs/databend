@@ -55,6 +55,7 @@ use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
+use crate::pipelines::executor::memory_limit_diagnostics::log_memory_limit_diagnostics;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -262,6 +263,9 @@ impl QueryPipelineExecutor {
         if let Some(cause) = cause {
             // We only save the cause of the first error.
             if finished_error.is_none() {
+                if !self.graph.is_should_finish() {
+                    log_memory_limit_diagnostics(&cause, "memory limit exceeded");
+                }
                 *finished_error = Some(cause);
             }
         }

@@ -450,7 +450,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(2i64)],
         vec![Scalar::from(4i64)],
         0,
-        None,
     ));
 
     let cluster_stats_1 = Some(ClusterStatistics::new(
@@ -458,7 +457,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(1i64)],
         vec![Scalar::from(3i64)],
         1,
-        None,
     ));
 
     let cluster_stats_2 = Some(ClusterStatistics::new(
@@ -466,7 +464,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::Null],
         vec![Scalar::Null],
         0,
-        None,
     ));
 
     let res_0 = reducers::reduce_cluster_statistics(
@@ -478,7 +475,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(1i64)],
         vec![Scalar::from(4i64)],
         1,
-        None,
     ));
     assert_eq!(res_0, expect);
 
@@ -491,7 +487,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(2i64)],
         vec![Scalar::Null],
         0,
-        None,
     ));
     assert_eq!(res_1, expect);
 
@@ -510,14 +505,12 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(1i64), Scalar::from(4i64)],
         vec![Scalar::from(1i64), Scalar::from(4i64)],
         0,
-        None,
     ));
     let multi_cluster_stats_2 = Some(ClusterStatistics::new(
         0,
         vec![Scalar::from(3i64), Scalar::from(2i64)],
         vec![Scalar::from(3i64), Scalar::from(2i64)],
         0,
-        None,
     ));
     let res_4 = reducers::reduce_cluster_statistics(
         &[multi_cluster_stats_0, multi_cluster_stats_2],
@@ -528,7 +521,6 @@ fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
         vec![Scalar::from(1i64), Scalar::from(4i64)],
         vec![Scalar::from(3i64), Scalar::from(2i64)],
         0,
-        None,
     ));
     assert_eq!(res_4, expect);
 
@@ -554,7 +546,6 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
             Scalar::Number(NumberScalar::Int32(100)),
         ],
         0,
-        None,
     ));
 
     let block_compactor =
@@ -563,7 +554,6 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
         0,
         vec![0, 1, 2],
         0,
-        None,
         0,
         block_compactor,
         vec![],
@@ -646,7 +636,6 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         vec![Scalar::Number(NumberScalar::Int32(1))],
         vec![Scalar::Number(NumberScalar::Int32(5))],
         0,
-        None,
     ));
 
     let block_compactor =
@@ -655,7 +644,6 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         vec![0],
         0,
-        None,
         0,
         block_compactor,
         vec![],
@@ -698,7 +686,6 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         0,
         vec![1],
         0,
-        None,
         0,
         block_compactor,
         operators,
@@ -717,7 +704,6 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
         1,
         vec![0],
         0,
-        None,
         0,
         block_compactor,
         vec![],

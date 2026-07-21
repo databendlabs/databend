@@ -859,9 +859,16 @@ mod tests {
                 num_values: 200,
             }),
         );
-        let err = OffsetsIndex::load(&op, &settings, &state.layout().offsets, 100, 200, &col_metas)
-            .err()
-            .unwrap();
+        let err = OffsetsIndex::load(
+            &op,
+            &settings,
+            &state.layout().offsets,
+            100,
+            200,
+            &col_metas,
+        )
+        .err()
+        .unwrap();
         assert!(err.message().contains("g_9"), "{err}");
     }
 

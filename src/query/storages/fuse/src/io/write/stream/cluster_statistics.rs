@@ -149,7 +149,6 @@ impl ClusterStatisticsState {
             min,
             level,
             cluster_key_id: self.builder.cluster_key_id,
-            pages: None,
         }))
     }
 

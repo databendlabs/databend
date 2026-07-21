@@ -36,6 +36,7 @@ JDBC_RELEASE_DOWNLOAD_ROOT = (
 )
 JDBC_SOURCE_BUILD_ENV = {"TEST_HANDLERS": "http"}
 JDBC_EXCLUDED_GROUPS = "FLAKY,cluster,MULTI_HOST"
+TESTNG_EXIT_CODE_SKIPPED = 2
 JDBC_MAIN_TEST_ARGS = [
     "-B",
     "-ntp",
@@ -350,6 +351,8 @@ def run_jdbc_release_test(session, jdbc_target):
         str(testng_suite),
         external=True,
         env=jdbc_target["env"],
+        # TestNG returns 2 when tests are only skipped. Keep failures non-zero.
+        success_codes=[0, TESTNG_EXIT_CODE_SKIPPED],
     )
 
 

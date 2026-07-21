@@ -31,7 +31,7 @@ members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
-    "src/tests/sqlsmith",
+    "src/tests/planner_replay",
     "tests/sqllogictests",
 ]
 default-members = [
@@ -57,7 +57,7 @@ default-members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
-    "src/tests/sqlsmith",
+    "src/tests/planner_replay",
     "tests/sqllogictests",
 ]
 
@@ -79,6 +79,7 @@ databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }
 databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
+databend-common-expression-test-support = { path = "src/query/expression/test-support" }
 databend-common-formats = { path = "src/query/formats" }
 databend-common-frozen-api = { path = "src/common/frozen_api" }
 databend-common-functions = { path = "src/query/functions" }
@@ -105,7 +106,6 @@ databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sql-test-support = { path = "src/query/sql/test-support" }
-databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-statistics = { path = "src/common/statistics" }
 databend-common-storage = { path = "src/common/storage" }
 databend-common-storages-basic = { path = "src/query/storages/basic" }
@@ -129,7 +129,6 @@ databend-common-version = { path = "src/common/version" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
-databend-enterprise-hilbert-clustering = { path = "src/query/ee_features/hilbert_clustering" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
 databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
@@ -166,11 +165,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260628.0.0"
-databend-meta-test-harness = "260628.0.0"
+databend-meta = "260629.0.0"
+databend-meta-test-harness = "260629.0.0"
 
 # External meta client
-databend-meta-client = "260205.12.0"
+databend-meta-client = "260205.13.1"
 structkey = "0.1.1"
 
 # Crates.io dependencies
@@ -275,7 +274,13 @@ futures-util = "0.3.24"
 geo = { version = "0.32.0", features = ["use-serde"] }
 geo-index = "0.3.4"
 geohash = "0.13.1"
-geozero = { version = "0.15.1", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
+# Pinned to a git rev to include https://github.com/georust/geozero/pull/278
+geozero = { git = "https://github.com/georust/geozero.git", rev = "bda4d03", features = [
+    "with-geo",
+    "with-geojson",
+    "with-wkb",
+    "with-wkt",
+] }
 gimli = "0.31.0"
 glob = "0.3.0"
 globiter = "0.1"
@@ -629,9 +634,9 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260628.0.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.12.0" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260628.0.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.0.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.1" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.0.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "a16344417d1fec6df4a62d8e77679211e909f86e" }
 lance-arrow = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }

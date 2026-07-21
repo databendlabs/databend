@@ -217,7 +217,6 @@ impl OperatorRangeReader {
             ranges.iter().filter(|range| !range.is_empty()).cloned(),
             settings.max_gap_size,
             settings.max_range_size,
-            Some(settings.parquet_fast_read_bytes),
         );
         let merged_ranges = range_merger.ranges();
         let mut chunks_by_io = vec![Vec::new(); merged_ranges.len()];

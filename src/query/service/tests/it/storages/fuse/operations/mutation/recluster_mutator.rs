@@ -150,7 +150,6 @@ fn make_recluster_block(
             vec![Scalar::from(min)],
             vec![Scalar::from(max)],
             level,
-            None,
         )),
         (block_id, DataBlock::VERSION),
         None,
@@ -390,7 +389,6 @@ async fn gen_recluster_segments_by_vector_stats(
                         vec![]
                     },
                     0,
-                    None,
                 )),
                 location,
                 None,

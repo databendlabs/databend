@@ -37,6 +37,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_io::ReadSettings;
+use tokio::sync::Semaphore;
 
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::FuseStorageFormat;
@@ -50,6 +51,7 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
+    io_semaphore: Arc<Semaphore>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
@@ -70,6 +72,7 @@ pub fn row_fetch_processor(
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let block_threshold = BlockThreshold {
                 max_rows: ctx.get_settings().get_max_block_size()? as usize,
                 max_bytes: ctx.get_settings().get_max_block_bytes()? as usize,
@@ -87,6 +90,8 @@ pub fn row_fetch_processor(
                         projection.clone(),
                         block_reader.clone(),
                         read_settings,
+                        max_threads,
+                        io_semaphore.clone(),
                     ),
                     need_wrap_nullable,
                     fetched_data_types.clone(),

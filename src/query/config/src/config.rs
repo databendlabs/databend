@@ -1632,6 +1632,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "admin")]
     pub tenant_id: String,
 
+    /// Product name used in user-visible server version strings.
+    #[clap(long, value_name = "VALUE", default_value = "Databend Query")]
+    pub product_name: String,
+
     /// ID for construct the cluster.
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub cluster_id: String,

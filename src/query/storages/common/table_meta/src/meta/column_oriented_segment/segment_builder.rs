@@ -418,7 +418,6 @@ fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
         min.clone(),
         max.clone(),
         level,
-        None,
     ))
 }
 

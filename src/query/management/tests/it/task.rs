@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions as AstScheduleOptions;
@@ -192,6 +193,52 @@ async fn test_alter_task_set_schedule_preserves_warehouse() -> anyhow::Result<()
             schedule_type: ScheduleType::IntervalType,
             milliseconds_interval: None,
         })
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scheduler_update_does_not_overwrite_alter() -> anyhow::Result<()> {
+    let (_kv, task_mgr) = new_task_api().await?;
+    let mut task = test_task("task_1", "select 1");
+    task.status = Status::Started;
+    task.schedule_options = Some(ScheduleOptions {
+        interval: Some(60),
+        cron: None,
+        time_zone: None,
+        schedule_type: ScheduleType::IntervalType,
+        milliseconds_interval: None,
+    });
+    task_mgr.create_task(task, &CreateOption::Create).await??;
+
+    let mut stale_task = task_mgr.describe_task("task_1").await??.unwrap();
+    task_mgr
+        .alter_task(
+            "task_1",
+            &AlterTaskOptions::ModifyAs(TaskSql::SingleStatement("select 2".to_string())),
+        )
+        .await??;
+
+    let next_scheduled_at = Utc::now() + Duration::minutes(1);
+    stale_task.next_scheduled_at = Some(next_scheduled_at);
+    stale_task.updated_at = Utc::now();
+    assert!(task_mgr.update_task(stale_task.clone()).await??);
+
+    let current_task = task_mgr.describe_task("task_1").await??.unwrap();
+    assert_eq!(
+        current_task.task_sql,
+        MetaTaskSql::Sql("select 2".to_string())
+    );
+    assert_eq!(current_task.next_scheduled_at, Some(next_scheduled_at));
+
+    task_mgr
+        .alter_task("task_1", &AlterTaskOptions::Suspend)
+        .await??;
+    assert!(!task_mgr.update_task(stale_task).await??);
+    assert_eq!(
+        task_mgr.describe_task("task_1").await??.unwrap().status,
+        Status::Suspended
     );
 
     Ok(())

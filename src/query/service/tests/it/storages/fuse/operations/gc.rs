@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_catalog::table::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_query::sessions::TableContext;
@@ -91,6 +92,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::try_from_previous(
             current_snapshot.clone(),
+            fuse_table.cluster_key_meta(),
             None,
             TestFixture::default_table_meta_timestamps(),
         )?;

@@ -890,6 +890,9 @@ insert into t1 values(1), (2), (3);
 query error 1001.*Scalar subquery can't return more than one row
 select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 
+query error 1001.*Scalar subquery can't return more than one row
+SELECT 1 WHERE (SELECT number FROM numbers(2)) >= 0;
+
 
 
 statement ok

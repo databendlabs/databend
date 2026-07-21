@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::ArgMatches;
 use clap::Args;
+use clap::Command;
+use clap::Error;
+use clap::FromArgMatches;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_meta::raft_store::config::RaftConfig;
 use serde::Deserialize;
@@ -283,11 +287,78 @@ pub struct TriggerSnapshotArgs {
     pub admin_api_address: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Args)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub enum LuaScript {
+    File(String),
+    Inline(String),
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct LuaArgs {
-    /// Path to the Lua script file. If not provided, script is read from stdin
-    #[clap(long)]
-    pub file: Option<String>,
+    #[serde(default)]
+    pub scripts: Vec<LuaScript>,
+}
+
+impl FromArgMatches for LuaArgs {
+    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
+        Ok(Self {
+            scripts: ordered_lua_scripts(matches),
+        })
+    }
+
+    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), Error> {
+        *self = Self::from_arg_matches(matches)?;
+        Ok(())
+    }
+}
+
+impl Args for LuaArgs {
+    fn augment_args(command: Command) -> Command {
+        add_lua_args(command)
+    }
+
+    fn augment_args_for_update(command: Command) -> Command {
+        add_lua_args(command)
+    }
+}
+
+fn add_lua_args(command: Command) -> Command {
+    command
+        .arg(
+            clap::Arg::new("file")
+                .long("file")
+                .value_name("FILE")
+                .help("Path to a Lua script file. May be specified multiple times.")
+                .action(clap::ArgAction::Append),
+        )
+        .arg(
+            clap::Arg::new("script")
+                .long("script")
+                .value_name("SCRIPT")
+                .help("Lua code to execute. May be specified multiple times.")
+                .action(clap::ArgAction::Append),
+        )
+}
+
+fn ordered_lua_scripts(matches: &ArgMatches) -> Vec<LuaScript> {
+    let mut scripts = matches
+        .indices_of("file")
+        .into_iter()
+        .flatten()
+        .zip(matches.get_many::<String>("file").into_iter().flatten())
+        .map(|(index, path)| (index, LuaScript::File(path.clone())))
+        .chain(
+            matches
+                .indices_of("script")
+                .into_iter()
+                .flatten()
+                .zip(matches.get_many::<String>("script").into_iter().flatten())
+                .map(|(index, script)| (index, LuaScript::Inline(script.clone()))),
+        )
+        .collect::<Vec<_>>();
+
+    scripts.sort_unstable_by_key(|(index, _)| *index);
+    scripts.into_iter().map(|(_, script)| script).collect()
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
@@ -328,4 +399,49 @@ pub struct DumpRaftLogWalArgs {
     /// Show raw protobuf bytes for values in UpsertKV and Transaction operations
     #[clap(short = 'R', long, default_value_t = false)]
     pub raw: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use clap::Subcommand;
+
+    use super::LuaArgs;
+    use super::LuaScript;
+
+    #[derive(Parser)]
+    struct TestApp {
+        #[command(subcommand)]
+        command: TestCommand,
+    }
+
+    #[derive(Subcommand)]
+    enum TestCommand {
+        Lua(LuaArgs),
+    }
+
+    #[test]
+    fn test_lua_scripts_preserve_command_line_order() {
+        let app = TestApp::try_parse_from([
+            "metactl",
+            "lua",
+            "--script",
+            "first()",
+            "--file",
+            "first.lua",
+            "--script",
+            "second()",
+            "--file",
+            "second.lua",
+        ])
+        .unwrap();
+
+        let TestCommand::Lua(args) = app.command;
+        assert_eq!(args.scripts, vec![
+            LuaScript::Inline("first()".to_string()),
+            LuaScript::File("first.lua".to_string()),
+            LuaScript::Inline("second()".to_string()),
+            LuaScript::File("second.lua".to_string()),
+        ]);
+    }
 }

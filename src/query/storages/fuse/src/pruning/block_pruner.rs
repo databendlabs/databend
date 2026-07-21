@@ -295,7 +295,12 @@ impl BlockPruner {
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
                         granule_ranges: prune_result.granule_ranges.clone(),
-                        page_size: block.page_size() as usize,
+                        page_size: block
+                            .granule_index
+                            .as_ref()
+                            .map_or(block.row_count as usize, |index| {
+                                index.granule_rows as usize
+                            }),
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
@@ -375,7 +380,12 @@ impl BlockPruner {
                     block_idx,
                     range: None,
                     granule_ranges: outcome.granule_ranges,
-                    page_size: block_meta.page_size() as usize,
+                    page_size: block_meta
+                        .granule_index
+                        .as_ref()
+                        .map_or(block_meta.row_count as usize, |index| {
+                            index.granule_rows as usize
+                        }),
                     block_id: block_id_in_segment(block_num, block_idx),
                     block_location: block_meta.location.0.clone(),
                     segment_location: segment_location.location.0.clone(),
@@ -778,7 +788,12 @@ impl BlockPruner {
                         block_idx,
                         range: None,
                         granule_ranges: None,
-                        page_size: block_meta.page_size() as usize,
+                        page_size: block_meta
+                            .granule_index
+                            .as_ref()
+                            .map_or(block_meta.row_count as usize, |index| {
+                                index.granule_rows as usize
+                            }),
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_meta.as_ref().location.0.clone(),
                         segment_location: segment_location.location.0.clone(),

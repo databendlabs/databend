@@ -78,7 +78,6 @@ async fn generate_column_oriented_segment()
         vec![Scalar::from(1i64)],
         vec![Scalar::from(3i64)],
         1,
-        None,
     ));
 
     let mut block_metas = Vec::new();

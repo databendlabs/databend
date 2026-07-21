@@ -318,13 +318,7 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
         .clone();
     let level = levels.into_iter().max().unwrap_or(0);
 
-    Some(ClusterStatistics::new(
-        cluster_key_id,
-        min,
-        max,
-        level,
-        None,
-    ))
+    Some(ClusterStatistics::new(cluster_key_id, min, max, level))
 }
 
 pub fn merge_statistics(

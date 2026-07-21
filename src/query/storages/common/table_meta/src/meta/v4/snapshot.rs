@@ -48,7 +48,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("6bef7be1")]
+#[frozen_api("9de02316")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -98,6 +98,17 @@ pub struct TableSnapshot {
     pub cluster_type: Option<ClusterType>,
     // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
+
+    /// Cumulative logical UPDATE and DELETE counters. `None` means this snapshot
+    /// was written by a version that did not track logical changes.
+    #[serde(default)]
+    logical_change_counters: Option<LogicalChangeCounters>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, FrozenAPI)]
+struct LogicalChangeCounters {
+    updated_rows_total: u64,
+    deleted_rows_total: u64,
 }
 
 impl TableSnapshot {
@@ -106,10 +117,9 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
-        summary: Statistics,
+        mut summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -150,6 +160,21 @@ impl TableSnapshot {
 
         ensure_segments_unique(&segments)?;
 
+        let cluster_key_id = cluster_key_meta.as_ref().map(|(id, _)| *id);
+        if summary
+            .cluster_stats
+            .as_ref()
+            .is_some_and(|stats| Some(stats.cluster_key_id) != cluster_key_id)
+        {
+            summary.cluster_stats = None;
+        }
+        let cluster_type = cluster_key_meta.as_ref().map(|_| ClusterType::Linear);
+        let logical_change_counters = Some(
+            prev_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.logical_change_counters)
+                .unwrap_or_default(),
+        );
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -162,11 +187,13 @@ impl TableSnapshot {
             cluster_key_meta,
             cluster_type,
             table_statistics_location,
+            logical_change_counters,
         })
     }
 
     pub fn try_from_previous(
         previous: Arc<TableSnapshot>,
+        target_cluster_key_meta: Option<ClusterKey>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -177,8 +204,7 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
-            previous.cluster_key_meta.clone(),
-            previous.cluster_type,
+            target_cluster_key_meta,
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
@@ -260,6 +286,20 @@ impl TableSnapshot {
     pub fn ensure_segments_unique(&self) -> Result<()> {
         ensure_segments_unique(&self.segments)
     }
+
+    pub fn logical_change_counters(&self) -> Option<(u64, u64)> {
+        self.logical_change_counters
+            .map(|counters| (counters.updated_rows_total, counters.deleted_rows_total))
+    }
+
+    /// Adds one committed operation's logical UPDATE and DELETE increments.
+    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+        let counters = self
+            .logical_change_counters
+            .get_or_insert_with(LogicalChangeCounters::default);
+        counters.updated_rows_total += updated_rows;
+        counters.deleted_rows_total += deleted_rows;
+    }
 }
 
 fn ensure_segments_unique(segments: &[Location]) -> Result<()> {
@@ -299,6 +339,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_change_counters: None,
         }
     }
 }
@@ -324,6 +365,7 @@ where T: Into<v3::TableSnapshot>
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
+            logical_change_counters: None,
         }
     }
 }
@@ -368,5 +410,110 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableSchema;
+
+    use super::*;
+    use crate::meta::ClusterStatistics;
+
+    #[test]
+    fn test_try_from_previous_uses_target_cluster_key_metadata() {
+        let mut previous = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+        let cluster_key_meta = Some((1, "(a, b)".to_string()));
+        let cluster_stats = ClusterStatistics::new(1, vec![], vec![], 0);
+        previous.cluster_key_meta = cluster_key_meta.clone();
+        previous.cluster_type = None;
+        previous.summary.cluster_stats = Some(cluster_stats.clone());
+
+        let snapshot = TableSnapshot::try_from_previous(
+            Arc::new(previous),
+            cluster_key_meta.clone(),
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.cluster_key_meta, cluster_key_meta);
+        assert_eq!(snapshot.cluster_type, Some(ClusterType::Linear));
+        assert_eq!(snapshot.summary.cluster_stats, Some(cluster_stats));
+    }
+
+    #[test]
+    fn test_try_from_previous_clears_cluster_metadata_without_target_key() {
+        let mut previous = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+        previous.cluster_key_meta = Some((1, "(a, b)".to_string()));
+        previous.cluster_type = Some(ClusterType::Hilbert);
+        previous.summary.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0));
+
+        let snapshot = TableSnapshot::try_from_previous(
+            Arc::new(previous),
+            None,
+            None,
+            TableMetaTimestamps::default(),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.cluster_key_meta, None);
+        assert_eq!(snapshot.cluster_type, None);
+        assert_eq!(snapshot.summary.cluster_stats, None);
+    }
+
+    fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {
+        TableSnapshot::try_new(
+            None,
+            previous,
+            TableSchema::default(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(1)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_logical_change_counter_compatibility_boundary() {
+        let mut aware = snapshot(None);
+        aware.add_logical_change_delta(17, 23);
+        let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.logical_change_counters(), Some((17, 23)));
+
+        let mut legacy_value = serde_json::to_value(decoded).unwrap();
+        legacy_value
+            .as_object_mut()
+            .unwrap()
+            .remove("logical_change_counters");
+        let legacy: TableSnapshot = serde_json::from_value(legacy_value).unwrap();
+        assert_eq!(legacy.logical_change_counters(), None);
+
+        let first_aware = snapshot(Some(Arc::new(legacy)));
+        assert_eq!(first_aware.logical_change_counters(), Some((0, 0)));
     }
 }

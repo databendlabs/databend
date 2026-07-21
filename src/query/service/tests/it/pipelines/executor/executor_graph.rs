@@ -12,22 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::PlanScope;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::SyncSenderSink;
 use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::ExecutorTask;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
@@ -448,6 +455,59 @@ async fn test_schedule_point_complex() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some("test-top-memory-plan-nodes".to_string());
+    tracking_payload.mem_stat = Some(MemStat::create("test-top-memory-plan-nodes".to_string()));
+    let _guard = ThreadTracker::tracking(tracking_payload);
+
+    let graph = RunningGraph::from_pipelines(
+        vec![
+            create_memory_tracking_pipeline(10, "left-plan", "left title", &[(4096, 3584)])?,
+            create_memory_tracking_pipeline(20, "right-plan", "right title", &[(2048, 0)])?,
+        ],
+        1,
+        Arc::new("test-top-memory-plan-nodes".to_string()),
+        None,
+        vec![],
+    )?;
+
+    let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
+    let mut queue = unsafe { graph.clone().init_schedule_queue(0)? };
+    while let Some(processor) = queue.sync_queue.pop_front() {
+        context.set_task(ExecutorTask::Sync(processor));
+        if let Err(error) = unsafe { context.execute_task(None) } {
+            panic!(
+                "execute memory tracking task failed: {}",
+                error.get_error_code().message()
+            );
+        }
+    }
+
+    let top_plan_nodes = graph.format_top_memory_plan_nodes(10);
+    let right_plan_offset = top_plan_nodes
+        .find("identity: \"right-plan [#20] right title\"")
+        .expect("right plan memory usage should be reported");
+    let left_plan_offset = top_plan_nodes
+        .find("identity: \"left-plan [#10] left title\"")
+        .expect("left plan memory usage should be reported");
+
+    assert!(right_plan_offset < left_plan_offset);
+    assert!(top_plan_nodes.contains("current_bytes: 2048"));
+    assert!(top_plan_nodes.contains("current_bytes: 512"));
+    assert!(top_plan_nodes.contains("peak_bytes: 4096"));
+    assert!(top_plan_nodes.contains("peak_bytes: 2048"));
+
+    let limited_top_plan_nodes = graph.format_top_memory_plan_nodes(1);
+    assert!(limited_top_plan_nodes.contains("right-plan [#20] right title"));
+    assert!(!limited_top_plan_nodes.contains("left-plan [#10] left title"));
+
+    Ok(())
+}
+
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
@@ -485,6 +545,75 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(sink_pipe);
 
     RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+}
+
+fn create_memory_tracking_pipeline(
+    plan_id: u32,
+    plan_name: &str,
+    title: &str,
+    memory_records: &[(i64, i64)],
+) -> Result<Pipeline> {
+    let mut pipeline = Pipeline::create();
+    let scope = PlanScope::create(
+        plan_id,
+        plan_name.to_string(),
+        Arc::new(title.to_string()),
+        Arc::new(vec![]),
+    );
+    let _guard = scope.enter_scope_guard();
+
+    add_memory_tracking_pipe(&mut pipeline, memory_records);
+    Ok(pipeline)
+}
+
+fn add_memory_tracking_pipe(pipeline: &mut Pipeline, memory_records: &[(i64, i64)]) {
+    let items = memory_records
+        .iter()
+        .copied()
+        .map(|(memory_usage, release_memory_usage)| {
+            let output = OutputPort::create();
+            PipeItem::create(
+                ProcessorPtr::create(Box::new(MemoryTrackingSource {
+                    memory_usage,
+                    release_memory_usage,
+                })),
+                vec![],
+                vec![output],
+            )
+        })
+        .collect::<Vec<_>>();
+    pipeline.add_pipe(Pipe::create(0, memory_records.len(), items));
+}
+
+struct MemoryTrackingSource {
+    memory_usage: i64,
+    release_memory_usage: i64,
+}
+
+impl Processor for MemoryTrackingSource {
+    fn name(&self) -> String {
+        "MemoryTrackingSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        Ok(Event::Sync)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(mem_stat) = ThreadTracker::mem_stat() {
+            mem_stat
+                .record_memory::<false>(self.memory_usage, self.memory_usage)
+                .expect("record test memory usage");
+            mem_stat
+                .record_memory::<false>(-self.release_memory_usage, -self.release_memory_usage)
+                .expect("release test memory usage");
+        }
+        Ok(())
+    }
 }
 
 fn create_source_pipe(

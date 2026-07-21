@@ -40,7 +40,11 @@ use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
-    Tokenizer::new(sql).collect::<Result<Vec<_>>>()
+    let mut tokens = Vec::with_capacity((sql.len() / 4).clamp(4, 256));
+    for token in Tokenizer::new(sql) {
+        tokens.push(token?);
+    }
+    Ok(tokens)
 }
 
 /// Parse a SQL string into `Statement`s.
@@ -160,7 +164,7 @@ pub fn run_parser<O>(
     allow_partial: bool,
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
-    let backtrace = Backtrace::new();
+    let backtrace = Backtrace::disabled();
     let input = Input {
         tokens,
         dialect,
@@ -184,6 +188,18 @@ pub fn run_parser<O>(
         }
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = tokens[0].source;
+            let backtrace = Backtrace::new();
+            let input = Input {
+                tokens,
+                dialect,
+                mode,
+                backtrace: &backtrace,
+            };
+            let err = match parser(input) {
+                Err(nom::Err::Error(err) | nom::Err::Failure(err)) => err,
+                Ok(_) => err,
+                Err(nom::Err::Incomplete(_)) => unreachable!(),
+            };
             Err(ParseError(None, display_parser_error(err, source)))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
