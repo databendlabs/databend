@@ -19,17 +19,16 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::display::display_tuple_field_name;
+use databend_common_expression::format_runtime_keypaths;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use jsonb::keypath::KeyPath;
-use jsonb::keypath::KeyPaths;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
@@ -43,12 +42,11 @@ use super::TypeChecker;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::binder::NameResolutionResult;
 use crate::binder::VirtualColumnName;
 use crate::binder::wrap_cast;
+use crate::planner::semantic::resolve_type_name;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -140,197 +138,252 @@ pub(super) fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator)
     }
 }
 
+// =============================================================================
+// Variant virtual-column pushdown
+// =============================================================================
+//
+// Goal: rewrite static JSON path access on a Variant base column into a virtual
+// column that storage can materialize (and optionally cast) without evaluating
+// get / get_by_keypath at runtime.
+//
+// Flow (three entry shapes, one shared bind path):
+//
+//   CoreExpr::Cast                              // data['k']::int, get(...)::string
+//     └─ try_resolve_variant_cast_pushdown
+//          ├─ StaticVariantAccess::from_expr
+//          │    MapAccess | get* chain | get_by_keypath*
+//          ├─ resolve base (must be Variant)
+//          ├─ PushdownTarget::from_type_name    // non-nullable cast target
+//          └─ try_pushdown_variant_paths
+//
+//   resolve_call                                // get(data, 'k'), get_by_keypath(data, ...)
+//     └─ try_resolve_variant_function
+//          ├─ StaticVariantAccess::from_function_call
+//          │    get / get_string /
+//          │    get_by_keypath / get_by_keypath_string
+//          ├─ resolve base (must be Variant)
+//          ├─ target = String | Variant
+//          └─ try_pushdown_variant_paths
+//               success → BoundColumnRef
+//               fail → None (normal function path)
+//
+//   resolve_map_access_from_scalar              // data['a']['b']
+//     └─ resolve_variant_map_access
+//          ├─ paths → OwnedKeyPaths
+//          └─ try_pushdown_variant_paths(target = Variant)
+//               success → BoundColumnRef
+//               fail → get_by_keypath FunctionCall
+//
+//   try_pushdown_variant_paths(target)  (sole gate + bind)
+//     1. allow_virtual_column
+//     2. base is BoundColumnRef
+//     3. BaseTableColumn | VirtualColumn → full keypaths
+//     4. table option enable_virtual_column
+//     5. add_virtual_column_binding (wrap target as Nullable)
+//
+// Target type rules:
+// - Recorded pushdown cast types are always non-nullable inner types.
+// - Binding re-wraps as Nullable(...) because the path may be missing.
+// - Equivalent casts unify: CAST AS String / String NULL / get_string → one binding.
+// - Display name encodes cast: data['k']::Int32, try_cast(data['k'] AS String).
+// =============================================================================
+
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    fn rewritable_variant_functions() -> &'static [Ascii<&'static str>] {
+    fn is_rewritable_variant_function(func_name: &str) -> bool {
         static VARIANT_FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("get"),
             Ascii::new("get_string"),
             Ascii::new("get_by_keypath"),
             Ascii::new("get_by_keypath_string"),
         ];
-        VARIANT_FUNCTIONS
+        VARIANT_FUNCTIONS.contains(&Ascii::new(func_name))
     }
 
-    pub(super) fn should_try_rewrite_variant_function(&self, func_name: &str) -> bool {
-        self.bind_context.allow_virtual_column
-            && Self::rewritable_variant_functions().contains(&Ascii::new(func_name))
-    }
-
-    pub(super) fn try_rewrite_variant_function(
+    /// Try to push a `Cast(inner AS type)` and `TRY_Cast(inner AS type)` expression
+    /// down as part of a virtual column when `inner` is a static variant JSON access
+    /// on a variant column or an existing variant virtual column.
+    ///
+    /// Supported inner forms (via [`StaticVariantAccess::from_expr`]):
+    /// - `MapAccess`: `data['k']::int`
+    /// - `get` chain: `get(get(v,'a'),'b')::int`
+    /// - `get_by_keypath`: `get_by_keypath(v, '{"k"}')::int`
+    ///
+    /// On success the outer `CastExpr` is dropped and the returned scalar is a `BoundColumnRef`
+    /// whose column is the newly bound virtual column with the requested target type. Callers
+    /// should fall back to the regular cast path when this returns `Ok(None)`.
+    pub(super) fn try_resolve_variant_cast_pushdown(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        args: &[ScalarExpr],
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.should_try_rewrite_variant_function(func_name) {
-            return None;
+        inner: CoreExprId,
+        target_type: &TypeName,
+        is_try: bool,
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        let Some(access) = StaticVariantAccess::from_expr(arena, inner)? else {
+            return Ok(None);
+        };
+        // `get_string` / `get_by_keypath_string` first convert the JSON value to
+        // String. Folding an outer cast directly into the virtual column would
+        // instead cast the original JSON value to the outer target, which is not
+        // generally equivalent. Let normal resolution bind the String virtual
+        // column first, then apply the outer cast.
+        if access.string_result {
+            return Ok(None);
         }
-        let first_arg_type = args.first()?.data_type();
-        if first_arg_type.remove_nullable() != DataType::Variant {
-            return None;
+
+        let box (scalar, data_type) = self.resolve_core(arena, access.base)?;
+        if data_type.remove_nullable() != DataType::Variant {
+            return Ok(None);
         }
-        if args.len() != 2 {
-            return None;
-        }
-        let keypaths = match func_name {
-            "get" | "get_string" => Self::get_function_keypaths(&args[1])?,
-            _ => {
-                let ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Scalar::String(path),
-                    ..
-                }) = &args[1]
-                else {
-                    return None;
-                };
-                parse_key_paths(path.as_bytes()).ok()?.to_owned()
-            }
+
+        let target = match PushdownTarget::from_type_name(target_type, is_try)? {
+            // No benefit in pushing the cast down when it would still leave a `Variant` column.
+            PushdownTarget::Variant => return Ok(None),
+            cast @ PushdownTarget::Cast(..) => cast,
         };
 
-        // try rewrite as virtual column and pushdown to storage layer.
-        let rewritten = self.try_rewrite_variant_keypaths(span, &args[0], keypaths);
-        if let Some(box (scalar, data_type)) = rewritten {
-            if matches!(func_name, "get_string" | "get_by_keypath_string") {
-                let target_type = DataType::Nullable(Box::new(DataType::String));
-                let new_scalar = ScalarExpr::CastExpr(CastExpr {
-                    span: scalar.span(),
-                    is_try: false,
-                    argument: Box::new(scalar),
-                    target_type: Box::new(target_type.clone()),
-                });
-                return Some(Ok(Box::new((new_scalar, target_type))));
-            } else {
-                return Some(Ok(Box::new((scalar, data_type))));
-            }
-        }
-        None
+        Ok(self.try_pushdown_variant_paths(span, &scalar, &access.keypaths, target))
     }
 
-    pub(super) fn try_resolve_get_function_chain(
+    /// Try to rewrite a variant JSON access call into a virtual column bound against the
+    /// underlying variant source column.
+    ///
+    /// Handles four function shapes uniformly via [`StaticVariantAccess::from_function_call`]:
+    /// - `get(v, key)` / `get_string(v, key)` and nested `get(get(v, ...), ...)`.
+    /// - `get_by_keypath(v, '{"a","b"}')` / `get_by_keypath_string(v, ...)`.
+    ///
+    /// Failed pushdown returns `None` so `resolve_call` recursively resolves the original
+    /// function arguments through the normal function-call path.
+    pub(super) fn try_resolve_variant_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
         func_name: &str,
         args: &CoreExprArgs,
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        let string_result = match func_name {
-            "get" => false,
-            "get_string" => true,
-            _ => return None,
+        if !Self::is_rewritable_variant_function(func_name) {
+            return None;
+        }
+
+        let access = StaticVariantAccess::from_function_call(arena, func_name, args)?;
+        let target = if access.string_result {
+            PushdownTarget::string()
+        } else {
+            PushdownTarget::Variant
         };
 
-        let mut paths = Vec::new();
-        let mut current_args = args;
-        let base = loop {
-            let [expr, path_id] = current_args.as_slice() else {
-                return None;
-            };
-            let path = Self::get_core_get_function_keypath(arena, *path_id)?;
-            paths.push((*path_id, path));
-
-            match arena.get(*expr) {
-                CoreExpr::Call {
-                    func_name: "get",
-                    args,
-                    ..
-                } => current_args = args,
-                _ => {
-                    break *expr;
-                }
-            }
-        };
-
-        paths.reverse();
-        let box (scalar, data_type) = match self.resolve_core(arena, base) {
+        let box (scalar, data_type) = match self.resolve_core(arena, access.base) {
             Ok(resolved) => resolved,
             Err(err) => return Some(Err(err)),
         };
 
-        if data_type.remove_nullable() == DataType::Variant {
-            let keypaths = OwnedKeyPaths {
-                paths: paths.iter().map(|(_, path)| path.clone()).collect(),
-            };
-            if let Some(box (scalar, data_type)) =
-                self.try_rewrite_variant_keypaths(span, &scalar, keypaths)
-            {
-                return Some(Ok(if string_result {
-                    let target_type = DataType::Nullable(Box::new(DataType::String));
-                    let scalar = ScalarExpr::CastExpr(CastExpr {
-                        span: scalar.span(),
-                        is_try: false,
-                        argument: Box::new(scalar),
-                        target_type: Box::new(target_type.clone()),
-                    });
-                    Box::new((scalar, target_type))
-                } else {
-                    Box::new((scalar, data_type))
-                }));
-            }
+        if data_type.remove_nullable() == DataType::Variant
+            && let Some(result) =
+                self.try_pushdown_variant_paths(span, &scalar, &access.keypaths, target)
+        {
+            return Some(Ok(result));
         }
 
-        Some(self.resolve_get_function_chain_fallback(arena, span, string_result, scalar, paths))
+        None
     }
 
-    fn resolve_get_function_chain_fallback(
+    /// Try to push a static variant JSON path down as a virtual column on the storage layer.
+    ///
+    /// Returns `Some(BoundColumnRef)` when `base` resolves to a base-table variant column or an
+    /// existing virtual column and the containing table has virtual columns enabled. `target`
+    /// controls whether the storage layer is asked to keep the value as `Nullable(Variant)` or
+    /// to cast it to a concrete type up-front (see `PushdownTarget`).
+    ///
+    /// `keypaths` is borrowed; it is only cloned when pushdown actually binds a virtual column.
+    fn try_pushdown_variant_paths(
         &mut self,
-        arena: &CoreExprArena<'_>,
         span: Span,
-        string_result: bool,
-        mut scalar: ScalarExpr,
-        paths: Vec<(CoreExprId, OwnedKeyPath)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let last_index = paths.len().saturating_sub(1);
-        let mut data_type = scalar.data_type().into_owned();
-        for (index, (path, _)) in paths.into_iter().enumerate() {
-            let box (path_scalar, _) = self.resolve_core(arena, path)?;
-            let func_name = if string_result && index == last_index {
-                "get_string"
-            } else {
-                "get"
-            };
-            let box (next_scalar, next_type) =
-                self.resolve_scalar_function_call(span, func_name, vec![], vec![
-                    scalar,
-                    path_scalar,
-                ])?;
-            scalar = next_scalar;
-            data_type = next_type;
+        base: &ScalarExpr,
+        keypaths: &OwnedKeyPaths,
+        target: PushdownTarget,
+    ) -> Option<Box<(ScalarExpr, DataType)>> {
+        if !self.bind_context.allow_virtual_column {
+            return None;
         }
-        Ok(Box::new((scalar, data_type)))
-    }
-
-    fn get_core_get_function_keypath(
-        arena: &CoreExprArena<'_>,
-        arg: CoreExprId,
-    ) -> Option<OwnedKeyPath> {
-        let CoreExpr::Literal { value, .. } = arena.get(arg) else {
+        let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = base else {
             return None;
         };
-        Self::get_function_keypath(value)
-    }
 
-    fn get_function_keypaths(arg: &ScalarExpr) -> Option<OwnedKeyPaths> {
-        let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = arg else {
-            return None;
-        };
-        Self::get_function_keypath(value).map(|path| OwnedKeyPaths { paths: vec![path] })
-    }
-
-    fn get_function_keypath(value: &Scalar) -> Option<OwnedKeyPath> {
-        let path = match value {
-            Scalar::String(path) => OwnedKeyPath::Name(path.clone()),
-            Scalar::Number(number) => {
-                let index = number.integer_to_i128()?;
-                if index < 0 {
-                    return None;
-                }
-                let index = i32::try_from(index).ok()?;
-                OwnedKeyPath::Index(index)
+        // Normalize both `BaseTableColumn(v)` and `VirtualColumn(v['a'])` down to
+        // `(table_index, source_column_id, source_column_name, full_keypaths)` so the pushdown
+        // logic doesn't need to know which representation it started from.
+        // Single metadata read covers column lookup and the enable_virtual_column table option.
+        let (table_index, source_column_id, source_column_name, full_keypaths) = {
+            let metadata = self.metadata.read();
+            if column.index.as_usize() >= metadata.columns().len() {
+                return None;
             }
-            _ => return None,
+
+            let (table_index, source_column_id, source_column_name, existing_paths) =
+                match metadata.column(column.index) {
+                    ColumnEntry::BaseTableColumn(base_column) => (
+                        base_column.table_index,
+                        base_column.column_id,
+                        base_column.column_name.clone(),
+                        None,
+                    ),
+                    ColumnEntry::VirtualColumn(virtual_column) => (
+                        virtual_column.table_index,
+                        virtual_column.source_column_id,
+                        virtual_column.source_column_name.clone(),
+                        Some(&virtual_column.key_paths),
+                    ),
+                    _ => return None,
+                };
+
+            if !metadata
+                .table(table_index)
+                .table()
+                .get_table_info()
+                .get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+            {
+                return None;
+            }
+
+            // Clone keypaths only after the enable check succeeds.
+            let full_keypaths = match existing_paths {
+                Some(prefix) => {
+                    let mut owned = prefix.clone();
+                    owned.paths.extend(keypaths.paths.iter().cloned());
+                    owned
+                }
+                None => keypaths.clone(),
+            };
+            (
+                table_index,
+                source_column_id,
+                source_column_name,
+                full_keypaths,
+            )
         };
-        Some(path)
+
+        let key_name = owned_keypaths_to_name(&source_column_name, &full_keypaths);
+        let virtual_column_name = VirtualColumnName::new(
+            table_index,
+            source_column_id,
+            key_name,
+            target.into_option(),
+        );
+
+        let column = self.bind_context.add_virtual_column_binding(
+            self.metadata.clone(),
+            &source_column_name,
+            virtual_column_name,
+            full_keypaths,
+        )?;
+
+        let data_type = *column.data_type.clone();
+        Some(Box::new((
+            BoundColumnRef { span, column }.into(),
+            data_type,
+        )))
     }
 
     pub(super) fn resolve_cast_to_variant(
@@ -557,45 +610,6 @@ where A: super::TypeCheckAdapter
         Ok(Box::new((scalar, return_type)))
     }
 
-    fn try_rewrite_variant_keypaths(
-        &mut self,
-        span: Span,
-        scalar: &ScalarExpr,
-        keypaths: OwnedKeyPaths,
-    ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if !self.bind_context.allow_virtual_column {
-            return None;
-        }
-        let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = scalar else {
-            return None;
-        };
-        if column.index.as_usize() >= self.metadata.read().columns().len() {
-            return None;
-        }
-        let column_entry = self.metadata.read().column(column.index).clone();
-        match column_entry {
-            ColumnEntry::BaseTableColumn(base_column) => self.try_rewrite_owned_virtual_column(
-                span,
-                base_column.table_index,
-                base_column.column_id,
-                &base_column.column_name,
-                keypaths,
-            ),
-            ColumnEntry::VirtualColumn(virtual_column) => {
-                let mut owned_keypaths = virtual_column.key_paths.clone();
-                owned_keypaths.paths.extend(keypaths.paths);
-                self.try_rewrite_owned_virtual_column(
-                    span,
-                    virtual_column.table_index,
-                    virtual_column.source_column_id,
-                    &virtual_column.source_column_name,
-                    owned_keypaths,
-                )
-            }
-            _ => None,
-        }
-    }
-
     fn resolve_tuple_map_access_pushdown(
         &mut self,
         span: Span,
@@ -697,84 +711,31 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    fn try_rewrite_owned_virtual_column(
-        &mut self,
-        span: Span,
-        table_index: IndexType,
-        column_id: ColumnId,
-        column_name: &str,
-        owned_keypaths: OwnedKeyPaths,
-    ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if !self
-            .metadata
-            .read()
-            .table(table_index)
-            .table()
-            .get_table_info()
-            .get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
-        {
-            return None;
-        }
-        let key_name = owned_keypaths.to_canonical_path();
-        let virtual_column_name = VirtualColumnName {
-            table_index,
-            source_column_id: column_id,
-            key_name,
-        };
-
-        // add virtual column binding into `BindContext`
-        let column = self.bind_context.add_virtual_column_binding(
-            self.metadata.clone(),
-            column_name,
-            virtual_column_name,
-            owned_keypaths,
-        )?;
-
-        let data_type = *column.data_type.clone();
-        Some(Box::new((
-            BoundColumnRef { span, column }.into(),
-            data_type,
-        )))
-    }
-
-    // Rewrite variant map access as `get_by_keypath` function
+    // Rewrite variant map access as `get_by_keypath`,
+    // using a virtual column when the static path can be pushed to storage.
     fn resolve_variant_map_access(
         &mut self,
         span: Span,
         scalar: ScalarExpr,
         paths: &mut VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut key_paths = Vec::with_capacity(paths.len());
-        for (span, path) in paths.iter() {
-            let key_path = match path {
-                Literal::UInt64(idx) => {
-                    if let Ok(i) = i32::try_from(*idx) {
-                        KeyPath::Index(i)
-                    } else {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "path index is overflow, max allowed value is {}, but got {}",
-                            i32::MAX,
-                            idx
-                        ))
-                        .set_span(*span));
-                    }
-                }
-                Literal::String(field) => KeyPath::QuotedName(std::borrow::Cow::Borrowed(field)),
-                _ => unreachable!(),
-            };
-            key_paths.push(key_path);
-        }
+        let key_paths = paths
+            .iter()
+            .map(|(s, l)| literal_to_owned_keypath(*s, l))
+            .collect::<Result<Vec<_>>>()?;
+        let owned_keypaths = OwnedKeyPaths { paths: key_paths };
 
-        let keypaths = KeyPaths { paths: key_paths };
-
-        // try rewrite as virtual column and pushdown to storage layer.
-        if let Some(box (scalar, data_type)) =
-            self.try_rewrite_variant_keypaths(span, &scalar, keypaths.to_owned())
+        // Try rewriting as a virtual column and pushing down to the storage layer.
+        // keypaths is borrowed, only cloned inside try_pushdown on successful bind.
+        if let Some(result) =
+            self.try_pushdown_variant_paths(span, &scalar, &owned_keypaths, PushdownTarget::Variant)
         {
-            return Ok(Box::new((scalar, data_type)));
+            return Ok(result);
         }
 
-        let keypaths_str = format!("{}", keypaths);
+        // Fallback: keep the original `get_by_keypath` function call. The runtime path key uses
+        // borrowed references to avoid re-cloning the owned segments.
+        let keypaths_str = format_runtime_keypaths(&owned_keypaths);
         let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
             value: Scalar::String(keypaths_str),
@@ -792,4 +753,231 @@ where A: super::TypeCheckAdapter
             DataType::Nullable(Box::new(DataType::Variant)),
         )))
     }
+}
+
+/// Target of a variant JSON path pushdown to the storage layer.
+///
+/// Invariant: `Cast`'s `TableDataType` is always non-nullable. Pushdown results are always
+/// nullable; outer `Nullable` is stripped here and re-applied when the virtual column is bound.
+#[derive(Debug)]
+enum PushdownTarget {
+    Variant,
+    Cast(TableDataType, bool),
+}
+
+impl PushdownTarget {
+    /// Target used by `get_string` / `get_by_keypath_string`.
+    /// Same as `CAST(... AS String)` / `::String`: non-nullable inner type with strict cast.
+    fn string() -> Self {
+        PushdownTarget::Cast(TableDataType::String, false)
+    }
+
+    fn from_type_name(target: &TypeName, is_try: bool) -> Result<Self> {
+        let ty = resolve_type_name(target, true)?;
+        // Always strip Nullable so equivalent casts unify:
+        // `CAST(x AS String)` / `CAST(x AS String NULL)` / `get_string` → same binding.
+        let inner = ty.remove_nullable();
+        let target_type = if matches!(
+            inner,
+            TableDataType::Boolean
+                | TableDataType::String
+                | TableDataType::Number(_)
+                | TableDataType::Decimal(_)
+                | TableDataType::Date
+                | TableDataType::Timestamp
+        ) {
+            PushdownTarget::Cast(inner, is_try)
+        } else {
+            PushdownTarget::Variant
+        };
+        Ok(target_type)
+    }
+
+    fn into_option(self) -> Option<(TableDataType, bool)> {
+        match self {
+            PushdownTarget::Variant => None,
+            // Defensive strip: constructors already produce non-nullable types.
+            PushdownTarget::Cast(ty, is_try) => Some((ty.remove_nullable(), is_try)),
+        }
+    }
+}
+
+/// Nested `get(get(..., p1), p2)` chain flattened into its base expression and
+/// parsed keypaths for pushdown.
+struct GetChain {
+    base: CoreExprId,
+    key_paths: OwnedKeyPaths,
+}
+
+impl GetChain {
+    fn parse(arena: &CoreExprArena<'_>, args: &CoreExprArgs) -> Option<Self> {
+        let mut key_paths = Vec::new();
+        let mut current_args = args;
+        let base = loop {
+            let [expr, path_id] = current_args.as_slice() else {
+                return None;
+            };
+            let CoreExpr::Literal { value, .. } = arena.get(*path_id) else {
+                return None;
+            };
+            key_paths.push(keypath_from_scalar(value)?);
+
+            match arena.get(*expr) {
+                CoreExpr::Call {
+                    func_name: "get",
+                    args,
+                    ..
+                } => current_args = args,
+                _ => break *expr,
+            }
+        };
+        key_paths.reverse();
+        Some(Self {
+            base,
+            key_paths: OwnedKeyPaths { paths: key_paths },
+        })
+    }
+}
+
+/// A static variant JSON access extracted from CoreExpr, shared by the cast / function
+/// pushdown entry points.
+///
+/// - `base`: expression that should resolve to a Variant column
+/// - `keypaths`: full static path to push down
+/// - `string_result`: true for `get_string` / `get_by_keypath_string` (target String)
+struct StaticVariantAccess {
+    base: CoreExprId,
+    keypaths: OwnedKeyPaths,
+    string_result: bool,
+}
+
+impl StaticVariantAccess {
+    /// Extract a static variant access from an arbitrary CoreExpr (used by cast pushdown).
+    ///
+    /// Recognizes:
+    /// - `MapAccess { expr, paths }` — `data['k']`
+    /// - `Call { get / get_string, ... }` — nested get chain
+    /// - `Call { get_by_keypath / get_by_keypath_string, ... }` — keypath literal
+    ///
+    /// Returns `Ok(None)` when the expression is not a static variant access.
+    fn from_expr(arena: &CoreExprArena<'_>, expr: CoreExprId) -> Result<Option<Self>> {
+        match arena.get(expr) {
+            CoreExpr::MapAccess { expr, paths, .. } => {
+                let owned_keypaths = paths
+                    .iter()
+                    .map(|(s, l)| literal_to_owned_keypath(*s, l))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Some(Self {
+                    base: *expr,
+                    keypaths: OwnedKeyPaths {
+                        paths: owned_keypaths,
+                    },
+                    string_result: false,
+                }))
+            }
+            CoreExpr::Call {
+                func_name, args, ..
+            } => Ok(Self::from_function_call(arena, func_name, args)),
+            _ => Ok(None),
+        }
+    }
+
+    /// Extract a static variant access from a known variant function call
+    /// (`get` / `get_string` / `get_by_keypath` / `get_by_keypath_string`).
+    fn from_function_call(
+        arena: &CoreExprArena<'_>,
+        func_name: &str,
+        args: &CoreExprArgs,
+    ) -> Option<Self> {
+        let string_result = matches!(func_name, "get_string" | "get_by_keypath_string");
+        match func_name {
+            "get" | "get_string" => {
+                let chain = GetChain::parse(arena, args)?;
+                Some(Self {
+                    base: chain.base,
+                    keypaths: chain.key_paths,
+                    string_result,
+                })
+            }
+            "get_by_keypath" | "get_by_keypath_string" => {
+                let [base_id, path_id] = args.as_slice() else {
+                    return None;
+                };
+                let CoreExpr::Literal {
+                    value: Scalar::String(path),
+                    ..
+                } = arena.get(*path_id)
+                else {
+                    return None;
+                };
+                let keypaths = parse_key_paths(path.as_bytes()).ok()?.to_owned();
+                Some(Self {
+                    base: *base_id,
+                    keypaths,
+                    string_result,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+fn keypath_from_scalar(value: &Scalar) -> Option<OwnedKeyPath> {
+    match value {
+        Scalar::String(path) => Some(OwnedKeyPath::Name(path.clone())),
+        Scalar::Number(number) => {
+            let index = number.integer_to_i128()?;
+            if index < 0 {
+                return None;
+            }
+            Some(OwnedKeyPath::Index(i32::try_from(index).ok()?))
+        }
+        _ => None,
+    }
+}
+
+/// Convert a map-access literal segment into an `OwnedKeyPath`. The literal kinds are
+/// already restricted by `lower_map_access_expr`, so anything else is a programming error.
+fn literal_to_owned_keypath(span: Span, literal: &Literal) -> Result<OwnedKeyPath> {
+    match literal {
+        Literal::UInt64(idx) => {
+            let i = i32::try_from(*idx).map_err(|_| {
+                ErrorCode::SemanticError(format!(
+                    "path index is overflow, max allowed value is {}, but got {}",
+                    i32::MAX,
+                    idx
+                ))
+                .set_span(span)
+            })?;
+            Ok(OwnedKeyPath::Index(i))
+        }
+        Literal::String(field) => Ok(OwnedKeyPath::Name(field.clone())),
+        _ => unreachable!("map access literals are validated by lower_map_access_expr"),
+    }
+}
+
+/// Build a display name for a virtual column that appends every path segment, e.g.
+/// `v['message']['id']`.
+fn owned_keypaths_to_name(column_name: &str, keypaths: &OwnedKeyPaths) -> String {
+    let mut name = column_name.to_string();
+    for path in &keypaths.paths {
+        name.push('[');
+        match path {
+            OwnedKeyPath::Index(idx) => {
+                name.push_str(&idx.to_string());
+            }
+            OwnedKeyPath::Name(field) => {
+                name.push('\'');
+                for ch in field.chars() {
+                    if ch == '\\' || ch == '\'' {
+                        name.push('\\');
+                    }
+                    name.push(ch);
+                }
+                name.push('\'');
+            }
+        }
+        name.push(']');
+    }
+    name
 }

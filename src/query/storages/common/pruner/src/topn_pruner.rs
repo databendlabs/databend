@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -115,32 +114,35 @@ impl TopNPruner {
             return self.prune_topn_by_score(*asc, metas);
         }
 
-        let sort_column_id = if let Ok(index) = self.schema.column_id_of(column.as_str()) {
-            index
-        } else {
+        let Ok(sort_column_id) = self.schema.column_id_of(column.as_str()) else {
             return Ok(metas);
         };
-
         // String Type min/max is truncated
         if matches!(
-            self.schema.field_with_name(column)?.data_type(),
+            self.schema
+                .field_with_name(column)?
+                .data_type()
+                .remove_nullable(),
             TableDataType::String
         ) {
             return Ok(metas);
         }
 
-        let mut id_stats = metas
-            .iter()
-            .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        sort_column_id
-                    ))
-                })?;
-                Ok((id.clone(), stat.clone(), meta.clone()))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut id_stats = Vec::with_capacity(metas.len());
+        for (index, meta) in &metas {
+            let stat = meta.col_stats.get(&sort_column_id).or_else(|| {
+                index
+                    .virtual_block_meta
+                    .as_ref()?
+                    .virtual_column_stats
+                    .get(&sort_column_id)
+            });
+            let Some(stat) = stat else {
+                // TopN requires a reliable bound for every candidate block.
+                return Ok(metas);
+            };
+            id_stats.push((index.clone(), stat.clone(), meta.clone()));
+        }
 
         if self.filter_only_use_index {
             // For descending order, we determine a lower bound for the Nth largest value.

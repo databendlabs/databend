@@ -31,6 +31,8 @@ use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use jsonb::keypath::OwnedKeyPath;
+use jsonb::keypath::OwnedKeyPaths;
 
 pub use self::column_from::*;
 use crate::BlockEntry;
@@ -54,6 +56,28 @@ use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::decimal::DecimalScalar;
 use crate::types::i256;
+
+/// Format owned key paths for `get_by_keypath` and related runtime functions.
+/// Object names are encoded as JSON strings so `parse_key_paths` can recover
+/// special characters without ambiguity.
+pub fn format_runtime_keypaths(key_paths: &OwnedKeyPaths) -> String {
+    let mut output = String::from("{");
+    for (index, key_path) in key_paths.paths.iter().enumerate() {
+        if index > 0 {
+            output.push(',');
+        }
+        match key_path {
+            OwnedKeyPath::Index(index) => output.push_str(&index.to_string()),
+            OwnedKeyPath::Name(name) => {
+                output.push_str(
+                    &serde_json::to_string(name).expect("serializing a string cannot fail"),
+                );
+            }
+        }
+    }
+    output.push('}');
+    output
+}
 
 /// A convenient shortcut to evaluate a scalar function.
 pub fn eval_function(
@@ -313,7 +337,32 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
 
 #[cfg(test)]
 mod tests {
+    use jsonb::keypath::parse_key_paths;
+
     use super::*;
+
+    #[test]
+    fn test_format_runtime_keypaths_roundtrip() {
+        let key_paths = OwnedKeyPaths {
+            paths: vec![
+                OwnedKeyPath::Name("simple".to_string()),
+                OwnedKeyPath::Name("user'name".to_string()),
+                OwnedKeyPath::Name("a\"b".to_string()),
+                OwnedKeyPath::Name("a\\b".to_string()),
+                OwnedKeyPath::Name("a,b".to_string()),
+                OwnedKeyPath::Name("a.b".to_string()),
+                OwnedKeyPath::Name("line\nbreak".to_string()),
+                OwnedKeyPath::Index(0),
+                OwnedKeyPath::Index(-1),
+            ],
+        };
+
+        let encoded = format_runtime_keypaths(&key_paths);
+        assert_eq!(
+            parse_key_paths(encoded.as_bytes()).unwrap().to_owned(),
+            key_paths
+        );
+    }
 
     #[test]
     fn test_shrink_scalar() {

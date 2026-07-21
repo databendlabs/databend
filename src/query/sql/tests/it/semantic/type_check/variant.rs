@@ -106,10 +106,14 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
         .iter()
         .map(|(name, (_, column_index))| (name.key_name.as_str(), column_index.as_usize()))
         .collect::<Vec<_>>();
-    assert_eq!(virtual_columns, vec![("a[0]", 2), ("b.c", 3)]);
+    assert_eq!(virtual_columns, vec![
+        ("v['a'][0]", 2),
+        ("v['b']['c']", 3),
+        ("v['b']['c']", 4)
+    ]);
 
     let metadata = metadata.read();
-    assert_eq!(metadata.columns().len(), 4);
+    assert_eq!(metadata.columns().len(), 5);
     assert_virtual_column(metadata.column(Symbol::new(2)), "v['a'][0]");
     assert_virtual_column(metadata.column(Symbol::new(3)), "v['b']['c']");
 

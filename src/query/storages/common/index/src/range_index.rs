@@ -48,6 +48,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use geo::Point;
 use geo::Rect;
 
@@ -462,6 +463,6 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
 
 impl Index for RangeIndex {
     fn supported_type(data_type: &DataType) -> bool {
-        databend_storages_common_table_meta::meta::supported_stat_type(data_type)
+        supported_stat_type(data_type)
     }
 }

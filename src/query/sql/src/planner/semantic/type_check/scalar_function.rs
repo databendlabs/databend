@@ -291,10 +291,13 @@ where A: TypeCheckAdapter
             )));
         }
 
-        if let Some(rewritten_get_expr) =
-            self.try_resolve_get_function_chain(arena, span, func_name, args)
+        // Variant access must be rewritten before resolving arguments. Otherwise a nested
+        // `get(get(v, ...), ...)` chain binds intermediate virtual columns before the complete
+        // path gets a chance to bind as one virtual column.
+        if let Some(rewritten_variant_expr) =
+            self.try_resolve_variant_function(arena, span, func_name, args)
         {
-            return rewritten_get_expr;
+            return rewritten_variant_expr;
         }
 
         let is_grouping = func_name.eq_ignore_ascii_case("grouping");
@@ -309,19 +312,12 @@ where A: TypeCheckAdapter
             scalars.push(scalar);
         }
 
-        if self.should_try_rewrite_variant_function(func_name) {
-            if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars)
-            {
-                return rewritten_variant_expr;
-            }
-        }
-        if Self::is_vector_function(func_name)
-            && let Some(rewritten_vector_expr) =
-                self.try_rewrite_vector_function(span, func_name, &scalars)
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &scalars)
         {
             return rewritten_vector_expr;
         }
+
         let box (scalar, data_type) =
             self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
         if func_name == "eq" || func_name == "noteq" {
@@ -340,31 +336,7 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
-
-        // `grouping<...>(...)` with explicit params is the internal rewritten
-        // form; keep its arguments untouched (see `replace_grouping`).
-        if func_name.eq_ignore_ascii_case("grouping") && params.is_empty() {
-            for (scalar, arg) in scalars.iter_mut().zip(args) {
-                if let Some(group_item) = self.grouping_argument_group_item(arena, *arg, scalar) {
-                    *scalar = group_item;
-                }
-            }
-        }
-
-        if self.should_try_rewrite_variant_function(func_name) {
-            if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars)
-            {
-                return rewritten_variant_expr;
-            }
-        }
-        if Self::is_vector_function(func_name)
-            && let Some(rewritten_vector_expr) =
-                self.try_rewrite_vector_function(span, func_name, &scalars)
-        {
-            return rewritten_vector_expr;
-        }
+        let (scalars, _) = self.resolve_expr_args(arena, args)?;
 
         self.resolve_scalar_function_call(span, func_name, params, scalars)
     }

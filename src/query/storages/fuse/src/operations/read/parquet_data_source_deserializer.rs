@@ -210,11 +210,24 @@ impl Processor for DeserializeDataTransform {
                 .deserialize_and_filter(columns_chunks, part)?;
 
             if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                data_block = virtual_reader.deserialize_virtual_columns(
-                    data_block,
-                    read_res.virtual_data,
-                    row_selection.as_ref().map(|s| s.selection.clone()),
-                )?;
+                let virtual_block_location = read_res
+                    .virtual_data
+                    .as_ref()
+                    .map(|data| data.virtual_block_location.clone());
+                data_block = virtual_reader
+                    .deserialize_virtual_columns(
+                        data_block,
+                        read_res.virtual_data,
+                        row_selection.as_ref().map(|s| s.selection.clone()),
+                    )
+                    .inspect_err(|error| {
+                        log::warn!(
+                            "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
+                            part.location,
+                            virtual_block_location,
+                            error
+                        );
+                    })?;
             }
 
             // Perf.
