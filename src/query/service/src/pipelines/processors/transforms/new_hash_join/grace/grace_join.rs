@@ -39,6 +39,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
@@ -110,6 +111,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
             self.state
                 .ctx
                 .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+            record_join_spill_progress(&self.state.ctx, written, &row_groups);
 
             if !row_groups.is_empty() {
                 partitions_meta.push((id, SpillMetadata { path, row_groups }));
@@ -373,6 +375,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             self.state
                 .ctx
                 .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+            record_join_spill_progress(&self.state.ctx, written, &row_groups);
 
             if !row_groups.is_empty() {
                 partitions_meta.push((id, SpillMetadata { path, row_groups }));
@@ -430,17 +433,36 @@ impl GraceJoinPartition {
     pub fn create(prefix: &str, writer_pool_bytes: usize) -> Result<GraceJoinPartition> {
         let data_operator = DataOperator::instance();
 
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
         let spills_data_writer =
-            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes, target)?;
 
         Ok(GraceJoinPartition {
             path: file_path,
             writer: spills_data_writer,
         })
     }
+}
+
+fn record_join_spill_progress(
+    ctx: &Arc<QueryContext>,
+    written: usize,
+    row_groups: &[parquet::file::metadata::RowGroupMetaData],
+) {
+    if written == 0 && row_groups.is_empty() {
+        return;
+    }
+
+    ctx.get_join_spill_progress().incr(&ProgressValues {
+        rows: row_groups
+            .iter()
+            .map(|row_group| row_group.num_rows() as usize)
+            .sum(),
+        bytes: written,
+    });
 }
 
 pub struct RestoreProbeStream<'a, T: GraceMemoryJoin> {

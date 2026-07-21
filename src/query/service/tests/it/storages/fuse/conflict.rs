@@ -63,7 +63,6 @@ fn test_unresolvable_delete_conflict() {
     let result = generator.do_generate_new_snapshot(
         &TableInfo::default(),
         None,
-        None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
         Default::default(),
@@ -193,7 +192,6 @@ fn test_resolvable_delete_conflict() {
 
     let result = generator.do_generate_new_snapshot(
         &TableInfo::default(),
-        None,
         None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
@@ -350,7 +348,6 @@ fn test_resolvable_replace_conflict() {
 
     let result = generator.do_generate_new_snapshot(
         &TableInfo::default(),
-        None,
         None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),

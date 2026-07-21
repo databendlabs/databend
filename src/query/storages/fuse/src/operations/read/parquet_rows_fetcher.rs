@@ -40,8 +40,11 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use futures_util::future;
+use futures_util::stream::FuturesUnordered;
+use futures_util::stream::StreamExt;
 use itertools::Itertools;
+use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
 use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
@@ -51,6 +54,38 @@ use crate::FuseTable;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
+
+struct AbortOnDropTasks<T> {
+    inner: FuturesUnordered<JoinHandle<T>>,
+}
+
+impl<T> AbortOnDropTasks<T> {
+    fn new() -> Self {
+        Self {
+            inner: FuturesUnordered::new(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn push(&self, task: JoinHandle<T>) {
+        self.inner.push(task);
+    }
+
+    async fn next(&mut self) -> Option<std::result::Result<T, tokio::task::JoinError>> {
+        self.inner.next().await
+    }
+}
+
+impl<T> Drop for AbortOnDropTasks<T> {
+    fn drop(&mut self) {
+        for task in self.inner.iter() {
+            task.abort();
+        }
+    }
+}
 
 pub struct RowsFetchMetadataImpl {
     // Average bytes per row
@@ -78,6 +113,17 @@ pub(super) struct ParquetRowsFetcher {
     settings: ReadSettings,
 
     reader: Arc<BlockReader>,
+    // Per-lane cap on the number of block-fetch tasks spawned at once, so a single
+    // `fetch()` call does not spawn one task per hit block up front.
+    max_threads: usize,
+    // Shared across every RowFetch lane of the query. A mutation plan can fan
+    // RowFetch out to `max_threads` lanes (see physical_row_fetch.rs), each with
+    // its own fetcher; without a shared gate the aggregate in-flight decoded
+    // chunks would be `lanes * max_threads`, so peak memory would not be bounded
+    // by `max_threads` and could OOM on wide/long string columns. Each in-flight
+    // `fetch_block` holds one permit for the lifetime of its decoded chunk, so the
+    // query-wide count of concurrently-held chunks never exceeds the permit count.
+    io_semaphore: Arc<Semaphore>,
 
     segment_reader: CompactSegmentInfoReader,
     block_meta_lru_cache: InMemoryLruCache<RowsFetchMetadataImpl>,
@@ -168,29 +214,47 @@ impl RowsFetcher for ParquetRowsFetcher {
             }
         }
 
-        let mut tasks_handle = Vec::with_capacity(tasks_indices.len());
-        let mut blocks_bytes = 0;
         let mut final_blocks = HashMap::with_capacity(tasks_indices.len());
-        let mut tasks_indices = tasks_indices.into_iter().peekable();
-        while let Some((block_id, task_indices)) = tasks_indices.next() {
-            let metadata = &metadata[&block_id];
-            blocks_bytes += metadata.block_bytes;
 
-            let final_take_index = final_block_index[&block_id];
-            let join_handle =
-                spawn(self.fetch_block(metadata.clone(), final_take_index, task_indices));
-            tasks_handle.push(join_handle);
-
-            // To prevent excessive memory usage, we need to perform a join when the threshold is reached.
-            if blocks_bytes >= 50 * 1024 * 1024 || tasks_indices.peek().is_none() {
-                let tasks_handle = std::mem::take(&mut tasks_handle);
-                let tasks_block = future::try_join_all(tasks_handle).await.unwrap();
-                blocks_bytes = 0;
-                for task_block in tasks_block {
-                    let (final_index, block) = task_block?;
-                    final_blocks.insert(final_index, block);
-                }
+        // Concurrency is bounded in two layers, neither of which is the old
+        // accumulated-byte barrier (which collapsed to a single in-flight task
+        // whenever one block's chunk already exceeded the budget — common for
+        // wide/long string columns — and thereby serialized the whole fetch;
+        // see #19677 and the row-fetch perf regression):
+        //   1. This per-lane window (FuturesUnordered) caps how many fetch tasks
+        //      one `fetch()` call keeps in flight, draining by completion order
+        //      so S3 tail latency on one block does not stall the window.
+        //   2. `io_semaphore` (shared across all RowFetch lanes of the query) caps
+        //      how many decoded column chunks are actually alive at once, so peak
+        //      memory stays bounded even when a mutation plan fans RowFetch out to
+        //      `max_threads` lanes.
+        let max_concurrency = self.max_threads.max(1);
+        let mut in_flight = AbortOnDropTasks::new();
+        let mut tasks_indices = tasks_indices.into_iter();
+        loop {
+            // Fill the window up to max_concurrency.
+            while in_flight.len() < max_concurrency {
+                let Some((block_id, task_indices)) = tasks_indices.next() else {
+                    break;
+                };
+                let metadata = &metadata[&block_id];
+                let final_take_index = final_block_index[&block_id];
+                in_flight.push(spawn(self.fetch_block(
+                    metadata.clone(),
+                    final_take_index,
+                    task_indices,
+                )));
             }
+
+            // Drain the first completed task to make room for the next block.
+            let Some(result) = in_flight.next().await else {
+                break;
+            };
+            let (final_index, block) = match result.expect("row-fetch task panicked") {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
+            final_blocks.insert(final_index, block);
         }
 
         let final_blocks = final_blocks
@@ -222,6 +286,8 @@ impl ParquetRowsFetcher {
         projection: Projection,
         reader: Arc<BlockReader>,
         settings: ReadSettings,
+        max_threads: usize,
+        io_semaphore: Arc<Semaphore>,
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
@@ -234,6 +300,8 @@ impl ParquetRowsFetcher {
             schema,
             reader,
             settings,
+            max_threads: max_threads.max(1),
+            io_semaphore,
             block_meta_lru_cache: InMemoryLruCache::with_items_capacity(
                 String::from("RowFetchBlockMetaCache"),
                 128,
@@ -250,7 +318,15 @@ impl ParquetRowsFetcher {
         {
             let settings = self.settings;
             let reader = self.reader.clone();
+            let io_semaphore = self.io_semaphore.clone();
             async move {
+                // Hold a permit for the whole decode: the query-wide number of
+                // decoded chunks alive at once is capped by the shared semaphore,
+                // regardless of how many RowFetch lanes the plan created.
+                let _permit = io_semaphore
+                    .acquire_owned()
+                    .await
+                    .expect("row-fetch io semaphore never closed");
                 let chunk = reader
                     .read_columns_data_by_merge_io(
                         &settings,
@@ -336,5 +412,73 @@ impl ParquetRowsFetcher {
 impl From<RowsFetchMetadataImpl> for CacheValue<RowsFetchMetadataImpl> {
     fn from(value: RowsFetchMetadataImpl) -> Self {
         CacheValue::new(value, 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::pending;
+    use std::time::Duration;
+
+    use tokio::sync::oneshot;
+    use tokio::time::timeout;
+
+    use super::*;
+
+    struct DropSignal(Option<oneshot::Sender<()>>);
+
+    impl Drop for DropSignal {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn aborts_running_and_waiting_tasks_on_drop() {
+        let semaphore = Arc::new(Semaphore::new(1));
+        let tasks = AbortOnDropTasks::new();
+
+        let (running_started_tx, running_started_rx) = oneshot::channel();
+        let (running_dropped_tx, running_dropped_rx) = oneshot::channel();
+        let running_semaphore = semaphore.clone();
+        tasks.push(spawn(async move {
+            let _drop_signal = DropSignal(Some(running_dropped_tx));
+            let _permit = running_semaphore.acquire_owned().await.unwrap();
+            running_started_tx.send(()).unwrap();
+            pending::<()>().await;
+        }));
+
+        running_started_rx.await.unwrap();
+
+        let (waiting_started_tx, waiting_started_rx) = oneshot::channel();
+        let (waiting_dropped_tx, waiting_dropped_rx) = oneshot::channel();
+        let waiting_semaphore = semaphore.clone();
+        tasks.push(spawn(async move {
+            let _drop_signal = DropSignal(Some(waiting_dropped_tx));
+            waiting_started_tx.send(()).unwrap();
+            let _permit = waiting_semaphore.acquire_owned().await.unwrap();
+            pending::<()>().await;
+        }));
+
+        waiting_started_rx.await.unwrap();
+        drop(tasks);
+
+        timeout(Duration::from_secs(1), running_dropped_rx)
+            .await
+            .expect("running task should be aborted")
+            .unwrap();
+        timeout(Duration::from_secs(1), waiting_dropped_rx)
+            .await
+            .expect("task waiting for a permit should be aborted")
+            .unwrap();
+
+        let permit = timeout(Duration::from_secs(1), semaphore.acquire())
+            .await
+            .expect("aborted task should release its permit")
+            .unwrap();
+        drop(permit);
+        assert_eq!(semaphore.available_permits(), 1);
     }
 }

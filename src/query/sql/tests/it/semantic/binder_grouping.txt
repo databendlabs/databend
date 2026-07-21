@@ -3,7 +3,7 @@ description: A set-returning function over an aggregate should stay above the ag
 sql: SELECT unnest(max([11, 12]))
 status: ok
 EvalScalar
-├── scalars: [get(unnest(max([11, 12])) (#2)) AS (#3)]
+├── scalars: [get(1)(unnest(max([11, 12])) (#2)) AS (#3)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..28), func_name: "unnest", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(14..27), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max([11, 12])", column_name_lower: None, index: 1, data_type: Nullable(Array(Number(UInt8))), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 2 }] })
     └── Aggregate(Initial)
         ├── group items: []
@@ -18,7 +18,7 @@ description: Repeated identical SRF expressions should reuse the registered Proj
 sql: SELECT unnest([1, 2, 3]), unnest([1, 2, 3])
 status: ok
 EvalScalar
-├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1), get(unnest([1, 2, 3]) (#0)) AS (#2)]
+├── scalars: [get(1)(unnest([1, 2, 3]) (#0)) AS (#1), get(1)(unnest([1, 2, 3]) (#0)) AS (#2)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
     └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
 
@@ -157,7 +157,7 @@ description: CUBE should expand into grouping sets and allow grouping(...) to bi
 sql: SELECT a, b, sum(c) AS sc, grouping(a, b) FROM g GROUP BY CUBE(a, b)
 status: ok
 EvalScalar
-├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), sum(c) (#6) AS (#6), grouping(_grouping_id (#5)) AS (#7)]
+├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), sum(c) (#6) AS (#6), grouping(0, 1)(_grouping_id (#5)) AS (#7)]
 └── Aggregate(Initial)
     ├── group items: [g.a (#0) AS (#0), g.b (#1) AS (#1), _grouping_id (#5) AS (#5)]
     ├── aggregate functions: [sum(g.c (#2)) AS (#6)]
@@ -180,7 +180,7 @@ EvalScalar
     ├── group items: []
     ├── aggregate functions: [max(max_arg_0 (#2)) AS (#3)]
     └── EvalScalar
-        ├── scalars: [get(unnest(split(t.col2 (#0), ',')) (#1)) AS (#2)]
+        ├── scalars: [get(1)(unnest(split(t.col2 (#0), ',')) (#1)) AS (#2)]
         └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(11..37), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(18..36), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 0, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(32..35), value: String(",") })] })] }), index: 1 }] })
             └── Scan
                 ├── table: default.t_str (#0)
@@ -194,7 +194,7 @@ description: A sqllogictest SRF-over-aggregate pattern with an extra scalar wrap
 sql: SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t
 status: ok
 EvalScalar
-├── scalars: [get(unnest(split(max(t.col2), ',')) (#2)) AS (#3)]
+├── scalars: [get(1)(unnest(split(max(t.col2), ',')) (#2)) AS (#3)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..38), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(14..37), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(20..31), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max(t.col2)", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: InVisible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(33..36), value: String(",") })] })] }), index: 2 }] })
     └── Aggregate(Initial)
         ├── group items: []
@@ -213,11 +213,11 @@ description: A sqllogictest grouping() pattern should still rewrite correctly wh
 sql: SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)
 status: ok
 EvalScalar
-├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(_grouping_id (#4)) AS (#9), grouping(_grouping_id (#4)) AS (#10)]
+├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(1)(_grouping_id (#4)) AS (#9), grouping(0)(_grouping_id (#4)) AS (#10)]
 └── Window
     ├── aggregate function: sum
-    ├── partition items: [plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6)]
-    ├── order by items: [grouping(_grouping_id (#4)) AS (#7) DESC]
+    ├── partition items: [plus(grouping(1)(_grouping_id (#4)), grouping(0)(_grouping_id (#4))) AS (#6)]
+    ├── order by items: [grouping(0)(_grouping_id (#4)) AS (#7) DESC]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── Sort
         ├── sort keys: [sum_part_0 (#6) ASC NULLS LAST, sum_order_0 (#7) DESC NULLS LAST]
@@ -225,7 +225,7 @@ EvalScalar
         ├── window top: NONE
         ├── window function: Aggregate(AggregateFunction { span: Some(44..154), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(48..64), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 5, data_type: Number(UInt32), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC)" })
         └── EvalScalar
-            ├── scalars: [grouping(_grouping_id (#4)) AS (#5), plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6), grouping(_grouping_id (#4)) AS (#7)]
+            ├── scalars: [grouping(1)(_grouping_id (#4)) AS (#5), plus(grouping(1)(_grouping_id (#4)), grouping(0)(_grouping_id (#4))) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
             └── Aggregate(Initial)
                 ├── group items: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1), _grouping_id (#4) AS (#4)]
                 ├── aggregate functions: []
@@ -251,6 +251,24 @@ EvalScalar
         ├── scalars: [empsalary.empno (#0) AS (#0), CAST(empsalary.salary (#1) AS String NULL) AS (#2)]
         └── Scan
             ├── table: default.empsalary (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== grouping_sets_select_alias_with_grouping_func_does_not_shadow_column ===
+description: A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.
+sql: SELECT if(grouping(category_id)=1, 0, category_id) AS category_id, label, sum(amount) FROM events GROUP BY GROUPING SETS ((label), (category_id, label))
+status: ok
+EvalScalar
+├── scalars: [events.label (#1) AS (#1), sum(amount) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, events.category_id (#0)) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [events.label (#1) AS (#1), events.category_id (#0) AS (#0), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(events.amount (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [events.category_id (#0) AS (#0), events.label (#1) AS (#1), events.amount (#2) AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE

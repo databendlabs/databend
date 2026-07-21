@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionID;
+use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -33,7 +36,11 @@ use databend_common_expression::expr::FunctionCall;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::nullable::NullableDomain;
 
 fn bool_column(id: usize, display_name: &str) -> Expr<usize> {
     Expr::ColumnRef(ColumnRef {
@@ -194,6 +201,51 @@ fn fold_with_registry(expr: &Expr<usize>, registry: &FunctionRegistry) -> Expr<u
 
 fn fold(expr: &Expr<usize>) -> Expr<usize> {
     fold_with_registry(expr, &if_test_registry())
+}
+
+#[test]
+fn test_monotonic_nullable_domain_rejects_boundary_probe() {
+    let mut registry = FunctionRegistry::empty();
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _>(
+        "identity",
+        |_, _| FunctionDomain::Full,
+        |value, _| value,
+    );
+    registry.properties.insert(
+        "identity".to_string(),
+        FunctionProperty::default().monotonicity(),
+    );
+
+    let data_type = DataType::Number(NumberDataType::UInt64).wrap_nullable();
+    let expr = databend_common_expression::type_check::check_function(
+        None,
+        "identity",
+        &[],
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type,
+            display_name: "a".to_string(),
+        })],
+        &registry,
+    )
+    .unwrap();
+    let input_domain = Domain::Nullable(NullableDomain {
+        has_null: true,
+        value: Some(Box::new(Domain::Number(NumberDomain::UInt64(
+            SimpleDomain { min: 10, max: 20 },
+        )))),
+    });
+
+    let (folded, output_domain) = ConstantFolder::fold_with_domain(
+        &expr,
+        &HashMap::from([(0, input_domain)]),
+        &FunctionContext::default(),
+        &registry,
+    );
+
+    assert_eq!(folded, expr);
+    assert_eq!(output_domain, None);
 }
 
 #[test]

@@ -30,3 +30,6 @@ mod read_plan;
 mod replace_into;
 mod table_analyze;
 mod truncate;
+mod virtual_column_pruner_reader;
+mod virtual_columns;
+mod virtual_columns_builder;

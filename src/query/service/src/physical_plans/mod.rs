@@ -96,7 +96,6 @@ pub use physical_mutation_source::*;
 pub use physical_project_set::ProjectSet;
 pub use physical_r_cte_scan::RecursiveCteScan;
 pub use physical_range_join::*;
-pub use physical_recluster::HilbertPartition;
 pub use physical_recluster::Recluster;
 pub use physical_replace_async_source::ReplaceAsyncSourcer;
 pub use physical_replace_deduplicate::*;

@@ -44,6 +44,7 @@ pub use property::StatInfo;
 pub use property::Statistics;
 pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
+pub use stats::CountMinSketchSet;
 pub(crate) use stats::JoinConditionColumns;
 pub(crate) use stats::JoinKeyStatUpdate;
 pub(crate) use stats::JoinStatsEstimator;

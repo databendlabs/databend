@@ -25,6 +25,7 @@ use futures::future;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
+use tokio::runtime::Id;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
@@ -60,7 +61,7 @@ impl Runtime {
 
         let handle = runtime.handle().clone();
         let runtime_name = name.clone().unwrap_or_else(|| "unnamed".to_string());
-        let runtime_id = handle.id().to_string();
+        let runtime_id = handle.id();
         let runtime_label = format!("{runtime_name} id={runtime_id}");
         let task_marker = format!("[{runtime_label}]");
 
@@ -82,7 +83,8 @@ impl Runtime {
 
                 if cfg!(debug_assertions) {
                     let instant = Instant::now();
-                    // We wait up to 3 seconds to complete the runtime shutdown.
+                    // In debug builds, bound the Tokio runtime shutdown wait to 3 seconds.
+                    // The dropper joining this wait-to-drop thread is still an unbounded wait.
                     runtime.shutdown_timeout(Duration::from_secs(3));
                     instant.elapsed() >= Duration::from_secs(3)
                 } else {
@@ -95,6 +97,7 @@ impl Runtime {
             task_marker,
             _dropper: Dropper {
                 name,
+                runtime_id,
                 close: Some(watchdog_tx),
                 join_handler: Some(join_handler),
             },
@@ -148,6 +151,12 @@ impl Runtime {
 
     pub fn inner(&self) -> tokio::runtime::Handle {
         self.handle.clone()
+    }
+
+    /// Returns whether the caller is running in this runtime.
+    #[inline]
+    pub fn is_current(&self) -> bool {
+        is_current_runtime(self.handle.id())
     }
 
     fn task_location_name(&self, location_name: String) -> String {
@@ -296,6 +305,7 @@ impl Runtime {
 /// Dropping the dropper will cause runtime to shutdown.
 pub struct Dropper {
     name: Option<String>,
+    runtime_id: Id,
     close: Option<std::sync::mpsc::Sender<WatchdogEvent>>,
     join_handler: Option<ThreadJoinHandle<bool>>,
 }
@@ -307,11 +317,20 @@ impl Drop for Dropper {
             if let Some(close_sender) = self.close.take()
                 && close_sender.send(WatchdogEvent::Stop).is_ok()
             {
+                if is_current_runtime(self.runtime_id) {
+                    // The wait-to-drop thread owns the Tokio runtime and will shut it down
+                    // after observing the stop signal. Joining it from one of the same
+                    // runtime's workers would deadlock: shutdown waits for this worker to
+                    // exit, while this worker waits for shutdown to finish.
+                    drop(self.join_handler.take());
+                    return;
+                }
+
                 match self.join_handler.take().unwrap().join() {
                     Err(e) => warn!("Runtime dropper panic, {:?}", e),
                     Ok(true) => {
-                        // When the runtime shutdown is blocked for more than 3 seconds,
-                        // we will print the backtrace in the warn log, which will help us debug.
+                        // If the debug shutdown timeout is fully consumed, log the
+                        // drop-site backtrace to help diagnose blocked runtime tasks.
                         warn!(
                             "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
                             self.name,
@@ -322,6 +341,14 @@ impl Drop for Dropper {
                 };
             }
         })
+    }
+}
+
+#[inline]
+fn is_current_runtime(runtime_id: Id) -> bool {
+    match Handle::try_current() {
+        Ok(handle) => handle.id() == runtime_id,
+        Err(_) => false,
     }
 }
 

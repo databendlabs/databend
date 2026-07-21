@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
@@ -26,12 +25,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -84,17 +82,9 @@ pub struct VirtualColumnAccumulator {
 
 impl VirtualColumnAccumulator {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
         schema: &Arc<TableSchema>,
         virtual_schema: &Option<VirtualDataSchema>,
     ) -> Option<VirtualColumnAccumulator> {
-        if LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
-            .is_err()
-        {
-            return None;
-        }
-
         let has_variant = schema
             .fields
             .iter()
@@ -209,8 +199,8 @@ impl ColumnHLLAccumulator {
         Ok(())
     }
 
-    pub fn build(&mut self) -> SegmentStatistics {
-        SegmentStatistics::new(std::mem::take(&mut self.hlls))
+    pub fn build_segment_statistics(&mut self, block_top_ns: Vec<BlockTopN>) -> SegmentStatistics {
+        SegmentStatistics::new(std::mem::take(&mut self.hlls), block_top_ns)
     }
 
     pub fn is_empty(&self) -> bool {

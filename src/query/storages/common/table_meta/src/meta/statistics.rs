@@ -15,8 +15,11 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::io::Cursor;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
@@ -26,6 +29,7 @@ use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::MetaHLL;
 use serde::Deserialize;
 use serde::Serialize;
+use siphasher::sip::SipHasher24;
 use uuid::Uuid;
 
 use crate::meta::ColumnStatistics;
@@ -47,10 +51,24 @@ pub type StatisticsOfVectorColumns =
     HashMap<(ColumnId, VectorDistanceType), VectorColumnStatistics>;
 pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type BlockTopN = HashMap<ColumnId, ColumnTopN>;
+pub type BlockCountMinSketch = HashMap<ColumnId, ColumnCountMinSketch>;
 pub type RawBlockHLL = Vec<u8>;
+
+const COUNT_MIN_SKETCH_WIDTH: usize = 2048;
+const MAX_COUNT_MIN_SKETCH_WIDTH: usize = 1 << 20;
+const COUNT_MIN_SKETCH_DEPTH: usize = 5;
+const MIN_COUNT_MIN_SKETCH_ERROR_RATE: f64 = 2.0 / MAX_COUNT_MIN_SKETCH_WIDTH as f64;
+const MAX_COUNT_MIN_SKETCH_ERROR_RATE: f64 = 1.0;
+
+const COUNT_MIN_SKETCH_HASH0_KEY0_V1: u64 = 0x459b_4c9e_5d6e_f817_u64;
+const COUNT_MIN_SKETCH_HASH0_KEY1_V1: u64 = 0x7d31_8741_1d8c_2f23_u64;
+const COUNT_MIN_SKETCH_HASH1_KEY0_V1: u64 = 0xd7a6_5b21_f07c_3e91_u64;
+const COUNT_MIN_SKETCH_HASH1_KEY1_V1: u64 = 0x238f_9c4d_6b15_a0e7_u64;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, FrozenAPI)]
 pub struct ColumnTopN {
+    #[serde(default)]
+    pub capacity: usize,
     pub values: Vec<ColumnTopNEntry>,
     #[serde(skip)]
     #[doc(hidden)]
@@ -82,13 +100,21 @@ impl Ord for ColumnTopNEntry {
 
 impl PartialEq for ColumnTopN {
     fn eq(&self, other: &Self) -> bool {
-        self.values == other.values
+        self.capacity == other.capacity && self.values == other.values
     }
 }
 
 impl Eq for ColumnTopN {}
 
 impl ColumnTopN {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            capacity,
+            values: vec![],
+            min_index: None,
+        }
+    }
+
     pub fn get(&self, scalar: &Scalar) -> Option<u64> {
         self.get_entry(scalar).map(|entry| entry.count)
     }
@@ -99,25 +125,33 @@ impl ColumnTopN {
             .and_then(|index| self.values.get(index))
     }
 
-    pub fn add_with_size(&mut self, top_n_size: usize, scalar: ScalarRef<'_>, count: u64) {
-        self.add_ref_with_options(top_n_size, scalar, count, 0);
+    pub fn add(&mut self, scalar: ScalarRef<'_>, count: u64) {
+        self.add_ref_with_options(scalar, count, 0);
     }
 
-    pub fn merge_with_size(&mut self, other: ColumnTopN, top_n_size: usize) {
-        if top_n_size == 0 {
-            self.values.clear();
-            self.min_index = None;
-            return;
+    pub fn merge(&mut self, other: ColumnTopN) -> Result<()> {
+        if self.capacity == 0 {
+            self.capacity = other.capacity;
+        }
+        let lhs_missing_error = self.absent_error();
+        let rhs_missing_error = other.absent_error();
+
+        if other.capacity != 0 {
+            self.capacity = other.capacity;
         }
 
-        let lhs_missing_error = self.absent_error(top_n_size);
-        let rhs_missing_error = other.absent_error(top_n_size);
+        if self.capacity == 0 {
+            self.values.clear();
+            self.min_index = None;
+            return Ok(());
+        }
+
         let lhs_values = std::mem::take(&mut self.values);
         self.min_index = None;
 
         let mut lhs_iter = lhs_values.into_iter().peekable();
         let mut rhs_iter = other.values.into_iter().peekable();
-        let mut values = Vec::with_capacity(top_n_size.saturating_mul(2));
+        let mut values = Vec::with_capacity(self.capacity.saturating_mul(2));
 
         loop {
             match (lhs_iter.peek(), rhs_iter.peek()) {
@@ -163,22 +197,17 @@ impl ColumnTopN {
         }
 
         self.values = values;
-        self.prune_to_capacity(top_n_size);
+        self.prune_to_capacity();
+        Ok(())
     }
 
-    pub fn finish_with_size(mut self, top_n_size: usize) -> Self {
-        self.prune_to_capacity(top_n_size);
+    pub fn finish(mut self) -> Self {
+        self.prune_to_capacity();
         self
     }
 
-    fn add_ref_with_options(
-        &mut self,
-        capacity: usize,
-        scalar: ScalarRef<'_>,
-        count: u64,
-        error: u64,
-    ) {
-        if capacity == 0 || count == 0 || matches!(scalar, ScalarRef::Null) {
+    fn add_ref_with_options(&mut self, scalar: ScalarRef<'_>, count: u64, error: u64) {
+        if self.capacity == 0 || count == 0 || matches!(scalar, ScalarRef::Null) {
             return;
         }
 
@@ -192,7 +221,7 @@ impl ColumnTopN {
             count,
             error,
         };
-        if self.values.len() >= capacity
+        if self.values.len() >= self.capacity
             && let Some(min_entry) = self.remove_min()
         {
             entry.count = entry.count.saturating_add(min_entry.count);
@@ -234,12 +263,12 @@ impl ColumnTopN {
         self.on_insert(index);
     }
 
-    fn prune_to_capacity(&mut self, capacity: usize) {
-        if self.values.len() <= capacity {
+    fn prune_to_capacity(&mut self) {
+        if self.values.len() <= self.capacity {
             return;
         }
 
-        while self.values.len() > capacity {
+        while self.values.len() > self.capacity {
             if self.remove_min().is_none() {
                 break;
             }
@@ -257,8 +286,8 @@ impl ColumnTopN {
         Some(entry)
     }
 
-    fn absent_error(&self, capacity: usize) -> u64 {
-        if self.values.len() < capacity {
+    fn absent_error(&self) -> u64 {
+        if self.values.len() < self.capacity {
             return 0;
         }
         self.values
@@ -325,24 +354,183 @@ impl ColumnTopN {
     }
 
     #[cfg(test)]
-    fn add_ref_for_test(&mut self, capacity: usize, scalar: ScalarRef<'_>, count: u64, error: u64) {
-        self.add_ref_with_options(capacity, scalar, count, error);
+    fn add_ref_for_test(&mut self, scalar: ScalarRef<'_>, count: u64, error: u64) {
+        self.add_ref_with_options(scalar, count, error);
     }
 
     #[cfg(test)]
-    fn add_entry_for_test(&mut self, capacity: usize, entry: ColumnTopNEntry) {
-        self.add_ref_with_options(capacity, entry.scalar.as_ref(), entry.count, entry.error);
+    fn add_entry_for_test(&mut self, entry: ColumnTopNEntry) {
+        self.add_ref_with_options(entry.scalar.as_ref(), entry.count, entry.error);
     }
 }
 
-pub fn merge_column_top_n_mut(lhs: &mut BlockTopN, rhs: BlockTopN, top_n_size: usize) {
+pub fn merge_column_top_n_mut(lhs: &mut BlockTopN, rhs: BlockTopN) -> Result<()> {
     for (column_id, column_top_n) in rhs {
         match lhs.entry(column_id) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().merge_with_size(column_top_n, top_n_size);
+                entry.get_mut().merge(column_top_n)?;
             }
             Entry::Vacant(entry) => {
-                entry.insert(column_top_n.finish_with_size(top_n_size));
+                entry.insert(column_top_n.finish());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct ColumnCountMinSketch {
+    width: usize,
+    depth: usize,
+    counters: Vec<u64>,
+}
+
+impl Default for ColumnCountMinSketch {
+    fn default() -> Self {
+        Self::new(COUNT_MIN_SKETCH_WIDTH, COUNT_MIN_SKETCH_DEPTH)
+    }
+}
+
+impl ColumnCountMinSketch {
+    pub fn new(width: usize, depth: usize) -> Self {
+        debug_assert!(width > 0);
+        debug_assert!(depth > 0);
+        Self {
+            width,
+            depth,
+            counters: vec![0; width.saturating_mul(depth)],
+        }
+    }
+
+    pub fn with_error_rate(error_rate: f64) -> Result<Self> {
+        Ok(Self::new(
+            Self::width_for_error_rate(error_rate)?,
+            COUNT_MIN_SKETCH_DEPTH,
+        ))
+    }
+
+    pub fn width_for_error_rate(error_rate: f64) -> Result<usize> {
+        if error_rate <= 0.0 || !error_rate.is_finite() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "count-min sketch error rate must be finite and greater than zero, got: {error_rate}"
+            )));
+        }
+        if error_rate > MAX_COUNT_MIN_SKETCH_ERROR_RATE {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "count-min sketch error rate must be no greater than {MAX_COUNT_MIN_SKETCH_ERROR_RATE}, got: {error_rate}"
+            )));
+        }
+        if error_rate < MIN_COUNT_MIN_SKETCH_ERROR_RATE {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "count-min sketch error rate must be at least {MIN_COUNT_MIN_SKETCH_ERROR_RATE}, got: {error_rate}"
+            )));
+        }
+        Ok((2.0 / error_rate).ceil() as usize)
+    }
+
+    pub fn add_with_count(&mut self, scalar: ScalarRef<'_>, count: u64) {
+        if count == 0 || matches!(scalar, ScalarRef::Null) || self.width == 0 || self.depth == 0 {
+            return;
+        }
+
+        let hashes = self.hash_scalar(&scalar);
+        for row in 0..self.depth {
+            let offset = self.offset_with_hashes(hashes, row);
+            if let Some(counter) = self.counters.get_mut(offset) {
+                *counter = counter.saturating_add(count);
+            }
+        }
+    }
+
+    pub fn estimate(&self, scalar: &Scalar) -> Option<u64> {
+        let scalar = scalar.as_ref();
+        if matches!(scalar, ScalarRef::Null) || self.width == 0 || self.depth == 0 {
+            return None;
+        }
+
+        let hashes = self.hash_scalar(&scalar);
+        (0..self.depth)
+            .filter_map(|row| self.counters.get(self.offset_with_hashes(hashes, row)))
+            .copied()
+            .min()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.counters.iter().all(|counter| *counter == 0)
+    }
+
+    pub fn error_bound(&self, total_count: u64) -> u64 {
+        if self.width == 0 {
+            return total_count;
+        }
+        total_count
+            .saturating_mul(2)
+            .div_ceil(u64::try_from(self.width).unwrap_or(u64::MAX))
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        if self.width != other.width
+            || self.depth != other.depth
+            || self.counters.len() != other.counters.len()
+        {
+            log::warn!(
+                "Skip merging incompatible count-min sketches: lhs=({}, {}, {}), rhs=({}, {}, {})",
+                self.width,
+                self.depth,
+                self.counters.len(),
+                other.width,
+                other.depth,
+                other.counters.len()
+            );
+            return;
+        }
+
+        for (lhs, rhs) in self.counters.iter_mut().zip(other.counters.iter()) {
+            *lhs = lhs.saturating_add(*rhs);
+        }
+    }
+
+    fn hash_scalar(&self, value: &ScalarRef<'_>) -> (u64, u64) {
+        (
+            count_min_sketch_hash_v1(
+                value,
+                COUNT_MIN_SKETCH_HASH0_KEY0_V1,
+                COUNT_MIN_SKETCH_HASH0_KEY1_V1,
+            ),
+            count_min_sketch_hash_v1(
+                value,
+                COUNT_MIN_SKETCH_HASH1_KEY0_V1,
+                COUNT_MIN_SKETCH_HASH1_KEY1_V1,
+            ),
+        )
+    }
+
+    fn offset_with_hashes(&self, hashes: (u64, u64), row: usize) -> usize {
+        let (hash0, hash1) = hashes;
+        let hash = hash0.wrapping_add((row as u64).wrapping_mul(hash1 | 1));
+        let bucket = if self.width.is_power_of_two() {
+            hash as usize & (self.width - 1)
+        } else {
+            hash as usize % self.width
+        };
+        row.saturating_mul(self.width).saturating_add(bucket)
+    }
+}
+
+fn count_min_sketch_hash_v1<Q: ?Sized + Hash>(value: &Q, key0: u64, key1: u64) -> u64 {
+    let mut hasher = SipHasher24::new_with_keys(key0, key1);
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn merge_column_count_min_sketch_mut(lhs: &mut BlockCountMinSketch, rhs: BlockCountMinSketch) {
+    for (column_id, column_sketch) in rhs {
+        match lhs.entry(column_id) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().merge(&column_sketch);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(column_sketch);
             }
         }
     }
@@ -364,8 +552,8 @@ mod tests {
 
     #[test]
     fn column_top_n_ignores_incomparable_scalar_lookup() {
-        let mut top_n = ColumnTopN::default();
-        top_n.add_entry_for_test(2, ColumnTopNEntry {
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: int32_scalar(5),
             count: 10,
             error: 0,
@@ -377,18 +565,18 @@ mod tests {
 
     #[test]
     fn column_top_n_replaces_min_with_error() {
-        let mut top_n = ColumnTopN::default();
-        top_n.add_entry_for_test(2, ColumnTopNEntry {
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(1),
             count: 5,
             error: 0,
         });
-        top_n.add_entry_for_test(2, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(2),
             count: 3,
             error: 0,
         });
-        top_n.add_entry_for_test(2, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(3),
             count: 1,
             error: 0,
@@ -403,30 +591,30 @@ mod tests {
 
     #[test]
     fn column_top_n_merge_accounts_for_missing_side_error() {
-        let mut lhs = ColumnTopN::default();
-        lhs.add_entry_for_test(2, ColumnTopNEntry {
+        let mut lhs = ColumnTopN::with_capacity(2);
+        lhs.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(1),
             count: 10,
             error: 0,
         });
-        lhs.add_entry_for_test(2, ColumnTopNEntry {
+        lhs.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(2),
             count: 5,
             error: 0,
         });
-        let mut rhs = ColumnTopN::default();
-        rhs.add_entry_for_test(2, ColumnTopNEntry {
+        let mut rhs = ColumnTopN::with_capacity(2);
+        rhs.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(1),
             count: 7,
             error: 0,
         });
-        rhs.add_entry_for_test(2, ColumnTopNEntry {
+        rhs.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(3),
             count: 4,
             error: 0,
         });
 
-        lhs.merge_with_size(rhs, 2);
+        lhs.merge(rhs).unwrap();
 
         assert_eq!(lhs.get(&uint_scalar(1)), Some(17));
         let entry = lhs.get_entry(&uint_scalar(2)).unwrap();
@@ -435,12 +623,117 @@ mod tests {
     }
 
     #[test]
+    fn column_top_n_merge_uses_rhs_capacity() {
+        let mut lhs = ColumnTopN::with_capacity(1);
+        lhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 10,
+            error: 0,
+        });
+        let mut rhs = ColumnTopN::with_capacity(2);
+        rhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 5,
+            error: 0,
+        });
+
+        lhs.merge(rhs).unwrap();
+
+        assert_eq!(lhs.capacity, 2);
+        assert_eq!(lhs.values.len(), 2);
+        assert_eq!(lhs.get(&uint_scalar(1)), Some(10));
+        assert_eq!(lhs.get(&uint_scalar(2)), Some(15));
+
+        let mut rhs = ColumnTopN::with_capacity(1);
+        rhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(3),
+            count: 20,
+            error: 0,
+        });
+
+        lhs.merge(rhs).unwrap();
+
+        assert_eq!(lhs.capacity, 1);
+        assert_eq!(lhs.values.len(), 1);
+    }
+
+    #[test]
+    fn column_top_n_merge_infers_legacy_capacity_before_missing_error() {
+        let mut lhs = ColumnTopN {
+            capacity: 0,
+            values: vec![ColumnTopNEntry {
+                scalar: uint_scalar(1),
+                count: 10,
+                error: 0,
+            }],
+            min_index: None,
+        };
+        let mut rhs = ColumnTopN::with_capacity(10);
+        rhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 5,
+            error: 0,
+        });
+
+        lhs.merge(rhs).unwrap();
+
+        assert_eq!(lhs.capacity, 10);
+        assert_eq!(lhs.get(&uint_scalar(1)), Some(10));
+        assert_eq!(lhs.get(&uint_scalar(2)), Some(5));
+    }
+
+    #[test]
+    fn column_top_n_merge_defers_pruning_until_after_matching_entries() {
+        let mut lhs = ColumnTopN::with_capacity(4);
+        lhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(1),
+            count: 100,
+            error: 0,
+        });
+        lhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 90,
+            error: 0,
+        });
+        lhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(3),
+            count: 95,
+            error: 0,
+        });
+        lhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(4),
+            count: 1,
+            error: 0,
+        });
+
+        let mut rhs = ColumnTopN::with_capacity(2);
+        rhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(2),
+            count: 15,
+            error: 0,
+        });
+        rhs.add_entry_for_test(ColumnTopNEntry {
+            scalar: uint_scalar(5),
+            count: 1,
+            error: 0,
+        });
+
+        lhs.merge(rhs).unwrap();
+
+        assert_eq!(lhs.capacity, 2);
+        assert_eq!(lhs.values.len(), 2);
+        assert_eq!(lhs.get(&uint_scalar(1)), Some(101));
+        assert_eq!(lhs.get(&uint_scalar(2)), Some(105));
+        assert_eq!(lhs.get(&uint_scalar(3)), None);
+    }
+
+    #[test]
     fn column_top_n_adds_scalar_refs() {
-        let mut top_n = ColumnTopN::default();
-        top_n.add_ref_for_test(2, ScalarRef::String("b"), 1, 0);
-        top_n.add_ref_for_test(2, ScalarRef::String("a"), 1, 0);
-        top_n.add_ref_for_test(2, ScalarRef::String("a"), 4, 0);
-        top_n.add_ref_for_test(2, ScalarRef::String("c"), 1, 0);
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add_ref_for_test(ScalarRef::String("b"), 1, 0);
+        top_n.add_ref_for_test(ScalarRef::String("a"), 1, 0);
+        top_n.add_ref_for_test(ScalarRef::String("a"), 4, 0);
+        top_n.add_ref_for_test(ScalarRef::String("c"), 1, 0);
 
         assert_eq!(top_n.values.len(), 2);
         assert!(
@@ -461,33 +754,33 @@ mod tests {
 
     #[test]
     fn column_top_n_rescans_min_after_cached_min_updates() {
-        let mut top_n = ColumnTopN::default();
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        let mut top_n = ColumnTopN::with_capacity(4);
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(1),
             count: 1,
             error: 0,
         });
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(2),
             count: 5,
             error: 0,
         });
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(1),
             count: 10,
             error: 0,
         });
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(3),
             count: 7,
             error: 0,
         });
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(4),
             count: 8,
             error: 0,
         });
-        top_n.add_entry_for_test(4, ColumnTopNEntry {
+        top_n.add_entry_for_test(ColumnTopNEntry {
             scalar: uint_scalar(5),
             count: 1,
             error: 0,
@@ -500,6 +793,66 @@ mod tests {
         let entry = top_n.get_entry(&uint_scalar(5)).unwrap();
         assert_eq!(entry.count, 6);
         assert_eq!(entry.error, 5);
+    }
+
+    #[test]
+    fn count_min_sketch_estimates_frequency_and_merges() {
+        let mut lhs = ColumnCountMinSketch::new(64, 4);
+        lhs.add_with_count(uint_scalar(7).as_ref(), 10);
+        lhs.add_with_count(uint_scalar(9).as_ref(), 2);
+
+        let mut rhs = ColumnCountMinSketch::new(64, 4);
+        rhs.add_with_count(uint_scalar(7).as_ref(), 5);
+        rhs.add_with_count(ScalarRef::Null, 100);
+
+        lhs.merge(&rhs);
+
+        assert_eq!(lhs.estimate(&uint_scalar(7)), Some(15));
+        assert!(
+            lhs.estimate(&uint_scalar(9))
+                .is_some_and(|count| count >= 2)
+        );
+        assert_eq!(lhs.estimate(&Scalar::Null), None);
+        assert!(!lhs.is_empty());
+        assert_eq!(lhs.error_bound(1_000), 32);
+    }
+
+    #[test]
+    fn count_min_sketch_hash_v1_is_stable() {
+        let sketch = ColumnCountMinSketch::new(64, 4);
+        let scalar = uint_scalar(7);
+        let scalar_ref = scalar.as_ref();
+
+        assert_eq!(
+            sketch.hash_scalar(&scalar_ref),
+            (14425906419808812959, 13059174909041102891)
+        );
+        let hashes = sketch.hash_scalar(&scalar_ref);
+        assert_eq!(
+            (0..sketch.depth)
+                .map(|row| sketch.offset_with_hashes(hashes, row))
+                .collect::<Vec<_>>(),
+            vec![31, 74, 181, 224]
+        );
+    }
+
+    #[test]
+    fn count_min_sketch_batched_update_does_not_underestimate() {
+        let mut sketch = ColumnCountMinSketch::new(64, 4);
+        let scalar = uint_scalar(7);
+        let scalar_ref = scalar.as_ref();
+        let hashes = sketch.hash_scalar(&scalar_ref);
+        let offsets = (0..sketch.depth)
+            .map(|row| sketch.offset_with_hashes(hashes, row))
+            .collect::<Vec<_>>();
+
+        for (idx, offset) in offsets.iter().enumerate() {
+            sketch.counters[*offset] = if idx == 1 { 101 } else { 100 };
+        }
+
+        sketch.add_with_count(scalar_ref, 10);
+
+        assert_eq!(sketch.estimate(&scalar), Some(110));
     }
 }
 

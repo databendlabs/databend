@@ -2268,13 +2268,17 @@ Functions overloads:
 3 hex(Int64 NULL) :: String NULL
 4 hex(Binary) :: String
 5 hex(Binary NULL) :: String NULL
-0 hilbert_range_index FACTORY
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
 1 humanize_size(Float64 NULL) :: String NULL
 0 if FACTORY
 0 ignore FACTORY
+0 ilike(String, String) :: Boolean
+1 ilike(String NULL, String NULL) :: Boolean NULL
+2 ilike(String, String, String) :: Boolean
+3 ilike(String NULL, String NULL, String NULL) :: Boolean NULL
+0 ilike_any FACTORY
 0 inet_aton(String) :: UInt32
 1 inet_aton(String NULL) :: UInt32 NULL
 0 inet_ntoa(Int64) :: String
@@ -3701,8 +3705,6 @@ Functions overloads:
 1 range(Int64 NULL, Int64 NULL) :: Array(Int64) NULL
 2 range(Int64, Int64, Int64) :: Array(Int64)
 3 range(Int64 NULL, Int64 NULL, Int64 NULL) :: Array(Int64) NULL
-0 range_partition_id(T0, Array(T0)) :: UInt64
-1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
 1 regexp(String NULL, String NULL) :: Boolean NULL
 0 regexp_extract(String, String) :: String

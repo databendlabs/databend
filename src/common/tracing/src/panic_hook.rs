@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 use backtrace::Backtrace;
 use backtrace::BacktraceFrame;
 use databend_common_base::runtime::LimitMemGuard;
-use databend_common_base::runtime::take_alloc_error_panic;
+use databend_common_base::runtime::is_alloc_error_panic;
 use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 use log::error;
 
@@ -52,7 +52,7 @@ fn should_backtrace() -> bool {
 }
 
 pub fn log_panic(panic: &PanicHookInfo, version: Arc<String>) {
-    let backtrace_str = if take_alloc_error_panic() {
+    let backtrace_str = if is_alloc_error_panic() {
         Cow::Borrowed(MEMORY_BACKTRACE_SKIPPED)
     } else {
         Cow::Owned(backtrace(50))

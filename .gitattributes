@@ -5,9 +5,8 @@ tests/data/tsv/crlf_empty_line.tsv -text
 tests/data/tsv/crlf_unterminated_data_cr.tsv -text
 
 # Golden and testdata outputs are byte-sensitive; whitespace can be expected output.
-src/query/functions/tests/it/scalars/testdata/*.txt -whitespace
+src/query/functions/tests/it/**/*.txt -whitespace
 src/query/sql/test-support/data/results/**/*.txt -whitespace
-src/query/sql/tests/it/optimizer/*.txt -whitespace
-src/query/sql/tests/it/semantic/**/*.txt -whitespace
+src/query/sql/tests/it/**/*.txt -whitespace
 tests/sqllogictests/**/*.test -whitespace
 tests/suites/**/*.result -whitespace

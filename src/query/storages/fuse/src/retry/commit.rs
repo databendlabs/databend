@@ -221,6 +221,18 @@ async fn try_rebuild_req(
                 ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
             })?
             .clone();
+        // `new_snapshot` is generated directly from `base_snapshot`. A legacy
+        // base has no counters, while its counter-aware child starts from zero.
+        let (new_updated_rows, new_deleted_rows) = new_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.logical_change_counters())
+            .ok_or_else(|| ErrorCode::Internal("new snapshot lacks logical change counters"))?;
+        let (base_updated_rows, base_deleted_rows) = base_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.logical_change_counters())
+            .unwrap_or_default();
+        let logical_updated_rows = new_updated_rows - base_updated_rows;
+        let logical_deleted_rows = new_deleted_rows - base_deleted_rows;
 
         let s = merge_statistics(
             new_snapshot.summary(),
@@ -309,17 +321,17 @@ async fn try_rebuild_req(
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(latest_table.as_ref(), latest_snapshot.clone())?;
-        let merged_snapshot = TableSnapshot::try_new(
+        let mut merged_snapshot = TableSnapshot::try_new(
             Some(seq),
             latest_snapshot.clone(),
             latest_table.schema().as_ref().clone(),
             merged_summary,
             merged_segments,
             latest_table.cluster_key_meta(),
-            latest_table.cluster_type(),
-            latest_snapshot.table_statistics_location(),
+            None,
             table_meta_timestamps,
         )?;
+        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows);
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot

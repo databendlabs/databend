@@ -14,7 +14,6 @@
 
 pub(crate) mod golden;
 
-mod lite_context;
-
-pub(crate) use lite_context::LiteTableContext;
-pub(crate) use lite_context::init_testing_globals;
+pub(crate) use databend_common_sql_test_support::FrequencyStatsMap;
+pub(crate) use databend_common_sql_test_support::LiteTableContext;
+pub(crate) use databend_common_sql_test_support::init_testing_globals;

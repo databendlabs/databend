@@ -201,6 +201,60 @@ async fn check_column_ndv_statistics(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_table_analyze_count_min_sketch_preserves_hll_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table_name = "t_cms_preserve_hll";
+
+    fixture
+        .execute_command(&format!(
+            "create table {table_name}(c int) approx_distinct_columns = 'c'"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table_name} select number::int from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("analyze table default.{table_name}"))
+        .await?;
+
+    ctx.evict_table_from_cache("default", "default", table_name)?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), "default", table_name)
+        .await?;
+    let expected = HashMap::from([(0, 10_u64)]);
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
+
+    fixture
+        .execute_command(&format!(
+            "alter table default.{table_name} set options(\
+             analyze_frequency_columns = 'c', \
+             analyze_top_n_size = 0, \
+             analyze_count_min_sketch_error_rate = '0.001')"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("analyze table default.{table_name}"))
+        .await?;
+    fixture
+        .execute_command(&format!("analyze table default.{table_name}"))
+        .await?;
+
+    ctx.evict_table_from_cache("default", "default", table_name)?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), "default", table_name)
+        .await?;
+    check_column_ndv_statistics(ctx.clone(), table.clone(), expected).await?;
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert!(provider.count_min_sketch(0).is_some());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -220,6 +274,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let snapshot_0 = fuse_table.read_table_snapshot().await?.unwrap();
     let snapshot_1 = TableSnapshot::try_from_previous(
         snapshot_0.clone(),
+        fuse_table.cluster_key_meta(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -241,6 +296,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     // genenrate snapshot without prev_table_seq
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
+        fuse_table.cluster_key_meta(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;

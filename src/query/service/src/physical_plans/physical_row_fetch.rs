@@ -123,12 +123,15 @@ impl IPhysicalPlan for RowFetch {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
+        let max_threads = builder.settings.get_max_threads()? as usize;
+        let io_semaphore = builder.ctx.get_row_fetch_io_semaphore(max_threads);
         let processor = row_fetch_processor(
             builder.ctx.clone(),
             self.row_id_col_offset,
             &self.source,
             self.cols_to_fetch.clone(),
             self.need_wrap_nullable,
+            io_semaphore,
         )?;
 
         if !MutationSplit::check_physical_plan(&self.input) {
@@ -138,7 +141,6 @@ impl IPhysicalPlan for RowFetch {
             // with non-deterministic output order, which would destroy the sort
             // order produced by Sort+Limit.
             if self.enable_block_id_repartition {
-                let max_threads = builder.settings.get_max_threads()? as usize;
                 if max_threads > 1
                     && builder
                         .settings

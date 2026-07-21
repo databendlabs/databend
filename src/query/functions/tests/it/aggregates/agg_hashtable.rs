@@ -183,7 +183,7 @@ fn test_layout() {
     type S = DecimalSumState<false, i128>;
     type M = DecimalSumState<false, i256>;
 
-    let states_layout = get_states_layout(&[aggrs.clone()]).unwrap();
+    let states_layout = get_states_layout(std::slice::from_ref(&aggrs)).unwrap();
 
     assert_eq!(
         states_layout.layout,

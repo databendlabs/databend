@@ -27,6 +27,30 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 
+fn is_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1)) || stat_info.cardinality == 1.0
+}
+
+fn is_precise_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1))
+}
+
+fn single_join_scalar_side_is_precise_single_row(join: &Join, s_expr: &SExpr) -> Result<bool> {
+    match join.single_to_inner {
+        Some(JoinType::LeftSingle) => {
+            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+            let right_stat_info = right_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&right_stat_info))
+        }
+        Some(JoinType::RightSingle) => {
+            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+            let left_stat_info = left_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&left_stat_info))
+        }
+        _ => Ok(false),
+    }
+}
+
 enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
@@ -63,6 +87,7 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let left_stat_info = left_rel_expr.derive_cardinality()?;
     let right_stat_info = right_rel_expr.derive_cardinality()?;
 
     if !join.equi_conditions.is_empty() {
@@ -75,10 +100,10 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-        || right_stat_info.cardinality == 1.0
-    {
-        // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
+    if is_single_row(&left_stat_info) || is_single_row(&right_stat_info) {
+        // Prefer CROSS JOIN + FILTER when statistics prove or estimate one side at one row.
+        // HashJoin remains correct if the estimate is wrong and avoids the result-block
+        // overhead that RangeJoin can incur for this shape after join commutation.
         return Ok(PhysicalJoinType::Hash);
     }
 
@@ -221,8 +246,25 @@ impl PhysicalPlanBuilder {
         } else {
             match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
+                    // When a LeftSingle/RightSingle join (scalar subquery) has no
+                    // equi-conditions, the hash join executes as a cross join + filter.
+                    // The single-join runtime check can fire during the cross-product
+                    // matching phase before the filter is applied. It is only safe to
+                    // clear the marker when the scalar side itself is proven to produce
+                    // exactly one row. A precise one-row cardinality on the other input
+                    // does not prove that.
+                    let join = if join.equi_conditions.is_empty()
+                        && join.single_to_inner.is_some()
+                        && single_join_scalar_side_is_precise_single_row(join, s_expr)?
+                    {
+                        let mut j = join.clone();
+                        j.single_to_inner = None;
+                        j
+                    } else {
+                        join.clone()
+                    };
                     self.build_hash_join(
-                        join,
+                        &join,
                         s_expr,
                         required,
                         others_required,

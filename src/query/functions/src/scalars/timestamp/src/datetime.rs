@@ -2506,6 +2506,48 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+// Compute a correct date domain from a raw arithmetic range.
+// `clamp_date` maps out-of-range values to DATE_MIN (non-monotonic), so naively
+// clamping endpoints can produce a reversed domain. This function accounts for
+// partial overlap with the valid date range.
+fn clamp_date_domain(raw_min: i64, raw_max: i64) -> SimpleDomain<i32> {
+    if raw_min >= DATE_MIN as i64 && raw_max <= DATE_MAX as i64 {
+        SimpleDomain {
+            min: raw_min as i32,
+            max: raw_max as i32,
+        }
+    } else if raw_min > DATE_MAX as i64 || raw_max < DATE_MIN as i64 {
+        SimpleDomain {
+            min: DATE_MIN,
+            max: DATE_MIN,
+        }
+    } else {
+        SimpleDomain {
+            min: DATE_MIN,
+            max: raw_max.min(DATE_MAX as i64) as i32,
+        }
+    }
+}
+
+fn clamp_timestamp_domain(raw_min: i64, raw_max: i64) -> SimpleDomain<i64> {
+    if raw_min >= TIMESTAMP_MIN && raw_max <= TIMESTAMP_MAX {
+        SimpleDomain {
+            min: raw_min,
+            max: raw_max,
+        }
+    } else if raw_min > TIMESTAMP_MAX || raw_max < TIMESTAMP_MIN {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: TIMESTAMP_MIN,
+        }
+    } else {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: raw_max.min(TIMESTAMP_MAX),
+        }
+    }
+}
+
 fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "plus",
@@ -2516,15 +2558,14 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rm = rhs.max;
                 let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: clamp_date(ln + rn),
-                    max: clamp_date(lm + rm),
-                }))
+                let raw_min = ln.saturating_add(rn);
+                let raw_max = lm.saturating_add(rm);
+                Some(FunctionDomain::Domain(clamp_date_domain(raw_min, raw_max)))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
-            output.push(clamp_date((a as i64) + b))
+            output.push(clamp_date((a as i64).saturating_add(b)))
         }),
     );
 
@@ -2536,17 +2577,17 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-                let mut min = ln + rn;
-                clamp_timestamp(&mut min);
-                let mut max = lm + rm;
-                clamp_timestamp(&mut max);
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+                let raw_min = ln.saturating_add(rn);
+                let raw_max = lm.saturating_add(rm);
+                Some(FunctionDomain::Domain(clamp_timestamp_domain(
+                    raw_min, raw_max,
+                )))
             }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, _| {
-                let mut sum = a + b;
+                let mut sum = a.saturating_add(b);
                 clamp_timestamp(&mut sum);
                 output.push(sum);
             },
@@ -2562,15 +2603,14 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rm = rhs.max;
                 let rn = rhs.min;
 
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: clamp_date(ln - rn),
-                    max: clamp_date(lm - rm),
-                }))
+                let raw_min = ln.saturating_sub(rm);
+                let raw_max = lm.saturating_sub(rn);
+                Some(FunctionDomain::Domain(clamp_date_domain(raw_min, raw_max)))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
-            output.push(clamp_date((a as i64) - b));
+            output.push(clamp_date((a as i64).saturating_sub(b)));
         }),
     );
 
@@ -2582,17 +2622,17 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-                let mut min = ln - rn;
-                clamp_timestamp(&mut min);
-                let mut max = lm - rm;
-                clamp_timestamp(&mut max);
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+                let raw_min = ln.saturating_sub(rm);
+                let raw_max = lm.saturating_sub(rn);
+                Some(FunctionDomain::Domain(clamp_timestamp_domain(
+                    raw_min, raw_max,
+                )))
             }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, _| {
-                let mut minus = a - b;
+                let mut minus = a.saturating_sub(b);
                 clamp_timestamp(&mut minus);
                 output.push(minus);
             },

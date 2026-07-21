@@ -44,10 +44,6 @@ impl TableContext for QueryContext {
         &self.written_segment_locs
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        &self.shared.selected_segment_locs
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

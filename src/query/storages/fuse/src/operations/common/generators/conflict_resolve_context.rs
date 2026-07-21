@@ -30,6 +30,17 @@ pub enum ConflictResolveContext {
 }
 
 impl ConflictResolveContext {
+    pub fn logical_insert_rows(&self, deleted_rows: u64) -> u64 {
+        match self {
+            ConflictResolveContext::None => 0,
+            ConflictResolveContext::AppendOnly((merged, _)) => merged.merged_statistics.row_count,
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => {
+                changes.merged_statistics.row_count + deleted_rows
+                    - changes.removed_statistics.row_count
+            }
+        }
+    }
+
     pub fn is_latest_snapshot_append_only(
         base: &TableSnapshot,
         latest: &TableSnapshot,

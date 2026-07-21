@@ -65,10 +65,11 @@ struct PartitionFileWriter {
 impl PartitionFileWriter {
     fn create(prefix: &str, writer_pool_bytes: usize) -> Result<Self> {
         let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let writer = buffer_pool.writer(operator, path.clone(), writer_pool_bytes)?;
+        let writer = buffer_pool.writer(operator, path.clone(), writer_pool_bytes, target)?;
         Ok(Self {
             path,
             writer,

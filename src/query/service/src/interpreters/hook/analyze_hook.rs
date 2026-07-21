@@ -24,9 +24,10 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use log::info;
 
+use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
 use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::interpreters::hook::table_id_matches_target;
@@ -108,7 +109,11 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let table_options = fuse_table.get_table_info().options();
     let top_n_size = analyze_top_n_size_from_options(table_options)?;
-    let top_n_columns = table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned();
+    let count_min_sketch_error_rate =
+        analyze_count_min_sketch_error_rate_from_options(table_options)?;
+    let frequency_columns = table_options
+        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+        .cloned();
     let mut pipeline = Pipeline::create();
     let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
         return Ok(());
@@ -119,7 +124,8 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
         &mut pipeline,
         AnalyzeHistogramInfo::None,
         top_n_size,
-        top_n_columns,
+        frequency_columns,
+        count_min_sketch_error_rate,
         true,
         false,
     )?;

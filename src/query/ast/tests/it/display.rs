@@ -53,6 +53,9 @@ fn test_like_escape_display_escapes_escape_literal() {
     for sql in [
         r#"SELECT 'a' LIKE 'a' ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' NOT ILIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' ILIKE ANY ('a', 'b') ESCAPE '''';"#,
         r#"SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';"#,
     ] {
         test_stmt_display(sql);

@@ -101,6 +101,29 @@ EvalScalar
         ├── push downs: [filters: [lineitem.l_orderkey (#0) > 1 and lineitem.l_commitdate (#11) = '1992-01-22'], limit: NONE]
         └── estimated rows: 600572.00
 
+# Keep supported Iceberg conjuncts when another conjunct cannot be converted.
+query T
+explain select 1 from ctl.tpch.lineitem where l_orderkey < 1 and length(l_comment) > 0;
+----
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 0.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(lineitem.l_orderkey (#0) < 1), is_true(length(lineitem.l_comment (#15)) > 0)]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
+        ├── output columns: [l_orderkey (#0), l_comment (#15)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [lineitem.l_orderkey (#0) < 1 and length(lineitem.l_comment (#15)) > 0], limit: NONE]
+        └── estimated rows: 600572.00
+
 
 query T
 explain select 1 from  ctl.tpch.lineitem where l_orderkey is null;

@@ -64,6 +64,30 @@ async fn test_type_check_string_rewrites() -> Result<()> {
             sql: "text LIKE pattern",
         },
         SqlTestCase {
+            name: "ilike_lowers_both_sides",
+            description: "ILIKE should preserve case-insensitive semantics instead of using plain LIKE.",
+            setup_sqls: &[],
+            sql: "text ILIKE pattern",
+        },
+        SqlTestCase {
+            name: "not_ilike_lowers_both_sides",
+            description: "NOT ILIKE should negate the case-insensitive LIKE expression.",
+            setup_sqls: &[],
+            sql: "text NOT ILIKE pattern",
+        },
+        SqlTestCase {
+            name: "ilike_any_lowers_tuple_patterns",
+            description: "ILIKE ANY should bind to the case-insensitive like_any function.",
+            setup_sqls: &[],
+            sql: "text ILIKE ANY ('A%', 'B%')",
+        },
+        SqlTestCase {
+            name: "ilike_escape_lowers_escape",
+            description: "ILIKE ESCAPE should preserve the escape marker for runtime pattern conversion.",
+            setup_sqls: &[],
+            sql: "text ILIKE 'A_%' ESCAPE 'A'",
+        },
+        SqlTestCase {
             name: "regexp_operator_from_function_tests_binds",
             description: "The regexp operator form from scalar comparison tests should type check as regexp_like.",
             setup_sqls: &[],

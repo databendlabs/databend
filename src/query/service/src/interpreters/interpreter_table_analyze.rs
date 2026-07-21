@@ -33,12 +33,13 @@ use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_COLUMNS;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
 use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -202,7 +203,11 @@ impl Interpreter for AnalyzeTableInterpreter {
             || has_table_histogram_policy(table_options)
             || self.ctx.get_settings().get_enable_analyze_histogram()?;
         let top_n_size = analyze_top_n_size_from_options(table_options)?;
-        let top_n_columns = table_options.get(OPT_KEY_ANALYZE_TOP_N_COLUMNS).cloned();
+        let count_min_sketch_error_rate =
+            analyze_count_min_sketch_error_rate_from_options(table_options)?;
+        let frequency_columns = table_options
+            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+            .cloned();
         if collect_histogram {
             if self.plan.no_scan {
                 return Err(ErrorCode::BadArguments(
@@ -286,13 +291,13 @@ impl Interpreter for AnalyzeTableInterpreter {
             }
         }
         if self.plan.no_scan
-            && top_n_size.is_some()
-            && top_n_columns
+            && (top_n_size.is_some() || count_min_sketch_error_rate.is_some())
+            && frequency_columns
                 .as_ref()
                 .is_some_and(|columns| !columns.trim().is_empty())
         {
             return Err(ErrorCode::BadArguments(
-                "ANALYZE TABLE NOSCAN cannot be used with top-N collection because top-N collection must scan table data",
+                "ANALYZE TABLE NOSCAN cannot be used with frequency statistics collection because frequency statistics collection must scan table data",
             ));
         }
         table.do_analyze(
@@ -301,7 +306,8 @@ impl Interpreter for AnalyzeTableInterpreter {
             &mut build_res.main_pipeline,
             histogram_info,
             top_n_size,
-            top_n_columns,
+            frequency_columns,
+            count_min_sketch_error_rate,
             self.plan.no_scan,
             true,
         )?;

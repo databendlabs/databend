@@ -104,7 +104,7 @@ impl FileFormatTypeExt for StageFileFormatType {
         match self {
             StageFileFormatType::Text => "text/tab-separated-values; charset=UTF-8",
             StageFileFormatType::Csv => "text/csv; charset=UTF-8",
-            StageFileFormatType::Parquet => "application/octet-stream",
+            StageFileFormatType::Parquet | StageFileFormatType::Orc => "application/octet-stream",
             StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",
             StageFileFormatType::Json => "application/json; charset=UTF-8",
             StageFileFormatType::Lance => "application/octet-stream",

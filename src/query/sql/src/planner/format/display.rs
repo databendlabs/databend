@@ -304,15 +304,13 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::FunctionCall(func) => {
-            format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(format_scalar)
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let arguments = func.arguments.iter().map(format_scalar).join(", ");
+            if params.is_empty() {
+                format!("{}({})", &func.func_name, arguments)
+            } else {
+                format!("{}({})({})", &func.func_name, params, arguments)
+            }
         }
         ScalarExpr::CastExpr(cast) => {
             format!(

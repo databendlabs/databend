@@ -1782,6 +1782,32 @@ fn register_like(registry: &mut FunctionRegistry) {
        },
     );
 
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "ilike",
+        |_, _, _| FunctionDomain::Full,
+        |arg1, arg2, ctx| {
+            vectorize_ilike(|str, pattern_type| pattern_type.compare(str))(
+                arg1,
+                arg2,
+                Value::Scalar("".to_string()),
+                ctx,
+            )
+        },
+    );
+
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, BooleanType, _, _>(
+        "ilike",
+        |_, _, _, _| FunctionDomain::Full,
+       |arg1, arg2, arg3, ctx| {
+           vectorize_ilike(|str, pattern_type| pattern_type.compare(str))(
+               arg1,
+               arg2,
+               arg3,
+               ctx,
+           )
+       },
+    );
+
     registry.register_function_factory(
         "like_any",
         FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
@@ -1822,6 +1848,49 @@ fn register_like(registry: &mut FunctionRegistry) {
                 signature,
                 FunctionDomain::Full,
                 like_any_fn,
+                None,
+                is_nullable,
+            )))
+        })),
+    );
+
+    registry.register_function_factory(
+        "ilike_any",
+        FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+            if args_type.len() < 2 || args_type.len() > 3 {
+                return None;
+            }
+            let is_nullable = args_type[0].is_nullable();
+            let arg_type = args_type[0].remove_nullable();
+            if !arg_type.is_string() {
+                return None;
+            }
+            let mut new_args_type = match &args_type[1] {
+                DataType::Tuple(patterns_ty) => {
+                    if patterns_ty.iter().any(|ty| !ty.is_string()) {
+                        return None;
+                    }
+                    vec![
+                        arg_type,
+                        DataType::Tuple(vec![DataType::String; patterns_ty.len()]),
+                    ]
+                }
+                DataType::String => vec![arg_type, DataType::String],
+                _ => return None,
+            };
+            if args_type.len() > 2 {
+                new_args_type.push(DataType::String);
+            }
+
+            let signature = FunctionSignature {
+                name: "ilike_any".to_string(),
+                args_type: new_args_type,
+                return_type: DataType::Boolean,
+            };
+            Some(Arc::new(Function::with_passthrough_nullable(
+                signature,
+                FunctionDomain::Full,
+                ilike_any_fn,
                 None,
                 is_nullable,
             )))
@@ -2046,6 +2115,72 @@ fn vectorize_like(
     }
 }
 
+fn vectorize_ilike(
+    func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
+) -> impl Fn(
+    Value<StringType>,
+    Value<StringType>,
+    Value<StringType>,
+    &mut EvalContext,
+) -> Value<BooleanType>
++ Copy {
+    move |arg1, arg2, arg3, _ctx| {
+        let Value::Scalar(escape) = arg3 else {
+            unreachable!()
+        };
+        match (arg1, arg2) {
+            (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+                let arg1 = arg1.to_lowercase();
+                let pattern = convert_escape_pattern(&escape, arg2).to_lowercase();
+                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                Value::Scalar(func(arg1.as_bytes(), &pattern_type))
+            }
+            (Value::Column(arg1), Value::Scalar(arg2)) => {
+                let arg1_iter = StringType::iter_column(&arg1);
+                let mut builder = MutableBitmap::with_capacity(arg1.len());
+                let pattern = convert_escape_pattern(&escape, arg2).to_lowercase();
+                let pattern_type =
+                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                if let LikePattern::SurroundByPercent(searcher) = pattern_type {
+                    for arg1 in arg1_iter {
+                        let arg1 = arg1.to_lowercase();
+                        builder.push(searcher.search(arg1.as_bytes()).is_some());
+                    }
+                } else {
+                    for arg1 in arg1_iter {
+                        let arg1 = arg1.to_lowercase();
+                        builder.push(func(arg1.as_bytes(), &pattern_type));
+                    }
+                }
+                Value::Column(builder.into())
+            }
+            (Value::Scalar(arg1), Value::Column(arg2)) => {
+                let arg2_iter = StringType::iter_column(&arg2);
+                let arg1 = arg1.to_lowercase();
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for arg2 in arg2_iter {
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string()).to_lowercase();
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    builder.push(func(arg1.as_bytes(), &pattern_type));
+                }
+                Value::Column(builder.into())
+            }
+            (Value::Column(arg1), Value::Column(arg2)) => {
+                let arg1_iter = StringType::iter_column(&arg1);
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                    let arg1 = arg1.to_lowercase();
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string()).to_lowercase();
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    builder.push(func(arg1.as_bytes(), &pattern_type));
+                }
+                Value::Column(builder.into())
+            }
+        }
+    }
+}
+
 fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let arg = &args[0];
     let input_all_scalars = arg.as_scalar().is_some();
@@ -2102,6 +2237,64 @@ fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>
         );
         return Value::Scalar(Scalar::Boolean(Default::default()));
     };
+
+    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
+    let patterns_len = patterns.len();
+    for row in 0..process_rows {
+        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
+    }
+
+    if input_all_scalars {
+        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
+    } else {
+        Value::<BooleanType>::Column(BooleanType::build_column(builder))
+    }
+    .upcast()
+}
+
+fn ilike_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg = &args[0];
+    let input_all_scalars = arg.as_scalar().is_some();
+    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+
+    let patterns = match args[1].as_scalar() {
+        Some(Scalar::Tuple(patterns)) => patterns.clone(),
+        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
+        _ => {
+            ctx.set_error(
+                1,
+                "The second parameter of `ilike_any` must be of Tuple or String type",
+            );
+            return Value::Scalar(Scalar::Boolean(Default::default()));
+        }
+    };
+
+    let escape: Value<StringType> = args
+        .get(2)
+        .cloned()
+        .and_then(|value| value.try_downcast().ok())
+        .unwrap_or(Value::Scalar("".to_string()));
+
+    let Ok(value) = arg.try_downcast::<StringType>() else {
+        ctx.set_error(
+            1,
+            "The first parameter of 'ilike_any' can only be of type String",
+        );
+        return Value::Scalar(Scalar::Boolean(Default::default()));
+    };
+
+    let ilike = vectorize_ilike(|str, pattern_type| pattern_type.compare(str));
+    let result = patterns
+        .iter()
+        .map(|pattern| {
+            ilike(
+                value.clone(),
+                Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()),
+                escape.clone(),
+                ctx,
+            )
+        })
+        .collect::<Vec<_>>();
 
     let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
     let patterns_len = patterns.len();

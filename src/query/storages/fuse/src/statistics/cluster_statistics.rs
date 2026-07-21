@@ -468,22 +468,17 @@ pub(crate) fn prepare_cluster_key_exprs(
         .iter()
         .map(|expr| {
             let data_type = expr.data_type().clone();
-            let column_refs = if matches!(data_type.remove_nullable(), DataType::Binary) {
-                Vec::new()
-            } else {
-                expr.column_refs()
+            PreparedClusterKeyExpr {
+                expr: expr.clone(),
+                data_type,
+                column_refs: expr
+                    .column_refs()
                     .into_iter()
                     .map(|(index, ty)| {
                         let column_ids = schema.field(index).leaf_column_ids();
                         (index, ty, column_ids)
                     })
-                    .collect()
-            };
-
-            PreparedClusterKeyExpr {
-                expr: expr.clone(),
-                data_type,
-                column_refs,
+                    .collect(),
             }
         })
         .collect()
@@ -508,13 +503,6 @@ pub(crate) fn get_min_max_stats(
     let mut mins = Vec::with_capacity(prepared_exprs.len());
     let mut maxs = Vec::with_capacity(prepared_exprs.len());
     for prepared_expr in prepared_exprs {
-        // Since the hilbert index does not calc domain, set min max directly.
-        if prepared_expr.data_type.remove_nullable() == DataType::Binary {
-            mins.push(Scalar::Binary(vec![]));
-            maxs.push(Scalar::Binary(vec![0xFF; 40]));
-            continue;
-        }
-
         let input_domains = prepared_expr
             .column_refs
             .iter()

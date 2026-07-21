@@ -45,6 +45,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
@@ -56,11 +57,6 @@ use databend_storages_common_table_meta::table::StreamMode;
 use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
-
-pub enum StreamStatus {
-    MayHaveData,
-    NoData,
-}
 
 pub struct StreamTable {
     info: TableInfo,
@@ -337,6 +333,15 @@ impl StreamTable {
         };
         Ok(status)
     }
+
+    #[fastrace::trace]
+    pub async fn stream_backlog(&self, ctx: Arc<dyn TableContext>) -> Result<StreamBacklog> {
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .stream_backlog(ctx, &self.mode(), &self.snapshot_loc(), self.offset()?)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -445,4 +450,35 @@ impl Table for StreamTable {
             )
             .await
     }
+}
+
+pub enum StreamStatus {
+    MayHaveData,
+    NoData,
+}
+
+pub(crate) fn extract_fully_qualified_stream_name(
+    ctx: &dyn TableContext,
+    target: &str,
+) -> Result<(String, String, String)> {
+    let stream_name_vec: Vec<&str> = target.split('.').collect();
+    let (catalog, database, stream) = match stream_name_vec.as_slice() {
+        [stream] => (
+            ctx.get_current_catalog(),
+            ctx.get_current_database(),
+            (*stream).to_owned(),
+        ),
+        [db, stream] => (
+            ctx.get_current_catalog(),
+            (*db).to_owned(),
+            (*stream).to_owned(),
+        ),
+        [cat, db, stream] => ((*cat).to_owned(), (*db).to_owned(), (*stream).to_owned()),
+        _ => {
+            return Err(ErrorCode::BadArguments(
+                "Invalid stream name. Use the format '[catalog.][database.]stream'",
+            ));
+        }
+    };
+    Ok((catalog, database, stream))
 }

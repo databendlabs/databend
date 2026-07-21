@@ -16,15 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use backoff::backoff::Backoff;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchemaRef;
+use databend_common_expression::ColumnId;
+use databend_common_expression::TableField;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
@@ -33,7 +31,6 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -42,8 +39,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -52,29 +48,24 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use log::debug;
 use log::info;
 use opendal::Operator;
 
 use super::TableMutationAggregator;
-use super::decorate_snapshot;
 use super::new_serialize_segment_processor;
 use crate::FuseTable;
 use crate::io::MetaReaders;
 use crate::io::MetaWriter;
-use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::SnapshotHintWriter;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
-use crate::operations::common::ConflictResolveContext;
-use crate::operations::set_backoff;
 use crate::statistics::TableStatsGenerator;
-use crate::statistics::merge_statistics;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -95,7 +86,6 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             new_serialize_segment_processor(
-                ctx.clone(),
                 input,
                 output,
                 self,
@@ -319,195 +309,6 @@ impl FuseTable {
             .await
     }
 
-    // TODO use commit sink instead
-    #[async_backtrace::framed]
-    pub async fn commit_mutation(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
-        base_segments: &[Location],
-        base_summary: Statistics,
-        table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<()> {
-        let mut retries = 0;
-        let mut backoff = set_backoff(None, None, None);
-
-        let mut latest_snapshot = base_snapshot.clone();
-        let mut latest_table_info = &self.table_info;
-        let default_cluster_key_id = self.cluster_key_id();
-        let base_schema = self.schema();
-
-        // holding the reference of latest table during retries
-        let mut latest_table_ref: Arc<dyn Table>;
-
-        // potentially concurrently appended segments, init it to empty
-        let mut concurrently_appended_segment_locations: &[Location] = &[];
-
-        // Status
-        ctx.set_status_info("mutation: begin try to commit");
-
-        loop {
-            let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
-                latest_snapshot.clone(),
-                Some(latest_table_info.ident.seq),
-                table_meta_timestamps,
-            )?;
-
-            if base_schema != latest_table_info.schema() {
-                return Err(ErrorCode::StorageOther(
-                    "The schema of the table has changed",
-                ));
-            }
-            let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
-                ctx.clone(),
-                self.operator.clone(),
-                base_segments,
-                &base_summary,
-                concurrently_appended_segment_locations,
-                base_schema.clone(),
-                default_cluster_key_id,
-            )
-            .await?;
-            snapshot_tobe_committed.segments = segments_tobe_committed;
-            snapshot_tobe_committed.summary = statistics_tobe_committed;
-            snapshot_tobe_committed.summary.additional_stats_meta = latest_snapshot
-                .summary
-                .additional_stats_meta
-                .as_ref()
-                .cloned();
-
-            decorate_snapshot(
-                &mut snapshot_tobe_committed,
-                ctx.txn_mgr(),
-                Some(base_snapshot.clone()),
-                self.get_id(),
-            )?;
-
-            match self
-                .commit_to_meta_server(
-                    ctx.as_ref(),
-                    latest_table_info,
-                    &self.meta_location_generator,
-                    snapshot_tobe_committed,
-                    None,
-                    &None,
-                    &self.operator,
-                )
-                .await
-            {
-                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            let name = self.table_info.name.clone();
-                            debug!(
-                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                                d.as_millis(),
-                                name.as_str(),
-                                self.table_info.ident
-                            );
-
-                            tokio::time::sleep(d).await;
-                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                            let latest_fuse_table =
-                                FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                            latest_snapshot =
-                                latest_fuse_table
-                                    .read_table_snapshot()
-                                    .await?
-                                    .ok_or_else(|| {
-                                        ErrorCode::Internal(
-                                            "mutation meets empty snapshot during conflict reconciliation",
-                                        )
-                                    })?;
-                            latest_table_info = &latest_fuse_table.table_info;
-
-                            // Check if there is only insertion during the operation.
-                            if let Some(range_of_newly_append) =
-                                ConflictResolveContext::is_latest_snapshot_append_only(
-                                    &base_snapshot,
-                                    &latest_snapshot,
-                                )
-                            {
-                                info!("resolvable conflicts detected");
-                                metrics_inc_commit_mutation_latest_snapshot_append_only();
-                                concurrently_appended_segment_locations =
-                                    &latest_snapshot.segments[range_of_newly_append];
-                            } else {
-                                metrics_inc_commit_mutation_unresolvable_conflict();
-                                break Err(ErrorCode::UnresolvableConflict(
-                                    "segment compact conflict with other operations",
-                                ));
-                            }
-
-                            retries += 1;
-                            metrics_inc_commit_mutation_retry();
-                            continue;
-                        }
-                        None => {
-                            // Commit not fulfilled, abort.
-                            //
-                            // Note that, here the last error we have seen is TableVersionMismatched,
-                            // otherwise we should have been returned, thus it is safe to abort the operation here.
-                            break Err(ErrorCode::StorageOther(format!(
-                                "commit mutation failed after {} retries",
-                                retries
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    // we are not sure about if the table state has been modified or not, just propagate the error
-                    // and return, without aborting anything.
-                    break Err(e);
-                }
-                Ok(_) => {
-                    break {
-                        metrics_inc_commit_mutation_success();
-                        Ok(())
-                    };
-                }
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn merge_with_base(
-        ctx: Arc<dyn TableContext>,
-        operator: Operator,
-        base_segments: &[Location],
-        base_summary: &Statistics,
-        concurrently_appended_segment_locations: &[Location],
-        schema: TableSchemaRef,
-        default_cluster_key_id: Option<u32>,
-    ) -> Result<(Vec<Location>, Statistics)> {
-        if concurrently_appended_segment_locations.is_empty() {
-            Ok((base_segments.to_owned(), base_summary.clone()))
-        } else {
-            // place the concurrently appended segments at the head of segment list
-            let new_segments = concurrently_appended_segment_locations
-                .iter()
-                .chain(base_segments.iter())
-                .cloned()
-                .collect();
-
-            let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
-            let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
-                .await?;
-
-            let mut new_statistics = base_summary.clone();
-            for result in concurrent_appended_segment_infos.into_iter() {
-                let concurrent_appended_segment = result?;
-                new_statistics = merge_statistics(
-                    new_statistics.clone(),
-                    &concurrent_appended_segment.summary,
-                    default_cluster_key_id,
-                );
-            }
-            Ok((new_segments, new_statistics))
-        }
-    }
-
     // check if there are any fuse table legacy options
     fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
@@ -516,37 +317,61 @@ impl FuseTable {
     pub(crate) async fn generate_table_stats(
         &self,
         snapshot: &Option<Arc<TableSnapshot>>,
-        insert_hll: &BlockHLL,
-        insert_rows: u64,
+        statistics_hll: &BlockHLL,
+        statistics_rows: u64,
+        insert_top_n: &BlockTopN,
+        refresh_top_n: bool,
     ) -> Result<TableStatsGenerator> {
-        // Extract previous stats meta (row_count / hll, etc.) from snapshot
+        // Extract previous stats meta (row_count / hll, etc.) from snapshot.
         let summary = snapshot.summary();
         let prev_stats_meta = summary.additional_stats_meta.as_ref();
-        // Previous statistics file location (if any)
+        // Previous statistics file location (if any).
         let mut prev_stats_location = snapshot.table_statistics_location();
-        // If no new rows are inserted, or HLL is empty, just reuse previous statistics
-        if insert_rows == 0 || insert_hll.is_empty() {
+        let top_n_columns = if refresh_top_n && statistics_rows > 0 {
+            self.append_top_n_columns(self.schema())?
+                .map(|(columns, _)| {
+                    columns
+                        .into_values()
+                        .map(|field| (field.column_id(), field))
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+        let has_top_n_update = !top_n_columns.is_empty();
+        let table_row_count = summary.row_count.saturating_add(statistics_rows);
+
+        // If no rows are covered by commit-local statistics, just reuse previous statistics.
+        if statistics_rows == 0 || (statistics_hll.is_empty() && !has_top_n_update) {
             return Ok(TableStatsGenerator::new(
                 prev_stats_meta.cloned(),
                 prev_stats_location,
                 0,
                 0,
                 HashMap::new(),
+                None,
             ));
         }
 
-        // Initialize a new HLL with inserted rows
-        let mut new_hll = insert_hll.clone();
+        // Initialize a new HLL with commit-local HLL.
+        let mut new_hll = statistics_hll.clone();
+        let mut next_stats_meta = if statistics_hll.is_empty() {
+            prev_stats_meta.cloned()
+        } else {
+            None
+        };
         // Calculate updated row_count
-        let (row_count, unstats_rows) = match prev_stats_meta {
+        let (hll_row_count, unstats_rows) = match (!statistics_hll.is_empty(), prev_stats_meta) {
+            (false, _) => (0, 0),
             // Case 1: Previous stats exist and already contain HLL → merge directly
-            Some(v) if v.hll.is_some() => {
+            (true, Some(v)) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
-                (v.row_count + insert_rows, v.unstats_rows)
+                (v.row_count + statistics_rows, v.unstats_rows)
             }
             // Case 2: Previous meta has no HLL → need to load from stats file
-            _ => {
+            (true, _) => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
@@ -573,41 +398,193 @@ impl FuseTable {
                         .ok()
                         .flatten();
                         if let Some(prev) = prev_snapshot {
-                            // Successfully loaded the previous snapshot → use its row_count + inserted rows
+                            // Successfully loaded the previous snapshot.
                             merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                             let prev_rows = prev.summary.row_count;
                             (
-                                prev_rows + insert_rows,
+                                prev_rows + statistics_rows,
                                 summary.row_count.saturating_sub(prev_rows),
                             )
                         } else {
                             // Could not load previous snapshot → old stats are invalid
                             // Drop prev_stats_location to mark stats as "reset",
-                            // and only use inserted rows as the new base.
+                            // and only use commit-local statistics rows as the new base.
                             prev_stats_location = None;
-                            (insert_rows, summary.row_count)
+                            (statistics_rows, summary.row_count)
                         }
                     } else {
-                        // Normal case: accumulate old row_count + inserted rows
+                        // Normal case: accumulate old row_count + commit-local statistics rows.
                         merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                         (
-                            prev_stats.row_count + insert_rows,
+                            prev_stats.row_count + statistics_rows,
                             summary.row_count.saturating_sub(prev_stats.row_count),
                         )
                     }
                 } else {
-                    // No previous stats available → start from inserted rows only
-                    (insert_rows, summary.row_count)
+                    // No previous stats available.
+                    (statistics_rows, summary.row_count)
                 }
             }
         };
 
+        let table_statistics = if has_top_n_update {
+            self.build_append_top_n_statistics(
+                snapshot,
+                top_n_columns,
+                &new_hll,
+                insert_top_n,
+                table_row_count,
+            )
+            .await?
+        } else {
+            None
+        };
+        if let Some(stats) = &table_statistics {
+            prev_stats_location = Some(self.new_table_statistics_location(stats)?);
+            if stats.hll.is_empty()
+                && match next_stats_meta.as_ref().and_then(|meta| meta.hll.as_ref()) {
+                    Some(hll) => decode_column_hll(hll)?.is_none_or(|hll| hll.is_empty()),
+                    None => true,
+                }
+            {
+                // The refreshed table-statistics file is authoritative for a TopN-only append.
+                // Do not let metadata without any HLL values keep its pre-append row count.
+                if let Some(meta) = &mut next_stats_meta {
+                    meta.row_count = stats.row_count;
+                }
+            }
+        }
+
         Ok(TableStatsGenerator::new(
-            None,
+            next_stats_meta,
             prev_stats_location,
-            row_count,
+            hll_row_count,
             unstats_rows,
             new_hll,
+            table_statistics,
         ))
     }
+
+    fn new_table_statistics_location(&self, stats: &TableSnapshotStatistics) -> Result<String> {
+        self.meta_location_generator
+            .snapshot_statistics_location_from_uuid(&SnapshotId::now_v7(), stats.format_version())
+    }
+
+    async fn build_append_top_n_statistics(
+        &self,
+        snapshot: &Option<Arc<TableSnapshot>>,
+        top_n_columns: HashMap<ColumnId, TableField>,
+        hll: &BlockHLL,
+        insert_top_n: &BlockTopN,
+        row_count: u64,
+    ) -> Result<Option<TableSnapshotStatistics>> {
+        let prev_table_stats = self
+            .read_table_snapshot_statistics(snapshot.as_ref())
+            .await?;
+        let fresh_prev_stats = if let (Some(previous), Some(prev_stats)) =
+            (snapshot.as_ref(), prev_table_stats.as_ref())
+            && is_fresh_table_snapshot_top_n(previous, prev_stats)
+        {
+            Some((previous, prev_stats.as_ref()))
+        } else {
+            None
+        };
+
+        let mut top_n = fresh_prev_stats
+            .map(|(_, stats)| stats.top_n.clone())
+            .unwrap_or_default();
+        top_n.retain(|column_id, _| top_n_columns.contains_key(column_id));
+
+        let append_top_n = append_top_n_merge_input(
+            &top_n_columns,
+            snapshot.as_ref().map(|snapshot| &snapshot.summary),
+            &top_n,
+            insert_top_n,
+        );
+        merge_column_top_n_mut(&mut top_n, append_top_n)?;
+        if top_n.is_empty() {
+            return Ok(None);
+        }
+
+        // Histograms are allowed to remain stale across appends, as they still describe the
+        // existing value distribution and are expensive to rebuild.
+        let histograms = fresh_prev_stats
+            .map(|(_, stats)| stats.histograms.clone())
+            .unwrap_or_default();
+        // Count-Min sketches are row-count aligned. Carrying an old sketch into the refreshed
+        // statistics would incorrectly mark it as covering the appended rows.
+        let count_min_sketch = HashMap::new();
+        let stats_hll = if hll.is_empty() {
+            fresh_prev_stats
+                .map(|(_, stats)| stats.hll.clone())
+                .unwrap_or_default()
+        } else {
+            hll.clone()
+        };
+        let stats_snapshot_id = snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.snapshot_id)
+            .unwrap_or_else(SnapshotId::nil);
+
+        Ok(Some(TableSnapshotStatistics::new(
+            stats_hll,
+            top_n,
+            count_min_sketch,
+            histograms,
+            stats_snapshot_id,
+            row_count,
+        )))
+    }
+}
+
+fn append_top_n_merge_input(
+    columns: &HashMap<ColumnId, TableField>,
+    previous_summary: Option<&Statistics>,
+    previous_top_n: &BlockTopN,
+    insert_top_n: &BlockTopN,
+) -> BlockTopN {
+    let previous_summary = previous_summary.filter(|summary| summary.row_count != 0);
+    let mut append_top_n = HashMap::new();
+
+    for (&column_id, field) in columns {
+        let Some(column_top_n) = insert_top_n.get(&column_id).cloned() else {
+            continue;
+        };
+        if previous_top_n.contains_key(&column_id)
+            || column_has_no_previous_values(previous_summary, column_id, field)
+        {
+            append_top_n.insert(column_id, column_top_n);
+        }
+    }
+
+    append_top_n
+}
+
+fn column_has_no_previous_values(
+    previous_summary: Option<&Statistics>,
+    column_id: ColumnId,
+    field: &TableField,
+) -> bool {
+    let Some(summary) = previous_summary else {
+        return true;
+    };
+    match summary.col_stats.get(&column_id) {
+        Some(stats) => stats.null_count == summary.row_count,
+        None => {
+            // A nullable column added without a default has no old column stats;
+            // historical rows read as NULL and should not block append TopN.
+            field.default_expr().is_none() && field.is_nullable_or_null()
+        }
+    }
+}
+
+pub(crate) fn is_fresh_table_snapshot_top_n(
+    snapshot: &TableSnapshot,
+    stats: &TableSnapshotStatistics,
+) -> bool {
+    stats.row_count == snapshot.summary.row_count
+        && snapshot
+            .prev_snapshot_id
+            .as_ref()
+            .is_none_or(|(snapshot_id, _)| *snapshot_id == stats.snapshot_id)
 }

@@ -1,5 +1,6 @@
 """Databend Meta service management utilities."""
 
+import os
 from typing import Optional
 
 from .progress import ProgressReporter
@@ -39,6 +40,32 @@ class DatabendMeta:
         config = self._parse_config()
         grpc_address = config.get("grpc_api_address", "0.0.0.0:9191")
         return int(grpc_address.split(":")[-1])
+
+    def pid_file(self) -> str:
+        """Path of the pid file: a sibling of the node's raft dir.
+
+        It must not live inside raft_dir: databend-meta treats that directory
+        as its own and removes foreign files on startup.
+        """
+        raft_dir = self.get_raft_config()["raft_dir"]
+        return raft_dir.rstrip("/") + ".pid"
+
+    def pid(self) -> Optional[int]:
+        """Pid of the running process, from this instance or the pid file.
+
+        Returns None when the service is not running. The pid file makes the
+        process reachable across Python invocations, e.g. a `stop` command run
+        after the `start` process has exited.
+
+        A pid read from the file is trusted only when it still belongs to a
+        databend-meta process, so a stale file whose pid the OS has recycled
+        for an unrelated process is not mistaken for a live meta.
+        """
+        if ProcessManager.is_process_running(self.process):
+            return self.process.pid
+        pid = ProcessManager.read_pid_file(self.pid_file())
+        binary = os.path.basename(self.binary_path)
+        return pid if ProcessManager.is_pid_command(pid, binary) else None
 
     def _print_start_info(self) -> None:
         """Print startup information."""
@@ -92,7 +119,7 @@ class DatabendMeta:
 
     def start(self, wait_for_ready: bool = True, dry_run: bool = False) -> None:
         """Start databend-meta process."""
-        if ProcessManager.is_process_running(self.process):
+        if self.is_running():
             raise RuntimeError("Meta service is already running")
 
         self._print_start_info()
@@ -113,7 +140,9 @@ class DatabendMeta:
 
         config = self._parse_config()
         log_dir = config["log"]["file"]["dir"]
-        self.process = ProcessManager.start_process(cmd, "meta", log_dir)
+        self.process = ProcessManager.start_process(
+            cmd, "meta", log_dir, pid_file=self.pid_file()
+        )
 
         if wait_for_ready:
             port = self._get_grpc_port()
@@ -121,13 +150,20 @@ class DatabendMeta:
             ProgressReporter.print_ready_info("databend-meta", port)
 
     def stop(self) -> None:
-        """Stop databend-meta process."""
-        ProcessManager.stop_process(self.process, "meta")
-        self.process = None
+        """Stop databend-meta, whether started by this instance or an earlier one."""
+        if self.process is not None:
+            ProcessManager.stop_process(self.process, "meta")
+            self.process = None
+        else:
+            pid = self.pid()
+            if pid is not None:
+                ProcessManager.stop_pid(pid, "meta")
+
+        ProcessManager.remove_pid_file(self.pid_file())
 
     def is_running(self) -> bool:
-        """Check if meta service is running."""
-        return ProcessManager.is_process_running(self.process)
+        """Check if meta service is running (this instance or via pid file)."""
+        return self.pid() is not None
 
     def get_raft_config(self) -> dict:
         """Get raft configuration from parsed config."""

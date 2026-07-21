@@ -772,6 +772,7 @@ impl Join {
                 precise_cardinality: None,
                 column_stats,
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }
@@ -1466,10 +1467,12 @@ mod tests {
             ..Default::default()
         };
         let left_stat_info = stat_info_with_topn(0, 1_000_000.0, 10.0, ColumnTopN {
+            capacity: 2,
             values: vec![topn_entry(1, 800_000, 50_000), topn_entry(2, 200_000, 0)],
             min_index: None,
         });
         let right_stat_info = stat_info_with_topn(1, 1_000.0, 10.0, ColumnTopN {
+            capacity: 2,
             values: vec![topn_entry(1, 20, 0), topn_entry(2, 10, 0)],
             min_index: None,
         });
@@ -1504,10 +1507,12 @@ mod tests {
         probe_entries.extend((2..=9).map(|value| topn_entry(value, 55_000_000, 0)));
 
         let left_stat_info = stat_info_with_topn(0, 1_000_000_000.0, 10_000.0, ColumnTopN {
+            capacity: 9,
             values: probe_entries,
             min_index: None,
         });
         let right_stat_info = stat_info_with_topn(1, 10_000.0, 10_000.0, ColumnTopN {
+            capacity: 9,
             values: (1..=9)
                 .map(|value| topn_entry(value, 1, 0))
                 .collect::<Vec<_>>(),
@@ -1540,10 +1545,12 @@ mod tests {
             ..Default::default()
         };
         let left_stat_info = stat_info_with_topn(0, 1_000_000.0, 10.0, ColumnTopN {
+            capacity: 1,
             values: vec![topn_entry(1, 800_000, 0)],
             min_index: None,
         });
         let right_stat_info = stat_info_with_topn(1, 1_000.0, 10.0, ColumnTopN {
+            capacity: 1,
             values: vec![topn_entry(1, 20, 0)],
             min_index: None,
         });
@@ -1567,10 +1574,12 @@ mod tests {
             ..Default::default()
         };
         let left_stat_info = stat_info_with_topn(0, 10_000_000.0, 1.0, ColumnTopN {
+            capacity: 1,
             values: vec![topn_entry(1, 6_500_000, 500_000)],
             min_index: None,
         });
         let right_stat_info = stat_info_with_topn(1, 100.0, 1.0, ColumnTopN {
+            capacity: 1,
             values: vec![topn_entry(1, 30, 0)],
             min_index: None,
         });
@@ -1594,6 +1603,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1605,6 +1615,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1644,6 +1655,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1655,6 +1667,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 2.3333333333333335, true);
         let condition = JoinEquiCondition::new(
@@ -1694,6 +1707,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1705,6 +1719,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1744,6 +1759,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1755,6 +1771,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1795,6 +1812,7 @@ mod tests {
                     histogram: None,
                 })]),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         });
         let right_stat_info = Arc::new(StatInfo {
@@ -1809,6 +1827,7 @@ mod tests {
                     histogram: None,
                 })]),
                 top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         });
         let join = Join {
@@ -1843,6 +1862,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1854,6 +1874,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1896,6 +1917,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let right_statistics = Statistics {
             precise_cardinality: None,
@@ -1907,6 +1929,7 @@ mod tests {
                 histogram: None,
             })]),
             top_n: Default::default(),
+            count_min_sketch: Default::default(),
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(

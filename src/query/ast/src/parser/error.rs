@@ -65,14 +65,25 @@ impl ErrorKind {
 ///
 /// This is similar to the `Error`, but the information will not get lost
 /// even the error is from a optional branch.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Backtrace {
+    enabled: bool,
     inner: RefCell<Option<BacktraceInner>>,
 }
 
 impl Backtrace {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            enabled: true,
+            inner: RefCell::new(None),
+        }
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            inner: RefCell::new(None),
+        }
     }
 
     pub fn clear(&self) {
@@ -85,6 +96,12 @@ impl Backtrace {
     /// particularly when the furthest path is reached but considered invalid.
     pub fn restore(&self, other: Backtrace) {
         *self.inner.borrow_mut() = other.inner.into_inner();
+    }
+}
+
+impl Default for Backtrace {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -139,25 +156,27 @@ impl<'a> nom::error::ContextError<Input<'a>> for Error<'a> {
 
 impl<'a> Error<'a> {
     pub fn from_error_kind(input: Input<'a>, kind: ErrorKind) -> Self {
-        let mut inner = input.backtrace.inner.borrow_mut();
-        if let Some(ref mut inner) = *inner {
-            match input.tokens[0].span.start.cmp(&inner.span.start) {
-                Ordering::Equal => {
-                    inner.errors.push(kind.clone());
+        if input.backtrace.enabled {
+            let mut inner = input.backtrace.inner.borrow_mut();
+            if let Some(ref mut inner) = *inner {
+                match input.tokens[0].span.start.cmp(&inner.span.start) {
+                    Ordering::Equal => {
+                        inner.errors.push(kind.clone());
+                    }
+                    Ordering::Less => (),
+                    Ordering::Greater => {
+                        *inner = BacktraceInner {
+                            span: transform_span(&input.tokens[..1]).unwrap(),
+                            errors: vec![kind.clone()],
+                        };
+                    }
                 }
-                Ordering::Less => (),
-                Ordering::Greater => {
-                    *inner = BacktraceInner {
-                        span: transform_span(&input.tokens[..1]).unwrap(),
-                        errors: vec![kind.clone()],
-                    };
-                }
-            }
-        } else {
-            *inner = Some(BacktraceInner {
-                span: transform_span(&input.tokens[..1]).unwrap(),
-                errors: vec![kind.clone()],
-            })
+            } else {
+                *inner = Some(BacktraceInner {
+                    span: transform_span(&input.tokens[..1]).unwrap(),
+                    errors: vec![kind.clone()],
+                })
+            };
         }
 
         Error {

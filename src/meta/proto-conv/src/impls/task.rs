@@ -154,16 +154,19 @@ impl FromToProto for mt::TaskMessage {
                 Message::ScheduleTask(task) => {
                     mt::TaskMessage::ScheduleTask(mt::Task::from_pb(task)?)
                 }
-                Message::DeleteTask(task_name) => mt::TaskMessage::DeleteTask(task_name, None),
+                Message::DeleteTask(task_name) => {
+                    mt::TaskMessage::DeleteTask(task_name, None, None)
+                }
                 Message::DeleteTaskV2(DeleteTask {
                     task_name,
                     warehouse_options,
+                    task_id,
                 }) => {
                     let warehouse = warehouse_options.as_ref().map(|w| mt::WarehouseOptions {
                         warehouse: w.warehouse.clone(),
                         using_warehouse_size: w.using_warehouse_size.clone(),
                     });
-                    mt::TaskMessage::DeleteTask(task_name, warehouse)
+                    mt::TaskMessage::DeleteTask(task_name, warehouse, task_id)
                 }
                 Message::AfterTask(task) => mt::TaskMessage::AfterTask(mt::Task::from_pb(task)?),
             },
@@ -174,13 +177,14 @@ impl FromToProto for mt::TaskMessage {
         let message = match self {
             mt::TaskMessage::ExecuteTask(task) => Message::ExecuteTask(task.to_pb()),
             mt::TaskMessage::ScheduleTask(task) => Message::ScheduleTask(task.to_pb()),
-            mt::TaskMessage::DeleteTask(task_name, warehouse_options) => {
+            mt::TaskMessage::DeleteTask(task_name, warehouse_options, task_id) => {
                 Message::DeleteTaskV2(DeleteTask {
                     task_name: task_name.clone(),
                     warehouse_options: warehouse_options.as_ref().map(|w| pb::WarehouseOptions {
                         warehouse: w.warehouse.clone(),
                         using_warehouse_size: w.using_warehouse_size.clone(),
                     }),
+                    task_id: *task_id,
                 })
             }
             mt::TaskMessage::AfterTask(task) => Message::AfterTask(task.to_pb()),

@@ -369,10 +369,30 @@ where
 
 fn need_manual_drop_state(data_type: &DataType) -> bool {
     match data_type {
-        DataType::String | DataType::Variant => true,
-        DataType::Nullable(t) | DataType::Array(t) | DataType::Map(t) => need_manual_drop_state(t),
-        DataType::Tuple(ts) => ts.iter().any(need_manual_drop_state),
-        _ => false,
+        DataType::Binary
+        | DataType::String
+        | DataType::Array(_)
+        | DataType::Map(_)
+        | DataType::Bitmap
+        | DataType::Tuple(_)
+        | DataType::Variant
+        | DataType::Geometry
+        | DataType::Geography
+        | DataType::Vector(_) => true,
+        DataType::Nullable(data_type) => need_manual_drop_state(data_type),
+        DataType::Null
+        | DataType::EmptyArray
+        | DataType::EmptyMap
+        | DataType::Boolean
+        | DataType::Number(_)
+        | DataType::Decimal(_)
+        | DataType::Timestamp
+        | DataType::TimestampTz
+        | DataType::Date
+        | DataType::Interval
+        | DataType::Opaque(_)
+        | DataType::Generic(_)
+        | DataType::StageLocation => false,
     }
 }
 

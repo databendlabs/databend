@@ -29,7 +29,6 @@ pub mod geo_func {
 }
 
 mod hash;
-mod hilbert;
 
 pub mod dt_func {
     pub use databend_functions_scalar_datetime::*;
@@ -84,7 +83,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     bitmap::register(registry);
     geo_func::geometry::register(registry);
     geo_func::geography::register(registry);
-    hilbert::register(registry);
     dt_func::interval::register(registry);
     obfuscator::register(registry);
 }

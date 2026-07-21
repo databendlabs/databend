@@ -184,6 +184,7 @@ pub(crate) struct ReclusterTaskCandidate {
     // Empty means a rebuild-only repack candidate.
     selected_blocks: Vec<(usize, Vec<usize>)>,
     output_level: i32,
+    all_ordered: bool,
 }
 
 impl ReclusterTaskCandidate {
@@ -261,7 +262,9 @@ impl ReclusterFinalCarry {
 /// current cluster key, so selection can borrow them directly and write-back can
 /// reuse the original `Arc<BlockMeta>` without cloning the (potentially large)
 /// `ClusterStatistics`. `Normalized` holds statistics recomputed for a block
-/// whose cached cluster key differs from the current one.
+/// whose cached cluster key differs from the current one. Normalized stats are
+/// only a selection-time view; they must not be persisted into unchanged block
+/// metas because they do not prove that the physical block is ordered.
 enum ReclusterBlockStats {
     Original,
     Normalized(ClusterStatistics),
@@ -284,19 +287,6 @@ impl ReclusterBlock {
                 .expect("Original implies matched cluster_stats"),
             ReclusterBlockStats::Normalized(stats) => stats,
         }
-    }
-
-    fn into_indexed_meta(self) -> (BlockIndex, Arc<BlockMeta>) {
-        let ReclusterBlock { index, meta, stats } = self;
-        let block_meta = match stats {
-            ReclusterBlockStats::Original => meta,
-            ReclusterBlockStats::Normalized(stats) => {
-                let mut block_meta = Arc::unwrap_or_clone(meta);
-                block_meta.cluster_stats = Some(stats);
-                Arc::new(block_meta)
-            }
-        };
-        (index, block_meta)
     }
 }
 
@@ -489,6 +479,9 @@ impl ReclusterMutator {
         candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
+            let all_original_stats = blocks
+                .iter()
+                .all(|block| matches!(block.stats, ReclusterBlockStats::Original));
             let unordered = || {
                 blocks.windows(2).any(|window| {
                     sort_by_cluster_stats(
@@ -504,7 +497,8 @@ impl ReclusterMutator {
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack = self.mode == ReclusterMode::Conservative && unordered();
+            let unordered_repack =
+                self.mode == ReclusterMode::Conservative && all_original_stats && unordered();
             if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
@@ -516,22 +510,10 @@ impl ReclusterMutator {
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
+                    all_ordered: false,
                 });
             } else {
                 return Ok(candidate_window);
-            }
-        }
-
-        drop(blocks);
-
-        let mut selected_segment_blocks = vec![Vec::new(); window_segment_infos.len()];
-        for (window_pos, selected) in selected_window_positions.iter().copied().enumerate() {
-            if !selected {
-                continue;
-            }
-            for block in blocks_by_segment[window_pos].drain(..) {
-                let (index, block_meta) = block.into_indexed_meta();
-                selected_segment_blocks[window_pos].push((index.block_idx, block_meta));
             }
         }
 
@@ -540,11 +522,9 @@ impl ReclusterMutator {
                 continue;
             }
             let info = &window_segment_infos[window_pos];
-            let mut block_metas = std::mem::take(&mut selected_segment_blocks[window_pos]);
-            block_metas.sort_by_key(|(block_idx, _)| *block_idx);
-            let blocks = block_metas
-                .into_iter()
-                .map(|(_, block_meta)| block_meta)
+            let blocks = blocks_by_segment[window_pos]
+                .drain(..)
+                .map(|block| block.meta)
                 .collect::<Vec<_>>();
             candidate_window.segments[window_pos].1 = Some(Arc::new(SegmentInfo {
                 format_version: info.format_version,
@@ -707,6 +687,7 @@ impl ReclusterMutator {
                     total_bytes,
                     total_compressed,
                     level: candidate.output_level,
+                    all_ordered: candidate.all_ordered,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -824,24 +805,14 @@ impl ReclusterMutator {
 
         let mut total_rows = 0;
         let mut total_bytes = 0;
-        let mut points_map: HashMap<&[Scalar], (Vec<usize>, Vec<usize>)> = HashMap::new();
 
-        for (local_idx, &i) in indices.iter().enumerate() {
-            // Use a group-local block index (0..block_count) as the point key so
-            // dense lookup vectors are sized by the group block count, not the
-            // window-global block index range. `indices` maps each local index
-            // back to its `blocks` index.
+        for &i in &indices {
             let block = &blocks[i];
-            let stats = block.stats();
-            let point = points_map.entry(stats.min().as_slice()).or_default();
-            point.0.push(local_idx);
-            let point = points_map.entry(stats.max().as_slice()).or_default();
-            point.1.push(local_idx);
             total_rows += block.meta.row_count;
             total_bytes += block.meta.block_size;
         }
 
-        let candidates = if self
+        if self
             .block_thresholds
             .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.memory_threshold
@@ -852,28 +823,32 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            vec![ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&indices, blocks),
-                output_level: group.output_level(&indices, blocks),
-            }]
+            return Ok(vec![Self::task_candidate(group, score, &indices, blocks)]);
+        }
+
+        let candidates = if let Some(vector_cluster_info) = self.vector_cluster_key() {
+            self.fetch_vector_task_candidates(
+                group,
+                &indices,
+                blocks,
+                vector_cluster_info,
+                task_budget,
+            )?
         } else {
-            match self.vector_cluster_key() {
-                Some(vector_cluster_info) => self.fetch_vector_task_candidates(
-                    group,
-                    &indices,
-                    blocks,
-                    vector_cluster_info,
-                    task_budget,
-                )?,
-                None => self.fetch_max_depth_candidates(
-                    group,
-                    points_map,
-                    &indices,
-                    blocks,
-                    task_budget,
-                )?,
+            let mut points_map = HashMap::new();
+            for (local_idx, &i) in indices.iter().enumerate() {
+                // Use a group-local block index (0..block_count) as the point key so
+                // dense lookup vectors are sized by the group block count, not the
+                // window-global block index range. `indices` maps each local index
+                // back to its `blocks` index.
+                let stats = blocks[i].stats();
+                let point: &mut (Vec<usize>, Vec<usize>) =
+                    points_map.entry(stats.min().as_slice()).or_default();
+                point.0.push(local_idx);
+                let point = points_map.entry(stats.max().as_slice()).or_default();
+                point.1.push(local_idx);
             }
+            self.fetch_max_depth_candidates(group, points_map, &indices, blocks, task_budget)?
         };
         debug!(
             "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
@@ -884,6 +859,22 @@ impl ReclusterMutator {
         );
 
         Ok(candidates)
+    }
+
+    fn task_candidate(
+        group: ReclusterGroup,
+        score: CandidateScore,
+        task_indices: &[usize],
+        blocks: &[&ReclusterBlock],
+    ) -> ReclusterTaskCandidate {
+        ReclusterTaskCandidate {
+            score,
+            selected_blocks: Self::selected_blocks_by_segment(task_indices, blocks),
+            output_level: group.output_level(task_indices, blocks),
+            all_ordered: task_indices
+                .iter()
+                .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original)),
+        }
     }
 
     fn selected_blocks_by_segment(
@@ -1030,12 +1021,7 @@ impl ReclusterMutator {
                 max_depth: depth,
                 average_depth,
             };
-            let output_level = group.output_level(&task_indices, blocks);
-            candidates.push(ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                output_level,
-            });
+            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
         }
 
         debug!(
@@ -1274,13 +1260,10 @@ impl ReclusterMutator {
         let block_per_seg = self.block_thresholds.block_per_segment;
         let window_len = window_len.max(1);
         let mut total_blocks = 0;
-        let mut candidate_indices = IndexSet::new();
+        let mut vector_segments = Vec::new();
         let mut small_segments = IndexSet::new();
-        let mut segments: Vec<Option<VectorReclusterSegment>> =
-            Vec::with_capacity(compact_segments.len());
-        segments.resize_with(compact_segments.len(), || None);
 
-        for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
+        for (loc, compact_segment) in compact_segments {
             let stats = self.build_cluster_stats_for_recluster(
                 compact_segment.summary.cluster_stats.as_ref(),
                 &compact_segment.summary.col_stats,
@@ -1296,12 +1279,12 @@ impl ReclusterMutator {
 
             let block_metas = compact_segment.block_metas()?;
             let current_blocks_num = compact_segment.summary.block_count as usize;
+            let segment_idx = vector_segments.len();
             if current_blocks_num < block_per_seg {
-                small_segments.insert(i);
+                small_segments.insert(segment_idx);
             }
             total_blocks += current_blocks_num;
-            candidate_indices.insert(i);
-            segments[i] = Some(VectorReclusterSegment {
+            vector_segments.push(VectorReclusterSegment {
                 segment,
                 block_metas,
                 stats,
@@ -1312,39 +1295,13 @@ impl ReclusterMutator {
         let mut seen_windows = HashSet::new();
         let mut covered_segments = IndexSet::new();
 
-        if candidate_indices.len() > 1 && total_blocks > block_per_seg {
-            let mut overlaps = vec![IndexSet::new(); compact_segments.len()];
-            for idx in candidate_indices.iter().copied() {
-                overlaps[idx].insert(idx);
-            }
-
-            let candidate_list = candidate_indices.iter().copied().collect::<Vec<_>>();
-            for left_pos in 0..candidate_list.len() {
-                for right_pos in left_pos + 1..candidate_list.len() {
-                    let left_idx = candidate_list[left_pos];
-                    let right_idx = candidate_list[right_pos];
-                    let Some(left_segment) = segments[left_idx].as_ref() else {
-                        continue;
-                    };
-                    let Some(right_segment) = segments[right_idx].as_ref() else {
-                        continue;
-                    };
-
-                    if vector_segment_spheres_overlap(
-                        &left_segment.block_metas,
-                        &right_segment.block_metas,
-                        vector_cluster_info,
-                    )? {
-                        overlaps[left_idx].insert(right_idx);
-                        overlaps[right_idx].insert(left_idx);
-                    }
-                }
-            }
-
-            let mut depth_order = candidate_indices
+        if vector_segments.len() > 1 && total_blocks > block_per_seg {
+            let overlaps =
+                self.build_vector_segment_overlaps(&vector_segments, vector_cluster_info, false)?;
+            let mut depth_order = overlaps
                 .iter()
-                .copied()
-                .map(|idx| (idx, overlaps[idx].len()))
+                .enumerate()
+                .map(|(idx, overlap)| (idx, overlap.len()))
                 .filter(|(_, depth)| *depth > 1)
                 .collect::<Vec<_>>();
             depth_order.sort_by(|(left_idx, left_depth), (right_idx, right_depth)| {
@@ -1373,32 +1330,24 @@ impl ReclusterMutator {
 
             debug!(
                 "recluster: vector segment selection overlap windows segments={} blocks={} window_count={} covered_segments={}",
-                candidate_indices.len(),
+                vector_segments.len(),
                 total_blocks,
                 windows.len(),
                 covered_segments.len(),
             );
         }
 
-        let max_threads = (self.ctx.get_settings().get_max_threads()? as usize).max(2);
         let mut fallback_indices = Vec::new();
-        let mut fallback_blocks = 0;
-        for idx in candidate_indices {
+        for idx in 0..vector_segments.len() {
             if !covered_segments.contains(&idx) || small_segments.contains(&idx) {
-                fallback_blocks += compact_segments[idx].1.summary.block_count as usize;
                 fallback_indices.push(idx);
             }
         }
 
-        let fallback_groups = if fallback_blocks <= block_per_seg {
-            vec![fallback_indices]
-        } else {
-            fallback_indices
-                .chunks(max_threads)
-                .map(|chunk| chunk.to_vec())
-                .collect::<Vec<_>>()
-        };
-        for selected_indices in fallback_groups {
+        for selected_indices in fallback_indices
+            .chunks(window_len)
+            .map(|chunk| chunk.to_vec())
+        {
             let mut window_key = selected_indices.clone();
             window_key.sort_unstable();
             if seen_windows.insert(window_key) {
@@ -1411,7 +1360,7 @@ impl ReclusterMutator {
             .map(|(selected_indices, _)| {
                 selected_indices
                     .into_iter()
-                    .filter_map(|i| segments[i].as_ref().map(|segment| segment.segment.clone()))
+                    .map(|i| vector_segments[i].segment.clone())
                     .collect::<Vec<_>>()
             })
             .filter(|window| !window.is_empty())
@@ -1450,30 +1399,8 @@ impl ReclusterMutator {
                 });
             }
 
-            let mut overlaps = vec![IndexSet::new(); vector_segments.len()];
-            for (idx, overlap) in overlaps.iter_mut().enumerate().take(vector_segments.len()) {
-                overlap.insert(idx);
-            }
-
-            for left in 0..vector_segments.len() {
-                for right in left + 1..vector_segments.len() {
-                    if !self.scalar_cluster_stats_overlap(
-                        &vector_segments[left].stats,
-                        &vector_segments[right].stats,
-                    ) {
-                        continue;
-                    }
-
-                    if vector_segment_spheres_overlap(
-                        &vector_segments[left].block_metas,
-                        &vector_segments[right].block_metas,
-                        vector_cluster_info,
-                    )? {
-                        overlaps[left].insert(right);
-                        overlaps[right].insert(left);
-                    }
-                }
-            }
+            let overlaps =
+                self.build_vector_segment_overlaps(&vector_segments, vector_cluster_info, true)?;
 
             let mut visited = vec![false; vector_segments.len()];
             for start in 0..vector_segments.len() {
@@ -1508,6 +1435,42 @@ impl ReclusterMutator {
         }
 
         Ok(refined_windows)
+    }
+
+    fn build_vector_segment_overlaps(
+        &self,
+        vector_segments: &[VectorReclusterSegment],
+        vector_cluster_info: &VectorClusterInfo,
+        require_scalar_overlap: bool,
+    ) -> Result<Vec<IndexSet<usize>>> {
+        let mut overlaps = vec![IndexSet::new(); vector_segments.len()];
+        for (idx, overlap) in overlaps.iter_mut().enumerate() {
+            overlap.insert(idx);
+        }
+
+        for left in 0..vector_segments.len() {
+            for right in left + 1..vector_segments.len() {
+                if require_scalar_overlap
+                    && !self.scalar_cluster_stats_overlap(
+                        &vector_segments[left].stats,
+                        &vector_segments[right].stats,
+                    )
+                {
+                    continue;
+                }
+
+                if vector_segment_spheres_overlap(
+                    &vector_segments[left].block_metas,
+                    &vector_segments[right].block_metas,
+                    vector_cluster_info,
+                )? {
+                    overlaps[left].insert(right);
+                    overlaps[right].insert(left);
+                }
+            }
+        }
+
+        Ok(overlaps)
     }
 
     fn segment_window_key(window: &[SelectedReclusterSegment]) -> Vec<usize> {
@@ -1805,12 +1768,7 @@ impl ReclusterMutator {
                 max_depth,
                 average_depth,
             };
-            let output_level = group.output_level(&task_indices, blocks);
-            candidates.push(ReclusterTaskCandidate {
-                score,
-                selected_blocks: Self::selected_blocks_by_segment(&task_indices, blocks),
-                output_level,
-            });
+            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
         };
 
         let mut candidates = Vec::new();

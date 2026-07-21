@@ -83,6 +83,7 @@ pub struct MatchedAggregator {
     aggregation_ctx: Arc<AggregationContext>,
     target_build_optimization: bool,
     meta_indexes: HashSet<(SegmentIndex, BlockIndex)>,
+    target_build_updated_rows: u64,
 }
 
 impl MatchedAggregator {
@@ -144,18 +145,28 @@ impl MatchedAggregator {
             ctx,
             target_build_optimization,
             meta_indexes: HashSet::new(),
+            target_build_updated_rows: 0,
         })
     }
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
-        // An optimization: If we use target table as build side, the deduplicate will be done
-        // in hashtable probe phase.In this case, We don't support delete for now, so we
-        // don't to add MutationStatus here.
-        if data_block.get_meta().is_some() && data_block.is_empty() {
-            let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
-            if meta_index.is_some() {
-                let meta_index = meta_index.unwrap();
+        // Target-build plans send block indexes and logical UPDATE counters
+        // instead of row IDs. DELETE is not supported by that optimization.
+        if let Some(meta) = data_block.get_meta().filter(|_| data_block.is_empty()) {
+            if let Some(logs) = MutationLogs::downcast_ref_from(meta) {
+                if !self.target_build_optimization
+                    || !logs.entries.is_empty()
+                    || logs.logical_deleted_rows != 0
+                {
+                    return Err(ErrorCode::Internal(
+                        "unexpected mutation log in matched aggregator",
+                    ));
+                }
+                self.target_build_updated_rows += logs.logical_updated_rows;
+                return Ok(());
+            }
+            if let Some(meta_index) = BlockMetaIndex::downcast_ref_from(meta) {
                 if !self
                     .meta_indexes
                     .insert((meta_index.segment_idx, meta_index.block_idx))
@@ -300,8 +311,19 @@ impl MatchedAggregator {
             }
             return Ok(Some(MutationLogs {
                 entries: mutation_logs,
+                logical_updated_rows: self.target_build_updated_rows,
+                logical_deleted_rows: 0,
             }));
         }
+
+        let logical_updated_rows = self
+            .block_mutation_row_offset
+            .values()
+            .fold(0_u64, |rows, (updates, _)| rows + updates.len() as u64);
+        let logical_deleted_rows = self
+            .block_mutation_row_offset
+            .values()
+            .fold(0_u64, |rows, (_, deletes)| rows + deletes.len() as u64);
 
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());
@@ -370,6 +392,8 @@ impl MatchedAggregator {
         metrics_inc_merge_into_apply_milliseconds(elapsed_time);
         Ok(Some(MutationLogs {
             entries: mutation_logs,
+            logical_updated_rows,
+            logical_deleted_rows,
         }))
     }
 }

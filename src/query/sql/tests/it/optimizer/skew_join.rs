@@ -259,6 +259,7 @@ fn register_table_with_hot_key(
         HashMap::new(),
         FrequencyStatsMap {
             top_n: HashMap::from([("k".to_string(), ColumnTopN {
+                capacity: 1,
                 values: vec![ColumnTopNEntry {
                     scalar: uint64_scalar(1),
                     count: hot_count,

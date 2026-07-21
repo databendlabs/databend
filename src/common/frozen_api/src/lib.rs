@@ -234,6 +234,7 @@ fn is_custom_type(name: &str) -> bool {
             | "ClusterKey"
             | "StatisticsOfColumns"
             | "BlockHLL"
+            | "BlockTopN"
             | "SnapshotId"
     )
 }
