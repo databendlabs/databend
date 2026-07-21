@@ -39,6 +39,13 @@ pub struct WriteSettings {
     pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
+impl WriteSettings {
+    /// Dictionary pages are incompatible with explicit granule-aligned data-page boundaries.
+    pub fn parquet_dictionary_enabled(&self) -> bool {
+        self.enable_parquet_dictionary && self.index_granularity.is_none()
+    }
+}
+
 impl Default for WriteSettings {
     fn default() -> Self {
         Self {
@@ -52,5 +59,22 @@ impl Default for WriteSettings {
             index_granularity: None,
             col_stats_truncate_lens: BTreeMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_granule_indexes_disable_parquet_dictionary() {
+        let mut settings = WriteSettings {
+            enable_parquet_dictionary: true,
+            ..Default::default()
+        };
+        assert!(settings.parquet_dictionary_enabled());
+
+        settings.index_granularity = Some(1024);
+        assert!(!settings.parquet_dictionary_enabled());
     }
 }

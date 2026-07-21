@@ -39,10 +39,11 @@ use bytes::Bytes;
 use parquet::file::metadata::ParquetMetaData;
 
 pub use self::block::ParquetFileWriter;
+pub use self::bulk::BlockingWrite;
 pub use self::bulk::BulkParquetFileWriter;
 pub use self::bulk::BulkParquetLeafWriter;
-pub use self::bulk::ChunkedWriteBuffer;
 pub use self::bulk::DEFAULT_CHUNK_SIZE;
+pub use self::bulk::MemoryBlockingWrite;
 
 /// Result of finishing a [`BulkParquetFileWriter`] / [`ParquetFileWriter`]: the serialized
 /// single-row-group Parquet bytes plus the file metadata.

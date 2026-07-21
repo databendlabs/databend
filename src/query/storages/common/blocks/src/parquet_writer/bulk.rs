@@ -16,12 +16,10 @@
 //!
 //! Built on the `parquet` low-level API (`next_column_with_factory` +
 //! `write_leaf_column`/`write_byte_array_column`, exposed by the datafuse-extras arrow-rs
-//! fork) so compressed pages are flushed to the sink as they fill, instead of buffering whole
-//! column chunks in memory like `ArrowWriter` does. The caller supplies the sink (any
-//! `io::Write`); [`BulkParquetFileWriter::finish`] writes the footer and hands the sink back
-//! alongside the metadata, so the caller reads the serialized bytes from its own sink. The
-//! provided [`ChunkedWriteBuffer`] sink keeps the bytes as 4 MiB chunks that the fuse write
-//! path can forward straight to opendal with no consolidation copy.
+//! fork) so compressed pages are flushed to the writer as they fill, instead of buffering whole
+//! column chunks in memory like `ArrowWriter` does. The caller supplies any [`BlockingWrite`];
+//! [`BulkParquetFileWriter::finish`] writes the footer, closes the writer, and returns it alongside
+//! the metadata so callers can inspect writer-specific output.
 
 use std::io;
 use std::sync::Arc;
@@ -46,10 +44,10 @@ use parquet::file::writer::OnCloseColumnChunk;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
 
-/// Default chunk size for [`ChunkedWriteBuffer`]: 4 MiB.
+/// Default chunk size for [`MemoryBlockingWrite`]: 4 MiB.
 pub const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
-/// A `Write` sink backed by a list of fixed-size chunks instead of one growing `Vec<u8>`.
+/// An in-memory `Write` implementation backed by fixed-size chunks instead of one growing `Vec<u8>`.
 ///
 /// `SerializedFileWriter` needs a `W: Write`. Backing it with a single `Vec<u8>` means every
 /// time the vector outgrows its capacity it reallocates and copies *all* bytes written so
@@ -58,13 +56,13 @@ pub const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 /// growth costs one chunk allocation. At finish the chunks are handed out as-is via
 /// [`Self::into_chunks`] (each `Vec<u8>` becomes a `Bytes` with no copy), so the serialized
 /// payload can travel to IO non-contiguously without ever being consolidated.
-pub struct ChunkedWriteBuffer {
+pub struct MemoryBlockingWrite {
     chunk_size: usize,
     chunks: Vec<Vec<u8>>,
     total_bytes: usize,
 }
 
-impl ChunkedWriteBuffer {
+impl MemoryBlockingWrite {
     pub fn new(chunk_size: usize) -> Self {
         Self {
             chunk_size,
@@ -81,13 +79,13 @@ impl ChunkedWriteBuffer {
     }
 }
 
-impl Default for ChunkedWriteBuffer {
+impl Default for MemoryBlockingWrite {
     fn default() -> Self {
         Self::new(DEFAULT_CHUNK_SIZE)
     }
 }
 
-impl io::Write for ChunkedWriteBuffer {
+impl io::Write for MemoryBlockingWrite {
     fn write(&mut self, mut remaining: &[u8]) -> io::Result<usize> {
         let bytes_written = remaining.len();
 
@@ -109,6 +107,12 @@ impl io::Write for ChunkedWriteBuffer {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl BlockingWrite for MemoryBlockingWrite {
+    fn close(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -173,6 +177,50 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
     }
 }
 
+/// A blocking writer whose output must be explicitly committed after all bytes are written.
+pub trait BlockingWrite: io::Write + Send {
+    fn close(&mut self) -> Result<()>;
+}
+
+/// Private holder that lets the Parquet writer return `W` without requiring `W: Default`.
+struct WriteSlot<W>(Option<W>);
+
+impl<W> WriteSlot<W> {
+    fn new(writer: W) -> Self {
+        Self(Some(writer))
+    }
+
+    fn close_and_take(&mut self) -> Result<W>
+    where W: BlockingWrite {
+        let Some(writer) = self.0.as_mut() else {
+            return Err(ErrorCode::Internal(
+                "Parquet output writer has already been taken",
+            ));
+        };
+        writer.close()?;
+        Ok(self
+            .0
+            .take()
+            .expect("Parquet output writer exists after close"))
+    }
+}
+
+impl<W: io::Write> io::Write for WriteSlot<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let Some(writer) = self.0.as_mut() else {
+            return Err(io::ErrorKind::BrokenPipe.into());
+        };
+        writer.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let Some(writer) = self.0.as_mut() else {
+            return Err(io::ErrorKind::BrokenPipe.into());
+        };
+        writer.flush()
+    }
+}
+
 /// Low-level **leaf-oriented** single-row-group Parquet writer.
 ///
 /// This writer *is* the (single) row group — it opens one implicitly on construction; there is
@@ -185,7 +233,7 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 /// [`BulkParquetLeafWriter`]. Feed it `ArrowLeafColumn`s via
 /// [`BulkParquetLeafWriter::write`], then finish the leaf to recover the file writer before opening
 /// the next; finally [`Self::finish`] writes the footer. Each write encodes straight into the open
-/// leaf's page writer, flushing pages to the sink as they fill — no per-column chunk buffer
+/// leaf's page writer, flushing pages to the output writer as they fill — no per-column chunk buffer
 /// (unlike `ArrowWriter`). The consuming API encodes the "one open leaf at a time" rule in the
 /// type state and lets an active leaf live across caller method boundaries.
 ///
@@ -195,34 +243,36 @@ fn classify_data_type(data_type: &ArrowDataType, out: &mut Vec<LeafEncoderKind>)
 /// [`BulkParquetLeafWriter`] additionally borrows the boxed row group and is always dropped or
 /// finished before its parent, preserving `leaf -> row_group -> file_writer` destruction order.
 ///
-/// Generic over the sink `W`: callers pass any `io::Write` (e.g. an in-memory buffer, or a
-/// streaming IO writer). [`Self::new`] defaults to the chunked in-memory buffer;
-/// [`Self::create`] takes an arbitrary sink. `W: Default` lets [`Self::finish`] move the
-/// finished sink out via `mem::take` after the footer is written.
-pub struct BulkParquetFileWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
+/// Generic over `W`: callers pass any [`BlockingWrite`] implementation, such as an in-memory chunk
+/// writer or a streaming IO writer. [`Self::finish`] closes the writer before taking it from the
+/// private writer slot; the returned writer exposes implementation-specific completed output.
+pub struct BulkParquetFileWriter<W: BlockingWrite + 'static = MemoryBlockingWrite> {
     leaf_kinds: Vec<LeafEncoderKind>,
     next_leaf: usize,
-    row_group: Option<Box<SerializedRowGroupWriter<'static, W>>>,
-    file_writer: Box<SerializedFileWriter<W>>,
+    row_group: Option<Box<SerializedRowGroupWriter<'static, WriteSlot<W>>>>,
+    file_writer: Box<SerializedFileWriter<WriteSlot<W>>>,
 }
 
-impl BulkParquetFileWriter<ChunkedWriteBuffer> {
-    /// Construct a writer backed by the in-memory [`ChunkedWriteBuffer`]. [`Self::finish`] returns
-    /// the buffer, whose bytes the caller reads via [`ChunkedWriteBuffer::into_chunks`].
+impl BulkParquetFileWriter<MemoryBlockingWrite> {
+    /// Construct a writer backed by the in-memory [`MemoryBlockingWrite`]. [`Self::finish`]
+    /// returns the writer, whose bytes the caller reads via [`MemoryBlockingWrite::into_chunks`].
     pub fn new(arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Result<Self> {
         Self::create(
-            ChunkedWriteBuffer::new(DEFAULT_CHUNK_SIZE),
+            MemoryBlockingWrite::new(DEFAULT_CHUNK_SIZE),
             arrow_schema,
             props,
         )
     }
 }
 
-impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
-    /// Construct a writer that streams the serialized parquet into the caller-provided `sink`.
-    /// The footer is written on [`Self::finish`], which returns the metadata plus the sink moved
-    /// back out.
-    pub fn create(sink: W, arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Result<Self> {
+impl<W: BlockingWrite + 'static> BulkParquetFileWriter<W> {
+    /// Construct a Parquet file writer backed by the caller-provided output writer. The footer is
+    /// written on [`Self::finish`], which closes and returns the output writer with the metadata.
+    pub fn create(
+        writer: W,
+        arrow_schema: Arc<Schema>,
+        props: WriterPropertiesPtr,
+    ) -> Result<Self> {
         let parquet_schema = ArrowSchemaConverter::new()
             .with_coerce_types(props.coerce_types())
             .convert(&arrow_schema)?;
@@ -235,7 +285,11 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         let mut props = (*props).clone();
         add_encoded_arrow_schema_to_metadata(&arrow_schema, &mut props);
 
-        let mut file_writer = Box::new(SerializedFileWriter::new(sink, root, Arc::new(props))?);
+        let mut file_writer = Box::new(SerializedFileWriter::new(
+            WriteSlot::new(writer),
+            root,
+            Arc::new(props),
+        )?);
         let leaf_kinds = classify_schema(&arrow_schema);
         debug_assert_eq!(leaf_kinds.len(), parquet_schema.num_columns());
 
@@ -244,7 +298,7 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         // tracked against `file_writer` (letting us move the box into the struct below). The
         // borrow is really bounded by `*file_writer`, which is heap-stable and outlives
         // `row_group` (drop order); `row_group` is the sole accessor until `finish` closes it.
-        let fw_ptr: *mut SerializedFileWriter<W> = &mut *file_writer;
+        let fw_ptr: *mut SerializedFileWriter<WriteSlot<W>> = &mut *file_writer;
         let row_group = unsafe { (*fw_ptr).next_row_group() }?;
 
         Ok(Self {
@@ -315,9 +369,8 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         })
     }
 
-    /// Close the row group, write the footer, and return the parquet metadata plus the sink moved
-    /// back out. The sink now holds the complete serialized parquet file; the caller reads the
-    /// bytes from it (e.g. [`ChunkedWriteBuffer::into_chunks`]).
+    /// Close the row group, write the footer, close the output writer, and return both the Parquet
+    /// metadata and completed writer. Metadata is returned only after close succeeds.
     pub fn finish(mut self) -> Result<(ParquetMetaData, W)> {
         if self.next_leaf != self.leaf_kinds.len() {
             return Err(ErrorCode::Internal(format!(
@@ -334,8 +387,8 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetFileWriter<W> {
         }
 
         let metadata = self.file_writer.finish()?;
-        let sink = std::mem::take(self.file_writer.inner_mut());
-        Ok((metadata, sink))
+        let writer = self.file_writer.inner_mut().close_and_take()?;
+        Ok((metadata, writer))
     }
 }
 
@@ -385,7 +438,7 @@ impl RawLeafColumnWriter<'_> {
 /// Owning active-leaf state returned by [`BulkParquetFileWriter::next_leaf`]. Finish it to recover
 /// the parent file writer. This allows an incremental producer to retain the active leaf and flush
 /// explicit page boundaries across calls without exposing self-referential lifetimes.
-pub struct BulkParquetLeafWriter<W: io::Write + Send + Default + 'static = ChunkedWriteBuffer> {
+pub struct BulkParquetLeafWriter<W: BlockingWrite + 'static = MemoryBlockingWrite> {
     // Drop order is significant: the active leaf borrows allocations owned by `parent`.
     leaf: Option<RawLeafColumnWriter<'static>>,
     parent: Option<BulkParquetFileWriter<W>>,
@@ -395,9 +448,9 @@ pub struct BulkParquetLeafWriter<W: io::Write + Send + Default + 'static = Chunk
 // boxed parent. The leaf has exclusive access, both borrowed allocations are stable across moves,
 // and field/drop order destroys the leaf before the parent. All other components are `Send` when W
 // is `Send`.
-unsafe impl<W: io::Write + Send + Default + 'static> Send for BulkParquetLeafWriter<W> {}
+unsafe impl<W: BlockingWrite + 'static> Send for BulkParquetLeafWriter<W> {}
 
-impl<W: io::Write + Send + Default + 'static> BulkParquetLeafWriter<W> {
+impl<W: BlockingWrite + 'static> BulkParquetLeafWriter<W> {
     /// Encode one `ArrowLeafColumn` fragment into this leaf.
     pub fn write(&mut self, leaf: &ArrowLeafColumn) -> Result<()> {
         self.leaf.as_mut().expect("active leaf").write(leaf)
@@ -419,13 +472,86 @@ impl<W: io::Write + Send + Default + 'static> BulkParquetLeafWriter<W> {
 mod tests {
     use super::*;
 
+    struct CloseTrackingWrite {
+        bytes: Vec<u8>,
+        closed: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl io::Write for CloseTrackingWrite {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl BlockingWrite for CloseTrackingWrite {
+        fn close(&mut self) -> Result<()> {
+            self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
     #[test]
-    fn test_chunked_write_buffer() {
+    fn test_finish_closes_writer() {
+        let closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let output = CloseTrackingWrite {
+            bytes: Vec::new(),
+            closed: closed.clone(),
+        };
+        let schema = Arc::new(Schema::empty());
+        let props = Arc::new(parquet::file::properties::WriterProperties::builder().build());
+        let writer = BulkParquetFileWriter::create(output, schema, props).unwrap();
+
+        let (metadata, output) = writer.finish().unwrap();
+
+        assert!(closed.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(!output.bytes.is_empty());
+        assert!(!metadata.row_groups().is_empty());
+    }
+
+    #[derive(Debug, Default)]
+    struct FailingCloseWrite(Vec<u8>);
+
+    impl io::Write for FailingCloseWrite {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl BlockingWrite for FailingCloseWrite {
+        fn close(&mut self) -> Result<()> {
+            Err(ErrorCode::Internal("close failed"))
+        }
+    }
+
+    #[test]
+    fn test_finish_propagates_close_failure() {
+        let schema = Arc::new(Schema::empty());
+        let props = Arc::new(parquet::file::properties::WriterProperties::builder().build());
+        let writer =
+            BulkParquetFileWriter::create(FailingCloseWrite::default(), schema, props).unwrap();
+
+        let error = writer.finish().unwrap_err();
+
+        assert!(error.message().contains("close failed"));
+    }
+
+    #[test]
+    fn test_memory_blocking_write() {
         use std::io::Write;
 
         // Chunk size 4: writes that span chunk boundaries must still reassemble exactly,
         // and a single write larger than the chunk size must be accepted in one chunk.
-        let mut buf = ChunkedWriteBuffer::new(4);
+        let mut buf = MemoryBlockingWrite::new(4);
         buf.write_all(b"ab").unwrap(); // partial first chunk
         buf.write_all(b"cde").unwrap(); // spills into a second chunk
         buf.write_all(b"fghijklm").unwrap(); // larger than chunk_size in one write
@@ -437,13 +563,13 @@ mod tests {
         assert_eq!(buf.into_chunks().concat(), b"abcdefghijklm");
 
         // Single write under chunk size yields a single chunk holding all bytes.
-        let mut single = ChunkedWriteBuffer::new(4);
+        let mut single = MemoryBlockingWrite::new(4);
         single.write_all(b"xy").unwrap();
         let chunks = single.into_chunks();
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks.concat(), b"xy");
 
         // Empty buffer yields no chunks.
-        assert!(ChunkedWriteBuffer::new(4).into_chunks().is_empty());
+        assert!(MemoryBlockingWrite::new(4).into_chunks().is_empty());
     }
 }

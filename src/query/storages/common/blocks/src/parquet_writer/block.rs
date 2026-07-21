@@ -57,7 +57,7 @@ const PARQUET_MAGIC: &[u8; 4] = b"PAR1";
 
 /// High-level row-oriented writer: encodes+compresses each incoming `DataBlock` immediately
 /// into per-leaf [`ArrowColumnWriter`]s, then at [`Self::finish`] assembles the single-row-group
-/// file from the closed column chunks. Used by the insert / fuse `StreamBlockBuilder` path and
+/// file from the closed column chunks. Used by the standard FUSE `FuseBlockWriter` path and
 /// `blocks_to_parquet*` where blocks arrive incrementally or as a batch.
 pub struct ParquetFileWriter {
     arrow_schema: Arc<Schema>,

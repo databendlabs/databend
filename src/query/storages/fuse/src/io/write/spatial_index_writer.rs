@@ -34,7 +34,9 @@ use databend_common_expression::types::geometry::extract_bbox_and_srid;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
+use databend_storages_common_blocks::block_to_parquet_with_writer;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -49,6 +51,18 @@ use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_spatial_index_files;
+use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
+use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
+use crate::io::write::block_index::BlockIndexLowLevelWriter;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingSpatialIndex;
+use crate::io::write::block_index::WrittenBlockIndexOutput;
+use crate::io::write::block_index::WrittenIndexFile;
+use crate::io::write::block_index::WrittenSpatialIndex;
 use crate::statistics::SpatialStatsBuilder;
 
 #[derive(Debug, Clone)]
@@ -62,6 +76,11 @@ pub struct SpatialIndexState {
 pub struct SpatialIndexBuildResult {
     pub index_state: Option<SpatialIndexState>,
     pub spatial_stats: Option<StatisticsOfSpatialColumns>,
+}
+
+pub(crate) struct SpatialIndexWrittenState {
+    pub(crate) size: u64,
+    pub(crate) spatial_stats: Option<StatisticsOfSpatialColumns>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +188,40 @@ impl SpatialIndexBuilder {
         })
     }
 
+    pub fn add_column(&mut self, field_index: usize, column: Column) -> Result<()> {
+        if let Some(columns) = self.columns.get_mut(&field_index) {
+            columns.push(column.clone());
+        }
+        if let Some((_, column_id)) = self
+            .stats_only_offsets
+            .iter()
+            .find(|(offset, _)| *offset == field_index)
+        {
+            let spatial_stat = self.spatial_stats.entry(*column_id).or_default();
+            if !spatial_stat.is_srid_mixed() {
+                for value in column.iter() {
+                    spatial_stat.update_value(value)?;
+                    if spatial_stat.is_srid_mixed() {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn into_write_spec(
+        self,
+        location: Location,
+        num_fields: usize,
+    ) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec {
+            builder: self,
+            location,
+            num_fields,
+        }
+    }
+
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
         for offset in &self.field_offsets_set {
             let block_entry = block.get_by_offset(*offset);
@@ -201,6 +254,32 @@ impl SpatialIndexBuilder {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn finalize_to_writer(
+        &mut self,
+        write: OpenDalBlockingWrite,
+    ) -> Result<SpatialIndexWrittenState> {
+        let size = match self.build_spatial_index()? {
+            Some(result) => {
+                let index_schema = TableSchemaRefExt::create(result.index_fields);
+                let index_block = DataBlock::new(result.index_columns, 1);
+                let (_, write) = block_to_parquet_with_writer(
+                    index_schema.as_ref(),
+                    index_block,
+                    TableCompression::Zstd,
+                    false,
+                    Some(result.metadata),
+                    write,
+                )?;
+                write.bytes_written()
+            }
+            None => 0,
+        };
+        Ok(SpatialIndexWrittenState {
+            size,
+            spatial_stats: self.finalize_spatial_stats(),
+        })
     }
 
     pub fn finalize(&mut self, location: &Location) -> Result<SpatialIndexBuildResult> {
@@ -445,6 +524,130 @@ impl SpatialIndexBuilder {
             size,
             data,
         })
+    }
+}
+
+pub(crate) struct SpatialIndexWriteSpec {
+    builder: SpatialIndexBuilder,
+    location: Location,
+    num_fields: usize,
+}
+
+impl BlockIndexSpec for SpatialIndexWriteSpec {
+    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(SpatialIndexWriter {
+            builder: self.builder.clone(),
+            location: self.location.clone(),
+        }))
+    }
+
+    fn new_low_level_writer(
+        &self,
+        context: BlockIndexLowLevelWriteContext,
+    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        let write = context.create_write(&self.location);
+        Ok(Box::new(SpatialIndexLowLevelWriter {
+            builder: self.builder.clone(),
+            location: self.location.clone(),
+            write: Some(write),
+            next_field: 0,
+            num_fields: self.num_fields,
+        }))
+    }
+}
+
+struct SpatialIndexWriter {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for SpatialIndexWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let result = self.builder.finalize(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            spatial: Some(PendingSpatialIndex {
+                file: result.index_state.map(|state| PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: result.spatial_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+struct SpatialIndexLowLevelWriter {
+    builder: SpatialIndexBuilder,
+    location: Location,
+    write: Option<OpenDalBlockingWrite>,
+    next_field: usize,
+    num_fields: usize,
+}
+
+impl BlockIndexLowLevelWriter for SpatialIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
+        if self.next_field >= self.num_fields {
+            return Err(ErrorCode::Internal(
+                "spatial index low-level writer has no remaining columns",
+            ));
+        }
+        let field_index = self.next_field;
+        self.next_field += 1;
+        Ok(Box::new(SpatialIndexLowLevelColumnWriter {
+            parent: Some(self),
+            field_index,
+        }))
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
+        if self.next_field != self.num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "spatial index low-level writer consumed {} of {} columns",
+                self.next_field, self.num_fields
+            )));
+        }
+        let write = self
+            .write
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("spatial index blocking output was consumed"))?;
+        let result = self.builder.finalize_to_writer(write)?;
+        Ok(WrittenBlockIndexOutput {
+            spatial: Some(WrittenSpatialIndex {
+                file: (result.size > 0).then_some(WrittenIndexFile {
+                    location: self.location,
+                    size: result.size,
+                }),
+                statistics: result.spatial_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+struct SpatialIndexLowLevelColumnWriter {
+    parent: Option<Box<SpatialIndexLowLevelWriter>>,
+    field_index: usize,
+}
+
+impl BlockIndexLowLevelColumnWriter for SpatialIndexLowLevelColumnWriter {
+    fn write(&mut self, column: &Column) -> Result<()> {
+        self.parent
+            .as_mut()
+            .ok_or_else(|| ErrorCode::Internal("spatial index column writer has no parent"))?
+            .builder
+            .add_column(self.field_index, column.clone())
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        self.parent
+            .take()
+            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
+            .ok_or_else(|| ErrorCode::Internal("spatial index column writer has no parent"))
     }
 }
 

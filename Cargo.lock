@@ -6708,6 +6708,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-storages-common-blocks",
  "fastrace",
  "futures",
  "log",

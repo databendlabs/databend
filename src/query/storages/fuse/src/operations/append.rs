@@ -41,7 +41,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::FuseTable;
-use crate::io::StreamBlockProperties;
+use crate::io::FuseBlockWriteOptions;
 use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
@@ -59,7 +59,7 @@ impl FuseTable {
     ) -> Result<()> {
         let enable_stream_block_write = self.enable_stream_block_write(ctx.clone())?;
         if enable_stream_block_write {
-            let properties = StreamBlockProperties::try_create(
+            let properties = FuseBlockWriteOptions::try_create(
                 ctx.clone(),
                 self,
                 MutationKind::Insert,

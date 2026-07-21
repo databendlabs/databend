@@ -21,42 +21,42 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_meta_app::schema::TableIndex;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Buffer;
-use opendal::Operator;
-use uuid::Uuid;
 
-use super::super::fuse_block_writer::FuseBlockOutput;
-use super::super::fuse_block_writer::FuseBlockWriter;
-use super::super::fuse_block_writer::GranuleWriteSettings;
+use super::super::parquet_block_writer::GranuleWriteSettings;
+use super::super::parquet_block_writer::ParquetBlockOutput;
+use super::super::parquet_block_writer::ParquetBlockWriter;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
-use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
-use crate::io::InvertedIndexWriter;
+use crate::io::PendingBlockSerialization;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
@@ -65,8 +65,14 @@ use crate::io::WriteSettings;
 use crate::io::create_inverted_index_builders;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::build_granule_index_specs;
-use crate::io::write::BlockStatsBuilder;
-use crate::io::write::InvertedIndexState;
+use crate::io::write::BlockColumnSketchesBuilder;
+use crate::io::write::BloomIndexWriteSpec;
+use crate::io::write::GranuleIndexState;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
@@ -87,22 +93,20 @@ impl NdvProvider for ColumnsNdvInfo {
     }
 }
 
-pub struct StreamBlockBuilder {
-    properties: Arc<StreamBlockProperties>,
+/// Standard FUSE block writer driven by complete `DataBlock` inputs. It retains serialized
+/// payloads in memory and returns a pending block serialization for asynchronous upload.
+pub struct FuseBlockWriter {
+    properties: Arc<FuseBlockWriteOptions>,
     /// The block's location, fixed at construction (not at `finish`): granule-index builders stream
     /// their payload files to storage as granules seal, so payload paths — derived from this — must
     /// exist before the first block is written.
     block_location: Location,
-    block_id: Uuid,
     /// `None` until the first block arrives: props depend on first-block NDV, so creation is
     /// deferred to `write`.
-    block_writer: Option<FuseBlockWriter>,
-    inverted_index_writers: Vec<InvertedIndexWriter>,
-    bloom_index_builder: BloomIndexBuilder,
+    block_writer: Option<ParquetBlockWriter>,
+    block_index_writers: Vec<Box<dyn BlockIndexWriter>>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
-    vector_index_builder: Option<VectorIndexBuilder>,
-    spatial_index_builder: Option<SpatialIndexBuilder>,
-    block_stats_builder: BlockStatsBuilder,
+    column_sketches_builder: BlockColumnSketchesBuilder,
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
@@ -111,8 +115,8 @@ pub struct StreamBlockBuilder {
     block_size: usize,
 }
 
-impl StreamBlockBuilder {
-    pub fn try_new_with_config(properties: Arc<StreamBlockProperties>) -> Result<Self> {
+impl FuseBlockWriter {
+    pub fn create(properties: Arc<FuseBlockWriteOptions>) -> Result<Self> {
         // Reject unsupported formats up front so the deferred `write` can assume Parquet.
         if matches!(
             properties.write_settings.storage_format,
@@ -125,37 +129,49 @@ impl StreamBlockBuilder {
             .meta_locations
             .gen_block_location(properties.table_meta_timestamps);
 
-        let inverted_index_writers = properties
-            .inverted_index_builders
-            .iter()
-            .map(|builder| {
-                InvertedIndexWriter::try_create(Arc::new(builder.schema.clone()), &builder.options)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let bloom_index_builder = BloomIndexBuilder::create(
-            properties.ctx.get_function_context()?,
-            properties.write_settings.bloom_index_type,
-            properties.bloom_columns_map.clone(),
-            &properties.ngram_args,
-        )?;
+        let func_ctx = properties.ctx.get_function_context()?;
+        let index_context = BlockIndexWriteContext {
+            func_ctx,
+            physical_schema: properties.source_schema.clone(),
+            block_location: block_location.clone(),
+            write_settings: properties.write_settings.clone(),
+        };
+        let bloom_location = properties
+            .meta_locations
+            .block_bloom_index_location(&block_id);
+        let mut block_index_writers = vec![
+            BloomIndexWriteSpec::new(
+                properties.bloom_columns_map.clone(),
+                properties.ngram_args.clone(),
+                bloom_location,
+            )
+            .new_writer(index_context.clone())?,
+        ];
+        for spec in &properties.inverted_index_builders {
+            block_index_writers.push(spec.new_writer(index_context.clone())?);
+        }
+        if let Some(builder) = properties.vector_index_builder.clone() {
+            let spec = builder.into_write_spec(
+                properties.meta_locations.block_vector_index_location(),
+                properties.source_schema.num_fields(),
+            );
+            block_index_writers.push(spec.new_writer(index_context.clone())?);
+        }
+        if let Some(builder) = properties.spatial_index_builder.clone() {
+            let spec = builder.into_write_spec(
+                properties.meta_locations.block_spatial_index_location(),
+                properties.source_schema.num_fields(),
+            );
+            block_index_writers.push(spec.new_writer(index_context)?);
+        }
 
         let virtual_column_builder = properties.virtual_column_builder.clone();
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            &properties.table_indexes,
-            properties.source_schema.clone(),
-            true,
-        );
-        let spatial_index_builder = SpatialIndexBuilder::try_create(
-            &properties.table_indexes,
-            properties.source_schema.clone(),
-            true,
-        );
         let top_n = properties
             .top_n
             .as_ref()
             .map(|(columns, size)| (columns, *size));
-        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map, top_n, None)?;
+        let column_sketches_builder =
+            BlockColumnSketchesBuilder::new(&properties.ndv_columns_map, top_n, None)?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state = ColumnStatisticsState::new(
@@ -163,17 +179,13 @@ impl StreamBlockBuilder {
             &properties.distinct_columns,
             &properties.write_settings.col_stats_truncate_lens,
         );
-        Ok(StreamBlockBuilder {
+        Ok(FuseBlockWriter {
             properties,
             block_location,
-            block_id,
             block_writer: None,
-            inverted_index_writers,
-            bloom_index_builder,
+            block_index_writers,
             virtual_column_builder,
-            vector_index_builder,
-            spatial_index_builder,
-            block_stats_builder,
+            column_sketches_builder,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -186,10 +198,10 @@ impl StreamBlockBuilder {
     }
 
     pub fn need_flush(&self) -> bool {
-        let file_size = self
-            .block_writer
-            .as_ref()
-            .map_or(0, |w| w.compressed_size());
+        let file_size = match &self.block_writer {
+            Some(writer) => writer.compressed_size(),
+            None => 0,
+        };
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
             || self.block_size >= self.properties.block_thresholds.min_bytes_per_block * 2
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
@@ -204,45 +216,44 @@ impl StreamBlockBuilder {
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
-        self.bloom_index_builder.add_block(&block)?;
-        self.block_stats_builder.add_block(&block)?;
-        for writer in self.inverted_index_writers.iter_mut() {
-            writer.add_block(&self.properties.source_schema, &block)?;
+        for writer in self.block_index_writers.iter_mut() {
+            writer.write(&block)?;
         }
+        self.column_sketches_builder.add_block(&block)?;
         if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
             virtual_column_builder.add_block(&block)?;
-        }
-        if let Some(ref mut vector_index_builder) = self.vector_index_builder {
-            vector_index_builder.add_block(&block)?;
-        }
-        if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
-            spatial_index_builder.add_block(&block)?;
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size(block.num_columns());
 
         if self.block_writer.is_none() {
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
-            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+            cols_ndv.extend(self.column_sketches_builder.peek_cols_ndv());
             let ndv_info = ColumnsNdvInfo::new(block.num_rows(), cols_ndv);
             self.block_writer = Some(self.new_block_writer(ndv_info)?);
         }
 
-        // FuseBlockWriter tracks the residual granule fill across calls, so just forward the block.
-        self.block_writer.as_mut().unwrap().write(block)?;
+        // ParquetBlockWriter tracks the residual granule fill across calls, so just forward the block.
+        let Some(writer) = self.block_writer.as_mut() else {
+            return Err(ErrorCode::Internal(
+                "stream block writer was not initialized",
+            ));
+        };
+        writer.write(block)?;
         Ok(())
     }
 
     /// Build the parquet writer for the first block, configured from its NDV snapshot.
-    fn new_block_writer(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<FuseBlockWriter> {
+    fn new_block_writer(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ParquetBlockWriter> {
         let write_settings = &self.properties.write_settings;
         let num_rows = cols_ndv_info.num_rows;
         let data_page_rows = write_settings
             .index_granularity
             .or(write_settings.data_page_rows);
+        let enable_parquet_dictionary = write_settings.parquet_dictionary_enabled();
         let props = Arc::new(build_parquet_writer_properties(
             write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
+            enable_parquet_dictionary,
             Some(cols_ndv_info),
             None,
             num_rows,
@@ -252,25 +263,43 @@ impl StreamBlockBuilder {
         ));
         let granule = if let Some(rows) = write_settings.index_granularity {
             let func_ctx = self.properties.ctx.get_function_context()?;
-            let builders = self
+            let writers = self
                 .properties
                 .granule_index_specs
                 .iter()
                 .map(|spec| {
-                    spec.new_builder(
+                    spec.new_writer(
                         func_ctx.clone(),
                         &self.properties.source_schema,
                         &self.block_location.0,
-                        self.properties.operator.clone(),
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;
-            // Stream blocks are not linearly cluster-key sorted, so this is an offset-only index.
-            Some(GranuleWriteSettings::new(rows, builders, None, None))
+            let mins = self
+                .properties
+                .granule_cluster_keys
+                .as_ref()
+                .map(|options| {
+                    (
+                        options.mins.clone(),
+                        options.types.clone(),
+                        self.properties
+                            .meta_locations
+                            .block_granule_index_location(),
+                    )
+                });
+            Some(GranuleWriteSettings::new(
+                rows,
+                writers,
+                mins,
+                self.properties
+                    .meta_locations
+                    .block_granule_index_location(),
+            ))
         } else {
             None
         };
-        Ok(FuseBlockWriter::new(
+        Ok(ParquetBlockWriter::new(
             props,
             self.properties.source_schema.clone(),
             granule,
@@ -279,30 +308,21 @@ impl StreamBlockBuilder {
 
     pub fn finish(mut self) -> Result<BlockSerialization> {
         let block_location = self.block_location.clone();
-        let block_id = self.block_id;
 
-        let bloom_index_location = self
-            .properties
-            .meta_locations
-            .block_bloom_index_location(&block_id);
-        let bloom_index = self.bloom_index_builder.finalize()?;
-        let bloom_index_state = if let Some(bloom_index) = bloom_index {
-            Some(BloomIndexState::from_bloom_index(
-                &bloom_index,
-                bloom_index_location,
-            )?)
-        } else {
-            None
-        };
-        let mut column_distinct_count = bloom_index_state
+        let mut block_indexes = PendingBlockIndexOutput::default();
+        for writer in self.block_index_writers {
+            block_indexes.merge(writer.finish()?)?;
+        }
+        let mut column_distinct_count = block_indexes
+            .bloom
             .as_ref()
-            .map(|i| i.column_distinct_count.clone())
+            .map(|index| index.column_distinct_count.clone())
             .unwrap_or_default();
-        let block_stats = self.block_stats_builder.finalize_with_top_n()?;
-        let (column_hlls, column_top_n) = if let Some(stats) = block_stats {
+        let column_sketches = self.column_sketches_builder.finalize_sketches()?;
+        let (column_hlls, column_top_n) = if let Some(sketches) = column_sketches {
             (
-                (!stats.hll.is_empty()).then_some(stats.hll),
-                (!stats.top_n.is_empty()).then_some(stats.top_n),
+                (!sketches.hll.is_empty()).then_some(sketches.hll),
+                (!sketches.top_n.is_empty()).then_some(sketches.top_n),
             )
         } else {
             (None, None)
@@ -316,18 +336,6 @@ impl StreamBlockBuilder {
         }
         let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
 
-        let mut inverted_index_states = Vec::with_capacity(self.inverted_index_writers.len());
-        for (i, inverted_index_writer) in std::mem::take(&mut self.inverted_index_writers)
-            .into_iter()
-            .enumerate()
-        {
-            let inverted_index_location = self.properties.inverted_index_builders[i]
-                .gen_inverted_index_location(&block_location);
-            let data = inverted_index_writer.finalize()?;
-            let inverted_index_state =
-                InvertedIndexState::try_create(data, inverted_index_location)?;
-            inverted_index_states.push(inverted_index_state);
-        }
         let virtual_column_state =
             if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
                 let virtual_column_state = virtual_column_builder
@@ -336,74 +344,65 @@ impl StreamBlockBuilder {
             } else {
                 None
             };
-        let (vector_index_state, vector_stats) = if let Some(ref mut vector_index_builder) =
-            self.vector_index_builder
-        {
-            let vector_index_location =
-                self.properties.meta_locations.block_vector_index_location();
-            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
-            (
-                vector_index_state.index_state,
-                vector_index_state.vector_stats,
-            )
-        } else {
-            (None, None)
+        let (vector_index_size, vector_index_location, vector_stats) = match &block_indexes.vector {
+            Some(index) => (
+                index.file.as_ref().map(PendingIndexFile::size),
+                index.file.as_ref().map(|file| file.location.clone()),
+                index.statistics.clone(),
+            ),
+            None => (None, None, None),
         };
-
-        let vector_index_size = vector_index_state.as_ref().map(|v| v.size);
-        let vector_index_location = vector_index_state.as_ref().map(|v| v.location.clone());
-
-        let (spatial_index_state, spatial_stats) =
-            if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
-                let spatial_index_location = self
-                    .properties
-                    .meta_locations
-                    .block_spatial_index_location();
-                let spatial_result = spatial_index_builder.finalize(&spatial_index_location)?;
-                (spatial_result.index_state, spatial_result.spatial_stats)
-            } else {
-                (None, None)
+        let (spatial_index_size, spatial_index_location, spatial_stats) =
+            match &block_indexes.spatial {
+                Some(index) => (
+                    index.file.as_ref().map(PendingIndexFile::size),
+                    index.file.as_ref().map(|file| file.location.clone()),
+                    index.statistics.clone(),
+                ),
+                None => (None, None, None),
             };
-        let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
-        let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
 
-        // Offset-only index (no cluster-key mins): the stream path writes unsorted / Hilbert blocks,
-        // which are not linearly sorted, so recording mins would corrupt pruning. Mins are built only
-        // on the sorted `BlockBuilder` path.
-        let mins_location = self
-            .properties
-            .meta_locations
-            .block_granule_index_location();
-        let offsets_location = self
-            .properties
-            .meta_locations
-            .block_granule_index_location();
-        let FuseBlockOutput {
+        let ParquetBlockOutput {
             data: block_raw_data,
             col_metas,
-            granule_index_state,
+            granule_index,
+            granule_payloads,
         } = match self.block_writer.take() {
-            Some(w) => w.finish(mins_location, offsets_location, &self.properties.operator)?,
+            Some(writer) => writer.finish()?,
             // Empty builder: no block was ever written.
-            None => FuseBlockOutput {
+            None => ParquetBlockOutput {
                 data: Buffer::new(),
                 col_metas: HashMap::new(),
-                granule_index_state: None,
+                granule_index: None,
+                granule_payloads: Vec::new(),
             },
         };
-        let granule_index = granule_index_state.as_ref().map(|s| s.layout());
-
         let file_size = block_raw_data.len();
-        let inverted_index_size = inverted_index_states
+        let inverted_index_size = block_indexes
+            .inverted
             .iter()
-            .map(|v| v.size)
-            .reduce(|a, b| a + b);
+            .map(|index| index.file.size())
+            .sum::<u64>();
+        let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
         let perfect = self.properties.block_thresholds.check_perfect_block(
             self.row_count,
             self.block_size,
             file_size,
         );
-        let cluster_stats = self.cluster_stats_state.finalize(perfect)?;
+        let cluster_stats = match &self.properties.cluster_stats_override {
+            Some(stats) => Some(stats.clone()),
+            None => self.cluster_stats_state.finalize(perfect)?,
+        };
+        let (bloom_filter_index_location, bloom_filter_index_size, ngram_filter_index_size) =
+            match &block_indexes.bloom {
+                Some(index) => (
+                    Some(index.file.location.clone()),
+                    index.file.size(),
+                    index.ngram_size,
+                ),
+                None => (None, 0, None),
+            };
+        let granule_index_layout = granule_index.as_ref().map(GranuleIndexState::layout);
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
             block_size: self.block_size as u64,
@@ -412,11 +411,8 @@ impl StreamBlockBuilder {
             col_metas,
             cluster_stats,
             location: block_location,
-            bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
-            bloom_filter_index_size: bloom_index_state
-                .as_ref()
-                .map(|v| v.size)
-                .unwrap_or_default(),
+            bloom_filter_index_location,
+            bloom_filter_index_size,
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
             vector_index_size,
@@ -424,34 +420,40 @@ impl StreamBlockBuilder {
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
-            granule_index,
+            granule_index: granule_index_layout,
             vector_stats,
             create_on: Some(Utc::now()),
-            ngram_filter_index_size: bloom_index_state
-                .as_ref()
-                .map(|v| v.ngram_size)
-                .unwrap_or_default(),
+            ngram_filter_index_size,
             virtual_block_meta: None,
         };
-        let serialized = BlockSerialization {
+        let serialized = BlockSerialization::Pending(PendingBlockSerialization {
             block_raw_data,
             block_meta,
-            bloom_index_state,
-            inverted_index_states,
+            block_indexes,
             virtual_column_state,
-            vector_index_state,
-            spatial_index_state,
-            granule_index_state,
-            column_hlls: column_hlls.map(BlockHLLState::Deserialized),
+            granule_index_state: granule_index,
+            granule_index_payloads: granule_payloads,
+            column_hlls: match column_hlls {
+                Some(hlls) if self.properties.serialize_hll => {
+                    Some(BlockHLLState::Serialized(encode_column_hll(&hlls)?))
+                }
+                Some(hlls) => Some(BlockHLLState::Deserialized(hlls)),
+                None => None,
+            },
             column_top_n,
-        };
+        });
         Ok(serialized)
     }
 }
 
-pub struct StreamBlockProperties {
+#[derive(Clone)]
+struct GranuleClusterKeysOptions {
+    mins: Vec<Scalar>,
+    types: Vec<DataType>,
+}
+
+pub struct FuseBlockWriteOptions {
     pub(crate) ctx: Arc<dyn TableContext>,
-    pub(crate) operator: Operator,
     pub(crate) write_settings: WriteSettings,
     pub(crate) block_thresholds: BlockThresholds,
 
@@ -468,11 +470,15 @@ pub struct StreamBlockProperties {
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
-    table_indexes: BTreeMap<String, TableIndex>,
+    vector_index_builder: Option<VectorIndexBuilder>,
+    spatial_index_builder: Option<SpatialIndexBuilder>,
     granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
+    granule_cluster_keys: Option<GranuleClusterKeysOptions>,
+    serialize_hll: bool,
+    cluster_stats_override: Option<ClusterStatistics>,
 }
 
-impl StreamBlockProperties {
+impl FuseBlockWriteOptions {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         table: &FuseTable,
@@ -549,10 +555,18 @@ impl StreamBlockProperties {
                 }
             }
         }
-        let table_indexes = table.table_info.meta.indexes.clone();
-        Ok(Arc::new(StreamBlockProperties {
+        let vector_index_builder = VectorIndexBuilder::try_create(
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+            true,
+        );
+        let spatial_index_builder = SpatialIndexBuilder::try_create(
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+            true,
+        );
+        Ok(Arc::new(FuseBlockWriteOptions {
             ctx,
-            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             block_thresholds: table.get_block_thresholds(),
             source_schema,
@@ -562,13 +576,96 @@ impl StreamBlockProperties {
             stats_columns,
             distinct_columns,
             bloom_columns_map,
+            top_n,
             ngram_args,
             inverted_index_builders,
             table_meta_timestamps,
-            table_indexes,
+            vector_index_builder,
+            spatial_index_builder,
+            ndv_columns_map,
+            granule_index_specs,
+            granule_cluster_keys: None,
+            serialize_hll: false,
+            cluster_stats_override: None,
+        }))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_block_builder_parts(
+        ctx: Arc<dyn TableContext>,
+        meta_locations: TableMetaLocationGenerator,
+        source_schema: TableSchemaRef,
+        write_settings: WriteSettings,
+        block_thresholds: BlockThresholds,
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+        ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+        top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
+        ngram_args: Vec<NgramArgs>,
+        inverted_index_builders: Vec<InvertedIndexBuilder>,
+        virtual_column_builder: Option<VirtualColumnBuilder>,
+        vector_index_builder: Option<VectorIndexBuilder>,
+        spatial_index_builder: Option<SpatialIndexBuilder>,
+        granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
+        granule_cluster_columns: Option<Vec<databend_common_expression::Column>>,
+        table_meta_timestamps: TableMetaTimestamps,
+        serialize_hll: bool,
+        cluster_stats_override: Option<ClusterStatistics>,
+    ) -> Result<Arc<Self>> {
+        let bloom_ndv_columns = bloom_columns_map
+            .values()
+            .chain(ndv_columns_map.values())
+            .map(TableField::column_id)
+            .collect::<HashSet<_>>();
+        let mut stats_columns = Vec::new();
+        let mut distinct_columns = Vec::new();
+        for field in source_schema.leaf_fields() {
+            let column_id = field.column_id();
+            let data_type = DataType::from(field.data_type());
+            if RangeIndex::supported_type(&data_type) {
+                stats_columns.push((column_id, data_type.clone()));
+                if !bloom_ndv_columns.contains(&column_id) {
+                    distinct_columns.push((column_id, data_type));
+                }
+            }
+        }
+        let granule_rows = write_settings.index_granularity;
+        Ok(Arc::new(Self {
+            ctx,
+            write_settings,
+            block_thresholds,
+            meta_locations,
+            source_schema,
+            cluster_stats_builder: Arc::new(ClusterStatisticsBuilder::default()),
+            stats_columns,
+            distinct_columns,
+            bloom_columns_map,
             ndv_columns_map,
             top_n,
+            ngram_args,
+            inverted_index_builders,
+            virtual_column_builder,
+            table_meta_timestamps,
+            vector_index_builder,
+            spatial_index_builder,
             granule_index_specs,
+            granule_cluster_keys: granule_cluster_columns.map(|columns| {
+                let types = columns.iter().map(Column::data_type).collect();
+                let granule_rows = granule_rows.unwrap();
+                let mins = (0..columns[0].len())
+                    .step_by(granule_rows)
+                    .map(|row| {
+                        Scalar::Tuple(
+                            columns
+                                .iter()
+                                .map(|column| unsafe { column.index_unchecked(row) }.to_owned())
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                GranuleClusterKeysOptions { mins, types }
+            }),
+            serialize_hll,
+            cluster_stats_override,
         }))
     }
 }

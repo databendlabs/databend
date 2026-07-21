@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_array::ArrayRef;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -21,6 +22,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
+use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
@@ -28,6 +30,8 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
+use crate::parquet_writer::BlockingWrite;
+use crate::parquet_writer::BulkParquetFileWriter;
 use crate::parquet_writer::ParquetFileWriter;
 use crate::parquet_writer::SerializedParquet;
 
@@ -70,6 +74,38 @@ pub fn blocks_to_parquet(
     // page-bounded chunks internally, so no pre-splitting is needed here.
     let mut writer = ParquetFileWriter::new(arrow_schema, props);
     writer.write_blocks(blocks)?;
+    writer.finish()
+}
+
+pub fn block_to_parquet_with_writer<W: BlockingWrite + 'static>(
+    table_schema: &TableSchema,
+    block: DataBlock,
+    compression: TableCompression,
+    enable_dictionary: bool,
+    metadata: Option<Vec<KeyValue>>,
+    output: W,
+) -> Result<(parquet::file::metadata::ParquetMetaData, W)> {
+    let arrow_schema: Arc<arrow_schema::Schema> = Arc::new(table_schema.into());
+    let props = Arc::new(build_parquet_writer_properties(
+        compression,
+        enable_dictionary,
+        None::<&StatisticsOfColumns>,
+        metadata,
+        block.num_rows(),
+        table_schema,
+        None,
+        None,
+    ));
+    let mut writer = BulkParquetFileWriter::create(output, arrow_schema.clone(), props)?;
+    for (field_index, entry) in block.columns().iter().enumerate() {
+        let column = entry.to_column();
+        let array = ArrayRef::from(&column);
+        for leaf in compute_leaves(&arrow_schema.fields()[field_index], &array)? {
+            let mut leaf_writer = writer.next_leaf()?;
+            leaf_writer.write(&leaf)?;
+            writer = leaf_writer.finish()?;
+        }
+    }
     writer.finish()
 }
 

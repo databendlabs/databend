@@ -38,6 +38,8 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Location;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::io::GranulePruningReadContext;
@@ -56,52 +58,150 @@ impl GranuleMark {
     }
 }
 
+#[derive(Debug)]
+pub struct PendingGranuleIndexPayload {
+    pub location: Location,
+    pub data: Buffer,
+}
+
 #[derive(Default)]
-pub struct GranuleIndexBuildOutput {
+pub struct PendingGranuleIndexOutput {
+    pub marks: Vec<GranuleMark>,
+    pub pending_payloads: Vec<PendingGranuleIndexPayload>,
+}
+
+impl PendingGranuleIndexOutput {
+    pub fn merge(&mut self, other: PendingGranuleIndexOutput) -> Result<()> {
+        merge_marks(&mut self.marks, other.marks)?;
+        self.pending_payloads.extend(other.pending_payloads);
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct GranuleIndexLowLevelOutput {
     pub marks: Vec<GranuleMark>,
 }
 
-impl GranuleIndexBuildOutput {
-    pub fn merge(&mut self, other: GranuleIndexBuildOutput) -> Result<()> {
-        for mark in other.marks {
-            if self
-                .marks
-                .iter()
-                .any(|existing| existing.field.name() == mark.field.name())
-            {
-                return Err(ErrorCode::Internal(format!(
-                    "duplicate granule mark {}",
-                    mark.field.name()
-                )));
-            }
-            self.marks.push(mark);
+impl GranuleIndexLowLevelOutput {
+    pub fn merge(&mut self, other: GranuleIndexLowLevelOutput) -> Result<()> {
+        merge_marks(&mut self.marks, other.marks)
+    }
+}
+
+fn merge_marks(target: &mut Vec<GranuleMark>, marks: Vec<GranuleMark>) -> Result<()> {
+    for mark in marks {
+        if target
+            .iter()
+            .any(|existing| existing.field.name() == mark.field.name())
+        {
+            return Err(ErrorCode::Internal(format!(
+                "duplicate granule mark {}",
+                mark.field.name()
+            )));
         }
+        target.push(mark);
+    }
+    Ok(())
+}
+
+/// Granule-index writer driven by complete `DataBlock` inputs. The caller seals granules at
+/// exactly the same boundaries as the main Parquet writer.
+pub trait GranuleIndexWriter: Send {
+    fn write(&mut self, block: &DataBlock, range: Range<usize>) -> Result<()>;
+
+    fn finish_granule(&mut self) -> Result<()>;
+
+    fn finish(self: Box<Self>) -> Result<PendingGranuleIndexOutput>;
+}
+
+/// Writes one logical column of a low-level granule-index writer. It temporarily owns its parent
+/// writer and returns that parent after committing the completed column state internally.
+pub trait GranuleIndexLowLevelColumnWriter: Send {
+    fn write(&mut self, column: &Column) -> Result<()>;
+
+    fn finish(self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelWriter>>;
+}
+
+/// Low-level granule-index writer. Opening a column consumes the parent, which makes it impossible
+/// to open two columns or finish the index while a column is active.
+pub trait GranuleIndexLowLevelWriter: Send {
+    fn next_column(self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelColumnWriter>>;
+
+    fn finish(self: Box<Self>) -> Result<GranuleIndexLowLevelOutput>;
+}
+
+pub(super) struct NoopGranuleIndexWriter;
+
+impl GranuleIndexWriter for NoopGranuleIndexWriter {
+    fn write(&mut self, _block: &DataBlock, _range: Range<usize>) -> Result<()> {
         Ok(())
+    }
+
+    fn finish_granule(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingGranuleIndexOutput> {
+        Ok(PendingGranuleIndexOutput::default())
     }
 }
 
-/// The caller must finalize each granule boundary independently of `push_rows` slice boundaries.
-pub trait GranuleIndexBuilder: Send {
-    fn push_rows(&mut self, block: &DataBlock, range: Range<usize>) -> Result<()>;
-
-    fn finalize_granule(&mut self) -> Result<()>;
-
-    fn finalize(self: Box<Self>) -> Result<GranuleIndexBuildOutput>;
+pub(super) struct NoopGranuleIndexLowLevelColumnWriter {
+    parent: Option<Box<dyn GranuleIndexLowLevelWriter>>,
 }
 
-pub(super) struct NoopGranuleIndexBuilder;
+impl NoopGranuleIndexLowLevelColumnWriter {
+    fn new(parent: Box<dyn GranuleIndexLowLevelWriter>) -> Self {
+        Self {
+            parent: Some(parent),
+        }
+    }
+}
 
-impl GranuleIndexBuilder for NoopGranuleIndexBuilder {
-    fn push_rows(&mut self, _block: &DataBlock, _range: Range<usize>) -> Result<()> {
+impl GranuleIndexLowLevelColumnWriter for NoopGranuleIndexLowLevelColumnWriter {
+    fn write(&mut self, _column: &Column) -> Result<()> {
         Ok(())
     }
 
-    fn finalize_granule(&mut self) -> Result<()> {
-        Ok(())
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelWriter>> {
+        self.parent
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("no-op granule index column writer has no parent"))
+    }
+}
+
+pub(super) struct NoopGranuleIndexLowLevelWriter {
+    remaining_columns: usize,
+}
+
+impl NoopGranuleIndexLowLevelWriter {
+    pub(super) fn new(columns: usize) -> Self {
+        Self {
+            remaining_columns: columns,
+        }
+    }
+}
+
+impl GranuleIndexLowLevelWriter for NoopGranuleIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelColumnWriter>> {
+        if self.remaining_columns == 0 {
+            return Err(ErrorCode::Internal(
+                "granule index low-level writer has no remaining columns",
+            ));
+        }
+        self.remaining_columns -= 1;
+        Ok(Box::new(NoopGranuleIndexLowLevelColumnWriter::new(self)))
     }
 
-    fn finalize(self: Box<Self>) -> Result<GranuleIndexBuildOutput> {
-        Ok(GranuleIndexBuildOutput::default())
+    fn finish(self: Box<Self>) -> Result<GranuleIndexLowLevelOutput> {
+        if self.remaining_columns != 0 {
+            return Err(ErrorCode::Internal(format!(
+                "granule index low-level writer has {} unconsumed columns",
+                self.remaining_columns
+            )));
+        }
+        Ok(GranuleIndexLowLevelOutput::default())
     }
 }
 
@@ -122,15 +222,23 @@ pub trait GranuleIndexPruner: Send + Sync {
 
 /// Factory shared by granule-index write and read paths.
 pub trait GranuleIndexSpec: Send + Sync {
-    /// Builders bind stable IDs against the physical write schema. Payload locations must be known
-    /// at construction because builders stream data before `finalize`.
-    fn new_builder(
+    /// Default writers bind stable IDs and return compressed pending payloads. Low-level writers
+    /// additionally bind lazy blocking outputs and write payloads directly.
+    fn new_writer(
+        &self,
+        func_ctx: FunctionContext,
+        physical_schema: &TableSchema,
+        block_location: &str,
+    ) -> Result<Box<dyn GranuleIndexWriter>>;
+
+    fn new_low_level_writer(
         &self,
         func_ctx: FunctionContext,
         physical_schema: &TableSchema,
         block_location: &str,
         dal: Operator,
-    ) -> Result<Box<dyn GranuleIndexBuilder>>;
+        granule_rows: usize,
+    ) -> Result<Box<dyn GranuleIndexLowLevelWriter>>;
 
     fn new_pruner(
         &self,

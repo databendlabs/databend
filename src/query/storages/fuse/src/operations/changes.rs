@@ -885,13 +885,23 @@ fn sum_block_rows(blocks: &[Arc<BlockMeta>]) -> u64 {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use chrono::TimeDelta;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DecimalSize;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::Statistics;
     use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
     use super::*;
+
+    const TEST_USER_COLUMN_ID: u32 = 0;
+
+    fn test_block_path(uuid: &str) -> String {
+        format!("root/_b/{uuid}_v0.parquet")
+    }
 
     fn snapshot(rows: u64) -> TableSnapshot {
         TableSnapshot::try_new(

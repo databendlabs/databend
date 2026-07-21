@@ -19,8 +19,9 @@ mod merge_io_reader;
 mod merge_io_result;
 mod read_settings;
 
-pub use blocking_io::BlockingOperatorWriter;
+pub use blocking_io::OpenDalBlockingWrite;
 pub use blocking_io::OperatorRangeReader;
+pub use blocking_io::create_blocking_write;
 pub use buffer_reader::BufferReader;
 pub use files::Files;
 pub use files::dedup_file_locations;

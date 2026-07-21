@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Shared Parquet block writer for batch and streaming FUSE writes.
+//! Shared Parquet block writer for complete `DataBlock` FUSE writes.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,55 +21,58 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::types::DataType;
-use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_blocks::ParquetFileWriter;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use databend_storages_common_table_meta::meta::Location;
 use opendal::Buffer;
-use opendal::Operator;
 use parquet::file::properties::WriterPropertiesPtr;
 
-use crate::io::granule_index::GranuleIndexBuildOutput;
-use crate::io::granule_index::GranuleIndexBuilder;
+use crate::io::granule_index::GranuleIndexWriter;
+use crate::io::granule_index::PendingGranuleIndexOutput;
+use crate::io::write::GranuleIndexFileWriter;
 use crate::io::write::GranuleIndexState;
-use crate::io::write::GranuleIndexWriter;
 use crate::operations::column_parquet_metas;
 
-pub(super) struct FuseBlockOutput {
+pub(super) struct ParquetBlockOutput {
     pub(super) data: Buffer,
     pub(super) col_metas: HashMap<ColumnId, ColumnMeta>,
-    pub(super) granule_index_state: Option<GranuleIndexState>,
+    pub(super) granule_index: Option<GranuleIndexState>,
+    pub(super) granule_payloads: Vec<crate::io::granule_index::PendingGranuleIndexPayload>,
 }
 
 pub(super) struct GranuleWriteSettings {
     rows: usize,
-    builders: Vec<Box<dyn GranuleIndexBuilder>>,
-    mins: Option<GranuleMins>,
-    cluster_key_id: Option<u32>,
+    writers: Vec<Box<dyn GranuleIndexWriter>>,
+    mins: Option<(
+        Vec<databend_common_expression::Scalar>,
+        Vec<databend_common_expression::types::DataType>,
+        databend_storages_common_table_meta::meta::Location,
+    )>,
+    offsets_location: databend_storages_common_table_meta::meta::Location,
 }
 
 impl GranuleWriteSettings {
     pub(super) fn new(
         rows: usize,
-        builders: Vec<Box<dyn GranuleIndexBuilder>>,
-        mins: Option<GranuleMins>,
-        cluster_key_id: Option<u32>,
+        writers: Vec<Box<dyn GranuleIndexWriter>>,
+        mins: Option<(
+            Vec<databend_common_expression::Scalar>,
+            Vec<databend_common_expression::types::DataType>,
+            databend_storages_common_table_meta::meta::Location,
+        )>,
+        offsets_location: databend_storages_common_table_meta::meta::Location,
     ) -> Self {
         Self {
             rows,
-            builders,
+            writers,
             mins,
-            cluster_key_id,
+            offsets_location,
         }
     }
 }
 
-pub(super) struct FuseBlockWriter {
+pub(super) struct ParquetBlockWriter {
     inner: ParquetFileWriter,
     schema: TableSchemaRef,
     granule: Option<GranuleWriteSettings>,
@@ -78,68 +81,7 @@ pub(super) struct FuseBlockWriter {
     leaf_column_ids: Vec<ColumnId>,
 }
 
-/// Collects the first cluster-key value of each sorted granule.
-pub(super) struct GranuleMins {
-    cluster_key_index: Vec<usize>,
-    operators: Vec<BlockOperator>,
-    func_ctx: FunctionContext,
-    types: Option<Vec<DataType>>,
-    mins: Vec<Scalar>,
-}
-
-impl GranuleMins {
-    pub(super) fn new(
-        cluster_key_index: Vec<usize>,
-        operators: Vec<BlockOperator>,
-        func_ctx: FunctionContext,
-    ) -> Self {
-        Self {
-            cluster_key_index,
-            operators,
-            func_ctx,
-            types: None,
-            mins: Vec::new(),
-        }
-    }
-
-    fn add_granule(&mut self, block: &DataBlock, row: usize) -> Result<()> {
-        let evaluated = self
-            .operators
-            .iter()
-            .try_fold(block.clone(), |input, op| op.execute(&self.func_ctx, input))?;
-
-        let types = self
-            .cluster_key_index
-            .iter()
-            .map(|&i| evaluated.get_by_offset(i).data_type())
-            .collect::<Vec<_>>();
-        if let Some(expected) = &self.types {
-            if expected != &types {
-                return Err(ErrorCode::Internal(format!(
-                    "granule cluster key types changed from {expected:?} to {types:?}"
-                )));
-            }
-        } else {
-            self.types = Some(types);
-        }
-
-        let key = self
-            .cluster_key_index
-            .iter()
-            .map(|&i| evaluated.get_by_offset(i).index(row).unwrap().to_owned())
-            .collect::<Vec<_>>();
-
-        self.mins.push(Scalar::Tuple(key));
-
-        Ok(())
-    }
-
-    fn finish(self) -> (Vec<Scalar>, Vec<DataType>) {
-        (self.mins, self.types.unwrap_or_default())
-    }
-}
-
-impl FuseBlockWriter {
+impl ParquetBlockWriter {
     pub(super) fn new(
         props: WriterPropertiesPtr,
         schema: TableSchemaRef,
@@ -170,22 +112,14 @@ impl FuseBlockWriter {
         let mut offset = 0;
         let num_rows = block.num_rows();
         self.total_rows += num_rows;
-
         while offset < num_rows {
-            if self.written == 0 {
-                if let Some(mins) = granule.mins.as_mut() {
-                    mins.add_granule(&block, offset)?;
-                }
-            }
-
             let take = (granule.rows - self.written).min(num_rows - offset);
             let range = offset..offset + take;
 
-            for builder in granule.builders.iter_mut() {
-                builder.push_rows(&block, range.clone())?;
-            }
-
             self.inner.write_block(block.slice(range.clone()))?;
+            for writer in &mut granule.writers {
+                writer.write(&block, range.clone())?;
+            }
 
             offset += take;
             self.written += take;
@@ -193,11 +127,10 @@ impl FuseBlockWriter {
             if self.written == granule.rows {
                 self.written = 0;
 
-                for builder in granule.builders.iter_mut() {
-                    builder.finalize_granule()?;
-                }
-
                 self.inner.flush_page()?;
+                for writer in &mut granule.writers {
+                    writer.finish_granule()?;
+                }
             }
         }
         Ok(())
@@ -207,22 +140,15 @@ impl FuseBlockWriter {
         self.inner.compressed_size()
     }
 
-    pub(super) fn finish(
-        mut self,
-        mins_location: Location,
-        offsets_location: Location,
-        dal: &Operator,
-    ) -> Result<FuseBlockOutput> {
+    pub(super) fn finish(mut self) -> Result<ParquetBlockOutput> {
         let granule = self.granule.take();
         let serialized = self.inner.finish()?;
-        let granule_index_state = match granule {
+        let granule_index = match granule {
             Some(granule) => {
                 let num_granules = self.total_rows.div_ceil(granule.rows);
-                let (granule_mins, cluster_key_types) =
-                    granule.mins.map(GranuleMins::finish).unwrap_or_default();
-                let mut output = GranuleIndexBuildOutput::default();
-                for builder in granule.builders {
-                    output.merge(builder.finalize()?)?;
+                let mut output = PendingGranuleIndexOutput::default();
+                for writer in granule.writers {
+                    output.merge(writer.finish()?)?;
                 }
 
                 let page_layout = serialized.page_layout.as_ref().ok_or_else(|| {
@@ -230,31 +156,32 @@ impl FuseBlockWriter {
                         "granule page layout was not captured with granule write settings",
                     )
                 })?;
-                let writer = GranuleIndexWriter::new(
-                    granule.cluster_key_id,
+                let mins = granule.mins.as_ref().map(|(values, types, _)| {
+                    crate::io::write::granule_index_writer::GranuleMinsInput { values, types }
+                });
+                let writer = GranuleIndexFileWriter::new(
                     granule.rows,
                     self.leaf_column_ids,
+                    granule
+                        .mins
+                        .as_ref()
+                        .map(|(_, _, location)| location.clone()),
+                    granule.offsets_location,
                 );
-                Some(writer.build_with_extra_marks(
-                    page_layout,
-                    num_granules,
-                    &granule_mins,
-                    &cluster_key_types,
-                    mins_location,
-                    offsets_location,
-                    output.marks,
-                    dal,
-                )?)
+                let state =
+                    writer.build_with_extra_marks(page_layout, num_granules, mins, output.marks)?;
+                (Some(state), output.pending_payloads)
             }
-            None => None,
+            None => (None, Vec::new()),
         };
         let col_metas = column_parquet_metas(&serialized.metadata, &self.schema)?;
         let data = Buffer::from(serialized.payload);
 
-        Ok(FuseBlockOutput {
+        Ok(ParquetBlockOutput {
             data,
             col_metas,
-            granule_index_state,
+            granule_index: granule_index.0,
+            granule_payloads: granule_index.1,
         })
     }
 
@@ -276,7 +203,9 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::number::Int32Type;
     use databend_storages_common_blocks::build_parquet_writer_properties;
+    use databend_storages_common_io::BufferReader;
     use databend_storages_common_table_meta::table::TableCompression;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
     use super::*;
 
@@ -296,26 +225,54 @@ mod tests {
             None,
             None,
         ));
-        let mut writer = FuseBlockWriter::new(props, schema.clone(), None);
+        let mut writer = ParquetBlockWriter::new(props, schema.clone(), None);
         writer
             .write(DataBlock::new_from_columns(vec![Int32Type::from_data(
                 vec![1, 2, 3],
             )]))
             .unwrap();
 
-        let dal = opendal::Operator::new(opendal::services::Memory::default())
-            .unwrap()
-            .finish();
-        let output = writer
-            .finish(
-                ("unused-mins".to_string(), 0),
-                ("unused-offsets".to_string(), 0),
-                &dal,
-            )
-            .unwrap();
+        let output = writer.finish().unwrap();
 
         assert!(!output.data.is_empty());
         assert_eq!(output.col_metas.len(), schema.to_leaf_column_ids().len());
-        assert!(output.granule_index_state.is_none());
+        assert!(output.granule_index.is_none());
+    }
+
+    #[test]
+    fn test_finish_with_granule_settings_disables_dictionary() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Number(NumberDataType::Int32),
+        )]));
+        let props = Arc::new(build_parquet_writer_properties(
+            TableCompression::None,
+            false,
+            None::<&databend_storages_common_table_meta::meta::StatisticsOfColumns>,
+            None,
+            3,
+            &schema,
+            Some(2),
+            None,
+        ));
+        let granule =
+            GranuleWriteSettings::new(2, Vec::new(), None, ("offsets.parquet".to_string(), 0));
+        let mut writer = ParquetBlockWriter::new(props, schema, Some(granule));
+        writer
+            .write(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 2, 3],
+            )]))
+            .unwrap();
+
+        let output = writer.finish().unwrap();
+        let builder = ParquetRecordBatchReaderBuilder::try_new(BufferReader(output.data)).unwrap();
+        let encodings = builder
+            .metadata()
+            .row_group(0)
+            .column(0)
+            .encodings()
+            .collect::<Vec<_>>();
+        assert!(!encodings.contains(&parquet::basic::Encoding::RLE_DICTIONARY));
+        assert!(!encodings.contains(&parquet::basic::Encoding::PLAIN_DICTIONARY));
     }
 }
