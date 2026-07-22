@@ -32,6 +32,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::BlockHLLState;
+use crate::meta::BlockTopN;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
@@ -254,13 +255,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-
-    /// Get the page size of the block.
-    ///
-    /// For the parquet format, the page size is its row count.
-    pub fn page_size(&self) -> u64 {
-        self.row_count
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -268,6 +262,8 @@ pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
     pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
     pub column_hlls: Option<BlockHLLState>,
+    #[serde(default)]
+    pub column_top_n: Option<BlockTopN>,
 }
 
 #[typetag::serde(name = "extended_block_meta")]

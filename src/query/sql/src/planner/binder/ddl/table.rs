@@ -23,7 +23,6 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
-use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -85,8 +84,6 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
@@ -100,7 +97,6 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -961,17 +957,7 @@ impl Binder {
         if matches!(engine, Engine::Fuse)
             && let Some(partition_exprs) = partition_by
         {
-            if cluster_by
-                .as_ref()
-                .is_some_and(|cluster| matches!(cluster.cluster_type, AstClusterType::Hilbert))
-            {
-                return Err(ErrorCode::InvalidClusterKeys(
-                    "PARTITION BY cannot be combined with HILBERT CLUSTER BY",
-                ));
-            }
-
             let partition_opt = ClusterOption {
-                cluster_type: AstClusterType::Linear,
                 cluster_exprs: partition_exprs.clone(),
             };
             let keys = self
@@ -989,10 +975,6 @@ impl Binder {
                 .analyze_cluster_keys(cluster_opt, schema.clone(), table_indexes.as_ref())
                 .await?;
             if !keys.is_empty() {
-                options.insert(
-                    OPT_KEY_CLUSTER_TYPE.to_owned(),
-                    cluster_opt.cluster_type.to_string().to_lowercase(),
-                );
                 options
                     .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
@@ -1428,13 +1410,6 @@ impl Binder {
                     .ctx
                     .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?;
-                if tbl.options().contains_key(OPT_KEY_PARTITION_BY)
-                    && matches!(cluster_by.cluster_type, AstClusterType::Hilbert)
-                {
-                    return Err(ErrorCode::InvalidClusterKeys(
-                        "PARTITION BY cannot be combined with HILBERT CLUSTER BY",
-                    ));
-                }
                 let cluster_keys = self
                     .analyze_cluster_keys(
                         cluster_by,
@@ -1451,7 +1426,6 @@ impl Binder {
                         table,
                         branch,
                         cluster_keys,
-                        cluster_type: cluster_by.cluster_type.to_string().to_lowercase(),
                     },
                 )))
             }
@@ -2396,22 +2370,9 @@ impl Binder {
         key_name: &str,
         allow_vector: bool,
     ) -> Result<Vec<String>> {
-        let ClusterOption {
-            cluster_type,
-            cluster_exprs,
-        } = cluster_opt;
+        let ClusterOption { cluster_exprs } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
-        if matches!(cluster_type, AstClusterType::Hilbert) {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
-
-            if !(2..=5).contains(&expr_len) {
-                return Err(ErrorCode::InvalidClusterKeys(
-                    "Hilbert clustering requires the dimension to be between 2 and 5",
-                ));
-            }
-        }
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
@@ -2471,12 +2432,6 @@ impl Binder {
                 )));
             }
             if is_vector_type {
-                if matches!(cluster_type, AstClusterType::Hilbert) {
-                    return Err(ErrorCode::InvalidClusterKeys(format!(
-                        "Unsupported data type '{}' for hilbert cluster by expression `{:#}`",
-                        data_type, cluster_expr
-                    )));
-                }
                 vector_cluster_key_num += 1;
                 if vector_cluster_key_num > 1 {
                     return Err(ErrorCode::InvalidClusterKeys(

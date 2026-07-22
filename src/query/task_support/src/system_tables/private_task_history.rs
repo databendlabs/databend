@@ -31,44 +31,40 @@ pub struct PrivateTaskHistoryTable;
 
 impl PrivateTaskHistoryTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
+        // Keep the private-task system table compatible with the cloud task-history
+        // contract. The underlying task_run table is an implementation detail and
+        // may grow independently without changing this public schema.
         let query = "SELECT
-        task_id,
-        task_name,
-        query_text,
-        when_condition,
-        after,
+        COALESCE(task_name, '') AS name,
+        COALESCE(task_id, 0) AS id,
+        COALESCE(owner, '') AS owner,
         comment,
-        owner,
-        owner_user,
-        warehouse_name,
-        using_warehouse_size,
-        schedule_type,
-        interval,
-        interval_milliseconds,
-        cron,
-        time_zone,
-        run_id,
-        attempt_number,
-        state,
-        error_code,
-        error_message,
-        root_task_id,
-        scheduled_at,
-        completed_at,
-        next_scheduled_at,
-        error_integration,
-        status,
-        created_at,
-        updated_at,
-        session_params,
-        last_suspended_at,
-        suspend_task_after_num_failures
+        CASE
+            WHEN schedule_type = 0 AND interval_milliseconds IS NOT NULL THEN CONCAT('INTERVAL ', COALESCE(CAST(interval AS STRING), '0'), ' SECOND ', CAST(interval_milliseconds AS STRING), ' MILLISECOND')
+            WHEN schedule_type = 0 THEN CONCAT('INTERVAL ', COALESCE(CAST(interval AS STRING), '0'), ' SECOND')
+            WHEN schedule_type = 1 AND time_zone IS NOT NULL THEN CONCAT('CRON ', cron, ' TIMEZONE ', time_zone)
+            WHEN schedule_type = 1 THEN CONCAT('CRON ', cron)
+            ELSE NULL
+        END AS schedule,
+        warehouse_name AS warehouse,
+        COALESCE(state, '') AS state,
+        COALESCE(query_text, '') AS definition,
+        COALESCE(when_condition, '') AS condition_text,
+        CAST(COALESCE(run_id, 0) AS STRING) AS run_id,
+        '' AS query_id,
+        COALESCE(error_code, 0) AS exception_code,
+        error_message AS exception_text,
+        COALESCE(attempt_number, 0) AS attempt_number,
+        completed_at AS completed_time,
+        COALESCE(scheduled_at, TO_TIMESTAMP(0)) AS scheduled_time,
+        CAST(COALESCE(root_task_id, 0) AS STRING) AS root_task_id,
+        session_params AS session_parameters
         FROM system_task.task_run ORDER BY run_id DESC;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'task_history'".to_string(),
+            desc: "'system'.'task_history'".to_string(),
             name: "task_history".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

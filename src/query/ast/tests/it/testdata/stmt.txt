@@ -2786,7 +2786,7 @@ CreateTable(
 ---------- Input ----------
 create table cluster_tbl (a int, b int) cluster by (a, b)
 ---------- Output ---------
-CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY LINEAR(a, b)
+CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY (a, b)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2844,7 +2844,6 @@ CreateTable(
         uri_location: None,
         cluster_by: Some(
             ClusterOption {
-                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -16885,7 +16884,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t CLUSTER BY LINEAR(c1)
+ALTER TABLE t CLUSTER BY (c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -16916,7 +16915,6 @@ AlterTable(
         },
         action: AlterTableClusterKey {
             cluster_by: ClusterOption {
-                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -28601,7 +28599,7 @@ CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28667,7 +28665,6 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
-                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -28811,7 +28808,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28868,7 +28865,6 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
-                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(
@@ -29057,7 +29053,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -29114,7 +29110,6 @@ CreateDynamicTable(
         ),
         cluster_by: Some(
             ClusterOption {
-                cluster_type: Linear,
                 cluster_exprs: [
                     ColumnRef {
                         span: Some(

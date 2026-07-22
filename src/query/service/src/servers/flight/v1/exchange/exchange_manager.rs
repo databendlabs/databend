@@ -70,8 +70,10 @@ use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::DoExchangeParams;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
+use crate::servers::flight::FlightOperation;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -109,33 +111,49 @@ enum QueryExchange {
 }
 
 async fn create_flight_client(
+    remote_node_id: String,
     address: String,
     use_current_rt: bool,
     keep_alive: FlightKeepAliveParams,
 ) -> Result<FlightClient> {
     let config = GlobalConfig::instance();
+    let local_node_id = config.query.node_id.clone();
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let task = async move {
-        match config.tls_query_cli_enabled() {
-            true => Ok(FlightClient::new(FlightServiceClient::new(
+        let channel = match config.tls_query_cli_enabled() {
+            true => {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     Some(config.query.to_grpc_tls_config()),
                     keep_alive_config,
                 )
-                .await?,
-            ))),
-            false => Ok(FlightClient::new(FlightServiceClient::new(
+                .await
+            }
+            false => {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     None,
                     keep_alive_config,
                 )
-                .await?,
-            ))),
+                .await
+            }
         }
+        .map_err(|error| {
+            add_flight_error_context(
+                ErrorCode::from(error),
+                FlightOperation::Connect,
+                &local_node_id,
+                &remote_node_id,
+            )
+        })?;
+
+        Ok(FlightClient::new(
+            FlightServiceClient::new(channel),
+            local_node_id,
+            remote_node_id,
+        ))
     };
     if use_current_rt {
         task.await
@@ -305,14 +323,19 @@ impl DataExchangeManager {
 
                     let query_id = env.query_id.clone();
                     let address = source.flight_address.clone();
+                    let source_id = source.id.clone();
 
                     let keep_alive_params = keep_alive;
                     match edge {
                         Edge::Fragment(channel) => {
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client =
-                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = Self::create_client(
+                                    &source_id,
+                                    &address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
                                     channel: channel.clone(),
                                     exchange: flight_client.do_get(&query_id, &channel).await?,
@@ -321,11 +344,15 @@ impl DataExchangeManager {
                         }
                         Edge::Statistics => {
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client =
-                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = Self::create_client(
+                                    &source_id,
+                                    &address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Statistics {
-                                    source: source.id.clone(),
+                                    source: source_id,
                                     exchange: flight_client
                                         .request_server_exchange(&query_id, &target.id)
                                         .await?,
@@ -354,6 +381,7 @@ impl DataExchangeManager {
                     } = edge
                     {
                         let target_id = target.id.clone();
+                        let local_node_id = config.query.node_id.clone();
                         let query_id = env.query_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
@@ -365,9 +393,13 @@ impl DataExchangeManager {
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
-                                let mut flight_client =
-                                    create_flight_client(address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = create_flight_client(
+                                    target_id.clone(),
+                                    address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
 
                                 let (send_tx, send_rx) = async_channel::bounded(1);
                                 let response_stream = flight_client
@@ -376,23 +408,19 @@ impl DataExchangeManager {
                                         num_threads,
                                         exchange_id: exchange_id.clone(),
                                     })
-                                    .await
-                                    .map_err(|e| {
-                                        ErrorCode::Internal(format!(
-                                            "PingPong connect failed: {}",
-                                            e
-                                        ))
-                                    })?;
+                                    .await?;
                                 Ok::<_, ErrorCode>((send_tx, response_stream))
                             }?;
 
                             Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
-                                target_id,
+                                target_id: target_id.clone(),
                                 exchange_id,
                                 exchange: PingPongExchange::from_parts(
                                     num_threads,
                                     send_tx,
                                     response_stream,
+                                    local_node_id,
+                                    target_id.clone(),
                                 ),
                             })
                         }));
@@ -529,34 +557,51 @@ impl DataExchangeManager {
 
     #[async_backtrace::framed]
     pub async fn create_client(
+        remote_node_id: &str,
         address: &str,
         use_current_rt: bool,
         keep_alive: FlightKeepAliveParams,
     ) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
+        let local_node_id = config.query.node_id.clone();
         let address = address.to_string();
+        let remote_node_id = remote_node_id.to_string();
         let keep_alive_config = build_keep_alive_config(keep_alive);
         let task = async move {
-            match config.tls_query_cli_enabled() {
-                true => Ok(FlightClient::new(FlightServiceClient::new(
+            let channel = match config.tls_query_cli_enabled() {
+                true => {
                     ConnectionFactory::create_rpc_channel(
                         address.to_owned(),
                         None,
                         Some(config.query.to_grpc_tls_config()),
                         keep_alive_config,
                     )
-                    .await?,
-                ))),
-                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    .await
+                }
+                false => {
                     ConnectionFactory::create_rpc_channel(
                         address.to_owned(),
                         None,
                         None,
                         keep_alive_config,
                     )
-                    .await?,
-                ))),
+                    .await
+                }
             }
+            .map_err(|error| {
+                add_flight_error_context(
+                    ErrorCode::from(error),
+                    FlightOperation::Connect,
+                    &local_node_id,
+                    &remote_node_id,
+                )
+            })?;
+
+            Ok(FlightClient::new(
+                FlightServiceClient::new(channel),
+                local_node_id,
+                remote_node_id,
+            ))
         };
         if use_current_rt {
             task.await

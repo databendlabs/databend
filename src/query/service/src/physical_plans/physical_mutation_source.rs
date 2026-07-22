@@ -140,10 +140,12 @@ impl IPhysicalPlan for MutationSource {
                         conflict_resolve_context: ConflictResolveContext::None,
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
-                        insert_rows: 0,
+                        logical_updated_rows: 0,
+                        logical_deleted_rows: 0,
                         virtual_schema: None,
                         virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
+                        top_n: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)

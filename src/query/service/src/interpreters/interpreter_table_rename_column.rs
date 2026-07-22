@@ -23,6 +23,7 @@ use databend_common_sql::plans::RenameTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -139,6 +140,14 @@ impl Interpreter for RenameTableColumnInterpreter {
             )?
         {
             *value = new_partition_key;
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
+            rename_column_in_comma_separated_ident(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?;
         }
 
         let mut new_cluster_key = None;

@@ -53,15 +53,58 @@ pub struct DoExchangeParams {
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
+    local_node_id: String,
+    remote_node_id: String,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum FlightOperation {
+    Connect,
+    DoAction,
+    DoGet,
+    DoExchange,
+}
+
+impl FlightOperation {
+    fn as_str(self) -> &'static str {
+        match self {
+            FlightOperation::Connect => "connect",
+            FlightOperation::DoAction => "do_action",
+            FlightOperation::DoGet => "do_get",
+            FlightOperation::DoExchange => "do_exchange",
+        }
+    }
+}
+
+pub(crate) fn add_flight_error_context(
+    error: ErrorCode,
+    operation: FlightOperation,
+    local_node_id: &str,
+    remote_node_id: &str,
+) -> ErrorCode {
+    error.add_message_back(format!(
+        "(flight {}, client={}, service={})",
+        operation.as_str(),
+        local_node_id,
+        remote_node_id,
+    ))
 }
 
 // TODO: Integration testing required
 impl FlightClient {
-    pub fn new(mut inner: FlightServiceClient<Channel>) -> FlightClient {
+    pub fn new(
+        mut inner: FlightServiceClient<Channel>,
+        local_node_id: impl Into<String>,
+        remote_node_id: impl Into<String>,
+    ) -> FlightClient {
         inner = inner.max_decoding_message_size(usize::MAX);
         inner = inner.max_encoding_message_size(usize::MAX);
 
-        FlightClient { inner }
+        FlightClient {
+            inner,
+            local_node_id: local_node_id.into(),
+            remote_node_id: remote_node_id.into(),
+        }
     }
 
     #[async_backtrace::framed]
@@ -100,25 +143,51 @@ impl FlightClient {
             AsciiMetadataValue::from_str(&secret).unwrap(),
         );
 
-        let response = self.inner.do_action(request).await?;
+        let response = self.inner.do_action(request).await.map_err(|status| {
+            add_flight_error_context(
+                ErrorCode::from(status),
+                FlightOperation::DoAction,
+                &self.local_node_id,
+                &self.remote_node_id,
+            )
+        })?;
 
-        match response.into_inner().message().await? {
+        let response = response.into_inner().message().await.map_err(|status| {
+            add_flight_error_context(
+                ErrorCode::from(status),
+                FlightOperation::DoAction,
+                &self.local_node_id,
+                &self.remote_node_id,
+            )
+        })?;
+
+        match response {
             Some(response) => {
                 let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
                 deserializer.disable_recursion_limit();
                 let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
 
                 Res::deserialize(deserializer).map_err(|cause| {
-                    ErrorCode::BadBytes(format!(
-                        "Response payload deserialize error while in {:?}, cause: {}",
-                        path, cause
-                    ))
+                    add_flight_error_context(
+                        ErrorCode::BadBytes(format!(
+                            "Response payload deserialize error while in {:?}, cause: {}",
+                            path, cause
+                        )),
+                        FlightOperation::DoAction,
+                        &self.local_node_id,
+                        &self.remote_node_id,
+                    )
                 })
             }
-            None => Err(ErrorCode::EmptyDataFromServer(format!(
-                "Can not receive data from flight server, action: {:?}",
-                path
-            ))),
+            None => Err(add_flight_error_context(
+                ErrorCode::EmptyDataFromServer(format!(
+                    "Can not receive data from flight server, action: {:?}",
+                    path
+                )),
+                FlightOperation::DoAction,
+                &self.local_node_id,
+                &self.remote_node_id,
+            )),
         }
     }
 
@@ -138,7 +207,11 @@ impl FlightClient {
             )
             .await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let (notify, rx) = Self::streaming_receiver(
+            streaming,
+            self.local_node_id.clone(),
+            self.remote_node_id.clone(),
+        );
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
@@ -154,12 +227,18 @@ impl FlightClient {
 
         let streaming = self.get_streaming(request).await?;
 
-        let (notify, rx) = Self::streaming_receiver(streaming);
+        let (notify, rx) = Self::streaming_receiver(
+            streaming,
+            self.local_node_id.clone(),
+            self.remote_node_id.clone(),
+        );
         Ok(FlightExchange::create_receiver(notify, rx))
     }
 
     fn streaming_receiver(
         mut streaming: Streaming<FlightData>,
+        local_node_id: String,
+        remote_node_id: String,
     ) -> (Arc<WatchNotify>, Receiver<Result<FlightData>>) {
         let (tx, rx) = async_channel::bounded(1);
         let notify = Arc::new(WatchNotify::new());
@@ -185,7 +264,13 @@ impl FlightClient {
                                     }
                                 }
                                 Err(status) => {
-                                    let _ = tx.send(Err(ErrorCode::from(status))).await;
+                                    let error = add_flight_error_context(
+                                        ErrorCode::from(status),
+                                        FlightOperation::DoGet,
+                                        &local_node_id,
+                                        &remote_node_id,
+                                    );
+                                    let _ = tx.send(Err(error)).await;
                                     break;
                                 }
                             }
@@ -208,7 +293,12 @@ impl FlightClient {
     async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
         match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
-            Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
+            Err(status) => Err(add_flight_error_context(
+                ErrorCode::from(status),
+                FlightOperation::DoGet,
+                &self.local_node_id,
+                &self.remote_node_id,
+            )),
         }
     }
 
@@ -217,17 +307,13 @@ impl FlightClient {
         request_rx: Receiver<FlightData>,
         params: DoExchangeParams,
     ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = std::result::Result<Streaming<FlightData>, Status>>
-                + Send
-                + '_,
-        >,
+        Box<dyn std::future::Future<Output = Result<Streaming<FlightData>>> + Send + '_>,
     > {
         Box::pin(async move {
             let mut request = Request::new(request_rx);
 
             let params_json = serde_json::to_string(&params).map_err(|e| {
-                Status::internal(format!("Failed to serialize DoExchangeParams: {}", e))
+                ErrorCode::Internal(format!("Failed to serialize DoExchangeParams: {}", e))
             })?;
             if let Ok(value) = params_json.parse() {
                 request.metadata_mut().insert("x-exchange-params", value);
@@ -235,7 +321,12 @@ impl FlightClient {
 
             match self.inner.do_exchange(request).await {
                 Ok(response) => Ok(response.into_inner()),
-                Err(status) => Err(status),
+                Err(status) => Err(add_flight_error_context(
+                    ErrorCode::from(status),
+                    FlightOperation::DoExchange,
+                    &self.local_node_id,
+                    &self.remote_node_id,
+                )),
             }
         })
     }

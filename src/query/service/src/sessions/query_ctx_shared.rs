@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -48,7 +49,6 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -64,6 +64,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
@@ -162,9 +163,6 @@ pub struct QueryContextShared {
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
-    // Used by hilbert clustering when do recluster.
-    pub(super) selected_segment_locs: SegmentLocationsState,
-
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
     pub(super) io_stats: Arc<IoStats>,
@@ -188,6 +186,10 @@ pub struct QueryContextShared {
     /// Cached full visibility checker (ignore_ownership=false, Object::All).
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Limits concurrent RowFetch reads and decodes across all pipelines and
+    /// QueryContext instances belonging to this query on the local node.
+    row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
 }
 
 impl QueryContextShared {
@@ -249,7 +251,6 @@ impl QueryContextShared {
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
-            selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             io_stats: Default::default(),
             broadcast_registry: Default::default(),
@@ -260,7 +261,14 @@ impl QueryContextShared {
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            row_fetch_io_semaphore: Default::default(),
         }))
+    }
+
+    pub(super) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
+        self.row_fetch_io_semaphore
+            .get_or_init(|| Arc::new(Semaphore::new(max_threads.max(1))))
+            .clone()
     }
 
     pub fn get_version(&self) -> &BuildInfoRef {
@@ -508,6 +516,8 @@ impl QueryContextShared {
                                     &source_database_name,
                                     &source_table_name,
                                     max_batch_size,
+                                    self.get_settings()
+                                        .get_enable_stream_batch_snapshot_forward_scan()?,
                                     self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;

@@ -278,7 +278,6 @@ async fn test_commit_to_meta_server() -> anyhow::Result<()> {
                 new_segments,
                 None,
                 None,
-                None,
                 TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();
@@ -410,10 +409,6 @@ impl TableContext for CtxDelegation {
 
     fn written_segment_locations(&self) -> &SegmentLocationsState {
         self.ctx.written_segment_locations()
-    }
-
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.selected_segment_locations()
     }
 
     fn as_any(&self) -> &dyn Any {

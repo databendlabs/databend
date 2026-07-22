@@ -265,6 +265,30 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_changes_preserve_position() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let threshold = BlockThresholds {
+        block_per_segment: 3,
+        ..Default::default()
+    };
+    let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, threshold)?;
+
+    let (state, _) = case_fixture
+        .run(&[10, 10, 1, 2, 10, 10], None, None)
+        .await?;
+
+    assert_eq!(state.new_segment_paths.len(), 1);
+    let new_segment = (state.new_segment_paths[0].clone(), SegmentInfo::VERSION);
+    assert_eq!(state.replaced_segments.get(&2), Some(&new_segment));
+    assert_eq!(state.removed_segment_indexes, vec![3]);
+    assert_eq!(state.segments_locations[2], new_segment);
+    assert_eq!(state.segments_locations.len(), 5);
+
+    Ok(())
+}
+
 pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
@@ -727,8 +751,14 @@ impl CompactSegmentTestFixture {
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
+        let num_locations = locations.len();
+        let reverse_locations = locations
+            .into_iter()
+            .enumerate()
+            .map(|(idx, location)| (num_locations - idx - 1, location))
+            .collect();
         let state = seg_acc
-            .compact(locations, limit, |status| {
+            .compact(reverse_locations, limit, |status| {
                 self.ctx.set_status_info(&status);
             })
             .await?;
@@ -788,7 +818,7 @@ impl CompactSegmentTestFixture {
                             } else {
                                 0
                             };
-                            ClusterStatistics::new(v, left, right, level, None)
+                            ClusterStatistics::new(v, left, right, level)
                         })
                     };
 
@@ -1082,8 +1112,14 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
         );
+        let num_locations = locations.len();
+        let reverse_locations = locations
+            .into_iter()
+            .enumerate()
+            .map(|(idx, location)| (num_locations - idx - 1, location))
+            .collect();
         let state = seg_acc
-            .compact(locations, limit, |status| {
+            .compact(reverse_locations, limit, |status| {
                 ctx.set_status_info(&status);
             })
             .await?;

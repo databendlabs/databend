@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::types::StringType;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 
@@ -27,11 +29,17 @@ fn create_pipeline(
 ) -> Result<(Arc<QueryPipelineExecutor>, Receiver<Result<DataBlock>>)> {
     let mut pipeline = Pipeline::create();
 
-    let data_type = data[0][0].data_type(0);
+    let schema = DataSchemaRefExt::create(
+        data[0][0]
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| DataField::new(&format!("c{index}"), entry.data_type()))
+            .collect(),
+    );
     let source_pipe = create_source_pipe(ctx, data)?;
     pipeline.add_pipe(source_pipe);
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", data_type)]);
     let sort_desc = [SortColumnDescription {
         offset: 0,
         asc: true,
@@ -173,4 +181,73 @@ async fn test_k_way_merge_sort_fuzz() -> anyhow::Result<()> {
         run_fuzz(ctx, &mut rng, true).await?;
     }
     Ok(())
+}
+
+fn make_wide_block(start: i32, rows: i32) -> DataBlock {
+    let payload_suffix = "x".repeat(256);
+    let keys = (start..start + rows).collect::<Vec<_>>();
+    let payloads = keys
+        .iter()
+        .map(|key| format!("{key:08}-{payload_suffix}"))
+        .collect::<Vec<_>>();
+    DataBlock::new_from_columns(vec![
+        Int32Type::from_data(keys),
+        StringType::from_data(payloads),
+    ])
+}
+
+async fn assert_limit_compacts_string_views(
+    ctx: Arc<QueryContext>,
+    data: Vec<Vec<DataBlock>>,
+    limit: usize,
+) -> anyhow::Result<()> {
+    let (executor, mut rx) = create_pipeline(ctx, data, 2, 4_096, Some(limit), true)?;
+
+    executor.execute()?;
+
+    let mut result = Vec::new();
+    while !rx.is_empty() {
+        result.push(rx.recv().await.unwrap()?);
+    }
+
+    assert_eq!(result.iter().map(DataBlock::num_rows).sum::<usize>(), limit);
+
+    let mut total_bytes_len = 0;
+    let mut total_buffer_len = 0;
+    for block in &result {
+        let Column::String(payloads) = block.get_by_offset(1).to_column() else {
+            unreachable!("expected string payload column")
+        };
+        total_bytes_len += payloads.total_bytes_len();
+        total_buffer_len += payloads.total_buffer_len();
+    }
+    assert_eq!(total_bytes_len, limit * (8 + 1 + 256));
+    assert!(
+        total_buffer_len < 16 * 1024,
+        "LIMIT output retained {total_buffer_len} bytes of source string buffers",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_limit_compacts_string_views() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let first = make_wide_block(0, 2_000);
+    let second = make_wide_block(2_000, 2_000);
+    let data = vec![vec![first], vec![second]];
+
+    assert_limit_compacts_string_views(ctx, data, 10).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_exact_limit_compacts_string_views() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let first = make_wide_block(0, 2_000).slice(0..10);
+    let second = make_wide_block(2_000, 2_000);
+    let data = vec![vec![first], vec![second]];
+
+    assert_limit_compacts_string_views(ctx, data, 10).await
 }

@@ -247,7 +247,6 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         segment_idx: segment_location.segment_idx,
                         block_idx,
                         range: None,
-                        page_size: row_count as usize,
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: location_path.clone(),
                         segment_location: segment_location.location.0.clone(),

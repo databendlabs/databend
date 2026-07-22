@@ -48,7 +48,6 @@ mod mode;
 mod quantile_cont;
 mod quantile_disc;
 mod quantile_tdigest;
-mod range_bound;
 mod retention;
 mod skewness;
 mod st_collect;

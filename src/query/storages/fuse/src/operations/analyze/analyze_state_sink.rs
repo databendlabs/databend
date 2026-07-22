@@ -433,6 +433,7 @@ impl SinkAnalyzeState {
 
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
+            table.cluster_key_meta(),
             Some(table.get_table_info().ident.seq),
             self.ctx
                 .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
@@ -680,14 +681,13 @@ impl Processor for SinkAnalyzeState {
                                     top_n.remove(&column_id);
                                 }
                             }
-                            let dropped_top_n_columns = &self.dropped_top_n_columns;
-                            if let Some(top_n_size) = self.top_n_size {
+                            if self.top_n_size.is_some() {
                                 match (&mut self.top_n, meta.top_n) {
                                     (Some(top_n), Some(mut meta_top_n)) => {
                                         meta_top_n.retain(|column_id, _| {
-                                            !dropped_top_n_columns.contains(column_id)
+                                            !self.dropped_top_n_columns.contains(column_id)
                                         });
-                                        merge_column_top_n_mut(top_n, meta_top_n, top_n_size);
+                                        merge_column_top_n_mut(top_n, meta_top_n)?;
                                     }
                                     (_, None) => {
                                         self.top_n = None;

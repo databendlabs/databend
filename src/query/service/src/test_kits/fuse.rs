@@ -70,8 +70,10 @@ pub async fn generate_snapshot_with_segments(
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
+    let current_cluster_key_meta = fuse_table.cluster_key_meta();
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
+        current_cluster_key_meta,
         Some(fuse_table.get_table_info().ident.seq),
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -220,7 +222,7 @@ async fn generate_blocks(
         block_metas.push(Arc::new(block_meta));
         hlls.push(hll);
     }
-    let stats = SegmentStatistics::new(hlls).to_bytes()?;
+    let stats = SegmentStatistics::new(hlls, Vec::new()).to_bytes()?;
     Ok((block_metas, stats))
 }
 
@@ -277,7 +279,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         locations,
         None,
         None,
-        None,
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
@@ -297,6 +298,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     ];
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
+        snapshot_1.cluster_key_meta.clone(),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -460,7 +462,6 @@ pub async fn generate_snapshot_v4(
         schema.as_ref().clone(),
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
-        None,
         None,
         None,
         TestFixture::default_table_meta_timestamps(),

@@ -29,7 +29,7 @@ use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
-use log::info;
+use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
@@ -107,7 +107,6 @@ impl BlockPruner {
                             prune_result,
                             block_meta.clone(),
                             block_meta.row_count,
-                            false,
                             true,
                         )
                         .await?;
@@ -138,7 +137,7 @@ impl BlockPruner {
 
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
-        info!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -240,7 +239,6 @@ impl BlockPruner {
                                 prune_result,
                                 block_meta,
                                 row_count,
-                                true,
                                 false,
                             )
                             .await
@@ -283,7 +281,6 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
-                        page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
@@ -303,7 +300,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -313,7 +310,6 @@ impl BlockPruner {
         mut prune_result: BlockPruneResult,
         block_meta: Arc<BlockMeta>,
         row_count: u64,
-        apply_page_pruner: bool,
         limit_before_bloom: bool,
     ) -> Result<BlockPruneResult> {
         if !prune_result.keep {
@@ -324,7 +320,6 @@ impl BlockPruner {
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
-        let page_pruner = pruning_ctx.page_pruner.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
@@ -366,12 +361,6 @@ impl BlockPruner {
             } else if !limit_before_bloom {
                 prune_result.keep = limit_pruner.within_limit(row_count);
             }
-        }
-
-        if prune_result.keep && apply_page_pruner {
-            let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-            prune_result.keep = keep;
-            prune_result.range = range;
         }
 
         if prune_result.keep {
@@ -452,7 +441,6 @@ impl BlockPruner {
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
-        let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let start = Instant::now();
 
@@ -491,26 +479,22 @@ impl BlockPruner {
                     continue;
                 }
 
-                let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-                if keep {
-                    result.push((
-                        BlockMetaIndex {
-                            segment_idx: segment_location.segment_idx,
-                            block_idx,
-                            range,
-                            page_size: block_meta.page_size() as usize,
-                            block_id: block_id_in_segment(block_num, block_idx),
-                            block_location: block_meta.as_ref().location.0.clone(),
-                            segment_location: segment_location.location.0.clone(),
-                            snapshot_location: segment_location.snapshot_loc.clone(),
-                            matched_rows: None,
-                            matched_scores: None,
-                            vector_scores: None,
-                            virtual_block_meta: None,
-                        },
-                        block_meta.clone(),
-                    ))
-                }
+                result.push((
+                    BlockMetaIndex {
+                        segment_idx: segment_location.segment_idx,
+                        block_idx,
+                        range: None,
+                        block_id: block_id_in_segment(block_num, block_idx),
+                        block_location: block_meta.as_ref().location.0.clone(),
+                        segment_location: segment_location.location.0.clone(),
+                        snapshot_location: segment_location.snapshot_loc.clone(),
+                        matched_rows: None,
+                        matched_scores: None,
+                        vector_scores: None,
+                        virtual_block_meta: None,
+                    },
+                    block_meta.clone(),
+                ))
             }
         }
 
@@ -519,7 +503,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
 
         Ok(result)
     }

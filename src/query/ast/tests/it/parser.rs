@@ -1211,6 +1211,17 @@ SELECT * from s;"#,
 }
 
 #[test]
+fn test_hilbert_cluster_type_is_rejected() {
+    for sql in [
+        "create table t(a int, b int) cluster by hilbert(a, b)",
+        "alter table t cluster by hilbert(a, b)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stmt-error.txt").unwrap();

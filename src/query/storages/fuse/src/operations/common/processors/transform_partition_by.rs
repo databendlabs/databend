@@ -174,17 +174,13 @@ impl AccumulatingTransform for TransformPartitionBy {
         if let Some(meta) = replaced_block_meta {
             let meta = SerializeDataMeta::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("Invalid partitioned UPDATE block metadata"))?;
-            let SerializeDataMeta::SerializeBlock(mut serialize_block) = meta else {
+            let SerializeDataMeta::SerializeBlock(serialize_block) = meta else {
                 return Err(ErrorCode::Internal(
                     "Invalid partitioned UPDATE block metadata",
                 ));
             };
-            let mut insert_rows = serialize_block.insert_rows;
-            serialize_block.insert_rows = 0;
             for block in &mut blocks {
-                block.replace_meta(Box::new(SerializeDataMeta::SerializeAppend {
-                    insert_rows: std::mem::take(&mut insert_rows),
-                }));
+                block.replace_meta(Box::new(SerializeDataMeta::SerializeAppend));
             }
             blocks.insert(
                 0,
@@ -250,6 +246,7 @@ mod tests {
             BlockMetaIndex::default(),
             ClusterStatsGenType::Generally,
             2,
+            0,
         ));
         let block = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0, 0, 1, 1, 2]),
@@ -264,22 +261,15 @@ mod tests {
         assert!(matches!(
             SerializeDataMeta::downcast_from(blocks[0].take_meta().unwrap()),
             Some(SerializeDataMeta::SerializeBlock(SerializeBlock {
-                insert_rows: 0,
+                logical_updated_rows: 2,
+                logical_deleted_rows: 0,
                 ..
             }))
         ));
-        assert_eq!(
-            blocks[1..]
-                .iter_mut()
-                .map(|block| {
-                    match SerializeDataMeta::downcast_from(block.take_meta().unwrap()).unwrap() {
-                        SerializeDataMeta::SerializeAppend { insert_rows } => insert_rows,
-                        _ => unreachable!(),
-                    }
-                })
-                .collect::<Vec<_>>(),
-            vec![2, 0, 0]
-        );
+        assert!(blocks[1..].iter_mut().all(|block| matches!(
+            SerializeDataMeta::downcast_from(block.take_meta().unwrap()),
+            Some(SerializeDataMeta::SerializeAppend)
+        )));
         assert_eq!(
             blocks[1..]
                 .iter()
@@ -292,6 +282,7 @@ mod tests {
             BlockMetaIndex::default(),
             ClusterStatsGenType::Generally,
             1,
+            0,
         ));
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1])])
             .add_meta(Some(Box::new(meta)))?;
@@ -302,7 +293,7 @@ mod tests {
         assert_eq!(blocks[1].num_rows(), 1);
         assert!(matches!(
             SerializeDataMeta::downcast_from(blocks[1].take_meta().unwrap()),
-            Some(SerializeDataMeta::SerializeAppend { insert_rows: 1 })
+            Some(SerializeDataMeta::SerializeAppend)
         ));
         Ok(())
     }

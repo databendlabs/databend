@@ -564,6 +564,7 @@ mod tests {
     fn test_sampled_scan_clears_top_n_stats() -> Result<()> {
         let column = Symbol::new(1);
         let top_n = ColumnTopN {
+            capacity: 1,
             values: vec![ColumnTopNEntry {
                 scalar: Scalar::Number(NumberScalar::UInt64(42)),
                 count: 37,

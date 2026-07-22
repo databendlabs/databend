@@ -39,7 +39,6 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::FuseTable;
 use crate::io::StreamBlockProperties;
@@ -279,8 +278,7 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         input_schema: Arc<DataSchema>,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_type = self.physical_cluster_type();
-        if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
+        if self.physical_cluster_key_id().is_none() {
             return Ok(ClusterStatsGenerator::default());
         }
 
@@ -382,7 +380,6 @@ impl FuseTable {
             self.physical_cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
-            None,
             level,
             block_thresholds,
             operators,

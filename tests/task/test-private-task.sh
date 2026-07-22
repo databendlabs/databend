@@ -236,7 +236,47 @@ check_response_error "$response"
 response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task RESUME")
 check_response_error "$response"
 
-sleep 9
+sleep 1
+
+response=$(query_sql_with_auth "root:" "SELECT next_schedule_time, last_committed_on FROM system.tasks WHERE name = 'overlap_schedule_task'")
+check_response_error "$response"
+initial_next_schedule_time=$(echo "$response" | jq -r '.data[0][0]')
+initial_last_committed_on=$(echo "$response" | jq -r '.data[0][1]')
+
+sleep 3
+
+response=$(query_sql_with_auth "root:" "SELECT if(next_schedule_time > to_timestamp('${initial_next_schedule_time}'), 1, 0), if(last_committed_on > to_timestamp('${initial_last_committed_on}'), 1, 0) FROM system.tasks WHERE name = 'overlap_schedule_task'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -c '.data')
+expected='[["1","1"]]'
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Interval scheduling advances next_schedule_time and last_committed_on"
+else
+    echo "❌ Expected interval scheduling metadata to advance"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SHOW TASKS")
+check_response_error "$response"
+show_next_schedule_time=$(echo "$response" | jq -r '.data[] | select(.[1] == "overlap_schedule_task") | .[13]')
+show_last_committed_on=$(echo "$response" | jq -r '.data[] | select(.[1] == "overlap_schedule_task") | .[14]')
+if [ -n "$show_next_schedule_time" ] &&
+    [ "$show_next_schedule_time" != "$initial_next_schedule_time" ] &&
+    [ -n "$show_last_committed_on" ] &&
+    [ "$show_last_committed_on" != "$initial_last_committed_on" ]; then
+    echo "✅ SHOW TASKS exposes advancing scheduling metadata"
+else
+    echo "❌ Expected SHOW TASKS scheduling metadata to advance"
+    echo "Initial next schedule: $initial_next_schedule_time"
+    echo "SHOW next schedule   : $show_next_schedule_time"
+    echo "Initial commit       : $initial_last_committed_on"
+    echo "SHOW commit          : $show_last_committed_on"
+    exit 1
+fi
+
+sleep 5
 
 response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task SUSPEND")
 check_response_error "$response"
@@ -264,6 +304,132 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SCHEDULED'), count(*) - count(DISTINCT run_id) FROM system_task.task_run WHERE task_name = 'overlap_schedule_task'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -c '.data')
+expected='[["0","0"]]'
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Each trigger creates one history row with a unique run_id"
+else
+    echo "❌ Expected no duplicate scheduled/history rows"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SKIPPED' AND error_message LIKE 'OVERLAPPING_EXECUTION:%') FROM system_task.task_run WHERE task_name = 'overlap_schedule_task'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" -ge 1 ]; then
+    echo "✅ Overlapping schedule windows are recorded as SKIPPED"
+else
+    echo "❌ Expected overlapping schedule windows to record a skip reason"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT * FROM system.task_history WHERE name = 'overlap_schedule_task' LIMIT 1")
+check_response_error "$response"
+check_task_history_schema "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK when_false_task SCHEDULE = 500 MILLISECOND WHEN 1 = 0 AS INSERT INTO t1 VALUES (99)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK when_false_task RESUME")
+check_response_error "$response"
+
+sleep 2
+
+response=$(query_sql_with_auth "root:" "ALTER TASK when_false_task SUSPEND")
+check_response_error "$response"
+
+sleep 1
+
+response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SKIPPED' AND error_message LIKE 'WHEN_CONDITION_FALSE:%'), count_if(state IN ('EXECUTING', 'SUCCEEDED', 'FAILED')) FROM system_task.task_run WHERE task_name = 'when_false_task'")
+check_response_error "$response"
+skipped_count=$(echo "$response" | jq -r '.data[0][0]')
+executed_count=$(echo "$response" | jq -r '.data[0][1]')
+if [ "$skipped_count" -ge 2 ] && [ "$executed_count" = "0" ]; then
+    echo "✅ False WHEN conditions are recorded without executing the task"
+else
+    echo "❌ Expected false WHEN conditions to produce only SKIPPED history"
+    echo "Skipped : $skipped_count"
+    echo "Executed: $executed_count"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT state, exception_code, exception_text FROM system.task_history WHERE name = 'when_false_task' ORDER BY scheduled_time DESC LIMIT 1")
+check_response_error "$response"
+history_state=$(echo "$response" | jq -r '.data[0][0]')
+history_code=$(echo "$response" | jq -r '.data[0][1]')
+history_reason=$(echo "$response" | jq -r '.data[0][2]')
+if [ "$history_state" = "SKIPPED" ] &&
+    [ "$history_code" = "0" ] &&
+    [[ "$history_reason" == WHEN_CONDITION_FALSE:* ]]; then
+    echo "✅ system.task_history explains why the task was skipped"
+else
+    echo "❌ Expected public task history to expose the skip reason"
+    echo "State : $history_state"
+    echo "Code  : $history_code"
+    echo "Reason: $history_reason"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'when_false_task', ERROR_ONLY => TRUE)")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Skipped task runs are excluded from error-only history"
+else
+    echo "❌ Expected error-only history to exclude skipped task runs"
+    echo "Actual: $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count_if(c1 = 99) FROM t1")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ False WHEN condition did not execute task SQL"
+else
+    echo "❌ Task SQL executed despite a false WHEN condition"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE TASK when_error_task SCHEDULE = 500 MILLISECOND WHEN EXISTS (SELECT 1 FROM missing_when_source) AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK when_error_task RESUME")
+check_response_error "$response"
+
+sleep 2
+
+response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'FAILED' AND error_code != 0 AND error_message LIKE 'WHEN_CONDITION_EVALUATION_ERROR:%') FROM system_task.task_run WHERE task_name = 'when_error_task'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" -ge 2 ]; then
+    echo "✅ WHEN evaluation errors are recorded and later schedules continue"
+else
+    echo "❌ Expected repeated WHEN evaluation failures in task history"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT state FROM system.tasks WHERE name = 'when_error_task'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "Started" ]; then
+    echo "✅ WHEN evaluation errors do not silently stop the scheduler"
+else
+    echo "❌ Expected task scheduler to remain started after WHEN errors"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "ALTER TASK when_error_task SUSPEND")
+check_response_error "$response"
 
 response=$(query_sql_with_auth "root:" "CREATE TABLE t_failed_task_recovery (c1 int)")
 check_response_error "$response"
@@ -536,6 +702,32 @@ if [ "$actual" = "$expected" ]; then
 else
     echo "❌ Expected private task fan-out to trigger all successors"
     echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'SKIPPED', error_code = 0, error_message = 'OVERLAPPING_EXECUTION: test', completed_at = to_timestamp(4102444800) WHERE task_name = 'fanout_root'")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "EXECUTE TASK fanout_root")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM fanout_sink")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" = "6" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual" = "6" ]; then
+    echo "✅ Overlap skips do not mask successful parent runs"
+else
+    echo "❌ Expected successful parent run to release all successors after an overlap skip"
+    echo "Expected: 6"
     echo "Actual  : $actual"
     exit 1
 fi

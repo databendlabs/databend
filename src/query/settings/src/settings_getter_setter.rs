@@ -1095,21 +1095,13 @@ impl Settings {
         Ok(if v == 0 { None } else { Some(v) })
     }
 
+    pub fn get_enable_stream_batch_snapshot_forward_scan(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_stream_batch_snapshot_forward_scan")? != 0)
+    }
+
     /// # Safety
     pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
         unsafe { self.unchecked_set_setting(String::from("warehouse"), warehouse) }
-    }
-
-    pub fn get_hilbert_num_range_ids(&self) -> Result<u64> {
-        self.try_get_u64("hilbert_num_range_ids")
-    }
-
-    pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
-        self.try_get_u64("hilbert_sample_size_per_block")
-    }
-
-    pub fn get_hilbert_clustering_min_bytes(&self) -> Result<u64> {
-        self.try_get_u64("hilbert_clustering_min_bytes")
     }
 
     pub fn get_copy_dedup_full_path_by_default(&self) -> Result<bool> {

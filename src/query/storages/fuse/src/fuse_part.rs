@@ -121,13 +121,6 @@ impl FuseBlockPartInfo {
     pub fn block_meta_index(&self) -> Option<&BlockMetaIndex> {
         self.block_meta_index.as_ref()
     }
-
-    pub fn page_size(&self) -> usize {
-        self.block_meta_index
-            .as_ref()
-            .map(|meta| meta.page_size)
-            .unwrap_or(self.nums_rows)
-    }
 }
 
 /// Fuse table lazy partition information.

@@ -89,6 +89,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
     r
 });
 
@@ -102,6 +103,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
     r
 });
 
@@ -182,6 +184,13 @@ impl std::str::FromStr for ClusterType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cluster_type_is_reserved_and_internal() {
+        assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
+        assert!(is_reserved_opt_key("CLUSTER_TYPE"));
+        assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+    }
 
     #[test]
     fn test_analyze_top_n_size_from_options() {
