@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::LineageDetail;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
@@ -110,6 +111,7 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_table_lvt/"           => LeastVisibleTime,
         "__fd_table_lock/"          => LockMeta,
         "__fd_vacuum_watermark_ts/" => VacuumWatermark,
+        "__fd_lineage/"             => LineageDetail,
 
         // schema - sequence
         "__fd_sequence/"            => SequenceMeta,

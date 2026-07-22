@@ -1176,6 +1176,7 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
     "__fd_dictionaries",
     "__fd_file_formats",
     "__fd_index",
+    "__fd_lineage",
     "__fd_mask_policy_apply_table_id",
     "__fd_network_policies",
     "__fd_object_owners",
