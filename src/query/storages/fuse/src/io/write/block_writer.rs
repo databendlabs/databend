@@ -267,6 +267,7 @@ impl BlockBuilder {
             file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),

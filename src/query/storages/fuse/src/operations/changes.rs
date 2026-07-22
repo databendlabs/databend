@@ -1152,6 +1152,7 @@ mod tests {
             file_size: block_size,
             col_stats,
             col_metas: HashMap::new(),
+            column_groups: vec![],
             cluster_stats: None,
             location: (test_block_path(uuid), 0),
             bloom_filter_index_location: None,

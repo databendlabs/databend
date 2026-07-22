@@ -170,6 +170,20 @@ pub struct DraftVirtualBlockMeta {
     pub virtual_location: Location,
 }
 
+/// Metadata of one physical column-group file in a logical block.
+///
+/// A file may still contain column chunks that are no longer active. Readers must only use the
+/// chunks listed in [`Self::active_column_ids`].
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct ColumnGroupFileMeta {
+    pub active_column_ids: Vec<ColumnId>,
+    pub location: Location,
+    pub format_version: FormatVersion,
+    pub file_size: u64,
+    pub uncompressed_size: u64,
+    pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -180,6 +194,12 @@ pub struct BlockMeta {
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Physical files that contain the active columns of this logical block.
+    ///
+    /// An empty vector is the legacy single-file representation described by `location`,
+    /// `file_size`, `block_size`, and `col_metas`.
+    #[serde(default)]
+    pub column_groups: Vec<ColumnGroupFileMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     pub location: Location,
@@ -233,6 +253,7 @@ impl BlockMeta {
             file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats,
             location,
             bloom_filter_index_location,
@@ -372,6 +393,7 @@ impl BlockMeta {
             file_size: s.file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
@@ -404,6 +426,7 @@ impl BlockMeta {
             file_size: s.file_size,
             col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
@@ -432,5 +455,48 @@ impl From<(v1::SegmentInfo, &[TableField])> for SegmentInfo {
 impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
     fn from((v, fields): (v0::SegmentInfo, &[TableField])) -> Self {
         SegmentInfo::from_v0(v, fields)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_legacy_block_meta_without_column_groups() {
+        let block_meta = BlockMeta::new(
+            10,
+            300,
+            30,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("old.parquet".to_string(), 2),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Zstd,
+            None,
+        );
+        let location = block_meta.location.clone();
+        let mut value = serde_json::to_value(block_meta).unwrap();
+        assert!(
+            value
+                .as_object_mut()
+                .unwrap()
+                .remove("column_groups")
+                .is_some()
+        );
+
+        let decoded: BlockMeta = serde_json::from_value(value).unwrap();
+        assert!(decoded.column_groups.is_empty());
+        assert_eq!(decoded.location, location);
     }
 }
