@@ -267,29 +267,6 @@ fn add_matched_mutation_workers(
     ));
 }
 
-#[cfg(test)]
-mod mutation_worker_tests {
-    use super::*;
-
-    #[test]
-    fn test_matched_mutation_worker_width() -> Result<()> {
-        for worker_width in [1, 4] {
-            let mut pipeline = Pipeline::create();
-            pipeline.add_source(databend_common_pipeline::sources::EmptySource::create, 1)?;
-            add_matched_mutation_workers(&mut pipeline, 0, worker_width);
-
-            let worker_count = pipeline
-                .graph
-                .node_weights()
-                .filter(|node| unsafe { node.proc.name() == "MatchedBlockMutationWorker" })
-                .count();
-            assert_eq!(worker_count, worker_width);
-            assert_eq!(pipeline.output_len(), worker_width);
-        }
-        Ok(())
-    }
-}
-
 impl PhysicalPlanBuilder {
     pub async fn build_mutation(
         &mut self,
@@ -1128,5 +1105,28 @@ fn build_field_id_to_schema_index(
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod mutation_worker_tests {
+    use super::*;
+
+    #[test]
+    fn test_matched_mutation_worker_width() -> Result<()> {
+        for worker_width in [1, 4] {
+            let mut pipeline = Pipeline::create();
+            pipeline.add_source(databend_common_pipeline::sources::EmptySource::create, 1)?;
+            add_matched_mutation_workers(&mut pipeline, 0, worker_width);
+
+            let worker_count = pipeline
+                .graph
+                .node_weights()
+                .filter(|node| unsafe { node.proc.name() == "MatchedBlockMutationWorker" })
+                .count();
+            assert_eq!(worker_count, worker_width);
+            assert_eq!(pipeline.output_len(), worker_width);
+        }
+        Ok(())
     }
 }
