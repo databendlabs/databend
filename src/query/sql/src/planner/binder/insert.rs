@@ -20,6 +20,7 @@ use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -311,6 +312,12 @@ impl Binder {
             overwrite: *overwrite,
             source: input_source?,
             table_info: None,
+            lineage_target_table_id: GlobalConfig::instance()
+                .query
+                .common
+                .lineage
+                .capture_enabled
+                .then_some(table.get_table_info().ident.table_id),
         };
 
         Ok(Plan::Insert(Box::new(plan)))

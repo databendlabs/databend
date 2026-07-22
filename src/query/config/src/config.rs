@@ -1959,6 +1959,10 @@ pub struct QueryConfig {
     /// Max number of async table hook jobs running concurrently.
     #[clap(long, value_name = "VALUE", default_value = "2")]
     pub table_hook_async_max_concurrency: usize,
+
+    /// Lineage collection config.
+    #[clap(skip)]
+    pub lineage: LineageConfig,
 }
 
 impl Default for QueryConfig {
@@ -1971,6 +1975,27 @@ impl Default for QueryConfig {
         }
 
         Cmd::parse_from(std::iter::once(std::ffi::OsString::from("databend-query"))).query
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LineageConfig {
+    /// Whether to collect lineage for successful DDL/DML commits.
+    #[clap(
+        long,
+        value_name = "VALUE",
+        value_parser = clap::value_parser!(bool),
+        default_value = "false"
+    )]
+    pub capture_enabled: bool,
+}
+
+impl Default for LineageConfig {
+    fn default() -> Self {
+        Self {
+            capture_enabled: false,
+        }
     }
 }
 

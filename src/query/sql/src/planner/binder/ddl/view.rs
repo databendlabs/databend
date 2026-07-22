@@ -18,9 +18,11 @@ use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
@@ -65,6 +67,16 @@ impl Binder {
         };
         query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
+        let query_plan = if GlobalConfig::instance()
+            .query
+            .common
+            .lineage
+            .capture_enabled
+        {
+            Some(Box::new(self.view_query_plan(&query).await?))
+        } else {
+            None
+        };
 
         let plan = CreateViewPlan {
             create_option: create_option.clone().into(),
@@ -74,6 +86,7 @@ impl Binder {
             view_name,
             column_names,
             subquery,
+            query_plan,
         };
         Ok(Plan::CreateView(plan.into()))
     }
@@ -224,5 +237,11 @@ impl Binder {
             view_name,
             schema,
         })))
+    }
+
+    async fn view_query_plan(&mut self, query: &databend_common_ast::ast::Query) -> Result<Plan> {
+        let stmt = Statement::Query(Box::new(query.clone()));
+        let mut bind_context = BindContext::new();
+        self.bind_statement(&mut bind_context, &stmt).await
     }
 }
