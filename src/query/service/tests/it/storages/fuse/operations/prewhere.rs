@@ -44,6 +44,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseColumnGroupPartInfo;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::DataItem;
 use databend_common_storages_fuse::io::WriteSettings;
@@ -332,7 +333,10 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         bloom_filter_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
-        columns_meta: column_metas.clone(),
+        column_groups: vec![FuseColumnGroupPartInfo {
+            location: "test_block".to_string(),
+            columns_meta: column_metas.clone(),
+        }],
         columns_stat: None,
         compression,
         sort_min_max: None,

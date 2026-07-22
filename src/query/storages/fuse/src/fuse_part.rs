@@ -35,6 +35,13 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
 
+/// Projected column chunks to read from one physical column-group file.
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct FuseColumnGroupPartInfo {
+    pub location: String,
+    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+}
+
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct FuseBlockPartInfo {
@@ -45,7 +52,7 @@ pub struct FuseBlockPartInfo {
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
-    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub column_groups: Vec<FuseColumnGroupPartInfo>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
 
@@ -83,7 +90,7 @@ impl FuseBlockPartInfo {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         rows_count: u64,
-        columns_meta: HashMap<ColumnId, ColumnMeta>,
+        column_groups: Vec<FuseColumnGroupPartInfo>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
@@ -95,7 +102,7 @@ impl FuseBlockPartInfo {
             bloom_filter_index_location,
             bloom_filter_index_size,
             create_on,
-            columns_meta,
+            column_groups,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,

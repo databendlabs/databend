@@ -87,6 +87,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::fuse_part::FuseColumnGroupPartInfo;
 use crate::io::BloomIndexRebuilder;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
@@ -1369,29 +1370,68 @@ impl FuseTable {
         (statistics, partitions)
     }
 
+    fn projected_column_groups(
+        meta: &BlockMeta,
+        projected_column_ids: &HashSet<ColumnId>,
+    ) -> Vec<FuseColumnGroupPartInfo> {
+        if meta.column_groups.is_empty() {
+            let columns_meta = projected_column_ids
+                .iter()
+                .filter_map(|column_id| {
+                    meta.col_metas
+                        .get(column_id)
+                        .map(|column_meta| (*column_id, column_meta.clone()))
+                })
+                .collect();
+            return vec![FuseColumnGroupPartInfo {
+                location: meta.location.0.clone(),
+                columns_meta,
+            }];
+        }
+
+        let mut column_groups = Vec::with_capacity(meta.column_groups.len());
+        for group in &meta.column_groups {
+            let mut group_columns_meta = HashMap::new();
+            for column_id in &group.active_column_ids {
+                if !projected_column_ids.contains(column_id) {
+                    continue;
+                }
+                if let Some(column_meta) = group.leaf_column_metas.get(column_id) {
+                    group_columns_meta.insert(*column_id, column_meta.clone());
+                }
+            }
+            if !group_columns_meta.is_empty() {
+                column_groups.push(FuseColumnGroupPartInfo {
+                    location: group.location.0.clone(),
+                    columns_meta: group_columns_meta,
+                });
+            }
+        }
+        column_groups
+    }
+
     pub fn all_columns_part(
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
         meta: &BlockMeta,
     ) -> PartInfoPtr {
-        let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
         let mut spatial_stats = HashMap::new();
 
-        for column_id in meta.col_metas.keys() {
-            // ignore all deleted field
-            if let Some(schema) = schema {
-                if schema.is_column_deleted(*column_id) {
-                    continue;
-                }
-            }
+        let mut projected_column_ids = if meta.column_groups.is_empty() {
+            meta.col_metas.keys().copied().collect::<HashSet<_>>()
+        } else {
+            meta.column_groups
+                .iter()
+                .flat_map(|group| group.active_column_ids.iter().copied())
+                .collect()
+        };
+        if let Some(schema) = schema {
+            projected_column_ids.retain(|column_id| !schema.is_column_deleted(*column_id));
+        }
 
-            // ignore column this block dose not exist
-            if let Some(meta) = meta.col_metas.get(column_id) {
-                columns_meta.insert(*column_id, meta.clone());
-            }
-
+        for column_id in &projected_column_ids {
             if let Some(stat) = meta.col_stats.get(column_id) {
                 columns_stats.insert(*column_id, stat.clone());
             }
@@ -1403,6 +1443,7 @@ impl FuseTable {
                 spatial_stats.insert(*column_id, stats.clone());
             }
         }
+        let column_groups = Self::projected_column_groups(meta, &projected_column_ids);
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
@@ -1420,7 +1461,7 @@ impl FuseTable {
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
             rows_count,
-            columns_meta,
+            column_groups,
             Some(columns_stats),
             meta.compression(),
             sort_min_max,
@@ -1436,17 +1477,14 @@ impl FuseTable {
         top_k: Option<(TopK, Scalar)>,
         projection: &Projection,
     ) -> PartInfoPtr {
-        let mut columns_meta = HashMap::with_capacity(projection.len());
         let mut columns_stat = HashMap::with_capacity(projection.len());
         let mut spatial_stats = HashMap::new();
+        let mut projected_column_ids = HashSet::with_capacity(projection.len());
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
             for column_id in &column.leaf_column_ids {
-                // ignore column this block dose not exist
-                if let Some(column_meta) = meta.col_metas.get(column_id) {
-                    columns_meta.insert(*column_id, column_meta.clone());
-                }
+                projected_column_ids.insert(*column_id);
                 if let Some(column_stat) = meta.col_stats.get(column_id) {
                     columns_stat.insert(*column_id, column_stat.clone());
                 }
@@ -1459,6 +1497,7 @@ impl FuseTable {
                 }
             }
         }
+        let column_groups = Self::projected_column_groups(meta, &projected_column_ids);
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
@@ -1478,7 +1517,7 @@ impl FuseTable {
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
             rows_count,
-            columns_meta,
+            column_groups,
             Some(columns_stat),
             meta.compression(),
             sort_min_max,
@@ -1490,6 +1529,11 @@ impl FuseTable {
 
 #[cfg(test)]
 mod tests {
+    use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
+    use databend_storages_common_table_meta::meta::ColumnMeta;
+    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::SingleColumnMeta;
+
     use super::*;
 
     fn segment_location(segment_idx: usize, location: &str, snapshot_loc: &str) -> SegmentLocation {
@@ -1516,5 +1560,72 @@ mod tests {
         let mut changed_segment = original.clone();
         changed_segment[1].location = ("segment-c".to_string(), 1);
         assert!(!same_segment_locations(&original, &changed_segment));
+    }
+
+    #[test]
+    fn test_projected_column_groups() {
+        let column_1_meta = ColumnMeta::Parquet(SingleColumnMeta::new(0, 10, 3));
+        let stale_column_2_meta = ColumnMeta::Parquet(SingleColumnMeta::new(10, 10, 3));
+        let active_column_2_meta = ColumnMeta::Parquet(SingleColumnMeta::new(0, 12, 3));
+        let mut block_meta = BlockMeta::new(
+            3,
+            30,
+            22,
+            HashMap::new(),
+            HashMap::from([
+                (1, column_1_meta.clone()),
+                (2, active_column_2_meta.clone()),
+            ]),
+            None,
+            ("group-2.parquet".to_string(), 2),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Zstd,
+            None,
+        );
+
+        let legacy_groups = FuseTable::projected_column_groups(&block_meta, &HashSet::from([2]));
+        assert_eq!(legacy_groups.len(), 1);
+        assert_eq!(legacy_groups[0].location, "group-2.parquet");
+        assert_eq!(
+            legacy_groups[0].columns_meta,
+            HashMap::from([(2, active_column_2_meta.clone())])
+        );
+
+        block_meta.column_groups = vec![
+            ColumnGroupFileMeta {
+                active_column_ids: vec![1],
+                location: ("group-1.parquet".to_string(), 2),
+                format_version: 2,
+                file_size: 10,
+                uncompressed_size: 10,
+                leaf_column_metas: HashMap::from([(1, column_1_meta), (2, stale_column_2_meta)]),
+            },
+            ColumnGroupFileMeta {
+                active_column_ids: vec![2],
+                location: block_meta.location.clone(),
+                format_version: 2,
+                file_size: 12,
+                uncompressed_size: 12,
+                leaf_column_metas: HashMap::from([(2, active_column_2_meta.clone())]),
+            },
+        ];
+
+        let column_groups = FuseTable::projected_column_groups(&block_meta, &HashSet::from([2]));
+
+        assert_eq!(column_groups.len(), 1);
+        assert_eq!(column_groups[0].location, "group-2.parquet");
+        assert_eq!(
+            column_groups[0].columns_meta,
+            HashMap::from([(2, active_column_2_meta)])
+        );
     }
 }

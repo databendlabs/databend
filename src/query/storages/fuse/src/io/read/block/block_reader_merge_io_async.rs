@@ -29,10 +29,23 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use crate::BlockReadResult;
+use crate::FuseColumnGroupPartInfo;
 use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 impl BlockReader {
+    #[async_backtrace::framed]
+    pub(crate) async fn read_column_groups_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        column_groups: &[FuseColumnGroupPartInfo],
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
+        self.read_context()
+            .read_column_groups_data_by_merge_io(settings, column_groups, ignore_column_ids)
+            .await
+    }
+
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,
@@ -48,6 +61,26 @@ impl BlockReader {
 }
 
 impl BlockReadContext {
+    #[async_backtrace::framed]
+    pub(crate) async fn read_column_groups_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        column_groups: &[FuseColumnGroupPartInfo],
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
+        let reads = column_groups.iter().map(|group| {
+            self.read_columns_data_by_merge_io(
+                settings,
+                &group.location,
+                &group.columns_meta,
+                ignore_column_ids,
+            )
+        });
+        Ok(BlockReadResult::merge(
+            futures::future::try_join_all(reads).await?,
+        ))
+    }
+
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,

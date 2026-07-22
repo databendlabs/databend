@@ -23,6 +23,7 @@ use log::debug;
 use super::block_format::FuseParquetBlockFormat;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
+use crate::FuseColumnGroupPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
@@ -77,12 +78,10 @@ impl ReadBlockContext {
             .and_then(|source| source.ignore_column_ids.clone());
 
         let data = self
-            .block_format
-            .read_data_by_merge_io(
-                &self.block_read_ctx,
+            .block_read_ctx
+            .read_column_groups_data_by_merge_io(
                 &self.read_settings,
-                &fuse_part.location,
-                &fuse_part.columns_meta,
+                &fuse_part.column_groups,
                 &ignore_column_ids,
             )
             .await?;
@@ -112,15 +111,13 @@ impl ReadBlockContext {
             return Ok(None);
         };
 
-        let data = match self
-            .block_format
-            .read_data_by_merge_io(
-                &index_block_read_ctx,
-                &self.read_settings,
-                &location,
-                &block_meta.columns_meta,
-                &None,
-            )
+        let num_rows = block_meta.num_rows;
+        let column_groups = vec![FuseColumnGroupPartInfo {
+            location: location.clone(),
+            columns_meta: block_meta.columns_meta,
+        }];
+        let data = match index_block_read_ctx
+            .read_column_groups_data_by_merge_io(&self.read_settings, &column_groups, &None)
             .await
         {
             Ok(data) => data,
@@ -134,8 +131,8 @@ impl ReadBlockContext {
             location,
             None,
             0,
-            block_meta.num_rows,
-            block_meta.columns_meta,
+            num_rows,
+            column_groups,
             None,
             index_reader.compression().into(),
             None,

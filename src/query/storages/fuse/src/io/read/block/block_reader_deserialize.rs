@@ -40,15 +40,10 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         let part = FuseBlockPartInfo::from_part(&part)?;
-
-        self.deserialize_chunks(
-            &part.location,
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            chunks,
-            storage_format,
-        )
+        match storage_format {
+            FuseStorageFormat::Parquet => self.deserialize_part(part, chunks, None),
+            FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
+        }
     }
 
     pub fn deserialize_chunks(
