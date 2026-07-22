@@ -74,6 +74,7 @@ impl Binder {
             view_name,
             column_names,
             subquery,
+            query_plan: None,
         };
         Ok(Plan::CreateView(plan.into()))
     }
