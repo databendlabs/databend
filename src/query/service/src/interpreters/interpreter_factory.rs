@@ -16,11 +16,14 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table_context::TableContextStage;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use log::error;
+use log::warn;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
@@ -156,6 +159,23 @@ impl InterpreterFactory {
         let mut access_logger = AccessLogger::create(ctx.clone());
         access_logger.log(plan);
         access_logger.output();
+
+        // Driver stage attachments are an INSERT/REPLACE transport optimization, not a logical
+        // data source. Explicit INSERT/COPY from a named Stage has no context attachment and keeps
+        // its Stage-to-Table lineage.
+        let skip_stage_attachment_lineage = ctx.get_stage_attachment().is_some()
+            && matches!(plan, Plan::CopyIntoTable(_) | Plan::Replace(_));
+        if lineage_enabled() && !skip_stage_attachment_lineage {
+            match plan.query_lineage() {
+                Ok(lineage) => ctx.attach_query_lineage(lineage),
+                Err(err) => {
+                    warn!("Failed to extract query lineage: {:?}", err);
+                    ctx.attach_query_lineage(None);
+                }
+            }
+        } else {
+            ctx.attach_query_lineage(None);
+        }
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
 
@@ -936,4 +956,11 @@ impl InterpreterFactory {
             ))),
         }
     }
+}
+
+fn lineage_enabled() -> bool {
+    GlobalConfig::instance()
+        .log
+        .history
+        .is_table_enabled("lineage_unresolved")
 }

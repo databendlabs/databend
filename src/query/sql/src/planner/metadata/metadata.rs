@@ -83,6 +83,9 @@ pub struct Metadata {
     next_scan_id: usize,
     /// Mappings from base column index to scan id.
     base_column_scan_id: HashMap<Symbol, usize>,
+    /// View output symbols that should remain at the view boundary after the
+    /// view query is expanded into the surrounding plan.
+    view_lineage_source_columns: HashMap<Symbol, ViewLineageSourceColumn>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -408,6 +411,7 @@ impl Metadata {
             source_of_view,
             source_of_index,
             source_of_stage,
+            stream_lineage_source: None,
         };
         self.tables.push(table_entry);
         let table_schema = table_meta.schema_with_stream();
@@ -535,6 +539,30 @@ impl Metadata {
         self.base_column_scan_id.get(&column_index).cloned()
     }
 
+    pub(crate) fn add_view_lineage_source_column(
+        &mut self,
+        column_index: Symbol,
+        source_column: ViewLineageSourceColumn,
+    ) {
+        self.view_lineage_source_columns
+            .insert(column_index, source_column);
+    }
+
+    pub(crate) fn view_lineage_source_column(
+        &self,
+        column_index: Symbol,
+    ) -> Option<&ViewLineageSourceColumn> {
+        self.view_lineage_source_columns.get(&column_index)
+    }
+
+    pub(crate) fn set_stream_lineage_source(
+        &mut self,
+        table_index: IndexType,
+        relation: LineageSourceRelation,
+    ) {
+        self.tables[table_index].stream_lineage_source = Some(relation);
+    }
+
     pub fn replace_all_tables(&mut self, table: Arc<dyn Table>) {
         for entry in self.tables.iter_mut() {
             entry.table = table.clone();
@@ -556,7 +584,27 @@ pub struct TableEntry {
     source_of_index: bool,
 
     source_of_stage: bool,
+    /// Source relation for a transparent stream scan. Stream data columns are
+    /// attributed to this relation; stream metadata columns are excluded.
+    stream_lineage_source: Option<LineageSourceRelation>,
     table: Arc<dyn Table>,
+}
+
+/// Relation identity shared by the explicit Stream relation and View column
+/// lineage annotations. This is a value object, not a generic extension point.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LineageSourceRelation {
+    pub(crate) catalog: String,
+    pub(crate) database: String,
+    pub(crate) name: String,
+    pub(crate) id: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ViewLineageSourceColumn {
+    pub(crate) relation: LineageSourceRelation,
+    pub(crate) name: String,
+    pub(crate) id: ColumnId,
 }
 
 impl Debug for TableEntry {
@@ -618,6 +666,10 @@ impl TableEntry {
     /// Return true if it is bound for an index.
     pub fn is_source_of_index(&self) -> bool {
         self.source_of_index
+    }
+
+    pub(crate) fn stream_lineage_source(&self) -> Option<&LineageSourceRelation> {
+        self.stream_lineage_source.as_ref()
     }
 
     pub fn update_table_index(&mut self, table_index: IndexType) {

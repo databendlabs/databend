@@ -311,6 +311,10 @@ impl Binder {
             overwrite: *overwrite,
             source: input_source?,
             table_info: None,
+            lineage_target_table_id: (table.get_table_info().catalog_info.catalog_type()
+                == databend_common_meta_app::schema::CatalogType::Default)
+                .then_some(table.get_table_info().ident.table_id),
+            lineage_target_catalog_type: table.get_table_info().catalog_info.catalog_type(),
         };
 
         Ok(Plan::Insert(Box::new(plan)))
