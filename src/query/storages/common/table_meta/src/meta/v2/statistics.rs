@@ -69,6 +69,15 @@ pub struct ClusterStatistics {
     )]
     pub max: Vec<Scalar>,
     pub level: i32,
+
+    // Page pruning has been removed, but this field must remain in the persisted wire format so
+    // binaries released before its removal can still deserialize newly written metadata.
+    #[serde(
+        default,
+        serialize_with = "serialize_index_scalar_option_vec",
+        deserialize_with = "deserialize_index_scalar_option_vec"
+    )]
+    pub pages: Option<Vec<Scalar>>,
 }
 
 /// Spatial statistics for geometry columns.
@@ -334,6 +343,7 @@ impl ClusterStatistics {
             min,
             max,
             level,
+            pages: None,
         }
     }
 
@@ -383,6 +393,7 @@ impl ClusterStatistics {
             min,
             max,
             level: v0.level,
+            pages: None,
         })
     }
 }
@@ -506,6 +517,40 @@ where D: serde::Deserializer<'de> {
         .collect::<Result<Vec<_>, _>>()
 }
 
+fn serialize_index_scalar_option_vec<S>(
+    scalars: &Option<Vec<Scalar>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match scalars {
+        Some(scalars) => serialize_index_scalar_vec(scalars, serializer),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_index_scalar_option_vec<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<Scalar>>, D::Error>
+where D: serde::Deserializer<'de> {
+    <Option<Vec<IndexScalar>> as serde::Deserialize>::deserialize(deserializer)?
+        .map(|index_scalars| {
+            index_scalars
+                .into_iter()
+                .map(|index_scalar| {
+                    Scalar::try_from(index_scalar).map_err(|e| {
+                        D::Error::custom(format!(
+                            "Failed to convert IndexScalar to Scalar: {:?}",
+                            e
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()
+}
+
 /// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
 ///
 /// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
@@ -579,49 +624,20 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::converts::meta::IndexScalar;
-
     use super::*;
 
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct LegacyClusterStatistics {
+    #[derive(serde::Serialize)]
+    struct ClusterStatisticsWithoutPages {
         cluster_key_id: u32,
-        min: Vec<IndexScalar>,
-        max: Vec<IndexScalar>,
+        #[serde(serialize_with = "serialize_index_scalar_vec")]
+        min: Vec<Scalar>,
+        #[serde(serialize_with = "serialize_index_scalar_vec")]
+        max: Vec<Scalar>,
         level: i32,
-        pages: Option<Vec<IndexScalar>>,
-    }
-
-    fn legacy_stats() -> LegacyClusterStatistics {
-        LegacyClusterStatistics {
-            cluster_key_id: 7,
-            min: vec![IndexScalar::Number(1_i64.into())],
-            max: vec![IndexScalar::Number(9_i64.into())],
-            level: 2,
-            pages: Some(vec![IndexScalar::Tuple(vec![IndexScalar::Number(
-                1_i64.into(),
-            )])]),
-        }
     }
 
     #[test]
-    fn reads_legacy_cluster_statistics_with_pages() {
-        let bytes = rmp_serde::to_vec_named(&legacy_stats()).unwrap();
-        let stats: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
-
-        assert_eq!(
-            stats,
-            ClusterStatistics::new(
-                7,
-                vec![Scalar::Number(1_i64.into())],
-                vec![Scalar::Number(9_i64.into())],
-                2,
-            )
-        );
-    }
-
-    #[test]
-    fn legacy_reader_accepts_cluster_statistics_without_pages() {
+    fn writes_pages_for_legacy_readers() {
         let stats = ClusterStatistics::new(
             7,
             vec![Scalar::Number(1_i64.into())],
@@ -629,9 +645,22 @@ mod tests {
             2,
         );
         let bytes = rmp_serde::to_vec_named(&stats).unwrap();
-        let legacy: LegacyClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
+        let value: serde_json::Value = rmp_serde::from_slice(&bytes).unwrap();
 
-        assert_eq!(legacy.cluster_key_id, 7);
-        assert_eq!(legacy.pages, None);
+        assert_eq!(value.get("pages"), Some(&serde_json::Value::Null));
+    }
+
+    #[test]
+    fn reads_cluster_statistics_written_without_pages() {
+        let stats = ClusterStatisticsWithoutPages {
+            cluster_key_id: 7,
+            min: vec![Scalar::Number(1_i64.into())],
+            max: vec![Scalar::Number(9_i64.into())],
+            level: 2,
+        };
+        let bytes = rmp_serde::to_vec_named(&stats).unwrap();
+        let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
+
+        assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
     }
 }

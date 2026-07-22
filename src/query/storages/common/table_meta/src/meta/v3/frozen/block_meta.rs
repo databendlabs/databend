@@ -141,8 +141,8 @@ pub struct ClusterStatistics {
     pub max: Vec<LegacyScalar>,
     pub level: i32,
 
-    // Removed from the current `ClusterStatistics`, but retained here to decode
-    // legacy bincode segment metadata without changing its positional layout.
+    // Page pruning is no longer used, but this field is retained to decode legacy bincode segment
+    // metadata without changing its positional layout.
     pub pages: Option<Vec<LegacyScalar>>,
 }
 
@@ -153,17 +153,20 @@ impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
             min,
             max,
             level,
-            pages: _,
+            pages,
         } = value;
         let min: Vec<_> = min.into_iter().map(Scalar::from).collect();
 
         let max: Vec<_> = max.into_iter().map(Scalar::from).collect();
+
+        let pages = pages.map(|pages| pages.into_iter().map(Scalar::from).collect());
 
         Self {
             cluster_key_id,
             min,
             max,
             level,
+            pages,
         }
     }
 }
