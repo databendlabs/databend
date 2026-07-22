@@ -121,6 +121,7 @@ impl AttachTableHandler for RealAttachTableHandler {
                 table_name: plan.table.to_string(),
             },
             table_meta,
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: None,
             table_partition: None,

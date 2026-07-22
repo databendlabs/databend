@@ -158,6 +158,7 @@ impl StreamHandler for RealStreamHandler {
                 comment: plan.comment.clone().unwrap_or("".to_string()),
                 ..Default::default()
             },
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: None,
             table_partition: None,

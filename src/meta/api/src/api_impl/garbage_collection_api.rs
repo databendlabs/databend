@@ -73,6 +73,7 @@ use log::info;
 use log::warn;
 
 use super::index_api::IndexApi;
+use super::lineage_api::append_delete_lineage_for_table_id_txn_ops;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
@@ -662,6 +663,13 @@ async fn gc_dropped_table_by_id(
         // 3)
 
         remove_index_for_dropped_table(kv_api, tenant, table_id_ident, &mut txn).await?;
+        append_delete_lineage_for_table_id_txn_ops(
+            kv_api,
+            tenant,
+            &mut txn,
+            table_id_ident.table_id,
+        )
+        .await?;
 
         // Count removed keys (approximate for DeleteByPrefix operations)
         let mut num_meta_keys_removed = 0;

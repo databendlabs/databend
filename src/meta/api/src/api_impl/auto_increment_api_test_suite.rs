@@ -128,6 +128,7 @@ impl AutoIncrementApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: true,
                 table_properties: None,
                 table_partition: None,

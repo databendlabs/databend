@@ -88,6 +88,7 @@ async fn test_get_table_error_handling() -> anyhow::Result<()> {
             engine: "MEMORY".to_string(),
             ..TableMeta::default()
         },
+        lineage_updates: vec![],
         as_dropped: false,
         table_properties: None,
         table_partition: None,
@@ -222,6 +223,7 @@ async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
             engine: "MEMORY".to_string(),
             ..TableMeta::default()
         },
+        lineage_updates: vec![],
         as_dropped: false,
         table_properties: None,
         table_partition: None,

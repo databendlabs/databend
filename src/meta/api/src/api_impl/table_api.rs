@@ -60,6 +60,10 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::LineageIdentity;
+use databend_common_meta_app::schema::LineageObjectType;
+use databend_common_meta_app::schema::LineageUpdate;
+use databend_common_meta_app::schema::LineageUpdateMode;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
@@ -118,6 +122,7 @@ use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
+use super::lineage_api::append_replace_lineage_txn_ops;
 use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
 use super::schema_api::get_db_by_id_or_err;
@@ -199,6 +204,29 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
         ));
     }
     Ok(())
+}
+
+fn bind_lineage_updates_to_table_id(
+    updates: &[LineageUpdate],
+    table_id: u64,
+) -> Vec<LineageUpdate> {
+    // CREATE TABLE allocates the table id inside meta-service. Lineage writers
+    // can only build downstream-by-name updates before this point, so bind the
+    // downstream object to the allocated table id before appending lineage kv ops.
+    updates
+        .iter()
+        .cloned()
+        .map(|mut update| {
+            if update.downstream.object_type == LineageObjectType::Table
+                && matches!(update.downstream.identity, LineageIdentity::Name { .. })
+            {
+                update.downstream.identity = LineageIdentity::Id {
+                    id: table_id.to_string(),
+                };
+            }
+            update
+        })
+        .collect()
 }
 
 /// TableApi defines APIs for table lifecycle and metadata management.
@@ -481,6 +509,19 @@ where
                         ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start);
                     txn.if_then
                         .extend(vec![txn_put_pb(&storage_ident, &storage_value)]);
+                }
+
+                if !req.lineage_updates.is_empty() {
+                    // Structural lineage (CREATE VIEW / CTAS) should become
+                    // visible atomically with the created table metadata.
+                    let lineage_updates =
+                        bind_lineage_updates_to_table_id(&req.lineage_updates, table_id);
+                    append_replace_lineage_txn_ops(
+                        &mut txn,
+                        lineage_updates
+                            .iter()
+                            .filter(|update| update.mode == LineageUpdateMode::Replace),
+                    );
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
@@ -1100,7 +1141,7 @@ where
                 }
                 tb_meta.drop_on = None;
 
-                let txn_req = TxnRequest::new(
+                let mut txn_req = TxnRequest::new(
                     vec![
                         // db has not to change, i.e., no new table is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
@@ -1123,6 +1164,19 @@ where
                         txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     ],
                 );
+
+                if !req.lineage_updates.is_empty() {
+                    // CTAS creates the table as dropped first and commits it
+                    // later; commit lineage in the same txn that makes it visible.
+                    let lineage_updates =
+                        bind_lineage_updates_to_table_id(&req.lineage_updates, table_id);
+                    append_replace_lineage_txn_ops(
+                        &mut txn_req,
+                        lineage_updates
+                            .iter()
+                            .filter(|update| update.mode == LineageUpdateMode::Replace),
+                    );
+                }
 
                 let txn_response = txn_sender.send_txn(self, txn_req).await?;
                 let succ = match txn_response {
