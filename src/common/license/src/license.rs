@@ -37,6 +37,8 @@ pub enum Feature {
     StorageEncryption,
     #[serde(alias = "stream", alias = "STREAM")]
     Stream,
+    #[serde(alias = "lineage", alias = "LINEAGE")]
+    Lineage,
     #[serde(alias = "table_ref", alias = "TABLE_REF")]
     TableRef,
     #[serde(alias = "attach_table", alias = "ATTACH_TABLE")]
@@ -77,6 +79,7 @@ impl fmt::Display for Feature {
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
+            Feature::Lineage => write!(f, "lineage"),
             Feature::TableRef => write!(f, "table_ref"),
             Feature::AttacheTable => write!(f, "attach_table"),
             Feature::AmendTable => write!(f, "amend_table"),
@@ -212,6 +215,10 @@ mod tests {
             serde_json::from_str::<Feature>("\"Stream\"").unwrap()
         );
         assert_eq!(
+            Feature::Lineage,
+            serde_json::from_str::<Feature>("\"LINEAGE\"").unwrap()
+        );
+        assert_eq!(
             Feature::TableRef,
             serde_json::from_str::<Feature>("\"TableRef\"").unwrap()
         );
@@ -270,6 +277,7 @@ mod tests {
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
                 Feature::Stream,
+                Feature::Lineage,
                 Feature::TableRef,
                 Feature::AttacheTable,
                 Feature::AmendTable,
@@ -281,7 +289,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,license_info,lineage,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
             license_info.to_string()
         );
     }
@@ -297,6 +305,7 @@ mod tests {
             Feature::ComputedColumn,
             Feature::StorageEncryption,
             Feature::Stream,
+            Feature::Lineage,
             Feature::TableRef,
             Feature::AttacheTable,
             Feature::AmendTable,
