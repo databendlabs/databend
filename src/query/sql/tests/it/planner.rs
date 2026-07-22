@@ -40,6 +40,8 @@ use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
 
+mod lineage;
+
 struct LiteRunner(Arc<LiteTableContext>);
 
 struct LiteReplayCaseSpec {
