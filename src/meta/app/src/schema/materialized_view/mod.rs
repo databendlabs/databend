@@ -13,6 +13,25 @@
 // limitations under the License.
 
 //! Materialized view metadata.
+//!
+//! # Source-table mv consistency
+//!
+//! [`SourceTableMVIds`] is both the reverse index for a source table and the
+//! list of MVs that are currently valid for that source. An insert reads this
+//! index, writes the source table and every listed MV as one multi-table
+//! operation, and uses the index sequence as a commit condition. Therefore, a
+//! concurrent MV create, drop, or replacement makes the insert fail and be
+//! planned again with the new MV list.
+//!
+//! A source DDL that can invalidate an MV definition, such as renaming the
+//! source table or changing its columns, must clear this list in the same
+//! transaction as the source change. The empty value is retained so that its
+//! sequence advances. Future inserts no longer update those MVs, an in-progress
+//! insert fails its condition, and querying an MV absent from the list reports
+//! it as invalid. A staged MV built against the old source definition must also
+//! fail validation before publication.
+//!
+//! An invalid MV is recovered by recreating it against the current source definition.
 
 use databend_common_expression::TableSchema;
 use databend_meta_client::types::SeqV;
@@ -61,15 +80,12 @@ impl TableMeta {
 ///
 /// A materialized view reuses table metadata and storage for its materialized
 /// data, and its table ID is also its materialized view ID. [`TableMeta`]
-/// describes the physical storage, while this record stores the defining query
-/// and externally visible logical schema under the same table ID.
+/// describes how the data is stored, while this record stores the defining
+/// query and the columns returned to users under the same table ID.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MVDefinition {
     pub original_query: String,
     pub query: String,
-    /// Logical schema of the user's defining query, used for the externally
-    /// visible column types. `TableMeta::schema` stores the rewritten physical
-    /// schema that Fuse uses to read and write the materialized data.
     pub schema: TableSchema,
 }
 
