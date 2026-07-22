@@ -102,6 +102,7 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
                 Feature::LicenseInfo,
                 Feature::Vacuum,
                 Feature::Stream,
+                Feature::Lineage,
             ]),
         ),
         Duration::from_hours(2),
@@ -137,7 +138,13 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(token, Feature::Stream)
+            .check_enterprise_enabled(token.clone(), Feature::Stream)
+            .is_ok()
+    );
+
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(token, Feature::Lineage)
             .is_ok()
     );
 

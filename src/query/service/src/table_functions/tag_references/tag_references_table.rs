@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_ast::parser::parse_database_ref;
 use databend_common_ast::parser::parse_procedure_ref;
-use databend_common_ast::parser::parse_table_ref;
 use databend_common_ast::parser::parse_udf_ref;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -67,6 +66,7 @@ use databend_common_users::UserApiProvider;
 
 use crate::meta_service_error;
 use crate::sessions::TableContext;
+use crate::table_functions::object_name::TableNameParser;
 
 const TAG_REFERENCES_FUNC: &str = "tag_references";
 const TAG_REFERENCES_ENGINE: &str = "TAG_REFERENCES";
@@ -258,7 +258,9 @@ async fn collect_tag_references(
             )
         }
         "TABLE" => {
-            let (catalog_name, db_name, table_name) = parse_table_name(&ctx, &object_name)?;
+            let table_name_parser = TableNameParser::new(&ctx)?;
+            let (catalog_name, db_name, table_name) =
+                table_name_parser.parse_table_name(&object_name)?;
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
@@ -411,7 +413,9 @@ async fn collect_tag_references(
             )
         }
         "VIEW" => {
-            let (catalog_name, db_name, view_name) = parse_table_name(&ctx, &object_name)?;
+            let table_name_parser = TableNameParser::new(&ctx)?;
+            let (catalog_name, db_name, view_name) =
+                table_name_parser.parse_table_name(&object_name)?;
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
@@ -445,7 +449,9 @@ async fn collect_tag_references(
             )
         }
         "STREAM" => {
-            let (catalog_name, db_name, stream_name) = parse_table_name(&ctx, &object_name)?;
+            let table_name_parser = TableNameParser::new(&ctx)?;
+            let (catalog_name, db_name, stream_name) =
+                table_name_parser.parse_table_name(&object_name)?;
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
@@ -648,33 +654,4 @@ fn parse_database_name(ctx: &Arc<dyn TableContext>, name: &str) -> Result<(Strin
     let database = normalize_identifier(&db_ref.database, &name_resolution_ctx).name;
 
     Ok((catalog, database))
-}
-
-/// Parse table name in format "table", "db.table", or "catalog.db.table".
-/// Correctly handles quoted identifiers and normalizes them according to session settings.
-/// Returns (catalog, database, table).
-fn parse_table_name(ctx: &Arc<dyn TableContext>, name: &str) -> Result<(String, String, String)> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(ErrorCode::BadArguments("object_name must not be empty"));
-    }
-
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let dialect = settings.get_sql_dialect().unwrap_or_default();
-
-    let table_ref = parse_table_ref(trimmed, dialect)
-        .map_err(|e| ErrorCode::BadArguments(format!("Invalid table name '{}': {}", name, e.1)))?;
-
-    let catalog = table_ref
-        .catalog
-        .map(|i| normalize_identifier(&i, &name_resolution_ctx).name)
-        .unwrap_or_else(|| ctx.get_current_catalog());
-    let database = table_ref
-        .database
-        .map(|i| normalize_identifier(&i, &name_resolution_ctx).name)
-        .unwrap_or_else(|| ctx.get_current_database());
-    let table = normalize_identifier(&table_ref.table, &name_resolution_ctx).name;
-
-    Ok((catalog, database, table))
 }
