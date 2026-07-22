@@ -56,7 +56,12 @@ impl TableMeta {
     }
 }
 
-/// Defining query of a materialized view.
+/// Definition associated with a materialized-view table.
+///
+/// A materialized view reuses table metadata and storage for its materialized
+/// data, and its table ID is also its materialized view ID. [`TableMeta`]
+/// describes the physical storage, while this record stores the defining query
+/// and externally visible logical schema under the same table ID.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MVDefinition {
     pub original_query: String,
@@ -67,7 +72,7 @@ pub struct MVDefinition {
     pub schema: TableSchema,
 }
 
-/// Materialized view table ids that depend on one source table.
+/// Reverse index from a source table to its dependent materialized-view table IDs.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SourceTableMVIds {
     mv_ids: Vec<u64>,

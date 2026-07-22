@@ -14,7 +14,6 @@
 
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVDefinitionIdent;
-use databend_common_meta_app::schema::SourceTableMVIds;
 use databend_common_meta_app::schema::SourceTableMVIdsIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
@@ -26,6 +25,7 @@ use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnGetResponse;
 use databend_meta_client::types::protobuf as pb;
+use log::warn;
 
 use crate::deserialize_struct_get_response;
 use crate::kv_pb_api::KVPbApi;
@@ -48,29 +48,27 @@ where
         self.get_pb(&ident).await
     }
 
+    /// Get complete MV definitions and table metadata by source table ID.
+    ///
+    /// The source index is read first, then all definitions and TableMeta records
+    /// are fetched in one `mget_kv` request. An MV is omitted if either record no
+    /// longer exists.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_mv_ids_by_source_table_id(
+    async fn mget_mvs_by_source_table_id(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<Option<SeqV<SourceTableMVIds>>, MetaError> {
-        let ident = SourceTableMVIdsIdent::new(tenant, source_table_id);
-        self.get_pb(&ident).await
-    }
+    ) -> Result<Vec<(u64, SeqV<MVDefinition>, SeqV<TableMeta>)>, MetaError> {
+        let source_ident = SourceTableMVIdsIdent::new(tenant, source_table_id);
+        let Some(source_mv_ids) = self.get_pb(&source_ident).await? else {
+            return Ok(vec![]);
+        };
+        let mv_ids = source_mv_ids.data.mv_ids();
+        if mv_ids.is_empty() {
+            return Ok(vec![]);
+        }
 
-    /// Batch get MV definitions and table metadata in one `mget_kv` request.
-    ///
-    /// Returns one entry for every input MV ID, in the same order. The definition
-    /// and TableMeta are independently `None` when the corresponding KV record
-    /// does not exist.
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn mget_mvs(
-        &self,
-        tenant: &Tenant,
-        mv_ids: &[u64],
-    ) -> Result<Vec<(u64, Option<SeqV<MVDefinition>>, Option<SeqV<TableMeta>>)>, MetaError> {
         let mut keys = Vec::with_capacity(mv_ids.len() * 2);
         keys.extend(
             mv_ids
@@ -97,13 +95,17 @@ where
             .iter()
             .zip(definition_responses.into_iter().zip(table_meta_responses))
         {
-            let (definition_ident, definition) =
+            let (_, definition) =
                 deserialize_struct_get_response::<MVDefinitionIdent>(definition_response)?;
-            let (table_ident, table_meta) =
-                deserialize_struct_get_response::<TableId>(table_meta_response)?;
-            assert_eq!(definition_ident, MVDefinitionIdent::new(tenant, *mv_id));
-            assert_eq!(table_ident, TableId::new(*mv_id));
+            let (_, table_meta) = deserialize_struct_get_response::<TableId>(table_meta_response)?;
 
+            let (Some(definition), Some(table_meta)) = (definition, table_meta) else {
+                warn!(
+                    "source table {} references MV {} with incomplete metadata",
+                    source_table_id, mv_id
+                );
+                continue;
+            };
             mvs.push((*mv_id, definition, table_meta));
         }
 

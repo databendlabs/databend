@@ -128,6 +128,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SourceTableMVIdsIdent;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -1741,7 +1742,7 @@ impl SchemaApiTestSuite {
                 definition
             );
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                mt.get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                     .await?
                     .is_none()
             );
@@ -1760,13 +1761,15 @@ impl SchemaApiTestSuite {
             assert!(published_table.data.drop_on.is_none());
 
             let mv_ids = mt
-                .get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                .get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                 .await?
                 .expect("source index must exist");
             assert_eq!(mv_ids.data.mv_ids(), &[mv_id]);
 
-            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
-            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+            let mvs = mt
+                .mget_mvs_by_source_table_id(&tenant, source_table_id)
+                .await?;
+            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
                 panic!("one complete MV must be returned");
             };
             assert_eq!(*got_mv_id, mv_id);
@@ -1789,13 +1792,15 @@ impl SchemaApiTestSuite {
 
             assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_some());
             let mv_ids = mt
-                .get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                .get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                 .await?
                 .expect("source index must exist");
             assert_eq!(mv_ids.data.mv_ids(), &[replacement.table_id]);
 
-            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
-            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+            let mvs = mt
+                .mget_mvs_by_source_table_id(&tenant, source_table_id)
+                .await?;
+            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
                 panic!("the replacement MV must be returned");
             };
             assert_eq!(*got_mv_id, replacement.table_id);
@@ -1823,7 +1828,7 @@ impl SchemaApiTestSuite {
                     .is_some()
             );
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                mt.get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                     .await?
                     .expect("old source index must exist")
                     .data
@@ -1831,13 +1836,18 @@ impl SchemaApiTestSuite {
                     .is_empty()
             );
             let mv_ids = mt
-                .get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
+                .get_pb(&SourceTableMVIdsIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
                 .await?
                 .expect("replacement source index must exist");
             assert_eq!(mv_ids.data.mv_ids(), &[new_source_replacement.table_id]);
 
-            let mvs = mt.mget_mvs(&tenant, mv_ids.data.mv_ids()).await?;
-            let [(got_mv_id, Some(got_definition), Some(got_table_meta))] = mvs.as_slice() else {
+            let mvs = mt
+                .mget_mvs_by_source_table_id(&tenant, replacement_source_table_id)
+                .await?;
+            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
                 panic!("the new-source replacement MV must be returned");
             };
             assert_eq!(*got_mv_id, new_source_replacement.table_id);
@@ -1862,7 +1872,7 @@ impl SchemaApiTestSuite {
                 .await?;
 
             assert_eq!(
-                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                mt.get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                     .await?
                     .expect("old source index must exist")
                     .data
@@ -1888,7 +1898,7 @@ impl SchemaApiTestSuite {
                     .is_none()
             );
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                mt.get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                     .await?
                     .expect("old source index must exist")
                     .data
@@ -1919,7 +1929,7 @@ impl SchemaApiTestSuite {
                     .is_none()
             );
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, source_table_id)
+                mt.get_pb(&SourceTableMVIdsIdent::new(&tenant, source_table_id))
                     .await?
                     .expect("old source index must exist")
                     .data
@@ -1927,11 +1937,14 @@ impl SchemaApiTestSuite {
                     .is_empty()
             );
             assert_eq!(
-                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
-                    .expect("new source index must exist")
-                    .data
-                    .mv_ids(),
+                mt.get_pb(&SourceTableMVIdsIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
+                .await?
+                .expect("new source index must exist")
+                .data
+                .mv_ids(),
                 &[new_source_replacement.table_id]
             );
         }
@@ -1977,9 +1990,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
-                    .is_some()
+                mt.get_pb(&SourceTableMVIdsIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
+                .await?
+                .is_some()
             );
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
@@ -1992,9 +2008,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
-                    .is_none()
+                mt.get_pb(&SourceTableMVIdsIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
+                .await?
+                .is_none()
             );
         }
 
@@ -2022,9 +2041,12 @@ impl SchemaApiTestSuite {
                     .is_none()
             );
             assert!(
-                mt.get_mv_ids_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
-                    .is_none()
+                mt.get_pb(&SourceTableMVIdsIdent::new(
+                    &tenant,
+                    replacement_source_table_id,
+                ))
+                .await?
+                .is_none()
             );
         }
 
