@@ -47,6 +47,7 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 #[cfg(feature = "storage-stage")]
@@ -358,6 +359,7 @@ impl ReplaceInterpreter {
             });
         }
 
+        let lineage_updates = build_query_lineage_updates(&self.ctx, None).await?;
         root = PhysicalPlan::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
@@ -370,6 +372,7 @@ impl ReplaceInterpreter {
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             table_meta_timestamps,
             recluster_info: None,
+            lineage_updates,
             meta: PhysicalPlanMeta::new("CommitSink"),
         });
 

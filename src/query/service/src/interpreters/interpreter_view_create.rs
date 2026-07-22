@@ -27,6 +27,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::util::check_view_circular_dependency;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -115,6 +116,7 @@ impl Interpreter for CreateViewInterpreter {
         };
         options.insert(QUERY.to_string(), subquery);
 
+        let lineage_updates = build_query_lineage_updates(&self.ctx, None).await?;
         let plan = CreateTableReq {
             create_option: self.plan.create_option,
             catalog_name: if self.plan.create_option.is_overriding() {
@@ -132,6 +134,7 @@ impl Interpreter for CreateViewInterpreter {
                 options,
                 ..Default::default()
             },
+            lineage_updates,
             as_dropped: false,
             table_properties: None,
             table_partition: None,

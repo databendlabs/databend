@@ -69,6 +69,7 @@ use log::info;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
@@ -240,6 +241,7 @@ impl CreateTableInterpreter {
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
+        let lineage_updates = build_query_lineage_updates(&self.ctx, Some(&table_info)).await?;
 
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
@@ -288,6 +290,7 @@ impl CreateTableInterpreter {
                         "create_table_as_select {} success, commit table meta data by table id {}",
                         qualified_table_name, table_id
                     );
+                    let lineage_updates = lineage_updates.clone();
                     let fut = async move {
                         let req = CommitTableMetaReq {
                             name_ident: TableNameIdent {
@@ -299,6 +302,7 @@ impl CreateTableInterpreter {
                             table_id,
                             prev_table_id,
                             orphan_table_name,
+                            lineage_updates,
                         };
                         catalog.commit_table_meta(req).await
                     };
@@ -536,6 +540,7 @@ impl CreateTableInterpreter {
                 table_name: self.plan.table.to_string(),
             },
             table_meta,
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {

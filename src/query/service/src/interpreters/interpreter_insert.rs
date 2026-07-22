@@ -61,6 +61,8 @@ use crate::clusters::ClusterHelper;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::attach_query_lineage_on_finished;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::ConstantTableScan;
@@ -468,6 +470,8 @@ impl Interpreter for InsertInterpreter {
                     build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
                         .await?;
 
+                let lineage_updates =
+                    build_query_lineage_updates(&self.ctx, Some(table.get_table_info())).await?;
                 table.commit_insertion(
                     self.ctx.clone(),
                     &mut build_res.main_pipeline,
@@ -478,6 +482,7 @@ impl Interpreter for InsertInterpreter {
                     unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                     table_meta_timestamps,
                 )?;
+                attach_query_lineage_on_finished(&mut build_res.main_pipeline, lineage_updates);
 
                 //  Execute the hook operator.
                 if self.plan.branch.is_none() {

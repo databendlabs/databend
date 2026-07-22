@@ -440,6 +440,7 @@ impl ReclusterTableInterpreter {
             deduplicated_label: None,
             table_meta_timestamps,
             recluster_info,
+            lineage_updates: vec![],
             meta: PhysicalPlanMeta::new("CommitSink"),
         })
     }

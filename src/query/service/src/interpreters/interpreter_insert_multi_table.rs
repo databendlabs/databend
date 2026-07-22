@@ -44,6 +44,8 @@ use databend_common_storages_fuse::FuseTable;
 use super::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::attach_query_lineage_on_finished;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CastSchema;
 use crate::physical_plans::ChunkAppendData;
@@ -107,6 +109,9 @@ impl Interpreter for InsertMultiTableInterpreter {
         let physical_plan = self.build_physical_plan(false).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        let lineage_updates = build_query_lineage_updates(&self.ctx, None).await?;
+        attach_query_lineage_on_finished(&mut build_res.main_pipeline, lineage_updates);
+
         // Execute hook.
         if self
             .ctx

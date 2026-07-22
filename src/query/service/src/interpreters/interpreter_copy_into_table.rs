@@ -67,6 +67,8 @@ use log::info;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::attach_query_lineage_on_finished;
+use crate::interpreters::common::build_query_lineage_updates;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CopyIntoTable;
@@ -874,6 +876,7 @@ impl CopyIntoTableInterpreter {
                 path_prefix,
             )?;
 
+            let lineage_updates = build_query_lineage_updates(&ctx, None).await?;
             to_table.commit_insertion(
                 ctx.clone(),
                 main_pipeline,
@@ -884,6 +887,7 @@ impl CopyIntoTableInterpreter {
                 deduplicated_label,
                 table_meta_timestamps,
             )?;
+            attach_query_lineage_on_finished(main_pipeline, lineage_updates);
         }
 
         // Purge files.
