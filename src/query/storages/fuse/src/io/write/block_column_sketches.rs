@@ -21,6 +21,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::LARGE_STRING_BYTES_THRESHOLD;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
 use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -43,7 +45,6 @@ pub fn build_column_hlls(
 
 pub struct BlockColumnSketchesBuilder {
     builders: Vec<ColumnSketchesBuilder>,
-    dropped_top_n: Vec<ColumnId>,
 }
 
 pub struct BlockColumnSketches {
@@ -59,8 +60,6 @@ pub struct ColumnSketchesBuilder {
     pub hll: Option<ColumnNDVEstimator>,
     pub top_n: Option<ColumnTopN>,
     pub count_min_sketch: Option<ColumnCountMinSketch>,
-    streaming_string_bytes: usize,
-    streaming_string_rows: usize,
 }
 
 impl BlockColumnSketchesBuilder {
@@ -95,8 +94,6 @@ impl BlockColumnSketchesBuilder {
                 hll: Some(create_column_ndv_estimator(&field.data_type().into())),
                 top_n: column_top_n,
                 count_min_sketch,
-                streaming_string_bytes: 0,
-                streaming_string_rows: 0,
             });
         }
 
@@ -127,28 +124,24 @@ impl BlockColumnSketchesBuilder {
                     hll: None,
                     top_n: column_top_n,
                     count_min_sketch,
-                    streaming_string_bytes: 0,
-                    streaming_string_rows: 0,
                 });
             }
         }
 
-        Ok(BlockColumnSketchesBuilder {
-            builders,
-            dropped_top_n: vec![],
-        })
+        Ok(BlockColumnSketchesBuilder { builders })
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
-        let mut keys_to_remove = vec![];
-        for (index, column_builder) in self.builders.iter_mut().enumerate() {
+        for column_builder in self.builders.iter_mut() {
             let entry = block.get_by_offset(column_builder.index);
             match entry {
                 BlockEntry::Const(s, _, num_rows) => {
                     if let Some(hll) = &mut column_builder.hll {
                         hll.update_scalar(&s.as_ref(), *num_rows as u64);
                     }
-                    if let Some(top_n) = &mut column_builder.top_n {
+                    if should_collect_top_n_scalar(&s.as_ref())
+                        && let Some(top_n) = &mut column_builder.top_n
+                    {
                         top_n.add(s.as_ref(), *num_rows as u64);
                     }
                     if let Some(count_min_sketch) = &mut column_builder.count_min_sketch {
@@ -156,20 +149,6 @@ impl BlockColumnSketchesBuilder {
                     }
                 }
                 BlockEntry::Column(col) => {
-                    if col.check_large_string() {
-                        if column_builder.top_n.is_some() {
-                            let column_id = column_builder.field.column_id();
-                            if !self.dropped_top_n.contains(&column_id) {
-                                self.dropped_top_n.push(column_id);
-                            }
-                            column_builder.top_n = None;
-                        }
-                        if column_builder.hll.is_none() && column_builder.count_min_sketch.is_none()
-                        {
-                            keys_to_remove.push(index);
-                            continue;
-                        }
-                    }
                     if let Some(hll) = &mut column_builder.hll {
                         hll.update_column(col);
                     }
@@ -183,7 +162,9 @@ impl BlockColumnSketchesBuilder {
                                 {
                                     count += 1;
                                 }
-                                if let Some(top_n) = &mut column_builder.top_n {
+                                if should_collect_top_n_scalar(&scalar)
+                                    && let Some(top_n) = &mut column_builder.top_n
+                                {
                                     top_n.add(scalar.clone(), count as u64);
                                 }
                                 if let Some(count_min_sketch) = &mut column_builder.count_min_sketch
@@ -200,11 +181,9 @@ impl BlockColumnSketchesBuilder {
             }
         }
 
-        // reverse sorting.
-        keys_to_remove.sort_by(|a, b| b.cmp(a));
-        for k in keys_to_remove {
-            self.builders.remove(k);
-        }
+        self.builders.retain(|builder| {
+            builder.hll.is_some() || builder.top_n.is_some() || builder.count_min_sketch.is_some()
+        });
         Ok(())
     }
 
@@ -218,14 +197,6 @@ impl BlockColumnSketchesBuilder {
             return Ok(());
         };
         let builder = &mut self.builders[builder_index];
-        let (inner, rows) = match column {
-            Column::Nullable(inner) => (&inner.column, inner.validity.true_count()),
-            column => (column, column.len()),
-        };
-        if let Column::String(column) = inner {
-            builder.streaming_string_bytes += column.total_bytes_len();
-            builder.streaming_string_rows += rows;
-        }
         if let Some(hll) = &mut builder.hll {
             hll.update_column(column);
         }
@@ -239,7 +210,9 @@ impl BlockColumnSketchesBuilder {
                     {
                         count += 1;
                     }
-                    if let Some(top_n) = &mut builder.top_n {
+                    if should_collect_top_n_scalar(&scalar)
+                        && let Some(top_n) = &mut builder.top_n
+                    {
                         top_n.add(scalar.clone(), count as u64);
                     }
                     if let Some(sketch) = &mut builder.count_min_sketch {
@@ -275,26 +248,16 @@ impl BlockColumnSketchesBuilder {
     }
 
     pub fn finalize_sketches(self) -> Result<Option<BlockColumnSketches>> {
-        let BlockColumnSketchesBuilder {
-            builders,
-            mut dropped_top_n,
-            ..
-        } = self;
-        if builders.is_empty() && dropped_top_n.is_empty() {
+        let BlockColumnSketchesBuilder { builders } = self;
+        if builders.is_empty() {
             return Ok(None);
         }
 
         let mut column_hlls = HashMap::with_capacity(builders.len());
         let mut column_top_n = HashMap::with_capacity(builders.len());
         let mut column_count_min_sketch = HashMap::with_capacity(builders.len());
-        for mut column_builder in builders {
+        for column_builder in builders {
             let column_id = column_builder.field.column_id();
-            let streaming_string_is_large = column_builder.streaming_string_bytes
-                / column_builder.streaming_string_rows.max(1)
-                > 256;
-            if streaming_string_is_large && column_builder.top_n.take().is_some() {
-                dropped_top_n.push(column_id);
-            }
             if let Some(hll) = column_builder.hll {
                 column_hlls.insert(column_id, hll.into_hll());
             }
@@ -310,20 +273,23 @@ impl BlockColumnSketchesBuilder {
             }
         }
 
-        if column_hlls.is_empty()
-            && column_top_n.is_empty()
-            && column_count_min_sketch.is_empty()
-            && dropped_top_n.is_empty()
-        {
+        if column_hlls.is_empty() && column_top_n.is_empty() && column_count_min_sketch.is_empty() {
             Ok(None)
         } else {
             Ok(Some(BlockColumnSketches {
                 hll: column_hlls,
                 top_n: column_top_n,
                 count_min_sketch: column_count_min_sketch,
-                dropped_top_n,
+                dropped_top_n: vec![],
             }))
         }
+    }
+}
+
+fn should_collect_top_n_scalar(scalar: &ScalarRef<'_>) -> bool {
+    match scalar {
+        ScalarRef::String(value) => value.len() <= LARGE_STRING_BYTES_THRESHOLD,
+        _ => true,
     }
 }
 
@@ -378,14 +344,15 @@ mod tests {
     }
 
     #[test]
-    fn test_large_string_decision_is_fragment_independent() -> Result<()> {
+    fn test_large_string_top_n_is_fragment_independent() -> Result<()> {
         let columns = string_columns_map();
-        let long = "x".repeat(300);
-        let column = StringType::from_data(vec![long, String::new()]);
+        let long = "x".repeat(LARGE_STRING_BYTES_THRESHOLD + 1);
+        let column = StringType::from_data(vec![long, "ok".to_string()]);
 
+        let whole_block = DataBlock::new_from_columns(vec![column.clone()]);
         let mut whole =
             BlockColumnSketchesBuilder::new(&empty_columns_map(), Some((&columns, 2)), None)?;
-        whole.add_column(0, &column)?;
+        whole.add_block(&whole_block)?;
         let whole = whole.finalize_sketches()?.unwrap();
 
         let mut fragmented =
@@ -394,10 +361,33 @@ mod tests {
         fragmented.add_column(0, &column.slice(1..2))?;
         let fragmented = fragmented.finalize_sketches()?.unwrap();
 
-        assert_eq!(whole.dropped_top_n, fragmented.dropped_top_n);
+        assert_eq!(whole.top_n, fragmented.top_n);
         assert!(whole.dropped_top_n.is_empty());
-        assert_eq!(whole.top_n.len(), 1);
-        assert_eq!(fragmented.top_n.len(), 1);
+        let values = &whole.top_n.values().next().unwrap().values;
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].scalar, Scalar::String("ok".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_fragmented_top_n_matches_block_path_with_run_splits_and_eviction() -> Result<()> {
+        let columns = int32_ndv_columns_map();
+        let column = Int32Type::from_data(vec![1, 2, 2, 2, 3, 1, 4, 4]);
+
+        let whole_block = DataBlock::new_from_columns(vec![column.clone()]);
+        let mut whole =
+            BlockColumnSketchesBuilder::new(&empty_columns_map(), Some((&columns, 2)), None)?;
+        whole.add_block(&whole_block)?;
+        let whole = whole.finalize_sketches()?.unwrap();
+
+        let mut fragmented =
+            BlockColumnSketchesBuilder::new(&empty_columns_map(), Some((&columns, 2)), None)?;
+        fragmented.add_column(0, &column.slice(0..2))?;
+        fragmented.add_column(0, &column.slice(2..5))?;
+        fragmented.add_column(0, &column.slice(5..8))?;
+        let fragmented = fragmented.finalize_sketches()?.unwrap();
+
+        assert_eq!(whole.top_n, fragmented.top_n);
         Ok(())
     }
 
@@ -498,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn test_column_sketches_builder_drops_top_n_after_large_string() -> Result<()> {
+    fn test_column_sketches_builder_skips_large_string_top_n_value() -> Result<()> {
         let ndv_columns_map = empty_columns_map();
         let top_n_columns_map = string_columns_map();
         let column_id = top_n_columns_map.get(&0).unwrap().column_id();
@@ -511,14 +501,18 @@ mod tests {
         builder.add_block(&large_string_block())?;
 
         let sketches = builder.finalize_sketches()?.unwrap();
-        assert!(sketches.top_n.is_empty());
+        let column_top_n = sketches.top_n.values().next().unwrap();
+        assert_eq!(column_top_n.values.len(), 2);
+        assert!(column_top_n.values.iter().all(|entry| {
+            matches!(&entry.scalar, Scalar::String(value) if value.len() <= LARGE_STRING_BYTES_THRESHOLD)
+        }));
         let count_min_sketch = sketches.count_min_sketch.get(&column_id).unwrap();
         assert!(
             count_min_sketch
                 .estimate(&Scalar::String("x".repeat(257)))
                 .is_some_and(|count| count >= 1)
         );
-        assert_eq!(sketches.dropped_top_n, vec![column_id]);
+        assert!(sketches.dropped_top_n.is_empty());
         Ok(())
     }
 

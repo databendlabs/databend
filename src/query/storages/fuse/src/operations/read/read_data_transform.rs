@@ -151,7 +151,7 @@ impl ReadDataTransform {
 #[async_trait::async_trait]
 impl Processor for ReadDataTransform {
     fn name(&self) -> String {
-        String::from("ReadDataTransform")
+        String::from("AsyncReadDataTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
