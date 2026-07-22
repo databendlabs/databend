@@ -32,7 +32,6 @@ use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
@@ -84,37 +83,14 @@ impl Binder {
         &mut self,
         stmt: &AlterViewStmt,
     ) -> Result<Plan> {
-        let AlterViewStmt {
-            catalog,
-            database,
-            view,
-            columns,
-            query,
-        } = stmt;
-
-        let mut query = *query.clone();
-        let tenant = self.ctx.get_tenant();
-        let (catalog, database, view_name) =
-            self.normalize_object_identifier_triple(catalog, database, view);
-        let column_names = columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .collect::<Vec<_>>();
-        let mut visitor = ViewRewriter {
-            current_database: database.clone(),
-        };
-        query.walk_mut(&mut visitor)?;
-        let subquery = format!("{}", query);
-
-        let plan = AlterViewPlan {
-            tenant,
-            catalog,
-            database,
-            view_name,
-            column_names,
-            subquery,
-        };
-        Ok(Plan::AlterView(plan.into()))
+        let _ = stmt;
+        // View dependencies are tracked from the stored query. Changing the
+        // definition or output columns in place would require rewriting lineage
+        // metadata and makes rename/restore semantics harder to reason about.
+        // TODO: support ALTER VIEW <name> RENAME TO <new_name>.
+        Err(databend_common_exception::ErrorCode::Unimplemented(
+            "ALTER VIEW does not support changing the view query",
+        ))
     }
 
     #[async_backtrace::framed]
