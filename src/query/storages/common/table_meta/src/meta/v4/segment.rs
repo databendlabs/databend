@@ -436,12 +436,10 @@ mod tests {
         let mut col_metas = HashMap::new();
         col_metas.insert(
             1,
-            v3::frozen::ColumnMeta::Native(v3::frozen::NativeColumnMeta {
+            v3::frozen::ColumnMeta::Parquet(v3::frozen::ParquetColumnMeta {
                 offset: 0,
-                pages: vec![v3::frozen::PageMeta {
-                    length: 16,
-                    num_values: 3,
-                }],
+                len: 16,
+                num_values: 3,
             }),
         );
 
@@ -452,7 +450,7 @@ mod tests {
             col_stats: block_col_stats,
             col_metas,
             cluster_stats: None,
-            location: ("block.native".to_string(), 0),
+            location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: v3::frozen::Compression::None,
@@ -533,12 +531,10 @@ mod tests {
         for column_id in 1..=3 {
             col_metas.insert(
                 column_id,
-                ColumnMeta::Native(databend_common_native::ColumnMeta {
+                ColumnMeta::Parquet(crate::meta::v0::ColumnMeta {
                     offset: 0,
-                    pages: vec![databend_common_native::PageMeta {
-                        length: 16,
-                        num_values: 3,
-                    }],
+                    len: 16,
+                    num_values: 3,
                 }),
             );
         }
@@ -550,7 +546,7 @@ mod tests {
             col_stats: block_col_stats,
             col_metas,
             cluster_stats: None,
-            location: ("block.native".to_string(), 0),
+            location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             inverted_index_size: None,
@@ -560,6 +556,7 @@ mod tests {
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
+            vector_stats: None,
             virtual_block_meta: None,
             compression: Compression::None,
             create_on: None,
@@ -592,8 +589,8 @@ mod tests {
 
         let block = &segment.blocks[0];
         assert_eq!(block.row_count, 3);
-        assert_eq!(block.location.0, "block.native");
-        assert!(block.col_metas[&1].as_native().is_some());
+        assert_eq!(block.location.0, "block.parquet");
+        assert!(block.col_metas[&1].as_parquet().is_some());
         assert_eq!(block.col_stats[&1].max, Scalar::String("zzz".to_string()));
         Ok(())
     }
