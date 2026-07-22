@@ -770,6 +770,10 @@ fn test_rounder_functions(file: &mut impl Write) {
     );
     run_ast(file, "to_start_of_hour(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_day(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_day(order_time)", &[(
+        "order_time",
+        TimestampType::from_data(vec![0, 86_400_000_001]),
+    )]);
     run_ast(file, "time_slot(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_monday(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_week(to_timestamp(1630812366))", &[]);

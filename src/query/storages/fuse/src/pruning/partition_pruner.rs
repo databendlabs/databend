@@ -330,6 +330,14 @@ mod tests {
         })
     }
 
+    fn timestamp(value: i64) -> Expr<String> {
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Timestamp(value),
+            data_type: DataType::Timestamp,
+        })
+    }
+
     fn call(name: &str, args: Vec<Expr<String>>) -> Expr<String> {
         check_function(None, name, &[], &args, &BUILTIN_FUNCTIONS).unwrap()
     }
@@ -354,6 +362,33 @@ mod tests {
                 ..
             }))
         ));
+    }
+
+    fn assert_timestamp_range_partition_projection(
+        partition_expr: Expr<String>,
+        matching_value: Scalar,
+        non_matching_value: Scalar,
+    ) {
+        const MICROS_PER_DAY: i64 = 86_400_000_000;
+
+        let column = column_ref("order_time", DataType::Timestamp);
+        let filter = call("and_filters", vec![
+            call("gte", vec![column.clone(), timestamp(0)]),
+            call("lt", vec![column, timestamp(MICROS_PER_DAY)]),
+        ]);
+        let func_ctx = FunctionContext::default();
+
+        let rewriter = PartitionPredicateRewriter {
+            replacements: vec![(&partition_expr, &matching_value)],
+            func_ctx: &func_ctx,
+        };
+        assert!(rewriter.conjunctive_predicate_possible(&filter));
+
+        let rewriter = PartitionPredicateRewriter {
+            replacements: vec![(&partition_expr, &non_matching_value)],
+            func_ctx: &func_ctx,
+        };
+        assert!(!rewriter.conjunctive_predicate_possible(&filter));
     }
 
     #[test]
@@ -468,5 +503,20 @@ mod tests {
         };
 
         assert!(rewriter.conjunctive_predicate_possible(&filter));
+    }
+
+    #[test]
+    fn test_projects_timestamp_range_through_day_partition() {
+        let column = column_ref("order_time", DataType::Timestamp);
+        assert_timestamp_range_partition_projection(
+            call("to_date", vec![column.clone()]),
+            Scalar::Date(0),
+            Scalar::Date(1),
+        );
+        assert_timestamp_range_partition_projection(
+            call("to_start_of_day", vec![column]),
+            Scalar::Timestamp(0),
+            Scalar::Timestamp(86_400_000_000),
+        );
     }
 }

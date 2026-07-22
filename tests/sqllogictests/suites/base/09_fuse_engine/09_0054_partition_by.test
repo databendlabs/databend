@@ -119,6 +119,24 @@ SELECT p, v FROM range_partitioned WHERE p = 3 OR p = -5
 -5 n5
 3 p3
 
+# A timestamp range on the source column is projected through its day expression.
+statement ok
+CREATE TABLE timestamp_partitioned(order_time TIMESTAMP, label STRING) PARTITION BY (date_trunc(day, order_time)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO timestamp_partitioned VALUES ('2026-07-07 12:00:00', 'previous'), ('2026-07-08 00:00:00', 'start'), ('2026-07-08 23:59:59', 'end'), ('2026-07-09 00:00:00', 'next')
+
+query T
+EXPLAIN SELECT label FROM timestamp_partitioned WHERE order_time >= TIMESTAMP '2026-07-08' AND order_time < TIMESTAMP '2026-07-09'
+----
+<slt:ignore>partitions total: 3<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 3 to 1<slt:ignore>
+
+query T rowsort
+SELECT label FROM timestamp_partitioned WHERE order_time >= TIMESTAMP '2026-07-08' AND order_time < TIMESTAMP '2026-07-09'
+----
+end
+start
+
 # Each source-column predicate is projected through its matching partition key.
 statement ok
 CREATE TABLE multi_partitioned(a INT, b INT) PARTITION BY (a % 2, b % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000

@@ -3475,6 +3475,27 @@ output domain  : {1630800000000000..=1630800000000000}
 output         : '2021-09-05 00:00:00.000000'
 
 
+ast            : to_start_of_day(order_time)
+raw expr       : to_start_of_day(order_time::Timestamp)
+checked expr   : to_start_of_day<Timestamp>(order_time)
+evaluation:
++--------+------------------------------+------------------------------+
+|        | order_time                   | Output                       |
++--------+------------------------------+------------------------------+
+| Type   | Timestamp                    | Timestamp                    |
+| Domain | {0..=86400000001}            | {0..=86400000000}            |
+| Row 0  | '1970-01-01 00:00:00.000000' | '1970-01-01 00:00:00.000000' |
+| Row 1  | '1970-01-02 00:00:00.000001' | '1970-01-02 00:00:00.000000' |
++--------+------------------------------+------------------------------+
+evaluation (internal):
++------------+-------------------------------------+
+| Column     | Data                                |
++------------+-------------------------------------+
+| order_time | Column(Timestamp([0, 86400000001])) |
+| Output     | Timestamp([0, 86400000000])         |
++------------+-------------------------------------+
+
+
 ast            : time_slot(to_timestamp(1630812366))
 raw expr       : time_slot(to_timestamp(1630812366))
 checked expr   : time_slot<Timestamp>(CAST<Int64>(CAST<UInt32>(1630812366_u32 AS Int64) AS Timestamp))
