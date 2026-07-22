@@ -15,6 +15,7 @@
 mod column;
 mod finish_hook;
 mod grant;
+mod lineage_writer;
 mod metrics;
 mod notification;
 mod query_log;
@@ -29,6 +30,9 @@ pub mod table_option_validation;
 pub use column::*;
 pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
+pub use lineage_writer::attach_query_lineage_on_finished;
+pub use lineage_writer::build_query_lineage_updates;
+pub use lineage_writer::build_query_lineage_updates_with_lineage;
 pub use log::*;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;

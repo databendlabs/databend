@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::QueryLineage;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::RelOperator;
@@ -44,6 +45,7 @@ pub struct PhysicalPlanBuilder {
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
     pub build_depth: usize,
+    pub(crate) query_lineage: Option<Arc<QueryLineage>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -58,6 +60,7 @@ impl PhysicalPlanBuilder {
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
             build_depth: 0,
+            query_lineage: None,
         }
     }
 
@@ -188,6 +191,10 @@ impl PhysicalPlanBuilder {
 
     pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
         self.mutation_build_info = Some(mutation_build_info);
+    }
+
+    pub(crate) fn set_query_lineage(&mut self, query_lineage: Option<Arc<QueryLineage>>) {
+        self.query_lineage = query_lineage;
     }
 
     pub fn set_metadata(&mut self, metadata: MetadataRef) {

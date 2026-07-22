@@ -286,6 +286,7 @@ impl PhysicalPlanBuilder {
             deduplicated_label: None,
             recluster_info: None,
             table_meta_timestamps,
+            lineage_updates: vec![],
             meta: PhysicalPlanMeta::new("CommitSink"),
         });
 

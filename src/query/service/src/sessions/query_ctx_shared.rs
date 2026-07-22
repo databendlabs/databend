@@ -57,6 +57,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -145,6 +146,7 @@ pub struct QueryContextShared {
     pub(super) user_agent: Arc<RwLock<String>>,
 
     pub(super) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+    pub(super) query_lineage: OnceLock<Option<Arc<QueryLineage>>>,
 
     pub(super) runtime_filter_state: RuntimeFilterState,
 
@@ -241,6 +243,7 @@ impl QueryContextShared {
             window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            query_lineage: Default::default(),
             runtime_filter_state: Default::default(),
             merge_into_join: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),

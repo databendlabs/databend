@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::LineageUpdate;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -35,6 +36,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
+use crate::interpreters::common::attach_query_lineage_on_finished;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -52,6 +54,8 @@ pub struct CommitSink {
     pub commit_type: CommitType,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub deduplicated_label: Option<String>,
+    // Best-effort lineage updates are attached after the table commit sink is built.
+    pub lineage_updates: Vec<LineageUpdate>,
     pub table_meta_timestamps: TableMetaTimestamps,
 
     // Used for recluster.
@@ -95,6 +99,7 @@ impl IPhysicalPlan for CommitSink {
             commit_type: self.commit_type.clone(),
             update_stream_meta: self.update_stream_meta.clone(),
             deduplicated_label: self.deduplicated_label.clone(),
+            lineage_updates: self.lineage_updates.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
         })
@@ -211,7 +216,12 @@ impl IPhysicalPlan for CommitSink {
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                     )
-                })
+                })?;
+                attach_query_lineage_on_finished(
+                    &mut builder.main_pipeline,
+                    self.lineage_updates.clone(),
+                );
+                Ok(())
             }
         }
     }

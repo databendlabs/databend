@@ -73,6 +73,7 @@ use tokio::sync::Semaphore;
 
 use super::ColumnMutation;
 use super::CommitType;
+use crate::interpreters::common::build_query_lineage_updates_with_lineage;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::MutationManipulate;
@@ -320,6 +321,12 @@ impl PhysicalPlanBuilder {
 
         if *truncate_table {
             // Do truncate.
+            let lineage_updates = build_query_lineage_updates_with_lineage(
+                self.ctx.as_ref(),
+                self.query_lineage.as_deref(),
+                None,
+            )
+            .await?;
             plan = PhysicalPlan::new(CommitSink {
                 input: plan,
                 snapshot: mutation_build_info.table_snapshot,
@@ -333,6 +340,7 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                lineage_updates,
             });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -412,6 +420,12 @@ impl PhysicalPlanBuilder {
                 });
             }
 
+            let lineage_updates = build_query_lineage_updates_with_lineage(
+                self.ctx.as_ref(),
+                self.query_lineage.as_deref(),
+                None,
+            )
+            .await?;
             plan = PhysicalPlan::new(CommitSink {
                 input: plan,
                 snapshot: mutation_build_info.table_snapshot,
@@ -426,6 +440,7 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                lineage_updates,
             });
 
             plan.adjust_plan_id(&mut 0);
@@ -653,6 +668,12 @@ impl PhysicalPlanBuilder {
         };
 
         // build mutation_aggregate
+        let lineage_updates = build_query_lineage_updates_with_lineage(
+            self.ctx.as_ref(),
+            self.query_lineage.as_deref(),
+            None,
+        )
+        .await?;
         let mut physical_plan = PhysicalPlan::new(CommitSink {
             input: plan,
             snapshot: mutation_build_info.table_snapshot,
@@ -667,6 +688,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            lineage_updates,
         });
 
         physical_plan.adjust_plan_id(&mut 0);

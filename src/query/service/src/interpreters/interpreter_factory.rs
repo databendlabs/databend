@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -153,6 +154,7 @@ impl InterpreterFactory {
                 error!("Access.denied(v2): {:?}", e);
             }
         })?;
+        initialize_query_lineage(&ctx, plan);
         let mut access_logger = AccessLogger::create(ctx.clone());
         access_logger.log(plan);
         access_logger.output();
@@ -936,4 +938,25 @@ impl InterpreterFactory {
             ))),
         }
     }
+}
+
+fn initialize_query_lineage(ctx: &QueryContext, plan: &Plan) {
+    ctx.init_query_lineage(|| {
+        if !GlobalConfig::instance()
+            .query
+            .common
+            .lineage
+            .capture_enabled
+        {
+            return None;
+        }
+
+        match plan.query_lineage() {
+            Ok(lineage) => lineage,
+            Err(error) => {
+                log::warn!("failed to extract query lineage: {error:?}");
+                None
+            }
+        }
+    });
 }

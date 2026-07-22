@@ -122,6 +122,7 @@ use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -931,6 +932,16 @@ impl QueryContext {
 
     pub fn clear_table_meta_timestamps_cache(&self) {
         self.shared.table_meta_timestamps.lock().clear();
+    }
+
+    pub fn init_query_lineage(&self, init: impl FnOnce() -> Option<QueryLineage>) {
+        self.shared
+            .query_lineage
+            .get_or_init(|| init().map(Arc::new));
+    }
+
+    pub fn get_query_lineage(&self) -> Option<Arc<QueryLineage>> {
+        self.shared.query_lineage.get().cloned().flatten()
     }
 
     pub fn get_materialized_cte_senders(

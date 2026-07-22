@@ -178,6 +178,7 @@ impl MutationInterpreter {
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
         builder.set_mutation_build_info(mutation_build_info);
+        builder.set_query_lineage(self.ctx.get_query_lineage());
         builder
             .build(&self.s_expr, *mutation.required_columns.clone())
             .await
