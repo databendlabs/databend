@@ -447,6 +447,7 @@ impl InsertMultiTableInterpreter {
                 table,
                 casted_schema,
                 source_scalar_exprs,
+                ..
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
             branches.push(

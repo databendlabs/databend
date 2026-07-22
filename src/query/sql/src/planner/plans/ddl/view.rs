@@ -16,7 +16,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use crate::plans::Plan;
+
+#[derive(Clone, Debug)]
 pub struct CreateViewPlan {
     pub create_option: CreateOption,
     pub tenant: Tenant,
@@ -25,7 +27,22 @@ pub struct CreateViewPlan {
     pub view_name: String,
     pub column_names: Vec<String>,
     pub subquery: String,
+    pub query_plan: Option<Box<Plan>>,
 }
+
+impl PartialEq for CreateViewPlan {
+    fn eq(&self, other: &Self) -> bool {
+        self.create_option == other.create_option
+            && self.tenant == other.tenant
+            && self.catalog == other.catalog
+            && self.database == other.database
+            && self.view_name == other.view_name
+            && self.column_names == other.column_names
+            && self.subquery == other.subquery
+    }
+}
+
+impl Eq for CreateViewPlan {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterViewPlan {
