@@ -250,6 +250,7 @@ impl CreateTableInterpreter {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
             table_info: Some(table_info),
+            lineage_target_table_id: None,
         };
 
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?

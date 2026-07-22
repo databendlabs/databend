@@ -109,6 +109,12 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// Returns the underlying table that should be treated as this table's
+    /// lineage source. Virtual wrappers such as streams may override this.
+    fn lineage_source_table_info(&self) -> Option<&TableInfo> {
+        None
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(self.get_table_info().clone())
     }

@@ -74,6 +74,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
@@ -146,14 +147,17 @@ thread_local! {
 }
 
 pub fn init_testing_globals() {
+    init_testing_globals_with_config(InnerConfig::default());
+}
+
+pub fn init_testing_globals_with_config(config: InnerConfig) {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
             init.call_once(|| {
                 let thread_name = std::thread::current().name().unwrap().to_string();
                 GlobalInstance::init_testing(&thread_name);
-                GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                    .expect("init global config");
+                GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
                 LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
                 SecurityPolicyCacheManager::init().unwrap();
             });
@@ -165,8 +169,7 @@ pub fn init_testing_globals() {
         static INIT_GLOBALS: std::sync::Once = std::sync::Once::new();
         INIT_GLOBALS.call_once(|| {
             GlobalInstance::init_production();
-            GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                .expect("init global config");
+            GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
             LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
             SecurityPolicyCacheManager::init().expect("init security policy cache manager");
         });
@@ -1094,6 +1097,44 @@ impl LiteTableContext {
     }
 
     fn register_replay_view(&self, view: &ReplayView) -> Result<()> {
+        self.register_view(view, Arc::new(TableSchema::new(vec![])))
+    }
+
+    pub async fn register_view_sql(
+        self: &Arc<Self>,
+        database: &str,
+        view_name: &str,
+        query: &str,
+    ) -> Result<()> {
+        let plan = self.bind_sql(query).await?;
+        let Plan::Query { bind_context, .. } = plan else {
+            return unsupported("lite sql harness view registration from non-query SQL");
+        };
+        let fields = bind_context
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(idx, column)| {
+                Ok(TableField::new_from_column_id(
+                    &column.column_name,
+                    infer_schema_type(&column.data_type)?,
+                    idx as ColumnId,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        self.register_view(
+            &ReplayView {
+                catalog: self.current_catalog.clone(),
+                database: database.to_string(),
+                view: view_name.to_string(),
+                query: query.to_string(),
+            },
+            Arc::new(TableSchema::new(fields)),
+        )
+    }
+
+    fn register_view(&self, view: &ReplayView, schema: Arc<TableSchema>) -> Result<()> {
         let mut options = BTreeMap::new();
         options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
 
@@ -1104,7 +1145,7 @@ impl LiteTableContext {
                 desc: format!("'{}'.'{}'", view.database, view.view),
                 name: view.view.clone(),
                 meta: TableMeta {
-                    schema: Arc::new(TableSchema::new(vec![])),
+                    schema,
                     engine: LITE_VIEW_ENGINE.to_string(),
                     options,
                     ..Default::default()

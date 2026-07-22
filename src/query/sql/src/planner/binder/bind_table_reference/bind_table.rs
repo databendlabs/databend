@@ -25,12 +25,15 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
+use crate::LineageSourceColumn;
+use crate::LineageSourceRelation;
 use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::util::TableIdentifier;
@@ -189,17 +192,25 @@ impl Binder {
         {
             let change_type = get_change_type(&table_name_alias);
             if change_type.is_some() {
-                let table_index = self.metadata.write().add_table(
-                    catalog,
-                    database.clone(),
-                    table_meta.clone(),
-                    branch_name,
-                    table_name_alias,
-                    !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
-                    false,
-                    cte_suffix_name,
-                );
+                let lineage_source = lineage_source_relation(&table_meta);
+                let table_index = {
+                    let mut metadata = self.metadata.write();
+                    let table_index = metadata.add_table(
+                        catalog,
+                        database.clone(),
+                        table_meta.clone(),
+                        branch_name,
+                        table_name_alias,
+                        !bind_context.binding_views.is_empty(),
+                        bind_context.planning_agg_index,
+                        false,
+                        cte_suffix_name,
+                    );
+                    if let Some(lineage_source) = lineage_source {
+                        metadata.set_table_lineage_source_relation(table_index, lineage_source);
+                    }
+                    table_index
+                };
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
                     database.as_str(),
@@ -280,11 +291,11 @@ impl Binder {
                 new_bind_context.binding_views.insert(view_ident);
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
-                        catalog,
+                        catalog.clone(),
                         database.clone(),
-                        table_meta,
-                        branch_name,
-                        table_name_alias,
+                        table_meta.clone(),
+                        branch_name.clone(),
+                        table_name_alias.clone(),
                         false,
                         false,
                         false,
@@ -302,6 +313,13 @@ impl Binder {
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }
+                    self.add_view_lineage_source_columns(
+                        &new_bind_context,
+                        catalog.as_str(),
+                        database.as_str(),
+                        table_name.as_str(),
+                        &table_meta,
+                    );
                     // Restore binding_views to the outer scope's value so the
                     // current view does not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
@@ -315,17 +333,25 @@ impl Binder {
                 }
             }
             _ => {
-                let table_index = self.metadata.write().add_table(
-                    catalog.clone(),
-                    database.clone(),
-                    table_meta.clone(),
-                    branch_name,
-                    table_name_alias,
-                    !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
-                    false,
-                    cte_suffix_name,
-                );
+                let lineage_source = lineage_source_relation(&table_meta);
+                let table_index = {
+                    let mut metadata = self.metadata.write();
+                    let table_index = metadata.add_table(
+                        catalog.clone(),
+                        database.clone(),
+                        table_meta.clone(),
+                        branch_name,
+                        table_name_alias,
+                        !bind_context.binding_views.is_empty(),
+                        bind_context.planning_agg_index,
+                        false,
+                        cte_suffix_name,
+                    );
+                    if let Some(lineage_source) = lineage_source {
+                        metadata.set_table_lineage_source_relation(table_index, lineage_source);
+                    }
+                    table_index
+                };
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -343,4 +369,65 @@ impl Binder {
             }
         }
     }
+
+    fn add_view_lineage_source_columns(
+        &mut self,
+        bind_context: &BindContext,
+        catalog: &str,
+        database: &str,
+        view_name: &str,
+        view: &std::sync::Arc<dyn databend_common_catalog::table::Table>,
+    ) {
+        if !GlobalConfig::instance()
+            .query
+            .common
+            .lineage
+            .capture_enabled
+        {
+            return;
+        }
+
+        let relation = LineageSourceRelation {
+            catalog: catalog.to_string(),
+            database: database.to_string(),
+            name: view_name.to_string(),
+            id: view.get_table_info().ident.table_id,
+        };
+        let schema = view.schema();
+        let mut metadata = self.metadata.write();
+        for (idx, column) in bind_context.columns.iter().enumerate() {
+            let Some(field) = schema.fields().get(idx) else {
+                continue;
+            };
+            metadata.add_lineage_source_column(column.index, LineageSourceColumn {
+                relation: relation.clone(),
+                relation_is_view: true,
+                name: field.name().clone(),
+                id: field.column_id,
+            });
+        }
+    }
+}
+
+fn lineage_source_relation(
+    table: &std::sync::Arc<dyn databend_common_catalog::table::Table>,
+) -> Option<LineageSourceRelation> {
+    if !GlobalConfig::instance()
+        .query
+        .common
+        .lineage
+        .capture_enabled
+    {
+        return None;
+    }
+
+    table.lineage_source_table_info().and_then(|table_info| {
+        let database = table_info.database_name().ok()?.to_string();
+        Some(LineageSourceRelation {
+            catalog: table_info.catalog().to_string(),
+            database,
+            name: table_info.name.clone(),
+            id: table_info.ident.table_id,
+        })
+    })
 }

@@ -18,14 +18,25 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_catalog::table_context::TableContextVariables;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
+use databend_common_sql::LineageDownstream;
+use databend_common_sql::LineageUpstream;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
+use databend_common_sql::QueryLineage;
+use databend_common_sql::QueryLineageColumn;
+use databend_common_sql::QueryLineageColumnEdge;
+use databend_common_sql::QueryLineageKind;
+use databend_common_sql::QueryLineageRelation;
+use databend_common_sql::QueryLineageRelationKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -34,6 +45,7 @@ use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
+use databend_common_sql_test_support::init_testing_globals_with_config;
 use databend_common_sql_test_support::run_test_case_core;
 
 use crate::framework::LiteTableContext;
@@ -538,6 +550,442 @@ async fn test_lambda_udf_resolves_own_parameters() -> Result<()> {
     ctx.bind_sql("UPDATE t SET i=f2(f1(2)) WHERE i=f2(f1(1))")
         .await?;
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_insert_select_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // INSERT INTO dst SELECT a + b AS x FROM src WHERE c > 0
+    let sql = "INSERT INTO dst SELECT a + b AS x FROM src WHERE c > 0";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    let expected =
+        expected_table_query_lineage(QueryLineageKind::Dml, &ctx, "dst", "src", "x", &["a", "b"])
+            .await?;
+
+    assert_eq!(lineage, expected);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_insert_lineage_does_not_pin_target_table_info() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT)").await?;
+    ctx.register_setup_sql("CREATE TABLE dst(a INT)").await?;
+
+    let plan = ctx.bind_sql("INSERT INTO dst SELECT a FROM src").await?;
+    let Plan::Insert(plan) = plan else {
+        return Err(ErrorCode::Internal("expected insert plan"));
+    };
+    assert!(plan.table_info.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_insert_select_with_cte_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // INSERT INTO dst WITH q AS (SELECT a + b AS x, c FROM src) SELECT x FROM q WHERE c > 0
+    let sql =
+        "INSERT INTO dst WITH q AS (SELECT a + b AS x, c FROM src) SELECT x FROM q WHERE c > 0";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    let expected =
+        expected_table_query_lineage(QueryLineageKind::Dml, &ctx, "dst", "src", "x", &["a", "b"])
+            .await?;
+
+    assert_eq!(lineage, expected);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_insert_select_with_auto_materialized_cte_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.get_settings().set_enable_auto_materialize_cte(1)?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // INSERT INTO dst WITH q AS (SELECT a, b, c FROM src) SELECT q1.a + q2.b FROM q q1 JOIN q q2 ON q1.c = q2.c
+    let sql = "INSERT INTO dst WITH q AS (SELECT a, b, c FROM src) SELECT q1.a + q2.b FROM q q1 JOIN q q2 ON q1.c = q2.c";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "src.a", "src.b",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_join_and_exists_filter_columns_are_excluded_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE left_src(id INT, k INT, a INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE right_src(id INT, b INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE filter_src(k INT, flag INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // INSERT INTO dst SELECT l.a + r.b FROM left_src l JOIN right_src r ON l.id = r.id
+    // WHERE EXISTS (SELECT 1 FROM filter_src f WHERE f.k = l.k AND f.flag > 0)
+    let sql = "INSERT INTO dst SELECT l.a + r.b FROM left_src l JOIN right_src r ON l.id = r.id WHERE EXISTS (SELECT 1 FROM filter_src f WHERE f.k = l.k AND f.flag > 0)";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "left_src.a",
+        "right_src.b",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_join_using_prefers_left_column_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE left_src(id INT, a INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE right_src(id INT, b INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // INSERT INTO dst SELECT id FROM left_src JOIN right_src USING(id)
+    let sql = "INSERT INTO dst SELECT id FROM left_src JOIN right_src USING(id)";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "left_src.id",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_create_view_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+
+    // CREATE VIEW v(vx) AS SELECT a + b FROM src WHERE c > 0
+    let sql = "CREATE VIEW v(vx) AS SELECT a + b FROM src WHERE c > 0";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    let expected = expected_query_lineage(
+        QueryLineageKind::CreateView,
+        relation("v", QueryLineageRelationKind::View, None),
+        table_relation(&ctx, "src").await?,
+        column("vx", 0),
+        vec![
+            table_column(&ctx, "src", "a").await?,
+            table_column(&ctx, "src", "b").await?,
+        ],
+    );
+
+    assert_eq!(lineage, expected);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_view_does_not_bind_query_when_lineage_capture_is_disabled() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    let plan = ctx
+        .bind_sql("CREATE VIEW v AS SELECT * FROM missing_table")
+        .await?;
+
+    let Plan::CreateView(plan) = plan else {
+        return Err(ErrorCode::Internal("expected create view plan"));
+    };
+    assert!(plan.query_plan.is_none());
+    Ok(())
+}
+
+#[test]
+fn test_query_lineage_insert_select_from_view_stops_at_view_from_sql() -> Result<()> {
+    std::thread::Builder::new()
+        .name("lineage_view_boundary_sql".to_string())
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()
+                .map_err(|err| ErrorCode::Internal(err.to_string()))?
+                .block_on(async {
+                    let ctx = lineage_test_context().await?;
+                    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT)")
+                        .await?;
+                    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+                    ctx.register_view_sql("default", "v", "SELECT a + b AS vx FROM src")
+                        .await?;
+
+                    // INSERT INTO dst SELECT vx FROM v
+                    let lineage =
+                        query_lineage_from_sql(&ctx, "INSERT INTO dst SELECT vx FROM v").await?;
+                    let expected = expected_query_lineage(
+                        QueryLineageKind::Dml,
+                        table_relation(&ctx, "dst").await?,
+                        view_relation(&ctx, "v").await?,
+                        table_column(&ctx, "dst", "x").await?,
+                        vec![table_column(&ctx, "v", "vx").await?],
+                    );
+
+                    assert_eq!(lineage, expected);
+                    Ok(())
+                })
+        })
+        .map_err(|err| ErrorCode::Internal(err.to_string()))?
+        .join()
+        .map_err(|_| ErrorCode::Internal("lineage view boundary test panicked"))?
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_replace_into_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(id INT, a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(id INT, x INT)")
+        .await?;
+
+    // REPLACE INTO dst(id, x) ON(id) SELECT id, a + b FROM src WHERE c > 0
+    let sql = "REPLACE INTO dst(id, x) ON(id) SELECT id, a + b FROM src WHERE c > 0";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "id", &["src.id"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "src.a", "src.b",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_multi_insert_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst1(x INT, y INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst2(x INT, y INT)")
+        .await?;
+
+    // INSERT ALL INTO dst1 VALUES(a, b) INTO dst2(x, y) VALUES(b, c) SELECT a, b, c FROM src
+    let sql =
+        "INSERT ALL INTO dst1 VALUES(a, b) INTO dst2(x, y) VALUES(b, c) SELECT a, b, c FROM src";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst1", "x", &["src.a"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst1", "y", &["src.b"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst2", "x", &["src.b"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst2", "y", &["src.c"]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_update_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(id INT, a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(id INT, x INT)")
+        .await?;
+
+    // UPDATE dst SET x = src.a + src.b FROM src WHERE dst.id = src.id AND src.c > 0
+    let sql = "UPDATE dst SET x = src.a + src.b FROM src WHERE dst.id = src.id AND src.c > 0";
+    let lineage = query_lineage_from_bound_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "src.a", "src.b",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_merge_multiple_when_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(id INT, a INT, b INT, c INT, d INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(id INT, x INT, y INT)")
+        .await?;
+
+    // MERGE INTO dst USING src ON dst.id = src.id
+    // WHEN MATCHED AND src.c > 0 THEN UPDATE SET x = src.a
+    // WHEN MATCHED AND src.d > 0 THEN UPDATE SET y = src.b
+    // WHEN NOT MATCHED THEN INSERT (id, x, y) VALUES (src.id, src.a, src.b)
+    let sql = "MERGE INTO dst USING src ON dst.id = src.id WHEN MATCHED AND src.c > 0 THEN UPDATE SET x = src.a WHEN MATCHED AND src.d > 0 THEN UPDATE SET y = src.b WHEN NOT MATCHED THEN INSERT (id, x, y) VALUES (src.id, src.a, src.b)";
+    let lineage = query_lineage_from_bound_sql(&ctx, sql).await?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "id", &["src.id"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &["src.a"]);
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "y", &["src.b"]);
+    Ok(())
+}
+
+async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
+    let mut config = InnerConfig::default();
+    config.query.common.lineage.capture_enabled = true;
+    init_testing_globals_with_config(config);
+    LiteTableContext::create().await
+}
+
+async fn query_lineage_from_sql(ctx: &Arc<LiteTableContext>, sql: &str) -> Result<QueryLineage> {
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+    plan.query_lineage()?
+        .ok_or_else(|| ErrorCode::Internal(format!("missing query lineage for SQL: {sql}")))
+}
+
+async fn query_lineage_from_bound_sql(
+    ctx: &Arc<LiteTableContext>,
+    sql: &str,
+) -> Result<QueryLineage> {
+    let plan = ctx.bind_sql(sql).await?;
+    plan.query_lineage()?
+        .ok_or_else(|| ErrorCode::Internal(format!("missing query lineage for SQL: {sql}")))
+}
+
+fn assert_lineage_sources(
+    lineage: &QueryLineage,
+    kind: QueryLineageKind,
+    target_table: &str,
+    target_column: &str,
+    expected: &[&str],
+) {
+    assert_eq!(lineage.kind, kind, "unexpected lineage kind: {lineage:?}");
+
+    let mut actual = lineage
+        .downstreams
+        .iter()
+        .find(|downstream| downstream.relation.name == target_table)
+        .unwrap_or_else(|| panic!("missing target table {target_table}: {lineage:?}"))
+        .upstreams
+        .iter()
+        .flat_map(|from_relation| {
+            from_relation
+                .columns
+                .iter()
+                .filter(|edge| edge.downstream.name == target_column)
+                .map(|edge| format!("{}.{}", from_relation.relation.name, edge.upstream.name))
+        })
+        .collect::<Vec<_>>();
+    actual.sort();
+    actual.dedup();
+
+    let mut expected = expected
+        .iter()
+        .map(|source| source.to_string())
+        .collect::<Vec<_>>();
+    expected.sort();
+
+    assert_eq!(
+        actual, expected,
+        "unexpected lineage for {target_table}.{target_column}: {lineage:?}"
+    );
+}
+
+async fn table_id(ctx: &Arc<LiteTableContext>, table: &str) -> Result<u64> {
+    Ok(ctx
+        .get_table("default", "default", table)
+        .await?
+        .get_table_info()
+        .ident
+        .table_id)
+}
+
+async fn column_id(ctx: &Arc<LiteTableContext>, table: &str, column: &str) -> Result<ColumnId> {
+    ctx.get_table("default", "default", table)
+        .await?
+        .schema()
+        .column_id_of(column)
+}
+
+async fn expected_table_query_lineage(
+    kind: QueryLineageKind,
+    ctx: &Arc<LiteTableContext>,
+    to_table: &str,
+    from_table: &str,
+    to_column: &str,
+    from_columns: &[&str],
+) -> Result<QueryLineage> {
+    let mut sources = Vec::with_capacity(from_columns.len());
+    for from_column in from_columns {
+        sources.push(table_column(ctx, from_table, from_column).await?);
+    }
+
+    Ok(expected_query_lineage(
+        kind,
+        table_relation(ctx, to_table).await?,
+        table_relation(ctx, from_table).await?,
+        table_column(ctx, to_table, to_column).await?,
+        sources,
+    ))
+}
+
+async fn table_relation(ctx: &Arc<LiteTableContext>, table: &str) -> Result<QueryLineageRelation> {
+    Ok(relation(
+        table,
+        QueryLineageRelationKind::Table,
+        Some(table_id(ctx, table).await?),
+    ))
+}
+
+async fn view_relation(ctx: &Arc<LiteTableContext>, view: &str) -> Result<QueryLineageRelation> {
+    Ok(relation(
+        view,
+        QueryLineageRelationKind::View,
+        Some(table_id(ctx, view).await?),
+    ))
+}
+
+async fn table_column(
+    ctx: &Arc<LiteTableContext>,
+    table: &str,
+    column_name: &str,
+) -> Result<QueryLineageColumn> {
+    Ok(column(
+        column_name,
+        column_id(ctx, table, column_name).await?,
+    ))
+}
+
+fn expected_query_lineage(
+    kind: QueryLineageKind,
+    downstream: QueryLineageRelation,
+    upstream: QueryLineageRelation,
+    downstream_column: QueryLineageColumn,
+    upstream_columns: Vec<QueryLineageColumn>,
+) -> QueryLineage {
+    QueryLineage {
+        kind,
+        downstreams: vec![LineageDownstream {
+            relation: downstream,
+            upstreams: vec![LineageUpstream {
+                relation: upstream,
+                columns: upstream_columns
+                    .into_iter()
+                    .map(|upstream| QueryLineageColumnEdge {
+                        upstream,
+                        downstream: downstream_column.clone(),
+                    })
+                    .collect(),
+            }],
+        }],
+    }
+}
+
+fn relation(name: &str, kind: QueryLineageRelationKind, id: Option<u64>) -> QueryLineageRelation {
+    QueryLineageRelation {
+        catalog: "default".to_string(),
+        database: "default".to_string(),
+        name: name.to_string(),
+        id,
+        kind,
+    }
+}
+
+fn column(name: &str, id: ColumnId) -> QueryLineageColumn {
+    QueryLineageColumn {
+        name: name.to_string(),
+        id,
+    }
 }
 
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {

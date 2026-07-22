@@ -83,6 +83,7 @@ pub struct Metadata {
     next_scan_id: usize,
     /// Mappings from base column index to scan id.
     base_column_scan_id: HashMap<Symbol, usize>,
+    lineage_source_columns: HashMap<Symbol, LineageSourceColumn>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -408,6 +409,7 @@ impl Metadata {
             source_of_view,
             source_of_index,
             source_of_stage,
+            lineage_source_relation: None,
         };
         self.tables.push(table_entry);
         let table_schema = table_meta.schema_with_stream();
@@ -535,6 +537,30 @@ impl Metadata {
         self.base_column_scan_id.get(&column_index).cloned()
     }
 
+    pub(crate) fn add_lineage_source_column(
+        &mut self,
+        column_index: Symbol,
+        source_column: LineageSourceColumn,
+    ) {
+        self.lineage_source_columns
+            .insert(column_index, source_column);
+    }
+
+    pub(crate) fn lineage_source_column(
+        &self,
+        column_index: Symbol,
+    ) -> Option<&LineageSourceColumn> {
+        self.lineage_source_columns.get(&column_index)
+    }
+
+    pub(crate) fn set_table_lineage_source_relation(
+        &mut self,
+        table_index: IndexType,
+        relation: LineageSourceRelation,
+    ) {
+        self.tables[table_index].lineage_source_relation = Some(relation);
+    }
+
     pub fn replace_all_tables(&mut self, table: Arc<dyn Table>) {
         for entry in self.tables.iter_mut() {
             entry.table = table.clone();
@@ -556,7 +582,24 @@ pub struct TableEntry {
     source_of_index: bool,
 
     source_of_stage: bool,
+    lineage_source_relation: Option<LineageSourceRelation>,
     table: Arc<dyn Table>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LineageSourceRelation {
+    pub(crate) catalog: String,
+    pub(crate) database: String,
+    pub(crate) name: String,
+    pub(crate) id: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LineageSourceColumn {
+    pub(crate) relation: LineageSourceRelation,
+    pub(crate) relation_is_view: bool,
+    pub(crate) name: String,
+    pub(crate) id: ColumnId,
 }
 
 impl Debug for TableEntry {
@@ -618,6 +661,10 @@ impl TableEntry {
     /// Return true if it is bound for an index.
     pub fn is_source_of_index(&self) -> bool {
         self.source_of_index
+    }
+
+    pub(crate) fn lineage_source_relation(&self) -> Option<&LineageSourceRelation> {
+        self.lineage_source_relation.as_ref()
     }
 
     pub fn update_table_index(&mut self, table_index: IndexType) {

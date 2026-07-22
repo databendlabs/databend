@@ -89,6 +89,9 @@ pub struct Insert {
     // it should be provided as some `table_info`.
     // otherwise, the table being inserted will be resolved by using `catalog`.`database`.`table`
     pub table_info: Option<TableInfo>,
+    /// Target table id captured for lineage extraction only. Execution must
+    /// continue to resolve ordinary INSERT targets by name.
+    pub lineage_target_table_id: Option<u64>,
 }
 
 impl PartialEq for Insert {
@@ -126,6 +129,7 @@ impl Insert {
             overwrite,
             // table_info only used create table as select.
             table_info: _,
+            lineage_target_table_id: _,
             source,
         } = self;
 
