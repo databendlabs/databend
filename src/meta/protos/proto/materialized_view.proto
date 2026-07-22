@@ -24,13 +24,17 @@ message MVDefinition {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // SQL text submitted by the user.
+  // SQL text as submitted by the user, for example: SELECT * FROM t.
   string original_query = 1;
-  // Fully qualified SQL used by Databend.
+
+  // SQL text with object names fully qualified by Databend, for example:
+  // SELECT * FROM catalog.db.t.
   string query = 2;
+
   // Logical schema of the user's defining query, used for the externally
-  // visible column types. TableMeta.schema stores the rewritten physical
-  // schema that Fuse uses to read and write the materialized data.
+  // visible column types. The corresponding materialized-view table's
+  // TableMeta.schema stores the rewritten physical schema that Fuse uses
+  // to read and write the materialized data.
   DataSchema schema = 3;
 }
 

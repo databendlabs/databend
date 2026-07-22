@@ -528,7 +528,11 @@ pub struct CreateTableReq {
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
 
-    /// Definition stored with a materialized view created as a hidden table.
+    /// The defining query to persist for a materialized-view table.
+    ///
+    /// When set, `create_table` stores it under the newly allocated table ID in
+    /// the same transaction as `table_meta`. It is `None` for
+    /// non-materialized-view tables.
     pub mv_definition: Option<MVDefinition>,
 
     /// Iceberg table properties
