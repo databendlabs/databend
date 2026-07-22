@@ -31,10 +31,12 @@ message MVDefinition {
   // SELECT * FROM catalog.db.t.
   string query = 2;
 
-  // Logical schema of the user's defining query, used for the externally
-  // visible column types. The corresponding materialized-view table's
-  // TableMeta.schema stores the rewritten physical schema that Fuse uses
-  // to read and write the materialized data.
+  // Columns and types returned when querying the materialized view. For example,
+  // if orders.amount is a non-null Float64:
+  // SELECT AVG(amount) AS avg_amount FROM orders
+  // this schema is [avg_amount: Float64]. The materialized-view TableMeta.schema
+  // is [avg_amount: Tuple(Float64, UInt64)]. The Fuse table stores this mergeable
+  // AVG state (sum and count), which is finalized as avg_amount when queried.
   DataSchema schema = 3;
 }
 

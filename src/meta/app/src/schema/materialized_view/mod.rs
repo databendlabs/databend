@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Materialized view metadata.
-
 use databend_common_expression::TableSchema;
 use databend_meta_client::types::SeqV;
 
@@ -61,15 +59,12 @@ impl TableMeta {
 ///
 /// A materialized view reuses table metadata and storage for its materialized
 /// data, and its table ID is also its materialized view ID. [`TableMeta`]
-/// describes the physical storage, while this record stores the defining query
-/// and externally visible logical schema under the same table ID.
+/// describes how the data is stored, while this record stores the defining
+/// query and the columns returned to users under the same table ID.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MVDefinition {
     pub original_query: String,
     pub query: String,
-    /// Logical schema of the user's defining query, used for the externally
-    /// visible column types. `TableMeta::schema` stores the rewritten physical
-    /// schema that Fuse uses to read and write the materialized data.
     pub schema: TableSchema,
 }
 
