@@ -1,0 +1,81 @@
+statement ok
+create or replace table outer_to_anti_left(k int, payload int);
+
+statement ok
+create or replace table outer_to_anti_right(k int, payload int);
+
+statement ok
+insert into outer_to_anti_left values (null, 90), (1, 10), (2, 20), (3, 30);
+
+statement ok
+insert into outer_to_anti_right values (null, null), (1, null), (1, 10), (2, 20);
+
+# A null test on a regular right equi-join key is an anti join. Right-side
+# columns remain observable as NULL after the rewrite.
+query III rowsort
+select l.k, r.k, r.payload
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k = r.k
+where r.k is null;
+----
+3 NULL NULL
+NULL NULL NULL
+
+# An unrelated left-side predicate remains above the anti join.
+query I rowsort
+select l.k
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k = r.k
+where r.k is null and l.k is not null;
+----
+3
+
+# The symmetric right outer pattern is a right anti join. Left-side columns
+# remain observable as NULL after the rewrite.
+query III rowsort
+select l.k, l.payload, r.k
+from outer_to_anti_left l
+right join outer_to_anti_right r on l.k = r.k
+where l.k is null;
+----
+NULL NULL NULL
+
+# A nullable payload is not an anti-join indicator: the matched k=1 row with
+# a NULL payload must remain, including the duplicate match with payload=10
+# being filtered independently.
+query III rowsort
+select l.k, r.k, r.payload
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k = r.k
+where r.payload is null;
+----
+1 1 NULL
+3 NULL NULL
+NULL NULL NULL
+
+# Null-equal join keys are not safe: the matched NULL key must survive the
+# original outer join plus null filter.
+query II rowsort
+select l.k, r.k
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k is not distinct from r.k
+where r.k is null;
+----
+3 NULL
+NULL NULL
+
+# A null-safe right join condition can match the two NULL keys, so it must
+# remain an outer join rather than becoming a right anti join.
+query III rowsort
+select l.k, l.payload, r.k
+from outer_to_anti_left l
+right join outer_to_anti_right r on l.k is not distinct from r.k
+where l.k is null;
+----
+NULL 90 NULL
+
+statement ok
+drop table outer_to_anti_left;
+
+statement ok
+drop table outer_to_anti_right;

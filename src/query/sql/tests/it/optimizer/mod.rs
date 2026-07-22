@@ -17,6 +17,7 @@ mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;
 mod normalize_scalar;
+mod outer_join_to_anti;
 mod push_down_filter_project_set;
 mod selectivity;
 mod selectivity_smoke;
