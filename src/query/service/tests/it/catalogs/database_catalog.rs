@@ -166,6 +166,7 @@ async fn test_catalogs_table() -> anyhow::Result<()> {
                 created_on,
                 ..TableMeta::default()
             },
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: None,
             table_partition: None,

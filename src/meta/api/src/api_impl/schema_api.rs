@@ -86,6 +86,7 @@ use super::database_util::get_db_or_err;
 use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
+use super::lineage_api::append_delete_lineage_for_table_id_txn_ops;
 use super::lock_api2::LockApi2;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
@@ -238,6 +239,9 @@ pub async fn construct_drop_table_txn_operations(
     }
 
     tb_meta.drop_on = Some(Utc::now());
+    if tb_meta.engine == "VIEW" || tb_meta.options.contains_key("TRANSIENT") {
+        append_delete_lineage_for_table_id_txn_ops(kv_api, tenant, txn, table_id).await?;
+    }
 
     // Delete table-policy references when dropping table
     //

@@ -39,6 +39,7 @@ use maplit::hashmap;
 use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
+use super::LineageUpdate;
 use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
@@ -518,6 +519,7 @@ pub struct CreateTableReq {
     pub catalog_name: Option<String>,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
+    pub lineage_updates: Vec<LineageUpdate>,
 
     /// Set it to true if a dropped table needs to be created,
     ///
@@ -636,6 +638,7 @@ pub struct CommitTableMetaReq {
     pub table_id: MetaId,
     pub prev_table_id: Option<MetaId>,
     pub orphan_table_name: Option<String>,
+    pub lineage_updates: Vec<LineageUpdate>,
 }
 
 impl CommitTableMetaReq {

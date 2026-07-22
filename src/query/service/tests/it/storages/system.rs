@@ -594,6 +594,7 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
                 })),
                 ..TableMeta::default()
             },
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: None,
             table_partition: None,

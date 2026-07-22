@@ -1693,6 +1693,7 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: false,
                 table_properties: None,
                 table_partition: None,
@@ -1810,6 +1811,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: false,
                 table_properties: None,
                 table_partition: None,
@@ -2061,6 +2063,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: tbl_meta,
+                lineage_updates: vec![],
                 as_dropped: true,
                 table_properties: None,
                 table_partition: None,
@@ -2091,6 +2094,7 @@ impl SchemaApiTestSuite {
                     table_id: create_table_as_dropped_resp.table_id,
                     prev_table_id: create_table_as_dropped_resp.prev_table_id,
                     orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+                    lineage_updates: vec![],
                 };
 
                 mt.commit_table_meta(commit_table_req).await?;
@@ -4360,6 +4364,7 @@ impl SchemaApiTestSuite {
             catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
+            lineage_updates: vec![],
             as_dropped: false,
             table_properties: None,
             table_partition: None,
@@ -5187,6 +5192,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    lineage_updates: vec![],
                     as_dropped: false,
                     table_properties: None,
                     table_partition: None,
@@ -5675,6 +5681,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            lineage_updates: vec![],
             as_dropped: true,
             table_properties: None,
             table_partition: None,
@@ -5690,6 +5697,7 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
                 prev_table_id: Some(1111),
                 orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+                lineage_updates: vec![],
             };
             let resp = mt.commit_table_meta(commit_table_req).await;
             use databend_common_meta_app::app_error::AppError;
@@ -5725,6 +5733,7 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
                 prev_table_id: create_table_as_dropped_resp.prev_table_id,
                 orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+                lineage_updates: vec![],
             };
             let resp = mt.commit_table_meta(commit_table_req).await;
             use databend_common_meta_app::app_error::AppError;
@@ -5773,6 +5782,7 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
                 prev_table_id: create_table_as_dropped_resp.prev_table_id,
                 orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+                lineage_updates: vec![],
             };
             let resp = mt.commit_table_meta(commit_table_req).await;
             use databend_common_meta_app::app_error::AppError;
@@ -5795,6 +5805,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: true,
                 table_properties: None,
                 table_partition: None,
@@ -5815,6 +5826,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: true,
                 table_properties: None,
                 table_partition: None,
@@ -5828,6 +5840,7 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
                 prev_table_id: create_table_as_dropped_resp.prev_table_id,
                 orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+                lineage_updates: vec![],
             };
             mt.commit_table_meta(commit_table_req).await?;
         }
@@ -5851,6 +5864,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                lineage_updates: vec![],
                 as_dropped: true,
                 table_properties: None,
                 table_partition: None,
@@ -5944,6 +5958,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            lineage_updates: vec![],
             as_dropped: true,
             table_properties: None,
             table_partition: None,
@@ -5978,6 +5993,7 @@ impl SchemaApiTestSuite {
                     table_id: resp.table_id,
                     prev_table_id: resp.prev_table_id,
                     orphan_table_name: resp.orphan_table_name.clone(),
+                    lineage_updates: vec![],
                 };
                 let resp = arc_mt.commit_table_meta(commit_table_req).await;
 
