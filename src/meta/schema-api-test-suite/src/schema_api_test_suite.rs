@@ -1746,6 +1746,11 @@ impl SchemaApiTestSuite {
                     .await?
                     .is_none()
             );
+            let mvs = mt
+                .mget_mvs_by_source_table_id(&tenant, source_table_id)
+                .await?;
+            assert_eq!(mvs.source_table_mvs_index_seq, 0);
+            assert!(mvs.mvs.is_empty());
             created
         };
         let mv_id = created.table_id;
@@ -1769,12 +1774,13 @@ impl SchemaApiTestSuite {
             let mvs = mt
                 .mget_mvs_by_source_table_id(&tenant, source_table_id)
                 .await?;
-            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
+            assert_eq!(mvs.source_table_mvs_index_seq, mv_ids.seq);
+            let [mv] = mvs.mvs.as_slice() else {
                 panic!("one complete MV must be returned");
             };
-            assert_eq!(*got_mv_id, mv_id);
-            assert_eq!(got_definition.data, definition);
-            assert_eq!(got_table_meta, &published_table);
+            assert_eq!(mv.mv_id, mv_id);
+            assert_eq!(mv.definition.data, definition);
+            assert_eq!(mv.table_meta, published_table);
         }
 
         // Replacing an MV keeps the old definition for GC and leaves only the new MV ID in the source index.
@@ -1800,12 +1806,13 @@ impl SchemaApiTestSuite {
             let mvs = mt
                 .mget_mvs_by_source_table_id(&tenant, source_table_id)
                 .await?;
-            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
+            assert_eq!(mvs.source_table_mvs_index_seq, mv_ids.seq);
+            let [mv] = mvs.mvs.as_slice() else {
                 panic!("the replacement MV must be returned");
             };
-            assert_eq!(*got_mv_id, replacement.table_id);
-            assert_eq!(got_definition.data, definition);
-            assert!(got_table_meta.data.drop_on.is_none());
+            assert_eq!(mv.mv_id, replacement.table_id);
+            assert_eq!(mv.definition.data, definition);
+            assert!(mv.table_meta.data.drop_on.is_none());
             replacement
         };
 
@@ -1847,12 +1854,13 @@ impl SchemaApiTestSuite {
             let mvs = mt
                 .mget_mvs_by_source_table_id(&tenant, replacement_source_table_id)
                 .await?;
-            let [(got_mv_id, got_definition, got_table_meta)] = mvs.as_slice() else {
+            assert_eq!(mvs.source_table_mvs_index_seq, mv_ids.seq);
+            let [mv] = mvs.mvs.as_slice() else {
                 panic!("the new-source replacement MV must be returned");
             };
-            assert_eq!(*got_mv_id, new_source_replacement.table_id);
-            assert_eq!(got_definition.data, replacement_definition);
-            assert!(got_table_meta.data.drop_on.is_none());
+            assert_eq!(mv.mv_id, new_source_replacement.table_id);
+            assert_eq!(mv.definition.data, replacement_definition);
+            assert!(mv.table_meta.data.drop_on.is_none());
 
             new_source_replacement
         };

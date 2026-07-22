@@ -14,9 +14,10 @@
 
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::SourceTableMVIdsIdent;
+use databend_common_meta_app::schema::SourceTableMVs;
 use databend_common_meta_app::schema::TableId;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
@@ -48,25 +49,37 @@ where
         self.get_pb(&ident).await
     }
 
-    /// Get complete MV definitions and table metadata by source table ID.
+    /// Get the MVs that depend on a source table and the source index sequence.
     ///
-    /// The source index is read first, then all definitions and TableMeta records
-    /// are fetched in one `mget_kv` request. An MV is omitted if either record no
-    /// longer exists.
+    /// Each [`MVInfo`] contains the definition and `TableMeta` needed for a
+    /// multi-table write. The caller must use
+    /// [`SourceTableMVs::source_index_seq`] as a transaction condition so that a
+    /// concurrent MV create, drop, or replacement invalidates the write. The
+    /// sequence is 0 when the source index does not exist.
+    ///
+    /// Definitions and table metadata are fetched in one `mget_kv` request.
+    /// Incomplete MVs are omitted with a warning.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn mget_mvs_by_source_table_id(
         &self,
         tenant: &Tenant,
         source_table_id: u64,
-    ) -> Result<Vec<(u64, SeqV<MVDefinition>, SeqV<TableMeta>)>, MetaError> {
+    ) -> Result<SourceTableMVs, MetaError> {
         let source_ident = SourceTableMVIdsIdent::new(tenant, source_table_id);
         let Some(source_mv_ids) = self.get_pb(&source_ident).await? else {
-            return Ok(vec![]);
+            return Ok(SourceTableMVs {
+                source_table_mvs_index_seq: 0,
+                mvs: vec![],
+            });
         };
+        let source_index_seq = source_mv_ids.seq;
         let mv_ids = source_mv_ids.data.mv_ids();
         if mv_ids.is_empty() {
-            return Ok(vec![]);
+            return Ok(SourceTableMVs {
+                source_table_mvs_index_seq: source_index_seq,
+                mvs: vec![],
+            });
         }
 
         let mut keys = Vec::with_capacity(mv_ids.len() * 2);
@@ -106,10 +119,17 @@ where
                 );
                 continue;
             };
-            mvs.push((*mv_id, definition, table_meta));
+            mvs.push(MVInfo {
+                mv_id: *mv_id,
+                definition,
+                table_meta,
+            });
         }
 
-        Ok(mvs)
+        Ok(SourceTableMVs {
+            source_table_mvs_index_seq: source_index_seq,
+            mvs,
+        })
     }
 }
 

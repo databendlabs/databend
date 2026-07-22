@@ -15,6 +15,7 @@
 //! Materialized view metadata.
 
 use databend_common_expression::TableSchema;
+use databend_meta_client::types::SeqV;
 
 use super::TableMeta;
 use crate::app_error::AppError;
@@ -70,6 +71,22 @@ pub struct MVDefinition {
     /// visible column types. `TableMeta::schema` stores the rewritten physical
     /// schema that Fuse uses to read and write the materialized data.
     pub schema: TableSchema,
+}
+
+/// Complete metadata needed to use one materialized view.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MVInfo {
+    pub mv_id: u64,
+    pub definition: SeqV<MVDefinition>,
+    pub table_meta: SeqV<TableMeta>,
+}
+
+/// Materialized views associated with one source table.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceTableMVs {
+    /// Sequence of the [`SourceTableMVIds`] KV, or 0 if it does not exist.
+    pub source_table_mvs_index_seq: u64,
+    pub mvs: Vec<MVInfo>,
 }
 
 /// Reverse index from a source table to its dependent materialized-view table IDs.
