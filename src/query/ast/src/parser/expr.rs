@@ -1748,10 +1748,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         return with_span!(rule!(#in_list | #in_subquery | #exists | #between)).parse(i);
     }
 
+    if matches!(
+        i.tokens
+            .get(..2)
+            .map(|tokens| (tokens[0].kind, tokens[1].kind)),
+        Some((CAST | TRY_CAST, LParen))
+    ) {
+        return with_span!(cast).parse(i);
+    }
+
     try_dispatch!(i, true,
-        CAST | TRY_CAST => {
-            return with_span!(cast).parse(i);
-        },
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
         NOT => with_span!(rule!(
             #in_list
