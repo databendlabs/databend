@@ -24,6 +24,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnView;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AnyNumberType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
@@ -268,14 +269,7 @@ impl ArgMinMaxBuilder {
                 Self::create_for_value::<EmptyMapType, CMP_TYPE>(build, arg_type, value_type)
             }
             DataType::Number(_) => {
-                with_number_mapped_type!(|NUM| match &arg_type {
-                    DataType::Number(NumberDataType::NUM) => {
-                        Self::create_for_value::<NumberType<NUM>, CMP_TYPE>(
-                            build, arg_type, value_type,
-                        )
-                    }
-                    _ => unreachable!(),
-                })
+                Self::create_for_value::<AnyNumberType, CMP_TYPE>(build, arg_type, value_type)
             }
             _ => Self::create_for_value::<AnyType, CMP_TYPE>(build, arg_type, value_type),
         }
