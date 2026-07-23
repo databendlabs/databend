@@ -136,7 +136,7 @@ Exchange(Merge)
             │   └── EvalScalar
             │       ├── scalars: [a (#2) AS (#2), b (#3) AS (#3), 1 AS (#5), a (#7) AS (#8)]
             │       └── EvalScalar
-            │           ├── scalars: [a (#2) AS (#2), a (#2) AS (#2), b (#3) AS (#3), a (#0) AS (#7)]
+            │           ├── scalars: [a (#2) AS (#2), b (#3) AS (#3), a (#0) AS (#7)]
             │           └── Filter
             │               ├── filters: [eq(a (#2), a (#0))]
             │               └── Join(Cross)

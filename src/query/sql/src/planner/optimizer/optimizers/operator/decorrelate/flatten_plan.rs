@@ -257,28 +257,30 @@ impl SubqueryDecorrelatorOptimizer {
 
         let metadata = self.metadata.clone();
         let metadata = metadata.read();
-        let items: Vec<ScalarItem> = eval_scalar
+        let mut output_columns = ColumnSet::new();
+        let mut items: Vec<ScalarItem> = eval_scalar
             .items
             .iter()
             .filter(|item| !correlated_columns.contains(&item.index))
-            .map(Item::Scalar)
-            .chain(correlated_columns.iter().copied().map(Item::Index))
-            .map(|item| match item {
-                Item::Scalar(item) => Ok(ScalarItem {
+            .map(|item| {
+                output_columns.insert(item.index);
+                Ok(ScalarItem {
                     scalar: self.flatten_scalar(
                         &item.scalar,
                         correlated_columns,
                         &derived_columns,
                     )?,
                     index: item.index,
-                }),
-                Item::Index(old) => Ok(Self::scalar_item_from_index(
-                    derived_columns.must_resolve(old)?,
-                    "outer.",
-                    &metadata,
-                )),
+                })
             })
             .collect::<Result<_>>()?;
+
+        for old in correlated_columns {
+            let index = derived_columns.must_resolve(*old)?;
+            if output_columns.insert(index) {
+                items.push(Self::scalar_item_from_index(index, "outer.", &metadata));
+            }
+        }
 
         // Eg1. SELECT c_id, (SELECT count() FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
         // Eg2. SELECT
