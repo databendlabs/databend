@@ -321,6 +321,26 @@ EXPLAIN SELECT p, c FROM recluster_partitioned WHERE p % 2 = 1
 ----
 <slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
 
+# The last block can be held pending while the preceding partition segment is
+# serialized. If the input finishes in the meantime, the pending block must
+# immediately flush its own segment instead of waiting for more input forever.
+statement ok
+SET max_threads=2
+
+statement ok
+SET max_block_size=10000
+
+statement ok
+CREATE TABLE segment_finish_race(event_time TIMESTAMP, id BIGINT) PARTITION BY (date_trunc(day, event_time)) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO segment_finish_race SELECT to_timestamp(1767225600000000 + (number DIV 25000) * 86400000000 + number % 25000), number FROM numbers(200000)
+
+query II
+SELECT row_count, block_count FROM fuse_snapshot('db_09_0054', 'segment_finish_race') LIMIT 1
+----
+200000 24
+
 # Partition splitting is local to each sorted input block. Fragmented multi-block
 # input may therefore produce several blocks for the same physical partition.
 statement ok

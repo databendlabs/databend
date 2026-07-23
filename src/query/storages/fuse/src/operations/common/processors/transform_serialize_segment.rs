@@ -314,6 +314,14 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
+
+            // The last input block may have been held in `pending_block` while the previous
+            // partition was serialized. If the input finished in the meantime, no port event
+            // remains to wake this processor, so flush the final partition immediately.
+            if self.input.is_finished() {
+                self.state = State::GenerateSegment;
+                return Ok(Event::Sync);
+            }
         }
 
         self.input.set_need_data();
