@@ -336,10 +336,19 @@ CREATE TABLE segment_finish_race(event_time TIMESTAMP, id BIGINT) PARTITION BY (
 statement ok
 INSERT INTO segment_finish_race SELECT to_timestamp(1767225600000000 + (number DIV 25000) * 86400000000 + number % 25000), number FROM numbers(200000)
 
-query II
-SELECT row_count, block_count FROM fuse_snapshot('db_09_0054', 'segment_finish_race') LIMIT 1
+query I
+SELECT row_count FROM fuse_snapshot('db_09_0054', 'segment_finish_race') LIMIT 1
 ----
-200000 24
+200000
+
+# The number of blocks depends on pipeline and cluster scheduling. Assert the
+# physical invariant directly: no block may span two day partitions.
+query I
+SELECT count_if(date_trunc(day, statistics:min::timestamp) != date_trunc(day, statistics:max::timestamp))
+FROM fuse_block_statistics('db_09_0054', 'segment_finish_race')
+WHERE column_name = 'event_time'
+----
+0
 
 # Partition splitting is local to each sorted input block. Fragmented multi-block
 # input may therefore produce several blocks for the same physical partition.
