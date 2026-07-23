@@ -408,6 +408,7 @@ impl StreamBlockBuilder {
             cluster_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
+            bloom_index_files: vec![],
             bloom_filter_index_size: bloom_index_state
                 .as_ref()
                 .map(|v| v.size)

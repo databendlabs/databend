@@ -30,6 +30,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -159,6 +160,10 @@ impl Interpreter for SetOptionsInterpreter {
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
+        is_valid_option_of_type::<bool>(
+            &self.plan.set_options,
+            FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE,
+        )?;
         is_valid_option_of_type::<u64>(
             &self.plan.set_options,
             FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
@@ -284,6 +289,13 @@ async fn set_segment_format(
                     .await?;
                 for segment in segments {
                     let segment = segment?;
+                    if segment.blocks.iter().any(|block| {
+                        !block.column_groups.is_empty() || !block.bloom_index_files.is_empty()
+                    }) {
+                        return Err(ErrorCode::TableOptionInvalid(
+                            "cannot convert segments containing partial-update files to the column-oriented format; rewrite the blocks to the single-file layout first",
+                        ));
+                    }
                     for block in segment.blocks {
                         segment_builder.add_block(block.as_ref().clone())?;
                     }

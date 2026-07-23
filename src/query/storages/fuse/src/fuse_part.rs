@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -49,6 +50,8 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
+    #[serde(default)]
+    pub bloom_index_files: Vec<BloomIndexFileMeta>,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
@@ -89,6 +92,7 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        bloom_index_files: Vec<BloomIndexFileMeta>,
         rows_count: u64,
         column_groups: Vec<FuseColumnGroupPartInfo>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
@@ -101,6 +105,7 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            bloom_index_files,
             create_on,
             column_groups,
             nums_rows: rows_count as usize,

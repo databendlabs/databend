@@ -223,6 +223,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             .should_keep(
                                 &bloom_filter_index_location,
                                 bloom_filter_index_size,
+                                &[],
                                 &columns_stat,
                                 column_ids.clone(),
                                 &block_read_info,
@@ -286,6 +287,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         location_path,
                         bloom_filter_index_location,
                         bloom_filter_index_size,
+                        vec![],
                         row_count,
                         column_groups,
                         Some(columns_stat),

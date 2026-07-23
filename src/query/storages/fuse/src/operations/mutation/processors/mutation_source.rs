@@ -38,6 +38,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::BlockReadResult;
 use crate::FuseStorageFormat;
@@ -90,6 +91,7 @@ pub struct MutationSource {
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
     update_rows: u64,
+    origin_block_meta: Option<Arc<BlockMeta>>,
 }
 
 impl MutationSource {
@@ -119,6 +121,7 @@ impl MutationSource {
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
             update_rows: 0,
+            origin_block_meta: None,
         })))
     }
 }
@@ -223,6 +226,7 @@ impl Processor for MutationSource {
                                             self.index.clone(),
                                             self.stats_type.clone(),
                                             0,
+                                            None,
                                         ),
                                     ));
                                     self.state = State::Output(
@@ -325,6 +329,7 @@ impl Processor for MutationSource {
                         self.index.clone(),
                         self.stats_type.clone(),
                         update_rows,
+                        self.origin_block_meta.take(),
                     )));
                 let meta: BlockMetaInfoPtr = if self.update_stream_columns {
                     Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
@@ -359,8 +364,11 @@ impl Processor for MutationSource {
                             block_idx: part.index.block_idx,
                         };
                         if matches!(self.action, MutationAction::Deletion) {
-                            self.stats_type =
-                                ClusterStatsGenType::WithOrigin(part.cluster_stats.clone());
+                            self.stats_type = ClusterStatsGenType::WithOrigin(
+                                part.block_meta.cluster_stats.clone(),
+                            );
+                        } else {
+                            self.origin_block_meta = Some(part.block_meta.clone());
                         }
 
                         let inner_part = part.inner_part.clone();
@@ -376,6 +384,7 @@ impl Processor for MutationSource {
                                     self.index.clone(),
                                     self.stats_type.clone(),
                                     0,
+                                    None,
                                 ),
                             ));
                             self.state = State::Output(

@@ -131,6 +131,7 @@ impl ReadBlockContext {
             location,
             None,
             0,
+            vec![],
             num_rows,
             column_groups,
             None,

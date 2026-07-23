@@ -29,6 +29,7 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ColumnMutationFormatter;
@@ -51,6 +52,7 @@ pub struct ColumnMutation {
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub udf_col_num: usize,
+    pub partial_update_fields: Option<Vec<usize>>,
 }
 
 #[typetag::serde]
@@ -98,6 +100,7 @@ impl IPhysicalPlan for ColumnMutation {
             has_filter_column: self.has_filter_column,
             table_meta_timestamps: self.table_meta_timestamps,
             udf_col_num: self.udf_col_num,
+            partial_update_fields: self.partial_update_fields.clone(),
         })
     }
 
@@ -114,11 +117,10 @@ impl IPhysicalPlan for ColumnMutation {
             let mut exprs = Vec::with_capacity(mutation_expr.len());
             for (id, remote_expr) in mutation_expr {
                 let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let schema_index = field_id_to_schema_index.get(id).unwrap();
-                schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                field_id_to_schema_index
-                    .entry(*id)
-                    .and_modify(|e| *e = next_column_offset);
+                if let Some(schema_index) = field_id_to_schema_index.get(id) {
+                    schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+                }
+                field_id_to_schema_index.insert(*id, next_column_offset);
                 next_column_offset += 1;
                 exprs.push(expr);
             }
@@ -139,21 +141,15 @@ impl IPhysicalPlan for ColumnMutation {
                         remote_expr
                             .as_expr(&BUILTIN_FUNCTIONS)
                             .project_column_ref(|index| {
-                                schema_offset_to_new_offset
+                                Ok(schema_offset_to_new_offset
                                     .get(index)
-                                    .ok_or_else(|| {
-                                        ErrorCode::BadArguments(format!(
-                                            "Unable to get field named \"{}\"",
-                                            index
-                                        ))
-                                    })
                                     .copied()
+                                    .unwrap_or(*index))
                             })?;
-                    let schema_index = field_id_to_schema_index.get(id).unwrap();
-                    schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                    field_id_to_schema_index
-                        .entry(*id)
-                        .and_modify(|e| *e = next_column_offset);
+                    if let Some(schema_index) = field_id_to_schema_index.get(id) {
+                        schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+                    }
+                    field_id_to_schema_index.insert(*id, next_column_offset);
                     next_column_offset += 1;
                     exprs.push(expr);
                 }
@@ -166,12 +162,38 @@ impl IPhysicalPlan for ColumnMutation {
             // Keep only table fields in their schema order. Mutation input may
             // carry derived UDF argument/result columns that must not be
             // serialized back into the table.
-            let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
-            projection.sort_by_key(|(field_id, _)| *field_id);
-            let projection = projection
-                .into_iter()
-                .map(|(_, schema_index)| *schema_index)
-                .collect::<Vec<_>>();
+            let projection = if let Some(updated_fields) = &self.partial_update_fields {
+                let table = builder
+                    .ctx
+                    .build_table_by_table_info(&self.table_info, None)?;
+                let table = FuseTable::try_from_table(table.as_ref())?;
+                let schema_with_stream = table.schema_with_stream();
+                let source_schema = schema_with_stream.remove_virtual_computed_fields();
+                updated_fields
+                    .iter()
+                    .map(|source_index| {
+                        let column_id = source_schema.field(*source_index).column_id();
+                        let field_id = schema_with_stream
+                            .fields()
+                            .iter()
+                            .position(|field| field.column_id() == column_id)
+                            .ok_or_else(|| ErrorCode::Internal("updated field is not in schema"))?;
+                        field_id_to_schema_index
+                            .get(&field_id)
+                            .copied()
+                            .ok_or_else(|| {
+                                ErrorCode::Internal("updated field is not in mutation output")
+                            })
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
+                projection.sort_by_key(|(field_id, _)| *field_id);
+                projection
+                    .into_iter()
+                    .map(|(_, schema_index)| *schema_index)
+                    .collect::<Vec<_>>()
+            };
             block_operators.push(BlockOperator::Project { projection });
 
             builder.main_pipeline.add_transformer(|| {
@@ -188,8 +210,12 @@ impl IPhysicalPlan for ColumnMutation {
             .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
+        let write_column_group = self.partial_update_fields.is_some();
+
         let block_thresholds = table.get_block_thresholds();
-        let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {
+        let cluster_stats_gen = if write_column_group {
+            ClusterStatsGenerator::default()
+        } else if matches!(self.mutation_kind, MutationKind::Delete) {
             let input_schema = DataSchema::from(table.schema_with_stream()).into();
             table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
         } else {
@@ -202,15 +228,27 @@ impl IPhysicalPlan for ColumnMutation {
         };
 
         builder.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                builder.ctx.clone(),
-                input,
-                output,
-                table,
-                cluster_stats_gen.clone(),
-                self.mutation_kind,
-                self.table_meta_timestamps,
-            )?;
+            let proc = if write_column_group {
+                TransformSerializeBlock::try_create_for_update(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    cluster_stats_gen.clone(),
+                    self.partial_update_fields.clone().unwrap(),
+                    self.table_meta_timestamps,
+                )?
+            } else {
+                TransformSerializeBlock::try_create(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    cluster_stats_gen.clone(),
+                    self.mutation_kind,
+                    self.table_meta_timestamps,
+                )?
+            };
             proc.into_processor()
         })
     }

@@ -1605,6 +1605,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_partial_update", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables eligible direct UPDATE statements to write column groups.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_auto_vacuum", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Whether to automatically trigger VACUUM operations on tables (using vacuum2)",

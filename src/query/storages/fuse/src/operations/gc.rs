@@ -803,9 +803,27 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
         let mut hll_location = HashSet::new();
         let block_metas = value.block_metas()?;
         for block_meta in block_metas.into_iter() {
-            block_location.insert(block_meta.location.0.clone());
-            if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
-                bloom_location.insert(bloom_loc.0.clone());
+            if block_meta.column_groups.is_empty() {
+                block_location.insert(block_meta.location.0.clone());
+            } else {
+                block_location.extend(
+                    block_meta
+                        .column_groups
+                        .iter()
+                        .map(|group| group.location.0.clone()),
+                );
+            }
+            if block_meta.bloom_index_files.is_empty() {
+                if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
+                    bloom_location.insert(bloom_loc.0.clone());
+                }
+            } else {
+                bloom_location.extend(
+                    block_meta
+                        .bloom_index_files
+                        .iter()
+                        .map(|file| file.location.0.clone()),
+                );
             }
         }
         if let Some(loc) = value.as_ref().summary.additional_stats_loc() {

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -28,6 +29,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -79,6 +81,8 @@ impl TableMetaFunc for FuseBlock {
                 "virtual_column_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
+            TableField::new("column_groups", TableDataType::Variant),
+            TableField::new("bloom_index_files", TableDataType::Variant),
         ])
     }
 
@@ -104,6 +108,8 @@ impl TableMetaFunc for FuseBlock {
         let mut vector_index_size = Vec::with_capacity(len);
         let mut spatial_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
+        let mut column_groups = Vec::with_capacity(len);
+        let mut bloom_index_files = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -140,6 +146,49 @@ impl TableMetaFunc for FuseBlock {
                             .as_ref()
                             .map(|m| m.virtual_column_size),
                     );
+                    column_groups.push(
+                        jsonb::parse_value(
+                            serde_json::to_string(
+                                &block
+                                    .column_groups
+                                    .iter()
+                                    .map(|group| {
+                                        serde_json::json!({
+                                            "active_column_ids": group.active_column_ids,
+                                            "location": group.location.0,
+                                            "format_version": group.format_version,
+                                            "file_size": group.file_size,
+                                            "uncompressed_size": group.uncompressed_size,
+                                        })
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )?
+                            .as_bytes(),
+                        )
+                        .map_err(|error| ErrorCode::Internal(error.to_string()))?
+                        .to_vec(),
+                    );
+                    bloom_index_files.push(
+                        jsonb::parse_value(
+                            serde_json::to_string(
+                                &block
+                                    .bloom_index_files
+                                    .iter()
+                                    .map(|file| {
+                                        serde_json::json!({
+                                            "active_column_ids": file.active_column_ids,
+                                            "location": file.location.0,
+                                            "format_version": file.format_version,
+                                            "file_size": file.file_size,
+                                        })
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )?
+                            .as_bytes(),
+                        )
+                        .map_err(|error| ErrorCode::Internal(error.to_string()))?
+                        .to_vec(),
+                    );
 
                     num_rows += 1;
                     if num_rows >= limit {
@@ -164,6 +213,8 @@ impl TableMetaFunc for FuseBlock {
                 UInt64Type::from_opt_data(vector_index_size).into(),
                 UInt64Type::from_opt_data(spatial_index_size).into(),
                 UInt64Type::from_opt_data(virtual_column_size).into(),
+                VariantType::from_data(column_groups).into(),
+                VariantType::from_data(bloom_index_files).into(),
             ],
             num_rows,
         ))

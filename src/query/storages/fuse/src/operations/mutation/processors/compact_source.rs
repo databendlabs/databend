@@ -19,6 +19,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
@@ -89,14 +90,15 @@ impl PrefetchAsyncSource for CompactSource {
                                 metrics_inc_compact_block_read_bytes(block.block_size);
                             }
 
-                            block_reader
-                                .read_columns_data_by_merge_io(
+                            let column_groups = block_reader.projected_column_groups(&block);
+                            let read_res = block_reader
+                                .read_column_groups_data_by_merge_io(
                                     &settings,
-                                    &block.location.0,
-                                    &block.col_metas,
+                                    &column_groups,
                                     &None,
                                 )
-                                .await
+                                .await?;
+                            Ok::<_, ErrorCode>((read_res, column_groups))
                         })
                         .await
                         .unwrap()
@@ -105,7 +107,10 @@ impl PrefetchAsyncSource for CompactSource {
 
                 let start = Instant::now();
 
-                let read_res = futures::future::try_join_all(task_futures).await?;
+                let (read_res, column_groups) = futures::future::try_join_all(task_futures)
+                    .await?
+                    .into_iter()
+                    .unzip();
                 // Perf.
                 {
                     metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
@@ -113,6 +118,7 @@ impl PrefetchAsyncSource for CompactSource {
                 Box::new(CompactSourceMeta::Concat {
                     read_res,
                     metas: task.blocks.clone(),
+                    column_groups,
                     index: task.index.clone(),
                 })
             }
@@ -157,17 +163,29 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
             CompactSourceMeta::Concat {
                 read_res,
                 metas,
+                column_groups,
                 index,
             } => {
                 let blocks = read_res
                     .into_iter()
                     .zip(metas.into_iter())
-                    .map(|(data, meta)| {
-                        let mut block = self.block_reader.deserialize_chunks_with_meta(
-                            &meta.as_ref().into(),
-                            &self.storage_format,
-                            data,
-                        )?;
+                    .zip(column_groups.into_iter())
+                    .map(|((data, meta), column_groups)| {
+                        let chunks = data.columns_chunks()?;
+                        let mut block = match self.storage_format {
+                            FuseStorageFormat::Parquet => {
+                                self.block_reader.deserialize_column_groups(
+                                    meta.row_count as usize,
+                                    &column_groups,
+                                    chunks,
+                                    &meta.compression,
+                                    None,
+                                )?
+                            }
+                            FuseStorageFormat::Unsupported => {
+                                return Err(crate::unsupported_storage_format_error());
+                            }
+                        };
 
                         self.scan_progress.incr(&ProgressValues {
                             rows: block.num_rows(),
@@ -188,6 +206,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     index,
                     ClusterStatsGenType::Generally,
                     0,
+                    None,
                 )));
                 let new_block = block.add_meta(Some(meta))?;
                 Ok(vec![new_block])

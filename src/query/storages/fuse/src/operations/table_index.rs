@@ -794,6 +794,8 @@ impl AsyncTransform for NgramIndexTransform {
             };
             let state = BloomIndexState::from_bloom_index(&bloom_index, index_location)?;
 
+            new_block_meta.bloom_filter_index_location = Some(state.location.clone());
+            new_block_meta.bloom_index_files.clear();
             new_block_meta.bloom_filter_index_size = state.size();
             new_block_meta.ngram_filter_index_size = state.ngram_size();
             BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;

@@ -1156,6 +1156,7 @@ mod tests {
             cluster_stats: None,
             location: (test_block_path(uuid), 0),
             bloom_filter_index_location: None,
+            bloom_index_files: vec![],
             bloom_filter_index_size: 0,
             inverted_index_size: None,
             ngram_filter_index_size: None,

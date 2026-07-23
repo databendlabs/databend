@@ -184,6 +184,18 @@ pub struct ColumnGroupFileMeta {
     pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
 }
 
+/// Metadata of one physical Bloom index file referenced by a logical block.
+///
+/// A file may still contain filters that are no longer active. Readers must only use the filters
+/// whose column ids are listed in [`Self::active_column_ids`].
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct BloomIndexFileMeta {
+    pub active_column_ids: Vec<ColumnId>,
+    pub location: Location,
+    pub format_version: FormatVersion,
+    pub file_size: u64,
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -205,6 +217,13 @@ pub struct BlockMeta {
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
+
+    /// Physical files that contain the active Bloom filters of this logical block.
+    ///
+    /// An empty vector is the legacy single-file representation described by
+    /// `bloom_filter_index_location` and `bloom_filter_index_size`.
+    #[serde(default)]
+    pub bloom_index_files: Vec<BloomIndexFileMeta>,
 
     #[serde(default)]
     pub bloom_filter_index_size: u64,
@@ -257,6 +276,7 @@ impl BlockMeta {
             cluster_stats,
             location,
             bloom_filter_index_location,
+            bloom_index_files: vec![],
             bloom_filter_index_size,
             inverted_index_size,
             ngram_filter_index_size,
@@ -397,6 +417,7 @@ impl BlockMeta {
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
+            bloom_index_files: vec![],
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
@@ -430,6 +451,7 @@ impl BlockMeta {
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
+            bloom_index_files: vec![],
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
@@ -463,7 +485,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deserialize_legacy_block_meta_without_column_groups() {
+    fn test_deserialize_legacy_block_meta_without_file_lists() {
         let block_meta = BlockMeta::new(
             10,
             300,
@@ -494,9 +516,17 @@ mod tests {
                 .remove("column_groups")
                 .is_some()
         );
+        assert!(
+            value
+                .as_object_mut()
+                .unwrap()
+                .remove("bloom_index_files")
+                .is_some()
+        );
 
         let decoded: BlockMeta = serde_json::from_value(value).unwrap();
         assert!(decoded.column_groups.is_empty());
+        assert!(decoded.bloom_index_files.is_empty());
         assert_eq!(decoded.location, location);
     }
 }

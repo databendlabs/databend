@@ -14,12 +14,14 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
@@ -49,7 +51,9 @@ use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -271,6 +275,7 @@ impl BlockBuilder {
             cluster_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
+            bloom_index_files: vec![],
             bloom_filter_index_size: bloom_index_state
                 .as_ref()
                 .map(|v| v.size)
@@ -311,6 +316,249 @@ impl BlockBuilder {
             column_hlls,
         };
         Ok(serialized)
+    }
+
+    /// Serialize only the fields changed by an UPDATE and merge their physical
+    /// metadata back into the original logical block.
+    pub fn build_column_group(
+        &self,
+        data_block: DataBlock,
+        origin: &BlockMeta,
+        updated_field_indices: &[FieldIndex],
+    ) -> Result<BlockSerialization> {
+        if data_block.num_rows() as u64 != origin.row_count {
+            return Err(ErrorCode::Internal(
+                "column-group update changed the block row count",
+            ));
+        }
+
+        let mut updated_field_indices = updated_field_indices.to_vec();
+        updated_field_indices.sort_unstable();
+        updated_field_indices.dedup();
+        if updated_field_indices.is_empty() {
+            return Err(ErrorCode::Internal(
+                "column-group update has no updated fields",
+            ));
+        }
+        if updated_field_indices
+            .iter()
+            .any(|index| *index >= self.source_schema.fields().len())
+        {
+            return Err(ErrorCode::Internal(
+                "column-group update field is outside the table schema",
+            ));
+        }
+
+        let updated_fields = updated_field_indices
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        let updated_schema = Arc::new(self.source_schema.project(&updated_field_indices));
+        if data_block.num_columns() != updated_schema.fields().len() {
+            return Err(ErrorCode::Internal(
+                "column-group update block does not match updated fields",
+            ));
+        }
+        let updated_block = data_block;
+        let updated_column_ids = updated_schema.to_leaf_column_ids();
+        let updated_column_id_set = updated_column_ids.iter().copied().collect::<HashSet<_>>();
+
+        let (data_location, block_id) = self
+            .meta_locations
+            .gen_block_location(self.table_meta_timestamps);
+
+        let updated_bloom_columns_map = updated_field_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(updated_index, source_index)| {
+                self.bloom_columns_map
+                    .get(source_index)
+                    .cloned()
+                    .map(|field| (updated_index, field))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let updated_bloom_column_ids = updated_bloom_columns_map
+            .values()
+            .map(|field| field.column_id())
+            .collect::<HashSet<_>>();
+        let rebuild_bloom_index = !updated_bloom_columns_map.is_empty();
+        let bloom_index_state = if rebuild_bloom_index {
+            let location = self.meta_locations.block_bloom_index_location(&block_id);
+            BloomIndexState::from_data_block(
+                self.ctx.clone(),
+                &updated_block,
+                location,
+                self.write_settings.bloom_index_type,
+                updated_bloom_columns_map,
+                &[],
+            )?
+        } else {
+            None
+        };
+
+        let mut column_distinct_count = bloom_index_state
+            .as_ref()
+            .map(|index| index.column_distinct_count.clone())
+            .unwrap_or_default();
+        let updated_ndv_columns_map = updated_field_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(updated_index, source_index)| {
+                self.ndv_columns_map
+                    .get(source_index)
+                    .cloned()
+                    .map(|field| (updated_index, field))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let column_hlls = build_column_hlls(&updated_block, &updated_ndv_columns_map)?;
+        if let Some(hlls) = &column_hlls {
+            for (column_id, hll) in hlls {
+                if let Entry::Vacant(entry) = column_distinct_count.entry(*column_id) {
+                    entry.insert(hll.count());
+                }
+            }
+        }
+
+        let rebuild_virtual_columns = self
+            .virtual_column_builder
+            .as_ref()
+            .is_some_and(|builder| builder.is_affected(&updated_fields));
+        let virtual_column_state = None;
+
+        let updated_col_stats = gen_columns_statistics(
+            &updated_block,
+            Some(column_distinct_count),
+            &updated_schema,
+            &self.write_settings.col_stats_truncate_lens,
+        )?;
+        let uncompressed_size =
+            updated_block.estimate_block_size(updated_block.num_columns()) as u64;
+        let (updated_col_metas, buffer) = serialize_block_with_column_stats(
+            &self.write_settings,
+            &updated_schema,
+            Some(&updated_col_stats),
+            updated_block,
+        )?;
+        let file_size = buffer.len() as u64;
+
+        let current_column_ids = self.source_schema.to_leaf_column_id_set();
+        let mut column_groups = if origin.column_groups.is_empty() {
+            vec![ColumnGroupFileMeta {
+                active_column_ids: self
+                    .source_schema
+                    .to_leaf_column_ids()
+                    .into_iter()
+                    .filter(|column_id| origin.col_metas.contains_key(column_id))
+                    .collect(),
+                location: origin.location.clone(),
+                format_version: origin.location.1,
+                file_size: origin.file_size,
+                uncompressed_size: origin.block_size,
+                leaf_column_metas: origin.col_metas.clone(),
+            }]
+        } else {
+            origin.column_groups.clone()
+        };
+        for group in &mut column_groups {
+            group.active_column_ids.retain(|column_id| {
+                current_column_ids.contains(column_id) && !updated_column_id_set.contains(column_id)
+            });
+        }
+        column_groups.retain(|group| !group.active_column_ids.is_empty());
+        column_groups.push(ColumnGroupFileMeta {
+            active_column_ids: updated_column_ids,
+            location: data_location.clone(),
+            format_version: data_location.1,
+            file_size,
+            uncompressed_size,
+            leaf_column_metas: updated_col_metas.clone(),
+        });
+
+        let mut block_meta = origin.clone();
+        block_meta.location = data_location.clone();
+        block_meta.file_size = column_groups.iter().map(|group| group.file_size).sum();
+        block_meta.block_size = column_groups
+            .iter()
+            .map(|group| group.uncompressed_size)
+            .sum();
+        block_meta.column_groups = column_groups;
+        block_meta
+            .col_metas
+            .retain(|column_id, _| current_column_ids.contains(column_id));
+        block_meta.col_metas.extend(updated_col_metas);
+        block_meta
+            .col_stats
+            .retain(|column_id, _| current_column_ids.contains(column_id));
+        block_meta.col_stats.extend(updated_col_stats);
+        block_meta.create_on = Some(Utc::now());
+
+        if rebuild_bloom_index {
+            let mut bloom_index_files = if origin.bloom_index_files.is_empty() {
+                origin
+                    .bloom_filter_index_location
+                    .as_ref()
+                    .map(|location| BloomIndexFileMeta {
+                        active_column_ids: self
+                            .bloom_columns_map
+                            .values()
+                            .map(|field| field.column_id())
+                            .filter(|column_id| !updated_bloom_column_ids.contains(column_id))
+                            .collect(),
+                        location: location.clone(),
+                        format_version: location.1,
+                        file_size: origin.bloom_filter_index_size,
+                    })
+                    .into_iter()
+                    .collect()
+            } else {
+                origin.bloom_index_files.clone()
+            };
+            for file in &mut bloom_index_files {
+                file.active_column_ids
+                    .retain(|column_id| !updated_bloom_column_ids.contains(column_id));
+            }
+            bloom_index_files.retain(|file| !file.active_column_ids.is_empty());
+            if let Some(state) = &bloom_index_state {
+                let mut active_column_ids =
+                    updated_bloom_column_ids.iter().copied().collect::<Vec<_>>();
+                active_column_ids.sort_unstable();
+                bloom_index_files.push(BloomIndexFileMeta {
+                    active_column_ids,
+                    location: state.location.clone(),
+                    format_version: state.location.1,
+                    file_size: state.size,
+                });
+            }
+            block_meta.bloom_filter_index_location = None;
+            block_meta.bloom_filter_index_size =
+                bloom_index_files.iter().map(|file| file.file_size).sum();
+            block_meta.bloom_index_files = bloom_index_files;
+            block_meta.ngram_filter_index_size = None;
+        }
+        if rebuild_virtual_columns {
+            block_meta.virtual_block_meta = None;
+        }
+
+        let column_hlls = column_hlls
+            .map(|hlls| {
+                if self.serialize_hll {
+                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
+                } else {
+                    Ok(BlockHLLState::Deserialized(hlls))
+                }
+            })
+            .transpose()?;
+
+        Ok(BlockSerialization {
+            block_raw_data: buffer,
+            block_meta,
+            bloom_index_state,
+            inverted_index_states: vec![],
+            virtual_column_state,
+            vector_index_state: None,
+            spatial_index_state: None,
+            column_hlls,
+        })
     }
 }
 

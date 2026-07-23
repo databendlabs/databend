@@ -53,8 +53,45 @@ impl StreamContext {
         is_delete: bool,
         update_mutation_with_filter: bool,
     ) -> Result<Self> {
+        Self::try_create_inner(
+            func_ctx,
+            schema,
+            None,
+            table_version,
+            is_delete,
+            update_mutation_with_filter,
+        )
+    }
+
+    pub fn try_create_projected(
+        func_ctx: FunctionContext,
+        schema: Arc<TableSchema>,
+        projection: &[usize],
+        table_version: u64,
+        is_delete: bool,
+        update_mutation_with_filter: bool,
+    ) -> Result<Self> {
+        Self::try_create_inner(
+            func_ctx,
+            schema,
+            Some(projection),
+            table_version,
+            is_delete,
+            update_mutation_with_filter,
+        )
+    }
+
+    fn try_create_inner(
+        func_ctx: FunctionContext,
+        schema: Arc<TableSchema>,
+        projection: Option<&[usize]>,
+        table_version: u64,
+        is_delete: bool,
+        update_mutation_with_filter: bool,
+    ) -> Result<Self> {
         let input_schema = schema.remove_virtual_computed_fields();
-        let num_fields = input_schema.fields().len() + update_mutation_with_filter as usize;
+        let projected_len = projection.map_or(input_schema.fields().len(), <[usize]>::len);
+        let num_fields = projected_len + update_mutation_with_filter as usize;
 
         let stream_columns = [
             StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion),
@@ -69,12 +106,20 @@ impl StreamContext {
         let mut exprs = Vec::with_capacity(stream_columns.len());
         for stream_column in stream_columns.iter() {
             let schema_index = input_schema.index_of(stream_column.column_name()).unwrap();
+            let input_index = projection
+                .map(|projection| {
+                    projection
+                        .iter()
+                        .position(|index| *index == schema_index)
+                        .expect("partial update must read stream columns")
+                })
+                .unwrap_or(schema_index);
 
             let origin_stream_column_scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: ColumnBindingBuilder::new(
                     stream_column.column_name().to_string(),
-                    Symbol::from_field_index(schema_index),
+                    Symbol::from_field_index(input_index),
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
@@ -83,14 +128,14 @@ impl StreamContext {
 
             let current_stream_column_scalar_expr = match stream_column.column_type() {
                 StreamColumnType::OriginVersion => {
-                    new_schema_index.insert(schema_index, num_fields + 2);
+                    new_schema_index.insert(input_index, num_fields + 2);
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
                         value: table_version.into(),
                     })
                 }
                 StreamColumnType::OriginBlockId => {
-                    new_schema_index.insert(schema_index, num_fields + 3);
+                    new_schema_index.insert(input_index, num_fields + 3);
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
                         column: ColumnBindingBuilder::new(
@@ -103,7 +148,7 @@ impl StreamContext {
                     })
                 }
                 StreamColumnType::OriginRowNum => {
-                    new_schema_index.insert(schema_index, num_fields + 4);
+                    new_schema_index.insert(input_index, num_fields + 4);
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
                         column: ColumnBindingBuilder::new(

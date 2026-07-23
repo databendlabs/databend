@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline::core::Event;
@@ -35,6 +36,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -60,6 +62,7 @@ enum State {
         block: DataBlock,
         stats_type: ClusterStatsGenType,
         index: Option<BlockMetaIndex>,
+        origin_block_meta: Option<Arc<BlockMeta>>,
     },
     Serialized {
         serialized: BlockSerialization,
@@ -78,6 +81,7 @@ pub struct TransformSerializeBlock {
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
     pending_insert_rows: u64,
+    updated_field_indices: Option<Vec<FieldIndex>>,
 }
 
 impl TransformSerializeBlock {
@@ -98,6 +102,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             false,
+            None,
             table_meta_timestamps,
         )
     }
@@ -119,6 +124,30 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             true,
+            None,
+            table_meta_timestamps,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create_for_update(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+        updated_field_indices: Vec<FieldIndex>,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            MutationKind::Update,
+            false,
+            Some(updated_field_indices),
             table_meta_timestamps,
         )
     }
@@ -131,6 +160,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
+        updated_field_indices: Option<Vec<FieldIndex>>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let schema = table.schema();
@@ -217,6 +247,7 @@ impl TransformSerializeBlock {
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
             pending_insert_rows: 0,
+            updated_field_indices,
         })
     }
 
@@ -313,6 +344,7 @@ impl Processor for TransformSerializeBlock {
                             block: input_data,
                             stats_type: serialize_block.stats_type,
                             index: Some(serialize_block.index),
+                            origin_block_meta: serialize_block.origin_block_meta,
                         };
                         Ok(Event::Sync)
                     }
@@ -344,6 +376,7 @@ impl Processor for TransformSerializeBlock {
                 block: input_data,
                 stats_type: ClusterStatsGenType::Generally,
                 index: None,
+                origin_block_meta: None,
             };
             Ok(Event::Sync)
         }
@@ -355,11 +388,20 @@ impl Processor for TransformSerializeBlock {
                 block,
                 stats_type,
                 index,
+                origin_block_meta,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
-                let serialized =
+                let serialized = if let (Some(updated_field_indices), Some(origin_block_meta)) =
+                    (&self.updated_field_indices, origin_block_meta)
+                {
+                    self.block_builder.build_column_group(
+                        block,
+                        &origin_block_meta,
+                        updated_field_indices,
+                    )?
+                } else {
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
                             ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
@@ -368,7 +410,8 @@ impl Processor for TransformSerializeBlock {
                                     .gen_with_origin_stats(&block, origin_stats.clone())?;
                                 Ok((cluster_stats, block))
                             }
-                        })?;
+                        })?
+                };
 
                 self.state = State::Serialized { serialized, index };
             }

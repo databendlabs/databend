@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::future::Future;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
@@ -27,11 +28,52 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::BlockRea
 use super::BlockReader;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
+use crate::FuseColumnGroupPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::unsupported_storage_format_error;
 
 impl BlockReader {
+    pub(crate) fn projected_column_groups(&self, meta: &BlockMeta) -> Vec<FuseColumnGroupPartInfo> {
+        let projected_column_ids = self
+            .project_column_nodes
+            .iter()
+            .flat_map(|node| node.leaf_column_ids.iter().copied())
+            .collect::<std::collections::HashSet<_>>();
+        if meta.column_groups.is_empty() {
+            return vec![FuseColumnGroupPartInfo {
+                location: meta.location.0.clone(),
+                columns_meta: meta
+                    .col_metas
+                    .iter()
+                    .filter(|(column_id, _)| projected_column_ids.contains(column_id))
+                    .map(|(column_id, column_meta)| (*column_id, column_meta.clone()))
+                    .collect(),
+            }];
+        }
+
+        meta.column_groups
+            .iter()
+            .filter_map(|group| {
+                let columns_meta = group
+                    .active_column_ids
+                    .iter()
+                    .filter(|column_id| projected_column_ids.contains(column_id))
+                    .filter_map(|column_id| {
+                        group
+                            .leaf_column_metas
+                            .get(column_id)
+                            .map(|column_meta| (*column_id, column_meta.clone()))
+                    })
+                    .collect::<HashMap<_, _>>();
+                (!columns_meta.is_empty()).then(|| FuseColumnGroupPartInfo {
+                    location: group.location.0.clone(),
+                    columns_meta,
+                })
+            })
+            .collect()
+    }
+
     /// Deserialize column chunks data from parquet format to DataBlock.
     pub fn deserialize_chunks_with_part_info(
         &self,
@@ -77,11 +119,21 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         // Get the merged IO read result.
-        let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
-            .await?;
-
-        self.deserialize_chunks_with_meta(&meta.into(), storage_format, merge_io_read_result)
+        let column_groups = self.projected_column_groups(meta);
+        let read: std::pin::Pin<Box<dyn Future<Output = Result<BlockReadResult>> + Send + '_>> =
+            Box::pin(self.read_column_groups_data_by_merge_io(settings, &column_groups, &None));
+        let merge_io_read_result = read.await?;
+        let column_chunks = merge_io_read_result.columns_chunks()?;
+        match storage_format {
+            FuseStorageFormat::Parquet => self.deserialize_column_groups(
+                meta.row_count as usize,
+                &column_groups,
+                column_chunks,
+                &meta.compression,
+                None,
+            ),
+            FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
+        }
     }
 
     pub fn deserialize_chunks_with_meta(
