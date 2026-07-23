@@ -189,10 +189,8 @@ impl SegmentInfo {
             summary_size,
         } = decode_segment_header(&mut cursor)?;
 
-        let blocks: Vec<Arc<BlockMeta>> =
-            read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-        let summary: Statistics =
-            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+        let blocks = read_block_metas(&mut cursor, blocks_size, &encoding, &compression)?;
+        let summary = read_statistics(&mut cursor, summary_size, &encoding, &compression)?;
 
         let mut segment = Self::new(blocks, summary);
 
@@ -214,7 +212,7 @@ pub struct RawBlockMeta {
 impl RawBlockMeta {
     pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
         let mut reader = Cursor::new(&self.bytes);
-        read_and_deserialize(
+        read_block_metas(
             &mut reader,
             self.bytes.len() as u64,
             &self.encoding,
@@ -244,8 +242,7 @@ impl CompactSegmentInfo {
         let mut block_metas_raw_bytes = vec![0; blocks_size as usize];
         r.read_exact(&mut block_metas_raw_bytes)?;
 
-        let summary: Statistics =
-            read_and_deserialize(&mut r, summary_size, &encoding, &compression)?;
+        let summary = read_statistics(&mut r, summary_size, &encoding, &compression)?;
 
         let segment = CompactSegmentInfo {
             format_version: version,
@@ -262,6 +259,45 @@ impl CompactSegmentInfo {
     pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
         self.raw_block_metas.block_metas()
     }
+}
+
+fn read_block_metas<R>(
+    reader: &mut R,
+    size: u64,
+    encoding: &MetaEncoding,
+    compression: &MetaCompression,
+) -> Result<Vec<Arc<BlockMeta>>>
+where
+    R: Read,
+{
+    if matches!(encoding, MetaEncoding::Bincode) {
+        let blocks: Vec<v3::frozen::BlockMeta> =
+            read_and_deserialize(reader, size, encoding, compression)?;
+        return Ok(blocks
+            .into_iter()
+            .map(|block| Arc::new(block.into()))
+            .collect());
+    }
+
+    read_and_deserialize(reader, size, encoding, compression)
+}
+
+fn read_statistics<R>(
+    reader: &mut R,
+    size: u64,
+    encoding: &MetaEncoding,
+    compression: &MetaCompression,
+) -> Result<Statistics>
+where
+    R: Read,
+{
+    if matches!(encoding, MetaEncoding::Bincode) {
+        let statistics: v3::frozen::Statistics =
+            read_and_deserialize(reader, size, encoding, compression)?;
+        return Ok(statistics.into());
+    }
+
+    read_and_deserialize(reader, size, encoding, compression)
 }
 
 impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
@@ -311,5 +347,326 @@ impl TryFrom<SegmentInfo> for CompactSegmentInfo {
             summary: value.summary,
             raw_block_metas: bytes,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_column::types::timestamp_tz;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+    use crate::meta::ColumnMeta;
+    use crate::meta::ColumnStatistics;
+    use crate::meta::Compression;
+
+    #[allow(dead_code)]
+    #[derive(Serialize)]
+    enum OldLegacyScalar {
+        Null,
+        EmptyArray,
+        EmptyMap,
+        Number(databend_common_expression::types::NumberScalar),
+        Decimal(DecimalScalar),
+        Timestamp(i64),
+        Date(i32),
+        Boolean(bool),
+        String(Vec<u8>),
+        Array(()),
+        Map(()),
+        Bitmap(Vec<u8>),
+        Tuple(Vec<Scalar>),
+        Variant(Vec<u8>),
+    }
+
+    #[derive(Serialize)]
+    struct OldColumnStatistics {
+        min: OldLegacyScalar,
+        max: OldLegacyScalar,
+        null_count: u64,
+        in_memory_size: u64,
+        distinct_of_values: Option<u64>,
+    }
+
+    #[derive(Serialize)]
+    struct OldBlockMeta {
+        row_count: u64,
+        block_size: u64,
+        file_size: u64,
+        col_stats: HashMap<u32, OldColumnStatistics>,
+        col_metas: HashMap<u32, v3::frozen::ColumnMeta>,
+        cluster_stats: Option<()>,
+        location: (String, u64),
+        bloom_filter_index_location: Option<(String, u64)>,
+        bloom_filter_index_size: u64,
+        compression: v3::frozen::Compression,
+    }
+
+    #[derive(Serialize)]
+    struct OldStatistics {
+        row_count: u64,
+        block_count: u64,
+        perfect_block_count: u64,
+        uncompressed_byte_size: u64,
+        compressed_byte_size: u64,
+        index_size: u64,
+        col_stats: HashMap<u32, OldColumnStatistics>,
+    }
+
+    fn old_legacy_col_stats() -> HashMap<u32, OldColumnStatistics> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(1, OldColumnStatistics {
+            min: OldLegacyScalar::String(b"aaa".to_vec()),
+            max: OldLegacyScalar::String(b"zzz".to_vec()),
+            null_count: 0,
+            in_memory_size: 6,
+            distinct_of_values: Some(2),
+        });
+        col_stats
+    }
+
+    fn legacy_segment_bytes() -> Result<Vec<u8>> {
+        let block_col_stats = old_legacy_col_stats();
+        let summary_col_stats = old_legacy_col_stats();
+
+        let mut col_metas = HashMap::new();
+        col_metas.insert(
+            1,
+            v3::frozen::ColumnMeta::Parquet(v3::frozen::ParquetColumnMeta {
+                offset: 0,
+                len: 16,
+                num_values: 3,
+            }),
+        );
+
+        let blocks = vec![OldBlockMeta {
+            row_count: 3,
+            block_size: 16,
+            file_size: 16,
+            col_stats: block_col_stats,
+            col_metas,
+            cluster_stats: None,
+            location: ("block.parquet".to_string(), 0),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            compression: v3::frozen::Compression::None,
+        }];
+
+        let summary = OldStatistics {
+            row_count: 3,
+            block_count: 1,
+            perfect_block_count: 1,
+            uncompressed_byte_size: 16,
+            compressed_byte_size: 16,
+            index_size: 0,
+            col_stats: summary_col_stats,
+        };
+
+        let encoding = MetaEncoding::Bincode;
+        let compression = MetaCompression::default();
+        let blocks = compress(&compression, encode(&encoding, &blocks)?)?;
+        let summary = compress(&compression, encode(&encoding, &summary)?)?;
+
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&SegmentInfo::VERSION.to_le_bytes());
+        buf.push(MetaEncoding::Bincode as u8);
+        buf.push(MetaCompression::default() as u8);
+        buf.extend_from_slice(&blocks.len().to_le_bytes());
+        buf.extend_from_slice(&summary.len().to_le_bytes());
+        buf.extend(blocks);
+        buf.extend(summary);
+        Ok(buf)
+    }
+
+    fn current_col_stats() -> HashMap<u32, ColumnStatistics> {
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            1,
+            ColumnStatistics::new(
+                Scalar::String("aaa".to_string()),
+                Scalar::String("zzz".to_string()),
+                0,
+                6,
+                Some(2),
+            ),
+        );
+        col_stats.insert(
+            2,
+            ColumnStatistics::new(
+                Scalar::TimestampTz(timestamp_tz::new(1000, 0)),
+                Scalar::TimestampTz(timestamp_tz::new(2000, 0)),
+                0,
+                16,
+                Some(2),
+            ),
+        );
+        col_stats.insert(
+            3,
+            ColumnStatistics::new(
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    123,
+                    DecimalSize::new_unchecked(10, 2),
+                )),
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    456,
+                    DecimalSize::new_unchecked(10, 2),
+                )),
+                0,
+                16,
+                Some(2),
+            ),
+        );
+        col_stats
+    }
+
+    fn current_segment() -> SegmentInfo {
+        let block_col_stats = current_col_stats();
+        let summary_col_stats = current_col_stats();
+
+        let mut col_metas = HashMap::new();
+        for column_id in 1..=3 {
+            col_metas.insert(
+                column_id,
+                ColumnMeta::Parquet(crate::meta::v0::ColumnMeta {
+                    offset: 0,
+                    len: 16,
+                    num_values: 3,
+                }),
+            );
+        }
+
+        let blocks = vec![Arc::new(BlockMeta {
+            row_count: 3,
+            block_size: 16,
+            file_size: 16,
+            col_stats: block_col_stats,
+            col_metas,
+            cluster_stats: None,
+            location: ("block.parquet".to_string(), 0),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            inverted_index_size: None,
+            ngram_filter_index_size: None,
+            vector_index_size: None,
+            vector_index_location: None,
+            spatial_index_size: None,
+            spatial_index_location: None,
+            spatial_stats: None,
+            vector_stats: None,
+            virtual_block_meta: None,
+            compression: Compression::None,
+            create_on: None,
+        })];
+
+        SegmentInfo::new(blocks, Statistics {
+            row_count: 3,
+            block_count: 1,
+            perfect_block_count: 1,
+            uncompressed_byte_size: 16,
+            compressed_byte_size: 16,
+            index_size: 0,
+            col_stats: summary_col_stats,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_read_bincode_segment_with_v3_frozen_meta() -> Result<()> {
+        let bytes = legacy_segment_bytes()?;
+        let segment = SegmentInfo::from_slice(&bytes)?;
+
+        assert_eq!(segment.format_version, SegmentInfo::VERSION);
+        assert_eq!(segment.summary.row_count, 3);
+        assert_eq!(
+            segment.summary.col_stats[&1].min,
+            Scalar::String("aaa".to_string())
+        );
+        assert_eq!(segment.blocks.len(), 1);
+
+        let block = &segment.blocks[0];
+        assert_eq!(block.row_count, 3);
+        assert_eq!(block.location.0, "block.parquet");
+        assert!(block.col_metas[&1].as_parquet().is_some());
+        assert_eq!(block.col_stats[&1].max, Scalar::String("zzz".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_compact_segment_reads_bincode_blocks_lazily_with_v3_frozen_meta() -> Result<()> {
+        let bytes = legacy_segment_bytes()?;
+        let segment = CompactSegmentInfo::from_reader(Cursor::new(bytes))?;
+
+        assert_eq!(segment.summary.row_count, 3);
+        assert_eq!(
+            segment.summary.col_stats[&1].min,
+            Scalar::String("aaa".to_string())
+        );
+
+        let blocks = segment.block_metas()?;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].row_count, 3);
+        assert_eq!(
+            blocks[0].col_stats[&1].max,
+            Scalar::String("zzz".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_current_messagepack_segment() -> Result<()> {
+        let bytes = current_segment().to_bytes()?;
+        let segment = SegmentInfo::from_slice(&bytes)?;
+
+        assert_eq!(segment.format_version, SegmentInfo::VERSION);
+        assert_eq!(segment.summary.row_count, 3);
+        assert_eq!(
+            segment.summary.col_stats[&2].max,
+            Scalar::TimestampTz(timestamp_tz::new(2000, 0))
+        );
+        assert_eq!(
+            segment.summary.col_stats[&3].min,
+            Scalar::Decimal(DecimalScalar::Decimal64(
+                123,
+                DecimalSize::new_unchecked(10, 2)
+            ))
+        );
+
+        assert_eq!(segment.blocks.len(), 1);
+        assert_eq!(
+            segment.blocks[0].col_stats[&3].max,
+            Scalar::Decimal(DecimalScalar::Decimal64(
+                456,
+                DecimalSize::new_unchecked(10, 2)
+            ))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_compact_segment_reads_current_messagepack_blocks_lazily() -> Result<()> {
+        let bytes = current_segment().to_bytes()?;
+        let segment = CompactSegmentInfo::from_reader(Cursor::new(bytes))?;
+
+        assert_eq!(segment.raw_block_metas.encoding, MetaEncoding::MessagePack);
+        assert_eq!(segment.summary.row_count, 3);
+        assert_eq!(
+            segment.summary.col_stats[&2].min,
+            Scalar::TimestampTz(timestamp_tz::new(1000, 0))
+        );
+
+        let blocks = segment.block_metas()?;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].col_stats[&3].max,
+            Scalar::Decimal(DecimalScalar::Decimal64(
+                456,
+                DecimalSize::new_unchecked(10, 2)
+            ))
+        );
+        Ok(())
     }
 }

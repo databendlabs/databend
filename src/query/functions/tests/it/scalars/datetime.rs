@@ -19,6 +19,8 @@ use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::date::DATE_MAX;
+use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
@@ -27,6 +29,8 @@ use databend_common_expression::utils::auto_detect_datetime::auto_detect_timesta
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
 use goldenfile::Mint;
 use jiff::Timestamp;
+use jiff::Unit;
+use jiff::civil::date;
 use jiff::tz::TimeZone;
 
 use super::TestContext;
@@ -105,7 +109,7 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(2932897)", &[]);
     run_ast(file, "to_date(a)", &[(
         "a",
-        Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
+        Int32Type::from_data(vec![-354285, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_date(b)", &[(
         "b",
@@ -579,15 +583,15 @@ fn test_date_domain_overflow(file: &mut impl Write) {
     // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
-            ("a", DateType::from_data(vec![-719162]).into()),
-            ("b", Int64Type::from_data(vec![719162]).into()),
+            ("a", DateType::from_data(vec![DATE_MIN]).into()),
+            ("b", Int64Type::from_data(vec![-DATE_MIN as _]).into()),
         ],
         input_domains: Some(&[
             (
                 "a",
                 Domain::Date(SimpleDomain {
-                    min: -719162,
-                    max: -719162,
+                    min: DATE_MIN,
+                    max: DATE_MIN,
                 }),
             ),
             (
@@ -605,15 +609,15 @@ fn test_date_domain_overflow(file: &mut impl Write) {
     // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
     run_ast_with_context(file, "a - b", TestContext {
         entries: &[
-            ("a", DateType::from_data(vec![-719162]).into()),
+            ("a", DateType::from_data(vec![DATE_MIN]).into()),
             ("b", Int64Type::from_data(vec![0]).into()),
         ],
         input_domains: Some(&[
             (
                 "a",
                 Domain::Date(SimpleDomain {
-                    min: -719162,
-                    max: -719162,
+                    min: DATE_MIN,
+                    max: DATE_MIN,
                 }),
             ),
             (
@@ -643,11 +647,11 @@ fn test_to_number(file: &mut impl Write) {
     run_ast(file, "to_week_of_year(to_date(18875))", &[]);
     run_ast(file, "to_yyyymm(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_yyyymmdd(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_yyyymmddhhmmss(a)", &[(
         "a",
@@ -655,31 +659,65 @@ fn test_to_number(file: &mut impl Write) {
     )]);
     run_ast(file, "to_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_iso_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_quarter(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_month(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_month(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     run_ast(file, "to_day_of_week(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "dayofweek(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "yearweek(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    let millennium_days = [999, 1000, 1001, 1999, 2000, 2001].map(|year| {
+        date(year, 1, 1)
+            .since((Unit::Day, date(1970, 1, 1)))
+            .unwrap()
+            .get_days()
+    });
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        DateType::from_data(millennium_days.to_vec()),
+    )]);
+    run_ast(file, "millennium(a)", &[(
+        "a",
+        TimestampType::from_data(
+            millennium_days
+                .map(|days| days as i64 * 86_400_000_000)
+                .to_vec(),
+        ),
     )]);
     run_ast(file, "to_week_of_year(a)", &[(
         "a",
-        DateType::from_data(vec![-100, 0, 100]),
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
 
     // timestamp
@@ -748,9 +786,62 @@ fn test_to_number(file: &mut impl Write) {
         "a",
         TimestampType::from_data(vec![-100, 0, 100]),
     )]);
+    run_ast(file, "to_unix_timestamp(a)", &[(
+        "a",
+        TimestampType::from_data(vec![-1_000_001, -1, 0, 1, 1_000_001]),
+    )]);
 }
 
 fn test_rounder_functions(file: &mut impl Write) {
+    run_ast(file, "to_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_week(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN + 7, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_month(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_quarter(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_start_of_iso_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_week(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX - 7]),
+    )]);
+    run_ast(file, "to_last_of_month(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_quarter(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_last_of_year(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_previous_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+    run_ast(file, "to_next_monday(a)", &[(
+        "a",
+        DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
+    )]);
+
     run_ast(file, "to_start_of_second(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_minute(to_timestamp(1630812366))", &[]);
     run_ast(

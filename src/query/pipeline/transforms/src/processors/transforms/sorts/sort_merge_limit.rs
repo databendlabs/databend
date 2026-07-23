@@ -57,7 +57,8 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
         self.next_index += 1;
 
         let mut cursor = Cursor::new(input_index, init_rows);
-        self.num_bytes += block.memory_size() as u64;
+        let block_num_bytes = block.memory_size() as u64;
+        self.num_bytes += block_num_bytes;
         self.num_rows += block.num_rows();
         let cur_index = input_index;
         self.buffer.insert(cur_index, block);
@@ -79,6 +80,15 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
                 }
             }
             cursor.advance();
+        }
+
+        // String views may keep source buffers alive after filtering or slicing. Compact only
+        // blocks that remain in the Top-N candidate set so discarded blocks avoid the copy.
+        if let Some(block) = self.buffer.remove(&cur_index) {
+            self.num_bytes -= block_num_bytes;
+            let block = block.maybe_gc();
+            self.num_bytes += block.memory_size() as u64;
+            self.buffer.insert(cur_index, block);
         }
 
         Ok(())
@@ -113,6 +123,57 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
         debug_assert!(self.buffer.is_empty());
 
         Ok(blocks)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
+
+    use super::MergeSort;
+    use super::TransformSortMergeLimit;
+    use crate::sorts::core::Rows;
+    use crate::sorts::core::SimpleRowsAsc;
+
+    #[test]
+    fn test_top_n_compacts_retained_string_views() -> Result<()> {
+        const SOURCE_ROWS: i32 = 2_000;
+        const LIMIT: usize = 10;
+
+        let payload_suffix = "x".repeat(256);
+        let keys = (0..SOURCE_ROWS).collect::<Vec<_>>();
+        let payloads = keys
+            .iter()
+            .map(|key| format!("{key:08}-{payload_suffix}"))
+            .collect::<Vec<_>>();
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(keys),
+            StringType::from_data(payloads),
+        ])
+        .slice(0..LIMIT);
+        let rows = SimpleRowsAsc::<Int32Type>::from_column(&block.get_by_offset(0).to_column())?;
+
+        let mut sort = TransformSortMergeLimit::create(4_096, LIMIT);
+        sort.add_block(block, rows)?;
+
+        let retained = sort.buffer.values().next().unwrap();
+        let Column::String(payloads) = retained.get_by_offset(1).to_column() else {
+            unreachable!("expected string payload column")
+        };
+        assert_eq!(payloads.total_bytes_len(), LIMIT * (8 + 1 + 256));
+        assert!(
+            payloads.total_buffer_len() < 16 * 1024,
+            "Top-N retained {} bytes of source string buffers",
+            payloads.total_buffer_len(),
+        );
+        assert_eq!(sort.num_bytes().0, retained.memory_size() as u64);
+
+        Ok(())
     }
 }
 

@@ -1082,6 +1082,10 @@ pub trait ToNumber<N> {
     }
 }
 
+pub trait DateToNumber<N>: ToNumber<N> {
+    fn to_number_from_date(date: &Date) -> N;
+}
+
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
@@ -1095,13 +1099,8 @@ impl ToNumberImpl {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: &TimeZone) -> Result<R> {
-        let dt = date
-            .to_date(tz)
-            .at(0, 0, 0, 0)
-            .to_zoned(tz.clone())
-            .unwrap();
-        Ok(T::to_number(&dt))
+    pub fn eval_date<T: DateToNumber<R>, R>(date: i32, tz: &TimeZone) -> Result<R> {
+        Ok(T::to_number_from_date(&date.to_date(tz)))
     }
 }
 
@@ -1138,13 +1137,25 @@ impl ToNumber<u32> for ToYYYYMM {
     }
 }
 
+impl DateToNumber<u32> for ToYYYYMM {
+    fn to_number_from_date(date: &Date) -> u32 {
+        date.year() as u32 * 100 + date.month() as u32
+    }
+}
+
 impl ToNumber<u16> for ToMillennium {
     fn to_number(dt: &Zoned) -> u16 {
-        dt.year() as u16 / 1000 + 1
+        (dt.year() as u16).div_ceil(1000)
     }
 
     fn from_components(components: &DateTimeComponents) -> Option<u16> {
-        Some(components.year as u16 / 1000 + 1)
+        Some((components.year as u16).div_ceil(1000))
+    }
+}
+
+impl DateToNumber<u16> for ToMillennium {
+    fn to_number_from_date(date: &Date) -> u16 {
+        (date.year() as u16).div_ceil(1000)
     }
 }
 
@@ -1158,6 +1169,12 @@ impl ToNumber<u32> for ToWeekOfYear {
     }
 }
 
+impl DateToNumber<u32> for ToWeekOfYear {
+    fn to_number_from_date(date: &Date) -> u32 {
+        date.iso_week_date().week() as u32
+    }
+}
+
 impl ToNumber<u32> for ToYYYYMMDD {
     fn to_number(dt: &Zoned) -> u32 {
         dt.year() as u32 * 10_000 + dt.month() as u32 * 100 + dt.day() as u32
@@ -1167,6 +1184,12 @@ impl ToNumber<u32> for ToYYYYMMDD {
         Some(
             components.year as u32 * 10_000 + components.month as u32 * 100 + components.day as u32,
         )
+    }
+}
+
+impl DateToNumber<u32> for ToYYYYMMDD {
+    fn to_number_from_date(date: &Date) -> u32 {
+        date.year() as u32 * 10_000 + date.month() as u32 * 100 + date.day() as u32
     }
 }
 
@@ -1220,6 +1243,12 @@ impl ToNumber<u16> for ToYear {
     }
 }
 
+impl DateToNumber<u16> for ToYear {
+    fn to_number_from_date(date: &Date) -> u16 {
+        date.year() as u16
+    }
+}
+
 impl ToNumber<i16> for ToTimezoneHour {
     fn to_number(dt: &Zoned) -> i16 {
         dt.offset().seconds().div_ceil(3600) as i16
@@ -1250,6 +1279,12 @@ impl ToNumber<u16> for ToISOYear {
     }
 }
 
+impl DateToNumber<u16> for ToISOYear {
+    fn to_number_from_date(date: &Date) -> u16 {
+        date.iso_week_date().year() as u16
+    }
+}
+
 impl ToNumber<u32> for ToYYYYWW {
     fn to_number(dt: &Zoned) -> u32 {
         let week_date = dt.date().iso_week_date();
@@ -1260,6 +1295,13 @@ impl ToNumber<u32> for ToYYYYWW {
     fn from_components(components: &DateTimeComponents) -> Option<u32> {
         let (iso_year, iso_week) = components.iso_year_week();
         Some(iso_year as u32 * 100 + iso_week)
+    }
+}
+
+impl DateToNumber<u32> for ToYYYYWW {
+    fn to_number_from_date(date: &Date) -> u32 {
+        let week_date = date.iso_week_date();
+        week_date.year() as u32 * 100 + week_date.week() as u32
     }
 }
 
@@ -1274,6 +1316,12 @@ impl ToNumber<u8> for ToQuarter {
     }
 }
 
+impl DateToNumber<u8> for ToQuarter {
+    fn to_number_from_date(date: &Date) -> u8 {
+        (date.month() as u8 - 1) / 3 + 1
+    }
+}
+
 impl ToNumber<u8> for ToMonth {
     fn to_number(dt: &Zoned) -> u8 {
         dt.month() as u8
@@ -1281,6 +1329,12 @@ impl ToNumber<u8> for ToMonth {
 
     fn from_components(components: &DateTimeComponents) -> Option<u8> {
         Some(components.month)
+    }
+}
+
+impl DateToNumber<u8> for ToMonth {
+    fn to_number_from_date(date: &Date) -> u8 {
+        date.month() as u8
     }
 }
 
@@ -1294,6 +1348,12 @@ impl ToNumber<u16> for ToDayOfYear {
     }
 }
 
+impl DateToNumber<u16> for ToDayOfYear {
+    fn to_number_from_date(date: &Date) -> u16 {
+        date.day_of_year() as u16
+    }
+}
+
 impl ToNumber<u8> for ToDayOfMonth {
     fn to_number(dt: &Zoned) -> u8 {
         dt.day() as u8
@@ -1301,6 +1361,12 @@ impl ToNumber<u8> for ToDayOfMonth {
 
     fn from_components(components: &DateTimeComponents) -> Option<u8> {
         Some(components.day)
+    }
+}
+
+impl DateToNumber<u8> for ToDayOfMonth {
+    fn to_number_from_date(date: &Date) -> u8 {
+        date.day() as u8
     }
 }
 
@@ -1314,6 +1380,12 @@ impl ToNumber<u8> for ToDayOfWeek {
     }
 }
 
+impl DateToNumber<u8> for ToDayOfWeek {
+    fn to_number_from_date(date: &Date) -> u8 {
+        date.weekday().to_monday_one_offset() as u8
+    }
+}
+
 impl ToNumber<u8> for DayOfWeek {
     fn to_number(dt: &Zoned) -> u8 {
         dt.weekday().to_sunday_zero_offset() as u8
@@ -1321,6 +1393,12 @@ impl ToNumber<u8> for DayOfWeek {
 
     fn from_components(components: &DateTimeComponents) -> Option<u8> {
         Some(components.weekday.to_sunday_zero_offset() as u8)
+    }
+}
+
+impl DateToNumber<u8> for DayOfWeek {
+    fn to_number_from_date(date: &Date) -> u8 {
+        date.weekday().to_sunday_zero_offset() as u8
     }
 }
 
@@ -1685,14 +1763,16 @@ impl DateRounder {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: &TimeZone) -> Result<i32> {
-        let naive_dt = date
-            .to_date(tz)
-            .at(0, 0, 0, 0)
-            .to_zoned(tz.clone())
-            .unwrap();
-        Ok(T::to_number(&naive_dt))
+    pub fn eval_date<T: DateToNumber<i32>>(date: i32, tz: &TimeZone) -> Result<i32> {
+        Ok(T::to_number_from_date(&date.to_date(tz)))
     }
+}
+
+#[inline]
+fn date_to_inner_number(date: &Date) -> i32 {
+    date.since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
 }
 
 /// Convert `jiff::Zoned` to `i32` in `Scalar::Date(i32)` for `DateType`.
@@ -1739,6 +1819,12 @@ impl ToNumber<i32> for ToLastMonday {
     }
 }
 
+impl DateToNumber<i32> for ToLastMonday {
+    fn to_number_from_date(date: &Date) -> i32 {
+        date_to_inner_number(date) - date.weekday().to_monday_zero_offset() as i32
+    }
+}
+
 impl ToNumber<i32> for ToLastSunday {
     fn to_number(dt: &Zoned) -> i32 {
         // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
@@ -1746,9 +1832,21 @@ impl ToNumber<i32> for ToLastSunday {
     }
 }
 
+impl DateToNumber<i32> for ToLastSunday {
+    fn to_number_from_date(date: &Date) -> i32 {
+        date_to_inner_number(date) - date.weekday().to_sunday_zero_offset() as i32
+    }
+}
+
 impl ToNumber<i32> for ToStartOfMonth {
     fn to_number(dt: &Zoned) -> i32 {
         datetime_to_date_inner_number(&dt.first_of_month().unwrap())
+    }
+}
+
+impl DateToNumber<i32> for ToStartOfMonth {
+    fn to_number_from_date(date: &Date) -> i32 {
+        date_to_inner_number(&date.first_of_month())
     }
 }
 
@@ -1763,9 +1861,22 @@ impl ToNumber<i32> for ToStartOfQuarter {
     }
 }
 
+impl DateToNumber<i32> for ToStartOfQuarter {
+    fn to_number_from_date(input: &Date) -> i32 {
+        let new_month = (input.month() - 1) / 3 * 3 + 1;
+        date_to_inner_number(&date(input.year(), new_month, 1))
+    }
+}
+
 impl ToNumber<i32> for ToStartOfYear {
     fn to_number(dt: &Zoned) -> i32 {
         datetime_to_date_inner_number(&dt.first_of_year().unwrap())
+    }
+}
+
+impl DateToNumber<i32> for ToStartOfYear {
+    fn to_number_from_date(date: &Date) -> i32 {
+        date_to_inner_number(&date.first_of_year())
     }
 }
 
@@ -1786,9 +1897,28 @@ impl ToNumber<i32> for ToStartOfISOYear {
     }
 }
 
+impl DateToNumber<i32> for ToStartOfISOYear {
+    fn to_number_from_date(input: &Date) -> i32 {
+        let iso_year = input.iso_week_date().year();
+        for i in 1..=7 {
+            let new_date = date(iso_year, 1, i);
+            if new_date.iso_week_date().weekday() == Weekday::Monday {
+                return date_to_inner_number(&new_date);
+            }
+        }
+        0
+    }
+}
+
 impl ToNumber<i32> for ToLastOfWeek {
     fn to_number(dt: &Zoned) -> i32 {
         datetime_to_date_inner_number(dt) - dt.date().weekday().to_monday_zero_offset() as i32 + 6
+    }
+}
+
+impl DateToNumber<i32> for ToLastOfWeek {
+    fn to_number_from_date(date: &Date) -> i32 {
+        date_to_inner_number(date) - date.weekday().to_monday_zero_offset() as i32 + 6
     }
 }
 
@@ -1800,6 +1930,13 @@ impl ToNumber<i32> for ToLastOfMonth {
             .to_zoned(dt.time_zone().clone())
             .unwrap();
         datetime_to_date_inner_number(&dt)
+    }
+}
+
+impl DateToNumber<i32> for ToLastOfMonth {
+    fn to_number_from_date(input: &Date) -> i32 {
+        let day = last_day_of_year_month(input.year(), input.month());
+        date_to_inner_number(&date(input.year(), input.month(), day))
     }
 }
 
@@ -1815,6 +1952,14 @@ impl ToNumber<i32> for ToLastOfQuarter {
     }
 }
 
+impl DateToNumber<i32> for ToLastOfQuarter {
+    fn to_number_from_date(input: &Date) -> i32 {
+        let new_month = (input.month() - 1) / 3 * 3 + 3;
+        let day = last_day_of_year_month(input.year(), new_month);
+        date_to_inner_number(&date(input.year(), new_month, day))
+    }
+}
+
 impl ToNumber<i32> for ToLastOfYear {
     fn to_number(dt: &Zoned) -> i32 {
         let day = last_day_of_year_month(dt.year(), 12);
@@ -1824,6 +1969,50 @@ impl ToNumber<i32> for ToLastOfYear {
             .unwrap();
         datetime_to_date_inner_number(&dt)
     }
+}
+
+impl DateToNumber<i32> for ToLastOfYear {
+    fn to_number_from_date(input: &Date) -> i32 {
+        let day = last_day_of_year_month(input.year(), 12);
+        date_to_inner_number(&date(input.year(), 12, day))
+    }
+}
+
+macro_rules! impl_date_round_to_weekday {
+    ($type:ident, $weekday:ident, $is_previous:literal) => {
+        impl DateToNumber<i32> for $type {
+            fn to_number_from_date(date: &Date) -> i32 {
+                previous_or_next_date_day(date, Weekday::$weekday, $is_previous)
+            }
+        }
+    };
+}
+
+impl_date_round_to_weekday!(ToPreviousMonday, Monday, true);
+impl_date_round_to_weekday!(ToPreviousTuesday, Tuesday, true);
+impl_date_round_to_weekday!(ToPreviousWednesday, Wednesday, true);
+impl_date_round_to_weekday!(ToPreviousThursday, Thursday, true);
+impl_date_round_to_weekday!(ToPreviousFriday, Friday, true);
+impl_date_round_to_weekday!(ToPreviousSaturday, Saturday, true);
+impl_date_round_to_weekday!(ToPreviousSunday, Sunday, true);
+impl_date_round_to_weekday!(ToNextMonday, Monday, false);
+impl_date_round_to_weekday!(ToNextTuesday, Tuesday, false);
+impl_date_round_to_weekday!(ToNextWednesday, Wednesday, false);
+impl_date_round_to_weekday!(ToNextThursday, Thursday, false);
+impl_date_round_to_weekday!(ToNextFriday, Friday, false);
+impl_date_round_to_weekday!(ToNextSaturday, Saturday, false);
+impl_date_round_to_weekday!(ToNextSunday, Sunday, false);
+
+fn previous_or_next_date_day(date: &Date, target: Weekday, is_previous: bool) -> i32 {
+    let dir = if is_previous { -1 } else { 1 };
+    let mut days_diff = (dir
+        * (target.to_monday_zero_offset() as i32 - date.weekday().to_monday_zero_offset() as i32)
+        + 7)
+        % 7;
+
+    days_diff = if days_diff == 0 { 7 } else { days_diff };
+
+    clamp_date(date_to_inner_number(date) as i64 + (dir * days_diff) as i64)
 }
 
 impl ToNumber<i32> for ToPreviousMonday {
