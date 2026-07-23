@@ -180,7 +180,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1]
+├── filters: [rank() OVER (PARTITION BY k ORDER BY v DESC) (#6) = 1]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY k ORDER BY v DESC) (#6)]
@@ -223,7 +223,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
+├── filters: [rank() OVER (PARTITION BY v ORDER BY v DESC) (#6) = 1, is_true(t1.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY v ORDER BY v DESC) (#6)]
@@ -266,7 +266,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM (
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
+├── filters: [rank() OVER (ORDER BY v DESC) (#6) = 1, is_true(t1.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (ORDER BY v DESC) (#6)]
@@ -378,7 +378,7 @@ explain select * from vwpush where b > 3;
 ----
 Filter
 ├── output columns: [tbpush.b (#0), rnum (#1)]
-├── filters: [is_true(vwpush.b (#0) > 3)]
+├── filters: [is_true(tbpush.b (#0) > 3)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [tbpush.b (#0), rnum (#1)]
@@ -772,7 +772,7 @@ query T
 explain optimized select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn < 1
 ----
 EvalScalar
-├── scalars: [table43764_orc.rowkey (#0) AS (#0), table43764_orc.rowkey (#0) AS (#0), table43764_orc.time (#1) AS (#1), table43764_orc.time (#1) AS (#1), table43764_orc.sirc_action (#2) AS (#2), table43764_orc.sirc_operation_count (#3) AS (#3), table43764_orc.akc087 (#4) AS (#4), table43764_orc.aae035 (#5) AS (#5), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#6), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#7)]
+├── scalars: [table43764_orc.rowkey (#0) AS (#0), table43764_orc.time (#1) AS (#1), table43764_orc.sirc_action (#2) AS (#2), table43764_orc.sirc_operation_count (#3) AS (#3), table43764_orc.akc087 (#4) AS (#4), table43764_orc.aae035 (#5) AS (#5), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#6), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#7)]
 └── EmptyResultScan
 
 # same order multi window
@@ -997,7 +997,7 @@ Window
     ├── estimated rows: 50.00
     └── EvalScalar
         ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
-        ├── expressions: [t.number (#0) - 1, t.number (#0) % 3]
+        ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
         ├── estimated rows: 50.00
         └── Window
             ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2)]

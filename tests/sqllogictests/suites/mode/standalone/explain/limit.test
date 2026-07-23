@@ -216,7 +216,7 @@ Limit
         ├── estimated rows: 1.00
         ├── EvalScalar(Build)
         │   ├── output columns: [c (#4)]
-        │   ├── expressions: [CAST(t4.c (#3) AS UInt64 NULL)]
+        │   ├── expressions: [CAST(count(t.number) (#3) AS UInt64 NULL)]
         │   ├── estimated rows: 1.00
         │   └── AggregateFinal
         │       ├── output columns: [count(t.number) (#3), t.number (#2)]
