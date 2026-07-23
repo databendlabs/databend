@@ -1220,10 +1220,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-            COUNT ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ")" ~ #aggregate_filter? ~ ( OVER ~ #window_spec_ident )?
+            COUNT ~ "(" ~ #wildcard_qualification ~ "*" ~ ")" ~ #aggregate_filter? ~ ( OVER ~ #window_spec_ident )?
         },
         |(_, _, res, star, _, filter, window)| match res {
-            Some((fst, _, Some((snd, _)))) => ExprElement::CountAll {
+            Some((fst, Some(snd))) => ExprElement::CountAll {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Identifier(snd),
@@ -1232,7 +1232,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 filter,
                 window: window.map(|w| w.1),
             },
-            Some((fst, _, None)) => ExprElement::CountAll {
+            Some((fst, None)) => ExprElement::CountAll {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Star(Some(star.span)),
@@ -1481,14 +1481,32 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    #[allow(clippy::large_enum_variant)]
+    enum TruncArg {
+        Unit(IntervalKind),
+        Expr(Expr),
+    }
+
+    fn trunc_first_arg(i: Input) -> IResult<Option<Expr>> {
+        if i.tokens.first().is_some_and(|token| token.text() == ")") {
+            Ok((i, None))
+        } else {
+            map(nom::combinator::cut(subexpr(0)), Some).parse(i)
+        }
+    }
+
+    let trunc_arg = alt((
+        map(interval_kind, TruncArg::Unit),
+        map(subexpr(0), TruncArg::Expr),
+    ));
     let trunc = map(
         rule! {
-            TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
+            TRUNC ~ "(" ~ #trunc_first_arg ~ ("," ~ ^#trunc_arg)? ~ ")"
         },
-        |(s, _, opt_date, opt_numeric, _)| match (opt_date, opt_numeric) {
-            (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
-            (None, Some((expr, opt_expr2))) => {
-                if let Some((_, expr2)) = opt_expr2 {
+        |(s, _, first_arg, second_arg, _)| match (first_arg, second_arg) {
+            (Some(date), Some((_, TruncArg::Unit(unit)))) => ExprElement::DateTrunc { unit, date },
+            (Some(expr), second_arg) => {
+                if let Some((_, TruncArg::Expr(expr2))) = second_arg {
                     ExprElement::FunctionCall {
                         func: FunctionCall {
                             distinct: false,
@@ -1721,7 +1739,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         return with_span!(column_position).parse(i);
     }
 
+    if matches!(
+        i.tokens
+            .get(..2)
+            .map(|tokens| (tokens[0].kind, tokens[1].kind)),
+        Some((NOT, IN | BETWEEN | EXISTS))
+    ) {
+        return with_span!(rule!(#in_list | #in_subquery | #exists | #between)).parse(i);
+    }
+
     try_dispatch!(i, true,
+        CAST | TRY_CAST => {
+            return with_span!(cast).parse(i);
+        },
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
         NOT => with_span!(rule!(
             #in_list
@@ -1737,7 +1767,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         ILIKE => with_span!(binary_op).parse(i),
         EXISTS => with_span!(exists).parse(i),
         BETWEEN => with_span!(between).parse(i),
-        CAST | TRY_CAST => with_span!(cast).parse(i),
         DoubleColon => with_span!(pg_cast).parse(i),
         POSITION => with_span!(position).parse(i),
         IDENTIFIER => {
@@ -1840,13 +1869,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         ROW => with_span!(column_row).parse(i),
     );
 
-    // The try-parse operation in the function call is very expensive, easy to stack overflow
-    // so we manually check here whether the second token exists in LParen to avoid entering the loop
-    if i.tokens
-        .get(1)
-        .map(|token| token.kind == LParen)
-        .unwrap_or(false)
-    {
+    // Function-call backtracking is expensive, so only enter it when the second token is `(`.
+    if i.tokens.get(1).is_some_and(|token| token.kind == LParen) {
         return with_span!(function_call).parse(i);
     }
 
@@ -1862,141 +1886,95 @@ fn return_op<T>(i: Input, start: usize, op: T) -> IResult<T> {
     Ok((i.slice(start..), op))
 }
 
-macro_rules! op_branch {
-    ($i:ident, $token_0:ident, $($kind:ident => $op:expr_2021),+ $(,)?) => {
-        match $token_0.kind {
-            $(
-                TokenKind::$kind => return return_op($i, 1, $op),
-            )+
-            _ => (),
-        }
-    };
-}
-
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
-    // Plus and Minus are parsed as binary op at first.
-    if let Some(token_0) = i.tokens.first() {
-        op_branch!(
-            i, token_0,
-            NOT => UnaryOperator::Not,
-            Factorial => UnaryOperator::Factorial,
-            SquareRoot => UnaryOperator::SquareRoot,
-            BitWiseNot => UnaryOperator::BitwiseNot,
-            CubeRoot => UnaryOperator::CubeRoot,
-            Abs => UnaryOperator::Abs,
-        );
-    }
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
-    )))
+    try_dispatch!(i, false,
+        NOT => return_op(i, 1, UnaryOperator::Not),
+        Factorial => return_op(i, 1, UnaryOperator::Factorial),
+        SquareRoot => return_op(i, 1, UnaryOperator::SquareRoot),
+        BitWiseNot => return_op(i, 1, UnaryOperator::BitwiseNot),
+        CubeRoot => return_op(i, 1, UnaryOperator::CubeRoot),
+        Abs => return_op(i, 1, UnaryOperator::Abs),
+    )
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
-    if let Some(token_0) = i.tokens.first() {
-        op_branch!(
-            i, token_0,
-            Plus => BinaryOperator::Plus,
-            Minus => BinaryOperator::Minus,
-            Multiply => BinaryOperator::Multiply,
-            Divide => BinaryOperator::Divide,
-            IntDiv => BinaryOperator::IntDiv,
-            DIV => BinaryOperator::Div,
-            Modulo => BinaryOperator::Modulo,
-            StringConcat => BinaryOperator::StringConcat,
-            Spaceship => BinaryOperator::CosineDistance,
-            L1DISTANCE => BinaryOperator::L1Distance,
-            L2DISTANCE => BinaryOperator::L2Distance,
-            Gt => BinaryOperator::Gt,
-            Lt => BinaryOperator::Lt,
-            Gte => BinaryOperator::Gte,
-            Lte => BinaryOperator::Lte,
-            Eq => BinaryOperator::Eq,
-            NotEq => BinaryOperator::NotEq,
-            Caret => BinaryOperator::Caret,
-            AND => BinaryOperator::And,
-            OR => BinaryOperator::Or,
-            XOR => BinaryOperator::Xor,
-            REGEXP => BinaryOperator::Regexp,
-            BitWiseNot => BinaryOperator::PgRegexpMatch,
-            ExclamationMarkTilde => BinaryOperator::NotRegexp,
-            RLIKE => BinaryOperator::RLike,
-            BitWiseOr => BinaryOperator::BitwiseOr,
-            BitWiseAnd => BinaryOperator::BitwiseAnd,
-            BitWiseXor => BinaryOperator::BitwiseXor,
-            ShiftLeft => BinaryOperator::BitwiseShiftLeft,
-            ShiftRight => BinaryOperator::BitwiseShiftRight,
-        );
-        match token_0.kind {
-            LIKE => {
-                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
-                    return_op(i, 2, BinaryOperator::LikeAny(None))
-                } else {
-                    return_op(i, 1, BinaryOperator::Like(None))
-                };
-            }
-            ILIKE => {
-                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
-                    return_op(i, 2, BinaryOperator::ILikeAny(None))
-                } else {
-                    return_op(i, 1, BinaryOperator::ILike(None))
-                };
-            }
-            NOT => match i.tokens.get(1).map(|first| first.kind) {
-                Some(LIKE) => {
-                    return return_op(i, 2, BinaryOperator::NotLike(None));
-                }
-                Some(ILIKE) => {
-                    return return_op(i, 2, BinaryOperator::NotILike(None));
-                }
-                Some(REGEXP) => {
-                    return return_op(i, 2, BinaryOperator::NotRegexp);
-                }
-                Some(RLIKE) => {
-                    return return_op(i, 2, BinaryOperator::NotRLike);
-                }
-                _ => (),
-            },
-            SOUNDS => {
-                if let Some(LIKE) = i.tokens.get(1).map(|first| first.kind) {
-                    return return_op(i, 2, BinaryOperator::SoundsLike);
-                }
-            }
-            _ => (),
-        }
-    }
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other(
-            "expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...",
-        ),
-    )))
+    try_dispatch!(i, false,
+        Plus => return_op(i, 1, BinaryOperator::Plus),
+        Minus => return_op(i, 1, BinaryOperator::Minus),
+        Multiply => return_op(i, 1, BinaryOperator::Multiply),
+        Divide => return_op(i, 1, BinaryOperator::Divide),
+        IntDiv => return_op(i, 1, BinaryOperator::IntDiv),
+        DIV => return_op(i, 1, BinaryOperator::Div),
+        Modulo => return_op(i, 1, BinaryOperator::Modulo),
+        StringConcat => return_op(i, 1, BinaryOperator::StringConcat),
+        Spaceship => return_op(i, 1, BinaryOperator::CosineDistance),
+        L1DISTANCE => return_op(i, 1, BinaryOperator::L1Distance),
+        L2DISTANCE => return_op(i, 1, BinaryOperator::L2Distance),
+        Gt => return_op(i, 1, BinaryOperator::Gt),
+        Lt => return_op(i, 1, BinaryOperator::Lt),
+        Gte => return_op(i, 1, BinaryOperator::Gte),
+        Lte => return_op(i, 1, BinaryOperator::Lte),
+        Eq => return_op(i, 1, BinaryOperator::Eq),
+        NotEq => return_op(i, 1, BinaryOperator::NotEq),
+        Caret => return_op(i, 1, BinaryOperator::Caret),
+        AND => return_op(i, 1, BinaryOperator::And),
+        OR => return_op(i, 1, BinaryOperator::Or),
+        XOR => return_op(i, 1, BinaryOperator::Xor),
+        REGEXP => return_op(i, 1, BinaryOperator::Regexp),
+        BitWiseNot => return_op(i, 1, BinaryOperator::PgRegexpMatch),
+        ExclamationMarkTilde => return_op(i, 1, BinaryOperator::NotRegexp),
+        RLIKE => return_op(i, 1, BinaryOperator::RLike),
+        BitWiseOr => return_op(i, 1, BinaryOperator::BitwiseOr),
+        BitWiseAnd => return_op(i, 1, BinaryOperator::BitwiseAnd),
+        BitWiseXor => return_op(i, 1, BinaryOperator::BitwiseXor),
+        ShiftLeft => return_op(i, 1, BinaryOperator::BitwiseShiftLeft),
+        ShiftRight => return_op(i, 1, BinaryOperator::BitwiseShiftRight),
+        LIKE => if i.tokens.get(1).is_some_and(|token| token.kind == ANY) {
+            return_op(i, 2, BinaryOperator::LikeAny(None))
+        } else {
+            return_op(i, 1, BinaryOperator::Like(None))
+        },
+        ILIKE => if i.tokens.get(1).is_some_and(|token| token.kind == ANY) {
+            return_op(i, 2, BinaryOperator::ILikeAny(None))
+        } else {
+            return_op(i, 1, BinaryOperator::ILike(None))
+        },
+        NOT => match i.tokens.get(1).map(|token| token.kind) {
+            Some(LIKE) => return_op(i, 2, BinaryOperator::NotLike(None)),
+            Some(ILIKE) => return_op(i, 2, BinaryOperator::NotILike(None)),
+            Some(REGEXP) => return_op(i, 2, BinaryOperator::NotRegexp),
+            Some(RLIKE) => return_op(i, 2, BinaryOperator::NotRLike),
+            _ => Err(nom::Err::Error(Error::from_expected_tokens(
+                i.slice(1..),
+                &[LIKE, ILIKE, REGEXP, RLIKE],
+            ))),
+        },
+        SOUNDS => if i.tokens.get(1).is_some_and(|token| token.kind == LIKE) {
+            return_op(i, 2, BinaryOperator::SoundsLike)
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i.slice(1..),
+                ErrorKind::ExpectToken(LIKE),
+            )))
+        },
+    )
 }
 
 pub fn json_op(i: Input) -> IResult<JsonOperator> {
-    if let Some(token_0) = i.tokens.first() {
-        op_branch!(
-            i, token_0,
-            RArrow => JsonOperator::Arrow,
-            LongRArrow => JsonOperator::LongArrow,
-            HashRArrow => JsonOperator::HashArrow,
-            HashLongRArrow => JsonOperator::HashLongArrow,
-            Placeholder => JsonOperator::Question,
-            QuestionOr => JsonOperator::QuestionOr,
-            QuestionAnd => JsonOperator::QuestionAnd,
-            AtArrow => JsonOperator::AtArrow,
-            ArrowAt => JsonOperator::ArrowAt,
-            AtQuestion => JsonOperator::AtQuestion,
-            AtAt => JsonOperator::AtAt,
-            HashMinus => JsonOperator::HashMinus,
-        );
-    }
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other(
-            "expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ...",
-        ),
-    )))
+    try_dispatch!(i, false,
+        RArrow => return_op(i, 1, JsonOperator::Arrow),
+        LongRArrow => return_op(i, 1, JsonOperator::LongArrow),
+        HashRArrow => return_op(i, 1, JsonOperator::HashArrow),
+        HashLongRArrow => return_op(i, 1, JsonOperator::HashLongArrow),
+        Placeholder => return_op(i, 1, JsonOperator::Question),
+        QuestionOr => return_op(i, 1, JsonOperator::QuestionOr),
+        QuestionAnd => return_op(i, 1, JsonOperator::QuestionAnd),
+        AtArrow => return_op(i, 1, JsonOperator::AtArrow),
+        ArrowAt => return_op(i, 1, JsonOperator::ArrowAt),
+        AtQuestion => return_op(i, 1, JsonOperator::AtQuestion),
+        AtAt => return_op(i, 1, JsonOperator::AtAt),
+        HashMinus => return_op(i, 1, JsonOperator::HashMinus),
+    )
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
@@ -2026,7 +2004,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         |token| parse_float(token.text()).map_err(nom::Err::Failure),
     );
 
-    try_dispatch!(i, true,
+    try_dispatch!(i, false,
         LiteralString => string.parse(i),
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
@@ -2035,14 +2013,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         PGLiteralHex => binary.parse(i),
         TRUE | FALSE => boolean.parse(i),
         NULL => null.parse(i),
-    );
-
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other(
-            "expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...",
-        ),
-    )))
+    )
 }
 
 pub fn mysql_literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
@@ -2712,9 +2683,10 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         }
     }
 
+    let lambda_params = followed_by_text(lambda_params, "->");
     let function_call_body = map_res(
         rule! {
-            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ ^#subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
             ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ #aggregate_order_by? ~ ")")?
             ~ #within_group?
             ~ #aggregate_filter?

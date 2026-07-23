@@ -51,12 +51,10 @@ fn run_parser_with_dialect<P, O>(
     let src = unindent::unindent(src);
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens: &tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
