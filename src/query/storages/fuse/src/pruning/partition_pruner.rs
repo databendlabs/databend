@@ -519,4 +519,28 @@ mod tests {
             Scalar::Timestamp(86_400_000_000),
         );
     }
+
+    #[test]
+    fn test_should_keep_returns_true_for_segment_without_partition_metadata() {
+        // Segments written before PARTITION BY was added have no cluster statistics.
+        // The pruner must keep them conservatively rather than silently dropping rows.
+        let partition_expr = column_ref("p", DataType::Number(NumberDataType::Int64));
+        let filter = call("eq", vec![partition_expr.clone(), {
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Number(1_i64.into()),
+                data_type: DataType::Number(NumberDataType::Int64),
+            })
+        }]);
+
+        let pruner = PartitionPruner {
+            cluster_key_id: 0,
+            partition_keys: vec![partition_expr],
+            filter,
+            func_ctx: FunctionContext::default(),
+        };
+
+        // No cluster stats at all — must keep the segment.
+        assert!(pruner.should_keep(None));
+    }
 }

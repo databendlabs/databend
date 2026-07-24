@@ -374,5 +374,83 @@ SELECT block_count FROM fuse_snapshot('db_09_0054', 'fragmented_input') LIMIT 1
 statement error PARTITION BY expression `a \+ b` is invalid
 CREATE TABLE multi_column_expr(a INT, b INT) PARTITION BY (a + b)
 
+# SET OPTIONS cannot overwrite the internal partition_by metadata.
+statement error can't change partition_by
+ALTER TABLE t SET OPTIONS (partition_by='(part % 2)')
+
+# MODIFY COLUMN on a partition-key-referenced column is rejected.
+statement error referenced by partition key
+ALTER TABLE t MODIFY COLUMN part BIGINT
+
+# MODIFY COLUMN on an unrelated column is allowed.
+statement ok
+ALTER TABLE t MODIFY COLUMN c BIGINT
+
+# A filter with no correlation to the partition key must not prune any partition.
+statement ok
+CREATE TABLE unrelated_filter(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO unrelated_filter VALUES (0, 'a'), (2, 'b'), (1, 'c'), (3, 'd')
+
+# v is not a partition key; all 2 partitions must be scanned.
+query T
+EXPLAIN SELECT p, v FROM unrelated_filter WHERE v = 'a'
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 2<slt:ignore>
+
+query IS rowsort
+SELECT p, v FROM unrelated_filter WHERE v = 'a'
+----
+0 a
+
+# DELETE preserves physical partition boundaries after compaction.
+statement ok
+CREATE TABLE delete_partitioned(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO delete_partitioned VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'delete_partitioned') LIMIT 1
+----
+2 2
+
+statement ok
+DELETE FROM delete_partitioned WHERE v = 'b'
+
+# After deleting one row from partition 1, compact must not merge the two partitions.
+statement ok
+OPTIMIZE TABLE delete_partitioned COMPACT
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'delete_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, length(v) FROM delete_partitioned
+----
+0 1
+2 1
+3 1
+
+# CREATE TABLE AS SELECT with PARTITION BY applies partition boundaries during the initial write.
+statement ok
+CREATE TABLE ctas_partitioned PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+AS SELECT p, v FROM delete_partitioned
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0054', 'ctas_partitioned') LIMIT 1
+----
+2 2
+
+query II rowsort
+SELECT p, length(v) FROM ctas_partitioned
+----
+0 1
+2 1
+3 1
+
 statement ok
 DROP DATABASE db_09_0054
