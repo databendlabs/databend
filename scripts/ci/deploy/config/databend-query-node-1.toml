@@ -80,6 +80,9 @@ definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLE
 aggregate_spilling_memory_ratio = 60
 join_spilling_memory_ratio = 60
 
+[query.lineage]
+capture_enabled = true
+
 [log]
 
 [log.file]

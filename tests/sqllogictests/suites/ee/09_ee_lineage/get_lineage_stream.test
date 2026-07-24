@@ -1,0 +1,60 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# Requires databend-query config:
+# [query.lineage]
+# capture_enabled = true
+
+statement ok
+DROP DATABASE IF EXISTS lineage_stream_slt;
+
+statement ok
+CREATE DATABASE lineage_stream_slt;
+
+statement ok
+USE lineage_stream_slt;
+
+statement ok
+CREATE TABLE stream_src(id INT, value INT);
+
+statement ok
+CREATE STREAM stream_changes ON TABLE stream_src APPEND_ONLY = TRUE;
+
+statement ok
+INSERT INTO stream_src VALUES (1, 10);
+
+statement ok
+CREATE TABLE stream_dst(id INT, value INT);
+
+statement ok
+INSERT INTO stream_dst
+SELECT id, value
+FROM stream_changes;
+
+query ITTTT
+SELECT distance, source_object_domain, source_object_name, target_object_domain, target_object_name
+FROM get_lineage('lineage_stream_slt.stream_dst', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 TABLE lineage_stream_slt.stream_src TABLE lineage_stream_slt.stream_dst
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_stream_slt.stream_dst.value', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_stream_slt.stream_src value lineage_stream_slt.stream_dst value
+
+statement ok
+DROP DATABASE lineage_stream_slt;
