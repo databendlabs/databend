@@ -1,0 +1,778 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# Requires databend-query config:
+# [query.lineage]
+# capture_enabled = true
+
+# Lineage notation used by this test:
+# - `upstream -> downstream` always denotes the data-flow direction, independent
+#   of whether GET_LINEAGE is queried with UPSTREAM or DOWNSTREAM.
+# - CTAS and DML edges are `TABLE[id] -> TABLE[id]`; stable table and column ids
+#   keep these edges valid across renames.
+# - View dependencies are `TABLE[name] -> VIEW[id]`; the referenced table and
+#   its columns are matched by name, while the view side uses stable ids.
+# - Columns used only by joins or filters do not form column-lineage edges.
+
+# -----------------------------------------------------------------------------
+# Test setup
+# -----------------------------------------------------------------------------
+
+statement ok
+DROP DATABASE IF EXISTS lineage_slt;
+
+statement ok
+DROP DATABASE IF EXISTS lineage_slt_other;
+
+statement ok
+CREATE DATABASE lineage_slt;
+
+statement ok
+USE lineage_slt;
+
+statement ok
+SET enable_distributed_merge_into = 1;
+
+statement ok
+SET enable_distributed_replace_into = 1;
+
+statement ok
+CREATE TABLE src(id INT, a INT, b INT, filter_key INT, filter_flag INT);
+
+statement ok
+INSERT INTO src VALUES
+    (1, 10, 100, 7, 1),
+    (2, 20, 200, 8, 1);
+
+# -----------------------------------------------------------------------------
+# CTAS: src[id] -> ctas[id]
+#
+# Query the edge in the upstream direction from the target, then query column
+# lineage in both directions. `filter_flag` is filter-only and must be absent.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE ctas AS
+SELECT id AS dst_id, a + b AS payload
+FROM src
+WHERE filter_flag > 0;
+
+query ITTTTT
+SELECT distance, source_object_domain, source_object_name, target_object_domain, target_object_name, target_status
+FROM get_lineage('lineage_slt.ctas', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 TABLE lineage_slt.src TABLE lineage_slt.ctas ACTIVE
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.ctas.payload', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a lineage_slt.ctas payload
+1 lineage_slt.src b lineage_slt.ctas payload
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.src.filter_flag', 'COLUMN', 'DOWNSTREAM', 2);
+----
+0
+
+# VACUUM TABLE only removes obsolete table data. It must not remove lineage for
+# the active table id.
+
+statement ok
+VACUUM TABLE ctas;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.ctas', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.src lineage_slt.ctas
+
+# -----------------------------------------------------------------------------
+# Cross-database by-id resolution
+#
+# Both databases contain a table named `src`. Resolving the CTAS upstream id
+# must return `lineage_slt_other.src`, not the same-named table in the current
+# database and not an empty result.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE DATABASE lineage_slt_other;
+
+statement ok
+CREATE TABLE lineage_slt_other.src(id INT);
+
+statement ok
+CREATE TABLE lineage_slt_other.ctas AS
+SELECT id
+FROM lineage_slt_other.src;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt_other.ctas', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt_other.src lineage_slt_other.ctas
+
+# -----------------------------------------------------------------------------
+# Dropped source database invalidates by-id lineage
+#
+# Keep the target in `lineage_slt` while dropping the source database. The
+# target remains queryable, but its source table is no longer ACTIVE.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE drop_db_dst AS
+SELECT id
+FROM lineage_slt_other.src;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.drop_db_dst', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt_other.src lineage_slt.drop_db_dst
+
+statement ok
+DROP DATABASE lineage_slt_other;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.drop_db_dst', 'TABLE', 'UPSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# INSERT SELECT: ctas[id] -> insert_dst[id]
+#
+# The object query walks downstream two hops from `src`; the column query walks
+# one hop downstream from `ctas.payload`.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE insert_dst(dst_id INT, payload INT);
+
+statement ok
+INSERT INTO insert_dst
+SELECT dst_id, payload
+FROM ctas
+WHERE payload > 0;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.src', 'TABLE', 'DOWNSTREAM', 2)
+WHERE target_object_name = 'lineage_slt.insert_dst'
+ORDER BY distance, source_object_name, target_object_name;
+----
+2 lineage_slt.ctas lineage_slt.insert_dst
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.ctas.payload', 'COLUMN', 'DOWNSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.ctas payload lineage_slt.insert_dst payload
+
+# -----------------------------------------------------------------------------
+# Multi-table INSERT: src[id] -> multi_dst1[id], multi_dst2[id]
+#
+# Both targets must persist object and column lineage. Source column `b` fans
+# out to a different destination column in each target.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE multi_dst1(x INT, y INT);
+
+statement ok
+CREATE TABLE multi_dst2(x INT, y INT);
+
+statement ok
+INSERT ALL
+    INTO multi_dst1 VALUES(a, b)
+    INTO multi_dst2(x, y) VALUES(b, id)
+SELECT id, a, b FROM src;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.src', 'TABLE', 'DOWNSTREAM', 1)
+WHERE target_object_name IN ('lineage_slt.multi_dst1', 'lineage_slt.multi_dst2')
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.src lineage_slt.multi_dst1
+1 lineage_slt.src lineage_slt.multi_dst2
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.src.b', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name IN ('lineage_slt.multi_dst1', 'lineage_slt.multi_dst2')
+ORDER BY distance, source_column_name, target_object_name, target_column_name;
+----
+1 lineage_slt.src b lineage_slt.multi_dst1 y
+1 lineage_slt.src b lineage_slt.multi_dst2 x
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.multi_dst1.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a lineage_slt.multi_dst1 x
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.multi_dst2.y', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src id lineage_slt.multi_dst2 y
+
+# -----------------------------------------------------------------------------
+# CREATE VIEW: src[name] -> src_view[id]
+#
+# The view can be queried upstream through its stable id. A downstream query
+# from the source must also find the by-name dependency and map source column
+# names to stable view column ids.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE VIEW src_view AS
+SELECT a + b AS v_payload
+FROM src
+WHERE filter_key > 0;
+
+query ITTTTT
+SELECT distance, source_object_domain, source_object_name, target_object_domain, target_object_name, target_status
+FROM get_lineage('lineage_slt.src_view', 'VIEW', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 TABLE lineage_slt.src VIEW lineage_slt.src_view ACTIVE
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.src.a', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.src_view'
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a lineage_slt.src_view v_payload
+
+# -----------------------------------------------------------------------------
+# Rename and drop behavior
+#
+# Renaming the by-name source temporarily invalidates the view edge; renaming
+# it back restores the edge. By-id CTAS/DML object and column edges follow
+# renames. Dropped targets and explicitly dropped views are not returned.
+# -----------------------------------------------------------------------------
+
+statement ok
+ALTER TABLE src RENAME TO src_renamed;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.src_view', 'VIEW', 'UPSTREAM', 1);
+----
+0
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.ctas', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.src_renamed lineage_slt.ctas
+
+statement ok
+ALTER TABLE src_renamed RENAME TO src;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.src_view', 'VIEW', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.src lineage_slt.src_view
+
+# Data Movement column refs use stable ids, so renaming a source column keeps
+# the CTAS edge. View source columns are name-addressed, so the matching column
+# edge disappears until the old name is restored.
+
+statement ok
+ALTER TABLE src RENAME COLUMN a TO a_renamed;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.ctas.payload', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a_renamed lineage_slt.ctas payload
+1 lineage_slt.src b lineage_slt.ctas payload
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.src.a_renamed', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.src_view';
+----
+0
+
+statement ok
+ALTER TABLE src RENAME COLUMN a_renamed TO a;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.src.a', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.src_view'
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a lineage_slt.src_view v_payload
+
+statement ok
+ALTER TABLE ctas RENAME COLUMN payload TO payload2;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.ctas.payload2', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.src a lineage_slt.ctas payload2
+1 lineage_slt.src b lineage_slt.ctas payload2
+
+statement ok
+ALTER TABLE ctas RENAME TO ctas_renamed;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.ctas_renamed', 'TABLE', 'DOWNSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.ctas_renamed lineage_slt.insert_dst
+
+statement ok
+ALTER TABLE insert_dst RENAME TO insert_dst_renamed;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.ctas_renamed', 'TABLE', 'DOWNSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.ctas_renamed lineage_slt.insert_dst_renamed
+
+statement ok
+DROP TABLE insert_dst_renamed;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.ctas_renamed', 'TABLE', 'DOWNSTREAM', 1);
+----
+0
+
+statement ok
+UNDROP TABLE insert_dst_renamed;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.ctas_renamed', 'TABLE', 'DOWNSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.ctas_renamed lineage_slt.insert_dst_renamed
+
+statement ok
+DROP VIEW src_view;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.src.a', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.src_view';
+----
+0
+
+# -----------------------------------------------------------------------------
+# REPLACE INTO: replace_src[id] -> replace_dst[id]
+#
+# Expression inputs `a` and `b` flow to `x`; the filter-only column does not.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE replace_src(id INT NOT NULL, a INT, b INT, filter_flag INT);
+
+statement ok
+CREATE TABLE replace_dst(id INT NOT NULL, x INT);
+
+statement ok
+INSERT INTO replace_src VALUES (1, 3, 30, 1), (2, 4, 40, 1);
+
+statement ok
+REPLACE INTO replace_dst(id, x) ON(id)
+SELECT id, a + b
+FROM replace_src
+WHERE filter_flag > 0;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.replace_dst.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.replace_src a lineage_slt.replace_dst x
+1 lineage_slt.replace_src b lineage_slt.replace_dst x
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.replace_src.filter_flag', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# UPDATE FROM: update_src[id] -> update_dst[id]
+#
+# Only columns contributing to the assigned value form lineage. Join and
+# filter predicates are excluded.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE update_src(id INT, a INT, b INT, filter_flag INT);
+
+statement ok
+CREATE TABLE update_dst(id INT, x INT);
+
+statement ok
+INSERT INTO update_src VALUES (1, 5, 50, 1);
+
+statement ok
+INSERT INTO update_dst VALUES (1, 0);
+
+statement ok
+UPDATE update_dst
+SET x = s.a + s.b
+FROM update_src AS s
+WHERE update_dst.id = s.id AND s.filter_flag > 0;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.update_dst.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.update_src a lineage_slt.update_dst x
+1 lineage_slt.update_src b lineage_slt.update_dst x
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.update_src.filter_flag', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# Self-write suppression
+#
+# `self_write[id] -> self_write[id]` is not a useful dependency and must not be
+# persisted at either object or column level.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE self_write(id INT, value INT);
+
+statement ok
+INSERT INTO self_write VALUES (1, 10);
+
+statement ok
+INSERT INTO self_write
+SELECT id + 1, value
+FROM self_write;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.self_write', 'TABLE', 'UPSTREAM', 1);
+----
+0
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.self_write.value', 'COLUMN', 'UPSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# COUNT(*)
+#
+# COUNT(*) depends on row cardinality rather than a source column and does not
+# create lineage.
+#
+# TODO: COUNT(column) should depend on the named column. The optimizer can fold
+# it to a metadata-derived constant and currently loses the original argument;
+# preserve lineage metadata across that rewrite before enabling the behavior.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE agg_src(id INT, value INT);
+
+statement ok
+INSERT INTO agg_src VALUES (1, 10), (2, NULL);
+
+statement ok
+CREATE TABLE count_star_dst(cnt UINT64);
+
+statement ok
+INSERT INTO count_star_dst
+SELECT count(*) FROM agg_src;
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.count_star_dst', 'TABLE', 'UPSTREAM', 1);
+----
+0
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.count_star_dst.cnt', 'COLUMN', 'UPSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# SUM(column)
+#
+# `SUM(value)` retains its aggregate argument in the plan, so column lineage
+# passes through the aggregate operator.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE sum_dst(total BIGINT);
+
+statement ok
+INSERT INTO sum_dst
+SELECT sum(value) FROM agg_src;
+
+query ITT
+SELECT distance, source_object_name, target_object_name
+FROM get_lineage('lineage_slt.sum_dst', 'TABLE', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, target_object_name;
+----
+1 lineage_slt.agg_src lineage_slt.sum_dst
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.sum_dst.total', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.agg_src value lineage_slt.sum_dst total
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.agg_src.id', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.sum_dst';
+----
+0
+
+# -----------------------------------------------------------------------------
+# Automatic materialized CTE
+#
+# Auto-materialized CTE consumers resolve through MaterializedCTERef nodes to
+# the base table. Columns used only to join consumers remain excluded.
+#
+# TODO: Explicit `AS MATERIALIZED` is implemented through a query-scoped
+# temporary table. Preserve its column lineage outside persistent meta before
+# adding explicit MCTE coverage here.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE mcte_src(a INT, b INT, k INT);
+
+statement ok
+INSERT INTO mcte_src VALUES (1, 10, 1), (2, 20, 2);
+
+statement ok
+SET enable_auto_materialize_cte = 1;
+
+statement ok
+CREATE TABLE mcte_auto_dst(x INT);
+
+statement ok
+INSERT INTO mcte_auto_dst
+WITH q AS (
+    SELECT a, b, k FROM mcte_src
+)
+SELECT q1.a + q2.b
+FROM q AS q1
+JOIN q AS q2 ON q1.k = q2.k;
+
+statement ok
+UNSET enable_auto_materialize_cte;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.mcte_auto_dst.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.mcte_src a lineage_slt.mcte_auto_dst x
+1 lineage_slt.mcte_src b lineage_slt.mcte_auto_dst x
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.mcte_src.k', 'COLUMN', 'DOWNSTREAM', 1)
+WHERE target_object_name = 'lineage_slt.mcte_auto_dst';
+----
+0
+
+# -----------------------------------------------------------------------------
+# Scalar subquery
+#
+# Values from both the outer query and scalar subquery contribute to `x`.
+# Correlation and filter-only columns do not form column-lineage edges.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE subquery_left(id INT, a INT);
+
+statement ok
+CREATE TABLE subquery_right(id INT, b INT, filter_flag INT);
+
+statement ok
+CREATE TABLE subquery_dst(x INT);
+
+statement ok
+INSERT INTO subquery_left VALUES (1, 10);
+
+statement ok
+INSERT INTO subquery_right VALUES (1, 20, 1);
+
+statement ok
+INSERT INTO subquery_dst
+SELECT l.a + (
+    SELECT max(r.b)
+    FROM subquery_right AS r
+    WHERE r.id = l.id AND r.filter_flag > 0
+)
+FROM subquery_left AS l;
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.subquery_dst.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, source_column_name;
+----
+1 lineage_slt.subquery_left a lineage_slt.subquery_dst x
+1 lineage_slt.subquery_right b lineage_slt.subquery_dst x
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.subquery_right.filter_flag', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# JOIN USING
+#
+# The unqualified USING column is represented by the left input. The right id
+# participates only in the join condition and must not become a value source.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE using_left(id INT, a INT);
+
+statement ok
+CREATE TABLE using_right(id INT, b INT);
+
+statement ok
+CREATE TABLE using_dst(id INT);
+
+statement ok
+INSERT INTO using_left VALUES (1, 10);
+
+statement ok
+INSERT INTO using_right VALUES (1, 20);
+
+statement ok
+INSERT INTO using_dst
+SELECT id
+FROM using_left
+JOIN using_right USING (id);
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.using_dst.id', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_object_name, source_column_name;
+----
+1 lineage_slt.using_left id lineage_slt.using_dst id
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.using_right.id', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# MERGE: merge_src[id] -> merge_dst[id]
+#
+# Verify column mapping for matched updates and the not-matched insert. Columns
+# used only in match predicates (`c` and `d`) must not appear downstream.
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE merge_src(id INT, a INT, b INT, c INT, d INT);
+
+statement ok
+CREATE TABLE merge_dst(id INT, x INT, y INT);
+
+statement ok
+INSERT INTO merge_src VALUES (1, 6, 60, 1, 0), (2, 7, 70, 0, 1);
+
+statement ok
+INSERT INTO merge_dst VALUES (1, 0, 0);
+
+query II
+MERGE INTO merge_dst AS d
+USING merge_src AS s
+ON d.id = s.id
+WHEN MATCHED AND s.c > 0 THEN UPDATE SET x = s.a
+WHEN MATCHED AND s.d > 0 THEN UPDATE SET y = s.b
+WHEN NOT MATCHED THEN INSERT (id, x, y) VALUES (s.id, s.a, s.b);
+----
+1 1
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.merge_dst.id', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.merge_src id lineage_slt.merge_dst id
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.merge_dst.x', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.merge_src a lineage_slt.merge_dst x
+
+query ITTTT
+SELECT distance, source_object_name, source_column_name, target_object_name, target_column_name
+FROM get_lineage('lineage_slt.merge_dst.y', 'COLUMN', 'UPSTREAM', 1)
+ORDER BY distance, source_column_name, target_column_name;
+----
+1 lineage_slt.merge_src b lineage_slt.merge_dst y
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.merge_src.c', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_slt.merge_src.d', 'COLUMN', 'DOWNSTREAM', 1);
+----
+0
+
+# -----------------------------------------------------------------------------
+# Cleanup
+# -----------------------------------------------------------------------------
+
+statement ok
+DROP DATABASE IF EXISTS lineage_slt_other;
+
+statement ok
+DROP DATABASE lineage_slt;

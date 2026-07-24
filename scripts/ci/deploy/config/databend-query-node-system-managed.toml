@@ -51,6 +51,9 @@ definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLE
 type = "system_managed"
 node_group
 
+[query.lineage]
+capture_enabled = true
+
 [log]
 
 [log.file]
