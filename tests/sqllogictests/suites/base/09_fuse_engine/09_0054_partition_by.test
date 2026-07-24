@@ -391,18 +391,20 @@ statement ok
 CREATE TABLE unrelated_filter(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
-INSERT INTO unrelated_filter VALUES (0, 'a'), (2, 'b'), (1, 'c'), (3, 'd')
+INSERT INTO unrelated_filter VALUES (0, 'a'), (2, 'm'), (1, 'm'), (3, 'z')
 
-# v is not a partition key; all 2 partitions must be scanned.
+# v is not a partition key, and both partitions contain the matching value, so
+# ordinary range and bloom pruning cannot mask incorrect partition pruning.
 query T
-EXPLAIN SELECT p, v FROM unrelated_filter WHERE v = 'a'
+EXPLAIN SELECT p, v FROM unrelated_filter WHERE v = 'm'
 ----
 <slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 2<slt:ignore>
 
 query IS rowsort
-SELECT p, v FROM unrelated_filter WHERE v = 'a'
+SELECT p, v FROM unrelated_filter WHERE v = 'm'
 ----
-0 a
+1 m
+2 m
 
 # DELETE preserves physical partition boundaries after compaction.
 statement ok
