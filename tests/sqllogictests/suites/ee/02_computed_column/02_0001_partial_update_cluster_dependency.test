@@ -18,8 +18,8 @@ create or replace database partial_update_cluster_dependency
 statement ok
 use partial_update_cluster_dependency
 
-# A cluster key that references an updated column through a VIRTUAL computed column must use the
-# full-update path and refresh its cluster statistics.
+# A table with a computed column must use the full-update path. The cluster key also verifies that
+# the fallback pipeline uses the persisted physical schema and refreshes its cluster statistics.
 statement ok
 create table t(
     id int,

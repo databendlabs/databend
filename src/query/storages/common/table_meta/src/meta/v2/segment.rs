@@ -198,6 +198,18 @@ pub struct BloomIndexFileMeta {
     pub file_size: u64,
 }
 
+/// Borrowed view of the physical Bloom-index layout used by a logical block.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BloomIndexLayout<'a> {
+    Legacy {
+        location: &'a Location,
+        file_size: u64,
+    },
+    Split {
+        files: &'a [BloomIndexFileMeta],
+    },
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -215,7 +227,11 @@ pub struct BlockMeta {
     #[serde(default)]
     pub column_groups: Vec<ColumnGroupFileMeta>,
     pub cluster_stats: Option<ClusterStatistics>,
-    /// location of data block
+    /// Compatibility anchor for this logical block's data.
+    ///
+    /// In the legacy layout this is the only data-file location. In a split layout it identifies
+    /// the newest column-group file and does not cover the other active files; use
+    /// [`Self::physical_column_groups`] or [`Self::data_file_locations`] for physical reads.
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
@@ -296,6 +312,22 @@ impl BlockMeta {
 
     pub fn compression(&self) -> Compression {
         self.compression
+    }
+
+    /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
+    pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
+        if self.bloom_index_files.is_empty() {
+            self.bloom_filter_index_location
+                .as_ref()
+                .map(|location| BloomIndexLayout::Legacy {
+                    location,
+                    file_size: self.bloom_filter_index_size,
+                })
+        } else {
+            Some(BloomIndexLayout::Split {
+                files: &self.bloom_index_files,
+            })
+        }
     }
 
     /// Active physical data files referenced by this logical block.

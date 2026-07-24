@@ -33,6 +33,7 @@ use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
+use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -102,6 +103,22 @@ impl PartInfo for FuseBlockPartInfo {
 }
 
 impl FuseBlockPartInfo {
+    /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
+    pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
+        if self.bloom_index_files.is_empty() {
+            self.bloom_filter_index_location
+                .as_ref()
+                .map(|location| BloomIndexLayout::Legacy {
+                    location,
+                    file_size: self.bloom_filter_index_size,
+                })
+        } else {
+            Some(BloomIndexLayout::Split {
+                files: &self.bloom_index_files,
+            })
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,

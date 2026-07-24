@@ -54,6 +54,7 @@ use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
+use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -492,24 +493,27 @@ impl BlockBuilder {
         block_meta.create_on = Some(Utc::now());
 
         if !invalidated_bloom_column_ids.is_empty() {
-            let mut bloom_index_files = if origin.bloom_index_files.is_empty() {
-                let mut files = Vec::new();
-                if let Some(location) = &origin.bloom_filter_index_location {
+            let mut bloom_index_files = match origin.bloom_index_layout() {
+                None => Vec::new(),
+                Some(BloomIndexLayout::Legacy {
+                    location,
+                    file_size,
+                }) => {
                     let active_column_ids = legacy_bloom_column_ids.ok_or_else(|| {
                         ErrorCode::Internal("legacy Bloom file columns were not loaded")
                     })?;
                     if !active_column_ids.is_empty() {
-                        files.push(BloomIndexFileMeta {
+                        vec![BloomIndexFileMeta {
                             active_column_ids: active_column_ids.to_vec(),
                             location: location.clone(),
                             format_version: location.1,
-                            file_size: origin.bloom_filter_index_size,
-                        });
+                            file_size,
+                        }]
+                    } else {
+                        Vec::new()
                     }
                 }
-                files
-            } else {
-                origin.bloom_index_files.clone()
+                Some(BloomIndexLayout::Split { files }) => files.to_vec(),
             };
             for file in &mut bloom_index_files {
                 file.active_column_ids

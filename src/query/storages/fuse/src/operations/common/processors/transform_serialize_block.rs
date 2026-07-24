@@ -39,6 +39,7 @@ use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -277,29 +278,27 @@ impl TransformSerializeBlock {
     }
 
     fn needs_legacy_bloom_meta(&self, origin: &BlockMeta) -> bool {
-        origin.bloom_index_files.is_empty()
-            && origin.bloom_filter_index_location.is_some()
-            && self.updated_field_indices.as_ref().is_some_and(|indices| {
-                indices.iter().any(|index| {
-                    BloomIndex::supported_type(
-                        self.block_builder.source_schema.field(*index).data_type(),
-                    )
-                })
+        matches!(
+            origin.bloom_index_layout(),
+            Some(BloomIndexLayout::Legacy { .. })
+        ) && self.updated_field_indices.as_ref().is_some_and(|indices| {
+            indices.iter().any(|index| {
+                BloomIndex::supported_type(
+                    self.block_builder.source_schema.field(*index).data_type(),
+                )
             })
+        })
     }
 
     async fn load_legacy_bloom_column_ids(&self, origin: &BlockMeta) -> Result<Vec<ColumnId>> {
-        let location = origin
-            .bloom_filter_index_location
-            .as_ref()
-            .ok_or_else(|| ErrorCode::Internal("legacy Bloom location is missing"))?;
-        let meta = load_index_meta(
-            self.dal.clone(),
-            &location.0,
-            origin.bloom_filter_index_size,
-            None,
-        )
-        .await?;
+        let Some(BloomIndexLayout::Legacy {
+            location,
+            file_size,
+        }) = origin.bloom_index_layout()
+        else {
+            return Err(ErrorCode::Internal("legacy Bloom location is missing"));
+        };
+        let meta = load_index_meta(self.dal.clone(), &location.0, file_size, None).await?;
         let stored_filter_names = meta
             .columns
             .iter()

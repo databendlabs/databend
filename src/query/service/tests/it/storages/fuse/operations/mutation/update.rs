@@ -300,6 +300,136 @@ async fn test_partial_update_reads_legacy_bloom_schema() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_auto_fix_missing_split_bloom_index() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, value int) engine=fuse \
+             bloom_index_columns='id,value' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 10), (3, 30)"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set value = value + 1 where id = 1"
+        ))
+        .await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    let value_column_id = table.schema().field_with_name("value")?.column_id();
+    let block_meta = latest_default_block_meta(&fixture).await?;
+    assert_eq!(block_meta.bloom_index_files.len(), 2);
+    let missing_file = block_meta
+        .bloom_index_files
+        .iter()
+        .find(|file| file.active_column_ids.contains(&value_column_id))
+        .unwrap();
+    let existing_file = block_meta
+        .bloom_index_files
+        .iter()
+        .find(|file| file.location != missing_file.location)
+        .unwrap();
+    let existing_data = operator.read(&existing_file.location.0).await?.to_bytes();
+    operator.delete(&missing_file.location.0).await?;
+    assert!(!operator.exists(&missing_file.location.0).await?);
+
+    fixture
+        .execute_command("set enable_auto_fix_missing_bloom_index = 1")
+        .await?;
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} where value = 20"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 0);
+    assert!(operator.exists(&missing_file.location.0).await?);
+    assert_eq!(
+        operator.read(&existing_file.location.0).await?.to_bytes(),
+        existing_data
+    );
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} where id = 1 and value = 11"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_auto_fix_missing_legacy_bloom_index_from_split_data() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, flag boolean) engine=fuse \
+             bloom_index_columns='id' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, true), (3, false)"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set flag = false where flag"
+        ))
+        .await?;
+
+    let block_meta = latest_default_block_meta(&fixture).await?;
+    assert_eq!(block_meta.column_groups.len(), 2);
+    assert!(block_meta.bloom_index_files.is_empty());
+    let bloom_location = block_meta.bloom_filter_index_location.as_ref().unwrap();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    operator.delete(&bloom_location.0).await?;
+    assert!(!operator.exists(&bloom_location.0).await?);
+
+    fixture
+        .execute_command("set enable_auto_fix_missing_bloom_index = 1")
+        .await?;
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} where id = 2"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 0);
+    assert!(operator.exists(&bloom_location.0).await?);
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} where id = 1 and not flag"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_partial_update_invalidates_virtual_columns_when_disabled() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();

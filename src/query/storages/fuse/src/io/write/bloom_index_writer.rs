@@ -14,10 +14,12 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -31,6 +33,7 @@ use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
@@ -38,6 +41,7 @@ use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Buffer;
 use opendal::Operator;
 
+use crate::FuseColumnGroupPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
 
@@ -139,11 +143,19 @@ pub struct BloomIndexRebuilder {
 }
 
 impl BloomIndexRebuilder {
-    pub async fn bloom_index_state_from_block_meta(
-        &self,
-        bloom_index_location: &Location,
-        block_read_info: &BlockReadInfo,
-    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
+    pub(crate) fn validate_rebuild_version(bloom_index_location: &Location) -> Result<()> {
+        if bloom_index_location.1 != BlockFilter::VERSION {
+            return Err(ErrorCode::DeprecatedIndexFormat(format!(
+                "cannot rebuild Bloom index {:?} in legacy format {} with current format {}",
+                bloom_index_location,
+                bloom_index_location.1,
+                BlockFilter::VERSION
+            )));
+        }
+        Ok(())
+    }
+
+    async fn read_data_block(&self, block_read_info: &BlockReadInfo) -> Result<DataBlock> {
         let ctx = self.table_ctx.clone();
 
         let projection =
@@ -158,29 +170,77 @@ impl BloomIndexRebuilder {
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;
+        let column_groups = if block_read_info.column_groups.is_empty() {
+            vec![FuseColumnGroupPartInfo {
+                location: block_read_info.location.clone(),
+                columns_meta: block_read_info.col_metas.clone(),
+            }]
+        } else {
+            block_read_info
+                .column_groups
+                .iter()
+                .map(|group| FuseColumnGroupPartInfo {
+                    location: group.location.0.clone(),
+                    columns_meta: group
+                        .active_column_ids
+                        .iter()
+                        .filter_map(|column_id| {
+                            group
+                                .leaf_column_metas
+                                .get(column_id)
+                                .map(|column_meta| (*column_id, column_meta.clone()))
+                        })
+                        .collect(),
+                })
+                .collect()
+        };
 
         let merge_io_read_result = block_reader
-            .read_columns_data_by_merge_io(
-                &settings,
-                &block_read_info.location,
-                &block_read_info.col_metas,
-                &None,
-            )
+            .read_column_groups_data_by_merge_io(&settings, &column_groups, &None)
             .await?;
-        let data_block = block_reader.deserialize_chunks_with_meta(
-            block_read_info,
-            &self.storage_format,
-            merge_io_read_result,
-        )?;
+        let column_chunks = merge_io_read_result.columns_chunks()?;
+        match self.storage_format {
+            FuseStorageFormat::Parquet => block_reader.deserialize_column_groups(
+                block_read_info.row_count as usize,
+                &column_groups,
+                column_chunks,
+                &block_read_info.compression,
+                None,
+            ),
+            FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
+        }
+    }
 
-        assert_eq!(bloom_index_location.1, BlockFilter::VERSION);
+    fn bloom_index_state_from_data_block(
+        &self,
+        bloom_index_location: &Location,
+        data_block: &DataBlock,
+        active_column_ids: Option<&HashSet<ColumnId>>,
+    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
+        Self::validate_rebuild_version(bloom_index_location)?;
+        let bloom_columns_map = self
+            .bloom_columns_map
+            .iter()
+            .filter(|(_, field)| {
+                active_column_ids.is_none_or(|ids| ids.contains(&field.column_id()))
+            })
+            .map(|(index, field)| (*index, field.clone()))
+            .collect();
+        let ngram_args = self
+            .ngram_args
+            .iter()
+            .filter(|arg| {
+                active_column_ids.is_none_or(|ids| ids.contains(&arg.field().column_id()))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
             self.bloom_index_type,
-            self.bloom_columns_map.clone(),
-            &self.ngram_args,
+            bloom_columns_map,
+            &ngram_args,
         )?;
-        builder.add_block(&data_block)?;
+        builder.add_block(data_block)?;
         let maybe_bloom_index = builder.finalize()?;
 
         match maybe_bloom_index {
@@ -190,5 +250,59 @@ impl BloomIndexRebuilder {
                 bloom_index,
             ))),
         }
+    }
+
+    pub async fn bloom_index_state_from_block_meta(
+        &self,
+        bloom_index_location: &Location,
+        block_read_info: &BlockReadInfo,
+    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
+        let data_block = self.read_data_block(block_read_info).await?;
+        self.bloom_index_state_from_data_block(bloom_index_location, &data_block, None)
+    }
+
+    pub(crate) async fn bloom_index_states_from_block_meta(
+        &self,
+        bloom_index_files: &[BloomIndexFileMeta],
+        block_read_info: &BlockReadInfo,
+    ) -> Result<Option<Vec<BloomIndexState>>> {
+        let data_block = self.read_data_block(block_read_info).await?;
+        let mut states = Vec::with_capacity(bloom_index_files.len());
+        for file in bloom_index_files {
+            let active_column_ids = file
+                .active_column_ids
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let Some((state, _)) = self.bloom_index_state_from_data_block(
+                &file.location,
+                &data_block,
+                Some(&active_column_ids),
+            )?
+            else {
+                return Ok(None);
+            };
+            states.push(state);
+        }
+        Ok(Some(states))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+    use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_table_meta::meta::Versioned;
+
+    use super::BloomIndexRebuilder;
+
+    #[test]
+    fn test_validate_rebuild_version_rejects_legacy_format() {
+        let legacy_location = ("legacy-bloom".to_string(), BlockFilter::VERSION - 1);
+        let err = BloomIndexRebuilder::validate_rebuild_version(&legacy_location).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::DEPRECATED_INDEX_FORMAT);
+
+        let current_location = ("current-bloom".to_string(), BlockFilter::VERSION);
+        BloomIndexRebuilder::validate_rebuild_version(&current_location).unwrap();
     }
 }

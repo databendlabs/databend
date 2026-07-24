@@ -47,6 +47,7 @@ use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
+use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -707,49 +708,58 @@ impl AggregationContext {
         bloom_on_conflict_field_index: &[FieldIndex],
     ) -> Result<Option<Vec<Option<Arc<FilterImpl>>>>> {
         // different block may have different version of bloom filter index
-        let (block_filter, col_names) = if block_meta.bloom_index_files.is_empty() {
-            let Some(location) = &block_meta.bloom_filter_index_location else {
-                return Ok(None);
-            };
-            let col_names = bloom_on_conflict_field_index
-                .iter()
-                .map(|idx| {
-                    BloomIndex::build_filter_bloom_name(
-                        location.1,
-                        &self.on_conflict_fields[*idx].table_field,
+        let (block_filter, col_names) = match block_meta.bloom_index_layout() {
+            None => return Ok(None),
+            Some(BloomIndexLayout::Legacy {
+                location,
+                file_size,
+            }) => {
+                let col_names = bloom_on_conflict_field_index
+                    .iter()
+                    .map(|idx| {
+                        BloomIndex::build_filter_bloom_name(
+                            location.1,
+                            &self.on_conflict_fields[*idx].table_field,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let block_filter = location
+                    .read_block_filter(
+                        self.data_accessor.clone(),
+                        &self.read_settings,
+                        &col_names,
+                        file_size,
                     )
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let block_filter = location
-                .read_block_filter(
-                    self.data_accessor.clone(),
+                    .await?;
+                (block_filter, col_names)
+            }
+            Some(BloomIndexLayout::Split { files }) => {
+                let fields = bloom_on_conflict_field_index
+                    .iter()
+                    .map(|idx| self.on_conflict_fields[*idx].table_field.clone())
+                    .collect::<Vec<_>>();
+                let Some(filter) = read_multi_file_block_filter(
+                    &self.data_accessor,
                     &self.read_settings,
-                    &col_names,
-                    block_meta.bloom_filter_index_size,
+                    &fields,
+                    &[],
+                    files,
                 )
-                .await?;
-            (block_filter, col_names)
-        } else {
-            let fields = bloom_on_conflict_field_index
-                .iter()
-                .map(|idx| self.on_conflict_fields[*idx].table_field.clone())
-                .collect::<Vec<_>>();
-            let Some(block_filter) = read_multi_file_block_filter(
-                &self.data_accessor,
-                &self.read_settings,
-                &fields,
-                &[],
-                &block_meta.bloom_index_files,
-            )
-            .await?
-            else {
-                return Ok(None);
-            };
-            let col_names = fields
-                .iter()
-                .map(|field| BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, field))
-                .collect::<Result<Vec<_>>>()?;
-            (block_filter, col_names)
+                .await?
+                else {
+                    return Ok(None);
+                };
+                // REPLACE carries current digest hashes instead of scalar values, so it cannot
+                // safely evaluate legacy V2 filters. Keep the block in that compatibility case.
+                if filter.format_version != BlockFilter::VERSION {
+                    return Ok(None);
+                }
+                let col_names = fields
+                    .iter()
+                    .map(|field| BloomIndex::build_filter_bloom_name(filter.format_version, field))
+                    .collect::<Result<Vec<_>>>()?;
+                (filter.block_filter, col_names)
+            }
         };
 
         // reorder the filter according to the order of bloom_on_conflict_field

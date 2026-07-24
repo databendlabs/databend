@@ -35,6 +35,7 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
+use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -95,47 +96,41 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         }
     }
 
-    let bloom_index = if part.bloom_index_files.is_empty() {
-        let Some(index_location) = part.bloom_filter_index_location.as_ref() else {
-            return Ok(false);
-        };
-        let index_columns = result
-            .bloom_fields
-            .iter()
-            .map(|field| BloomIndex::build_filter_bloom_name(index_location.1, field))
-            .collect::<Result<Vec<_>>>()?;
-        let filter = index_location
-            .read_block_filter(
-                dal.clone(),
-                settings,
-                &index_columns,
-                part.bloom_filter_index_size,
-            )
-            .await?;
-        BloomIndex::from_filter_block(
-            func_ctx.clone(),
-            filter.filter_schema,
-            filter.filters,
-            index_location.1,
-        )?
-    } else {
-        let Some(filter) = read_multi_file_block_filter(
-            dal,
-            settings,
-            &result.bloom_fields,
-            &[],
-            &part.bloom_index_files,
-        )
-        .await?
-        else {
-            return Ok(false);
-        };
-        BloomIndex::from_filter_block(
-            func_ctx.clone(),
-            filter.filter_schema,
-            filter.filters,
-            BlockFilter::VERSION,
-        )?
+    let bloom_index = match part.bloom_index_layout() {
+        None => return Ok(false),
+        Some(BloomIndexLayout::Legacy {
+            location,
+            file_size,
+        }) => {
+            let index_columns = result
+                .bloom_fields
+                .iter()
+                .map(|field| BloomIndex::build_filter_bloom_name(location.1, field))
+                .collect::<Result<Vec<_>>>()?;
+            let filter = location
+                .read_block_filter(dal.clone(), settings, &index_columns, file_size)
+                .await?;
+            BloomIndex::from_filter_block(
+                func_ctx.clone(),
+                filter.filter_schema,
+                filter.filters,
+                location.1,
+            )?
+        }
+        Some(BloomIndexLayout::Split { files }) => {
+            let Some(filter) =
+                read_multi_file_block_filter(dal, settings, &result.bloom_fields, &[], files)
+                    .await?
+            else {
+                return Ok(false);
+            };
+            BloomIndex::from_filter_block(
+                func_ctx.clone(),
+                filter.block_filter.filter_schema,
+                filter.block_filter.filters,
+                filter.format_version,
+            )?
+        }
     };
 
     let like_scalar_map = HashMap::new();
@@ -151,23 +146,53 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     )? == FilterEvalResult::MustFalse)
 }
 
+pub(crate) struct MultiFileBlockFilter {
+    pub block_filter: BlockFilter,
+    pub format_version: u64,
+}
+
+fn multi_file_filter_version(
+    index_fields: &[TableField],
+    index_files: &[BloomIndexFileMeta],
+) -> Option<u64> {
+    let mut has_v2 = false;
+    let mut has_digest_encoding = false;
+    for file in index_files {
+        if !index_fields
+            .iter()
+            .any(|field| file.active_column_ids.contains(&field.column_id()))
+        {
+            continue;
+        }
+        if file.format_version == 2 {
+            has_v2 = true;
+        } else {
+            has_digest_encoding = true;
+        }
+    }
+    match (has_v2, has_digest_encoding) {
+        (true, true) => None,
+        (true, false) => Some(2),
+        _ => Some(BlockFilter::VERSION),
+    }
+}
+
 pub(crate) async fn read_multi_file_block_filter(
     dal: &Operator,
     settings: &ReadSettings,
     index_fields: &[TableField],
     ngram_args: &[NgramArgs],
     index_files: &[BloomIndexFileMeta],
-) -> Result<Option<BlockFilter>> {
+) -> Result<Option<MultiFileBlockFilter>> {
+    let Some(format_version) = multi_file_filter_version(index_fields, index_files) else {
+        // V2 filters use legacy scalar encoding and cannot be evaluated together with the digest
+        // encoding of newer files. Keeping the block is the safe compatibility behavior.
+        return Ok(None);
+    };
     let mut merged_fields = Vec::new();
     let mut merged_filters = Vec::new();
 
     for file in index_files {
-        // V2 filters use legacy scalar encoding and cannot be mixed with the digest encoding of
-        // current files. Keeping the block is the safe compatibility behavior.
-        if file.format_version == 2 {
-            return Ok(None);
-        }
-
         let mut rename = HashMap::new();
         let mut columns = Vec::new();
         for field in index_fields {
@@ -184,7 +209,7 @@ pub(crate) async fn read_multi_file_block_filter(
                 columns.push(name);
             } else {
                 let physical = BloomIndex::build_filter_bloom_name(file.format_version, field)?;
-                let normalized = BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, field)?;
+                let normalized = BloomIndex::build_filter_bloom_name(format_version, field)?;
                 rename.insert(physical.clone(), normalized);
                 columns.push(physical);
             }
@@ -211,9 +236,12 @@ pub(crate) async fn read_multi_file_block_filter(
         }
     }
 
-    Ok(Some(BlockFilter {
-        filter_schema: Arc::new(TableSchema::new(merged_fields)),
-        filters: merged_filters,
+    Ok(Some(MultiFileBlockFilter {
+        block_filter: BlockFilter {
+            filter_schema: Arc::new(TableSchema::new(merged_fields)),
+            filters: merged_filters,
+        },
+        format_version,
     }))
 }
 
@@ -421,23 +449,53 @@ impl BloomPrunerCreator {
         &self,
         index_files: &[BloomIndexFileMeta],
         column_stats: &StatisticsOfColumns,
+        block_meta: &BlockReadInfo,
     ) -> Result<bool> {
-        let Some(filter) = read_multi_file_block_filter(
+        let maybe_filter = read_multi_file_block_filter(
             &self.dal,
             &self.settings,
             &self.index_fields,
             &self.ngram_args,
             index_files,
         )
-        .await?
-        else {
+        .await;
+        let maybe_filter = match (&maybe_filter, &self.bloom_index_builder) {
+            (Err(_), Some(bloom_index_builder)) => {
+                match self
+                    .try_rebuild_missing_bloom_index_files(
+                        index_files,
+                        bloom_index_builder,
+                        block_meta,
+                    )
+                    .await
+                {
+                    Ok(true) => {
+                        read_multi_file_block_filter(
+                            &self.dal,
+                            &self.settings,
+                            &self.index_fields,
+                            &self.ngram_args,
+                            index_files,
+                        )
+                        .await
+                    }
+                    Ok(false) => maybe_filter,
+                    Err(e) => {
+                        info!("failed to re-build missing split Bloom indexes: {}", e);
+                        maybe_filter
+                    }
+                }
+            }
+            _ => maybe_filter,
+        };
+        let Some(filter) = maybe_filter? else {
             return Ok(true);
         };
         Ok(BloomIndex::from_filter_block(
             self.func_ctx.clone(),
-            filter.filter_schema,
-            filter.filters,
-            BlockFilter::VERSION,
+            filter.block_filter.filter_schema,
+            filter.block_filter.filters,
+            filter.format_version,
         )?
         .apply(
             self.filter_expression.clone(),
@@ -449,6 +507,64 @@ impl BloomPrunerCreator {
         )? != FilterEvalResult::MustFalse)
     }
 
+    async fn try_rebuild_missing_bloom_index_files(
+        &self,
+        index_files: &[BloomIndexFileMeta],
+        bloom_index_builder: &BloomIndexRebuilder,
+        block_read_info: &BlockReadInfo,
+    ) -> Result<bool> {
+        let needed_column_ids = self
+            .index_fields
+            .iter()
+            .map(TableField::column_id)
+            .collect::<HashSet<_>>();
+        let mut missing_files = Vec::new();
+        for file in index_files {
+            if !file
+                .active_column_ids
+                .iter()
+                .any(|column_id| needed_column_ids.contains(column_id))
+            {
+                continue;
+            }
+            if self.dal.exists(&file.location.0).await? {
+                continue;
+            }
+            if file.format_version != BlockFilter::VERSION {
+                info!(
+                    "cannot rebuild missing split Bloom index {:?} with legacy format {}",
+                    file.location, file.format_version
+                );
+                return Ok(false);
+            }
+            missing_files.push(file.clone());
+        }
+        if missing_files.is_empty() {
+            return Ok(false);
+        }
+
+        let Some(states) = bloom_index_builder
+            .bloom_index_states_from_block_meta(&missing_files, block_read_info)
+            .await?
+        else {
+            return Ok(false);
+        };
+        if states
+            .iter()
+            .zip(&missing_files)
+            .any(|(state, file)| state.size() != file.file_size)
+        {
+            info!("cannot rebuild missing split Bloom indexes because serialized sizes changed");
+            return Ok(false);
+        }
+        for (state, file) in states.into_iter().zip(&missing_files) {
+            BlockWriter::write_down_bloom_index_state(&bloom_index_builder.table_dal, Some(state))
+                .await?;
+            info!("re-created missing split Bloom index {:?}", file.location);
+        }
+        Ok(true)
+    }
+
     async fn try_rebuild_missing_bloom_index(
         &self,
         bloom_index_location: &Location,
@@ -456,6 +572,14 @@ impl BloomPrunerCreator {
         index_columns: &[String],
         block_read_info: &BlockReadInfo,
     ) -> Result<Option<BlockFilter>> {
+        if let Err(e) = BloomIndexRebuilder::validate_rebuild_version(bloom_index_location) {
+            info!(
+                "cannot rebuild missing legacy Bloom index {:?}: {}",
+                bloom_index_location, e
+            );
+            return Ok(None);
+        }
+
         if self.dal.exists(bloom_index_location.0.as_str()).await? {
             info!("bloom index exists, ignore");
             return Ok(None);
@@ -513,7 +637,10 @@ impl BloomPruner for BloomPrunerCreator {
         block_meta: &BlockReadInfo,
     ) -> bool {
         if !index_files.is_empty() {
-            match self.apply_files(index_files, column_stats).await {
+            match self
+                .apply_files(index_files, column_stats, block_meta)
+                .await
+            {
                 Ok(value) => value,
                 Err(e) => {
                     warn!(
@@ -539,5 +666,62 @@ impl BloomPruner for BloomPrunerCreator {
         } else {
             true
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
+    use databend_storages_common_table_meta::meta::Versioned;
+
+    use super::multi_file_filter_version;
+
+    fn field(column_id: u32) -> TableField {
+        let mut field = TableField::new(
+            &format!("c{column_id}"),
+            TableDataType::Number(NumberDataType::UInt64),
+        );
+        field.column_id = column_id;
+        field
+    }
+
+    fn file(active_column_ids: Vec<u32>, format_version: u64) -> BloomIndexFileMeta {
+        BloomIndexFileMeta {
+            active_column_ids,
+            location: (format!("bloom-{format_version}"), format_version),
+            format_version,
+            file_size: 1,
+        }
+    }
+
+    #[test]
+    fn test_multi_file_filter_version() {
+        let fields = vec![field(1)];
+        assert_eq!(
+            multi_file_filter_version(&fields, &[file(vec![1], 2)]),
+            Some(2)
+        );
+        assert_eq!(
+            multi_file_filter_version(&fields, &[file(vec![1], 2), file(vec![2], 4)]),
+            Some(2),
+            "an irrelevant current file does not create a mixed-codec read"
+        );
+        assert_eq!(
+            multi_file_filter_version(&fields, &[file(vec![1], 2), file(vec![1], 4)]),
+            None,
+            "V2 and digest encodings for the requested field cannot be merged"
+        );
+        assert_eq!(
+            multi_file_filter_version(&fields, &[file(vec![1], 3), file(vec![1], 4)]),
+            Some(BlockFilter::VERSION)
+        );
+        assert_eq!(
+            multi_file_filter_version(&fields, &[file(vec![2], 2)]),
+            Some(BlockFilter::VERSION)
+        );
     }
 }

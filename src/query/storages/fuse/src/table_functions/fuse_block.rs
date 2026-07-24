@@ -33,6 +33,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use serde::Serialize;
 
 use crate::FuseTable;
 use crate::io::SegmentsIO;
@@ -42,6 +43,13 @@ use crate::table_functions::function_template::TableMetaFunc;
 
 pub struct FuseBlock;
 pub type FuseBlockFunc = TableMetaFuncTemplate<FuseBlock>;
+
+fn serialize_variant(value: &impl Serialize) -> Result<Vec<u8>> {
+    let json = serde_json::to_vec(value)?;
+    Ok(jsonb::parse_value(&json)
+        .map_err(|error| ErrorCode::Internal(error.to_string()))?
+        .to_vec())
+}
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseBlock {
@@ -146,49 +154,35 @@ impl TableMetaFunc for FuseBlock {
                             .as_ref()
                             .map(|m| m.virtual_column_size),
                     );
-                    column_groups.push(
-                        jsonb::parse_value(
-                            serde_json::to_string(
-                                &block
-                                    .column_groups
-                                    .iter()
-                                    .map(|group| {
-                                        serde_json::json!({
-                                            "active_column_ids": group.active_column_ids,
-                                            "location": group.location.0,
-                                            "format_version": group.format_version,
-                                            "file_size": group.file_size,
-                                            "uncompressed_size": group.uncompressed_size,
-                                        })
-                                    })
-                                    .collect::<Vec<_>>(),
-                            )?
-                            .as_bytes(),
-                        )
-                        .map_err(|error| ErrorCode::Internal(error.to_string()))?
-                        .to_vec(),
-                    );
-                    bloom_index_files.push(
-                        jsonb::parse_value(
-                            serde_json::to_string(
-                                &block
-                                    .bloom_index_files
-                                    .iter()
-                                    .map(|file| {
-                                        serde_json::json!({
-                                            "active_column_ids": file.active_column_ids,
-                                            "location": file.location.0,
-                                            "format_version": file.format_version,
-                                            "file_size": file.file_size,
-                                        })
-                                    })
-                                    .collect::<Vec<_>>(),
-                            )?
-                            .as_bytes(),
-                        )
-                        .map_err(|error| ErrorCode::Internal(error.to_string()))?
-                        .to_vec(),
-                    );
+                    column_groups.push(serialize_variant(
+                        &block
+                            .column_groups
+                            .iter()
+                            .map(|group| {
+                                serde_json::json!({
+                                    "active_column_ids": group.active_column_ids,
+                                    "location": group.location.0,
+                                    "format_version": group.format_version,
+                                    "file_size": group.file_size,
+                                    "uncompressed_size": group.uncompressed_size,
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )?);
+                    bloom_index_files.push(serialize_variant(
+                        &block
+                            .bloom_index_files
+                            .iter()
+                            .map(|file| {
+                                serde_json::json!({
+                                    "active_column_ids": file.active_column_ids,
+                                    "location": file.location.0,
+                                    "format_version": file.format_version,
+                                    "file_size": file.file_size,
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )?);
 
                     num_rows += 1;
                     if num_rows >= limit {

@@ -155,7 +155,7 @@ async fn test_computed_column() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_partial_update_with_virtual_column_and_change_tracking() -> anyhow::Result<()> {
+async fn test_partial_update_rejects_virtual_column_with_change_tracking() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     let db = fixture.default_db_name();
     let table_name = fixture.default_table_name();
@@ -194,7 +194,7 @@ async fn test_partial_update_with_virtual_column_and_change_tracking() -> anyhow
     let rows = fixture
         .execute_query(&format!(
             "select count(*) from fuse_block('{db}', '{table_name}') \
-             where column_groups != parse_json('[]')"
+             where column_groups = parse_json('[]')"
         ))
         .await?;
     assert_eq!(query_count(rows).await?, 1);
@@ -203,7 +203,55 @@ async fn test_partial_update_with_virtual_column_and_change_tracking() -> anyhow
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_partial_update_rejects_indirect_cluster_key_update() -> anyhow::Result<()> {
+async fn test_partial_update_rejects_stored_computed_column_table() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} \
+             (id int, value int, stored_value bigint as (value + 1) stored) engine=fuse \
+             enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name}(id, value) values (1, 10), (2, 20)"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set value = value + 1 where id = 1"
+        ))
+        .await?;
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and value = 11 and stored_value = 12) \
+                or (id = 2 and value = 20 and stored_value = 21)"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 2);
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from fuse_block('{db}', '{table_name}') \
+             where column_groups = parse_json('[]')"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partial_update_rejects_computed_column_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     let db = fixture.default_db_name();
     let table_name = fixture.default_table_name();

@@ -21,7 +21,6 @@ use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -99,39 +98,6 @@ struct PartialUpdateInfo {
     updated_field_indices: Vec<FieldIndex>,
 }
 
-fn expand_computed_column_dependencies(
-    ctx: Arc<dyn TableContext>,
-    table_schema: &TableSchema,
-    computed_schema: &DataSchemaRef,
-    dependency_ids: &mut BTreeSet<ColumnId>,
-) -> Result<()> {
-    loop {
-        let previous_len = dependency_ids.len();
-        for field in table_schema.fields() {
-            if !dependency_ids.contains(&field.column_id()) {
-                continue;
-            }
-            let computed_expr = match field.computed_expr() {
-                Some(ComputedExpr::Stored(expr)) | Some(ComputedExpr::Virtual(expr)) => expr,
-                None => continue,
-            };
-            let expr = parse_computed_field_index_expr(
-                ctx.clone(),
-                computed_schema.clone(),
-                computed_expr,
-            )?;
-            dependency_ids.extend(
-                expr.column_refs()
-                    .into_iter()
-                    .map(|(index, _)| table_schema.field(index).column_id()),
-            );
-        }
-        if dependency_ids.len() == previous_len {
-            return Ok(());
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn build_partial_update_info(
     ctx: Arc<dyn TableContext>,
@@ -147,38 +113,20 @@ fn build_partial_update_info(
         || table.is_column_oriented()
         || !table.get_table_info().meta.indexes.is_empty()
         || update_list.is_empty()
+        || table
+            .schema()
+            .fields()
+            .iter()
+            .any(|field| field.computed_expr().is_some())
     {
         return Ok(None);
     }
 
     let schema_with_stream = table.schema_with_stream();
-    let table_schema = table.schema();
-    let computed_schema: DataSchemaRef = Arc::new(table_schema.as_ref().into());
     let mut updated_column_ids = update_list
         .keys()
         .map(|index| schema_with_stream.field(*index).column_id())
         .collect::<BTreeSet<_>>();
-    let mut computed_dependencies = BTreeSet::new();
-
-    for field in table_schema.fields() {
-        let Some(ComputedExpr::Stored(stored_expr)) = field.computed_expr() else {
-            continue;
-        };
-        let expr =
-            parse_computed_field_index_expr(ctx.clone(), computed_schema.clone(), stored_expr)?;
-        let dependencies = expr
-            .column_refs()
-            .into_iter()
-            .map(|(index, _)| index)
-            .collect::<BTreeSet<_>>();
-        if dependencies
-            .iter()
-            .any(|index| update_list.contains_key(index))
-        {
-            updated_column_ids.insert(field.column_id());
-            computed_dependencies.extend(dependencies);
-        }
-    }
 
     for stream_column in table.stream_columns() {
         updated_column_ids.insert(stream_column.column_id());
@@ -186,18 +134,13 @@ fn build_partial_update_info(
 
     if let Some(cluster_keys) = table.resolve_cluster_keys() {
         let cluster_exprs = parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
-        let mut cluster_dependency_ids = cluster_exprs
+        let updates_cluster_key = cluster_exprs
             .iter()
             .flat_map(|expr| expr.column_refs())
-            .map(|(index, _)| schema_with_stream.field(index).column_id())
-            .collect::<BTreeSet<_>>();
-        expand_computed_column_dependencies(
-            ctx.clone(),
-            table_schema.as_ref(),
-            &computed_schema,
-            &mut cluster_dependency_ids,
-        )?;
-        if !updated_column_ids.is_disjoint(&cluster_dependency_ids) {
+            .any(|(index, _)| {
+                updated_column_ids.contains(&schema_with_stream.field(index).column_id())
+            });
+        if updates_cluster_key {
             return Ok(None);
         }
     }
@@ -235,11 +178,7 @@ fn build_partial_update_info(
         .flat_map(ScalarExpr::used_columns)
         .chain(direct_filter.iter().flat_map(ScalarExpr::used_columns))
         .collect::<ColumnSet>();
-    for field_index in update_list
-        .keys()
-        .copied()
-        .chain(computed_dependencies.into_iter())
-    {
+    for field_index in update_list.keys().copied() {
         let Some(symbol) = find_symbol(field_index) else {
             return Ok(None);
         };
@@ -250,8 +189,6 @@ fn build_partial_update_info(
             let Some(symbol) = find_symbol(field_index) else {
                 return Ok(None);
             };
-            // STORED computed columns are regenerated from their dependencies and do not need
-            // their previous values. Stream columns do need their previous values.
             required_columns.insert(symbol);
         }
     }

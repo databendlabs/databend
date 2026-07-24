@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use databend_common_expression::ColumnId;
 
 use crate::meta::BlockMeta;
+use crate::meta::ColumnGroupFileMeta;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;
 
@@ -25,16 +27,29 @@ pub struct BlockReadInfo {
     pub location: String,
     pub row_count: u64,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
+    /// Active physical files that make up this logical block.
+    ///
+    /// An empty vector is the legacy single-file representation described by `location` and
+    /// `col_metas`.
+    #[serde(default)]
+    pub column_groups: Vec<ColumnGroupFileMeta>,
     pub compression: Compression,
     pub block_size: u64,
 }
 
 impl From<&BlockMeta> for BlockReadInfo {
     fn from(meta: &BlockMeta) -> Self {
+        let column_groups = if meta.column_groups.is_empty() {
+            vec![]
+        } else {
+            let projected_column_ids = meta.col_metas.keys().copied().collect::<HashSet<_>>();
+            meta.project_column_groups(&projected_column_ids)
+        };
         BlockReadInfo {
             location: meta.location.0.clone(),
             row_count: meta.row_count,
             col_metas: meta.col_metas.clone(),
+            column_groups,
             compression: meta.compression,
             block_size: meta.block_size,
         }

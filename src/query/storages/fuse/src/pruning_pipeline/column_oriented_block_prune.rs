@@ -215,6 +215,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             location: location_path.clone(),
                             row_count,
                             col_metas: columns_meta.clone(),
+                            column_groups: vec![],
                             compression,
                             block_size,
                         };
