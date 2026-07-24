@@ -41,6 +41,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -49,6 +50,7 @@ use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -74,6 +76,7 @@ use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
+use crate::pruning::read_multi_file_block_filter;
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -646,93 +649,108 @@ impl AggregationContext {
         if bloom_on_conflict_field_index.is_empty() {
             return false;
         }
-        if let Some(loc) = &block_meta.bloom_filter_index_location {
-            match self
-                .load_bloom_filter(
-                    loc,
-                    block_meta.bloom_filter_index_size,
-                    bloom_on_conflict_field_index,
-                )
-                .await
-            {
-                Ok(filters) => {
-                    // the caller ensures that the input_hashes is not empty
-                    let row_count = input_hashes[0].len();
+        match self
+            .load_bloom_filter(block_meta, bloom_on_conflict_field_index)
+            .await
+        {
+            Ok(Some(filters)) => {
+                // the caller ensures that the input_hashes is not empty
+                let row_count = input_hashes[0].len();
 
-                    // let assume that the target block is prunable
-                    let mut block_pruned = true;
-                    for row in 0..row_count {
-                        // for each row, by default, assume that columns of this row do have conflict with the target block.
-                        let mut row_not_prunable = true;
-                        for (col_idx, col_hash) in input_hashes.iter().enumerate() {
-                            // For each column of current row, check if the corresponding bloom
-                            // filter contains the digest of the column.
-                            //
-                            // Any one of the columns NOT contains by the corresponding bloom filter,
-                            // indicates that the row is prunable(thus, we do not stop on the first column that
-                            // the bloom filter contains).
+                // let assume that the target block is prunable
+                let mut block_pruned = true;
+                for row in 0..row_count {
+                    // for each row, by default, assume that columns of this row do have conflict with the target block.
+                    let mut row_not_prunable = true;
+                    for (col_idx, col_hash) in input_hashes.iter().enumerate() {
+                        // For each column of current row, check if the corresponding bloom
+                        // filter contains the digest of the column.
+                        //
+                        // Any one of the columns NOT contains by the corresponding bloom filter,
+                        // indicates that the row is prunable(thus, we do not stop on the first column that
+                        // the bloom filter contains).
 
-                            // - if bloom filter presents, check if the column is contained
-                            // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
-                            if let Some(col_filter) = &filters[col_idx] {
-                                let hash = col_hash[row];
-                                if hash == 0 || !col_filter.contains_digest(hash) {
-                                    // - hash == 0 indicates that the column value is null, which equals nothing.
-                                    // - NOT `contains_digest`, indicates that this column of row does not match
-                                    row_not_prunable = false;
-                                    // if one column not match, we do not need to check other columns
-                                    break;
-                                }
+                        // - if bloom filter presents, check if the column is contained
+                        // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
+                        if let Some(col_filter) = &filters[col_idx] {
+                            let hash = col_hash[row];
+                            if hash == 0 || !col_filter.contains_digest(hash) {
+                                // - hash == 0 indicates that the column value is null, which equals nothing.
+                                // - NOT `contains_digest`, indicates that this column of row does not match
+                                row_not_prunable = false;
+                                // if one column not match, we do not need to check other columns
+                                break;
                             }
                         }
-                        if row_not_prunable {
-                            // any row not prunable indicates that the target block is not prunable
-                            block_pruned = false;
-                            break;
-                        }
                     }
-                    block_pruned
+                    if row_not_prunable {
+                        // any row not prunable indicates that the target block is not prunable
+                        block_pruned = false;
+                        break;
+                    }
                 }
-                Err(e) => {
-                    // broken index should not stop us:
-                    warn!("failed to build bloom index column name: {}", e);
-                    // failed to load bloom filter, do not prune
-                    false
-                }
+                block_pruned
             }
-        } else {
-            // no bloom filter, no pruning
-            false
+            Ok(None) => false,
+            Err(e) => {
+                // broken index should not stop us:
+                warn!("failed to build bloom index column name: {}", e);
+                // failed to load bloom filter, do not prune
+                false
+            }
         }
     }
 
     async fn load_bloom_filter(
         &self,
-        location: &Location,
-        index_len: u64,
+        block_meta: &BlockMeta,
         bloom_on_conflict_field_index: &[FieldIndex],
-    ) -> Result<Vec<Option<Arc<FilterImpl>>>> {
+    ) -> Result<Option<Vec<Option<Arc<FilterImpl>>>>> {
         // different block may have different version of bloom filter index
-        let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
-
-        for idx in bloom_on_conflict_field_index {
-            let bloom_column_name = BloomIndex::build_filter_bloom_name(
-                location.1,
-                &self.on_conflict_fields[*idx].table_field,
-            )?;
-            col_names.push(bloom_column_name);
-        }
-
-        // using load_bloom_filter_by_columns is attractive,
-        // but it do not care about the version of the bloom filter index
-        let block_filter = location
-            .read_block_filter(
-                self.data_accessor.clone(),
+        let (block_filter, col_names) = if block_meta.bloom_index_files.is_empty() {
+            let Some(location) = &block_meta.bloom_filter_index_location else {
+                return Ok(None);
+            };
+            let col_names = bloom_on_conflict_field_index
+                .iter()
+                .map(|idx| {
+                    BloomIndex::build_filter_bloom_name(
+                        location.1,
+                        &self.on_conflict_fields[*idx].table_field,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let block_filter = location
+                .read_block_filter(
+                    self.data_accessor.clone(),
+                    &self.read_settings,
+                    &col_names,
+                    block_meta.bloom_filter_index_size,
+                )
+                .await?;
+            (block_filter, col_names)
+        } else {
+            let fields = bloom_on_conflict_field_index
+                .iter()
+                .map(|idx| self.on_conflict_fields[*idx].table_field.clone())
+                .collect::<Vec<_>>();
+            let Some(block_filter) = read_multi_file_block_filter(
+                &self.data_accessor,
                 &self.read_settings,
-                &col_names,
-                index_len,
+                &fields,
+                &[],
+                &block_meta.bloom_index_files,
             )
-            .await?;
+            .await?
+            else {
+                return Ok(None);
+            };
+            let col_names = fields
+                .iter()
+                .map(|field| BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, field))
+                .collect::<Result<Vec<_>>>()?;
+            (block_filter, col_names)
+        };
 
         // reorder the filter according to the order of bloom_on_conflict_field
         let mut filters = Vec::with_capacity(bloom_on_conflict_field_index.len());
@@ -744,14 +762,14 @@ impl AggregationContext {
                 Err(_) => {
                     info!(
                         "bloom filter column {} not found for block {}",
-                        filter_col_name, location.0
+                        filter_col_name, block_meta.location.0
                     );
                     filters.push(None);
                 }
             }
         }
 
-        Ok(filters)
+        Ok(Some(filters))
     }
 }
 

@@ -457,23 +457,7 @@ impl BlockBuilder {
         let file_size = buffer.len() as u64;
 
         let current_column_ids = self.source_schema.to_leaf_column_id_set();
-        let mut column_groups = if origin.column_groups.is_empty() {
-            vec![ColumnGroupFileMeta {
-                active_column_ids: self
-                    .source_schema
-                    .to_leaf_column_ids()
-                    .into_iter()
-                    .filter(|column_id| origin.col_metas.contains_key(column_id))
-                    .collect(),
-                location: origin.location.clone(),
-                format_version: origin.location.1,
-                file_size: origin.file_size,
-                uncompressed_size: origin.block_size,
-                leaf_column_metas: origin.col_metas.clone(),
-            }]
-        } else {
-            origin.column_groups.clone()
-        };
+        let mut column_groups = origin.physical_column_groups().into_owned();
         for group in &mut column_groups {
             group.active_column_ids.retain(|column_id| {
                 current_column_ids.contains(column_id) && !updated_column_id_set.contains(column_id)

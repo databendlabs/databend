@@ -90,13 +90,6 @@ impl From<TableCompression> for ParquetCompression {
 
 impl From<meta::Compression> for ParquetCompression {
     fn from(value: meta::Compression) -> Self {
-        match value {
-            meta::Compression::Lz4Raw => ParquetCompression::LZ4_RAW,
-            meta::Compression::Snappy => ParquetCompression::SNAPPY,
-            meta::Compression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
-            meta::Compression::None => ParquetCompression::UNCOMPRESSED,
-            meta::Compression::Lz4 => ParquetCompression::LZ4_RAW,
-            meta::Compression::Gzip => ParquetCompression::GZIP(GzipLevel::default()),
-        }
+        TableCompression::from(value).into()
     }
 }

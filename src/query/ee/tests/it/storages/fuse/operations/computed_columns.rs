@@ -201,3 +201,48 @@ async fn test_partial_update_with_virtual_column_and_change_tracking() -> anyhow
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partial_update_rejects_indirect_cluster_key_update() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} \
+             (id int, a int, k bigint as (a + 1) virtual) engine=fuse \
+             enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name}(id, a) values (1, 10), (2, 20)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("alter table {db}.{table_name} cluster by(k)"))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+
+    let updated = latest_default_block_meta(&fixture).await?;
+    assert!(updated.column_groups.is_empty());
+    assert!(updated.cluster_stats.is_some());
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and a = 11 and k = 12) or (id = 2 and a = 20 and k = 21)"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 2);
+
+    Ok(())
+}

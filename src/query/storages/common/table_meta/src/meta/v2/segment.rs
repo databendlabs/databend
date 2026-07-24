@@ -317,22 +317,40 @@ impl BlockMeta {
             .chain(self.bloom_index_files.iter().map(|file| &file.location))
     }
 
+    fn legacy_column_group(
+        &self,
+        projected_column_ids: Option<&HashSet<ColumnId>>,
+    ) -> ColumnGroupFileMeta {
+        let mut active_column_ids = self
+            .col_metas
+            .keys()
+            .filter(|column_id| {
+                projected_column_ids.is_none_or(|projected| projected.contains(column_id))
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        active_column_ids.sort_unstable();
+        let leaf_column_metas = active_column_ids
+            .iter()
+            .map(|column_id| (*column_id, self.col_metas[column_id].clone()))
+            .collect();
+        ColumnGroupFileMeta {
+            active_column_ids,
+            location: self.location.clone(),
+            format_version: self.location.1,
+            file_size: self.file_size,
+            uncompressed_size: self.block_size,
+            leaf_column_metas,
+        }
+    }
+
     /// Normalize legacy and split layouts to the active physical data-file view.
     pub fn physical_column_groups(&self) -> Cow<'_, [ColumnGroupFileMeta]> {
         if !self.column_groups.is_empty() {
             return Cow::Borrowed(&self.column_groups);
         }
 
-        let mut active_column_ids = self.col_metas.keys().copied().collect::<Vec<_>>();
-        active_column_ids.sort_unstable();
-        Cow::Owned(vec![ColumnGroupFileMeta {
-            active_column_ids,
-            location: self.location.clone(),
-            format_version: self.location.1,
-            file_size: self.file_size,
-            uncompressed_size: self.block_size,
-            leaf_column_metas: self.col_metas.clone(),
-        }])
+        Cow::Owned(vec![self.legacy_column_group(None)])
     }
 
     /// Project active leaf metadata while preserving each owning physical file.
@@ -371,18 +389,11 @@ impl BlockMeta {
             };
 
         if self.column_groups.is_empty() {
-            let mut active_column_ids = self.col_metas.keys().copied().collect::<Vec<_>>();
-            active_column_ids.sort_unstable();
-            return project_group(
-                &active_column_ids,
-                &self.location,
-                self.location.1,
-                self.file_size,
-                self.block_size,
-                &self.col_metas,
-            )
-            .into_iter()
-            .collect();
+            let group = self.legacy_column_group(Some(projected_column_ids));
+            return (!group.active_column_ids.is_empty())
+                .then_some(group)
+                .into_iter()
+                .collect();
         }
 
         self.column_groups

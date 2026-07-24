@@ -29,6 +29,7 @@ mod virtual_column_pruner;
 pub use block_pruner::BlockPruner;
 pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
+pub(crate) use bloom_pruner::read_multi_file_block_filter;
 pub use expr_bloom_filter::ExprBloomFilter;
 pub use expr_runtime_pruner::ExprRuntimePruner;
 pub use expr_runtime_pruner::RuntimeFilterExpr;

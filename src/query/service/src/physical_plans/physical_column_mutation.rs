@@ -35,6 +35,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ColumnMutationFormatter;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::physical_field_to_storage_index;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -174,12 +175,12 @@ impl IPhysicalPlan for ColumnMutation {
                 updated_fields
                     .iter()
                     .map(|source_index| {
-                        let column_id = source_schema.field(*source_index).column_id();
-                        let field_id = schema_with_stream
-                            .fields()
-                            .iter()
-                            .position(|field| field.column_id() == column_id)
-                            .ok_or_else(|| ErrorCode::Internal("updated field is not in schema"))?;
+                        let field_id = physical_field_to_storage_index(
+                            &source_schema,
+                            &schema_with_stream,
+                            *source_index,
+                        )
+                        .ok_or_else(|| ErrorCode::Internal("updated field is not in schema"))?;
                         field_id_to_schema_index
                             .get(&field_id)
                             .copied()
@@ -215,17 +216,23 @@ impl IPhysicalPlan for ColumnMutation {
         let write_column_group = self.partial_update_fields.is_some();
 
         let block_thresholds = table.get_block_thresholds();
+        let physical_table_schema = table.schema_with_stream().remove_virtual_computed_fields();
+        let physical_input_schema = DataSchema::from(&physical_table_schema).into();
         let cluster_stats_gen = if write_column_group {
             ClusterStatsGenerator::default()
         } else if matches!(self.mutation_kind, MutationKind::Delete) {
-            let input_schema = DataSchema::from(table.schema_with_stream()).into();
-            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
+            table.get_cluster_stats_gen(
+                builder.ctx.clone(),
+                0,
+                block_thresholds,
+                physical_input_schema,
+            )?
         } else {
             table.cluster_gen_for_append(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
                 block_thresholds,
-                None,
+                Some(physical_input_schema),
             )?
         };
 

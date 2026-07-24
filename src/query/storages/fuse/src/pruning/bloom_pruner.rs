@@ -151,7 +151,7 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     )? == FilterEvalResult::MustFalse)
 }
 
-async fn read_multi_file_block_filter(
+pub(crate) async fn read_multi_file_block_filter(
     dal: &Operator,
     settings: &ReadSettings,
     index_fields: &[TableField],

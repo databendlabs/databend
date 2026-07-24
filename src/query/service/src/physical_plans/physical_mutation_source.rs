@@ -55,6 +55,7 @@ use databend_common_storages_fuse::operations::VirtualSchemaMode;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::physical_field_to_storage_index;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -160,26 +161,23 @@ impl IPhysicalPlan for MutationSource {
 
         let physical_schema = table.schema_with_stream().remove_virtual_computed_fields();
         let partial_update = self.partial_update_projection.is_some();
-        let read_partition_field_indices: Vec<FieldIndex> =
-            if let Some(projection) = &self.partial_update_projection {
-                let storage_schema = table.schema_with_stream();
-                projection
-                    .iter()
-                    .map(|field_index| {
-                        let column_id = physical_schema.field(*field_index).column_id();
-                        storage_schema
-                            .fields()
-                            .iter()
-                            .position(|field| field.column_id() == column_id)
-                            .expect("physical field must exist in storage schema")
-                    })
-                    .collect()
-            } else {
-                self.read_partition_columns
-                    .iter()
-                    .map(|idx| idx.as_field_index())
-                    .collect()
-            };
+        let read_partition_field_indices: Vec<FieldIndex> = if let Some(projection) =
+            &self.partial_update_projection
+        {
+            let storage_schema = table.schema_with_stream();
+            projection
+                .iter()
+                .map(|field_index| {
+                    physical_field_to_storage_index(&physical_schema, &storage_schema, *field_index)
+                        .expect("physical field must exist in storage schema")
+                })
+                .collect()
+        } else {
+            self.read_partition_columns
+                .iter()
+                .map(|idx| idx.as_field_index())
+                .collect()
+        };
         let stream_projection = self
             .partial_update_projection
             .as_deref()

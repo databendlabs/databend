@@ -181,12 +181,12 @@ impl FuseTable {
     ) -> Result<ClusterStatsGenerator> {
         let input_schema =
             modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
+        let num_input_columns = input_schema.num_fields();
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transformer(move || {
