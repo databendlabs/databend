@@ -338,6 +338,7 @@ impl BlockBuilder {
         data_block: DataBlock,
         origin: &BlockMeta,
         updated_field_indices: &[FieldIndex],
+        legacy_bloom_column_ids: Option<&[ColumnId]>,
     ) -> Result<BlockSerialization> {
         if data_block.num_rows() as u64 != origin.row_count {
             return Err(ErrorCode::Internal(
@@ -445,8 +446,10 @@ impl BlockBuilder {
         )?;
         let uncompressed_size =
             updated_block.estimate_block_size(updated_block.num_columns()) as u64;
+        let mut write_settings = self.write_settings.clone();
+        write_settings.table_compression = origin.compression.into();
         let (updated_col_metas, buffer) = serialize_block_with_column_stats(
-            &self.write_settings,
+            &write_settings,
             &updated_schema,
             Some(&updated_col_stats),
             updated_block,
@@ -506,22 +509,21 @@ impl BlockBuilder {
 
         if !invalidated_bloom_column_ids.is_empty() {
             let mut bloom_index_files = if origin.bloom_index_files.is_empty() {
-                origin
-                    .bloom_filter_index_location
-                    .as_ref()
-                    .map(|location| BloomIndexFileMeta {
-                        active_column_ids: self
-                            .bloom_columns_map
-                            .values()
-                            .map(|field| field.column_id())
-                            .filter(|column_id| !invalidated_bloom_column_ids.contains(column_id))
-                            .collect(),
-                        location: location.clone(),
-                        format_version: location.1,
-                        file_size: origin.bloom_filter_index_size,
-                    })
-                    .into_iter()
-                    .collect()
+                let mut files = Vec::new();
+                if let Some(location) = &origin.bloom_filter_index_location {
+                    let active_column_ids = legacy_bloom_column_ids.ok_or_else(|| {
+                        ErrorCode::Internal("legacy Bloom file columns were not loaded")
+                    })?;
+                    if !active_column_ids.is_empty() {
+                        files.push(BloomIndexFileMeta {
+                            active_column_ids: active_column_ids.to_vec(),
+                            location: location.clone(),
+                            format_version: location.1,
+                            file_size: origin.bloom_filter_index_size,
+                        });
+                    }
+                }
+                files
             } else {
                 origin.bloom_index_files.clone()
             };

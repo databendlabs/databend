@@ -43,7 +43,6 @@ use thrift::protocol::TCompactInputProtocol;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
-use crate::fuse_part::normalized_column_group_files;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::TableMetaFuncTemplate;
@@ -145,7 +144,7 @@ impl TableMetaFunc for FusePage {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    for group in normalized_column_group_files(block).iter() {
+                    for group in block.physical_column_groups().iter() {
                         for field in schema.fields().iter() {
                             if field.is_nested()
                                 || !group.active_column_ids.contains(&field.column_id)

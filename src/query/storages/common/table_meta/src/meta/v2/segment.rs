@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -294,6 +296,108 @@ impl BlockMeta {
 
     pub fn compression(&self) -> Compression {
         self.compression
+    }
+
+    /// Active physical data files referenced by this logical block.
+    pub fn data_file_locations(&self) -> impl Iterator<Item = &Location> {
+        self.column_groups
+            .is_empty()
+            .then_some(&self.location)
+            .into_iter()
+            .chain(self.column_groups.iter().map(|group| &group.location))
+    }
+
+    /// Active physical Bloom files referenced by this logical block.
+    pub fn bloom_index_file_locations(&self) -> impl Iterator<Item = &Location> {
+        self.bloom_index_files
+            .is_empty()
+            .then_some(self.bloom_filter_index_location.as_ref())
+            .flatten()
+            .into_iter()
+            .chain(self.bloom_index_files.iter().map(|file| &file.location))
+    }
+
+    /// Normalize legacy and split layouts to the active physical data-file view.
+    pub fn physical_column_groups(&self) -> Cow<'_, [ColumnGroupFileMeta]> {
+        if !self.column_groups.is_empty() {
+            return Cow::Borrowed(&self.column_groups);
+        }
+
+        let mut active_column_ids = self.col_metas.keys().copied().collect::<Vec<_>>();
+        active_column_ids.sort_unstable();
+        Cow::Owned(vec![ColumnGroupFileMeta {
+            active_column_ids,
+            location: self.location.clone(),
+            format_version: self.location.1,
+            file_size: self.file_size,
+            uncompressed_size: self.block_size,
+            leaf_column_metas: self.col_metas.clone(),
+        }])
+    }
+
+    /// Project active leaf metadata while preserving each owning physical file.
+    pub fn project_column_groups(
+        &self,
+        projected_column_ids: &HashSet<ColumnId>,
+    ) -> Vec<ColumnGroupFileMeta> {
+        let project_group =
+            |active_column_ids: &[ColumnId],
+             location: &Location,
+             format_version: FormatVersion,
+             file_size: u64,
+             uncompressed_size: u64,
+             leaf_column_metas: &HashMap<ColumnId, ColumnMeta>| {
+                let active_column_ids = active_column_ids
+                    .iter()
+                    .filter(|column_id| projected_column_ids.contains(column_id))
+                    .filter(|column_id| leaf_column_metas.contains_key(column_id))
+                    .copied()
+                    .collect::<Vec<_>>();
+                if active_column_ids.is_empty() {
+                    return None;
+                }
+                let leaf_column_metas = active_column_ids
+                    .iter()
+                    .map(|column_id| (*column_id, leaf_column_metas[column_id].clone()))
+                    .collect();
+                Some(ColumnGroupFileMeta {
+                    active_column_ids,
+                    location: location.clone(),
+                    format_version,
+                    file_size,
+                    uncompressed_size,
+                    leaf_column_metas,
+                })
+            };
+
+        if self.column_groups.is_empty() {
+            let mut active_column_ids = self.col_metas.keys().copied().collect::<Vec<_>>();
+            active_column_ids.sort_unstable();
+            return project_group(
+                &active_column_ids,
+                &self.location,
+                self.location.1,
+                self.file_size,
+                self.block_size,
+                &self.col_metas,
+            )
+            .into_iter()
+            .collect();
+        }
+
+        self.column_groups
+            .iter()
+            .filter_map(|group| {
+                project_group(
+                    &group.active_column_ids,
+                    &group.location,
+                    group.format_version,
+                    group.file_size,
+                    group.uncompressed_size,
+                    &group.leaf_column_metas,
+                )
+            })
+            .collect()
     }
 
     /// Get the page size of the block.

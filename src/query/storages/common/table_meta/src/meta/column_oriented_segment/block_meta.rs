@@ -64,26 +64,9 @@ impl AbstractBlockMeta for BlockMeta {
         &self,
         col_ids: &HashSet<ColumnId>,
     ) -> Vec<(String, HashMap<ColumnId, ColumnMeta>)> {
-        if self.column_groups.is_empty() {
-            return vec![(self.location_path(), self.col_metas(col_ids))];
-        }
-
-        self.column_groups
-            .iter()
-            .filter_map(|group| {
-                let col_metas = group
-                    .active_column_ids
-                    .iter()
-                    .filter(|column_id| col_ids.contains(column_id))
-                    .filter_map(|column_id| {
-                        group
-                            .leaf_column_metas
-                            .get(column_id)
-                            .map(|meta| (*column_id, meta.clone()))
-                    })
-                    .collect::<HashMap<_, _>>();
-                (!col_metas.is_empty()).then(|| (group.location.0.clone(), col_metas))
-            })
+        BlockMeta::project_column_groups(self, col_ids)
+            .into_iter()
+            .map(|group| (group.location.0, group.leaf_column_metas))
             .collect()
     }
 

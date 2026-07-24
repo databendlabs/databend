@@ -78,7 +78,6 @@ pub struct MutationSource {
     /// `read_partition_columns` for expression/output naming and must not be used as field indices.
     #[serde(default)]
     pub partial_update_projection: Option<Vec<FieldIndex>>,
-    pub partial_update: bool,
     pub truncate_table: bool,
 
     pub partitions: Partitions,
@@ -124,7 +123,6 @@ impl IPhysicalPlan for MutationSource {
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
             partial_update_projection: self.partial_update_projection.clone(),
-            partial_update: self.partial_update,
             truncate_table: self.truncate_table,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
@@ -161,6 +159,7 @@ impl IPhysicalPlan for MutationSource {
         }
 
         let physical_schema = table.schema_with_stream().remove_virtual_computed_fields();
+        let partial_update = self.partial_update_projection.is_some();
         let read_partition_field_indices: Vec<FieldIndex> =
             if let Some(projection) = &self.partial_update_projection {
                 let storage_schema = table.schema_with_stream();
@@ -239,11 +238,11 @@ impl IPhysicalPlan for MutationSource {
             read_partition_field_indices.clone(),
             &mut builder.main_pipeline,
             mutation_action,
-            self.partial_update,
+            partial_update,
         )?;
 
         if table.change_tracking_enabled() {
-            let stream_ctx = if self.partial_update {
+            let stream_ctx = if partial_update {
                 StreamContext::try_create_projected(
                     builder.ctx.get_function_context()?,
                     table.schema_with_stream(),
@@ -365,7 +364,6 @@ impl PhysicalPlanBuilder {
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns,
             partial_update_projection,
-            partial_update,
             truncate_table,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),

@@ -13,39 +13,16 @@
 // limitations under the License.
 
 use std::path::Path;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_cache::LoadParams;
+use databend_query::test_kits::latest_default_block_meta;
 use databend_storages_common_io::dedup_file_locations;
-use databend_storages_common_table_meta::meta::BlockMeta;
-
-async fn latest_default_block_meta(fixture: &TestFixture) -> anyhow::Result<Arc<BlockMeta>> {
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table.schema());
-    let (segment_location, segment_version) = &snapshot.segments[0];
-    let segment = segment_reader
-        .read(&LoadParams {
-            location: segment_location.clone(),
-            len_hint: None,
-            ver: *segment_version,
-            put_cache: false,
-        })
-        .await?;
-    let blocks = segment.block_metas()?;
-    assert_eq!(blocks.len(), 1);
-    Ok(blocks[0].clone())
-}
 
 // TODO investigate this
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged

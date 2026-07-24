@@ -24,6 +24,8 @@ pub enum TableCompression {
     None,
     LZ4,
     Snappy,
+    /// Kept for rewriting legacy blocks whose metadata records Gzip compression.
+    Gzip,
     #[default]
     Zstd,
 }
@@ -55,7 +57,20 @@ impl From<TableCompression> for meta::Compression {
             // Map to meta Lz4Raw.
             TableCompression::LZ4 => meta::Compression::Lz4Raw,
             TableCompression::Snappy => meta::Compression::Snappy,
+            TableCompression::Gzip => meta::Compression::Gzip,
             TableCompression::Zstd => meta::Compression::Zstd,
+        }
+    }
+}
+
+impl From<meta::Compression> for TableCompression {
+    fn from(value: meta::Compression) -> Self {
+        match value {
+            meta::Compression::Lz4 | meta::Compression::Lz4Raw => TableCompression::LZ4,
+            meta::Compression::Snappy => TableCompression::Snappy,
+            meta::Compression::Zstd => TableCompression::Zstd,
+            meta::Compression::Gzip => TableCompression::Gzip,
+            meta::Compression::None => TableCompression::None,
         }
     }
 }
@@ -67,6 +82,7 @@ impl From<TableCompression> for ParquetCompression {
             TableCompression::None => ParquetCompression::UNCOMPRESSED,
             TableCompression::LZ4 => ParquetCompression::LZ4_RAW,
             TableCompression::Snappy => ParquetCompression::SNAPPY,
+            TableCompression::Gzip => ParquetCompression::GZIP(GzipLevel::default()),
             TableCompression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
         }
     }

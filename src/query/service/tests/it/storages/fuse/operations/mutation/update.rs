@@ -12,51 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
-use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::decode_column_hll;
-
-async fn latest_block_meta(fixture: &TestFixture) -> anyhow::Result<Arc<BlockMeta>> {
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table.schema());
-    let (segment_location, segment_version) = &snapshot.segments[0];
-    let segment = segment_reader
-        .read(&LoadParams {
-            location: segment_location.clone(),
-            len_hint: None,
-            ver: *segment_version,
-            put_cache: false,
-        })
-        .await?;
-    let blocks = segment.block_metas()?;
-    assert_eq!(blocks.len(), 1);
-    Ok(blocks[0].clone())
-}
 
 async fn latest_block_hll(fixture: &TestFixture) -> anyhow::Result<BlockHLL> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table.schema());
-    let (segment_location, segment_version) = &snapshot.segments[0];
-    let segment = segment_reader
-        .read(&LoadParams {
-            location: segment_location.clone(),
-            len_hint: None,
-            ver: *segment_version,
-            put_cache: false,
-        })
-        .await?;
+    let segment = latest_default_segment(fixture).await?;
     let (stats_location, stats_version) = segment.summary.additional_stats_loc().unwrap();
     let stats = MetaReaders::segment_stats_reader(fuse_table.get_operator())
         .read(&LoadParams {
@@ -93,7 +59,7 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
     let schema = table.schema();
     let id_column_id = schema.field(0).column_id();
     let value_column_id = schema.field(1).column_id();
-    let origin = latest_block_meta(&fixture).await?;
+    let origin = latest_default_block_meta(&fixture).await?;
     let origin_hll = latest_block_hll(&fixture).await?;
 
     fixture
@@ -106,7 +72,7 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
         ))
         .await?;
 
-    let updated = latest_block_meta(&fixture).await?;
+    let updated = latest_default_block_meta(&fixture).await?;
 
     assert_eq!(updated.column_groups.len(), 2);
     let unchanged_group = updated
@@ -179,7 +145,7 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
             "update {db}.{table_name} set value = value + 1 where id = 2"
         ))
         .await?;
-    let updated_again = latest_block_meta(&fixture).await?;
+    let updated_again = latest_default_block_meta(&fixture).await?;
     assert_eq!(updated_again.column_groups.len(), 2);
     assert!(
         updated_again
@@ -219,7 +185,7 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
             "update {db}.{table_name} set value = value + 1 where id = 1"
         ))
         .await?;
-    let fully_rewritten = latest_block_meta(&fixture).await?;
+    let fully_rewritten = latest_default_block_meta(&fixture).await?;
     assert!(fully_rewritten.column_groups.is_empty());
     assert!(fully_rewritten.bloom_index_files.is_empty());
 
@@ -230,6 +196,105 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
         ))
         .await?;
     assert_eq!(query_count(rows).await?, 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partial_update_preserves_block_compression() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, a int, b int) engine=fuse \
+             compression='zstd' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 10, 20), (2, 30, 40)"
+        ))
+        .await?;
+    let origin_compression = latest_default_block_meta(&fixture).await?.compression;
+
+    fixture
+        .execute_command(&format!(
+            "alter table {db}.{table_name} set options(compression='snappy')"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set b = b + 1 where id = 2"
+        ))
+        .await?;
+
+    let updated = latest_default_block_meta(&fixture).await?;
+    assert_eq!(updated.compression, origin_compression);
+    assert_eq!(updated.column_groups.len(), 3);
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and a = 11 and b = 20) \
+                or (id = 2 and a = 30 and b = 41)"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partial_update_reads_legacy_bloom_schema() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, value int, other int) engine=fuse \
+             bloom_index_columns='id' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 10, 20), (2, 30, 40)"
+        ))
+        .await?;
+    let table = fixture.latest_default_table().await?;
+    let id_column_id = table.schema().field_with_name("id")?.column_id();
+
+    fixture
+        .execute_command(&format!(
+            "alter table {db}.{table_name} set options(bloom_index_columns='value')"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set other = other + 1 where id = 1"
+        ))
+        .await?;
+
+    let updated = latest_default_block_meta(&fixture).await?;
+    assert!(updated.bloom_filter_index_location.is_none());
+    assert_eq!(updated.bloom_index_files.len(), 1);
+    assert_eq!(updated.bloom_index_files[0].active_column_ids, vec![
+        id_column_id
+    ]);
 
     Ok(())
 }
@@ -254,7 +319,7 @@ async fn test_partial_update_invalidates_virtual_columns_when_disabled() -> anyh
         ))
         .await?;
     assert!(
-        latest_block_meta(&fixture)
+        latest_default_block_meta(&fixture)
             .await?
             .virtual_block_meta
             .is_some()
@@ -275,7 +340,7 @@ async fn test_partial_update_invalidates_virtual_columns_when_disabled() -> anyh
         .await?;
 
     assert!(
-        latest_block_meta(&fixture)
+        latest_default_block_meta(&fixture)
             .await?
             .virtual_block_meta
             .is_none()

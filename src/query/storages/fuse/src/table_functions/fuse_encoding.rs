@@ -61,7 +61,6 @@ use parquet::basic::Type as ParquetPhysicalType;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
-use crate::fuse_part::normalized_column_group_files;
 use crate::io::SegmentsIO;
 use crate::io::read::meta::read_thrift_file_metadata;
 use crate::sessions::TableContext;
@@ -402,7 +401,7 @@ impl<'a> FuseEncodingImpl<'a> {
             for segment in segments {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
-                    for group in normalized_column_group_files(block).iter() {
+                    for group in block.physical_column_groups().iter() {
                         let column_metas = group
                             .active_column_ids
                             .iter()

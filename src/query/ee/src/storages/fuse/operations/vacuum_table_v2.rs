@@ -137,29 +137,16 @@ pub async fn do_vacuum2(
     let mut gc_root_indexes = HashSet::new();
     for segment in segments {
         for block in segment?.block_metas()? {
-            if block.column_groups.is_empty() {
-                gc_root_blocks.insert(block.location.0.clone());
-            } else {
-                gc_root_blocks.extend(
-                    block
-                        .column_groups
-                        .iter()
-                        .map(|group| group.location.0.clone()),
-                );
-            }
-
-            if block.bloom_index_files.is_empty() {
-                if let Some(location) = &block.bloom_filter_index_location {
-                    gc_root_indexes.insert(location.0.clone());
-                }
-            } else {
-                gc_root_indexes.extend(
-                    block
-                        .bloom_index_files
-                        .iter()
-                        .map(|file| file.location.0.clone()),
-                );
-            }
+            gc_root_blocks.extend(
+                block
+                    .data_file_locations()
+                    .map(|location| location.0.clone()),
+            );
+            gc_root_indexes.extend(
+                block
+                    .bloom_index_file_locations()
+                    .map(|location| location.0.clone()),
+            );
         }
     }
     ctx.set_status_info(&format!(

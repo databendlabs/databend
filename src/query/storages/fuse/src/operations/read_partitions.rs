@@ -87,8 +87,6 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::fuse_part::FuseColumnGroupPartInfo;
-use crate::fuse_part::normalized_column_group_files;
 use crate::fuse_part::project_column_groups;
 use crate::io::BloomIndexRebuilder;
 use crate::pruning::BlockPruner;
@@ -1372,13 +1370,6 @@ impl FuseTable {
         (statistics, partitions)
     }
 
-    fn projected_column_groups(
-        meta: &BlockMeta,
-        projected_column_ids: &HashSet<ColumnId>,
-    ) -> Vec<FuseColumnGroupPartInfo> {
-        project_column_groups(meta, projected_column_ids)
-    }
-
     pub fn all_columns_part(
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
@@ -1391,7 +1382,7 @@ impl FuseTable {
         let mut projected_column_ids = if meta.column_groups.is_empty() {
             meta.col_metas.keys().copied().collect::<HashSet<_>>()
         } else {
-            normalized_column_group_files(meta)
+            meta.physical_column_groups()
                 .iter()
                 .flat_map(|group| group.active_column_ids.iter().copied())
                 .collect::<HashSet<_>>()
@@ -1412,7 +1403,7 @@ impl FuseTable {
                 spatial_stats.insert(*column_id, stats.clone());
             }
         }
-        let column_groups = Self::projected_column_groups(meta, &projected_column_ids);
+        let column_groups = project_column_groups(meta, &projected_column_ids);
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
@@ -1467,7 +1458,7 @@ impl FuseTable {
                 }
             }
         }
-        let column_groups = Self::projected_column_groups(meta, &projected_column_ids);
+        let column_groups = project_column_groups(meta, &projected_column_ids);
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
@@ -1563,7 +1554,7 @@ mod tests {
             None,
         );
 
-        let legacy_groups = FuseTable::projected_column_groups(&block_meta, &HashSet::from([2]));
+        let legacy_groups = project_column_groups(&block_meta, &HashSet::from([2]));
         assert_eq!(legacy_groups.len(), 1);
         assert_eq!(legacy_groups[0].location, "group-2.parquet");
         assert_eq!(
@@ -1590,7 +1581,7 @@ mod tests {
             },
         ];
 
-        let column_groups = FuseTable::projected_column_groups(&block_meta, &HashSet::from([2]));
+        let column_groups = project_column_groups(&block_meta, &HashSet::from([2]));
 
         assert_eq!(column_groups.len(), 1);
         assert_eq!(column_groups[0].location, "group-2.parquet");

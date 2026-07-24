@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
@@ -34,7 +33,6 @@ use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
-use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -47,63 +45,15 @@ pub struct FuseColumnGroupPartInfo {
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
 }
 
-/// Normalize a legacy single-file block and a column-group block to the same physical-file view.
-pub(crate) fn normalized_column_group_files(meta: &BlockMeta) -> Cow<'_, [ColumnGroupFileMeta]> {
-    if !meta.column_groups.is_empty() {
-        return Cow::Borrowed(&meta.column_groups);
-    }
-
-    let mut active_column_ids = meta.col_metas.keys().copied().collect::<Vec<_>>();
-    active_column_ids.sort_unstable();
-    Cow::Owned(vec![ColumnGroupFileMeta {
-        active_column_ids,
-        location: meta.location.clone(),
-        format_version: meta.location.1,
-        file_size: meta.file_size,
-        uncompressed_size: meta.block_size,
-        leaf_column_metas: meta.col_metas.clone(),
-    }])
-}
-
 pub(crate) fn project_column_groups(
     meta: &BlockMeta,
     projected_column_ids: &HashSet<ColumnId>,
 ) -> Vec<FuseColumnGroupPartInfo> {
-    if meta.column_groups.is_empty() {
-        let columns_meta = meta
-            .col_metas
-            .iter()
-            .filter(|(column_id, _)| projected_column_ids.contains(column_id))
-            .map(|(column_id, column_meta)| (*column_id, column_meta.clone()))
-            .collect::<HashMap<_, _>>();
-        return if columns_meta.is_empty() {
-            vec![]
-        } else {
-            vec![FuseColumnGroupPartInfo {
-                location: meta.location.0.clone(),
-                columns_meta,
-            }]
-        };
-    }
-
-    normalized_column_group_files(meta)
-        .iter()
-        .filter_map(|group| {
-            let columns_meta = group
-                .active_column_ids
-                .iter()
-                .filter(|column_id| projected_column_ids.contains(column_id))
-                .filter_map(|column_id| {
-                    group
-                        .leaf_column_metas
-                        .get(column_id)
-                        .map(|column_meta| (*column_id, column_meta.clone()))
-                })
-                .collect::<HashMap<_, _>>();
-            (!columns_meta.is_empty()).then(|| FuseColumnGroupPartInfo {
-                location: group.location.0.clone(),
-                columns_meta,
-            })
+    meta.project_column_groups(projected_column_ids)
+        .into_iter()
+        .map(|group| FuseColumnGroupPartInfo {
+            location: group.location.0,
+            columns_meta: group.leaf_column_metas,
         })
         .collect()
 }

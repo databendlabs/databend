@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -21,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
@@ -48,6 +50,7 @@ use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
+use crate::io::read::bloom::block_filter_reader::load_index_meta;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -58,11 +61,18 @@ use crate::statistics::ClusterStatsGenerator;
 #[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
+    NeedLegacyBloomMeta {
+        block: DataBlock,
+        stats_type: ClusterStatsGenType,
+        index: Option<BlockMetaIndex>,
+        origin_block_meta: Arc<BlockMeta>,
+    },
     NeedSerialize {
         block: DataBlock,
         stats_type: ClusterStatsGenType,
         index: Option<BlockMetaIndex>,
         origin_block_meta: Option<Arc<BlockMeta>>,
+        legacy_bloom_column_ids: Option<Vec<ColumnId>>,
     },
     Serialized {
         serialized: BlockSerialization,
@@ -266,6 +276,48 @@ impl TransformSerializeBlock {
         self.block_builder.clone()
     }
 
+    fn needs_legacy_bloom_meta(&self, origin: &BlockMeta) -> bool {
+        origin.bloom_index_files.is_empty()
+            && origin.bloom_filter_index_location.is_some()
+            && self.updated_field_indices.as_ref().is_some_and(|indices| {
+                indices.iter().any(|index| {
+                    BloomIndex::supported_type(
+                        self.block_builder.source_schema.field(*index).data_type(),
+                    )
+                })
+            })
+    }
+
+    async fn load_legacy_bloom_column_ids(&self, origin: &BlockMeta) -> Result<Vec<ColumnId>> {
+        let location = origin
+            .bloom_filter_index_location
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("legacy Bloom location is missing"))?;
+        let meta = load_index_meta(
+            self.dal.clone(),
+            &location.0,
+            origin.bloom_filter_index_size,
+            None,
+        )
+        .await?;
+        let stored_filter_names = meta
+            .columns
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<HashSet<_>>();
+        let mut active_column_ids = Vec::new();
+        for field in self.block_builder.source_schema.fields() {
+            if !BloomIndex::supported_type(field.data_type()) {
+                continue;
+            }
+            let filter_name = BloomIndex::build_filter_bloom_name(location.1, field)?;
+            if stored_filter_names.contains(filter_name.as_str()) {
+                active_column_ids.push(field.column_id());
+            }
+        }
+        Ok(active_column_ids)
+    }
+
     fn mutation_logs(entry: MutationLogEntry) -> DataBlock {
         let meta = MutationLogs {
             entries: vec![entry],
@@ -285,6 +337,9 @@ impl Processor for TransformSerializeBlock {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::NeedLegacyBloomMeta { .. }) {
+            return Ok(Event::Async);
+        }
         if matches!(self.state, State::NeedSerialize { .. }) {
             return Ok(Event::Sync);
         }
@@ -340,13 +395,28 @@ impl Processor for TransformSerializeBlock {
                     } else {
                         // replace the old block
                         self.pending_insert_rows = serialize_block.insert_rows;
-                        self.state = State::NeedSerialize {
-                            block: input_data,
-                            stats_type: serialize_block.stats_type,
-                            index: Some(serialize_block.index),
-                            origin_block_meta: serialize_block.origin_block_meta,
-                        };
-                        Ok(Event::Sync)
+                        let origin_block_meta = serialize_block.origin_block_meta;
+                        if origin_block_meta
+                            .as_deref()
+                            .is_some_and(|origin| self.needs_legacy_bloom_meta(origin))
+                        {
+                            self.state = State::NeedLegacyBloomMeta {
+                                block: input_data,
+                                stats_type: serialize_block.stats_type,
+                                index: Some(serialize_block.index),
+                                origin_block_meta: origin_block_meta.unwrap(),
+                            };
+                            Ok(Event::Async)
+                        } else {
+                            self.state = State::NeedSerialize {
+                                block: input_data,
+                                stats_type: serialize_block.stats_type,
+                                index: Some(serialize_block.index),
+                                origin_block_meta,
+                                legacy_bloom_column_ids: None,
+                            };
+                            Ok(Event::Sync)
+                        }
                     }
                 }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
@@ -377,6 +447,7 @@ impl Processor for TransformSerializeBlock {
                 stats_type: ClusterStatsGenType::Generally,
                 index: None,
                 origin_block_meta: None,
+                legacy_bloom_column_ids: None,
             };
             Ok(Event::Sync)
         }
@@ -389,6 +460,7 @@ impl Processor for TransformSerializeBlock {
                 stats_type,
                 index,
                 origin_block_meta,
+                legacy_bloom_column_ids,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
@@ -400,6 +472,7 @@ impl Processor for TransformSerializeBlock {
                         block,
                         &origin_block_meta,
                         updated_field_indices,
+                        legacy_bloom_column_ids.as_deref(),
                     )?
                 } else {
                     self.block_builder
@@ -423,6 +496,23 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
+            State::NeedLegacyBloomMeta {
+                block,
+                stats_type,
+                index,
+                origin_block_meta,
+            } => {
+                let legacy_bloom_column_ids = self
+                    .load_legacy_bloom_column_ids(&origin_block_meta)
+                    .await?;
+                self.state = State::NeedSerialize {
+                    block,
+                    stats_type,
+                    index,
+                    origin_block_meta: Some(origin_block_meta),
+                    legacy_bloom_column_ids: Some(legacy_bloom_column_ids),
+                };
+            }
             State::Serialized { serialized, index } => {
                 let insert_rows = std::mem::take(&mut self.pending_insert_rows);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
