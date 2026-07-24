@@ -13,14 +13,39 @@
 // limitations under the License.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::dedup_file_locations;
+use databend_storages_common_table_meta::meta::BlockMeta;
+
+async fn latest_default_block_meta(fixture: &TestFixture) -> anyhow::Result<Arc<BlockMeta>> {
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let segment_reader =
+        MetaReaders::segment_info_reader(fuse_table.get_operator(), table.schema());
+    let (segment_location, segment_version) = &snapshot.segments[0];
+    let segment = segment_reader
+        .read(&LoadParams {
+            location: segment_location.clone(),
+            len_hint: None,
+            ver: *segment_version,
+            put_cache: false,
+        })
+        .await?;
+    let blocks = segment.block_metas()?;
+    assert_eq!(blocks.len(), 1);
+    Ok(blocks[0].clone())
+}
 
 // TODO investigate this
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
@@ -114,6 +139,89 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
 
     check_files_left(&ctx, storage_root, "db1", "t1").await?;
     check_files_left(&ctx, storage_root, "default", "t1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_active_partial_update_files() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    let db = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (id int, a int, b int) engine=fuse \
+             bloom_index_columns='id,a,b' enable_partial_update=true"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {db}.{table_name} values (1, 10, 20), (2, 30, 40)"
+        ))
+        .await?;
+    fixture
+        .execute_command("set enable_partial_update = 1")
+        .await?;
+
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+    let obsolete_group = latest_default_block_meta(&fixture)
+        .await?
+        .location
+        .0
+        .clone();
+
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set a = a + 1 where id = 1"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "update {db}.{table_name} set b = b + 1 where id = 1"
+        ))
+        .await?;
+
+    let current = latest_default_block_meta(&fixture).await?;
+    assert!(
+        current
+            .column_groups
+            .iter()
+            .all(|group| group.location.0 != obsolete_group)
+    );
+
+    fixture
+        .execute_command(&format!("call system$fuse_vacuum2('{db}', '{table_name}')"))
+        .await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    for group in &current.column_groups {
+        operator.stat(&group.location.0).await?;
+    }
+    for file in &current.bloom_index_files {
+        operator.stat(&file.location.0).await?;
+    }
+    assert!(operator.stat(&obsolete_group).await.is_err());
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select count(*) from {db}.{table_name} \
+             where (id = 1 and a = 12 and b = 21) \
+                or (id = 2 and a = 30 and b = 40)"
+        ))
+        .await?;
+    assert_eq!(databend_query::test_kits::query_count(rows).await?, 2);
 
     Ok(())
 }

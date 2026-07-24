@@ -134,8 +134,33 @@ pub async fn do_vacuum2(
         .read_segments::<Arc<CompactSegmentInfo>>(&protected_segments, false)
         .await?;
     let mut gc_root_blocks = HashSet::new();
+    let mut gc_root_indexes = HashSet::new();
     for segment in segments {
-        gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+        for block in segment?.block_metas()? {
+            if block.column_groups.is_empty() {
+                gc_root_blocks.insert(block.location.0.clone());
+            } else {
+                gc_root_blocks.extend(
+                    block
+                        .column_groups
+                        .iter()
+                        .map(|group| group.location.0.clone()),
+                );
+            }
+
+            if block.bloom_index_files.is_empty() {
+                if let Some(location) = &block.bloom_filter_index_location {
+                    gc_root_indexes.insert(location.0.clone());
+                }
+            } else {
+                gc_root_indexes.extend(
+                    block
+                        .bloom_index_files
+                        .iter()
+                        .map(|file| file.location.0.clone()),
+                );
+            }
+        }
     }
     ctx.set_status_info(&format!(
         "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
@@ -203,6 +228,7 @@ pub async fn do_vacuum2(
         &ctx,
         table_info.desc.as_str(),
         &blocks_to_gc,
+        &gc_root_indexes,
         &table_agg_index_ids,
         inverted_indexes,
         &mut files_to_gc,
@@ -262,6 +288,7 @@ async fn purge_block_chunks(
     ctx: &Arc<dyn TableContext>,
     table_desc: &str,
     blocks_to_gc: &[String],
+    protected_index_paths: &HashSet<String>,
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
     files_to_gc: &mut Vec<String>,
@@ -280,8 +307,9 @@ async fn purge_block_chunks(
             return Err(err.with_context("failed to vacuum block chunk"));
         }
 
-        let indexes_to_gc =
+        let mut indexes_to_gc =
             collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
+        indexes_to_gc.retain(|path| !protected_index_paths.contains(path));
         ctx.set_status_info(&format!(
             "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
             table_desc,

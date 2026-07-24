@@ -155,6 +155,13 @@ async fn test_update_writes_changed_column_group() -> anyhow::Result<()> {
     assert_eq!(query_count(rows).await?, 2);
     let rows = fixture
         .execute_query(&format!(
+            "select count(distinct block_location) from fuse_column('{db}', '{table_name}') \
+             where column_name in ('id', 'value')"
+        ))
+        .await?;
+    assert_eq!(query_count(rows).await?, 2);
+    let rows = fixture
+        .execute_query(&format!(
             "select count(distinct column_name) from fuse_encoding('{db}', '{table_name}') \
              where column_name in ('id', 'value')"
         ))

@@ -53,6 +53,13 @@ where column_name in ('id', 'value')
 ----
 2
 
+query I
+select count(distinct block_location)
+from fuse_column('default', 't_partial_update')
+where column_name in ('id', 'value')
+----
+2
+
 # Disabling the setting forces the next rewrite back to the single-file layout.
 statement ok
 set enable_partial_update = 0

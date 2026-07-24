@@ -69,6 +69,23 @@ pub(crate) fn project_column_groups(
     meta: &BlockMeta,
     projected_column_ids: &HashSet<ColumnId>,
 ) -> Vec<FuseColumnGroupPartInfo> {
+    if meta.column_groups.is_empty() {
+        let columns_meta = meta
+            .col_metas
+            .iter()
+            .filter(|(column_id, _)| projected_column_ids.contains(column_id))
+            .map(|(column_id, column_meta)| (*column_id, column_meta.clone()))
+            .collect::<HashMap<_, _>>();
+        return if columns_meta.is_empty() {
+            vec![]
+        } else {
+            vec![FuseColumnGroupPartInfo {
+                location: meta.location.0.clone(),
+                columns_meta,
+            }]
+        };
+    }
+
     normalized_column_group_files(meta)
         .iter()
         .filter_map(|group| {

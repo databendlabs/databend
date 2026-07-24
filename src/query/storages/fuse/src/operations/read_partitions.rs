@@ -1388,10 +1388,14 @@ impl FuseTable {
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
         let mut spatial_stats = HashMap::new();
 
-        let mut projected_column_ids = normalized_column_group_files(meta)
-            .iter()
-            .flat_map(|group| group.active_column_ids.iter().copied())
-            .collect::<HashSet<_>>();
+        let mut projected_column_ids = if meta.column_groups.is_empty() {
+            meta.col_metas.keys().copied().collect::<HashSet<_>>()
+        } else {
+            normalized_column_group_files(meta)
+                .iter()
+                .flat_map(|group| group.active_column_ids.iter().copied())
+                .collect::<HashSet<_>>()
+        };
         if let Some(schema) = schema {
             projected_column_ids.retain(|column_id| !schema.is_column_deleted(*column_id));
         }
