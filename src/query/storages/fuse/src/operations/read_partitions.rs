@@ -88,6 +88,8 @@ use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::fuse_part::FuseColumnGroupPartInfo;
+use crate::fuse_part::normalized_column_group_files;
+use crate::fuse_part::project_column_groups;
 use crate::io::BloomIndexRebuilder;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
@@ -1374,40 +1376,7 @@ impl FuseTable {
         meta: &BlockMeta,
         projected_column_ids: &HashSet<ColumnId>,
     ) -> Vec<FuseColumnGroupPartInfo> {
-        if meta.column_groups.is_empty() {
-            let columns_meta = projected_column_ids
-                .iter()
-                .filter_map(|column_id| {
-                    meta.col_metas
-                        .get(column_id)
-                        .map(|column_meta| (*column_id, column_meta.clone()))
-                })
-                .collect();
-            return vec![FuseColumnGroupPartInfo {
-                location: meta.location.0.clone(),
-                columns_meta,
-            }];
-        }
-
-        let mut column_groups = Vec::with_capacity(meta.column_groups.len());
-        for group in &meta.column_groups {
-            let mut group_columns_meta = HashMap::new();
-            for column_id in &group.active_column_ids {
-                if !projected_column_ids.contains(column_id) {
-                    continue;
-                }
-                if let Some(column_meta) = group.leaf_column_metas.get(column_id) {
-                    group_columns_meta.insert(*column_id, column_meta.clone());
-                }
-            }
-            if !group_columns_meta.is_empty() {
-                column_groups.push(FuseColumnGroupPartInfo {
-                    location: group.location.0.clone(),
-                    columns_meta: group_columns_meta,
-                });
-            }
-        }
-        column_groups
+        project_column_groups(meta, projected_column_ids)
     }
 
     pub fn all_columns_part(
@@ -1419,14 +1388,10 @@ impl FuseTable {
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
         let mut spatial_stats = HashMap::new();
 
-        let mut projected_column_ids = if meta.column_groups.is_empty() {
-            meta.col_metas.keys().copied().collect::<HashSet<_>>()
-        } else {
-            meta.column_groups
-                .iter()
-                .flat_map(|group| group.active_column_ids.iter().copied())
-                .collect()
-        };
+        let mut projected_column_ids = normalized_column_group_files(meta)
+            .iter()
+            .flat_map(|group| group.active_column_ids.iter().copied())
+            .collect::<HashSet<_>>();
         if let Some(schema) = schema {
             projected_column_ids.retain(|column_id| !schema.is_column_deleted(*column_id));
         }

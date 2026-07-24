@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -27,6 +26,7 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
@@ -48,7 +48,9 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BloomIndexFileMeta;
@@ -165,6 +167,31 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
+    fn add_hll_distinct_counts(
+        column_distinct_count: &mut HashMap<ColumnId, usize>,
+        column_hlls: &Option<BlockHLL>,
+    ) {
+        if let Some(hlls) = column_hlls {
+            for (column_id, hll) in hlls {
+                column_distinct_count
+                    .entry(*column_id)
+                    .or_insert_with(|| hll.count());
+            }
+        }
+    }
+
+    fn finalize_column_hlls(&self, column_hlls: Option<BlockHLL>) -> Result<Option<BlockHLLState>> {
+        column_hlls
+            .map(|hlls| {
+                if self.serialize_hll {
+                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
+                } else {
+                    Ok(BlockHLLState::Deserialized(hlls))
+                }
+            })
+            .transpose()
+    }
+
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
@@ -188,13 +215,7 @@ impl BlockBuilder {
             .unwrap_or_default();
 
         let column_hlls = build_column_hlls(&data_block, &self.ndv_columns_map)?;
-        if let Some(hlls) = &column_hlls {
-            for (key, val) in hlls {
-                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
-                    entry.insert(val.count());
-                }
-            }
-        }
+        Self::add_hll_distinct_counts(&mut column_distinct_count, &column_hlls);
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
         for inverted_index_builder in &self.inverted_index_builders {
@@ -296,15 +317,7 @@ impl BlockBuilder {
             create_on: Some(Utc::now()),
         };
 
-        let column_hlls = column_hlls
-            .map(|hlls| {
-                if self.serialize_hll {
-                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
-                } else {
-                    Ok(BlockHLLState::Deserialized(hlls))
-                }
-            })
-            .transpose()?;
+        let column_hlls = self.finalize_column_hlls(column_hlls)?;
         let serialized = BlockSerialization {
             block_raw_data: buffer,
             block_meta,
@@ -349,10 +362,6 @@ impl BlockBuilder {
             ));
         }
 
-        let updated_fields = updated_field_indices
-            .iter()
-            .copied()
-            .collect::<HashSet<_>>();
         let updated_schema = Arc::new(self.source_schema.project(&updated_field_indices));
         if data_block.num_columns() != updated_schema.fields().len() {
             return Err(ErrorCode::Internal(
@@ -380,6 +389,12 @@ impl BlockBuilder {
         let updated_bloom_column_ids = updated_bloom_columns_map
             .values()
             .map(|field| field.column_id())
+            .collect::<HashSet<_>>();
+        let invalidated_bloom_column_ids = updated_field_indices
+            .iter()
+            .map(|index| self.source_schema.field(*index))
+            .filter(|field| BloomIndex::supported_type(field.data_type()))
+            .map(TableField::column_id)
             .collect::<HashSet<_>>();
         let rebuild_bloom_index = !updated_bloom_columns_map.is_empty();
         let bloom_index_state = if rebuild_bloom_index {
@@ -411,18 +426,15 @@ impl BlockBuilder {
             })
             .collect::<BTreeMap<_, _>>();
         let column_hlls = build_column_hlls(&updated_block, &updated_ndv_columns_map)?;
-        if let Some(hlls) = &column_hlls {
-            for (column_id, hll) in hlls {
-                if let Entry::Vacant(entry) = column_distinct_count.entry(*column_id) {
-                    entry.insert(hll.count());
-                }
-            }
-        }
+        Self::add_hll_distinct_counts(&mut column_distinct_count, &column_hlls);
 
-        let rebuild_virtual_columns = self
-            .virtual_column_builder
-            .as_ref()
-            .is_some_and(|builder| builder.is_affected(&updated_fields));
+        let invalidate_virtual_columns = updated_field_indices.iter().any(|index| {
+            self.source_schema
+                .field(*index)
+                .data_type()
+                .remove_nullable()
+                == TableDataType::Variant
+        });
         let virtual_column_state = None;
 
         let updated_col_stats = gen_columns_statistics(
@@ -492,7 +504,7 @@ impl BlockBuilder {
         block_meta.col_stats.extend(updated_col_stats);
         block_meta.create_on = Some(Utc::now());
 
-        if rebuild_bloom_index {
+        if !invalidated_bloom_column_ids.is_empty() {
             let mut bloom_index_files = if origin.bloom_index_files.is_empty() {
                 origin
                     .bloom_filter_index_location
@@ -502,7 +514,7 @@ impl BlockBuilder {
                             .bloom_columns_map
                             .values()
                             .map(|field| field.column_id())
-                            .filter(|column_id| !updated_bloom_column_ids.contains(column_id))
+                            .filter(|column_id| !invalidated_bloom_column_ids.contains(column_id))
                             .collect(),
                         location: location.clone(),
                         format_version: location.1,
@@ -515,7 +527,7 @@ impl BlockBuilder {
             };
             for file in &mut bloom_index_files {
                 file.active_column_ids
-                    .retain(|column_id| !updated_bloom_column_ids.contains(column_id));
+                    .retain(|column_id| !invalidated_bloom_column_ids.contains(column_id));
             }
             bloom_index_files.retain(|file| !file.active_column_ids.is_empty());
             if let Some(state) = &bloom_index_state {
@@ -535,19 +547,11 @@ impl BlockBuilder {
             block_meta.bloom_index_files = bloom_index_files;
             block_meta.ngram_filter_index_size = None;
         }
-        if rebuild_virtual_columns {
+        if invalidate_virtual_columns {
             block_meta.virtual_block_meta = None;
         }
 
-        let column_hlls = column_hlls
-            .map(|hlls| {
-                if self.serialize_hll {
-                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
-                } else {
-                    Ok(BlockHLLState::Deserialized(hlls))
-                }
-            })
-            .transpose()?;
+        let column_hlls = self.finalize_column_hlls(column_hlls)?;
 
         Ok(BlockSerialization {
             block_raw_data: buffer,

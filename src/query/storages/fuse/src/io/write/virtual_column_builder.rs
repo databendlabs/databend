@@ -142,12 +142,6 @@ impl VirtualColumnBuilder {
         })
     }
 
-    pub(crate) fn is_affected(&self, updated_fields: &HashSet<usize>) -> bool {
-        self.variant_offsets
-            .iter()
-            .any(|offset| updated_fields.contains(offset))
-    }
-
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
         let num_rows = block.num_rows();
 

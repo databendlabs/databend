@@ -30,6 +30,7 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseColumnGroupPartInfo;
 use crate::FuseStorageFormat;
+use crate::fuse_part::project_column_groups;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::unsupported_storage_format_error;
 
@@ -40,38 +41,7 @@ impl BlockReader {
             .iter()
             .flat_map(|node| node.leaf_column_ids.iter().copied())
             .collect::<std::collections::HashSet<_>>();
-        if meta.column_groups.is_empty() {
-            return vec![FuseColumnGroupPartInfo {
-                location: meta.location.0.clone(),
-                columns_meta: meta
-                    .col_metas
-                    .iter()
-                    .filter(|(column_id, _)| projected_column_ids.contains(column_id))
-                    .map(|(column_id, column_meta)| (*column_id, column_meta.clone()))
-                    .collect(),
-            }];
-        }
-
-        meta.column_groups
-            .iter()
-            .filter_map(|group| {
-                let columns_meta = group
-                    .active_column_ids
-                    .iter()
-                    .filter(|column_id| projected_column_ids.contains(column_id))
-                    .filter_map(|column_id| {
-                        group
-                            .leaf_column_metas
-                            .get(column_id)
-                            .map(|column_meta| (*column_id, column_meta.clone()))
-                    })
-                    .collect::<HashMap<_, _>>();
-                (!columns_meta.is_empty()).then(|| FuseColumnGroupPartInfo {
-                    location: group.location.0.clone(),
-                    columns_meta,
-                })
-            })
-            .collect()
+        project_column_groups(meta, &projected_column_ids)
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock.

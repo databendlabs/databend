@@ -1,0 +1,70 @@
+statement ok
+drop table if exists t_partial_update
+
+statement ok
+set enable_partial_update = 0
+
+statement ok
+create table t_partial_update(id int, value int)
+    bloom_index_columns = 'id,value'
+    enable_partial_update = true
+
+statement ok
+insert into t_partial_update values (1, 10), (2, 20)
+
+# The table option alone is not enough to enable partial updates.
+statement ok
+update t_partial_update set value = value + 1 where id = 1
+
+query B
+select column_groups = parse_json('[]') from fuse_block('default', 't_partial_update')
+----
+1
+
+statement ok
+set enable_partial_update = 1
+
+statement ok
+update t_partial_update set value = value + 1 where id = 2
+
+query II
+select * from t_partial_update order by id
+----
+1 11
+2 21
+
+query BB
+select column_groups != parse_json('[]'), bloom_index_files != parse_json('[]')
+from fuse_block('default', 't_partial_update')
+----
+1 1
+
+query I
+select count(distinct column_name)
+from fuse_page('default', 't_partial_update')
+where column_name in ('id', 'value')
+----
+2
+
+query I
+select count(distinct column_name)
+from fuse_encoding('default', 't_partial_update')
+where column_name in ('id', 'value')
+----
+2
+
+# Disabling the setting forces the next rewrite back to the single-file layout.
+statement ok
+set enable_partial_update = 0
+
+statement ok
+update t_partial_update set value = value + 1 where id = 1
+
+query BB
+select column_groups = parse_json('[]'), bloom_index_files = parse_json('[]')
+from fuse_block('default', 't_partial_update')
+----
+1 1
+
+statement ok
+drop table t_partial_update

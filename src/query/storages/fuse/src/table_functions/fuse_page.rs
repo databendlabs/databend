@@ -43,6 +43,7 @@ use thrift::protocol::TCompactInputProtocol;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
+use crate::fuse_part::normalized_column_group_files;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::TableMetaFuncTemplate;
@@ -144,48 +145,52 @@ impl TableMetaFunc for FusePage {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    for field in schema.fields().iter() {
-                        if field.is_nested() {
-                            continue;
-                        }
-                        let column_id = field.column_id;
-                        let Some(column_meta) = block.col_metas.get(&column_id) else {
-                            continue;
-                        };
-                        let Some(parquet_meta) = column_meta.as_parquet() else {
-                            continue;
-                        };
+                    for group in normalized_column_group_files(block).iter() {
+                        for field in schema.fields().iter() {
+                            if field.is_nested()
+                                || !group.active_column_ids.contains(&field.column_id)
+                            {
+                                continue;
+                            }
+                            let Some(column_meta) = group.leaf_column_metas.get(&field.column_id)
+                            else {
+                                continue;
+                            };
+                            let Some(parquet_meta) = column_meta.as_parquet() else {
+                                continue;
+                            };
 
-                        let column_bytes = read_parquet_column_chunk(
-                            &tbl.operator,
-                            &block.location.0,
-                            parquet_meta.offset,
-                            parquet_meta.len,
-                        )
-                        .await?;
-                        for (page_ordinal_in_column, page) in parse_page_headers(
-                            field.name(),
-                            parquet_meta.offset,
-                            column_bytes.as_slice(),
-                        )?
-                        .into_iter()
-                        .enumerate()
-                        {
-                            block_location.put_and_commit(&block.location.0);
-                            column_name.put_and_commit(page.column_name);
-                            page_type.put_and_commit(page.page_type);
-                            encoding.put_and_commit(page.encoding);
-                            page_ordinal.push(page_ordinal_in_column as u64);
-                            num_values.push(page.num_values);
-                            num_rows.push(page.num_rows);
-                            compressed_size.push(page.compressed_size);
-                            uncompressed_size.push(page.uncompressed_size);
-                            header_size.push(page.header_size);
-                            page_offset.push(page.page_offset);
+                            let column_bytes = read_parquet_column_chunk(
+                                &tbl.operator,
+                                &group.location.0,
+                                parquet_meta.offset,
+                                parquet_meta.len,
+                            )
+                            .await?;
+                            for (page_ordinal_in_column, page) in parse_page_headers(
+                                field.name(),
+                                parquet_meta.offset,
+                                column_bytes.as_slice(),
+                            )?
+                            .into_iter()
+                            .enumerate()
+                            {
+                                block_location.put_and_commit(&group.location.0);
+                                column_name.put_and_commit(page.column_name);
+                                page_type.put_and_commit(page.page_type);
+                                encoding.put_and_commit(page.encoding);
+                                page_ordinal.push(page_ordinal_in_column as u64);
+                                num_values.push(page.num_values);
+                                num_rows.push(page.num_rows);
+                                compressed_size.push(page.compressed_size);
+                                uncompressed_size.push(page.uncompressed_size);
+                                header_size.push(page.header_size);
+                                page_offset.push(page.page_offset);
 
-                            rows += 1;
-                            if rows >= limit {
-                                break 'FOR;
+                                rows += 1;
+                                if rows >= limit {
+                                    break 'FOR;
+                                }
                             }
                         }
                     }

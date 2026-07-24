@@ -25,6 +25,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
@@ -47,6 +48,8 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
@@ -539,8 +542,19 @@ impl TableMutationAggregator {
                         })
                         .collect::<BTreeMap<usize, _>>();
 
-                    for (idx, new_meta) in segment_mutation.replaced_blocks {
-                        block_editor.insert(idx, new_meta);
+                    for (idx, (new_meta, new_hll)) in segment_mutation.replaced_blocks {
+                        let new_hll = if let Some(updated_column_ids) = new_meta
+                            .column_groups
+                            .last()
+                            .map(|group| group.active_column_ids.as_slice())
+                        {
+                            let previous_hll =
+                                block_editor.get(&idx).and_then(|(_, hll)| hll.as_ref());
+                            replace_partial_block_hll(previous_hll, new_hll, updated_column_ids)?
+                        } else {
+                            new_hll
+                        };
+                        block_editor.insert(idx, (new_meta, new_hll));
                     }
                     for idx in segment_mutation.deleted_blocks {
                         block_editor.remove(&idx);
@@ -951,5 +965,31 @@ fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u
         let blocks = hlls.into_iter().map(|x| x.unwrap_or_default()).collect();
         let data = SegmentStatistics::new(blocks).to_bytes()?;
         Ok(Some(data))
+    }
+}
+
+fn replace_partial_block_hll(
+    previous: Option<&RawBlockHLL>,
+    replacement: Option<RawBlockHLL>,
+    updated_column_ids: &[ColumnId],
+) -> Result<Option<RawBlockHLL>> {
+    let mut merged = previous
+        .map(decode_column_hll)
+        .transpose()?
+        .flatten()
+        .unwrap_or_default();
+    for column_id in updated_column_ids {
+        merged.remove(column_id);
+    }
+    if let Some(replacement) = replacement {
+        if let Some(replacement) = decode_column_hll(&replacement)? {
+            merged.extend(replacement);
+        }
+    }
+
+    if merged.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(encode_column_hll(&merged)?))
     }
 }

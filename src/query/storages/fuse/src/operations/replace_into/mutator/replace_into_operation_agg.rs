@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
-use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -55,7 +54,6 @@ use log::warn;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
@@ -512,8 +510,13 @@ impl AggregationContext {
                 metrics_inc_replace_row_number_totally_loaded(block_meta.row_count);
 
                 // read the remaining columns
-                let remain_columns_data =
-                    self.read_block(remain_columns_reader, block_meta).await?;
+                let remain_columns_data = read_block(
+                    self.write_settings.storage_format,
+                    remain_columns_reader,
+                    block_meta,
+                    &self.read_settings,
+                )
+                .await?;
 
                 // remove the deleted rows
                 let remain_columns_data_after_deletion =
@@ -631,42 +634,6 @@ impl AggregationContext {
             // if column range index does not exist, assume overlapped
             true
         }
-    }
-
-    async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
-        let column_groups = reader.projected_column_groups(block_meta);
-        let merged_io_read_result = reader
-            .read_column_groups_data_by_merge_io(&self.read_settings, &column_groups, &None)
-            .await?;
-
-        // deserialize block data
-        // cpu intensive task, send them to dedicated thread pool
-        let storage_format = self.write_settings.storage_format;
-        let block_meta_ptr = block_meta.clone();
-        let reader = reader.clone();
-        GlobalIORuntime::instance()
-            .spawn(async move {
-                let column_chunks = merged_io_read_result.columns_chunks()?;
-                match storage_format {
-                    FuseStorageFormat::Parquet => reader.deserialize_column_groups(
-                        block_meta_ptr.row_count as usize,
-                        &column_groups,
-                        column_chunks,
-                        &block_meta_ptr.compression,
-                        None,
-                    ),
-                    FuseStorageFormat::Unsupported => {
-                        Err(crate::unsupported_storage_format_error())
-                    }
-                }
-            })
-            .await
-            .map_err(|e| {
-                ErrorCode::Internal(
-                    "unexpected, failed to join aggregation context read block tasks for replace into.",
-                )
-                    .add_message_back(e.to_string())
-            })?
     }
 
     // return true if the block is pruned, otherwise false

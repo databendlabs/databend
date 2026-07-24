@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
@@ -52,7 +53,8 @@ pub struct ColumnMutation {
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub udf_col_num: usize,
-    pub partial_update_fields: Option<Vec<usize>>,
+    /// Field indices in the physical table schema after virtual computed fields are removed.
+    pub partial_update_fields: Option<Vec<FieldIndex>>,
 }
 
 #[typetag::serde]
