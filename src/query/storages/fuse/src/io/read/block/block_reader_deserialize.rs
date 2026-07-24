@@ -90,6 +90,8 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         // Get the merged IO read result.
         let column_groups = self.projected_column_groups(meta);
+        // Type erasure breaks the recursive async future formed by virtual-column reads that
+        // return to `read_by_meta` through the merge-IO path.
         let read: std::pin::Pin<Box<dyn Future<Output = Result<BlockReadResult>> + Send + '_>> =
             Box::pin(self.read_column_groups_data_by_merge_io(settings, &column_groups, &None));
         let merge_io_read_result = read.await?;

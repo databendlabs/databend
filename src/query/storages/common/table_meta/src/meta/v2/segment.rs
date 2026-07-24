@@ -186,6 +186,17 @@ pub struct ColumnGroupFileMeta {
     pub leaf_column_metas: HashMap<ColumnId, ColumnMeta>,
 }
 
+impl ColumnGroupFileMeta {
+    /// Active leaf metadata in this physical file.
+    pub fn active_leaf_column_metas(&self) -> impl Iterator<Item = (ColumnId, &ColumnMeta)> {
+        self.active_column_ids.iter().filter_map(|column_id| {
+            self.leaf_column_metas
+                .get(column_id)
+                .map(|column_meta| (*column_id, column_meta))
+        })
+    }
+}
+
 /// Metadata of one physical Bloom index file referenced by a logical block.
 ///
 /// A file may still contain filters that are no longer active. Readers must only use the filters
@@ -208,6 +219,24 @@ pub enum BloomIndexLayout<'a> {
     Split {
         files: &'a [BloomIndexFileMeta],
     },
+}
+
+impl<'a> BloomIndexLayout<'a> {
+    /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
+    pub fn from_metadata(
+        legacy_location: Option<&'a Location>,
+        legacy_file_size: u64,
+        split_files: &'a [BloomIndexFileMeta],
+    ) -> Option<Self> {
+        if split_files.is_empty() {
+            legacy_location.map(|location| Self::Legacy {
+                location,
+                file_size: legacy_file_size,
+            })
+        } else {
+            Some(Self::Split { files: split_files })
+        }
+    }
 }
 
 /// Meta information of a block
@@ -316,18 +345,11 @@ impl BlockMeta {
 
     /// Normalize optional legacy and split Bloom metadata into one physical-layout view.
     pub fn bloom_index_layout(&self) -> Option<BloomIndexLayout<'_>> {
-        if self.bloom_index_files.is_empty() {
-            self.bloom_filter_index_location
-                .as_ref()
-                .map(|location| BloomIndexLayout::Legacy {
-                    location,
-                    file_size: self.bloom_filter_index_size,
-                })
-        } else {
-            Some(BloomIndexLayout::Split {
-                files: &self.bloom_index_files,
-            })
-        }
+        BloomIndexLayout::from_metadata(
+            self.bloom_filter_index_location.as_ref(),
+            self.bloom_filter_index_size,
+            &self.bloom_index_files,
+        )
     }
 
     /// Active physical data files referenced by this logical block.
@@ -630,6 +652,66 @@ impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_bloom_index_layout_normalizes_legacy_and_split_metadata() {
+        let legacy_location = ("legacy-bloom".to_string(), 2);
+        assert_eq!(
+            BloomIndexLayout::from_metadata(Some(&legacy_location), 10, &[]),
+            Some(BloomIndexLayout::Legacy {
+                location: &legacy_location,
+                file_size: 10,
+            })
+        );
+
+        let split_files = vec![BloomIndexFileMeta {
+            active_column_ids: vec![1],
+            location: ("split-bloom".to_string(), 4),
+            format_version: 4,
+            file_size: 20,
+        }];
+        assert_eq!(
+            BloomIndexLayout::from_metadata(Some(&legacy_location), 10, &split_files),
+            Some(BloomIndexLayout::Split {
+                files: &split_files,
+            })
+        );
+    }
+
+    #[test]
+    fn test_active_leaf_column_metas_excludes_inactive_and_missing_columns() {
+        let group = ColumnGroupFileMeta {
+            active_column_ids: vec![1, 3],
+            location: ("group.parquet".to_string(), 4),
+            format_version: 4,
+            file_size: 20,
+            uncompressed_size: 40,
+            leaf_column_metas: HashMap::from([
+                (
+                    1,
+                    ColumnMeta::Parquet(v0::ColumnMeta {
+                        offset: 10,
+                        len: 11,
+                        num_values: 12,
+                    }),
+                ),
+                (
+                    2,
+                    ColumnMeta::Parquet(v0::ColumnMeta {
+                        offset: 20,
+                        len: 21,
+                        num_values: 22,
+                    }),
+                ),
+            ]),
+        };
+
+        let active_metas = group
+            .active_leaf_column_metas()
+            .map(|(column_id, column_meta)| (column_id, column_meta.offset_length()))
+            .collect::<Vec<_>>();
+        assert_eq!(active_metas, vec![(1, (10, 11))]);
+    }
 
     #[test]
     fn test_deserialize_legacy_block_meta_without_file_lists() {

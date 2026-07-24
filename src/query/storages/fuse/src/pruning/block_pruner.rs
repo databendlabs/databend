@@ -344,9 +344,7 @@ impl BlockPruner {
                     .measure_async(
                         PruningCostKind::BlocksBloom,
                         bloom_pruner.should_keep(
-                            &block_meta.bloom_filter_index_location,
-                            block_meta.bloom_filter_index_size,
-                            &block_meta.bloom_index_files,
+                            block_meta.bloom_index_layout(),
                             &block_meta.col_stats,
                             column_ids,
                             &block_meta.as_ref().into(),

@@ -29,11 +29,14 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
+use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use log::info;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
@@ -190,6 +193,24 @@ pub async fn do_vacuum2(
         slice_summary(&blocks_to_gc)
     ));
 
+    // Bloom files are immutable, but their lifetime is not tied to the data file whose UUID was
+    // originally used for the index path. Ngram refresh, for example, consolidates a split Bloom
+    // layout into a fresh file while retaining the active data groups. List the Bloom directory
+    // independently so those superseded files do not leak forever.
+    let start = std::time::Instant::now();
+    let bloom_indexes_before_gc_root =
+        list_bloom_indexes_before_gc_root(fuse_table, gc_root_timestamp, gc_root_meta_ts).await?;
+    let bloom_indexes_to_gc = bloom_indexes_before_gc_root
+        .into_iter()
+        .filter(|path| !gc_root_indexes.contains(path))
+        .collect::<Vec<_>>();
+    ctx.set_status_info(&format!(
+        "Filtered bloom_indexes_to_gc for table {}, elapsed: {:?}, bloom_indexes_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&bloom_indexes_to_gc)
+    ));
+
     let start = std::time::Instant::now();
     let catalog = ctx.get_default_catalog()?;
     let table_agg_index_ids = catalog
@@ -205,8 +226,17 @@ pub async fn do_vacuum2(
         blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 2)
             + stats_to_gc.len()
             + segments_to_gc.len()
-            + snapshots_to_gc.len(),
+            + snapshots_to_gc.len()
+            + bloom_indexes_to_gc.len(),
     );
+
+    // Bloom indexes must be removed before their data blocks. Keep the removed paths so the
+    // block-derived compatibility cleanup below does not issue duplicate deletes.
+    if !bloom_indexes_to_gc.is_empty() {
+        op.remove_file_in_batch(&bloom_indexes_to_gc).await?;
+        files_to_gc.extend(bloom_indexes_to_gc.iter().cloned());
+    }
+    let removed_bloom_indexes = bloom_indexes_to_gc.into_iter().collect::<HashSet<_>>();
 
     // order is important
     // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
@@ -216,6 +246,7 @@ pub async fn do_vacuum2(
         table_info.desc.as_str(),
         &blocks_to_gc,
         &gc_root_indexes,
+        &removed_bloom_indexes,
         &table_agg_index_ids,
         inverted_indexes,
         &mut files_to_gc,
@@ -276,6 +307,7 @@ async fn purge_block_chunks(
     table_desc: &str,
     blocks_to_gc: &[String],
     protected_index_paths: &HashSet<String>,
+    removed_bloom_index_paths: &HashSet<String>,
     table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
     files_to_gc: &mut Vec<String>,
@@ -296,7 +328,9 @@ async fn purge_block_chunks(
 
         let mut indexes_to_gc =
             collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
-        indexes_to_gc.retain(|path| !protected_index_paths.contains(path));
+        indexes_to_gc.retain(|path| {
+            !protected_index_paths.contains(path) && !removed_bloom_index_paths.contains(path)
+        });
         ctx.set_status_info(&format!(
             "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
             table_desc,
@@ -326,6 +360,56 @@ async fn purge_block_chunks(
     }
 
     Ok(())
+}
+
+async fn list_bloom_indexes_before_gc_root(
+    fuse_table: &FuseTable,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let gc_root_uuid = uuid_from_date_time(gc_root_timestamp).simple().to_string();
+    let gc_root_timestamp_prefix = &gc_root_uuid[..12];
+    fuse_table
+        .list_files(
+            fuse_table
+                .meta_location_generator()
+                .block_bloom_index_prefix()
+                .to_string(),
+            |path, modified| {
+                is_bloom_index_gc_candidate(
+                    &path,
+                    modified,
+                    gc_root_timestamp_prefix,
+                    gc_root_meta_ts,
+                )
+            },
+        )
+        .await
+}
+
+fn is_bloom_index_gc_candidate(
+    path: &str,
+    modified: DateTime<Utc>,
+    gc_root_timestamp_prefix: &str,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> bool {
+    if let Ok(uuid) = try_extract_uuid_str_from_path(path) {
+        let bytes = uuid.as_bytes();
+        if bytes.len() == 32
+            && bytes
+                .iter()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+            && bytes[12] == b'7'
+        {
+            // UUID V7 stores its millisecond timestamp in the first 12 hexadecimal digits. Use a
+            // strict bound, matching Vacuum2's segment/block listing behavior at the GC root.
+            return &uuid[..12] < gc_root_timestamp_prefix;
+        }
+    }
+
+    // Old and malformed object names have no trustworthy creation time in their key. Preserve
+    // the existing Vacuum2 compatibility window so an in-flight old writer cannot lose its file.
+    modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts
 }
 
 fn collect_block_index_locations(
@@ -416,6 +500,7 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Duration;
     use databend_common_meta_app::schema::TableIndexType;
 
     use super::*;
@@ -454,5 +539,38 @@ mod tests {
             ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
+    }
+
+    #[test]
+    fn test_bloom_index_gc_candidate_timestamp_safety() {
+        let gc_root_meta_ts = Utc::now();
+        let recent = gc_root_meta_ts - Duration::hours(1);
+        let old = gc_root_meta_ts - ASSUMPTION_MAX_TXN_DURATION - Duration::hours(1);
+        let gc_root_timestamp_prefix = "0191114d30fd";
+
+        assert!(is_bloom_index_gc_candidate(
+            "1/2/_i_b_v2/0191114d30fc70000000000000000000_v4.parquet",
+            recent,
+            gc_root_timestamp_prefix,
+            gc_root_meta_ts,
+        ));
+        assert!(!is_bloom_index_gc_candidate(
+            "1/2/_i_b_v2/0191114d30fd70000000000000000000_v4.parquet",
+            old,
+            gc_root_timestamp_prefix,
+            gc_root_meta_ts,
+        ));
+        assert!(!is_bloom_index_gc_candidate(
+            "1/2/_i_b_v2/0191114D30FC70000000000000000000_v4.parquet",
+            recent,
+            gc_root_timestamp_prefix,
+            gc_root_meta_ts,
+        ));
+        assert!(is_bloom_index_gc_candidate(
+            "1/2/_i_b_v2/0123456789ab4def8123456789abcdef_v4.parquet",
+            old,
+            gc_root_timestamp_prefix,
+            gc_root_meta_ts,
+        ));
     }
 }

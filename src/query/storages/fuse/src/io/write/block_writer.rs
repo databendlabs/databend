@@ -492,7 +492,30 @@ impl BlockBuilder {
         block_meta.col_stats.extend(updated_col_stats);
         block_meta.create_on = Some(Utc::now());
 
-        if !invalidated_bloom_column_ids.is_empty() {
+        let current_bloom_column_ids = self
+            .source_schema
+            .fields()
+            .iter()
+            .filter(|field| BloomIndex::supported_type(field.data_type()))
+            .map(TableField::column_id)
+            .collect::<HashSet<_>>();
+        let keep_legacy_bloom_layout = if matches!(
+            origin.bloom_index_layout(),
+            Some(BloomIndexLayout::Legacy { .. })
+        ) {
+            let active_column_ids = legacy_bloom_column_ids
+                .ok_or_else(|| ErrorCode::Internal("legacy Bloom file columns were not loaded"))?;
+            !active_column_ids.is_empty()
+                && bloom_index_state.is_none()
+                && invalidated_bloom_column_ids.is_empty()
+                && active_column_ids
+                    .iter()
+                    .all(|column_id| current_bloom_column_ids.contains(column_id))
+        } else {
+            false
+        };
+
+        if !keep_legacy_bloom_layout {
             let mut bloom_index_files = match origin.bloom_index_layout() {
                 None => Vec::new(),
                 Some(BloomIndexLayout::Legacy {
@@ -516,8 +539,10 @@ impl BlockBuilder {
                 Some(BloomIndexLayout::Split { files }) => files.to_vec(),
             };
             for file in &mut bloom_index_files {
-                file.active_column_ids
-                    .retain(|column_id| !invalidated_bloom_column_ids.contains(column_id));
+                file.active_column_ids.retain(|column_id| {
+                    current_bloom_column_ids.contains(column_id)
+                        && !invalidated_bloom_column_ids.contains(column_id)
+                });
             }
             bloom_index_files.retain(|file| !file.active_column_ids.is_empty());
             if let Some(state) = &bloom_index_state {

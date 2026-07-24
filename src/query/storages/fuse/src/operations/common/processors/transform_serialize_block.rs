@@ -41,6 +41,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use log::warn;
 use opendal::Operator;
 
 use crate::FuseTable;
@@ -278,16 +279,11 @@ impl TransformSerializeBlock {
     }
 
     fn needs_legacy_bloom_meta(&self, origin: &BlockMeta) -> bool {
-        matches!(
-            origin.bloom_index_layout(),
-            Some(BloomIndexLayout::Legacy { .. })
-        ) && self.updated_field_indices.as_ref().is_some_and(|indices| {
-            indices.iter().any(|index| {
-                BloomIndex::supported_type(
-                    self.block_builder.source_schema.field(*index).data_type(),
-                )
-            })
-        })
+        self.updated_field_indices.is_some()
+            && matches!(
+                origin.bloom_index_layout(),
+                Some(BloomIndexLayout::Legacy { .. })
+            )
     }
 
     async fn load_legacy_bloom_column_ids(&self, origin: &BlockMeta) -> Result<Vec<ColumnId>> {
@@ -298,7 +294,16 @@ impl TransformSerializeBlock {
         else {
             return Err(ErrorCode::Internal("legacy Bloom location is missing"));
         };
-        let meta = load_index_meta(self.dal.clone(), &location.0, file_size, None).await?;
+        let meta = match load_index_meta(self.dal.clone(), &location.0, file_size, None).await {
+            Ok(meta) => meta,
+            Err(error) => {
+                warn!(
+                    "failed to load legacy Bloom metadata at {:?}; dropping its reference from the partial-update output: {}",
+                    location, error
+                );
+                return Ok(vec![]);
+            }
+        };
         let stored_filter_names = meta
             .columns
             .iter()

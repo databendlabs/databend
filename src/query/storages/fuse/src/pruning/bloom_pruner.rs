@@ -56,9 +56,7 @@ pub trait BloomPruner {
     // returns true, if target should NOT be pruned (false positive allowed)
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
-        index_files: &[BloomIndexFileMeta],
+        index_layout: Option<BloomIndexLayout<'_>>,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockReadInfo,
@@ -629,42 +627,42 @@ impl BloomPruner for BloomPrunerCreator {
     #[async_backtrace::framed]
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
-        index_files: &[BloomIndexFileMeta],
+        index_layout: Option<BloomIndexLayout<'_>>,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockReadInfo,
     ) -> bool {
-        if !index_files.is_empty() {
-            match self
-                .apply_files(index_files, column_stats, block_meta)
-                .await
-            {
-                Ok(value) => value,
-                Err(e) => {
-                    warn!(
-                        "failed to apply multi-file bloom pruner, returning true. {}",
-                        e
-                    );
-                    true
+        match index_layout {
+            Some(BloomIndexLayout::Split { files }) => {
+                match self.apply_files(files, column_stats, block_meta).await {
+                    Ok(value) => value,
+                    Err(e) => {
+                        warn!(
+                            "failed to apply multi-file bloom pruner, returning true. {}",
+                            e
+                        );
+                        true
+                    }
                 }
             }
-        } else if let Some(loc) = index_location {
-            // load filter, and try pruning according to filter expression
-            match self
-                .apply(loc, index_length, column_stats, column_ids, block_meta)
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    // swallow exceptions intentionally, corrupted index should not prevent execution
-                    warn!("failed to apply bloom pruner, returning true. {}", e);
-                    true
+            Some(BloomIndexLayout::Legacy {
+                location,
+                file_size,
+            }) => {
+                // Load the filter and try pruning according to its expression.
+                match self
+                    .apply(location, file_size, column_stats, column_ids, block_meta)
+                    .await
+                {
+                    Ok(value) => value,
+                    Err(e) => {
+                        // Swallow exceptions intentionally: a corrupt index must not fail a query.
+                        warn!("failed to apply bloom pruner, returning true. {}", e);
+                        true
+                    }
                 }
             }
-        } else {
-            true
+            None => true,
         }
     }
 }

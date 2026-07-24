@@ -403,14 +403,8 @@ impl<'a> FuseEncodingImpl<'a> {
                 for block in segment.blocks.iter() {
                     for group in block.physical_column_groups().iter() {
                         let column_metas = group
-                            .active_column_ids
-                            .iter()
-                            .filter_map(|column_id| {
-                                group
-                                    .leaf_column_metas
-                                    .get(column_id)
-                                    .map(|meta| (*column_id, meta.clone()))
-                            })
+                            .active_leaf_column_metas()
+                            .map(|(column_id, column_meta)| (column_id, column_meta.clone()))
                             .collect();
                         block_groups.push((
                             group.location.0.clone(),

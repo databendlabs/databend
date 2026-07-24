@@ -182,14 +182,8 @@ impl BloomIndexRebuilder {
                 .map(|group| FuseColumnGroupPartInfo {
                     location: group.location.0.clone(),
                     columns_meta: group
-                        .active_column_ids
-                        .iter()
-                        .filter_map(|column_id| {
-                            group
-                                .leaf_column_metas
-                                .get(column_id)
-                                .map(|column_meta| (*column_id, column_meta.clone()))
-                        })
+                        .active_leaf_column_metas()
+                        .map(|(column_id, column_meta)| (column_id, column_meta.clone()))
                         .collect(),
                 })
                 .collect()
