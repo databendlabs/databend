@@ -77,16 +77,8 @@ impl<'a> nom::error::ParseError<Input<'a>> for Error {
         unreachable!()
     }
 
-    fn or(mut self, mut other: Self) -> Self {
-        match self.span.start.cmp(&other.span.start) {
-            Ordering::Equal => {
-                self.errors.append(&mut other.errors);
-                self.contexts.clear();
-                self
-            }
-            Ordering::Less => other,
-            Ordering::Greater => self,
-        }
+    fn or(self, other: Self) -> Self {
+        self.merge(other)
     }
 }
 
@@ -100,6 +92,26 @@ impl<'a> nom::error::ContextError<Input<'a>> for Error {
 }
 
 impl Error {
+    fn merge(mut self, mut other: Self) -> Self {
+        match self.span.start.cmp(&other.span.start) {
+            Ordering::Equal => {
+                self.errors.append(&mut other.errors);
+                self.contexts.clear();
+                self
+            }
+            Ordering::Less => other,
+            Ordering::Greater => self,
+        }
+    }
+
+    pub(crate) fn merge_into(self, other: nom::Err<Self>) -> nom::Err<Self> {
+        match other {
+            nom::Err::Error(error) => nom::Err::Error(self.merge(error)),
+            nom::Err::Failure(error) => nom::Err::Failure(self.merge(error)),
+            nom::Err::Incomplete(needed) => nom::Err::Incomplete(needed),
+        }
+    }
+
     pub fn from_error_kind(input: Input<'_>, kind: ErrorKind) -> Self {
         Error {
             span: transform_span(&input.tokens[..1]).unwrap(),

@@ -57,6 +57,43 @@ error:
 
 
 ---------- Input ----------
+SUBSTRING(col, 1
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | SUBSTRING(col, 1
+  | ---------       ^ unexpected end of input, expecting `)`
+  | |               
+  | while parsing expression
+
+
+---------- Input ----------
+EXTRACT(YEAR)
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | EXTRACT(YEAR)
+  | -------     ^ unexpected `)`, expecting `FROM`
+  | |            
+  | while parsing expression
+
+
+---------- Input ----------
+TRIM(foo,
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | TRIM(foo,
+  | ----     ^ unexpected end of input, expecting `)`
+  | |        
+  | while parsing `function(... [ ORDER BY <expr>, ... ] [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ FILTER ( WHERE <expr> ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
+  | while parsing expression
+
+
+---------- Input ----------
 a.add(b)
 ---------- Output ---------
 error: 

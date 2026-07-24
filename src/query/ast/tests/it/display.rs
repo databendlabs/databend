@@ -144,10 +144,11 @@ fn test_parse_sql_nested_join_conditions_without_panic() {
 }
 
 #[test]
-fn test_try_cast_keyword_as_identifier() {
+fn test_keyword_function_fallback() {
     for sql in [
         "SELECT try_cast FROM try_cast",
         "SELECT try_cast(try_cast AS BIGINT) FROM try_cast",
+        "SELECT trim(foo)",
     ] {
         test_stmt_display(sql);
     }

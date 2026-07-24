@@ -14,16 +14,24 @@
 
 macro_rules! try_dispatch {
     ($input:expr_2021, true, $($($kind:ident)|+ => $body:expr_2021),+ $(,)?) => {{
+        let mut dispatch_error = None;
         if let Some(token_0) = $input.tokens.first() {
             if let Some(result) = match token_0.kind {
                 $($($kind)|+ => Some($body),)+
                 _ => None,
             } {
-                if result.is_ok() {
-                    return result;
+                match result {
+                    Ok(output) => return Ok(output),
+                    Err(nom::Err::Error(error) | nom::Err::Failure(error)) => {
+                        dispatch_error = Some(error);
+                    }
+                    Err(nom::Err::Incomplete(needed)) => {
+                        return Err(nom::Err::Incomplete(needed));
+                    }
                 }
             }
         }
+        dispatch_error
     }};
     ($input:expr_2021, false, $($($kind:ident)|+ => $body:expr_2021),+ $(,)?) => {{
         if let Some(token_0) = $input.tokens.first() {

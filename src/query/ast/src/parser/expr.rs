@@ -1757,7 +1757,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         return with_span!(cast).parse(i);
     }
 
-    try_dispatch!(i, true,
+    let dispatch_error = try_dispatch!(i, true,
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
         NOT => with_span!(rule!(
             #in_list
@@ -1876,15 +1876,21 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
 
     // Function-call backtracking is expensive, so only enter it when the second token is `(`.
-    if i.tokens.get(1).is_some_and(|token| token.kind == LParen) {
-        return with_span!(function_call).parse(i);
-    }
+    let fallback = if i.tokens.get(1).is_some_and(|token| token.kind == LParen) {
+        with_span!(function_call).parse(i)
+    } else {
+        with_span!(alt((rule!(
+            #column_ident : "<column>"
+            | #literal : "<literal>"
+        ),)))
+        .parse(i)
+    };
 
-    with_span!(alt((rule!(
-        #column_ident : "<column>"
-        | #literal : "<literal>"
-    ),)))
-    .parse(i)
+    if let Some(dispatch_error) = dispatch_error {
+        fallback.map_err(|fallback_error| dispatch_error.merge_into(fallback_error))
+    } else {
+        fallback
+    }
 }
 
 #[inline]
