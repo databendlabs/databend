@@ -29,14 +29,13 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
+use databend_common_storages_fuse::operations::VacuumObjectKeyPolicy;
+use databend_common_storages_fuse::operations::is_vacuum_object_gc_candidate;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
-use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use log::info;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
@@ -367,8 +366,7 @@ async fn list_bloom_indexes_before_gc_root(
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<Vec<String>> {
-    let gc_root_uuid = uuid_from_date_time(gc_root_timestamp).simple().to_string();
-    let gc_root_timestamp_prefix = &gc_root_uuid[..12];
+    let key_policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
     fuse_table
         .list_files(
             fuse_table
@@ -376,40 +374,10 @@ async fn list_bloom_indexes_before_gc_root(
                 .block_bloom_index_prefix()
                 .to_string(),
             |path, modified| {
-                is_bloom_index_gc_candidate(
-                    &path,
-                    modified,
-                    gc_root_timestamp_prefix,
-                    gc_root_meta_ts,
-                )
+                is_vacuum_object_gc_candidate(&path, modified, gc_root_meta_ts, key_policy)
             },
         )
         .await
-}
-
-fn is_bloom_index_gc_candidate(
-    path: &str,
-    modified: DateTime<Utc>,
-    gc_root_timestamp_prefix: &str,
-    gc_root_meta_ts: DateTime<Utc>,
-) -> bool {
-    if let Ok(uuid) = try_extract_uuid_str_from_path(path) {
-        let bytes = uuid.as_bytes();
-        if bytes.len() == 32
-            && bytes
-                .iter()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
-            && bytes[12] == b'7'
-        {
-            // UUID V7 stores its millisecond timestamp in the first 12 hexadecimal digits. Use a
-            // strict bound, matching Vacuum2's segment/block listing behavior at the GC root.
-            return &uuid[..12] < gc_root_timestamp_prefix;
-        }
-    }
-
-    // Old and malformed object names have no trustworthy creation time in their key. Preserve
-    // the existing Vacuum2 compatibility window so an in-flight old writer cannot lose its file.
-    modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts
 }
 
 fn collect_block_index_locations(
@@ -502,6 +470,7 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 mod tests {
     use chrono::Duration;
     use databend_common_meta_app::schema::TableIndexType;
+    use databend_storages_common_table_meta::meta::uuid_from_date_time;
 
     use super::*;
 
@@ -543,34 +512,40 @@ mod tests {
 
     #[test]
     fn test_bloom_index_gc_candidate_timestamp_safety() {
+        let gc_root_timestamp = Utc::now() - Duration::days(1);
         let gc_root_meta_ts = Utc::now();
         let recent = gc_root_meta_ts - Duration::hours(1);
-        let old = gc_root_meta_ts - ASSUMPTION_MAX_TXN_DURATION - Duration::hours(1);
-        let gc_root_timestamp_prefix = "0191114d30fd";
+        let old = gc_root_meta_ts - Duration::days(4);
+        let policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
+        let before_root = uuid_from_date_time(gc_root_timestamp - Duration::milliseconds(1));
+        let at_root = uuid_from_date_time(gc_root_timestamp);
 
-        assert!(is_bloom_index_gc_candidate(
-            "1/2/_i_b_v2/0191114d30fc70000000000000000000_v4.parquet",
+        assert!(is_vacuum_object_gc_candidate(
+            &format!("1/2/_i_b_v2/{}_v4.parquet", before_root.as_simple()),
             recent,
-            gc_root_timestamp_prefix,
             gc_root_meta_ts,
+            policy,
         ));
-        assert!(!is_bloom_index_gc_candidate(
-            "1/2/_i_b_v2/0191114d30fd70000000000000000000_v4.parquet",
+        assert!(!is_vacuum_object_gc_candidate(
+            &format!("1/2/_i_b_v2/{}_v4.parquet", at_root.as_simple()),
             old,
-            gc_root_timestamp_prefix,
             gc_root_meta_ts,
+            policy,
         ));
-        assert!(!is_bloom_index_gc_candidate(
-            "1/2/_i_b_v2/0191114D30FC70000000000000000000_v4.parquet",
+        assert!(!is_vacuum_object_gc_candidate(
+            &format!(
+                "1/2/_i_b_v2/{}_v4.parquet",
+                before_root.as_simple().to_string().to_ascii_uppercase()
+            ),
             recent,
-            gc_root_timestamp_prefix,
             gc_root_meta_ts,
+            policy,
         ));
-        assert!(is_bloom_index_gc_candidate(
+        assert!(is_vacuum_object_gc_candidate(
             "1/2/_i_b_v2/0123456789ab4def8123456789abcdef_v4.parquet",
             old,
-            gc_root_timestamp_prefix,
             gc_root_meta_ts,
+            policy,
         ));
     }
 }

@@ -320,6 +320,14 @@ impl<'a> FuseEncodingImpl<'a> {
         }
         let row_group = &file_meta.row_groups()[0];
         let columns = row_group.columns();
+        let mut columns_by_range = HashMap::with_capacity(columns.len());
+        for column in columns {
+            // Keep the first match to preserve the previous `iter().find()` behavior for
+            // malformed metadata containing duplicate byte ranges.
+            columns_by_range
+                .entry(column.byte_range())
+                .or_insert(column);
+        }
         let mut block_rows = Vec::new();
 
         for field in fields.iter() {
@@ -334,10 +342,7 @@ impl<'a> FuseEncodingImpl<'a> {
                 continue;
             };
             let column_range = column_meta.offset_length();
-            let Some(column_chunk) = columns
-                .iter()
-                .find(|column| column.byte_range() == column_range)
-            else {
+            let Some(column_chunk) = columns_by_range.get(&column_range).copied() else {
                 continue;
             };
             let compressed_size = u64::try_from(column_chunk.compressed_size()).map_err(|_| {

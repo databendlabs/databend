@@ -60,19 +60,21 @@ use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::statistics::ClusterStatsGenerator;
 
+struct PendingSerialization {
+    block: DataBlock,
+    stats_type: ClusterStatsGenType,
+    index: Option<BlockMetaIndex>,
+}
+
 #[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
     NeedLegacyBloomMeta {
-        block: DataBlock,
-        stats_type: ClusterStatsGenType,
-        index: Option<BlockMetaIndex>,
+        pending: PendingSerialization,
         origin_block_meta: Arc<BlockMeta>,
     },
     NeedSerialize {
-        block: DataBlock,
-        stats_type: ClusterStatsGenType,
-        index: Option<BlockMetaIndex>,
+        pending: PendingSerialization,
         origin_block_meta: Option<Arc<BlockMeta>>,
         legacy_bloom_column_ids: Option<Vec<ColumnId>>,
     },
@@ -405,17 +407,21 @@ impl Processor for TransformSerializeBlock {
                             .is_some_and(|origin| self.needs_legacy_bloom_meta(origin))
                         {
                             self.state = State::NeedLegacyBloomMeta {
-                                block: input_data,
-                                stats_type: serialize_block.stats_type,
-                                index: Some(serialize_block.index),
+                                pending: PendingSerialization {
+                                    block: input_data,
+                                    stats_type: serialize_block.stats_type,
+                                    index: Some(serialize_block.index),
+                                },
                                 origin_block_meta: origin_block_meta.unwrap(),
                             };
                             Ok(Event::Async)
                         } else {
                             self.state = State::NeedSerialize {
-                                block: input_data,
-                                stats_type: serialize_block.stats_type,
-                                index: Some(serialize_block.index),
+                                pending: PendingSerialization {
+                                    block: input_data,
+                                    stats_type: serialize_block.stats_type,
+                                    index: Some(serialize_block.index),
+                                },
                                 origin_block_meta,
                                 legacy_bloom_column_ids: None,
                             };
@@ -447,9 +453,11 @@ impl Processor for TransformSerializeBlock {
                     0
                 };
             self.state = State::NeedSerialize {
-                block: input_data,
-                stats_type: ClusterStatsGenType::Generally,
-                index: None,
+                pending: PendingSerialization {
+                    block: input_data,
+                    stats_type: ClusterStatsGenType::Generally,
+                    index: None,
+                },
                 origin_block_meta: None,
                 legacy_bloom_column_ids: None,
             };
@@ -460,9 +468,12 @@ impl Processor for TransformSerializeBlock {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::NeedSerialize {
-                block,
-                stats_type,
-                index,
+                pending:
+                    PendingSerialization {
+                        block,
+                        stats_type,
+                        index,
+                    },
                 origin_block_meta,
                 legacy_bloom_column_ids,
             } => {
@@ -501,18 +512,14 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::NeedLegacyBloomMeta {
-                block,
-                stats_type,
-                index,
+                pending,
                 origin_block_meta,
             } => {
                 let legacy_bloom_column_ids = self
                     .load_legacy_bloom_column_ids(&origin_block_meta)
                     .await?;
                 self.state = State::NeedSerialize {
-                    block,
-                    stats_type,
-                    index,
+                    pending,
                     origin_block_meta: Some(origin_block_meta),
                     legacy_bloom_column_ids: Some(legacy_bloom_column_ids),
                 };

@@ -36,6 +36,7 @@ use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
 use log::info;
@@ -44,6 +45,7 @@ use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::Scheme;
+use uuid::Uuid;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
@@ -83,6 +85,61 @@ use crate::io::TableMetaLocationGenerator;
 ///   If the entire cluster is upgraded to the new version that includes the vacuum2 logic,
 ///   the above risks will not exist.
 pub const ASSUMPTION_MAX_TXN_DURATION: Duration = Duration::days(3);
+
+/// Object-key policy used when deciding whether an unreferenced Vacuum2 object predates the GC
+/// root.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VacuumObjectKeyPolicy {
+    /// The listing has already applied the lexicographic cutoff for `h`-prefixed Vacuum2 keys.
+    Vacuum2PrefixedBeforeRoot,
+    /// Current objects use a canonical, prefixless UUID V7 as the first file-name component.
+    PrefixlessUuidV7 { gc_root_timestamp: DateTime<Utc> },
+}
+
+impl VacuumObjectKeyPolicy {
+    /// Return a decision when the object key itself is trustworthy. `None` selects the legacy
+    /// transaction-window fallback.
+    fn trusted_gc_candidate(self, path: &str) -> Option<bool> {
+        match self {
+            Self::Vacuum2PrefixedBeforeRoot => path
+                .rsplit('/')
+                .next()
+                .is_some_and(|name| name.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
+                .then_some(true),
+            Self::PrefixlessUuidV7 { gc_root_timestamp } => {
+                let uuid_str = try_extract_uuid_str_from_path(path).ok()?;
+                let file_name = path.rsplit('/').next()?;
+                if !file_name.starts_with(uuid_str) {
+                    return None;
+                }
+
+                let uuid = Uuid::parse_str(uuid_str).ok()?;
+                if !is_uuid_v7(&uuid) || uuid.as_simple().to_string() != uuid_str {
+                    return None;
+                }
+
+                let (seconds, nanos) = uuid.get_timestamp()?.to_unix();
+                let created_at = DateTime::<Utc>::from_timestamp(seconds.try_into().ok()?, nanos)?;
+                Some(created_at.timestamp_millis() < gc_root_timestamp.timestamp_millis())
+            }
+        }
+    }
+}
+
+/// Decide whether an unreferenced object is eligible for Vacuum2 collection.
+///
+/// Trusted current keys use their embedded creation time and a strict GC-root cutoff. Legacy or
+/// malformed keys use the compatibility window based on object modification time.
+pub fn is_vacuum_object_gc_candidate(
+    path: &str,
+    modified: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+    key_policy: VacuumObjectKeyPolicy,
+) -> bool {
+    key_policy
+        .trusted_gc_candidate(path)
+        .unwrap_or(modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
+}
 
 pub struct SnapshotGcSelection {
     pub gc_root: Arc<TableSnapshot>,
@@ -171,9 +228,9 @@ async fn is_gc_candidate_segment_block(
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<bool> {
     let path = entry.path();
-    let last_part = path.rsplit('/').next().unwrap();
-    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
-        return Ok(true);
+    let key_policy = VacuumObjectKeyPolicy::Vacuum2PrefixedBeforeRoot;
+    if let Some(candidate) = key_policy.trusted_gc_candidate(path) {
+        return Ok(candidate);
     }
     let last_modified = if let Some(v) = entry.metadata().last_modified() {
         v
@@ -188,7 +245,12 @@ async fn is_gc_candidate_segment_block(
         })?
     };
 
-    Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
+    Ok(is_vacuum_object_gc_candidate(
+        path,
+        last_modified,
+        gc_root_meta_ts,
+        key_policy,
+    ))
 }
 
 impl FuseTable {
@@ -719,5 +781,108 @@ pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
         )
     } else {
         format!("{:?}", s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bloom_path(uuid: Uuid) -> String {
+        format!("1/2/_i_b_v2/{}_v4.parquet", uuid.as_simple())
+    }
+
+    #[test]
+    fn test_prefixless_uuid_v7_gc_classification() {
+        let gc_root_timestamp =
+            DateTime::<Utc>::from_timestamp(1_700_000_000, 500_000_000).unwrap();
+        let gc_root_meta_ts = gc_root_timestamp + Duration::days(10);
+        let recent = gc_root_meta_ts - Duration::hours(1);
+        let old = gc_root_meta_ts - ASSUMPTION_MAX_TXN_DURATION - Duration::hours(1);
+        let policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
+
+        let before_root = bloom_path(uuid_from_date_time(
+            gc_root_timestamp - Duration::milliseconds(1),
+        ));
+        let at_root = bloom_path(uuid_from_date_time(gc_root_timestamp));
+        let after_root = bloom_path(uuid_from_date_time(
+            gc_root_timestamp + Duration::milliseconds(1),
+        ));
+
+        assert!(is_vacuum_object_gc_candidate(
+            &before_root,
+            recent,
+            gc_root_meta_ts,
+            policy,
+        ));
+        assert!(!is_vacuum_object_gc_candidate(
+            &at_root,
+            old,
+            gc_root_meta_ts,
+            policy,
+        ));
+        assert!(!is_vacuum_object_gc_candidate(
+            &after_root,
+            old,
+            gc_root_meta_ts,
+            policy,
+        ));
+    }
+
+    #[test]
+    fn test_legacy_or_malformed_gc_classification_uses_transaction_window() {
+        let gc_root_timestamp = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let gc_root_meta_ts = gc_root_timestamp + Duration::days(10);
+        let policy = VacuumObjectKeyPolicy::PrefixlessUuidV7 { gc_root_timestamp };
+        let valid_v7 = bloom_path(uuid_from_date_time(
+            gc_root_timestamp - Duration::milliseconds(1),
+        ));
+        let uppercase_v7 = valid_v7.to_ascii_uppercase();
+        let v4 = bloom_path(Uuid::new_v4());
+        let malformed = "1/2/_i_b_v2/not-a-uuid_v4.parquet";
+        let at_window = gc_root_meta_ts - ASSUMPTION_MAX_TXN_DURATION;
+        let before_window = at_window - Duration::milliseconds(1);
+
+        for path in [&uppercase_v7, &v4, malformed] {
+            assert!(!is_vacuum_object_gc_candidate(
+                path,
+                at_window,
+                gc_root_meta_ts,
+                policy,
+            ));
+            assert!(is_vacuum_object_gc_candidate(
+                path,
+                before_window,
+                gc_root_meta_ts,
+                policy,
+            ));
+        }
+    }
+
+    #[test]
+    fn test_prefixed_policy_preserves_existing_listing_classification() {
+        let gc_root_meta_ts = Utc::now();
+        let recent = gc_root_meta_ts - Duration::hours(1);
+        let old = gc_root_meta_ts - ASSUMPTION_MAX_TXN_DURATION - Duration::hours(1);
+        let policy = VacuumObjectKeyPolicy::Vacuum2PrefixedBeforeRoot;
+
+        assert!(is_vacuum_object_gc_candidate(
+            "1/2/_b/h-malformed.parquet",
+            recent,
+            gc_root_meta_ts,
+            policy,
+        ));
+        assert!(!is_vacuum_object_gc_candidate(
+            "1/2/_b/legacy.parquet",
+            recent,
+            gc_root_meta_ts,
+            policy,
+        ));
+        assert!(is_vacuum_object_gc_candidate(
+            "1/2/_b/legacy.parquet",
+            old,
+            gc_root_meta_ts,
+            policy,
+        ));
     }
 }

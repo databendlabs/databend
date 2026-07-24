@@ -41,7 +41,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_index::filters::BlockFilter;
+use databend_storages_common_index::filters::BlockBloomFilterIndexVersion;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -51,7 +51,6 @@ use databend_storages_common_table_meta::meta::BloomIndexLayout;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -78,6 +77,13 @@ use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
 use crate::pruning::read_multi_file_block_filter;
+
+fn replace_digest_pruning_supported(format_version: u64) -> bool {
+    matches!(
+        BlockBloomFilterIndexVersion::try_from(format_version),
+        Ok(BlockBloomFilterIndexVersion::V3(_)) | Ok(BlockBloomFilterIndexVersion::V4(_))
+    )
+}
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -714,6 +720,12 @@ impl AggregationContext {
                 location,
                 file_size,
             }) => {
+                // REPLACE carries current digest hashes instead of scalar values. V2 filters were
+                // built from legacy scalar values, so testing current digests against them can
+                // produce false negatives and incorrectly prune a conflicting block.
+                if !replace_digest_pruning_supported(location.1) {
+                    return Ok(None);
+                }
                 let col_names = bloom_on_conflict_field_index
                     .iter()
                     .map(|idx| {
@@ -751,7 +763,7 @@ impl AggregationContext {
                 };
                 // REPLACE carries current digest hashes instead of scalar values, so it cannot
                 // safely evaluate legacy V2 filters. Keep the block in that compatibility case.
-                if filter.format_version != BlockFilter::VERSION {
+                if !replace_digest_pruning_supported(filter.format_version) {
                     return Ok(None);
                 }
                 let col_names = fields
@@ -790,8 +802,28 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_table_meta::meta::Versioned;
 
     use super::*;
+
+    #[test]
+    fn test_replace_digest_pruning_version_eligibility() {
+        assert!(
+            !replace_digest_pruning_supported(2),
+            "V2 filters contain legacy scalar hashes, not current digests"
+        );
+        assert!(
+            replace_digest_pruning_supported(3),
+            "V3 filters use the digest encoding"
+        );
+        assert!(
+            replace_digest_pruning_supported(BlockFilter::VERSION),
+            "the current filter format uses the digest encoding"
+        );
+        assert!(!replace_digest_pruning_supported(0));
+        assert!(!replace_digest_pruning_supported(u64::MAX));
+    }
 
     #[test]
     fn test_check_overlap() -> Result<()> {

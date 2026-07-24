@@ -33,6 +33,11 @@ use crate::FuseColumnGroupPartInfo;
 use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
+fn column_group_read_concurrency(max_threads: usize, max_storage_io_requests: usize) -> usize {
+    let outer_readers = max_threads.min(max_storage_io_requests).max(1);
+    max_storage_io_requests.max(1).div_ceil(outer_readers)
+}
+
 impl BlockReader {
     #[async_backtrace::framed]
     pub(crate) async fn read_column_groups_data_by_merge_io(
@@ -68,17 +73,24 @@ impl BlockReadContext {
         column_groups: &[FuseColumnGroupPartInfo],
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<BlockReadResult> {
-        let reads = column_groups.iter().map(|group| {
-            self.read_columns_data_by_merge_io(
-                settings,
-                &group.location,
-                &group.columns_meta,
-                ignore_column_ids,
-            )
-        });
-        Ok(BlockReadResult::merge(
-            futures::future::try_join_all(reads).await?,
-        ))
+        let query_settings = self.table_context().get_settings();
+        let concurrency = column_group_read_concurrency(
+            query_settings.get_max_threads()? as usize,
+            query_settings.get_max_storage_io_requests()? as usize,
+        );
+        let mut results = Vec::with_capacity(column_groups.len());
+        for groups in column_groups.chunks(concurrency) {
+            let reads = groups.iter().map(|group| {
+                self.read_columns_data_by_merge_io(
+                    settings,
+                    &group.location,
+                    &group.columns_meta,
+                    ignore_column_ids,
+                )
+            });
+            results.extend(futures::future::try_join_all(reads).await?);
+        }
+        Ok(BlockReadResult::merge(results))
     }
 
     #[async_backtrace::framed]
@@ -203,5 +215,19 @@ impl<'a> ColumnCacheKeyBuilder<'a> {
     fn cache_key(&self, column_id: &ColumnId, column_meta: &ColumnMeta) -> TableDataCacheKey {
         let (offset, len) = column_meta.offset_length();
         TableDataCacheKey::new(self.block_path, *column_id, offset, len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::column_group_read_concurrency;
+
+    #[test]
+    fn test_column_group_read_concurrency() {
+        assert_eq!(column_group_read_concurrency(8, 64), 8);
+        assert_eq!(column_group_read_concurrency(8, 10), 2);
+        assert_eq!(column_group_read_concurrency(64, 8), 1);
+        assert_eq!(column_group_read_concurrency(0, 0), 1);
+        assert_eq!(column_group_read_concurrency(0, 8), 8);
     }
 }
