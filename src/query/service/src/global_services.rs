@@ -52,6 +52,7 @@ use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::IcebergCreator;
+use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
 use crate::interpreters::TableHookScheduler;
@@ -133,6 +134,7 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
+                (CatalogType::Paimon, Arc::new(PaimonCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator, version)

@@ -23,6 +23,7 @@ use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_storages_common_table_meta::meta::merge_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
@@ -242,6 +243,9 @@ impl TransformMergeCommitMeta {
                 ),
             };
 
+        let mut top_n = l.top_n;
+        merge_column_top_n_mut(&mut top_n, r.top_n)?;
+
         Ok(CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
@@ -254,10 +258,12 @@ impl TransformMergeCommitMeta {
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
-            insert_rows: l.insert_rows + r.insert_rows,
+            logical_updated_rows: l.logical_updated_rows + r.logical_updated_rows,
+            logical_deleted_rows: l.logical_deleted_rows + r.logical_deleted_rows,
             virtual_schema,
             virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
+            top_n,
         })
     }
 }
@@ -291,6 +297,7 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::VariantDataType;
+    use databend_storages_common_table_meta::meta::Statistics;
 
     use super::*;
 
@@ -407,5 +414,38 @@ mod tests {
             Some(schema_with_column_ids(&[2])),
         );
         assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
+    }
+
+    fn commit_meta_with_rows(added_rows: u64, removed_rows: u64, deleted_rows: u64) -> CommitMeta {
+        let mut meta = CommitMeta::empty(1);
+        meta.conflict_resolve_context =
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                merged_statistics: Statistics {
+                    row_count: added_rows,
+                    ..Default::default()
+                },
+                removed_statistics: Statistics {
+                    row_count: removed_rows,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        meta.logical_deleted_rows = deleted_rows;
+        meta
+    }
+
+    #[test]
+    fn test_merge_commit_meta_derives_logical_insert_rows() {
+        let deleted = commit_meta_with_rows(90, 100, 10);
+        let inserted = commit_meta_with_rows(105, 100, 0);
+
+        let merged = TransformMergeCommitMeta::merge_commit_meta(deleted, inserted, None).unwrap();
+        assert_eq!(merged.logical_deleted_rows, 10);
+        assert_eq!(
+            merged
+                .conflict_resolve_context
+                .logical_insert_rows(merged.logical_deleted_rows),
+            5
+        );
     }
 }

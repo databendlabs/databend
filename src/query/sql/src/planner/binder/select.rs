@@ -113,7 +113,11 @@ impl ClauseAliasBindings {
         // With `enable_group_by_column_first`, the first binding pass should
         // use input columns only. Alias fallback is still available for simple
         // names that do not exist in the input scope.
-        if self.group_by_column_first {
+        //
+        // GROUPING SETS items (disable_select_alias_fallback = true) also prefer
+        // input columns: a SELECT alias like `if(grouping(x)=1, 0, x) AS x`
+        // must not shadow the underlying column `x` inside GROUP BY sets.
+        if self.group_by_column_first || disable_select_alias_fallback {
             return (
                 None,
                 (!self.available.is_empty()).then_some(self.available.as_slice()),

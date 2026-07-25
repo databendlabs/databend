@@ -19,8 +19,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_sql::ColumnBinding;
+use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -37,6 +39,8 @@ pub struct DistributedInsertSelect {
     pub select_schema: DataSchemaRef,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
+    #[serde(default)]
+    pub input_prepared: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -82,6 +86,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
             select_schema: self.select_schema.clone(),
             select_column_bindings: self.select_column_bindings.clone(),
             cast_needed: self.cast_needed,
+            input_prepared: self.input_prepared,
             table_meta_timestamps: self.table_meta_timestamps,
         })
     }
@@ -92,15 +97,29 @@ impl IPhysicalPlan for DistributedInsertSelect {
         let select_schema = &self.select_schema;
         let insert_schema = &self.insert_schema;
         // should render result for select
-        PipelineBuilder::build_result_projection(
-            &builder.func_ctx,
-            self.input.output_schema()?,
-            &self.select_column_bindings,
-            &mut builder.main_pipeline,
-            false,
-        )?;
+        if !self.input_prepared {
+            PipelineBuilder::build_result_projection(
+                &builder.func_ctx,
+                self.input.output_schema()?,
+                &self.select_column_bindings,
+                &mut builder.main_pipeline,
+                false,
+            )?;
+        } else {
+            let projection = (0..insert_schema.num_fields()).collect::<Vec<_>>();
+            let num_input_columns = self.input.output_schema()?.num_fields();
+            builder.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projection.clone(),
+                    }],
+                    builder.func_ctx.clone(),
+                    num_input_columns,
+                )
+            });
+        }
 
-        if self.cast_needed {
+        if !self.input_prepared && self.cast_needed {
             builder.main_pipeline.try_add_transformer(|| {
                 TransformCastSchema::try_new(
                     select_schema.clone(),
@@ -115,12 +134,14 @@ impl IPhysicalPlan for DistributedInsertSelect {
             .build_table_by_table_info(&self.table_info, None)?;
 
         let source_schema = insert_schema;
-        PipelineBuilder::fill_and_reorder_columns(
-            builder.ctx.clone(),
-            &mut builder.main_pipeline,
-            table.clone(),
-            source_schema.clone(),
-        )?;
+        if !self.input_prepared {
+            PipelineBuilder::fill_and_reorder_columns(
+                builder.ctx.clone(),
+                &mut builder.main_pipeline,
+                table.clone(),
+                source_schema.clone(),
+            )?;
+        }
 
         table.append_data(
             builder.ctx.clone(),

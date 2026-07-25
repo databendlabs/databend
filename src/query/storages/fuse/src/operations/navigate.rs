@@ -17,7 +17,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -756,33 +756,18 @@ impl FuseTable {
         snapshot: &TableSnapshot,
     ) -> Result<bool> {
         let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
-        let cluster_type = if let Some(cluster_type) = snapshot.cluster_type {
-            Some(cluster_type)
-        } else if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 {
-            // Historical snapshots written before cluster_type was persisted may still share the
-            // same cluster-key version as the current table. Reuse the current cluster_type only
-            // in that compatibility case.
-            self.cluster_type()
-        } else {
-            // Intentionally do not expose partial cluster metadata here. Historical snapshots
-            // written before cluster_type persistence may only carry cluster_key_meta, which is
-            // not enough to safely reconstruct the exact historical clustering mode once the
-            // table has moved to a different cluster-key generation or non-linear clustering
-            // implementation. Clearing both cluster key and cluster type in that case is a
-            // deliberate fallback to avoid fabricating misleading metadata during navigation.
-            None
+        let cluster_key_meta = match snapshot.cluster_type {
+            Some(ClusterType::Linear) => snapshot_cluster_key_meta,
+            Some(ClusterType::Hilbert) => None,
+            None if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_meta() => {
+                snapshot_cluster_key_meta
+            }
+            None => None,
         };
 
-        if let Some(cluster_type) = cluster_type {
-            table_meta.cluster_key_v2 = snapshot_cluster_key_meta;
-            table_meta.options.insert(
-                OPT_KEY_CLUSTER_TYPE.to_owned(),
-                cluster_type.to_string().to_lowercase(),
-            );
-        } else {
-            table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
-            table_meta.cluster_key_v2 = None;
-        }
+        table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        table_meta.cluster_key = None;
+        table_meta.cluster_key_v2 = cluster_key_meta;
 
         let mut historical_schema = snapshot.schema.clone();
         historical_schema.next_column_id = self

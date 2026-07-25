@@ -727,7 +727,6 @@ pub struct LiteTableContext {
     variables: RwLock<HashMap<String, Scalar>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     written_segment_locations: SegmentLocationsState,
-    selected_segment_locations: SegmentLocationsState,
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
     license_key: RwLock<String>,
@@ -969,7 +968,6 @@ impl LiteTableContext {
             variables: RwLock::new(HashMap::new()),
             runtime_filter_ready: RwLock::new(HashMap::new()),
             written_segment_locations: Default::default(),
-            selected_segment_locations: Default::default(),
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
             license_key: RwLock::new(String::new()),
@@ -1411,10 +1409,6 @@ impl TableContext for LiteTableContext {
 
     fn written_segment_locations(&self) -> &SegmentLocationsState {
         &self.written_segment_locations
-    }
-
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        &self.selected_segment_locations
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -62,7 +62,9 @@ impl TableMetaFunc for ClusteringStatistics {
                 TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
             ),
             TableField::new("block_depth", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("pages", TableDataType::String.wrap_nullable()),
+            // `pages` is intentionally removed from this public schema rather than kept as an
+            // always-NULL compatibility placeholder. It represented the removed Native-format
+            // page statistics, and retaining it would expose a capability that no longer exists.
         ])
     }
 
@@ -115,7 +117,6 @@ impl TableMetaFunc for ClusteringStatistics {
         let mut block_names = Vec::with_capacity(capacity);
         let mut ranges = Vec::with_capacity(capacity);
         let mut levels = Vec::with_capacity(capacity);
-        let mut pages = Vec::with_capacity(capacity);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
         let schema = tbl.schema();
@@ -157,9 +158,6 @@ impl TableMetaFunc for ClusteringStatistics {
                     segment_names.push(segment_loc.clone());
                     block_names.push(block.location.0.clone());
                     levels.push(current_cluster_stats.map(|v| v.level));
-                    pages.push(
-                        current_cluster_stats.and_then(|v| v.pages.as_ref().map(|v| format_vec(v))),
-                    );
                     ranges.push((min, max));
                 }
             }
@@ -176,7 +174,6 @@ impl TableMetaFunc for ClusteringStatistics {
         let mut max = Vec::with_capacity(output_len);
         let mut level = Vec::with_capacity(output_len);
         let mut block_depth = Vec::with_capacity(output_len);
-        let mut output_pages = Vec::with_capacity(output_len);
 
         for row_idx in 0..output_len {
             segment_name.put_and_commit(&segment_names[row_idx]);
@@ -186,7 +183,6 @@ impl TableMetaFunc for ClusteringStatistics {
             max.push(format_vec(&ranges[row_idx].1));
             level.push(levels[row_idx]);
             block_depth.push(block_depths[row_idx].depth as u64);
-            output_pages.push(pages[row_idx].clone());
         }
 
         Ok(DataBlock::new(
@@ -197,7 +193,6 @@ impl TableMetaFunc for ClusteringStatistics {
                 StringType::from_data(max).into(),
                 Int32Type::from_opt_data(level).into(),
                 UInt64Type::from_data(block_depth).into(),
-                StringType::from_opt_data(output_pages).into(),
             ],
             output_len,
         ))

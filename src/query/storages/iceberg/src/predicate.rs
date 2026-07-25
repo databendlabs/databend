@@ -47,17 +47,7 @@ impl PredicateBuilder {
                 generics: _,
                 args,
                 return_type: _,
-            } if args.len() == 1 && id.name().as_ref() == "is_true" => {
-                let (uncertain, predicate) = Self::build(&args[0]);
-                if uncertain {
-                    return (uncertain, Predicate::AlwaysTrue);
-                }
-                match predicate {
-                    Predicate::AlwaysTrue => (false, Predicate::AlwaysTrue),
-                    Predicate::AlwaysFalse => (false, Predicate::AlwaysFalse),
-                    _ => (false, predicate),
-                }
-            }
+            } if args.len() == 1 && id.name().as_ref() == "is_true" => Self::build(&args[0]),
 
             // unary
             RemoteExpr::FunctionCall {
@@ -97,28 +87,39 @@ impl PredicateBuilder {
                 (false, predicate)
             }
 
-            // binary {a op datum}
+            // logical operators
             RemoteExpr::FunctionCall {
                 span: _,
                 id,
                 generics: _,
                 args,
                 return_type: _,
-            } if args.len() == 2
+            } if args.len() >= 2
                 && ["and", "and_filters", "or", "or_filters"].contains(&id.name().as_ref()) =>
             {
-                let (left_uncertain, left) = Self::build(&args[0]);
-                let (right_uncertain, right) = Self::build(&args[1]);
-                if left_uncertain || right_uncertain {
-                    return (true, Predicate::AlwaysTrue);
-                }
-                let predicate = match id.name().as_ref() {
-                    "and" | "and_filters" => left.and(right),
-                    "or" | "or_filters" => left.or(right),
-                    _ => unreachable!(),
+                let is_and = matches!(id.name().as_ref(), "and" | "and_filters");
+                let initial = if is_and {
+                    Predicate::AlwaysTrue
+                } else {
+                    Predicate::AlwaysFalse
                 };
 
-                (false, predicate)
+                let mut uncertain = false;
+                let mut predicate = initial;
+                for arg in args {
+                    let (arg_uncertain, arg_predicate) = Self::build(arg);
+                    if !is_and && arg_uncertain {
+                        return (true, Predicate::AlwaysTrue);
+                    }
+                    uncertain |= arg_uncertain;
+                    predicate = if is_and {
+                        predicate.and(arg_predicate)
+                    } else {
+                        predicate.or(arg_predicate)
+                    };
+                }
+
+                (uncertain, predicate)
             }
 
             // binary {a op datum}
@@ -190,11 +191,11 @@ fn build_unary(r: Reference, op: &str) -> Option<Predicate> {
 fn build_binary(r: Reference, op: &str, datum: Datum) -> Option<Predicate> {
     let op = match op {
         "lt" | "<" => r.less_than(datum),
-        "le" | "<=" => r.less_than_or_equal_to(datum),
+        "le" | "lte" | "<=" => r.less_than_or_equal_to(datum),
         "gt" | ">" => r.greater_than(datum),
-        "ge" | ">=" => r.greater_than_or_equal_to(datum),
+        "ge" | "gte" | ">=" => r.greater_than_or_equal_to(datum),
         "eq" | "=" => r.equal_to(datum),
-        "ne" | "!=" => r.not_equal_to(datum),
+        "ne" | "noteq" | "!=" => r.not_equal_to(datum),
         _ => return None,
     };
     Some(op)
@@ -204,11 +205,11 @@ fn build_binary(r: Reference, op: &str, datum: Datum) -> Option<Predicate> {
 fn build_reverse_binary(r: Reference, op: &str, datum: Datum) -> Option<Predicate> {
     let op = match op {
         "lt" | "<" => r.greater_than(datum),
-        "le" | "<=" => r.greater_than_or_equal_to(datum),
+        "le" | "lte" | "<=" => r.greater_than_or_equal_to(datum),
         "gt" | ">" => r.less_than(datum),
-        "ge" | ">=" => r.less_than_or_equal_to(datum),
+        "ge" | "gte" | ">=" => r.less_than_or_equal_to(datum),
         "eq" | "=" => r.equal_to(datum),
-        "ne" | "!=" => r.not_equal_to(datum),
+        "ne" | "noteq" | "!=" => r.not_equal_to(datum),
         _ => return None,
     };
     Some(op)
@@ -237,4 +238,116 @@ fn scalar_to_datatum(scalar: &Scalar) -> Option<Datum> {
         _ => return None,
     };
     Some(val)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FunctionID;
+
+    use super::*;
+
+    fn column(name: &str, data_type: DataType) -> RemoteExpr<String> {
+        RemoteExpr::ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type,
+            display_name: name.to_string(),
+        }
+    }
+
+    fn constant(scalar: Scalar, data_type: DataType) -> RemoteExpr<String> {
+        RemoteExpr::Constant {
+            span: None,
+            scalar,
+            data_type,
+        }
+    }
+
+    fn function(name: &str, args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
+        RemoteExpr::FunctionCall {
+            span: None,
+            id: Box::new(FunctionID::Builtin {
+                name: name.to_string(),
+                id: 0,
+            }),
+            generics: vec![],
+            args,
+            return_type: DataType::Boolean,
+        }
+    }
+
+    fn string_eq(column_name: &str, value: &str) -> RemoteExpr<String> {
+        function("eq", vec![
+            column(column_name, DataType::String),
+            constant(Scalar::String(value.to_string()), DataType::String),
+        ])
+    }
+
+    #[test]
+    fn test_build_databend_comparison_names() {
+        let timestamp = 1_784_197_641_000_000;
+        let expr = function("gte", vec![
+            column("report_time", DataType::Timestamp),
+            constant(Scalar::Timestamp(timestamp), DataType::Timestamp),
+        ]);
+
+        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+
+        assert!(!uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("report_time")
+                .greater_than_or_equal_to(Datum::timestamp_micros(timestamp))
+        );
+    }
+
+    #[test]
+    fn test_and_keeps_supported_conjuncts() {
+        let unsupported = function("unsupported", vec![column(
+            "report_time",
+            DataType::Timestamp,
+        )]);
+        let event_name = string_eq("event_name", "game_end");
+        let expr = function("is_true", vec![function("and_filters", vec![
+            unsupported,
+            event_name,
+        ])]);
+
+        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+
+        assert!(uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("event_name").equal_to(Datum::string("game_end"))
+        );
+    }
+
+    #[test]
+    fn test_variadic_and_builds_all_conjuncts() {
+        let expr = function("is_true", vec![function("and_filters", vec![
+            string_eq("event_name", "game_end"),
+            string_eq("source_flag", "p7"),
+            string_eq("page", "home"),
+        ])]);
+
+        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+
+        assert!(!uncertain);
+        assert_ne!(predicate, Predicate::AlwaysTrue);
+    }
+
+    #[test]
+    fn test_or_drops_partial_predicate() {
+        let unsupported = function("unsupported", vec![column(
+            "report_time",
+            DataType::Timestamp,
+        )]);
+        let event_name = string_eq("event_name", "game_end");
+        let expr = function("or_filters", vec![unsupported, event_name]);
+
+        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+
+        assert!(uncertain);
+        assert_eq!(predicate, Predicate::AlwaysTrue);
+    }
 }

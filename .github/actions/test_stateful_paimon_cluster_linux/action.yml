@@ -1,0 +1,27 @@
+name: "Test Stateful Paimon Cluster Linux"
+description: "Running Paimon stateful tests in cluster mode"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+
+    - uses: actions/setup-java@v5
+      with:
+        distribution: "temurin"
+        java-version: "17"
+
+    - uses: astral-sh/setup-uv@v7
+
+    - name: Test setup
+      shell: bash
+      run: bash ./scripts/setup/dev_setup.sh -yd
+
+    - name: Run Paimon Stateful Tests with Cluster mode
+      shell: bash
+      run: bash ./scripts/ci/ci-run-stateful-paimon-tests-cluster.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-stateful-paimon-cluster-linux

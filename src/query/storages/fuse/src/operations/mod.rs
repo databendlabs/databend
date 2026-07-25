@@ -34,6 +34,7 @@ mod replace;
 mod replace_into;
 mod revert;
 mod snapshot_hint;
+mod stream_batch;
 mod table_index;
 mod truncate;
 mod util;

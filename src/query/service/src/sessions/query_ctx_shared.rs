@@ -49,7 +49,6 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -164,9 +163,6 @@ pub struct QueryContextShared {
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
-    // Used by hilbert clustering when do recluster.
-    pub(super) selected_segment_locs: SegmentLocationsState,
-
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
     pub(super) io_stats: Arc<IoStats>,
@@ -255,7 +251,6 @@ impl QueryContextShared {
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
-            selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             io_stats: Default::default(),
             broadcast_registry: Default::default(),
@@ -521,6 +516,8 @@ impl QueryContextShared {
                                     &source_database_name,
                                     &source_table_name,
                                     max_batch_size,
+                                    self.get_settings()
+                                        .get_enable_stream_batch_snapshot_forward_scan()?,
                                     self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;

@@ -6,6 +6,7 @@ FUSE FUSE Storage Engine
 ICEBERG ICEBERG Storage Engine
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
+PAIMON PAIMON Storage Engine
 PROXY PROXY Storage Engine
 RANDOM RANDOM Storage Engine
 STREAM STREAM Storage Engine

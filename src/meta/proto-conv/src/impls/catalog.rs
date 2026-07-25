@@ -87,6 +87,9 @@ impl FromToProto for mt::CatalogOption {
                 mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
             }
             pb::catalog_option::CatalogOption::Share(_v) => mt::CatalogOption::Default,
+            pb::catalog_option::CatalogOption::Paimon(v) => {
+                mt::CatalogOption::Paimon(mt::PaimonCatalogOption::from_pb(v)?)
+            }
         })
     }
 
@@ -96,6 +99,9 @@ impl FromToProto for mt::CatalogOption {
             mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb())),
             mt::CatalogOption::Iceberg(v) => {
                 Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()))
+            }
+            mt::CatalogOption::Paimon(v) => {
+                Some(pb::catalog_option::CatalogOption::Paimon(v.to_pb()))
             }
         };
 
@@ -322,6 +328,39 @@ impl FromToProto for mt::HiveCatalogOption {
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
             storage_params: self.storage_params.to_pb_opt(),
+        }
+    }
+}
+
+impl FromToProto for mt::PaimonCatalogOption {
+    type PB = pb::PaimonCatalogOption;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            options: p
+                .options
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
+    }
+
+    fn to_pb(&self) -> Self::PB {
+        pb::PaimonCatalogOption {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            options: self
+                .options
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         }
     }
 }

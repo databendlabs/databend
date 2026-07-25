@@ -57,7 +57,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -104,7 +103,6 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
-    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 
@@ -194,6 +192,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     match engine {
         Engine::Fuse => CREATE_FUSE_OPTIONS.contains(opt_key),
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
+        Engine::Paimon => opt_key == OPT_KEY_ENGINE,
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
         Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),

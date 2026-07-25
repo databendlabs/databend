@@ -1500,7 +1500,7 @@ impl ReclusterMutator {
             Some(self.cluster_key_id),
         );
 
-        ClusterStatistics::new(self.cluster_key_id, min_stats, max_stats, 0, None)
+        ClusterStatistics::new(self.cluster_key_id, min_stats, max_stats, 0)
     }
 
     /// Decide how to carry cluster statistics for a candidate block. When the

@@ -244,6 +244,27 @@ jobs:
         with:
           name: test-sqllogic-standalone-iceberg-tpch
 
+  standalone_paimon:
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_arch }}
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      - uses: ./.github/actions/test_sqllogic_paimon
+        timeout-minutes: 15
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-paimon
+
   cluster:
     runs-on:
       - self-hosted

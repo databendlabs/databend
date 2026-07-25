@@ -100,6 +100,7 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
+    Paimon,
 }
 
 impl Display for CatalogType {
@@ -108,6 +109,7 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
+            CatalogType::Paimon => write!(f, "PAIMON"),
         }
     }
 }

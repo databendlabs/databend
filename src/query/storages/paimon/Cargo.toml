@@ -1,0 +1,78 @@
+[package]
+name = "databend-common-storages-paimon"
+version = { workspace = true }
+edition = "2024"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+arrow-array = { workspace = true }
+arrow-cast = { workspace = true }
+arrow-schema = { workspace = true }
+async-backtrace = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-pipeline = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-users = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+educe = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+paimon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+typetag = { workspace = true }
+
+[features]
+storage-hdfs = ["paimon/storage-hdfs"]
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[[test]]
+name = "catalog"
+path = "tests/catalog.rs"
+
+[[test]]
+name = "connection_options"
+path = "tests/connection_options.rs"
+
+[[test]]
+name = "partition"
+path = "tests/partition.rs"
+
+[[test]]
+name = "predicate"
+path = "tests/predicate.rs"
+
+[[test]]
+name = "security"
+path = "tests/security.rs"
+
+[[test]]
+name = "system_tables"
+path = "tests/system_tables.rs"
+
+[[test]]
+name = "write_router"
+path = "tests/write_router.rs"
+
+[[test]]
+name = "write_pipeline"
+path = "tests/write_pipeline.rs"
+
+[lints]
+workspace = true

@@ -52,6 +52,7 @@ use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -83,11 +84,45 @@ struct SegmentWithHLL {
     block_metas: Vec<Arc<BlockMeta>>,
     origin_summary: Statistics,
     raw_block_hlls: Vec<RawBlockHLL>,
+    block_top_ns: Vec<BlockTopN>,
+    collect_top_n: bool,
 
     new_block_hlls: Vec<Option<BlockHLL>>,
     new_block_top_n: Vec<BlockTopN>,
     new_block_count_min_sketch: Vec<BlockCountMinSketch>,
     block_indexes: Vec<usize>,
+}
+
+fn empty_block_top_n(columns: &BTreeMap<FieldIndex, TableField>, capacity: usize) -> BlockTopN {
+    columns
+        .values()
+        .map(|field| (field.column_id(), ColumnTopN::with_capacity(capacity)))
+        .collect()
+}
+
+fn block_top_n_covers(
+    top_n: &BlockTopN,
+    columns: &BTreeMap<FieldIndex, TableField>,
+    capacity: usize,
+) -> bool {
+    columns.values().all(|field| {
+        top_n
+            .get(&field.column_id())
+            .is_some_and(|top_n| top_n.capacity == capacity)
+    })
+}
+
+fn project_block_top_n(top_n: &BlockTopN, columns: &BTreeMap<FieldIndex, TableField>) -> BlockTopN {
+    columns
+        .values()
+        .filter_map(|field| {
+            top_n
+                .get(&field.column_id())
+                .filter(|top_n| !top_n.values.is_empty())
+                .cloned()
+                .map(|top_n| (field.column_id(), top_n))
+        })
+        .collect()
 }
 
 fn split_block_stats(
@@ -115,6 +150,7 @@ enum State {
         segment_location: Location,
         segment_info: Arc<CompactSegmentInfo>,
         block_hlls: Vec<RawBlockHLL>,
+        block_top_ns: Vec<BlockTopN>,
     },
     BuildHLL,
     MergeHLL,
@@ -406,44 +442,62 @@ impl Processor for AnalyzeCollectNDVSource {
             State::CollectNDV {
                 segment_location,
                 segment_info,
-                block_hlls,
+                mut block_hlls,
+                mut block_top_ns,
             } => {
                 let block_count = segment_info.summary.block_count as usize;
+                block_hlls.resize(block_count, Vec::new());
                 let mut merged_hlls: HashMap<ColumnId, MetaHLL> = HashMap::new();
                 let collect_kll = !self.kll_columns_map.is_empty();
-                let collect_frequency_stats = (self.top_n_size.is_some()
-                    || self.count_min_sketch_error_rate.is_some())
+                let collect_top_n =
+                    self.top_n_size.is_some() && !self.frequency_columns_map.is_empty();
+                let collect_count_min_sketch = self.count_min_sketch_error_rate.is_some()
                     && !self.frequency_columns_map.is_empty();
-                let rescan_all_blocks = collect_kll || collect_frequency_stats;
+                let reuse_top_n = self.top_n_size.is_some_and(|capacity| {
+                    collect_top_n
+                        && block_top_ns.len() == block_count
+                        && block_top_ns.iter().all(|top_n| {
+                            block_top_n_covers(top_n, &self.frequency_columns_map, capacity)
+                        })
+                });
+                let rescan_all_blocks =
+                    collect_kll || collect_count_min_sketch || (collect_top_n && !reuse_top_n);
+                let refresh_top_n = collect_top_n && rescan_all_blocks;
                 let mut block_indexes = if rescan_all_blocks {
                     (0..block_count).collect()
                 } else {
                     Vec::new()
                 };
-                for (idx, data) in block_hlls.iter().enumerate() {
-                    let block_hll = decode_column_hll(data)?;
-                    if let Some(column_hlls) = &block_hll {
-                        if !collect_kll && !collect_frequency_stats {
-                            self.top_n = None;
-                            self.count_min_sketch = None;
-                        }
-                        if !rescan_all_blocks {
+                if !rescan_all_blocks && !self.ndv_columns_map.is_empty() {
+                    for (idx, data) in block_hlls.iter().enumerate() {
+                        if let Some(column_hlls) = decode_column_hll(data)? {
                             for (column_id, column_hll) in column_hlls.iter() {
                                 merged_hlls
                                     .entry(*column_id)
                                     .and_modify(|hll| hll.merge(column_hll))
                                     .or_insert_with(|| column_hll.clone());
                             }
+                        } else {
+                            block_indexes.push(idx);
                         }
-                    } else if !rescan_all_blocks {
-                        block_indexes.push(idx);
+                    }
+                }
+
+                if reuse_top_n && !refresh_top_n {
+                    if let Some(table_top_n) = &mut self.top_n {
+                        for block_top_n in &block_top_ns {
+                            let top_n =
+                                project_block_top_n(block_top_n, &self.frequency_columns_map);
+                            merge_column_top_n_mut(table_top_n, top_n)?;
+                        }
                     }
                 }
 
                 if !block_indexes.is_empty()
                     && self.no_scan
                     && !collect_kll
-                    && !collect_frequency_stats
+                    && !collect_top_n
+                    && !collect_count_min_sketch
                 {
                     self.unstats_rows += segment_info.summary.row_count;
                     self.state = State::ReadData(None);
@@ -458,16 +512,19 @@ impl Processor for AnalyzeCollectNDVSource {
                 }
                 self.row_count += segment_info.summary.row_count;
 
-                if block_indexes.is_empty() && !collect_kll && !collect_frequency_stats {
+                if block_indexes.is_empty() {
                     self.state = State::ReadData(None);
                 } else {
                     assert!(self.segment_with_hll.is_none());
                     let new_hlls = Vec::with_capacity(block_indexes.len());
+                    block_top_ns.resize(block_count, HashMap::new());
                     self.segment_with_hll = Some(SegmentWithHLL {
                         segment_location,
                         block_metas: segment_info.block_metas()?,
                         origin_summary: segment_info.summary.clone(),
                         raw_block_hlls: block_hlls,
+                        block_top_ns,
+                        collect_top_n: refresh_top_n,
                         new_block_hlls: new_hlls,
                         new_block_top_n: Vec::with_capacity(block_indexes.len()),
                         new_block_count_min_sketch: Vec::with_capacity(block_indexes.len()),
@@ -483,7 +540,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let new_count_min_sketch =
                     std::mem::take(&mut segment_with_hll.new_block_count_min_sketch);
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for (((new, mut top_n), count_min_sketch), idx) in new_hlls
+                for (((new, top_n), count_min_sketch), idx) in new_hlls
                     .into_iter()
                     .zip(new_top_n.into_iter())
                     .zip(new_count_min_sketch.into_iter())
@@ -498,12 +555,12 @@ impl Processor for AnalyzeCollectNDVSource {
                         }
                         segment_with_hll.raw_block_hlls[idx] = encode_column_hll(&column_hlls)?;
                     }
-                    if let (Some(block_top_n), Some(top_n_size)) =
-                        (&mut self.top_n, self.top_n_size)
-                    {
-                        let dropped_top_n_columns = &self.dropped_top_n_columns;
-                        top_n.retain(|column_id, _| !dropped_top_n_columns.contains(column_id));
-                        merge_column_top_n_mut(block_top_n, top_n, top_n_size);
+                    if segment_with_hll.collect_top_n {
+                        if let Some(block_top_n) = &mut self.top_n {
+                            let top_n = project_block_top_n(&top_n, &self.frequency_columns_map);
+                            merge_column_top_n_mut(block_top_n, top_n)?;
+                        }
+                        segment_with_hll.block_top_ns[idx] = top_n;
                     }
                     if let Some(block_count_min_sketch) = &mut self.count_min_sketch {
                         merge_column_count_min_sketch_mut(block_count_min_sketch, count_min_sketch);
@@ -541,26 +598,32 @@ impl Processor for AnalyzeCollectNDVSource {
                 }
 
                 let block_count = compact_segment_info.summary.block_count as usize;
-                let block_hlls = match compact_segment_info.summary.additional_stats_loc() {
-                    Some((path, ver)) => {
-                        let load_param = LoadParams {
-                            location: path,
-                            len_hint: None,
-                            ver,
-                            put_cache: true,
-                        };
-                        let stats = self.stats_reader.read(&load_param).await?;
-                        stats.block_hlls.clone()
-                    }
-                    _ => vec![vec![]; block_count],
-                };
+                let (block_hlls, block_top_ns) =
+                    match compact_segment_info.summary.additional_stats_loc() {
+                        Some((path, ver)) => {
+                            let load_param = LoadParams {
+                                location: path,
+                                len_hint: None,
+                                ver,
+                                put_cache: true,
+                            };
+                            let stats = self.stats_reader.read(&load_param).await?;
+                            (stats.block_hlls.clone(), stats.block_top_ns.clone())
+                        }
+                        _ => (vec![vec![]; block_count], Vec::new()),
+                    };
                 self.state = State::CollectNDV {
                     segment_location: part.segment_location.clone(),
                     segment_info: compact_segment_info,
                     block_hlls,
+                    block_top_ns,
                 };
             }
             State::BuildHLL => {
+                let collect_top_n = self.segment_with_hll.as_ref().unwrap().collect_top_n;
+                let block_top_n_template = collect_top_n.then(|| {
+                    empty_block_top_n(&self.frequency_columns_map, self.top_n_size.unwrap())
+                });
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let runtime = GlobalIORuntime::instance();
                 let mut handlers = Vec::with_capacity(segment_with_hll.block_indexes.len());
@@ -574,7 +637,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     let frequency_columns_map = self.frequency_columns_map.clone();
                     let kll_columns_map = self.kll_columns_map.clone();
                     let histogram_info = self.histogram_info;
-                    let top_n_size = self.top_n_size;
+                    let top_n_size = collect_top_n.then_some(self.top_n_size).flatten();
                     let count_min_sketch_error_rate = self.count_min_sketch_error_rate;
                     let count_min_sketch = count_min_sketch_error_rate
                         .map(|error_rate| (frequency_columns_map.clone(), error_rate));
@@ -613,8 +676,13 @@ impl Processor for AnalyzeCollectNDVSource {
                 let mut new_top_n = Vec::with_capacity(block_stats.len());
                 let mut new_count_min_sketch = Vec::with_capacity(block_stats.len());
                 for (column_hlls, kll_histograms) in block_stats {
-                    let (hll, top_n, count_min_sketch, dropped_top_n) =
+                    let (hll, mut top_n, count_min_sketch, dropped_top_n) =
                         split_block_stats(column_hlls);
+                    if let Some(template) = &block_top_n_template {
+                        let mut complete_top_n = template.clone();
+                        merge_column_top_n_mut(&mut complete_top_n, top_n)?;
+                        top_n = complete_top_n;
+                    }
                     for column_id in dropped_top_n {
                         self.dropped_top_n_columns.insert(column_id);
                         if let Some(top_n) = &mut self.top_n {
@@ -637,6 +705,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     && new_count_min_sketch
                         .iter()
                         .all(|count_min_sketch| count_min_sketch.is_empty())
+                    && !collect_top_n
                 {
                     self.segment_with_hll = None;
                     self.state = State::ReadData(None);
@@ -653,11 +722,12 @@ impl Processor for AnalyzeCollectNDVSource {
                     block_metas,
                     mut origin_summary,
                     raw_block_hlls,
+                    block_top_ns,
                     ..
                 } = std::mem::take(&mut self.segment_with_hll).unwrap();
 
                 let segment_loc = segment_location.0.as_str();
-                let data = SegmentStatistics::new(raw_block_hlls).to_bytes()?;
+                let data = SegmentStatistics::new(raw_block_hlls, block_top_ns).to_bytes()?;
                 let size = data.len() as u64;
                 let segment_stats_location =
                     TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
@@ -751,6 +821,7 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
 
     use super::*;
 
@@ -792,5 +863,56 @@ mod tests {
         assert_eq!(top_n.len(), 1);
         assert_eq!(count_min_sketch.len(), 1);
         assert_eq!(dropped_top_n, vec![7]);
+    }
+
+    #[test]
+    fn block_top_n_coverage_requires_every_requested_column() {
+        let columns = BTreeMap::from([
+            (
+                0,
+                TableField::new_from_column_id(
+                    "a",
+                    TableDataType::Number(NumberDataType::Int32),
+                    10,
+                ),
+            ),
+            (
+                1,
+                TableField::new_from_column_id(
+                    "b",
+                    TableDataType::Number(NumberDataType::Int32),
+                    20,
+                ),
+            ),
+        ]);
+        let top_n = HashMap::from([
+            (10, ColumnTopN::with_capacity(8)),
+            (20, ColumnTopN::with_capacity(8)),
+        ]);
+
+        assert!(block_top_n_covers(&top_n, &columns, 8));
+        assert!(!block_top_n_covers(&top_n, &columns, 4));
+
+        let missing_column = HashMap::from([(10, ColumnTopN::with_capacity(8))]);
+        assert!(!block_top_n_covers(&missing_column, &columns, 8));
+    }
+
+    #[test]
+    fn project_block_top_n_ignores_empty_and_unrequested_entries() {
+        let columns = BTreeMap::from([(
+            0,
+            TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::Int32), 10),
+        )]);
+        let mut requested = ColumnTopN::with_capacity(8);
+        requested.add(
+            databend_common_expression::Scalar::Number(NumberScalar::Int32(1)).as_ref(),
+            3,
+        );
+        let top_n = HashMap::from([(10, requested.clone()), (20, ColumnTopN::with_capacity(8))]);
+
+        assert_eq!(
+            project_block_top_n(&top_n, &columns),
+            HashMap::from([(10, requested)])
+        );
     }
 }

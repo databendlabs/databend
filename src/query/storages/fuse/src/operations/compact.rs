@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
@@ -26,9 +25,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::meta::Versioned;
 
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
@@ -105,26 +102,10 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
-        let base_segments = &base_snapshot.segments;
-        let final_segments_set: HashSet<&_> = compaction.segments_locations.iter().collect();
-
-        let removed_segment_indexes: Vec<usize> = base_segments
-            .iter()
-            .enumerate()
-            .filter(|(_, loc)| !final_segments_set.contains(loc))
-            .map(|(idx, _)| idx)
-            .collect();
-
-        let appended_segments: Vec<_> = compaction
-            .new_segment_paths
-            .iter()
-            .map(|p| (p.clone(), SegmentInfo::VERSION))
-            .collect();
-
         let snapshot_changes = SnapshotChanges {
-            appended_segments,
-            replaced_segments: HashMap::new(),
-            removed_segment_indexes,
+            appended_segments: vec![],
+            replaced_segments: compaction.replaced_segments,
+            removed_segment_indexes: compaction.removed_segment_indexes,
             merged_statistics: compaction.removed_statistics.clone(),
             removed_statistics: compaction.removed_statistics,
         };
@@ -136,8 +117,10 @@ impl FuseTable {
             vec![],
             self.get_id(),
             0,
+            0,
             None,
             VirtualSchemaMode::Merge,
+            HashMap::new(),
             HashMap::new(),
         );
         let block = DataBlock::empty_with_meta(Box::new(meta));

@@ -190,7 +190,6 @@ impl AsyncSource for StreamBacklogDataSource {
             UInt64Type::from_data(vec![backlog.rows_added]),
             UInt64Type::from_data(vec![backlog.rows_removed]),
             UInt64Type::from_data(vec![backlog.estimated_rows]),
-            UInt64Type::from_data(vec![backlog.estimated_bytes]),
         ])))
     }
 }
@@ -204,10 +203,6 @@ fn schema() -> Arc<TableSchema> {
         ),
         TableField::new(
             "estimated_rows",
-            TableDataType::Number(NumberDataType::UInt64),
-        ),
-        TableField::new(
-            "estimated_bytes",
             TableDataType::Number(NumberDataType::UInt64),
         ),
     ])

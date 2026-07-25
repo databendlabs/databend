@@ -22,8 +22,6 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::*;
-use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -71,7 +69,6 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         table: fixture.default_table_name(),
         branch: None,
         cluster_keys: vec!["id".to_string()],
-        cluster_type: "linear".to_string(),
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
@@ -84,10 +81,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         Some((1, "(id)".to_string()))
     );
     assert_eq!(table_info.meta.cluster_key_seq, 1);
-    assert_eq!(
-        table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE).unwrap(),
-        LINEAR_CLUSTER_TYPE
-    );
+    assert!(!table_info.meta.options.contains_key("cluster_type"));
 
     // drop cluster key
     let drop_table_cluster_key_plan = DropTableClusterKeyPlan {

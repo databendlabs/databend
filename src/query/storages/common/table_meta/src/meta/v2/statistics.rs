@@ -70,7 +70,10 @@ pub struct ClusterStatistics {
     pub max: Vec<Scalar>,
     pub level: i32,
 
+    // Page pruning has been removed, but this field must remain in the persisted wire format so
+    // binaries released before its removal can still deserialize newly written metadata.
     #[serde(
+        default,
         serialize_with = "serialize_index_scalar_option_vec",
         deserialize_with = "deserialize_index_scalar_option_vec"
     )]
@@ -334,19 +337,13 @@ impl ColumnStatistics {
 }
 
 impl ClusterStatistics {
-    pub fn new(
-        cluster_key_id: u32,
-        min: Vec<Scalar>,
-        max: Vec<Scalar>,
-        level: i32,
-        pages: Option<Vec<Scalar>>,
-    ) -> Self {
+    pub fn new(cluster_key_id: u32, min: Vec<Scalar>, max: Vec<Scalar>, level: i32) -> Self {
         Self {
             cluster_key_id,
             min,
             max,
             level,
-            pages,
+            pages: None,
         }
     }
 
@@ -622,5 +619,48 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
         }
 
         Ok(map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(serde::Serialize)]
+    struct ClusterStatisticsWithoutPages {
+        cluster_key_id: u32,
+        #[serde(serialize_with = "serialize_index_scalar_vec")]
+        min: Vec<Scalar>,
+        #[serde(serialize_with = "serialize_index_scalar_vec")]
+        max: Vec<Scalar>,
+        level: i32,
+    }
+
+    #[test]
+    fn writes_pages_for_legacy_readers() {
+        let stats = ClusterStatistics::new(
+            7,
+            vec![Scalar::Number(1_i64.into())],
+            vec![Scalar::Number(9_i64.into())],
+            2,
+        );
+        let bytes = rmp_serde::to_vec_named(&stats).unwrap();
+        let value: serde_json::Value = rmp_serde::from_slice(&bytes).unwrap();
+
+        assert_eq!(value.get("pages"), Some(&serde_json::Value::Null));
+    }
+
+    #[test]
+    fn reads_cluster_statistics_written_without_pages() {
+        let stats = ClusterStatisticsWithoutPages {
+            cluster_key_id: 7,
+            min: vec![Scalar::Number(1_i64.into())],
+            max: vec![Scalar::Number(9_i64.into())],
+            level: 2,
+        };
+        let bytes = rmp_serde::to_vec_named(&stats).unwrap();
+        let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
+
+        assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
     }
 }

@@ -76,6 +76,8 @@ use tokio::time::sleep as tokio_async_sleep;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
+use crate::servers::flight::FlightOperation;
+use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 
 pub struct ClusterDiscovery {
@@ -185,15 +187,20 @@ impl ClusterHelper for Cluster {
             let do_action_with_retry = {
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
+                let node_id = node.id.clone();
                 let node_secret = node.secret.clone();
 
                 async move {
                     let mut attempt = 0;
 
                     loop {
-                        let mut conn =
-                            create_client(&config, &flight_address, flight_params.keep_alive)
-                                .await?;
+                        let mut conn = create_client(
+                            &config,
+                            &node_id,
+                            &flight_address,
+                            flight_params.keep_alive,
+                        )
+                        .await?;
                         match conn
                             .do_action::<_, Res>(
                                 path,
@@ -325,6 +332,7 @@ impl ClusterDiscovery {
                         let start_at = Instant::now();
                         if let Err(cause) = create_client(
                             config,
+                            &node.id,
                             &node.flight_address,
                             FlightKeepAliveParams::default(),
                         )
@@ -986,6 +994,7 @@ impl ClusterHeartbeat {
 #[async_backtrace::framed]
 pub async fn create_client(
     config: &InnerConfig,
+    remote_node_id: &str,
     address: &str,
     keep_alive: FlightKeepAliveParams,
 ) -> Result<FlightClient> {
@@ -1004,15 +1013,27 @@ pub async fn create_client(
     };
     let keep_alive_config = build_keep_alive_config(keep_alive);
 
-    Ok(FlightClient::new(FlightServiceClient::new(
-        ConnectionFactory::create_rpc_channel(
-            address.to_owned(),
-            timeout,
-            rpc_tls_config,
-            keep_alive_config,
+    let channel = ConnectionFactory::create_rpc_channel(
+        address.to_owned(),
+        timeout,
+        rpc_tls_config,
+        keep_alive_config,
+    )
+    .await
+    .map_err(|error| {
+        add_flight_error_context(
+            ErrorCode::from(error),
+            FlightOperation::Connect,
+            &config.query.node_id,
+            remote_node_id,
         )
-        .await?,
-    )))
+    })?;
+
+    Ok(FlightClient::new(
+        FlightServiceClient::new(channel),
+        &config.query.node_id,
+        remote_node_id,
+    ))
 }
 
 #[derive(Clone, Copy, Debug)]

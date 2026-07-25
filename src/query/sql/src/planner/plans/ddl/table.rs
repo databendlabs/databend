@@ -536,7 +536,6 @@ pub struct AlterTableClusterKeyPlan {
     pub table: String,
     pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
-    pub cluster_type: String,
 }
 
 impl AlterTableClusterKeyPlan {

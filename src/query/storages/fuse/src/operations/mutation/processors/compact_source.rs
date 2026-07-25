@@ -206,6 +206,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     index,
                     ClusterStatsGenType::Generally,
                     0,
+                    0,
                     None,
                 )));
                 let new_block = block.add_meta(Some(meta))?;

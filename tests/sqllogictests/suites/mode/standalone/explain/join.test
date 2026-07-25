@@ -1026,6 +1026,36 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 4.00
 
+# The filter estimates the table side at zero rows, so join commutation places the
+# precise-one-row aggregate on Probe. Keep this no-equi join on HashJoin, not RangeJoin.
+query T
+EXPLAIN SELECT * FROM (SELECT MAX(a) AS a FROM t2) AS s, t1 WHERE s.a <= t1.a AND t1.a > 100;
+----
+HashJoin
+├── output columns: [MAX(a) (#1), t1.a (#2)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [s.a (#1) <= t1.a (#2)]
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t1
+│   ├── scan id: 1
+│   ├── output columns: [a (#2)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t1.a (#2) > 100)], limit: NONE]
+│   └── estimated rows: 0.00
+└── EvalScalar(Probe)
+    ├── output columns: [MAX(a) (#1)]
+    ├── expressions: [1]
+    ├── estimated rows: 1.00
+    └── DummyTableScan
+
 query T
 EXPLAIN SELECT * FROM t1 JOIN t3 ON t1.a = t3.a;
 ----

@@ -54,7 +54,12 @@ pub enum ClusterStatsGenType {
 pub struct SerializeBlock {
     pub index: BlockMetaIndex,
     pub stats_type: ClusterStatsGenType,
-    pub insert_rows: u64,
+    /// Rows affected by the logical UPDATE operation.
+    #[serde(default)]
+    pub logical_updated_rows: u64,
+    #[serde(default)]
+    pub logical_deleted_rows: u64,
+    #[serde(default)]
     pub origin_block_meta: Option<Arc<BlockMeta>>,
 }
 
@@ -62,13 +67,15 @@ impl SerializeBlock {
     pub fn create(
         index: BlockMetaIndex,
         stats_type: ClusterStatsGenType,
-        insert_rows: u64,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
         origin_block_meta: Option<Arc<BlockMeta>>,
     ) -> Self {
         SerializeBlock {
             index,
             stats_type,
-            insert_rows,
+            logical_updated_rows,
+            logical_deleted_rows,
             origin_block_meta,
         }
     }

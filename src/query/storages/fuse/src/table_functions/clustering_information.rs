@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -35,9 +34,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::parse_cluster_keys;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::table::ClusterType;
 use jsonb::Value as JsonbValue;
 use serde::Deserialize;
 use serde::Serialize;
@@ -156,8 +153,7 @@ impl<'a> ClusteringInformationImpl<'a> {
         &self,
         cluster_key: &Option<String>,
     ) -> Result<ClusteringInformationResponse> {
-        match (self.table.cluster_type(), cluster_key) {
-            (Some(ClusterType::Hilbert), None) => self.get_hilbert_clustering_info().await,
+        match (self.table.cluster_key_meta(), cluster_key) {
             (None, None) => Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table {}",
                 self.table.table_info.desc,
@@ -338,87 +334,6 @@ impl<'a> ClusteringInformationImpl<'a> {
         })
     }
 
-    #[async_backtrace::framed]
-    async fn get_hilbert_clustering_info(&self) -> Result<ClusteringInformationResponse> {
-        let Some((cluster_key_id, cluster_key_str)) = self.table.cluster_key_meta() else {
-            unreachable!("Unclustered table {}", self.table.table_info.desc);
-        };
-
-        let snapshot = self.table.read_table_snapshot().await?;
-        let now = Utc::now();
-        let timestamp = snapshot
-            .as_ref()
-            .map_or(now, |s| s.timestamp.unwrap_or(now))
-            .timestamp_micros();
-        let mut total_segment_count = 0;
-        let mut total_block_count = 0;
-        let mut stable_segment_count = 0;
-        let mut stable_block_count = 0;
-        let mut partial_segment_count = 0;
-        let mut partial_block_count = 0;
-        let mut unclustered_segment_count = 0;
-        let mut unclustered_block_count = 0;
-        if let Some(snapshot) = snapshot {
-            let total_count = snapshot.segments.len();
-            total_segment_count = total_count as u64;
-            total_block_count = snapshot.summary.block_count;
-            let chunk_size = cmp::min(
-                self.ctx.get_settings().get_max_threads()? as usize * 4,
-                total_count,
-            )
-            .max(1);
-            let segments_io = SegmentsIO::create(
-                self.ctx.clone(),
-                self.table.operator.clone(),
-                self.table.schema(),
-            );
-            for chunk in snapshot.segments.chunks(chunk_size) {
-                let segments = segments_io
-                    .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
-                    .await?;
-                for segment in segments {
-                    let segment = segment?;
-                    if segment
-                        .summary
-                        .cluster_stats
-                        .as_ref()
-                        .is_none_or(|v| v.cluster_key_id != cluster_key_id)
-                    {
-                        unclustered_segment_count += 1;
-                        unclustered_block_count += segment.summary.block_count;
-                        continue;
-                    }
-                    let level = segment.summary.cluster_stats.as_ref().unwrap().level;
-                    if level == -1 {
-                        stable_block_count += segment.summary.block_count;
-                        stable_segment_count += 1;
-                    } else {
-                        partial_block_count += segment.summary.block_count;
-                        partial_segment_count += 1;
-                    }
-                }
-            }
-        }
-
-        let info = HilbertClusterStatistics {
-            total_segment_count,
-            stable_segment_count,
-            partial_segment_count,
-            unclustered_segment_count,
-            total_block_count,
-            stable_block_count,
-            partial_block_count,
-            unclustered_block_count,
-        };
-
-        Ok(ClusteringInformationResponse {
-            cluster_key: cluster_key_str.to_string(),
-            cluster_type: "hilbert".to_string(),
-            timestamp,
-            info: serde_json::to_value(info)?,
-        })
-    }
-
     fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("cluster_key", TableDataType::String),
@@ -453,18 +368,6 @@ struct LinerClusterStatistics {
     p95_depth: usize,
     p99_depth: usize,
     block_depth_histogram: BTreeMap<String, u64>,
-}
-
-#[derive(Serialize)]
-struct HilbertClusterStatistics {
-    total_segment_count: u64,
-    stable_segment_count: u64,
-    partial_segment_count: u64,
-    unclustered_segment_count: u64,
-    total_block_count: u64,
-    stable_block_count: u64,
-    partial_block_count: u64,
-    unclustered_block_count: u64,
 }
 
 /// The histogram contains buckets with widths:

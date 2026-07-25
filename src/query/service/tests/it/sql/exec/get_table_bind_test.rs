@@ -545,10 +545,6 @@ impl TableContext for CtxDelegation {
         self.ctx.written_segment_locations()
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.selected_segment_locations()
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

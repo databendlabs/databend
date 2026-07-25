@@ -47,8 +47,6 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::ClusterType;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
@@ -136,16 +134,6 @@ pub trait Table: Sync + Send {
 
     fn cluster_key_meta(&self) -> Option<ClusterKey> {
         None
-    }
-
-    fn cluster_type(&self) -> Option<ClusterType> {
-        self.cluster_key_meta()?;
-        let cluster_type = self
-            .options()
-            .get(OPT_KEY_CLUSTER_TYPE)
-            .and_then(|s| s.parse::<ClusterType>().ok())
-            .unwrap_or(ClusterType::Linear);
-        Some(cluster_type)
     }
 
     fn resolve_cluster_keys(&self) -> Option<Vec<Expr>> {

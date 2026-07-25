@@ -9,6 +9,7 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 | 'ICEBERG' | 'ICEBERG Storage Engine'      |
 | 'MEMORY'  | 'MEMORY Storage Engine'       |
 | 'NULL'    | 'NULL Storage Engine'         |
+| 'PAIMON'  | 'PAIMON Storage Engine'       |
 | 'PROXY'   | 'PROXY Storage Engine'        |
 | 'RANDOM'  | 'RANDOM Storage Engine'       |
 | 'STREAM'  | 'STREAM Storage Engine'       |

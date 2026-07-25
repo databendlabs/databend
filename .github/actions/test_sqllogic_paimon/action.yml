@@ -1,0 +1,48 @@
+name: "Test sqllogic Paimon"
+description: "Running Paimon sqllogic tests against MinIO"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: sqllogictests,meta,query
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Prepare Paimon on MinIO
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: admin
+        AWS_SECRET_ACCESS_KEY: password
+        AWS_EC2_METADATA_DISABLED: true
+        PAIMON_WAREHOUSE: s3://paimon/warehouse
+        PAIMON_S3_ENDPOINT: http://127.0.0.1:9002
+        PAIMON_S3_ACCESS_KEY: admin
+        PAIMON_S3_SECRET_KEY: password
+      run: |
+        docker compose -f tests/sqllogictests/scripts/docker-compose-paimon.yml up -d
+        for i in $(seq 1 30); do
+          curl -sf http://127.0.0.1:9002/minio/health/live && break
+          echo "Waiting for MinIO... ($i)"
+          sleep 2
+        done
+        curl -sf http://127.0.0.1:9002/minio/health/live
+        aws --endpoint-url http://127.0.0.1:9002 s3 mb s3://paimon
+        uv run --script tests/sqllogictests/scripts/prepare_paimon_fs_data.py
+        # paimon-rust 0.2.0 checks directory paths as exact S3 keys.
+        for path in regression.db regression.db/{write_append,write_append_part,write_pk,write_pk_part}; do
+          aws --endpoint-url http://127.0.0.1:9002 s3api put-object \
+            --bucket paimon --key "warehouse/${path}"
+        done
+
+    - name: Run Paimon sqllogic tests
+      shell: bash
+      env:
+        TEST_HANDLERS: http
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh paimon
+
+    - name: Stop MinIO
+      if: always()
+      shell: bash
+      run: docker compose -f tests/sqllogictests/scripts/docker-compose-paimon.yml down -v

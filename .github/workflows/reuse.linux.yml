@@ -349,6 +349,23 @@ jobs:
       - uses: ./.github/actions/test_stateless_cluster_linux
         timeout-minutes: 25
 
+  test_stateful_paimon_cluster:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_stateful_paimon_cluster_linux
+        timeout-minutes: 25
+
   test_stateful_standalone:
     needs: [build, check]
     runs-on:

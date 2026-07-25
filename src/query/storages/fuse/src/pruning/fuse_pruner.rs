@@ -24,7 +24,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -44,14 +43,11 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
-use databend_storages_common_pruner::PagePruner;
-use databend_storages_common_pruner::PagePrunerCreator;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -90,7 +86,6 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
-    pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
@@ -107,8 +102,6 @@ impl PruningContext {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -187,15 +180,6 @@ impl PruningContext {
             )?
         };
 
-        // Page pruner, used in native format
-        let page_pruner = PagePrunerCreator::try_create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            cluster_key_meta,
-            cluster_keys,
-        )?;
-
         // inverted index pruner, used to search matched rows in block
         let inverted_index_pruner = if lightweight_pruning {
             None
@@ -245,7 +229,6 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
-            page_pruner,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
@@ -279,40 +262,11 @@ impl FusePruner {
         spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        Self::create_with_pages_and_options(
+        Self::create_with_options(
             ctx,
             dal,
             table_schema,
             push_down,
-            None,
-            vec![],
-            bloom_index_cols,
-            ngram_args,
-            spatial_index_columns,
-            bloom_index_builder,
-        )
-    }
-
-    // Create fuse pruner with pages.
-    pub fn create_with_pages(
-        ctx: &Arc<dyn TableContext>,
-        dal: Operator,
-        table_schema: TableSchemaRef,
-        push_down: &Option<PushDownInfo>,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_keys: Vec<RemoteExpr<String>>,
-        bloom_index_cols: BloomIndexColumns,
-        ngram_args: Vec<NgramArgs>,
-        spatial_index_columns: HashSet<ColumnId>,
-        bloom_index_builder: Option<BloomIndexRebuilder>,
-    ) -> Result<Self> {
-        Self::create_with_pages_and_options(
-            ctx,
-            dal,
-            table_schema,
-            push_down,
-            cluster_key_meta,
-            cluster_keys,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -321,13 +275,11 @@ impl FusePruner {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_with_pages_and_options(
+    fn create_with_options(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -356,8 +308,6 @@ impl FusePruner {
             dal,
             table_schema.clone(),
             push_down,
-            cluster_key_meta,
-            cluster_keys,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,

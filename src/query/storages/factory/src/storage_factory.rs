@@ -29,6 +29,7 @@ use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_common_storages_basic::view_table::ViewTable;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_paimon::PaimonTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 
 use crate::Table;
@@ -178,6 +179,12 @@ impl StorageFactory {
         creators.insert("DELTA".to_string(), Storage {
             creator: Arc::new(DeltaTable::try_create),
             descriptor: Arc::new(DeltaTable::description),
+        });
+
+        // Register PAIMON table engine
+        creators.insert("PAIMON".to_string(), Storage {
+            creator: Arc::new(PaimonTable::try_create),
+            descriptor: Arc::new(PaimonTable::description),
         });
 
         StorageFactory { storages: creators }

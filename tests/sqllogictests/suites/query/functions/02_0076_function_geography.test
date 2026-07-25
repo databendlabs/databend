@@ -132,7 +132,7 @@ SELECT st_x(st_geogfromwkt('POINT(37.5 45.5)')), st_y(st_geogfromwkt('POINT(37.5
 ----
 37.5 45.5
 
-query ?
+query RR
 SELECT st_x(st_geogfromwkt(NULL)), st_y(st_geogfromwkt(NULL));
 ----
 NULL NULL

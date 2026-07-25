@@ -139,40 +139,13 @@ impl Display for ShowDropTablesStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
-pub enum ClusterType {
-    Linear,
-    Hilbert,
-}
-
-impl Display for ClusterType {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ClusterType::Linear => write!(f, "LINEAR"),
-            ClusterType::Hilbert => write!(f, "HILBERT"),
-        }
-    }
-}
-
-impl std::str::FromStr for ClusterType {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "linear" => Ok(ClusterType::Linear),
-            "hilbert" => Ok(ClusterType::Hilbert),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ClusterOption {
-    pub cluster_type: ClusterType,
     pub cluster_exprs: Vec<Expr>,
 }
 
 impl Display for ClusterOption {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CLUSTER BY {}(", self.cluster_type)?;
+        write!(f, "CLUSTER BY (")?;
         write_comma_separated_list(f, &self.cluster_exprs)?;
         write!(f, ")")
     }
@@ -910,6 +883,7 @@ pub enum Engine {
     Random,
     Iceberg,
     Delta,
+    Paimon,
     Proxy,
 }
 
@@ -923,6 +897,7 @@ impl Display for Engine {
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
             Engine::Delta => write!(f, "DELTA"),
+            Engine::Paimon => write!(f, "PAIMON"),
             Engine::Proxy => write!(f, "PROXY"),
         }
     }
@@ -938,6 +913,7 @@ impl From<&str> for Engine {
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
             "delta" => Engine::Delta,
+            "paimon" => Engine::Paimon,
             "proxy" => Engine::Proxy,
             _ => unreachable!("invalid engine: {}", s),
         }

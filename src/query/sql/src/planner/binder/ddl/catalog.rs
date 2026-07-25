@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IcebergStorageCatalogOption;
+use databend_common_meta_app::schema::PaimonCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::BindContext;
@@ -176,6 +177,10 @@ impl Binder {
                 let opt = parse_iceberg_rest_catalog(options.clone())?;
                 CatalogOption::Iceberg(opt)
             }
+            CatalogType::Paimon => {
+                let opt = parse_paimon_catalog(options.clone())?;
+                CatalogOption::Paimon(opt)
+            }
         };
 
         Ok(CatalogMeta {
@@ -280,4 +285,29 @@ fn parse_iceberg_rest_catalog(
     };
 
     Ok(option)
+}
+
+fn parse_paimon_catalog(mut options: BTreeMap<String, String>) -> Result<PaimonCatalogOption> {
+    let metastore = options
+        .remove("metastore")
+        .unwrap_or_else(|| "filesystem".to_string())
+        .to_lowercase();
+    if !matches!(metastore.as_str(), "filesystem" | "rest") {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "paimon catalog metastore {metastore} is not supported"
+        )));
+    }
+    let warehouse = options.remove("warehouse").ok_or_else(|| {
+        ErrorCode::InvalidArgument("warehouse for paimon catalog is not specified")
+    })?;
+    if metastore == "rest" && !options.contains_key("uri") {
+        return Err(ErrorCode::InvalidArgument(
+            "uri for paimon rest catalog is not specified",
+        ));
+    }
+    options.insert("metastore".to_string(), metastore);
+    options.insert("warehouse".to_string(), warehouse);
+    Ok(PaimonCatalogOption {
+        options: options.into_iter().collect(),
+    })
 }

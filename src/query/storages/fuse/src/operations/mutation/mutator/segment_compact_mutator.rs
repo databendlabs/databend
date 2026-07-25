@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -43,6 +44,10 @@ pub struct SegmentCompactionState {
     pub segments_locations: Vec<Location>,
     // paths of all the newly created segments (which are compacted), need this to rollback the compaction
     pub new_segment_paths: Vec<String>,
+    // base segment indexes to be replaced by compacted segments.
+    pub replaced_segments: HashMap<usize, Location>,
+    // base segment indexes removed by segment compaction.
+    pub removed_segment_indexes: Vec<usize>,
     // number of fragmented segments compacted
     pub num_fragments_compacted: usize,
     // statistics of segments that were consumed by compaction
@@ -95,7 +100,14 @@ impl SegmentCompactMutator {
     pub async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
-        let mut base_segment_locations = self.compact_params.base_snapshot.segments.clone();
+        let mut base_segment_locations = self
+            .compact_params
+            .base_snapshot
+            .segments
+            .iter()
+            .cloned()
+            .enumerate()
+            .collect::<Vec<_>>();
         if base_segment_locations.len() <= 1 {
             // no need to compact
             return Ok(false);
@@ -157,7 +169,7 @@ pub struct SegmentCompactor<'a> {
     threshold: u64,
     default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(SegmentInfo, Location)>,
+    fragmented_segments: Vec<(usize, SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -197,7 +209,7 @@ impl<'a> SegmentCompactor<'a> {
     #[async_backtrace::framed]
     pub async fn compact<T>(
         mut self,
-        reverse_locations: Vec<Location>,
+        reverse_locations: Vec<(usize, Location)>,
         limit: usize,
         status_callback: T,
     ) -> Result<SegmentCompactionState>
@@ -212,26 +224,32 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
+            let chunk_locations = chunk
+                .iter()
+                .map(|(_, location)| location.clone())
+                .collect::<Vec<_>>();
             let mut segment_infos = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
+                .read_segments::<SegmentInfo>(&chunk_locations, false)
                 .await?
                 .into_iter()
                 .zip(chunk.iter())
-                .map(|(sg, chunk)| sg.map(|v| (v, chunk)))
+                .map(|(sg, (segment_idx, location))| {
+                    sg.map(|segment| (*segment_idx, segment, location))
+                })
                 .collect::<Result<Vec<_>>>()?;
 
             if let Some(default_cluster_key) = self.default_cluster_key_id {
                 // sort ascending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        a.0.summary.cluster_stats.as_ref(),
-                        b.0.summary.cluster_stats.as_ref(),
+                        a.1.summary.cluster_stats.as_ref(),
+                        b.1.summary.cluster_stats.as_ref(),
                         default_cluster_key,
                     )
                 });
             }
 
-            for (segment, location) in segment_infos.into_iter() {
+            for (segment_idx, segment, location) in segment_infos.into_iter() {
                 if is_end {
                     self.compacted_state
                         .segments_locations
@@ -239,7 +257,7 @@ impl<'a> SegmentCompactor<'a> {
                     continue;
                 }
 
-                self.add(segment, location.clone()).await?;
+                self.add(segment_idx, segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
                 if compacted >= limit {
                     if !self.fragmented_segments.is_empty() {
@@ -275,9 +293,11 @@ impl<'a> SegmentCompactor<'a> {
         if fragments_compacted {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            compaction
-                .segments_locations
-                .extend(reverse_locations[checked_end_at..].iter().cloned());
+            compaction.segments_locations.extend(
+                reverse_locations[checked_end_at..]
+                    .iter()
+                    .map(|(_, location)| location.clone()),
+            );
         }
         // reverse the segments back
         compaction.segments_locations.reverse();
@@ -287,10 +307,18 @@ impl<'a> SegmentCompactor<'a> {
 
     // accumulate one segment
     #[async_backtrace::framed]
-    pub async fn add(&mut self, segment_info: SegmentInfo, location: Location) -> Result<()> {
+    pub async fn add(
+        &mut self,
+        segment_idx: usize,
+        segment_info: SegmentInfo,
+        location: Location,
+    ) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {
+            self.compacted_state
+                .removed_segment_indexes
+                .push(segment_idx);
             return Ok(());
         }
 
@@ -299,10 +327,12 @@ impl<'a> SegmentCompactor<'a> {
         if s < self.threshold {
             // not enough blocks yet, just keep this segment for later compaction
             self.accumulated_num_blocks = s;
-            self.fragmented_segments.push((segment_info, location));
+            self.fragmented_segments
+                .push((segment_idx, segment_info, location));
         } else if s >= self.threshold && s < 2 * self.threshold {
             // compact the fragmented segments
-            self.fragmented_segments.push((segment_info, location));
+            self.fragmented_segments
+                .push((segment_idx, segment_info, location));
             self.compact_fragments().await?;
         } else {
             // JackTan25: I think this won't happen, right? so need to remove this branch??
@@ -332,7 +362,7 @@ impl<'a> SegmentCompactor<'a> {
             // if only one segment there, keep it as it is
             self.compacted_state
                 .segments_locations
-                .push(fragments[0].1.clone());
+                .push(fragments[0].2.clone());
             return Ok(());
         }
 
@@ -344,7 +374,9 @@ impl<'a> SegmentCompactor<'a> {
         let mut hlls_has_none = false;
 
         self.compacted_state.num_fragments_compacted += fragments.len();
-        for (segment, _location) in fragments {
+        let mut fragment_indexes = Vec::with_capacity(fragments.len());
+        for (segment_idx, segment, _location) in fragments {
+            fragment_indexes.push(segment_idx);
             merge_statistics_mut(
                 &mut new_statistics,
                 &segment.summary,
@@ -368,6 +400,7 @@ impl<'a> SegmentCompactor<'a> {
             .gen_segment_info_location(self.table_meta_timestamps, false);
         // 2.2 merge hlls into new.
         let mut block_hlls = Vec::with_capacity(blocks.len());
+        let mut block_top_ns = Vec::with_capacity(blocks.len());
         if !hlls_has_none {
             let max_threads = (self.chunk_size / 4).max(10);
             let segment_stats = read_segment_stats_in_parallel(
@@ -378,8 +411,9 @@ impl<'a> SegmentCompactor<'a> {
             .await?;
             for stats in segment_stats {
                 block_hlls.append(&mut stats.block_hlls.clone());
+                block_top_ns.extend(stats.block_top_ns.iter().cloned());
             }
-            let stats_data = SegmentStatistics::new(block_hlls).to_bytes()?;
+            let stats_data = SegmentStatistics::new(block_hlls, block_top_ns).to_bytes()?;
             let segment_stats_location =
                 TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                     location.as_str(),
@@ -403,9 +437,24 @@ impl<'a> SegmentCompactor<'a> {
         self.compacted_state
             .new_segment_paths
             .push(location.clone());
+        let new_segment_location = (location, SegmentInfo::VERSION);
+        // CommitSink applies SnapshotChanges as local replacements/removals on the latest
+        // snapshot. This preserves natural order for ordinary contiguous segment compaction.
+        // With cluster-key sorting, fragments may come from non-contiguous base positions; in
+        // that case we still replace the earliest consumed base segment and remove the rest,
+        // accepting the order defined by SnapshotChanges instead of forcing the sorted target.
+        let replace_idx = *fragment_indexes.iter().min().unwrap();
+        self.compacted_state
+            .replaced_segments
+            .insert(replace_idx, new_segment_location.clone());
+        self.compacted_state.removed_segment_indexes.extend(
+            fragment_indexes
+                .into_iter()
+                .filter(|idx| *idx != replace_idx),
+        );
         self.compacted_state
             .segments_locations
-            .push((location, SegmentInfo::VERSION));
+            .push(new_segment_location);
         Ok(())
     }
 

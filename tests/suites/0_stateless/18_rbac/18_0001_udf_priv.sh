@@ -21,8 +21,13 @@ create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD';
 grant insert, delete, update, select on default.t to 'test-user';
 grant select on default.t to 'test-user';
 grant super on *.* to 'test-user';
+drop stage if exists udf_priv_stage;
+create stage udf_priv_stage FILE_FORMAT = (TYPE = CSV);
+grant read on stage udf_priv_stage to 'test-user';
 SYSTEM FLUSH PRIVILEGES;
 "
+# stage a single data file for the copy-into-transform udf privilege cases below
+echo "copy into @udf_priv_stage from (select 1);" | bendsql_connect_root >/dev/null 2>&1
 
 # error test need privielge f1
 echo "=== Only Has Privilege on f2 ==="
@@ -56,6 +61,7 @@ echo "insert into t values (99),(199);" | $TEST_USER_CONNECT
 echo "select case when i > f2(f1(100)) then 200 else 100 end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then 200 else f2(f1(100)) end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $TEST_USER_CONNECT
+echo "copy into t from (select f2(f1(\$1)) from @udf_priv_stage);" | $TEST_USER_CONNECT
 echo "delete from t;" | $TEST_USER_CONNECT
 
 # error test need privielge f1
@@ -88,6 +94,7 @@ echo "insert into t values (99),(199);" | $TEST_USER_CONNECT
 echo "select case when i > f2(f1(100)) then 200 else 100 end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then 200 else f2(f1(100)) end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $TEST_USER_CONNECT
+echo "copy into t from (select f2(f1(\$1)) from @udf_priv_stage);" | $TEST_USER_CONNECT
 echo "delete from t;" | $TEST_USER_CONNECT
 
 echo "=== Has Privilege on f1, f2 ==="
@@ -118,6 +125,7 @@ echo "insert into t values (99),(199);" | $TEST_USER_CONNECT
 echo "select case when i > f2(f1(100)) then 200 else 100 end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then 200 else f2(f1(100)) end as c1 from t;" | $TEST_USER_CONNECT
 echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $TEST_USER_CONNECT
+echo "copy into t from (select f2(f1(\$1)) from @udf_priv_stage);" | $TEST_USER_CONNECT >/dev/null 2>&1 && echo "copy with udf: ok"
 echo "delete from t;" | $TEST_USER_CONNECT
 
 run_root_sql "
@@ -139,4 +147,5 @@ drop function if exists a;
 drop function if exists b;
 drop table if exists default.t;
 drop table if exists default.t2;
+drop stage if exists udf_priv_stage;
 "
