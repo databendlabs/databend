@@ -1049,6 +1049,11 @@ impl ChunkIndex {
         self.total as _
     }
 
+    pub fn allocated_bytes(&self) -> usize {
+        self.rows.capacity() * std::mem::size_of::<u32>()
+            + self.chunks.capacity() * std::mem::size_of::<ChunkIndexItem>()
+    }
+
     pub fn clear(&mut self) {
         self.rows.clear();
         self.chunks.clear();

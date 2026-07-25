@@ -32,6 +32,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::Location;
@@ -62,7 +63,11 @@ pub struct BlockIndexLowLevelWriteContext {
 impl BlockIndexLowLevelWriteContext {
     /// Low-level component writers create their lazy blocking outputs at construction time.
     pub fn create_write(&self, location: &Location) -> OpenDalBlockingWrite {
-        create_blocking_write(self.operator.clone(), location.0.clone(), 2)
+        create_blocking_write(
+            self.operator.clone(),
+            location.0.clone(),
+            BLOCKING_WRITE_MAX_CHUNKS,
+        )
     }
 }
 

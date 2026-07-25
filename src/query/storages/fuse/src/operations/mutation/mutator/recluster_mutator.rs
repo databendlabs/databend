@@ -24,6 +24,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -185,6 +186,7 @@ pub(crate) struct ReclusterTaskCandidate {
     selected_blocks: Vec<(usize, Vec<usize>)>,
     output_level: i32,
     all_ordered: bool,
+    vertical_kind: Option<VerticalReclusterKind>,
 }
 
 impl ReclusterTaskCandidate {
@@ -204,8 +206,9 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "output_level={} max_depth={} avg_depth={} selected_count={} bytes={}",
+            "output_level={} kind={:?} max_depth={} avg_depth={} selected_count={} bytes={}",
             self.output_level,
+            self.vertical_kind,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
@@ -316,6 +319,7 @@ pub struct ReclusterMutator {
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) cluster_key_types: Vec<DataType>,
     pub(crate) vector_cluster_info: Option<VectorClusterInfo>,
+    pub(crate) vertical_kind: Option<VerticalReclusterKind>,
 }
 
 impl ReclusterMutator {
@@ -324,6 +328,8 @@ impl ReclusterMutator {
         ctx: Arc<dyn TableContext>,
         snapshot: &TableSnapshot,
         mode: ReclusterMode,
+        vertical_kind: Option<VerticalReclusterKind>,
+        max_tasks_override: Option<usize>,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
         let cluster_key_id = table.cluster_key_id().unwrap();
@@ -349,12 +355,20 @@ impl ReclusterMutator {
         if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
+        if let Some(override_tasks) = max_tasks_override {
+            max_tasks = max_tasks.min(override_tasks.max(1));
+        }
 
         // safe to unwrap
         let cluster_keys = table.resolve_cluster_keys().unwrap();
         let full_cluster_key_exprs =
             parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let vector_cluster_info = vector_cluster_info_from_exprs(table, &full_cluster_key_exprs)?;
+        if vertical_kind.is_some() && vector_cluster_info.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "vertical recluster supports pure scalar cluster keys only".to_string(),
+            ));
+        }
         let cluster_key_exprs = scalar_cluster_key_exprs(full_cluster_key_exprs);
         if cluster_key_exprs.is_empty() && vector_cluster_info.is_none() {
             return Err(ErrorCode::Internal(
@@ -381,6 +395,7 @@ impl ReclusterMutator {
             prepared_cluster_key_exprs,
             cluster_key_types,
             vector_cluster_info,
+            vertical_kind,
         })
     }
 
@@ -427,6 +442,7 @@ impl ReclusterMutator {
             prepared_cluster_key_exprs,
             cluster_key_types,
             vector_cluster_info,
+            vertical_kind: None,
         }
     }
 
@@ -494,11 +510,14 @@ impl ReclusterMutator {
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.block_thresholds.block_per_segment);
-            let compactable_repack = total_block_count > 0
+            let compactable_repack = self.vertical_kind.is_none()
+                && total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack =
-                self.mode == ReclusterMode::Conservative && all_original_stats && unordered();
+            let unordered_repack = self.vertical_kind.is_none()
+                && self.mode == ReclusterMode::Conservative
+                && all_original_stats
+                && unordered();
             if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
@@ -511,6 +530,7 @@ impl ReclusterMutator {
                     selected_blocks: Vec::new(),
                     output_level: 0,
                     all_ordered: false,
+                    vertical_kind: None,
                 });
             } else {
                 return Ok(candidate_window);
@@ -545,8 +565,38 @@ impl ReclusterMutator {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
+        if self.vertical_kind == Some(VerticalReclusterKind::SortBlocks) {
+            let mut tasks = blocks
+                .iter()
+                .enumerate()
+                .filter(|(_, block)| {
+                    matches!(block.stats, ReclusterBlockStats::Normalized(_))
+                        && block.stats().level >= 0
+                })
+                .map(|(idx, block)| ReclusterTaskCandidate {
+                    score: CandidateScore {
+                        selected_total_bytes: block.meta.block_size as usize,
+                        max_depth: 1,
+                        average_depth: 1.0,
+                    },
+                    selected_blocks: Self::selected_blocks_by_segment(&[idx], blocks),
+                    output_level: 0,
+                    all_ordered: false,
+                    vertical_kind: self.vertical_kind,
+                })
+                .collect::<Vec<_>>();
+            tasks.sort_by(|left, right| right.score.cmp_desc(&left.score));
+            tasks.truncate(task_budget);
+            return Ok(tasks);
+        }
+
         let mut blocks_map: BTreeMap<ReclusterGroup, Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
+            if self.vertical_kind == Some(VerticalReclusterKind::MergeBlocks)
+                && !matches!(block.stats, ReclusterBlockStats::Original)
+            {
+                continue;
+            }
             let level = block.stats().level;
             if level < 0 {
                 continue;
@@ -688,6 +738,8 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.output_level,
                     all_ordered: candidate.all_ordered,
+                    vertical_kind: candidate.vertical_kind,
+                    memory_budget: self.memory_threshold,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -816,6 +868,8 @@ impl ReclusterMutator {
             .block_thresholds
             .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.memory_threshold
+            && (self.vertical_kind != Some(VerticalReclusterKind::MergeBlocks)
+                || total_rows as usize <= self.block_thresholds.max_rows_per_block)
         {
             // Small compactable groups are treated as one dense overlap.
             let score = CandidateScore {
@@ -823,7 +877,7 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            return Ok(vec![Self::task_candidate(group, score, &indices, blocks)]);
+            return Ok(vec![self.task_candidate(group, score, &indices, blocks)]);
         }
 
         let candidates = if let Some(vector_cluster_info) = self.vector_cluster_key() {
@@ -862,6 +916,7 @@ impl ReclusterMutator {
     }
 
     fn task_candidate(
+        &self,
         group: ReclusterGroup,
         score: CandidateScore,
         task_indices: &[usize],
@@ -874,6 +929,7 @@ impl ReclusterMutator {
             all_ordered: task_indices
                 .iter()
                 .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original)),
+            vertical_kind: self.vertical_kind,
         }
     }
 
@@ -1021,7 +1077,7 @@ impl ReclusterMutator {
                 max_depth: depth,
                 average_depth,
             };
-            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
+            candidates.push(self.task_candidate(group, score, &task_indices, blocks));
         }
 
         debug!(
@@ -1503,10 +1559,6 @@ impl ReclusterMutator {
         ClusterStatistics::new(self.cluster_key_id, min_stats, max_stats, 0)
     }
 
-    /// Decide how to carry cluster statistics for a candidate block. When the
-    /// cached cluster stats already match the current cluster key, return
-    /// `Original` so selection borrows them and write-back reuses the original
-    /// `Arc<BlockMeta>` without cloning stats. Otherwise recompute them.
     fn recluster_block_stats(&self, block_meta: &BlockMeta) -> ReclusterBlockStats {
         if block_meta
             .cluster_stats
@@ -1768,11 +1820,27 @@ impl ReclusterMutator {
                 max_depth,
                 average_depth,
             };
-            candidates.push(Self::task_candidate(group, score, &task_indices, blocks));
+            candidates.push(self.task_candidate(group, score, &task_indices, blocks));
         };
 
         let mut candidates = Vec::new();
         let mut used_blocks = vec![false; block_count];
+        // Horizontal tasks retain the existing compressed-byte packing limit.
+        // Vertical MergeBlocks must not be silently discarded just because that
+        // rough limit is smaller than a source block: its executor performs the
+        // exact mapping, field, index, and writer admission and returns an
+        // explicit MemoryExceedsLimit without spill or horizontal fallback.
+        let is_vertical_merge = self.vertical_kind == Some(VerticalReclusterKind::MergeBlocks);
+        let task_pack_limit = if is_vertical_merge {
+            usize::MAX
+        } else {
+            self.memory_threshold
+        };
+        let task_row_limit = if is_vertical_merge {
+            self.block_thresholds.max_rows_per_block
+        } else {
+            usize::MAX
+        };
 
         for &(peak_pos, peak_depth, _) in &peaks {
             if candidates.len() >= task_budget {
@@ -1795,6 +1863,7 @@ impl ReclusterMutator {
             // Keep the peak depth from the initial sweep. Here used_blocks only
             // prevents the same block from being assigned to multiple tasks.
             let mut task_bytes = 0usize;
+            let mut task_rows = 0usize;
             let mut task_indices = Vec::new();
             for local_idx in 0..block_count {
                 if used_blocks[local_idx] {
@@ -1805,10 +1874,21 @@ impl ReclusterMutator {
                 }
                 let idx = indices[local_idx];
                 let block_size = blocks[idx].meta.block_size as usize;
-                let should_split_for_memory = !task_indices.is_empty()
-                    && task_bytes.saturating_add(block_size) > self.memory_threshold;
+                let block_rows = blocks[idx].meta.row_count as usize;
+                if block_rows > task_row_limit {
+                    continue;
+                }
+                let should_split = exceeds_pack_limit(
+                    !task_indices.is_empty(),
+                    task_bytes,
+                    task_rows,
+                    block_size,
+                    block_rows,
+                    task_pack_limit,
+                    task_row_limit,
+                );
 
-                if should_split_for_memory {
+                if should_split {
                     if task_indices.len() >= 2 {
                         let local_indices = std::mem::take(&mut task_indices);
                         push_task(
@@ -1825,19 +1905,23 @@ impl ReclusterMutator {
                         task_indices.clear();
                     }
                     task_bytes = 0;
+                    task_rows = 0;
                 }
 
                 task_bytes = task_bytes.saturating_add(block_size);
+                task_rows = task_rows.saturating_add(block_rows);
                 task_indices.push(local_idx);
             }
 
             if !task_indices.is_empty()
-                && (task_bytes < self.memory_threshold || task_indices.len() < 2)
+                && ((task_bytes < task_pack_limit && task_rows < task_row_limit)
+                    || task_indices.len() < 2)
             {
                 // Fill only the last hotspot tail from the deeper adjacent side.
                 let mut left = hotspot_left;
                 let mut right = hotspot_right;
-                'fill_remaining: while task_bytes < self.memory_threshold || task_indices.len() < 2
+                'fill_remaining: while (task_bytes < task_pack_limit && task_rows < task_row_limit)
+                    || task_indices.len() < 2
                 {
                     let left_depth = if left > 0 {
                         point_depths[left - 1] as f64
@@ -1871,12 +1955,22 @@ impl ReclusterMutator {
                         }
                         let idx = indices[local_idx];
                         let block_size = blocks[idx].meta.block_size as usize;
-                        if !task_indices.is_empty()
-                            && task_bytes.saturating_add(block_size) > self.memory_threshold
+                        let block_rows = blocks[idx].meta.row_count as usize;
+                        if block_rows > task_row_limit
+                            || exceeds_pack_limit(
+                                !task_indices.is_empty(),
+                                task_bytes,
+                                task_rows,
+                                block_size,
+                                block_rows,
+                                task_pack_limit,
+                                task_row_limit,
+                            )
                         {
                             break 'fill_remaining;
                         }
                         task_bytes = task_bytes.saturating_add(block_size);
+                        task_rows = task_rows.saturating_add(block_rows);
                         task_indices.push(local_idx);
                     }
                 }
@@ -2039,4 +2133,48 @@ fn scalar_le(left: &Scalar, right: &Scalar) -> bool {
         left.partial_cmp(right),
         None | Some(cmp::Ordering::Less | cmp::Ordering::Equal)
     )
+}
+
+fn exceeds_pack_limit(
+    has_rows: bool,
+    current_bytes: usize,
+    current_rows: usize,
+    next_bytes: usize,
+    next_rows: usize,
+    byte_limit: usize,
+    row_limit: usize,
+) -> bool {
+    has_rows
+        && (current_bytes.saturating_add(next_bytes) > byte_limit
+            || current_rows.saturating_add(next_rows) > row_limit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exceeds_pack_limit;
+
+    #[test]
+    fn test_vertical_merge_pack_limit_allows_one_output_block() {
+        assert!(!exceeds_pack_limit(true, 100, 3, 100, 3, usize::MAX, 6));
+        assert!(exceeds_pack_limit(true, 100, 3, 100, 4, usize::MAX, 6));
+    }
+
+    #[test]
+    fn test_horizontal_pack_limit_is_unchanged() {
+        assert!(!exceeds_pack_limit(
+            true,
+            100,
+            usize::MAX / 4,
+            100,
+            usize::MAX / 4,
+            200,
+            usize::MAX,
+        ));
+        assert!(exceeds_pack_limit(true, 100, 1, 101, 1, 200, usize::MAX,));
+    }
+
+    #[test]
+    fn test_first_source_is_not_split_before_task_has_rows() {
+        assert!(!exceeds_pack_limit(false, 0, 0, 201, 7, 200, 6));
+    }
 }

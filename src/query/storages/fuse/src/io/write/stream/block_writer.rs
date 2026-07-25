@@ -48,6 +48,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Buffer;
+use opendal::Operator;
 
 use super::super::parquet_block_writer::GranuleWriteSettings;
 use super::super::parquet_block_writer::ParquetBlockOutput;
@@ -55,6 +56,12 @@ use super::super::parquet_block_writer::ParquetBlockWriter;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
+use crate::io::FuseLowLevelBlockWriteOptions;
+use crate::io::FuseLowLevelBloomIndexOptions;
+use crate::io::FuseLowLevelClusterKeyOptions;
+use crate::io::FuseLowLevelGranuleIndexOptions;
+use crate::io::FuseLowLevelStatisticsOptions;
+use crate::io::FuseLowLevelWriteContext;
 use crate::io::InvertedIndexBuilder;
 use crate::io::PendingBlockSerialization;
 use crate::io::SpatialIndexBuilder;
@@ -588,6 +595,126 @@ impl FuseBlockWriteOptions {
             serialize_hll: false,
             cluster_stats_override: None,
         }))
+    }
+
+    pub fn source_schema(&self) -> &TableSchemaRef {
+        &self.source_schema
+    }
+
+    /// Conservative retained-state estimate used by vertical admission before IO starts.
+    pub fn retained_index_bytes(&self, output_rows: usize) -> usize {
+        // The data writer opens the main Parquet output and every block-index
+        // output together. Bloom is always configured; inverted, vector, and
+        // spatial writers are optional. Granule Bloom indexes retain one output
+        // per bound physical column. Every OpenDAL blocking output retains a
+        // current 4 MiB chunk, its bounded channel, and one worker-owned chunk.
+        let granule_blocking_writers = if self.write_settings.index_granularity.is_some() {
+            self.granule_index_specs
+                .iter()
+                .map(|spec| spec.low_level_blocking_writers(self.source_schema.as_ref()))
+                .sum::<usize>()
+        } else {
+            0
+        };
+        let active_blocking_writers = 2usize
+            .saturating_add(self.inverted_index_builders.len())
+            .saturating_add(self.vector_index_builder.is_some() as usize)
+            .saturating_add(self.spatial_index_builder.is_some() as usize)
+            .saturating_add(granule_blocking_writers);
+        let writer_buffers = databend_storages_common_io::blocking_write_retained_bytes(
+            databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS,
+        )
+        .saturating_mul(active_blocking_writers);
+
+        // Index builders and granule mark state grow with output rows even when
+        // they do not own a concurrent upload buffer.
+        let retained_builders = 1usize
+            .saturating_add(self.inverted_index_builders.len())
+            .saturating_add(self.vector_index_builder.is_some() as usize)
+            .saturating_add(self.spatial_index_builder.is_some() as usize)
+            .saturating_add(self.granule_index_specs.len())
+            .saturating_mul(output_rows.saturating_mul(16).saturating_add(64 * 1024));
+        writer_buffers.saturating_add(retained_builders)
+    }
+
+    pub fn create_low_level_options(
+        &self,
+        operator: Operator,
+        cluster_key_types: Vec<DataType>,
+        cluster_key_id: u32,
+        level: i32,
+        output_rows: usize,
+    ) -> Result<FuseLowLevelBlockWriteOptions> {
+        let (block_location, block_id) = self.meta_locations.gen_unique_block_location();
+        let dictionary = self.write_settings.parquet_dictionary_enabled();
+        let properties = Arc::new(build_parquet_writer_properties(
+            self.write_settings.table_compression,
+            dictionary,
+            None::<ColumnsNdvInfo>,
+            None,
+            output_rows,
+            self.source_schema.as_ref(),
+            self.write_settings
+                .index_granularity
+                .or(self.write_settings.data_page_rows),
+            self.write_settings.data_page_bytes,
+        ));
+        let context = FuseLowLevelWriteContext::new(
+            self.ctx.get_function_context()?,
+            operator.clone(),
+            self.source_schema.clone(),
+            self.write_settings.clone(),
+        );
+        let mut options =
+            FuseLowLevelBlockWriteOptions::new(context, properties, block_location.clone());
+        options.set_statistics(FuseLowLevelStatisticsOptions::new(
+            self.stats_columns.clone(),
+            self.distinct_columns.clone(),
+            self.serialize_hll,
+        ));
+        options.set_bloom_indexes(FuseLowLevelBloomIndexOptions::new(
+            self.meta_locations.block_bloom_index_location(&block_id),
+            self.bloom_columns_map.clone(),
+            self.ngram_args.clone(),
+        ));
+        options.set_ndv_columns(self.ndv_columns_map.clone());
+        if let Some((columns, size)) = &self.top_n {
+            options.set_top_n_columns(columns.clone(), *size);
+        }
+        options.set_inverted_indexes(self.inverted_index_builders.clone());
+        options.set_virtual_columns(self.virtual_column_builder.clone());
+        if let Some(builder) = self.vector_index_builder.clone() {
+            options.set_vector_index(self.meta_locations.block_vector_index_location(), builder);
+        }
+        if let Some(builder) = self.spatial_index_builder.clone() {
+            options.set_spatial_index(self.meta_locations.block_spatial_index_location(), builder);
+        }
+        if let Some(rows) = self.write_settings.index_granularity {
+            let func_ctx = self.ctx.get_function_context()?;
+            let writers = self
+                .granule_index_specs
+                .iter()
+                .map(|spec| {
+                    spec.new_low_level_writer(
+                        func_ctx.clone(),
+                        self.source_schema.as_ref(),
+                        &block_location.0,
+                        operator.clone(),
+                        rows,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            options.set_granule_indexes(FuseLowLevelGranuleIndexOptions::new(
+                Some(self.meta_locations.block_granule_index_location()),
+                self.meta_locations.block_granule_index_location(),
+                writers,
+            ));
+        }
+        options.set_cluster_keys(
+            FuseLowLevelClusterKeyOptions::new(cluster_key_id, cluster_key_types, level),
+            None,
+        );
+        Ok(options)
     }
 
     #[allow(clippy::too_many_arguments)]

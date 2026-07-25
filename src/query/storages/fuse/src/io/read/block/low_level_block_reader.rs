@@ -24,6 +24,7 @@ use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -273,6 +274,8 @@ impl FuseLowLevelBlockReader {
             reader,
             expected_rows: row_group.num_rows,
             rows_read: 0,
+            rows_returned: 0,
+            buffered: None,
             state: ColumnReaderState::Reading,
         })
     }
@@ -302,6 +305,8 @@ pub struct FuseLowLevelColumnReader {
     reader: ParquetRecordBatchReader,
     expected_rows: usize,
     rows_read: usize,
+    rows_returned: usize,
+    buffered: Option<Column>,
     state: ColumnReaderState,
 }
 
@@ -314,11 +319,106 @@ impl FuseLowLevelColumnReader {
         self.rows_read
     }
 
+    /// Return exactly `rows` logical rows, retaining an unconsumed decoded suffix.
+    pub fn read(&mut self, rows: usize) -> Result<Column> {
+        if !matches!(self.state, ColumnReaderState::Reading) {
+            return Err(ErrorCode::BadArguments(format!(
+                "column {} is not readable in its current state",
+                self.field.name()
+            )));
+        }
+
+        let remaining = self.expected_rows.saturating_sub(self.rows_returned);
+
+        if rows > remaining {
+            return Err(ErrorCode::ParquetFileInvalid(format!(
+                "column {} requested {rows} rows with only {remaining} of {} remaining",
+                self.field.name(),
+                self.expected_rows
+            )));
+        }
+
+        if rows == 0 {
+            let data_type = DataType::from(self.field.data_type());
+            return Ok(ColumnBuilder::with_capacity(&data_type, 0).build());
+        }
+
+        let mut needed = rows;
+        let mut parts = Vec::new();
+
+        while needed > 0 {
+            let column = match self.buffered.take() {
+                Some(column) => column,
+                None => self.decode_next()?.ok_or_else(|| {
+                    ErrorCode::ParquetFileInvalid(format!(
+                        "column {} ended after {} of {} requested rows",
+                        self.field.name(),
+                        rows - needed,
+                        rows
+                    ))
+                })?,
+            };
+
+            if column.len() == 0 {
+                let error = ErrorCode::ParquetFileInvalid(format!(
+                    "column {} decoded an empty batch before satisfying a {rows}-row read",
+                    self.field.name()
+                ));
+                self.fail(error.message());
+                return Err(error);
+            }
+
+            let take = needed.min(column.len());
+
+            if take == column.len() {
+                parts.push(column);
+            } else {
+                parts.push(column.slice(0..take));
+                self.buffered = Some(column.slice(take..column.len()));
+            }
+
+            needed -= take;
+            self.rows_returned += take;
+        }
+
+        if parts.len() == 1 {
+            Ok(parts.pop().expect("one exact-read column"))
+        } else {
+            Column::concat_columns(parts.into_iter())
+        }
+    }
+
     pub fn finish(mut self) -> Result<FuseLowLevelBlockReader> {
+        if let ColumnReaderState::Failed(error) = &self.state {
+            return Err(ErrorCode::ParquetFileInvalid(format!(
+                "column {} failed while reading: {error}",
+                self.field.name()
+            )));
+        }
+        if self.rows_returned != self.expected_rows {
+            return Err(ErrorCode::BadArguments(format!(
+                "column {} returned {} of {} rows",
+                self.field.name(),
+                self.rows_returned,
+                self.expected_rows
+            )));
+        }
+        if self.buffered.is_some() {
+            return Err(ErrorCode::Internal(format!(
+                "column {} retained decoded rows after returning its declared row count",
+                self.field.name()
+            )));
+        }
+        if matches!(self.state, ColumnReaderState::Reading) && self.decode_next()?.is_some() {
+            return Err(ErrorCode::ParquetFileInvalid(format!(
+                "column {} decoded data after its declared row count",
+                self.field.name()
+            )));
+        }
         match &self.state {
             ColumnReaderState::Finished => Ok(self.parent.take().expect("column reader parent")),
-            ColumnReaderState::Reading => Err(ErrorCode::BadArguments(format!(
-                "column {} has not been read to completion",
+            ColumnReaderState::Reading => Err(ErrorCode::Internal(format!(
+                "column {} reader did not reach EOF",
                 self.field.name()
             ))),
             ColumnReaderState::Failed(error) => Err(ErrorCode::ParquetFileInvalid(format!(
@@ -328,19 +428,10 @@ impl FuseLowLevelColumnReader {
         }
     }
 
-    fn fail(&mut self, error: impl ToString) {
-        self.state = ColumnReaderState::Failed(error.to_string());
-    }
-}
-
-impl Iterator for FuseLowLevelColumnReader {
-    type Item = Result<Column>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn decode_next(&mut self) -> Result<Option<Column>> {
         if !matches!(self.state, ColumnReaderState::Reading) {
-            return None;
+            return Ok(None);
         }
-
         match self.reader.next() {
             Some(Ok(batch)) => {
                 if batch.num_columns() != 1 {
@@ -350,7 +441,7 @@ impl Iterator for FuseLowLevelColumnReader {
                         batch.num_columns()
                     ));
                     self.fail(error.message());
-                    return Some(Err(error));
+                    return Err(error);
                 }
                 let rows = batch.num_rows();
                 self.rows_read += rows;
@@ -362,20 +453,20 @@ impl Iterator for FuseLowLevelColumnReader {
                         self.expected_rows
                     ));
                     self.fail(error.message());
-                    return Some(Err(error));
+                    return Err(error);
                 }
                 let data_type = DataType::from(self.field.data_type());
                 match Column::from_arrow_rs(batch.column(0).clone(), &data_type) {
-                    Ok(column) => Some(Ok(column)),
+                    Ok(column) => Ok(Some(column)),
                     Err(error) => {
                         self.fail(error.message());
-                        Some(Err(error))
+                        Err(error)
                     }
                 }
             }
             Some(Err(error)) => {
                 self.fail(&error);
-                Some(Err(error.into()))
+                Err(error.into())
             }
             None => {
                 if self.rows_read != self.expected_rows {
@@ -386,13 +477,17 @@ impl Iterator for FuseLowLevelColumnReader {
                         self.expected_rows
                     ));
                     self.fail(error.message());
-                    Some(Err(error))
+                    Err(error)
                 } else {
                     self.state = ColumnReaderState::Finished;
-                    None
+                    Ok(None)
                 }
             }
         }
+    }
+
+    fn fail(&mut self, error: impl ToString) {
+        self.state = ColumnReaderState::Failed(error.to_string());
     }
 }
 
@@ -878,6 +973,7 @@ mod tests {
         schema: TableSchemaRef,
         meta: BlockMeta,
     ) -> (Vec<Column>, Vec<Vec<usize>>) {
+        let rows = meta.row_count as usize;
         let mut reader =
             FuseLowLevelBlockReader::create(read_options(operator, schema, meta)).unwrap();
         let mut columns = Vec::new();
@@ -886,8 +982,10 @@ mod tests {
             let mut column_reader = reader.next_column().unwrap();
             let mut fragments = Vec::new();
             let mut lengths = Vec::new();
-            for fragment in column_reader.by_ref() {
-                let fragment = fragment.unwrap();
+            let mut remaining = rows;
+            while remaining > 0 {
+                let fragment = column_reader.read(remaining.min(2)).unwrap();
+                remaining -= fragment.len();
                 lengths.push(fragment.len());
                 fragments.push(fragment);
             }
@@ -897,6 +995,58 @@ mod tests {
         }
         reader.finish().unwrap();
         (columns, boundaries)
+    }
+
+    #[test]
+    fn test_column_reader_reads_exact_rows_across_batch_boundaries() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "id",
+            TableDataType::Number(NumberDataType::Int32),
+        )]));
+        let values = Int32Type::from_data(vec![10, 20, 30, 40, 50]);
+        let meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "exact-read.parquet",
+            std::slice::from_ref(&values),
+        );
+        let reader = FuseLowLevelBlockReader::create(
+            FuseLowLevelBlockReadOptions::new(operator, schema, Arc::new(meta)).with_batch_size(3),
+        )
+        .unwrap();
+        let mut column = reader.next_column().unwrap();
+        assert_eq!(column.read(2).unwrap(), values.slice(0..2));
+        assert_eq!(column.read(3).unwrap(), values.slice(2..5));
+        column.finish().unwrap().finish().unwrap();
+    }
+
+    #[test]
+    fn test_column_reader_rejects_read_past_end() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "id",
+            TableDataType::Number(NumberDataType::Int32),
+        )]));
+        let values = Int32Type::from_data(vec![10, 20, 30, 40, 50]);
+        let meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "exact-read-past-end.parquet",
+            std::slice::from_ref(&values),
+        );
+        let reader = FuseLowLevelBlockReader::create(FuseLowLevelBlockReadOptions::new(
+            operator,
+            schema,
+            Arc::new(meta),
+        ))
+        .unwrap();
+        let mut column = reader.next_column().unwrap();
+        column.read(4).unwrap();
+        let error = column.read(2).unwrap_err();
+        assert!(error.message().contains("only 1 of 5 remaining"));
     }
 
     #[test]
@@ -1021,6 +1171,7 @@ mod tests {
             "source.parquet",
             &expected,
         );
+        let source_rows = source_meta.row_count as usize;
         let mut reader = FuseLowLevelBlockReader::create(read_options(
             operator.clone(),
             schema.clone(),
@@ -1038,8 +1189,11 @@ mod tests {
         while reader.has_next_column() {
             let mut input = reader.next_column().unwrap();
             let mut output = data.next_column().unwrap();
-            for fragment in input.by_ref() {
-                output.write(&fragment.unwrap()).unwrap();
+            let mut remaining = source_rows;
+            while remaining > 0 {
+                let fragment = input.read(remaining.min(2)).unwrap();
+                remaining -= fragment.len();
+                output.write(&fragment).unwrap();
             }
             reader = input.finish().unwrap();
             data = output.finish().unwrap();
@@ -1062,6 +1216,7 @@ mod tests {
             "source.parquet",
             &source_columns,
         );
+        let source_rows = source_meta.row_count as usize;
         let mut reader = FuseLowLevelBlockReader::create(read_options(
             operator.clone(),
             schema.clone(),
@@ -1082,8 +1237,8 @@ mod tests {
             let mut output = data.next_column().unwrap();
             let mut offset = 0;
             let mut boundaries = Vec::new();
-            for fragment in input.by_ref() {
-                let fragment = fragment.unwrap();
+            while offset < source_rows {
+                let fragment = input.read((source_rows - offset).min(2)).unwrap();
                 boundaries.push(fragment.len());
                 let local = (0..fragment.len())
                     .filter(|index| matches!(offset + index, 0 | 2 | 4))
@@ -1219,8 +1374,7 @@ mod tests {
 
         let reader = FuseLowLevelBlockReader::create(read_options(operator, schema, meta)).unwrap();
         let mut column = reader.next_column().unwrap();
-        let results = column.by_ref().collect::<Vec<_>>();
-        assert!(results.last().unwrap().is_err());
+        assert!(column.read(6).is_err());
         assert!(column.finish().is_err());
     }
 
@@ -1244,7 +1398,7 @@ mod tests {
 
         let reader = FuseLowLevelBlockReader::create(read_options(operator, schema, meta)).unwrap();
         let mut column = reader.next_column().unwrap();
-        assert!(column.any(|result| result.is_err()));
+        assert!(column.read(5).is_err());
     }
 
     #[test]

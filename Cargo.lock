@@ -5049,6 +5049,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
+ "databend-common-settings",
  "databend-common-sql",
  "databend-common-statistics",
  "databend-common-storage",

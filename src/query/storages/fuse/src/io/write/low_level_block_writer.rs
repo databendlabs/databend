@@ -52,6 +52,7 @@ use databend_storages_common_blocks::BlockingWrite;
 use databend_storages_common_blocks::BulkParquetFileWriter;
 use databend_storages_common_blocks::BulkParquetLeafWriter;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -507,8 +508,11 @@ impl FuseLowLevelBlockWriter {
     fn write_file(&self, data: impl Into<opendal::Buffer>, location: &Location) -> Result<()> {
         use std::io::Write;
 
-        let mut writer =
-            create_blocking_write(self.options.context.operator.clone(), location.0.clone(), 2);
+        let mut writer = create_blocking_write(
+            self.options.context.operator.clone(),
+            location.0.clone(),
+            BLOCKING_WRITE_MAX_CHUNKS,
+        );
         for chunk in data.into() {
             writer.write_all(&chunk)?;
         }
@@ -574,8 +578,11 @@ impl FuseLowLevelBlockWriter {
         let operator = self.options.context.operator.clone();
         let schema = self.options.context.schema.clone();
         let write_settings = &self.options.context.write_settings;
-        let writer =
-            create_blocking_write(operator.clone(), self.options.block_location.0.clone(), 2);
+        let writer = create_blocking_write(
+            operator.clone(),
+            self.options.block_location.0.clone(),
+            BLOCKING_WRITE_MAX_CHUNKS,
+        );
         let arrow_schema: Arc<arrow_schema::Schema> = Arc::new(schema.as_ref().into());
         let parquet = BulkParquetFileWriter::create(
             writer,

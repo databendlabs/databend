@@ -46,6 +46,7 @@ use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
+use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
@@ -183,6 +184,12 @@ impl GranuleIndexSpec for BloomGranuleIndexSpec {
         }))
     }
 
+    fn low_level_blocking_writers(&self, physical_schema: &TableSchema) -> usize {
+        self.bind_columns(physical_schema)
+            .map(|columns| columns.into_iter().flatten().count())
+            .unwrap_or(0)
+    }
+
     fn new_low_level_writer(
         &self,
         func_ctx: FunctionContext,
@@ -211,7 +218,8 @@ impl GranuleIndexSpec for BloomGranuleIndexSpec {
                             &self.index_version,
                             field.column_id(),
                         );
-                    let write = create_blocking_write(dal.clone(), location, 2);
+                    let write =
+                        create_blocking_write(dal.clone(), location, BLOCKING_WRITE_MAX_CHUNKS);
                     (field, write)
                 })
             })
@@ -1071,6 +1079,18 @@ mod tests {
             bound[0].as_ref().unwrap().column_id(),
             indexed_field.column_id()
         );
+        assert_eq!(spec.low_level_blocking_writers(&physical_schema), 1);
+
+        let unrelated_schema = TableSchema::new_from_column_ids(
+            vec![TableField::new_from_column_id(
+                "other_col",
+                TableDataType::Number(NumberDataType::Int64),
+                30,
+            )],
+            Default::default(),
+            31,
+        );
+        assert_eq!(spec.low_level_blocking_writers(&unrelated_schema), 0);
     }
 
     #[test]

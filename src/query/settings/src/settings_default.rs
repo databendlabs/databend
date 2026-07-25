@@ -1009,6 +1009,15 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("recluster_method", DefaultSettingValue {
+                    value: UserSettingValue::String("auto".to_string()),
+                    desc: "Selects recluster execution: auto (default, currently horizontal), horizontal, or vertical.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "auto".into(), "horizontal".into(), "vertical".into(),
+                    ])),
+                }),
                 ("default_order_by_null", DefaultSettingValue {
                     value: UserSettingValue::String("nulls_last".to_string()),
                     desc: "Set numeric default_order_by_null mode",

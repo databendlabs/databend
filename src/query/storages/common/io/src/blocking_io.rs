@@ -32,7 +32,14 @@ use opendal::Operator;
 
 use crate::ReadSettings;
 
-const CHUNK_SIZE: usize = 4 * 1024 * 1024;
+pub const BLOCKING_WRITE_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+pub const BLOCKING_WRITE_MAX_CHUNKS: usize = 2;
+
+/// Worst-case bytes retained by one blocking writer: the current producer
+/// buffer, the bounded channel, and one chunk owned by the upload worker.
+pub fn blocking_write_retained_bytes(max_chunks: usize) -> usize {
+    BLOCKING_WRITE_CHUNK_SIZE.saturating_mul(max_chunks.max(1).saturating_add(2))
+}
 
 enum UploadCommand {
     Data(Bytes),
@@ -84,7 +91,7 @@ pub struct OpenDalBlockingWrite {
 impl OpenDalBlockingWrite {
     fn create(operator: Operator, path: String, max_chunks: usize) -> Self {
         Self {
-            current: Some(BytesMut::with_capacity(CHUNK_SIZE)),
+            current: Some(BytesMut::with_capacity(BLOCKING_WRITE_CHUNK_SIZE)),
             bytes_written: 0,
             state: UploadWorkerState::Unopened(PendingWorker {
                 operator,
@@ -165,13 +172,13 @@ impl io::Write for OpenDalBlockingWrite {
             let mut current = self
                 .current
                 .take()
-                .unwrap_or_else(|| BytesMut::with_capacity(CHUNK_SIZE));
-            let space = CHUNK_SIZE - current.len();
+                .unwrap_or_else(|| BytesMut::with_capacity(BLOCKING_WRITE_CHUNK_SIZE));
+            let space = BLOCKING_WRITE_CHUNK_SIZE - current.len();
             let take = space.min(remaining.len());
             current.extend_from_slice(&remaining[..take]);
             remaining = &remaining[take..];
 
-            if current.len() == CHUNK_SIZE {
+            if current.len() == BLOCKING_WRITE_CHUNK_SIZE {
                 self.send_current(current)?;
             } else {
                 self.current = Some(current);

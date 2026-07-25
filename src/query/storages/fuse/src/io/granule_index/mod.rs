@@ -231,6 +231,11 @@ pub trait GranuleIndexSpec: Send + Sync {
         block_location: &str,
     ) -> Result<Box<dyn GranuleIndexWriter>>;
 
+    /// Number of lazy blocking outputs retained by the low-level writer.
+    fn low_level_blocking_writers(&self, _physical_schema: &TableSchema) -> usize {
+        0
+    }
+
     fn new_low_level_writer(
         &self,
         func_ctx: FunctionContext,

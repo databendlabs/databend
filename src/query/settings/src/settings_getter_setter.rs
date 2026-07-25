@@ -34,6 +34,29 @@ use crate::SettingScope;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ReclusterMethod {
+    #[default]
+    Auto,
+    Horizontal,
+    Vertical,
+}
+
+impl FromStr for ReclusterMethod {
+    type Err = ErrorCode;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "horizontal" => Ok(Self::Horizontal),
+            "vertical" => Ok(Self::Vertical),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid recluster_method {value:?}; expected auto, horizontal, or vertical"
+            ))),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
     Lz4,
@@ -787,6 +810,20 @@ impl Settings {
 
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("recluster_timeout_secs")
+    }
+
+    pub fn get_recluster_method(&self) -> Result<ReclusterMethod> {
+        self.try_get_string("recluster_method")?.parse()
+    }
+
+    pub fn set_recluster_method(&self, value: &str) -> Result<()> {
+        let method: ReclusterMethod = value.parse()?;
+        let value = match method {
+            ReclusterMethod::Auto => "auto",
+            ReclusterMethod::Horizontal => "horizontal",
+            ReclusterMethod::Vertical => "vertical",
+        };
+        self.set_setting("recluster_method".to_string(), value.to_string())
     }
 
     pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {

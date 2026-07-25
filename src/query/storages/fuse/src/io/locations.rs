@@ -156,6 +156,23 @@ impl TableMetaLocationGenerator {
         &self.ref_snapshot_location_prefix
     }
 
+    pub fn gen_unique_block_location(&self) -> (Location, Uuid) {
+        let block_id = Uuid::now_v7();
+        (
+            (
+                format!(
+                    "{}{}{}_v{}.parquet",
+                    self.block_location_prefix(),
+                    VACUUM2_OBJECT_KEY_PREFIX,
+                    block_id.as_simple(),
+                    DataBlock::VERSION,
+                ),
+                DataBlock::VERSION,
+            ),
+            block_id,
+        )
+    }
+
     pub fn gen_block_location(
         &self,
         table_meta_timestamps: TableMetaTimestamps,

@@ -616,6 +616,8 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             Some(2),
             ReclusterMode::Conservative,
             &mut carry,
+            None,
+            None,
         )
         .await?
         .expect("recluster should read the later matching scan range");
