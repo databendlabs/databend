@@ -728,14 +728,29 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
         return Ok(0);
     }
 
-    if buf.len() > 3
-        && buf[3] == HYBRID_KIND_LARGE
-        && buf[..2] == HYBRID_MAGIC
-        && buf[2] == HYBRID_VERSION
-    {
+    if is_hybrid_large(buf) {
         Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64)
     } else {
         Ok(deserialize_bitmap(buf)?.len())
+    }
+}
+
+fn is_hybrid(buf: &[u8]) -> bool {
+    buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION
+}
+
+fn is_hybrid_large(buf: &[u8]) -> bool {
+    is_hybrid(buf) && buf[3] == HYBRID_KIND_LARGE
+}
+
+pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
+    if buf.is_empty() {
+        return Ok(false);
+    }
+    if is_hybrid_large(buf) {
+        Ok(reader::bitmap_contains(&buf[HYBRID_HEADER_LEN..], value)?)
+    } else {
+        Ok(deserialize_bitmap(buf)?.contains(value))
     }
 }
 
@@ -744,7 +759,7 @@ fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
         return Ok(BitmapRhsView::Empty);
     }
 
-    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+    if is_hybrid(buf) {
         let payload = &buf[HYBRID_HEADER_LEN..];
         match buf[3] {
             HYBRID_KIND_SMALL => {
@@ -768,7 +783,7 @@ fn validate_serialized_bitmap(buf: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+    if is_hybrid(buf) {
         let payload = &buf[HYBRID_HEADER_LEN..];
         match buf[3] {
             HYBRID_KIND_SMALL => {
@@ -1428,5 +1443,42 @@ mod tests {
 
         let decoded = deserialize_bitmap(&legacy).unwrap();
         assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
+
+    #[test]
+    fn test_bitmap_contains() {
+        // HybridLarge: hit and miss (spanning two prefix buckets)
+        let large = HybridBitmap::from_iter(
+            [0u64, 2500, 65535, 65536, 65536 + 2500, 131071]
+                .into_iter()
+                .chain((0..40000).map(|v| v + 200000)),
+        );
+        let mut buf = Vec::new();
+        large.serialize_into(&mut buf).unwrap();
+        assert!(bitmap_contains(&buf, 0).unwrap());
+        assert!(bitmap_contains(&buf, 65536 + 2500).unwrap());
+        assert!(bitmap_contains(&buf, 200000).unwrap());
+        // 999999: no matching prefix bucket (fast-path miss)
+        assert!(!bitmap_contains(&buf, 999999).unwrap());
+        // 100000: prefix bucket exists but value not in container (search miss)
+        assert!(!bitmap_contains(&buf, 100000).unwrap());
+
+        // HybridSmall: hit and miss
+        let small = HybridBitmap::from_iter(0u64..31);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        assert!(bitmap_contains(&buf, 15).unwrap());
+        assert!(!bitmap_contains(&buf, 50).unwrap());
+
+        // Legacy: hit and miss
+        let mut tree = RoaringTreemap::new();
+        tree.insert(42);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf).unwrap();
+        assert!(bitmap_contains(&buf, 42).unwrap());
+        assert!(!bitmap_contains(&buf, 99).unwrap());
+
+        // Empty buffer
+        assert!(!bitmap_contains(&[], 42).unwrap());
     }
 }

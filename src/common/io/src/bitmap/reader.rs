@@ -26,6 +26,13 @@ use roaring::RoaringTreemap;
 const DESCRIPTION_BYTES: usize = 4;
 const OFFSET_BYTES: usize = 4;
 
+// Container layout constants
+const ARRAY_LIMIT: usize = 4096;
+const WORD_BITS: usize = 64;
+const WORD_BYTES: usize = 8;
+const BITMAP_WORDS: usize = 1024;
+const BITMAP_BYTES: usize = WORD_BYTES * BITMAP_WORDS;
+
 #[derive(Clone)]
 pub struct TreemapReader<'a> {
     buf: &'a [u8],
@@ -142,7 +149,6 @@ impl BitmapReader<'_> {
         self.containers as usize
     }
 
-    #[allow(dead_code)]
     pub fn prefix(&self) -> u32 {
         self.prefix
     }
@@ -163,6 +169,26 @@ impl BitmapReader<'_> {
 
     pub fn bitmap_buf(&self) -> &[u8] {
         &self.buf[4..]
+    }
+
+    pub(crate) fn container_offset(&self, i: usize) -> io::Result<usize> {
+        if i >= self.containers() {
+            return Err(Error::other("index out of range"));
+        }
+        let offset_table_start = 12 + self.containers() * DESCRIPTION_BYTES;
+        let offset_pos = offset_table_start + i * OFFSET_BYTES;
+        if offset_pos + OFFSET_BYTES > self.buf.len() {
+            return Err(Error::other("offset table too short"));
+        }
+        let mut reader = Cursor::new(&self.buf[offset_pos..]);
+        let offset = reader.read_u32::<LittleEndian>()? as usize;
+        if offset > self.bitmap_buf().len() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "container offset exceeds bitmap data",
+            ));
+        }
+        Ok(offset)
     }
 }
 
@@ -188,6 +214,84 @@ pub fn bitmap_len(buf: &[u8]) -> io::Result<usize> {
         }
     }
     Ok(sum)
+}
+
+pub(crate) fn bitmap_contains(buf: &[u8], value: u64) -> io::Result<bool> {
+    let tree = TreemapReader::new(buf)?;
+    let prefix = (value >> 32) as u32;
+    let container_key = ((value >> 16) & 0xFFFF) as u16;
+    let low16 = (value & 0xFFFF) as u16;
+
+    for bitmap_result in tree.iter() {
+        let bitmap = bitmap_result?;
+        if bitmap.prefix() < prefix {
+            continue;
+        }
+        if bitmap.prefix() > prefix {
+            return Ok(false);
+        }
+        return bitmap_contains_in_bitmap(&bitmap, container_key, low16);
+    }
+    Ok(false)
+}
+
+fn bitmap_contains_in_bitmap(
+    bitmap: &BitmapReader<'_>,
+    container_key: u16,
+    low16: u16,
+) -> io::Result<bool> {
+    let mut lo = 0;
+    let mut hi = bitmap.containers();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let desc = bitmap.description(mid)?;
+        match desc.prefix.cmp(&container_key) {
+            std::cmp::Ordering::Less => lo = mid + 1,
+            std::cmp::Ordering::Greater => hi = mid,
+            std::cmp::Ordering::Equal => {
+                let cardinality = desc.cardinality();
+                let offset = bitmap.container_offset(mid)?;
+                let container_data = &bitmap.bitmap_buf()[offset..];
+                return if cardinality < ARRAY_LIMIT {
+                    array_container_contains(container_data, cardinality, low16)
+                } else {
+                    bitmap_container_contains(container_data, low16)
+                };
+            }
+        }
+    }
+    Ok(false)
+}
+
+/// Binary search in an array container (cardinality < 4096).
+fn array_container_contains(data: &[u8], cardinality: usize, low16: u16) -> io::Result<bool> {
+    if data.len() < cardinality * 2 {
+        return Err(Error::other("array container too short"));
+    }
+    let mut lo = 0;
+    let mut hi = cardinality;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let v = u16::from_le_bytes(data[mid * 2..mid * 2 + 2].try_into().unwrap());
+        match v.cmp(&low16) {
+            std::cmp::Ordering::Less => lo = mid + 1,
+            std::cmp::Ordering::Greater => hi = mid,
+            std::cmp::Ordering::Equal => return Ok(true),
+        }
+    }
+    Ok(false)
+}
+
+/// Bit lookup in a bitmap container (cardinality >= 4096).
+fn bitmap_container_contains(data: &[u8], low16: u16) -> io::Result<bool> {
+    if data.len() < BITMAP_BYTES {
+        return Err(Error::other("bitmap container too short"));
+    }
+    let word_index = low16 as usize / WORD_BITS;
+    let bit_index = low16 as usize % WORD_BITS;
+    let start = word_index * WORD_BYTES;
+    let word = u64::from_le_bytes(data[start..start + WORD_BYTES].try_into().unwrap());
+    Ok(word & (1 << bit_index) != 0)
 }
 
 pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
