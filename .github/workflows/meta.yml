@@ -28,6 +28,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
+          allow-unsafe-pr-checkout: true
       - name: Get SHA
         shell: bash
         id: sha
@@ -51,6 +52,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
+          allow-unsafe-pr-checkout: true
       - name: Build Release
         uses: ./.github/actions/build_linux
         timeout-minutes: 60
@@ -71,6 +73,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: "refs/pull/${{ github.event.number }}/merge"
+          allow-unsafe-pr-checkout: true
       - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
