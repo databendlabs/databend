@@ -37,6 +37,7 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::bitmap_contains;
 use databend_common_io::bitmap::bitmap_len;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
@@ -269,9 +270,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        builder.push(rb.contains(item));
+                match bitmap_contains(b, item) {
+                    Ok(found) => {
+                        builder.push(found);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
