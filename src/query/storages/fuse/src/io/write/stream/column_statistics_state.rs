@@ -45,10 +45,7 @@ impl ColumnStatisticsState {
         let col_stats = stats_columns
             .iter()
             .map(|(col_id, data_type)| {
-                let string_len = col_stats_truncate_lens
-                    .get(col_id)
-                    .copied()
-                    .unwrap_or(crate::statistics::STATS_STRING_PREFIX_LEN);
+                let string_len = col_stats_truncate_lens.get(col_id).copied();
                 (*col_id, create_column_stats_builder(data_type, string_len))
             })
             .collect();
@@ -172,6 +169,7 @@ mod tests {
     use databend_storages_common_index::RangeIndex;
 
     use super::*;
+    use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::gen_columns_statistics;
 
     #[test]
@@ -260,6 +258,35 @@ mod tests {
                 .unwrap()
                 .in_memory_size,
             string_column.memory_size(true) as u64
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_stats_state_adaptive_string_prefix() -> Result<()> {
+        let field = TableField::new("a", TableDataType::String);
+        let schema = Arc::new(TableSchema::new(vec![field]));
+        let prefix = "abcdefghijklmnop";
+        let min = format!("{prefix}a-min-suffix");
+        let max = format!("{prefix}z-max-suffix");
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            min.as_str(),
+            max.as_str(),
+        ])]);
+        let stats_columns = vec![(0, DataType::String)];
+
+        let mut state = ColumnStatisticsState::new(&stats_columns, &[], &BTreeMap::new());
+        state.add_block(&schema, &block)?;
+        let stats = state.finalize(HashMap::new())?;
+        let col_stats = stats.get(&0).unwrap();
+
+        assert_eq!(
+            col_stats.min(),
+            &databend_common_expression::Scalar::String(format!("{prefix}a"))
+        );
+        assert_eq!(
+            col_stats.max(),
+            &databend_common_expression::Scalar::String(format!("{prefix}{END_OF_UNICODE_RANGE}"))
         );
         Ok(())
     }

@@ -923,6 +923,7 @@ pub(crate) async fn build_select_insert_plan(
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
+        input_prepared: false,
         table_meta_timestamps,
         meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
     });

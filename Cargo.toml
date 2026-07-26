@@ -32,6 +32,7 @@ members = [
     "src/meta/ver",
     "src/query/codegen",
     "src/tests/planner_replay",
+    "src/query/storages/paimon",
     "tests/sqllogictests",
 ]
 default-members = [
@@ -116,6 +117,7 @@ databend-common-storages-hive = { path = "src/query/storages/hive/hive" }
 databend-common-storages-iceberg = { path = "src/query/storages/iceberg" }
 databend-common-storages-information-schema = { path = "src/query/storages/information_schema" }
 databend-common-storages-orc = { path = "src/query/storages/orc" }
+databend-common-storages-paimon = { path = "src/query/storages/paimon" }
 databend-common-storages-parquet = { path = "src/query/storages/parquet" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
@@ -311,6 +313,7 @@ iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/databendla
 iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
 iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
 iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
+paimon = { version = "=0.2.0", default-features = false, features = ["storage-fs", "storage-s3", "storage-oss"] }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"

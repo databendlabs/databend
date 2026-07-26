@@ -5695,6 +5695,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
+        value(Engine::Paimon, rule! { PAIMON }),
         value(Engine::Proxy, rule! { PROXY }),
     ));
 
@@ -5752,6 +5753,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Paimon, rule! { PAIMON }),
     ))
     .parse(i)
 }

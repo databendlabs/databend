@@ -751,6 +751,28 @@ impl DataExchangeManager {
         }
     }
 
+    /// Return the inbound channels for a ping-pong exchange, creating them when
+    /// the exchange has only local edges and therefore no do_exchange request.
+    pub fn get_or_create_exchange_channel_set(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => {
+                coordinator.get_or_create_inbound_channel_set(channel_id, num_threads)
+            }
+        }
+    }
+
     /// Take the PingPongExchanges for a given query and channel.
     ///
     /// Returns the exchanges that were created during init_query_env.
@@ -1130,11 +1152,7 @@ impl QueryCoordinator {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        let channel_set = self
-            .inbound_channel_sets
-            .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
-            .clone();
+        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
@@ -1143,6 +1161,27 @@ impl QueryCoordinator {
             &channel_set,
             max_bytes_per_connection,
         ))
+    }
+
+    fn get_or_create_inbound_channel_set(
+        &mut self,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let channel_set = self
+            .inbound_channel_sets
+            .entry(channel_id.to_string())
+            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
+            .clone();
+        if channel_set.channels.len() != num_threads {
+            return Err(ErrorCode::Internal(format!(
+                "NetworkInboundChannelSet {} has {} channels, expected {}",
+                channel_id,
+                channel_set.channels.len(),
+                num_threads
+            )));
+        }
+        Ok(channel_set)
     }
 
     pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {

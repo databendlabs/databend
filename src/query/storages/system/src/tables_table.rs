@@ -127,6 +127,7 @@ macro_rules! impl_history_aware {
                             ));
                         }
                         CatalogType::Iceberg => "Iceberg".to_string(),
+                        CatalogType::Paimon => "Paimon".to_string(),
                         CatalogType::Hive => "Hive".to_string(),
                     };
 
@@ -1343,7 +1344,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         && filtered_db_names.len() == 1
                         && catalog.name() == filtered_catalog_names[0].clone()
                     {
-                        if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                        if matches!(
+                            catalog.info().catalog_type(),
+                            CatalogType::Iceberg | CatalogType::Paimon
+                        ) {
                             return Some((
                                 filtered_catalog_names[0].clone(),
                                 filtered_db_names[0].clone(),

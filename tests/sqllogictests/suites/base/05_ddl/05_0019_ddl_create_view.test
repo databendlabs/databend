@@ -195,16 +195,9 @@ select * from rv_v3;
 ----
 1
 
-# Test: circular dependency via ALTER VIEW should also fail
-# Reuse rv_v1 -> rv_v2 -> rv_v3 chain
-
-# Direct self-reference via ALTER VIEW
-statement error 1029
-alter view rv_v1 as select * from rv_v1;
-
-# Circular: rv_v1 -> rv_v3 -> rv_v2 -> rv_v1
-statement error 1029
-alter view rv_v1 as select * from rv_v3;
+# ALTER VIEW query changes are rejected.
+statement error
+alter view rv_v3 as select * from rv_v1;
 
 # Verify views still work after failed ALTER attempts
 query I

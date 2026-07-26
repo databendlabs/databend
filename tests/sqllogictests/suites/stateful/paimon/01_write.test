@@ -1,0 +1,109 @@
+statement ok
+DROP CATALOG IF EXISTS paimon;
+
+statement ok
+CREATE CATALOG paimon TYPE = PAIMON CONNECTION = (
+    METASTORE = 'filesystem',
+    WAREHOUSE = 's3://paimon/warehouse',
+    "s3.endpoint" = 'http://127.0.0.1:9002',
+    "s3.access-key" = 'admin',
+    "s3.secret-key" = 'password',
+    "s3.region" = 'us-east-1',
+    "s3.path-style-access" = 'true'
+);
+
+statement ok
+INSERT INTO paimon.regression.write_append VALUES (1, 'a'), (2, 'b');
+
+statement ok
+INSERT INTO paimon.regression.write_append SELECT number + 10, concat('v', number)
+FROM numbers(8);
+
+statement ok
+INSERT INTO paimon.regression.write_append_part VALUES
+    (1, 'a', 0), (2, 'b', 0), (3, 'c', 1), (4, 'd', 1);
+
+statement ok
+INSERT INTO paimon.regression.write_pk VALUES (1, 'old'), (2, 'x');
+
+statement ok
+INSERT INTO paimon.regression.write_pk VALUES (1, 'new');
+
+query I
+SELECT count(*) FROM paimon.regression."write_pk_part$snapshots";
+----
+0
+
+statement ok
+INSERT INTO paimon.regression.write_pk_part
+SELECT number, concat('v', number), number % 5 FROM numbers(10000);
+
+query I
+SELECT count(*) FROM paimon.regression."write_pk_part$snapshots";
+----
+1
+
+statement ok
+INSERT INTO paimon.regression.write_pk_part VALUES (1, 'new', 1);
+
+query I
+SELECT count(*) FROM paimon.regression."write_pk_part$snapshots";
+----
+2
+
+query II rowsort
+SELECT part, count(*) FROM paimon.regression.write_pk_part GROUP BY part;
+----
+0 2000
+1 2000
+2 2000
+3 2000
+4 2000
+
+query III
+SELECT count(*), sum(id), count_if(value = 'new')
+FROM paimon.regression.write_pk_part;
+----
+10000 49995000 1
+
+# Empty INSERT must not create a snapshot.
+query I
+SELECT count(*) FROM paimon.regression."write_append$snapshots";
+----
+2
+
+statement ok
+INSERT INTO paimon.regression.write_append SELECT id, value FROM paimon.regression.write_append WHERE false;
+
+query I
+SELECT count(*) FROM paimon.regression."write_append$snapshots";
+----
+2
+
+query IT
+SELECT id, value FROM paimon.regression.write_append ORDER BY id;
+----
+1 a
+2 b
+10 v0
+11 v1
+12 v2
+13 v3
+14 v4
+15 v5
+16 v6
+17 v7
+
+query ITI
+SELECT id, value, part FROM paimon.regression.write_append_part ORDER BY part, id;
+----
+1 a 0
+2 b 0
+3 c 1
+4 d 1
+
+query IT
+SELECT id, value FROM paimon.regression.write_pk ORDER BY id;
+----
+1 new
+2 x

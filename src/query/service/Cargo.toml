@@ -26,7 +26,11 @@ storage-stage = [
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
-storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
+storage-hdfs = [
+    "opendal/services-hdfs",
+    "databend-common-storage/storage-hdfs",
+    "databend-common-storages-paimon/storage-hdfs",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -97,6 +101,7 @@ databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-orc = { workspace = true }
+databend-common-storages-paimon = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
@@ -193,6 +198,7 @@ jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
 p256 = { workspace = true }
+paimon = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 reqwest = { workspace = true }

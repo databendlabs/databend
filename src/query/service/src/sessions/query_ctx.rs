@@ -658,6 +658,7 @@ impl QueryContext {
         // the better place to do this is in the QueryContextShared::get_table() method,
         // but there is no way to access dyn TableContext.
         Ok(match table.engine() {
+            "PAIMON" => databend_common_storages_paimon::table_from_info(table.get_table_info())?,
             engine @ ("ICEBERG" | "DELTA") => {
                 let sp = StageResolver::from_authorization_ref(
                     self.get_tenant(),

@@ -87,6 +87,22 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     )
                 }
             }),
+            CatalogOption::Paimon(op) => {
+                let metastore = op
+                    .options
+                    .get("metastore")
+                    .cloned()
+                    .unwrap_or_else(|| "filesystem".to_string());
+                let warehouse = op.options.get("warehouse").cloned().unwrap_or_default();
+                let mut lines = vec![
+                    format!("METASTORE\n{metastore}"),
+                    format!("WAREHOUSE\n{warehouse}"),
+                ];
+                if let Some(uri) = op.options.get("uri") {
+                    lines.insert(1, format!("URI\n{uri}"));
+                }
+                (String::from("paimon"), lines.join("\n"))
+            }
         };
 
         let block = DataBlock::new(

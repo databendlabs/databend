@@ -83,6 +83,7 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
@@ -576,6 +577,12 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
+        if catalog.info().meta.catalog_option.catalog_type() == CatalogType::Paimon {
+            return Err(ErrorCode::StorageUnsupported(
+                "Paimon catalog is read-only, CREATE TABLE is not supported".to_string(),
+            ));
+        }
+
         let mut options: BTreeMap<String, String> = BTreeMap::new();
 
         // FUSE tables can inherit database connection defaults for external storage
@@ -841,6 +848,11 @@ impl Binder {
                             },
                             as_query_plan,
                         )
+                    }
+                    Engine::Paimon => {
+                        return Err(ErrorCode::StorageUnsupported(
+                            "CREATE TABLE with PAIMON engine is not supported".to_string(),
+                        ));
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",

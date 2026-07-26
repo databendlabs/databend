@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
@@ -32,6 +33,7 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::PaimonCatalogOption;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
@@ -282,6 +284,27 @@ fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
         )),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
     }
+}
+
+fn new_paimon_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
+    databend_common_meta_app::schema::CatalogMeta {
+        catalog_option: CatalogOption::Paimon(PaimonCatalogOption {
+            options: HashMap::from([
+                ("metastore".to_string(), "rest".to_string()),
+                ("uri".to_string(), "http://127.0.0.1:8080".to_string()),
+                ("warehouse".to_string(), "demo".to_string()),
+            ]),
+        }),
+        created_on: Utc::now(),
+    }
+}
+
+#[test]
+fn test_paimon_catalog_meta_round_trip() -> anyhow::Result<()> {
+    let want = new_paimon_catalog_meta();
+    let got = databend_common_meta_app::schema::CatalogMeta::from_pb(want.to_pb())?;
+    assert_eq!(want, got);
+    Ok(())
 }
 
 fn new_virtual_data_schema() -> ce::VirtualDataSchema {

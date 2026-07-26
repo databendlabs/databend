@@ -250,6 +250,7 @@ pub use interpreter_explain_perf::ExplainPerfInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_index_refresh::RefreshIndexInterpreter;
 pub use interpreter_insert::InsertInterpreter;
+pub use interpreter_insert::build_insert_select_physical_plan;
 pub use interpreter_insert_multi_table::InsertMultiTableInterpreter;
 pub use interpreter_kill::KillInterpreter;
 pub use interpreter_metrics::InterpreterMetrics;

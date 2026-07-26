@@ -193,6 +193,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     match engine {
         Engine::Fuse => CREATE_FUSE_OPTIONS.contains(opt_key),
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
+        Engine::Paimon => opt_key == OPT_KEY_ENGINE,
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
         Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),
