@@ -63,7 +63,8 @@ jobs:
       - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
       - uses: actions/setup-python@v6
         with:
@@ -102,7 +103,8 @@ jobs:
       - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         if: inputs.target == 'load' || inputs.target == 'all'
@@ -155,7 +157,8 @@ jobs:
       - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         if: inputs.target == 'cloud' || inputs.target == 'all'
