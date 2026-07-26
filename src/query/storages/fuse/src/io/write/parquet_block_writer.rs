@@ -45,8 +45,7 @@ pub(super) struct GranuleWriteSettings {
     rows: usize,
     writers: Vec<Box<dyn GranuleIndexWriter>>,
     mins: Option<(
-        Vec<databend_common_expression::Scalar>,
-        Vec<databend_common_expression::types::DataType>,
+        Vec<databend_common_expression::Column>,
         databend_storages_common_table_meta::meta::Location,
     )>,
     offsets_location: databend_storages_common_table_meta::meta::Location,
@@ -57,8 +56,7 @@ impl GranuleWriteSettings {
         rows: usize,
         writers: Vec<Box<dyn GranuleIndexWriter>>,
         mins: Option<(
-            Vec<databend_common_expression::Scalar>,
-            Vec<databend_common_expression::types::DataType>,
+            Vec<databend_common_expression::Column>,
             databend_storages_common_table_meta::meta::Location,
         )>,
         offsets_location: databend_storages_common_table_meta::meta::Location,
@@ -156,16 +154,14 @@ impl ParquetBlockWriter {
                         "granule page layout was not captured with granule write settings",
                     )
                 })?;
-                let mins = granule.mins.as_ref().map(|(values, types, _)| {
-                    crate::io::write::granule_index_writer::GranuleMinsInput { values, types }
-                });
+                let (mins, mins_location) = match granule.mins {
+                    Some((columns, location)) => (Some(columns), Some(location)),
+                    None => (None, None),
+                };
                 let writer = GranuleIndexFileWriter::new(
                     granule.rows,
                     self.leaf_column_ids,
-                    granule
-                        .mins
-                        .as_ref()
-                        .map(|(_, _, location)| location.clone()),
+                    mins_location,
                     granule.offsets_location,
                 );
                 let state =

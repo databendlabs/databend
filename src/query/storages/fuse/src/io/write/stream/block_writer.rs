@@ -29,7 +29,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -57,11 +56,6 @@ use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::FuseLowLevelBlockWriteOptions;
-use crate::io::FuseLowLevelBloomIndexOptions;
-use crate::io::FuseLowLevelClusterKeyOptions;
-use crate::io::FuseLowLevelGranuleIndexOptions;
-use crate::io::FuseLowLevelStatisticsOptions;
-use crate::io::FuseLowLevelWriteContext;
 use crate::io::InvertedIndexBuilder;
 use crate::io::PendingBlockSerialization;
 use crate::io::SpatialIndexBuilder;
@@ -84,16 +78,10 @@ use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 
-pub struct ColumnsNdvInfo {
+struct ColumnsNdvInfo {
     cols_ndv: HashMap<ColumnId, usize>,
-    num_rows: usize,
 }
 
-impl ColumnsNdvInfo {
-    fn new(num_rows: usize, cols_ndv: HashMap<ColumnId, usize>) -> Self {
-        Self { cols_ndv, num_rows }
-    }
-}
 impl NdvProvider for ColumnsNdvInfo {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.cols_ndv.get(column_id).map(|v| *v as u64)
@@ -236,8 +224,8 @@ impl FuseBlockWriter {
         if self.block_writer.is_none() {
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
             cols_ndv.extend(self.column_sketches_builder.peek_cols_ndv());
-            let ndv_info = ColumnsNdvInfo::new(block.num_rows(), cols_ndv);
-            self.block_writer = Some(self.new_block_writer(ndv_info)?);
+            let ndv_info = ColumnsNdvInfo { cols_ndv };
+            self.block_writer = Some(self.new_block_writer(block.num_rows(), ndv_info)?);
         }
 
         // ParquetBlockWriter tracks the residual granule fill across calls, so just forward the block.
@@ -251,9 +239,12 @@ impl FuseBlockWriter {
     }
 
     /// Build the parquet writer for the first block, configured from its NDV snapshot.
-    fn new_block_writer(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ParquetBlockWriter> {
+    fn new_block_writer(
+        &self,
+        num_rows: usize,
+        cols_ndv_info: ColumnsNdvInfo,
+    ) -> Result<ParquetBlockWriter> {
         let write_settings = &self.properties.write_settings;
-        let num_rows = cols_ndv_info.num_rows;
         let data_page_rows = write_settings
             .index_granularity
             .or(write_settings.data_page_rows);
@@ -286,10 +277,9 @@ impl FuseBlockWriter {
                 .properties
                 .granule_cluster_keys
                 .as_ref()
-                .map(|options| {
+                .map(|columns| {
                     (
-                        options.mins.clone(),
-                        options.types.clone(),
+                        columns.clone(),
                         self.properties
                             .meta_locations
                             .block_granule_index_location(),
@@ -453,10 +443,35 @@ impl FuseBlockWriter {
     }
 }
 
-#[derive(Clone)]
-struct GranuleClusterKeysOptions {
-    mins: Vec<Scalar>,
-    types: Vec<DataType>,
+fn sample_granule_cluster_keys(columns: Vec<Column>, granule_rows: usize) -> Result<Vec<Column>> {
+    if columns.is_empty() {
+        return Err(ErrorCode::Internal(
+            "granule cluster keys require at least one column",
+        ));
+    }
+    if granule_rows == 0 {
+        return Err(ErrorCode::Internal(
+            "granule cluster key rows must be greater than zero",
+        ));
+    }
+
+    let rows = columns[0].len();
+    if columns.iter().any(|column| column.len() != rows) {
+        return Err(ErrorCode::Internal(
+            "granule cluster key columns have different row counts",
+        ));
+    }
+
+    let indices = (0..rows)
+        .step_by(granule_rows)
+        .map(|row| row as u64)
+        .collect::<Vec<_>>();
+    let sampled = DataBlock::new_from_columns(columns).take(indices.as_slice())?;
+    Ok(sampled
+        .columns()
+        .iter()
+        .map(|entry| entry.to_column().wrap_nullable(None))
+        .collect())
 }
 
 pub struct FuseBlockWriteOptions {
@@ -480,7 +495,7 @@ pub struct FuseBlockWriteOptions {
     vector_index_builder: Option<VectorIndexBuilder>,
     spatial_index_builder: Option<SpatialIndexBuilder>,
     granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
-    granule_cluster_keys: Option<GranuleClusterKeysOptions>,
+    granule_cluster_keys: Option<Vec<Column>>,
     serialize_hll: bool,
     cluster_stats_override: Option<ClusterStatistics>,
 }
@@ -659,24 +674,24 @@ impl FuseBlockWriteOptions {
                 .or(self.write_settings.data_page_rows),
             self.write_settings.data_page_bytes,
         ));
-        let context = FuseLowLevelWriteContext::new(
+        let mut options = FuseLowLevelBlockWriteOptions::new(
             self.ctx.get_function_context()?,
             operator.clone(),
             self.source_schema.clone(),
             self.write_settings.clone(),
+            properties,
+            block_location.clone(),
         );
-        let mut options =
-            FuseLowLevelBlockWriteOptions::new(context, properties, block_location.clone());
-        options.set_statistics(FuseLowLevelStatisticsOptions::new(
+        options.set_statistics(
             self.stats_columns.clone(),
             self.distinct_columns.clone(),
             self.serialize_hll,
-        ));
-        options.set_bloom_indexes(FuseLowLevelBloomIndexOptions::new(
+        );
+        options.set_bloom_indexes(
             self.meta_locations.block_bloom_index_location(&block_id),
             self.bloom_columns_map.clone(),
             self.ngram_args.clone(),
-        ));
+        );
         options.set_ndv_columns(self.ndv_columns_map.clone());
         if let Some((columns, size)) = &self.top_n {
             options.set_top_n_columns(columns.clone(), *size);
@@ -704,16 +719,13 @@ impl FuseBlockWriteOptions {
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;
-            options.set_granule_indexes(FuseLowLevelGranuleIndexOptions::new(
+            options.set_granule_indexes(
                 Some(self.meta_locations.block_granule_index_location()),
                 self.meta_locations.block_granule_index_location(),
                 writers,
-            ));
+            );
         }
-        options.set_cluster_keys(
-            FuseLowLevelClusterKeyOptions::new(cluster_key_id, cluster_key_types, level),
-            None,
-        );
+        options.set_cluster_keys(cluster_key_id, cluster_key_types, level, None);
         Ok(options)
     }
 
@@ -775,24 +787,41 @@ impl FuseBlockWriteOptions {
             vector_index_builder,
             spatial_index_builder,
             granule_index_specs,
-            granule_cluster_keys: granule_cluster_columns.map(|columns| {
-                let types = columns.iter().map(Column::data_type).collect();
-                let granule_rows = granule_rows.unwrap();
-                let mins = (0..columns[0].len())
-                    .step_by(granule_rows)
-                    .map(|row| {
-                        Scalar::Tuple(
-                            columns
-                                .iter()
-                                .map(|column| unsafe { column.index_unchecked(row) }.to_owned())
-                                .collect(),
-                        )
-                    })
-                    .collect();
-                GranuleClusterKeysOptions { mins, types }
-            }),
+            granule_cluster_keys: match granule_cluster_columns {
+                Some(columns) => Some(sample_granule_cluster_keys(
+                    columns,
+                    granule_rows.expect("granule cluster keys require granules"),
+                )?),
+                None => None,
+            },
             serialize_hll,
             cluster_stats_override,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::types::string::StringType;
+
+    use super::*;
+
+    #[test]
+    fn test_sample_granule_cluster_keys_takes_all_keys_at_each_boundary() {
+        let sampled = sample_granule_cluster_keys(
+            vec![
+                Int32Type::from_data(vec![1, 2, 3, 4, 5]),
+                StringType::from_data(vec!["one", "two", "three", "four", "five"]),
+            ],
+            2,
+        )
+        .unwrap();
+
+        assert_eq!(sampled, vec![
+            Int32Type::from_opt_data(vec![Some(1), Some(3), Some(5)]),
+            StringType::from_opt_data(vec![Some("one"), Some("three"), Some("five")]),
+        ]);
     }
 }

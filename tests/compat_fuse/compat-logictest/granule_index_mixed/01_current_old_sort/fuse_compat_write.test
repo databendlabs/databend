@@ -1,0 +1,121 @@
+statement ok
+DROP DATABASE IF EXISTS compat_granule_mixed
+
+statement ok
+CREATE DATABASE compat_granule_mixed
+
+statement ok
+USE compat_granule_mixed
+
+statement ok
+CREATE TABLE gi_empty(k int null, payload bigint null) CLUSTER BY(k) index_granularity=100
+
+query I
+SELECT count() FROM gi_empty
+----
+0
+
+statement ok
+CREATE TABLE gi_t(k int null, payload bigint null, source string) index_granularity=100 row_per_block=512 block_per_segment=2 change_tracking=true
+
+statement ok
+INSERT INTO gi_t SELECT 98-number, 98-number, 'current-99' FROM numbers(99)
+
+statement ok
+INSERT INTO gi_t SELECT 1099-number, 1099-number, 'current-100' FROM numbers(100)
+
+statement ok
+INSERT INTO gi_t SELECT 2100-number, 2100-number, 'current-101' FROM numbers(101)
+
+statement ok
+INSERT INTO gi_t VALUES (NULL,NULL,'current-edge'),(-2147483648,-2147483648,'current-edge'),(2147483647,2147483647,'current-edge'),(99,99,'current-edge'),(100,100,'current-edge'),(100,100,'current-edge'),(101,101,'current-edge')
+
+statement ok
+ALTER TABLE gi_t CLUSTER BY(k)
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE gi_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+307 317250 1
+
+query III
+SELECT count_if(k=98),count_if(k=100),count_if(k=101) FROM gi_t
+----
+1 2 1
+
+query III
+SELECT count_if(k BETWEEN 0 AND 98),count_if(k BETWEEN 99 AND 101),count_if(k=500) FROM gi_t
+----
+99 4 0
+
+query T
+SELECT info:average_depth FROM clustering_information('compat_granule_mixed','gi_t')
+----
+1.0
+
+statement ok
+CREATE TABLE gi_sort_merge(k int, payload string) row_per_block=16 block_per_segment=2
+
+statement ok
+INSERT INTO gi_sort_merge VALUES (8,'c8'),(1,'c1'),(7,'c7'),(2,'c2'),(6,'c6'),(3,'c3'),(5,'c5'),(4,'c4')
+
+statement ok
+ALTER TABLE gi_sort_merge CLUSTER BY(k)
+
+statement ok
+ALTER TABLE gi_sort_merge RECLUSTER FINAL
+
+query I
+SELECT count(DISTINCT _block_name) FROM gi_sort_merge
+----
+1
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM gi_sort_merge)
+----
+0
+
+query IT rowsort
+SELECT k,payload FROM gi_sort_merge
+----
+1 c1
+2 c2
+3 c3
+4 c4
+5 c5
+6 c6
+7 c7
+8 c8
+
+# Bloom granule payloads are written by current. Dropping only the logical index
+# definition leaves the immutable block metadata/files for the old reader to ignore.
+statement ok
+CREATE TABLE gi_bloom(k int, tag string) CLUSTER BY(k) index_granularity=100 row_per_block=512
+
+statement ok
+CREATE BLOOM INDEX gi_bloom_idx ON gi_bloom(tag)
+
+statement ok
+INSERT INTO gi_bloom SELECT 200-number,concat('c',to_string(200-number)) FROM numbers(201)
+
+query III
+SELECT count(),count_if(k=99),count_if(k=201) FROM gi_bloom WHERE tag IN ('c99','missing') OR k=201
+----
+1 1 0
+
+statement ok
+DROP BLOOM INDEX gi_bloom_idx ON gi_bloom
+
+statement ok
+CREATE STREAM gi_s ON TABLE gi_t APPEND_ONLY=false
+
+query I
+SELECT count() FROM gi_s
+----
+0

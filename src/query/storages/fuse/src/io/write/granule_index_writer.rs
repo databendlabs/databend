@@ -21,7 +21,6 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -78,11 +77,6 @@ impl GranuleIndexState {
     }
 }
 
-pub struct GranuleMinsInput<'a> {
-    pub values: &'a [Scalar],
-    pub types: &'a [DataType],
-}
-
 pub struct GranuleIndexFileWriter {
     granule_rows: usize,
     // Must match Parquet leaf order in `page_layout`.
@@ -106,29 +100,39 @@ impl GranuleIndexFileWriter {
         }
     }
 
-    pub(crate) fn serialize_mins(
-        granule_mins: &[Scalar],
-        cluster_key_types: &[DataType],
+    pub(crate) fn serialize_min_columns(
+        columns: Vec<Column>,
         location: Location,
     ) -> Result<GranuleIndexFileState> {
-        if granule_mins.is_empty() || cluster_key_types.is_empty() {
+        let Some(first) = columns.first() else {
             return Err(ErrorCode::Internal(
-                "granule mins require non-empty values and element types",
+                "granule mins require at least one column",
+            ));
+        };
+        let num_granules = first.len();
+        if num_granules == 0 {
+            return Err(ErrorCode::Internal(
+                "granule mins require at least one granule",
             ));
         }
-        let columns = build_min_columns(granule_mins, cluster_key_types)?;
-        let fields = cluster_key_types
+        let fields = columns
             .iter()
             .enumerate()
-            .map(|(i, ty)| {
+            .map(|(i, column)| {
+                if column.len() != num_granules {
+                    return Err(ErrorCode::Internal(format!(
+                        "granule min column {i} has {} rows, expected {num_granules}",
+                        column.len()
+                    )));
+                }
                 let name = format!("{GRANULE_INDEX_MIN_COL_PREFIX}{i}");
                 Ok(TableField::new(
                     &name,
-                    infer_schema_type(&ty.wrap_nullable())?,
+                    infer_schema_type(&column.data_type())?,
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-        serialize_columns(fields, columns, granule_mins.len(), location)
+        serialize_columns(fields, columns, num_granules, location)
     }
 
     pub(crate) fn serialize_offsets(
@@ -167,7 +171,7 @@ impl GranuleIndexFileWriter {
         &self,
         page_layout: &[LeafPageLayout],
         num_granules: usize,
-        mins: Option<GranuleMinsInput<'_>>,
+        mins: Option<Vec<Column>>,
         extra_marks: Vec<GranuleMark>,
     ) -> Result<GranuleIndexState> {
         let granule_rows = u32::try_from(self.granule_rows).map_err(|_| {
@@ -190,39 +194,23 @@ impl GranuleIndexFileWriter {
                 "granule index build called with zero granules",
             ));
         }
-        let (granule_mins, cluster_key_types) = match mins {
-            Some(mins) => (mins.values, mins.types),
-            None => (&[][..], &[][..]),
+        let mins = match mins {
+            Some(columns) => {
+                if columns.first().map(Column::len) != Some(num_granules) {
+                    return Err(ErrorCode::Internal(format!(
+                        "granule index mins do not have {num_granules} rows"
+                    )));
+                }
+                let Some(location) = self.mins_location.clone() else {
+                    return Err(ErrorCode::Internal(
+                        "granule mins location is not configured",
+                    ));
+                };
+                Some(Self::serialize_min_columns(columns, location)?)
+            }
+            None => None,
         };
-        if !granule_mins.is_empty() && granule_mins.len() != num_granules {
-            return Err(ErrorCode::Internal(format!(
-                "granule index has {} mins, expected {num_granules}",
-                granule_mins.len()
-            )));
-        }
-        if granule_mins.is_empty() != cluster_key_types.is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "granule index has {} mins but {} cluster key types",
-                granule_mins.len(),
-                cluster_key_types.len()
-            )));
-        }
-
         let offsets = self.serialize_offsets(page_layout, num_granules, extra_marks)?;
-        let mins = if granule_mins.is_empty() {
-            None
-        } else {
-            let Some(location) = self.mins_location.clone() else {
-                return Err(ErrorCode::Internal(
-                    "granule mins location is not configured",
-                ));
-            };
-            Some(Self::serialize_mins(
-                granule_mins,
-                cluster_key_types,
-                location,
-            )?)
-        };
 
         Ok(GranuleIndexState {
             granule_rows,
@@ -323,40 +311,6 @@ fn serialize_columns(
             columns: columns_layout,
         },
     })
-}
-
-fn build_min_columns(
-    granule_mins: &[Scalar],
-    cluster_key_types: &[DataType],
-) -> Result<Vec<Column>> {
-    let mut builders: Vec<ColumnBuilder> = cluster_key_types
-        .iter()
-        .map(|ty| ColumnBuilder::with_capacity(&ty.wrap_nullable(), granule_mins.len()))
-        .collect();
-
-    for m in granule_mins {
-        let tuple = m.as_tuple().ok_or_else(|| {
-            ErrorCode::Internal("granule index: granule min must be a tuple scalar")
-        })?;
-        if tuple.len() != cluster_key_types.len() {
-            return Err(ErrorCode::Internal(format!(
-                "granule index: granule min arity {} != expected {}",
-                tuple.len(),
-                cluster_key_types.len()
-            )));
-        }
-        for (i, elem) in tuple.iter().enumerate() {
-            if !elem.as_ref().is_value_of_type(&cluster_key_types[i]) {
-                return Err(ErrorCode::Internal(format!(
-                    "granule index: min element {i} has value {elem:?}, expected type {:?}",
-                    cluster_key_types[i]
-                )));
-            }
-            builders[i].push(elem.as_ref());
-        }
-    }
-
-    Ok(builders.into_iter().map(|b| b.build()).collect())
 }
 
 // ============================ read path ============================
@@ -655,7 +609,9 @@ impl OffsetsIndex {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::FromData;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::number::Int64Type;
     use databend_storages_common_blocks::DataPageOffset;
     use databend_storages_common_table_meta::meta::SingleColumnMeta;
     use opendal::Operator;
@@ -727,10 +683,9 @@ mod tests {
             .build_with_extra_marks(
                 &page_layout,
                 3,
-                Some(GranuleMinsInput {
-                    values: &granule_mins,
-                    types: &[DataType::Number(NumberDataType::Int64)],
-                }),
+                Some(vec![
+                    Int64Type::from_data(vec![0, 100, 200]).wrap_nullable(None),
+                ]),
                 vec![],
             )
             .unwrap();
@@ -793,10 +748,7 @@ mod tests {
             .build_with_extra_marks(
                 &[layout(None, 1000, &[(0, 100), (100, 260)])],
                 2,
-                Some(GranuleMinsInput {
-                    values: &granule_mins,
-                    types: std::slice::from_ref(&element_type),
-                }),
+                Some(vec![Int64Type::from_opt_data(vec![None, Some(100)])]),
                 vec![],
             )
             .unwrap();

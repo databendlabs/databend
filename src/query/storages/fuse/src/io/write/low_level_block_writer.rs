@@ -28,7 +28,9 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -93,140 +95,12 @@ use crate::io::granule_index::GranuleIndexLowLevelOutput;
 use crate::io::granule_index::GranuleIndexLowLevelWriter;
 use crate::operations::column_parquet_metas;
 
-/// Cluster-key configuration for one output block.
 #[derive(Clone)]
-pub struct FuseLowLevelClusterKeyOptions {
+struct ClusterKeysWriteOptions {
     cluster_key_id: u32,
     fields: Vec<DataType>,
     level: i32,
-}
-
-impl FuseLowLevelClusterKeyOptions {
-    pub fn new(cluster_key_id: u32, fields: Vec<DataType>, level: i32) -> Self {
-        Self {
-            cluster_key_id,
-            fields,
-            level,
-        }
-    }
-}
-
-/// Configuration shared by block writes using the same table schema and write settings.
-#[derive(Clone)]
-pub struct FuseLowLevelWriteContext {
-    func_ctx: FunctionContext,
-    operator: Operator,
-    schema: TableSchemaRef,
-    write_settings: WriteSettings,
-}
-
-impl FuseLowLevelWriteContext {
-    pub fn new(
-        func_ctx: FunctionContext,
-        operator: Operator,
-        schema: TableSchemaRef,
-        write_settings: WriteSettings,
-    ) -> Self {
-        Self {
-            func_ctx,
-            operator,
-            schema,
-            write_settings,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct FuseLowLevelStatisticsOptions {
-    stats_columns: Vec<(ColumnId, DataType)>,
-    distinct_columns: Vec<(ColumnId, DataType)>,
-    serialize_hll: bool,
-}
-
-impl FuseLowLevelStatisticsOptions {
-    pub fn new(
-        stats_columns: Vec<(ColumnId, DataType)>,
-        distinct_columns: Vec<(ColumnId, DataType)>,
-        serialize_hll: bool,
-    ) -> Self {
-        Self {
-            stats_columns,
-            distinct_columns,
-            serialize_hll,
-        }
-    }
-}
-
-pub struct FuseLowLevelBloomIndexOptions {
-    location: Location,
-    columns: BTreeMap<FieldIndex, TableField>,
-    ngram_args: Vec<NgramArgs>,
-}
-
-impl FuseLowLevelBloomIndexOptions {
-    pub fn new(
-        location: Location,
-        columns: BTreeMap<FieldIndex, TableField>,
-        ngram_args: Vec<NgramArgs>,
-    ) -> Self {
-        Self {
-            location,
-            columns,
-            ngram_args,
-        }
-    }
-
-    fn into_spec(self) -> BloomIndexWriteSpec {
-        BloomIndexWriteSpec::new(self.columns, self.ngram_args, self.location)
-    }
-}
-
-pub struct FuseLowLevelGranuleIndexOptions {
-    mins_location: Option<Location>,
-    offsets_location: Location,
-    writers: Vec<Box<dyn GranuleIndexLowLevelWriter>>,
-}
-
-impl FuseLowLevelGranuleIndexOptions {
-    pub fn new(
-        mins_location: Option<Location>,
-        offsets_location: Location,
-        writers: Vec<Box<dyn GranuleIndexLowLevelWriter>>,
-    ) -> Self {
-        Self {
-            mins_location,
-            offsets_location,
-            writers,
-        }
-    }
-
-    fn locations(&self) -> (Option<Location>, Location) {
-        (self.mins_location.clone(), self.offsets_location.clone())
-    }
-}
-
-#[derive(Clone)]
-struct ClusterKeysWriteOptions {
-    keys: FuseLowLevelClusterKeyOptions,
     stats: Option<ClusterStatistics>,
-}
-
-#[derive(Clone)]
-struct VirtualColumnsWrite {
-    builder: VirtualColumnBuilder,
-    write_settings: WriteSettings,
-    block_location: Location,
-}
-
-impl VirtualColumnsWrite {
-    fn add_column(&mut self, field_index: FieldIndex, column: &Column) -> Result<()> {
-        self.builder.add_column(field_index, column)
-    }
-
-    fn finish(&mut self) -> Result<super::virtual_column_builder::VirtualColumnState> {
-        self.builder
-            .finalize(&self.write_settings, &self.block_location)
-    }
 }
 
 struct GranuleIndexesWrite {
@@ -292,44 +166,75 @@ impl GranuleIndexesColumnWrite {
 
 /// Immutable configuration of a low-level block write.
 pub struct FuseLowLevelBlockWriteOptions {
-    context: FuseLowLevelWriteContext,
+    func_ctx: FunctionContext,
+    operator: Operator,
+    schema: TableSchemaRef,
+    write_settings: WriteSettings,
     writer_properties: WriterPropertiesPtr,
     block_location: Location,
-    statistics: FuseLowLevelStatisticsOptions,
+    stats_columns: Vec<(ColumnId, DataType)>,
+    distinct_columns: Vec<(ColumnId, DataType)>,
+    serialize_hll: bool,
     block_indexes: Vec<Box<dyn BlockIndexSpec>>,
     ndv_columns: BTreeMap<FieldIndex, TableField>,
     top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
-    virtual_columns: Option<VirtualColumnsWrite>,
-    granule_indexes: Option<FuseLowLevelGranuleIndexOptions>,
+    virtual_columns: Option<VirtualColumnBuilder>,
+    granule_mins_location: Option<Location>,
+    granule_offsets_location: Option<Location>,
+    granule_index_writers: Vec<Box<dyn GranuleIndexLowLevelWriter>>,
     cluster_keys: Option<ClusterKeysWriteOptions>,
 }
 
 impl FuseLowLevelBlockWriteOptions {
     pub fn new(
-        context: FuseLowLevelWriteContext,
+        func_ctx: FunctionContext,
+        operator: Operator,
+        schema: TableSchemaRef,
+        write_settings: WriteSettings,
         writer_properties: WriterPropertiesPtr,
         block_location: Location,
     ) -> Self {
         Self {
-            context,
+            func_ctx,
+            operator,
+            schema,
+            write_settings,
             writer_properties,
             block_location,
-            statistics: FuseLowLevelStatisticsOptions::default(),
+            stats_columns: Vec::new(),
+            distinct_columns: Vec::new(),
+            serialize_hll: false,
             block_indexes: Vec::new(),
             ndv_columns: BTreeMap::new(),
             top_n: None,
             virtual_columns: None,
-            granule_indexes: None,
+            granule_mins_location: None,
+            granule_offsets_location: None,
+            granule_index_writers: Vec::new(),
             cluster_keys: None,
         }
     }
 
-    pub fn set_statistics(&mut self, options: FuseLowLevelStatisticsOptions) {
-        self.statistics = options;
+    pub fn set_statistics(
+        &mut self,
+        stats_columns: Vec<(ColumnId, DataType)>,
+        distinct_columns: Vec<(ColumnId, DataType)>,
+        serialize_hll: bool,
+    ) {
+        self.stats_columns = stats_columns;
+        self.distinct_columns = distinct_columns;
+        self.serialize_hll = serialize_hll;
     }
 
-    pub fn set_bloom_indexes(&mut self, options: FuseLowLevelBloomIndexOptions) {
-        self.block_indexes.push(Box::new(options.into_spec()));
+    pub fn set_bloom_indexes(
+        &mut self,
+        location: Location,
+        columns: BTreeMap<FieldIndex, TableField>,
+        ngram_args: Vec<NgramArgs>,
+    ) {
+        self.block_indexes.push(Box::new(BloomIndexWriteSpec::new(
+            columns, ngram_args, location,
+        )));
     }
 
     pub fn set_ndv_columns(&mut self, columns: BTreeMap<FieldIndex, TableField>) {
@@ -349,49 +254,59 @@ impl FuseLowLevelBlockWriteOptions {
     }
 
     pub fn set_virtual_columns(&mut self, builder: Option<VirtualColumnBuilder>) {
-        self.virtual_columns = builder.map(|builder| VirtualColumnsWrite {
-            builder,
-            write_settings: self.context.write_settings.clone(),
-            block_location: self.block_location.clone(),
-        });
+        self.virtual_columns = builder;
     }
 
     pub fn set_vector_index(&mut self, location: Location, builder: VectorIndexBuilder) {
         self.block_indexes.push(Box::new(
-            builder.into_write_spec(location, self.context.schema.num_fields()),
+            builder.into_write_spec(location, self.schema.num_fields()),
         ));
     }
 
     pub fn set_spatial_index(&mut self, location: Location, builder: SpatialIndexBuilder) {
         self.block_indexes.push(Box::new(
-            builder.into_write_spec(location, self.context.schema.num_fields()),
+            builder.into_write_spec(location, self.schema.num_fields()),
         ));
     }
 
-    pub fn set_granule_indexes(&mut self, options: FuseLowLevelGranuleIndexOptions) {
-        self.granule_indexes = Some(options);
+    pub fn set_granule_indexes(
+        &mut self,
+        mins_location: Option<Location>,
+        offsets_location: Location,
+        writers: Vec<Box<dyn GranuleIndexLowLevelWriter>>,
+    ) {
+        self.granule_mins_location = mins_location;
+        self.granule_offsets_location = Some(offsets_location);
+        self.granule_index_writers = writers;
     }
 
     pub fn set_cluster_keys(
         &mut self,
-        keys: FuseLowLevelClusterKeyOptions,
+        cluster_key_id: u32,
+        fields: Vec<DataType>,
+        level: i32,
         stats: Option<ClusterStatistics>,
     ) {
-        self.cluster_keys = Some(ClusterKeysWriteOptions { keys, stats });
+        self.cluster_keys = Some(ClusterKeysWriteOptions {
+            cluster_key_id,
+            fields,
+            level,
+            stats,
+        });
     }
 
     fn granule_rows(&self) -> Option<usize> {
-        self.context.write_settings.index_granularity
+        self.write_settings.index_granularity
     }
 
     fn validate(&self) -> Result<()> {
         if !matches!(
-            self.context.write_settings.storage_format,
+            self.write_settings.storage_format,
             FuseStorageFormat::Parquet
         ) {
             return Err(crate::unsupported_storage_format_error());
         }
-        if self.context.schema.fields().is_empty() {
+        if self.schema.fields().is_empty() {
             return Err(ErrorCode::BadArguments(
                 "FuseLowLevelBlockWriter requires a non-empty schema",
             ));
@@ -402,7 +317,7 @@ impl FuseLowLevelBlockWriteOptions {
                 "FuseLowLevelBlockWriter index_granularity must be greater than zero",
             ));
         }
-        match (granule_rows, &self.granule_indexes) {
+        match (granule_rows, &self.granule_offsets_location) {
             (Some(_), None) => {
                 return Err(ErrorCode::BadArguments(
                     "FuseLowLevelBlockWriter requires granule index configuration when granules are enabled",
@@ -416,22 +331,20 @@ impl FuseLowLevelBlockWriteOptions {
             _ => {}
         }
         if let Some(cluster) = &self.cluster_keys {
-            if let Some(granule) = &self.granule_indexes
-                && granule.mins_location.is_none()
-            {
+            if granule_rows.is_some() && self.granule_mins_location.is_none() {
                 return Err(ErrorCode::BadArguments(
                     "FuseLowLevelBlockWriter requires a mins location for granule cluster keys",
                 ));
             }
-            if cluster.keys.fields.is_empty() {
+            if cluster.fields.is_empty() {
                 return Err(ErrorCode::BadArguments(
                     "FuseLowLevelBlockWriter cluster key fields must not be empty",
                 ));
             }
         }
-        let expected_compression = self.context.write_settings.table_compression.into();
+        let expected_compression = self.write_settings.table_compression.into();
         let granules_enabled = granule_rows.is_some();
-        for (_, path) in table_schema_arrow_leaf_paths(&self.context.schema) {
+        for (_, path) in table_schema_arrow_leaf_paths(&self.schema) {
             let path = ColumnPath::from(path);
             let actual = self.writer_properties.compression(&path);
             if actual != expected_compression {
@@ -509,7 +422,7 @@ impl FuseLowLevelBlockWriter {
         use std::io::Write;
 
         let mut writer = create_blocking_write(
-            self.options.context.operator.clone(),
+            self.options.operator.clone(),
             location.0.clone(),
             BLOCKING_WRITE_MAX_CHUNKS,
         );
@@ -527,7 +440,7 @@ impl FuseLowLevelBlockWriter {
             ));
         }
         let cluster = match &self.options.cluster_keys {
-            Some(options) => options.keys.clone(),
+            Some(options) => options.clone(),
             None => {
                 return Err(ErrorCode::BadArguments(
                     "FuseLowLevelBlockWriter has no cluster-key configuration",
@@ -536,16 +449,20 @@ impl FuseLowLevelBlockWriter {
         };
         let granule_rows = self.options.granule_rows();
         let (granule_mins_location, granule_offsets_location) = match granule_rows {
-            Some(_) => {
-                let granule = self
-                    .options
-                    .granule_indexes
-                    .as_ref()
-                    .expect("granule options validated");
-                let (mins, offsets) = granule.locations();
-                (mins, Some(offsets))
-            }
+            Some(_) => (
+                self.options.granule_mins_location.clone(),
+                self.options.granule_offsets_location.clone(),
+            ),
             None => (None, None),
+        };
+        let granule_min_builders = if granule_rows.is_some() {
+            cluster
+                .fields
+                .iter()
+                .map(|ty| ColumnBuilder::with_capacity(&ty.wrap_nullable(), 0))
+                .collect()
+        } else {
+            Vec::new()
         };
         Ok(FuseLowLevelClusterKeyWriter {
             parent: self,
@@ -554,8 +471,7 @@ impl FuseLowLevelBlockWriter {
             granule_mins_location,
             granule_offsets_location,
             total_rows: 0,
-            rows_in_granule: 0,
-            granule_mins: Vec::new(),
+            granule_min_builders,
             first_key: None,
             last_key: None,
         })
@@ -575,9 +491,9 @@ impl FuseLowLevelBlockWriter {
         }
 
         let write_started = Instant::now();
-        let operator = self.options.context.operator.clone();
-        let schema = self.options.context.schema.clone();
-        let write_settings = &self.options.context.write_settings;
+        let operator = self.options.operator.clone();
+        let schema = self.options.schema.clone();
+        let write_settings = &self.options.write_settings;
         let writer = create_blocking_write(
             operator.clone(),
             self.options.block_location.0.clone(),
@@ -598,16 +514,16 @@ impl FuseLowLevelBlockWriter {
         let column_sketches =
             BlockColumnSketchesBuilder::new(&self.options.ndv_columns, top_n, None)?;
         let column_stats = ColumnStatisticsState::new(
-            &self.options.statistics.stats_columns,
-            &self.options.statistics.distinct_columns,
+            &self.options.stats_columns,
+            &self.options.distinct_columns,
             &write_settings.col_stats_truncate_lens,
         );
         let index_context = BlockIndexLowLevelWriteContext {
-            func_ctx: self.options.context.func_ctx.clone(),
+            func_ctx: self.options.func_ctx.clone(),
             physical_schema: schema.clone(),
             block_location: self.options.block_location.clone(),
             operator: operator.clone(),
-            write_settings: self.options.context.write_settings.clone(),
+            write_settings: self.options.write_settings.clone(),
         };
         let block_indexes = std::mem::take(&mut self.options.block_indexes)
             .into_iter()
@@ -616,20 +532,20 @@ impl FuseLowLevelBlockWriter {
 
         let granule_indexes = match self.options.granule_rows() {
             Some(rows) => {
-                let options = self
+                let offsets_location = self
                     .options
-                    .granule_indexes
-                    .as_mut()
+                    .granule_offsets_location
+                    .clone()
                     .expect("granule options validated");
                 Some(GranuleIndexesWrite {
                     rows,
-                    writers: std::mem::take(&mut options.writers),
+                    writers: std::mem::take(&mut self.options.granule_index_writers),
                     output: GranuleIndexLowLevelOutput::default(),
                     writer: GranuleIndexFileWriter::new(
                         rows,
                         schema.to_leaf_column_ids(),
-                        options.mins_location.clone(),
-                        options.offsets_location.clone(),
+                        self.options.granule_mins_location.clone(),
+                        offsets_location,
                     ),
                 })
             }
@@ -638,7 +554,7 @@ impl FuseLowLevelBlockWriter {
         let virtual_columns = self.options.virtual_columns.take();
         let granule_rows = self.options.granule_rows();
         let fields = schema.fields().to_vec();
-        let serialize_hll = self.options.statistics.serialize_hll;
+        let serialize_hll = self.options.serialize_hll;
         Ok(FuseLowLevelDataWriter {
             parent: self,
             parquet: Some(parquet),
@@ -738,7 +654,7 @@ impl FuseLowLevelBlockWriter {
             granule_index,
             vector_stats: data.vector_stats,
             virtual_block_meta: None,
-            compression: Compression::from(self.options.context.write_settings.table_compression),
+            compression: Compression::from(self.options.write_settings.table_compression),
             create_on: Some(Utc::now()),
         };
         Ok(FuseLowLevelBlockWriteOutput {
@@ -753,13 +669,12 @@ impl FuseLowLevelBlockWriter {
 /// Consumes ordered cluster-key batches and owns all active cluster-key state.
 pub struct FuseLowLevelClusterKeyWriter {
     parent: FuseLowLevelBlockWriter,
-    cluster: FuseLowLevelClusterKeyOptions,
+    cluster: ClusterKeysWriteOptions,
     granule_rows: Option<usize>,
     granule_mins_location: Option<Location>,
     granule_offsets_location: Option<Location>,
     total_rows: usize,
-    rows_in_granule: usize,
-    granule_mins: Vec<Scalar>,
+    granule_min_builders: Vec<ColumnBuilder>,
     first_key: Option<Vec<Scalar>>,
     last_key: Option<Vec<Scalar>>,
 }
@@ -798,17 +713,17 @@ impl FuseLowLevelClusterKeyWriter {
         self.last_key = Some(tuple_at(columns, rows - 1));
 
         if let Some(granule_rows) = self.granule_rows {
-            let mut offset = 0;
-            while offset < rows {
-                if self.rows_in_granule == 0 {
-                    self.granule_mins
-                        .push(Scalar::Tuple(tuple_at(columns, offset)));
-                }
-                let take = (granule_rows - self.rows_in_granule).min(rows - offset);
-                offset += take;
-                self.rows_in_granule += take;
-                if self.rows_in_granule == granule_rows {
-                    self.rows_in_granule = 0;
+            let first = (granule_rows - self.total_rows % granule_rows) % granule_rows;
+            let indices = (first..rows)
+                .step_by(granule_rows)
+                .map(|row| row as u64)
+                .collect::<Vec<_>>();
+            if !indices.is_empty() {
+                let sampled =
+                    DataBlock::new_from_columns(columns.to_vec()).take(indices.as_slice())?;
+                for (builder, entry) in self.granule_min_builders.iter_mut().zip(sampled.columns())
+                {
+                    builder.append_column(&entry.to_column().wrap_nullable(None));
                 }
             }
         }
@@ -822,11 +737,18 @@ impl FuseLowLevelClusterKeyWriter {
                 "FuseLowLevelClusterKeyWriter cannot finish without rows",
             ));
         }
+        let granule_count = self
+            .granule_min_builders
+            .first()
+            .map_or(0, ColumnBuilder::len);
+        let min_columns = std::mem::take(&mut self.granule_min_builders)
+            .into_iter()
+            .map(ColumnBuilder::build)
+            .collect();
         let mut parent = self.parent;
         let mins_state = match self.granule_mins_location {
-            Some(location) => Some(GranuleIndexFileWriter::serialize_mins(
-                &self.granule_mins,
-                &self.cluster.fields,
+            Some(location) => Some(GranuleIndexFileWriter::serialize_min_columns(
+                min_columns,
                 location,
             )?),
             None => None,
@@ -849,7 +771,7 @@ impl FuseLowLevelClusterKeyWriter {
         let max = self.last_key.take().expect("non-empty cluster keys");
         parent.cluster_keys_result = Some(FuseBlockClusterKeysResult {
             row_count: self.total_rows,
-            granule_count: self.granule_mins.len(),
+            granule_count,
             cluster_stats: ClusterStatistics::new(
                 self.cluster.cluster_key_id,
                 min,
@@ -885,7 +807,7 @@ pub struct FuseLowLevelDataWriter {
     column_stats: ColumnStatisticsState,
     column_sketches: BlockColumnSketchesBuilder,
     block_indexes: Option<Vec<Box<dyn BlockIndexLowLevelWriter>>>,
-    virtual_columns: Option<VirtualColumnsWrite>,
+    virtual_columns: Option<VirtualColumnBuilder>,
     granule_indexes: Option<GranuleIndexesWrite>,
 }
 
@@ -903,10 +825,6 @@ impl FuseLowLevelDataWriter {
         let field_index = self.next_field;
         let field = self.fields[field_index].clone();
         let arrow_field = self.arrow_schema.fields()[field_index].clone();
-        let leaf_write = LeafWriteSettings {
-            field: arrow_field,
-            granule_rows: self.granule_rows,
-        };
         let block_indexes = self
             .block_indexes
             .take()
@@ -915,6 +833,7 @@ impl FuseLowLevelDataWriter {
             .map(|writer| writer.next_column())
             .collect::<Result<Vec<_>>>()?;
         let num_leaves = field.data_type().num_leaf_columns();
+        let granule_rows = self.granule_rows;
         let granule_index = match self.granule_indexes.take() {
             Some(indexes) => Some(indexes.next_column()?),
             None => None,
@@ -928,7 +847,8 @@ impl FuseLowLevelDataWriter {
             Ok(FuseLowLevelColumnWriter {
                 parent: self,
                 field,
-                leaf_write,
+                arrow_field: arrow_field.clone(),
+                granule_rows,
                 block_indexes,
                 rows: 0,
                 size_state: None,
@@ -940,7 +860,8 @@ impl FuseLowLevelDataWriter {
             Ok(FuseLowLevelColumnWriter {
                 parent: self,
                 field,
-                leaf_write,
+                arrow_field: arrow_field.clone(),
+                granule_rows,
                 block_indexes,
                 rows: 0,
                 size_state: None,
@@ -1030,8 +951,11 @@ impl FuseLowLevelDataWriter {
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
 
         let draft_virtual_block_meta = match self.virtual_columns.as_mut() {
-            Some(writer) => {
-                let state = writer.finish()?;
+            Some(builder) => {
+                let state = builder.finalize(
+                    &parent.options.write_settings,
+                    &parent.options.block_location,
+                )?;
                 let meta = state.draft_virtual_block_meta;
                 if meta.virtual_column_size > 0 {
                     let write_started = Instant::now();
@@ -1268,7 +1192,8 @@ enum FuseBlockColumnState {
 pub struct FuseLowLevelColumnWriter {
     parent: FuseLowLevelDataWriter,
     field: databend_common_expression::TableField,
-    leaf_write: LeafWriteSettings,
+    arrow_field: Arc<arrow_schema::Field>,
+    granule_rows: Option<usize>,
     block_indexes: Vec<Box<dyn super::block_index::BlockIndexLowLevelColumnWriter>>,
     rows: usize,
     size_state: Option<ColumnSizeState>,
@@ -1316,8 +1241,13 @@ impl FuseLowLevelColumnWriter {
         match &mut self.state {
             FuseBlockColumnState::Streaming(leaf) => {
                 let leaf = leaf.as_mut().expect("streaming leaf is active");
-                self.leaf_write
-                    .write_single(leaf, column, &mut self.rows_in_granule)?;
+                write_single_leaf(
+                    self.arrow_field.as_ref(),
+                    self.granule_rows,
+                    leaf,
+                    column,
+                    &mut self.rows_in_granule,
+                )?;
             }
             FuseBlockColumnState::Buffered(chunks) => chunks.push(column.clone()),
         }
@@ -1354,7 +1284,9 @@ impl FuseLowLevelColumnWriter {
                 for leaf_index in 0..num_leaves {
                     let mut leaf = parquet.next_leaf()?;
                     let mut rows_in_granule = 0;
-                    self.leaf_write.write_leaf(
+                    write_leaf(
+                        self.arrow_field.as_ref(),
+                        self.granule_rows,
                         &mut leaf,
                         &column,
                         leaf_index,
@@ -1387,86 +1319,81 @@ impl FuseLowLevelColumnWriter {
     }
 }
 
-struct LeafWriteSettings {
-    field: Arc<arrow_schema::Field>,
+fn write_single_leaf(
+    field: &arrow_schema::Field,
     granule_rows: Option<usize>,
+    leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
+    column: &Column,
+    rows_in_granule: &mut usize,
+) -> Result<()> {
+    let mut offset = 0;
+    while offset < column.len() {
+        let take = rows_to_write(granule_rows, *rows_in_granule, column.len() - offset);
+        let part = column.slice(offset..offset + take);
+        let array: Arc<dyn arrow_array::Array> = (&part).into();
+        let leaves = compute_leaves(field, &array)?;
+        if leaves.len() != 1 {
+            return Err(ErrorCode::Internal(format!(
+                "single-leaf column produced {} parquet leaves",
+                leaves.len()
+            )));
+        }
+        leaf.write(&leaves[0])?;
+        offset += take;
+        finish_leaf_fragment(granule_rows, leaf, rows_in_granule, take)?;
+    }
+    Ok(())
 }
 
-impl LeafWriteSettings {
-    fn write_single(
-        &self,
-        leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
-        column: &Column,
-        rows_in_granule: &mut usize,
-    ) -> Result<()> {
-        let mut offset = 0;
-        while offset < column.len() {
-            let take = self.rows_to_write(*rows_in_granule, column.len() - offset);
-            let part = column.slice(offset..offset + take);
-            let array: Arc<dyn arrow_array::Array> = (&part).into();
-            let leaves = compute_leaves(&self.field, &array)?;
-            if leaves.len() != 1 {
-                return Err(ErrorCode::Internal(format!(
-                    "single-leaf column produced {} parquet leaves",
-                    leaves.len()
-                )));
-            }
-            leaf.write(&leaves[0])?;
-            offset += take;
-            self.finish_fragment(leaf, rows_in_granule, take)?;
-        }
-        Ok(())
+fn write_leaf(
+    field: &arrow_schema::Field,
+    granule_rows: Option<usize>,
+    leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
+    column: &Column,
+    leaf_index: usize,
+    rows_in_granule: &mut usize,
+) -> Result<()> {
+    let mut offset = 0;
+    while offset < column.len() {
+        let take = rows_to_write(granule_rows, *rows_in_granule, column.len() - offset);
+        let part = column.slice(offset..offset + take);
+        let array: Arc<dyn arrow_array::Array> = (&part).into();
+        let leaves = compute_leaves(field, &array)?;
+        let encoded = leaves.get(leaf_index).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "logical column produced {} leaves, expected leaf {leaf_index}",
+                leaves.len()
+            ))
+        })?;
+        leaf.write(encoded)?;
+        offset += take;
+        finish_leaf_fragment(granule_rows, leaf, rows_in_granule, take)?;
     }
+    Ok(())
+}
 
-    fn write_leaf(
-        &self,
-        leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
-        column: &Column,
-        leaf_index: usize,
-        rows_in_granule: &mut usize,
-    ) -> Result<()> {
-        let mut offset = 0;
-        while offset < column.len() {
-            let take = self.rows_to_write(*rows_in_granule, column.len() - offset);
-            let part = column.slice(offset..offset + take);
-            let array: Arc<dyn arrow_array::Array> = (&part).into();
-            let leaves = compute_leaves(&self.field, &array)?;
-            let encoded = leaves.get(leaf_index).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "logical column produced {} leaves, expected leaf {leaf_index}",
-                    leaves.len()
-                ))
-            })?;
-            leaf.write(encoded)?;
-            offset += take;
-            self.finish_fragment(leaf, rows_in_granule, take)?;
-        }
-        Ok(())
+fn rows_to_write(granule_rows: Option<usize>, rows_in_granule: usize, remaining: usize) -> usize {
+    match granule_rows {
+        Some(rows) => (rows - rows_in_granule).min(remaining),
+        None => remaining,
     }
+}
 
-    fn rows_to_write(&self, rows_in_granule: usize, remaining: usize) -> usize {
-        match self.granule_rows {
-            Some(rows) => (rows - rows_in_granule).min(remaining),
-            None => remaining,
-        }
+fn finish_leaf_fragment(
+    granule_rows: Option<usize>,
+    leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
+    rows_in_granule: &mut usize,
+    written: usize,
+) -> Result<()> {
+    let Some(rows) = granule_rows else {
+        return Ok(());
+    };
+    *rows_in_granule += written;
+    if *rows_in_granule == rows {
+        leaf.flush_page()?;
+        *rows_in_granule = 0;
     }
-
-    fn finish_fragment(
-        &self,
-        leaf: &mut BulkParquetLeafWriter<OpenDalBlockingWrite>,
-        rows_in_granule: &mut usize,
-        written: usize,
-    ) -> Result<()> {
-        let Some(rows) = self.granule_rows else {
-            return Ok(());
-        };
-        *rows_in_granule += written;
-        if *rows_in_granule == rows {
-            leaf.flush_page()?;
-            *rows_in_granule = 0;
-        }
-        Ok(())
-    }
+    Ok(())
 }
 
 fn page_layout_from_metadata(
@@ -1578,7 +1505,7 @@ mod tests {
             .iter()
             .map(|field| (field.column_id(), DataType::from(field.data_type())))
             .collect();
-        let context = FuseLowLevelWriteContext::new(
+        let mut options = FuseLowLevelBlockWriteOptions::new(
             FunctionContext::default(),
             operator,
             schema,
@@ -1587,35 +1514,26 @@ mod tests {
                 index_granularity: Some(2),
                 ..Default::default()
             },
-        );
-        let mut options = FuseLowLevelBlockWriteOptions::new(
-            context,
             properties,
             ("block.parquet".to_string(), 0),
         );
-        options.set_statistics(FuseLowLevelStatisticsOptions::new(
-            stats_columns,
-            Vec::new(),
-            false,
-        ));
-        options.set_bloom_indexes(FuseLowLevelBloomIndexOptions::new(
+        options.set_statistics(stats_columns, Vec::new(), false);
+        options.set_bloom_indexes(
             ("bloom.parquet".to_string(), 0),
             BTreeMap::new(),
             Vec::new(),
-        ));
-        options.set_granule_indexes(FuseLowLevelGranuleIndexOptions::new(
+        );
+        options.set_granule_indexes(
             Some(("mins.parquet".to_string(), 0)),
             ("offsets.parquet".to_string(), 0),
             Vec::new(),
-        ));
+        );
         options.set_cluster_keys(
-            FuseLowLevelClusterKeyOptions::new(
-                7,
-                vec![DataType::Nullable(Box::new(DataType::Number(
-                    NumberDataType::Int32,
-                )))],
-                0,
-            ),
+            7,
+            vec![DataType::Nullable(Box::new(DataType::Number(
+                NumberDataType::Int32,
+            )))],
+            0,
             None,
         );
         options
@@ -1630,7 +1548,7 @@ mod tests {
             TableDataType::Number(NumberDataType::Int32),
         )]));
         let mut options = options(operator, schema);
-        options.context.write_settings.table_compression = TableCompression::Zstd;
+        options.write_settings.table_compression = TableCompression::Zstd;
 
         let error = match FuseLowLevelBlockWriter::create(options) {
             Ok(_) => panic!("compression mismatch must be rejected"),
@@ -1673,14 +1591,16 @@ mod tests {
         let field = TableField::new("value", TableDataType::String);
         let schema = Arc::new(TableSchema::new(vec![field.clone()]));
         let mut write_options = options(operator.clone(), schema.clone());
-        write_options.context.write_settings.index_granularity = None;
-        write_options.granule_indexes = None;
+        write_options.write_settings.index_granularity = None;
+        write_options.granule_mins_location = None;
+        write_options.granule_offsets_location = None;
+        write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
-        write_options.set_bloom_indexes(FuseLowLevelBloomIndexOptions::new(
+        write_options.set_bloom_indexes(
             ("bloom.parquet".to_string(), 0),
             BTreeMap::from([(0, field)]),
             Vec::new(),
-        ));
+        );
 
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
         let mut data = writer.write_data().unwrap();
@@ -1735,8 +1655,10 @@ mod tests {
             ]),
         ]);
         let mut write_options = options(operator.clone(), schema.clone());
-        write_options.context.write_settings.index_granularity = None;
-        write_options.granule_indexes = None;
+        write_options.write_settings.index_granularity = None;
+        write_options.granule_mins_location = None;
+        write_options.granule_offsets_location = None;
+        write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
 
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
@@ -1828,15 +1750,13 @@ mod tests {
         let finalized = Arc::new(AtomicUsize::new(0));
         let mut write_options = options(operator, schema);
         write_options.cluster_keys = None;
-        write_options.set_granule_indexes(FuseLowLevelGranuleIndexOptions::new(
-            None,
-            ("offsets.parquet".to_string(), 0),
-            vec![Box::new(TrackingGranuleLowLevelWriter {
+        write_options.set_granule_indexes(None, ("offsets.parquet".to_string(), 0), vec![
+            Box::new(TrackingGranuleLowLevelWriter {
                 finalized: finalized.clone(),
                 remaining_columns: 1,
                 granule_rows: 2,
-            })],
-        ));
+            }),
+        ]);
 
         let values = Int32Type::from_data(vec![1, 2, 3, 4, 5]);
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
@@ -1927,11 +1847,24 @@ mod tests {
             Some("five"),
         ]);
 
-        let writer =
-            FuseLowLevelBlockWriter::create(options(operator.clone(), schema.clone())).unwrap();
+        let mut write_options = options(operator.clone(), schema.clone());
+        write_options.set_cluster_keys(
+            7,
+            vec![
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+                DataType::Nullable(Box::new(DataType::String)),
+            ],
+            0,
+            None,
+        );
+        let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
         let mut cluster = writer.write_cluster_keys().unwrap();
-        cluster.write_columns(&[keys.slice(0..3)]).unwrap();
-        cluster.write_columns(&[keys.slice(3..5)]).unwrap();
+        cluster
+            .write_columns(&[keys.slice(0..3), strings.slice(0..3)])
+            .unwrap();
+        cluster
+            .write_columns(&[keys.slice(3..5), strings.slice(3..5)])
+            .unwrap();
         let writer = cluster.finish().unwrap();
 
         let mut data = writer.write_data().unwrap();
@@ -1954,7 +1887,7 @@ mod tests {
         );
         assert_eq!(
             result.block_meta.cluster_stats.as_ref().unwrap().min.len(),
-            1
+            2
         );
         let granule = result.block_meta.granule_index.as_ref().unwrap();
         assert_eq!(granule.granule_rows, 2);
@@ -1989,16 +1922,23 @@ mod tests {
             &operator,
             &settings,
             granule.mins.as_ref().unwrap(),
-            &[DataType::Nullable(Box::new(DataType::Number(
-                NumberDataType::Int32,
-            )))],
+            &[
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+                DataType::Nullable(Box::new(DataType::String)),
+            ],
             3,
         )
         .unwrap();
         assert_eq!(mins, vec![
-            Scalar::Tuple(vec![Scalar::Number(1i32.into())]),
-            Scalar::Tuple(vec![Scalar::Number(3i32.into())]),
-            Scalar::Tuple(vec![Scalar::Null]),
+            Scalar::Tuple(vec![
+                Scalar::Number(1i32.into()),
+                Scalar::String("one".to_string()),
+            ]),
+            Scalar::Tuple(vec![
+                Scalar::Number(3i32.into()),
+                Scalar::String("three".to_string()),
+            ]),
+            Scalar::Tuple(vec![Scalar::Null, Scalar::String("five".to_string())]),
         ]);
         OffsetsIndex::load(
             &operator,
@@ -2044,8 +1984,10 @@ mod tests {
             .collect::<Vec<_>>();
         let mut write_options = options(operator.clone(), schema);
         write_options.block_location = block_location;
-        write_options.context.write_settings.index_granularity = None;
-        write_options.granule_indexes = None;
+        write_options.write_settings.index_granularity = None;
+        write_options.granule_mins_location = None;
+        write_options.granule_offsets_location = None;
+        write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
         write_options.set_inverted_indexes(builders);
 

@@ -66,6 +66,7 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -82,6 +83,15 @@ pub struct ReclusterTableInterpreter {
 enum VerticalRound {
     MergeBlocks,
     SortBlocks { task_budget: usize },
+}
+
+fn all_nodes_run_version<'a>(
+    current_version: &str,
+    node_versions: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    node_versions
+        .into_iter()
+        .all(|node_version| node_version == current_version)
 }
 
 impl ReclusterTableInterpreter {
@@ -120,7 +130,11 @@ impl Interpreter for ReclusterTableInterpreter {
         let mut linear_final_carry = ReclusterFinalCarry::default();
         let is_vertical = ctx.get_settings().get_recluster_method()?
             == databend_common_settings::ReclusterMethod::Vertical;
-        let vertical_max_tasks = self.vertical_max_tasks()?;
+        let vertical_max_tasks = if is_vertical {
+            self.vertical_max_tasks()?
+        } else {
+            1
+        };
         let mut vertical_round = VerticalRound::MergeBlocks;
         let mut vertical_cycle_progress = false;
         let start = SystemTime::now();
@@ -138,7 +152,12 @@ impl Interpreter for ReclusterTableInterpreter {
             // A successful commit advances this phase. On retryable conflicts,
             // keep the phase unchanged and rebuild it against the fresh snapshot.
             let res = self
-                .execute_recluster(&mut push_downs, &mut linear_final_carry, vertical_round)
+                .execute_recluster(
+                    &mut push_downs,
+                    &mut linear_final_carry,
+                    vertical_round,
+                    vertical_max_tasks,
+                )
                 .await;
 
             let mut continue_vertical_phase = false;
@@ -249,9 +268,21 @@ impl ReclusterTableInterpreter {
     fn vertical_max_tasks(&self) -> Result<usize> {
         let settings = self.ctx.get_settings();
         let cluster = self.ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
-            Ok(cluster.nodes.len().max(1))
+        if cluster.is_empty() || !settings.get_enable_distributed_recluster()? {
+            return Ok(1);
+        }
+
+        let current_version = &self.ctx.get_version().commit_detail;
+        if all_nodes_run_version(
+            current_version,
+            cluster
+                .nodes
+                .iter()
+                .map(|node| node.binary_version.as_str()),
+        ) {
+            Ok(cluster.nodes.len())
         } else {
+            warn!("recluster: disable distributed vertical execution during mixed-version upgrade");
             Ok(1)
         }
     }
@@ -261,6 +292,7 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
         vertical_round: VerticalRound,
+        vertical_max_tasks: usize,
     ) -> Result<Option<usize>> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
@@ -299,6 +331,7 @@ impl ReclusterTableInterpreter {
                 *limit,
                 linear_final_carry,
                 vertical_round,
+                vertical_max_tasks,
             )
             .await?;
         let Some((mut physical_plan, task_count)) = physical_plan else {
@@ -370,6 +403,7 @@ impl ReclusterTableInterpreter {
         limit: Option<usize>,
         linear_final_carry: &mut ReclusterFinalCarry,
         vertical_round: VerticalRound,
+        vertical_max_tasks: usize,
     ) -> Result<Option<(PhysicalPlan, usize)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
         // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
@@ -385,7 +419,10 @@ impl ReclusterTableInterpreter {
         let method = self.ctx.get_settings().get_recluster_method()?;
         let (vertical_kind, max_tasks_override) = match method {
             databend_common_settings::ReclusterMethod::Vertical => match vertical_round {
-                VerticalRound::MergeBlocks => (Some(VerticalReclusterKind::MergeBlocks), None),
+                VerticalRound::MergeBlocks => (
+                    Some(VerticalReclusterKind::MergeBlocks),
+                    Some(vertical_max_tasks),
+                ),
                 VerticalRound::SortBlocks { task_budget } => {
                     (Some(VerticalReclusterKind::SortBlocks), Some(task_budget))
                 }
@@ -532,5 +569,16 @@ impl ReclusterTableInterpreter {
             recluster_info,
             meta: PhysicalPlanMeta::new("CommitSink"),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_nodes_run_version;
+
+    #[test]
+    fn test_all_nodes_run_version() {
+        assert!(all_nodes_run_version("current", ["current", "current"]));
+        assert!(!all_nodes_run_version("current", ["current", "old"]));
     }
 }

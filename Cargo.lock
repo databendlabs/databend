@@ -13423,7 +13423,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "58.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=4dafc978a#4dafc978a2969be99c5992ac35873b15b5dad677"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=5f3d97f0e9f813955c18af3306fe3d08b1006adc#5f3d97f0e9f813955c18af3306fe3d08b1006adc"
 dependencies = [
  "ahash 0.8.12",
  "arrow-array 58.1.0",

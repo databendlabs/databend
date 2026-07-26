@@ -1826,10 +1826,8 @@ impl ReclusterMutator {
         let mut candidates = Vec::new();
         let mut used_blocks = vec![false; block_count];
         // Horizontal tasks retain the existing compressed-byte packing limit.
-        // Vertical MergeBlocks must not be silently discarded just because that
-        // rough limit is smaller than a source block: its executor performs the
-        // exact mapping, field, index, and writer admission and returns an
-        // explicit MemoryExceedsLimit without spill or horizontal fallback.
+        // Vertical MergeBlocks are bounded by the output row limit instead, so a
+        // source block larger than the rough byte limit is not silently discarded.
         let is_vertical_merge = self.vertical_kind == Some(VerticalReclusterKind::MergeBlocks);
         let task_pack_limit = if is_vertical_merge {
             usize::MAX

@@ -19,20 +19,33 @@ import urllib.request
 from pathlib import Path
 
 
-def load_test_cases(path: Path) -> list[dict]:
-    """Load test cases from a YAML file."""
+def load_test_cases(path: Path) -> list[dict | list[dict]]:
+    """Load standalone cases and shared-data case groups from YAML."""
     import yaml
 
     with open(path) as f:
         cases = yaml.safe_load(f)
-    # Ensure all values in meta lists are strings (yaml may parse "1.2.527" as float)
-    for case in cases:
-        case["meta"] = [str(v) for v in case["meta"]]
-        if "writer" in case:
+
+    # YAML may parse unquoted versions such as 1.2.527 as numbers.
+    required_fields = {"writer", "reader", "meta", "suite"}
+    for index, entry in enumerate(cases):
+        if not isinstance(entry, (dict, list)):
+            raise ValueError(f"Case entry {index + 1} must be an object or array")
+        group = entry if isinstance(entry, list) else [entry]
+        if not group:
+            raise ValueError(f"Shared-data group {index + 1} must not be empty")
+        for case in group:
+            if not isinstance(case, dict) or not required_fields.issubset(case):
+                raise ValueError(
+                    f"Case entry {index + 1} requires fields {sorted(required_fields)}"
+                )
+            if not isinstance(case["meta"], list) or not case["meta"]:
+                raise ValueError(
+                    f"Case entry {index + 1} requires a non-empty meta list"
+                )
             case["writer"] = str(case["writer"])
-        if "reader" in case:
             case["reader"] = str(case["reader"])
-        if "suite" in case:
+            case["meta"] = [str(v) for v in case["meta"]]
             case["suite"] = str(case["suite"])
     return cases
 
@@ -112,7 +125,8 @@ def git_partial_clone(
     subprocess.run(
         [
             "git",
-            "-c", "advice.detachedHead=false",
+            "-c",
+            "advice.detachedHead=false",
             "clone",
             "-b",
             branch,
@@ -209,7 +223,7 @@ class TestContext:
         return proc
 
     def start_query(self, ver: str) -> subprocess.Popen:
-        """Start databend-query, track process, wait for port 3307."""
+        """Start databend-query and wait for its MySQL and HTTP ports."""
         query_path = self.bin_path(ver, "query")
         config_path = self.query_config_path(ver)
         stdout_file = str(self.data_dir / f"query-nohup-{ver}.out")
@@ -234,6 +248,7 @@ class TestContext:
 
         try:
             wait_tcp_port(3307, 20)
+            wait_tcp_port(8000, 20)
         except TimeoutError:
             proc.terminate()
             proc.wait()
@@ -244,11 +259,51 @@ class TestContext:
 
         return proc
 
+    def stop_query(self, proc: subprocess.Popen) -> None:
+        """Stop one query process while leaving the shared meta process running."""
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        if proc in self.processes:
+            self.processes.remove(proc)
+        time.sleep(1)
+
+    def install_enterprise_license(self) -> None:
+        """Install the CI license on the active query, when provided."""
+        license_key = os.environ.get("QUERY_DATABEND_ENTERPRISE_LICENSE")
+        if not license_key:
+            return
+
+        print(" === Install enterprise license")
+        sql = f"SET GLOBAL enterprise_license = '{license_key}'"
+        subprocess.run(
+            [
+                "bendsql",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8000",
+                "--user",
+                "root",
+                "--query",
+                sql,
+                "--output",
+                "null",
+            ],
+            check=True,
+        )
+
     def run_sqllogictests(self, run_file: str) -> None:
-        """Run sqllogictests for the given test file."""
+        """Run one sqllogictest file against the active query."""
         print(f" === Run test: {run_file}")
 
-        sqllogictests = str(self.bins_dir / "current" / "bin" / "databend-sqllogictests")
+        sqllogictests = str(
+            self.bins_dir / "current" / "bin" / "databend-sqllogictests"
+        )
         subprocess.run(
             [
                 sqllogictests,
@@ -266,16 +321,17 @@ class TestContext:
         """Try to print binary version info; suppress noise from old binaries."""
         result = subprocess.run(
             [bin_path] + args,
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode == 0:
             for line in result.stdout.strip().splitlines():
                 if line.startswith("version:"):
                     print(f"        {line}")
                     return
-            print(f"        (no version line in output)")
+            print("        (no version line in output)")
         else:
-            print(f"        (--cmd ver not supported by this build)")
+            print("        (--cmd ver not supported by this build)")
 
     def clean_data_dir(self) -> None:
         """Remove and recreate the .databend data directory."""
@@ -284,45 +340,57 @@ class TestContext:
             shutil.rmtree(self.data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-    def run_test(self) -> None:
-        """Run the full write -> meta-upgrade -> read compatibility test."""
-        self.cleanup()
-        self.clean_data_dir()
+    def check_versions(self, query_versions: list[str]) -> None:
+        """Print all binaries used by a compatibility scenario."""
+        print(" === Checking binary versions before test ...")
+        for ver in self.meta_versions:
+            print(f" === checking metasrv {ver}")
+            self._print_bin_version(
+                self.bin_path(ver, "meta"), ["--single", "--cmd", "ver"]
+            )
 
-        try:
-            # Verify downloaded binaries by printing their versions
-            print(" === Checking binary versions before test ...")
+        checked = set()
+        for ver in query_versions:
+            if ver in checked:
+                continue
+            checked.add(ver)
+            print(f" === checking query {ver}")
+            self._print_bin_version(self.bin_path(ver, "query"), ["--cmd", "ver"])
+        print(" === All binaries OK")
 
-            for ver in self.meta_versions:
-                print(f" === checking metasrv {ver}")
-                self._print_bin_version(self.bin_path(ver, "meta"), ["--single", "--cmd", "ver"])
-
-            print(f" === checking writer query {self.writer_ver}")
-            self._print_bin_version(self.bin_path(self.writer_ver, "query"), ["--cmd", "ver"])
-
-            print(f" === checking reader query {self.reader_ver}")
-            self._print_bin_version(self.bin_path(self.reader_ver, "query"), ["--cmd", "ver"])
-
-            print(" === All binaries OK")
-
-            # Phase 1: Write
-            print(" === Phase 1: Write data with writer version")
-            self.start_metasrv(self.meta_versions[0])
-            self.start_query(self.writer_ver)
-            self.run_sqllogictests("fuse_compat_write.test")
+    def upgrade_meta(self) -> None:
+        """Start each declared meta version once to upgrade its on-disk state."""
+        print(" === Upgrade meta on-disk data")
+        for ver in self.meta_versions:
+            self.start_metasrv(ver)
+            time.sleep(3)
             self.cleanup()
 
-            # Phase 2: Meta upgrade
-            print(" === Phase 2: Upgrade meta on-disk data")
-            for ver in self.meta_versions:
-                self.start_metasrv(ver)
-                time.sleep(3)
-                self.cleanup()
+    def run_test(self, clean_data: bool = True, install_license: bool = False) -> None:
+        """Run one complete writer -> meta chain -> reader compatibility case."""
+        self.cleanup()
+        if clean_data:
+            self.clean_data_dir()
 
-            # Phase 3: Read
+        try:
+            self.check_versions([self.writer_ver, self.reader_ver])
+
+            print(" === Phase 1: Write data with writer version")
+            self.start_metasrv(self.meta_versions[0])
+            query = self.start_query(self.writer_ver)
+            if install_license:
+                self.install_enterprise_license()
+            self.run_sqllogictests("fuse_compat_write.test")
+            self.stop_query(query)
+            self.cleanup()
+
+            self.upgrade_meta()
+
             print(" === Phase 3: Read data with reader version")
             self.start_metasrv(self.meta_versions[-1])
             self.start_query(self.reader_ver)
+            if install_license:
+                self.install_enterprise_license()
             self.run_sqllogictests("fuse_compat_read.test")
         finally:
             self.cleanup()
@@ -414,21 +482,58 @@ def setup_env() -> None:
     Path(".databend").mkdir(parents=True, exist_ok=True)
 
 
-def download_and_run_case(
-    writer: str, reader: str, meta: list[str], suite: str,
-) -> None:
-    """Download binaries/configs and run one compatibility test case."""
-    download_query_config(writer)
-    download_query_config(reader)
+def download_case_artifacts(case: dict) -> None:
+    """Download all binaries and configs required by one case."""
+    download_query_config(case["writer"])
+    download_query_config(case["reader"])
 
-    for meta_ver in meta:
+    for meta_ver in case["meta"]:
         download_binary(meta_ver)
 
-    download_binary(writer)
-    download_binary(reader)
+    download_binary(case["writer"])
+    download_binary(case["reader"])
+
+
+def download_and_run_case(
+    writer: str,
+    reader: str,
+    meta: list[str],
+    suite: str,
+) -> None:
+    """Download and run one standalone compatibility test case."""
+    case = {"writer": writer, "reader": reader, "meta": meta, "suite": suite}
+    download_case_artifacts(case)
 
     ctx = TestContext(writer, reader, meta, suite)
-    ctx.run_test()
+    ctx.run_test(install_license=suite.startswith("recluster_"))
+
+
+def download_and_run_group(group: list[dict]) -> None:
+    """Run complete compatibility cases in order while preserving data."""
+    query_versions = []
+    meta_versions = []
+    for case in group:
+        for version in (case["writer"], case["reader"]):
+            if version not in query_versions:
+                query_versions.append(version)
+        for version in case["meta"]:
+            if version not in meta_versions:
+                meta_versions.append(version)
+
+    for version in query_versions:
+        download_query_config(version)
+        download_binary(version)
+    for version in meta_versions:
+        download_binary(version)
+
+    for index, case in enumerate(group):
+        print(
+            f" === Shared-data case {index + 1}/{len(group)}: "
+            f"writer={case['writer']} reader={case['reader']} "
+            f"meta={case['meta']} suite={case['suite']}"
+        )
+        ctx = TestContext(case["writer"], case["reader"], case["meta"], case["suite"])
+        ctx.run_test(clean_data=index == 0, install_license=True)
 
 
 def main():
@@ -473,17 +578,29 @@ def main():
         cases = load_test_cases(yaml_path)
         print(f" === Loaded {len(cases)} test cases from {yaml_path}")
 
-        for i, case in enumerate(cases):
-            writer = case["writer"]
-            reader = case["reader"]
-            meta = case["meta"]
-            suite = case["suite"]
-            print(f" === [{i+1}/{len(cases)}] writer={writer} reader={reader} meta={meta} suite={suite}")
+        for i, entry in enumerate(cases):
+            group = entry if isinstance(entry, list) else [entry]
+            descriptions = []
+            for case in group:
+                descriptions.append(
+                    f"writer={case['writer']} reader={case['reader']} "
+                    f"meta={case['meta']} suite={case['suite']}"
+                )
+            kind = "shared-data group" if isinstance(entry, list) else "case"
+            print(f" === [{i + 1}/{len(cases)}] {kind}: " + " -> ".join(descriptions))
 
             if args.dry_run:
                 continue
 
-            download_and_run_case(writer, reader, meta, suite)
+            if isinstance(entry, list):
+                download_and_run_group(entry)
+            else:
+                download_and_run_case(
+                    entry["writer"],
+                    entry["reader"],
+                    entry["meta"],
+                    entry["suite"],
+                )
 
         if args.dry_run:
             print(" === Dry run complete, no tests executed.")

@@ -1,0 +1,33 @@
+statement ok
+USE compat_granule_rollout
+
+query III
+SELECT count(),sum(payload),count_if(source LIKE 'old-live-%') FROM rollout_t
+----
+64 288224 16
+
+query II
+SELECT table_option LIKE '%INDEX_GRANULARITY=''4''%', table_option LIKE '%AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD=''0''%' FROM system.tables WHERE database='compat_granule_rollout' AND name='rollout_t'
+----
+1 1
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE rollout_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count(DISTINCT _block_name) FROM rollout_t
+----
+64 288224 4
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM rollout_t)
+----
+0
+
+query III
+SELECT count_if(k=0),count_if(k=50),count_if(k=157) FROM rollout_t
+----
+3 0 1

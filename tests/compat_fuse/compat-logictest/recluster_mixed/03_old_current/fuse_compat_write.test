@@ -1,0 +1,39 @@
+statement ok
+USE compat_recluster_mixed
+
+query IIT rowsort
+SELECT id,value,source FROM mixed_t
+----
+0 5 new-merge-insert
+1 10 initial
+2 220 old-update
+3 330 new-merge-update
+5 50 initial
+5 500 old-overlap
+6 60 initial
+7 70 old-write-1
+8 80 old-write-2
+9 90 old-write-1
+10 100 old-write-2
+11 110 old-write-3
+12 120 old-write-3
+13 130 new-merge-insert
+
+statement ok
+CREATE TABLE stream_audit(id int, value int, source string, action string, is_update bool)
+
+statement ok
+INSERT INTO stream_audit SELECT id,value,source,change$action,change$is_update FROM mixed_s
+
+query TBI rowsort
+SELECT action,is_update,count() FROM stream_audit GROUP BY action,is_update
+----
+DELETE 0 1
+DELETE 1 2
+INSERT 0 9
+INSERT 1 2
+
+query I
+SELECT count() FROM mixed_s
+----
+0
