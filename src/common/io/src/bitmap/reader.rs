@@ -294,6 +294,52 @@ fn bitmap_container_contains(data: &[u8], low16: u16) -> io::Result<bool> {
     Ok(word & (1 << bit_index) != 0)
 }
 
+pub(crate) fn bitmap_min(buf: &[u8]) -> io::Result<Option<u64>> {
+    let tree = TreemapReader::new(buf)?;
+    let bitmap = match tree.iter().next() {
+        None => return Ok(None),
+        Some(b) => b?,
+    };
+    if bitmap.containers() == 0 {
+        return Ok(None);
+    }
+    let desc = bitmap.description(0)?;
+    let offset = bitmap.container_offset(0)?;
+    let container_data = &bitmap.bitmap_buf()[offset..];
+    let prefix = bitmap.prefix() as u64;
+    let container_key = desc.prefix as u64;
+    let cardinality = desc.cardinality();
+    let low16 = if cardinality < ARRAY_LIMIT {
+        array_container_first(container_data, cardinality)?
+    } else {
+        bitmap_container_first(container_data)?
+    };
+    Ok(Some(prefix << 32 | container_key << 16 | low16 as u64))
+}
+
+fn array_container_first(data: &[u8], cardinality: usize) -> io::Result<u16> {
+    if data.len() < cardinality * 2 {
+        return Err(Error::other("array container too short"));
+    }
+    Ok(u16::from_le_bytes(data[0..2].try_into().unwrap()))
+}
+
+fn bitmap_container_first(data: &[u8]) -> io::Result<u16> {
+    if data.len() < BITMAP_BYTES {
+        return Err(Error::other("bitmap container too short"));
+    }
+    // Find the lowest set bit in the 1024-word bitmap
+    for word_index in 0..BITMAP_WORDS {
+        let start = word_index * WORD_BYTES;
+        let word = u64::from_le_bytes(data[start..start + WORD_BYTES].try_into().unwrap());
+        if word != 0 {
+            return Ok((word_index * WORD_BITS + word.trailing_zeros() as usize) as u16);
+        }
+    }
+    // All zeros — shouldn't happen for a valid bitmap container
+    Err(Error::other("bitmap container has no set bits"))
+}
+
 pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
     use std::cmp::Ordering::*;
     let rhs = TreemapReader::new(buf)?;

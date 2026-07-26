@@ -754,6 +754,17 @@ pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
     }
 }
 
+pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
+    if buf.is_empty() {
+        return Ok(None);
+    }
+    if is_hybrid_large(buf) {
+        Ok(reader::bitmap_min(&buf[HYBRID_HEADER_LEN..])?)
+    } else {
+        Ok(deserialize_bitmap(buf)?.min())
+    }
+}
+
 fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
     if buf.is_empty() {
         return Ok(BitmapRhsView::Empty);
@@ -1480,5 +1491,40 @@ mod tests {
 
         // Empty buffer
         assert!(!bitmap_contains(&[], 42).unwrap());
+    }
+
+    #[test]
+    fn test_bitmap_min() {
+        // HybridLarge: spanning multiple containers
+        let large = HybridBitmap::from_iter(
+            [0u64, 2500, 65535, 65536, 65536 + 2500, 131071]
+                .into_iter()
+                .chain((0..40000).map(|v| v + 200000)),
+        );
+        let mut buf = Vec::new();
+        large.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_min(&buf).unwrap(), Some(0));
+
+        // HybridSmall
+        let small = HybridBitmap::from_iter(0u64..31);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_min(&buf).unwrap(), Some(0));
+
+        // HybridSmall with non-zero start
+        let small = HybridBitmap::from_iter(100u64..131);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_min(&buf).unwrap(), Some(100));
+
+        // Legacy
+        let mut tree = RoaringTreemap::new();
+        tree.insert(42);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_min(&buf).unwrap(), Some(42));
+
+        // Empty buffer
+        assert_eq!(bitmap_min(&[]).unwrap(), None);
     }
 }
