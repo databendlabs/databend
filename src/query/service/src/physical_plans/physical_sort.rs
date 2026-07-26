@@ -505,6 +505,7 @@ impl PhysicalPlanBuilder {
             input: sample,
             kind: FragmentKind::Normal,
             keys: vec![],
+            skew_info: None,
             ignore_exchange: false,
             allow_adjust_parallelism: false,
             meta: PhysicalPlanMeta::new("Exchange"),

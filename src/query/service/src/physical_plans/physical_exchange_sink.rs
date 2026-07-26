@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::plans::SkewHashInfo;
 
 use crate::physical_plans::format::ExchangeSinkFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -35,6 +36,7 @@ pub struct ExchangeSink {
     pub schema: DataSchemaRef,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
+    pub skew_info: Option<SkewHashInfo>,
 
     // Fragment ID of sink fragment
     pub destination_fragment_id: usize,
@@ -97,6 +99,7 @@ impl IPhysicalPlan for ExchangeSink {
             schema: self.schema.clone(),
             kind: self.kind.clone(),
             keys: self.keys.clone(),
+            skew_info: self.skew_info.clone(),
             destination_fragment_id: self.destination_fragment_id,
             query_id: self.query_id.clone(),
             ignore_exchange: self.ignore_exchange,

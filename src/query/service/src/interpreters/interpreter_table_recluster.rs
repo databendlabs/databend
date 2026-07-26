@@ -419,6 +419,7 @@ impl ReclusterTableInterpreter {
                 input,
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                skew_info: None,
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),

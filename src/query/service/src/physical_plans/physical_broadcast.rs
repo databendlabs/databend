@@ -137,6 +137,7 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
         input: broadcast_source,
         kind: FragmentKind::Expansive,
         keys: vec![],
+        skew_info: None,
         allow_adjust_parallelism: true,
         ignore_exchange: false,
         meta: PhysicalPlanMeta::new("Exchange"),

@@ -20,8 +20,10 @@ use databend_common_exception::Result;
 
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostModel;
+use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::MExpr;
 use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::RequiredProperty;
 use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Join;
@@ -45,8 +47,13 @@ pub struct DefaultCostModel {
 }
 
 impl CostModel for DefaultCostModel {
-    fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        self.compute_cost_impl(memo, m_expr)
+    fn compute_cost(
+        &self,
+        memo: &Memo,
+        m_expr: &MExpr,
+        children_required_props: &[RequiredProperty],
+    ) -> Result<Cost> {
+        self.compute_cost_impl(memo, m_expr, children_required_props)
     }
 }
 
@@ -76,12 +83,19 @@ impl DefaultCostModel {
         self
     }
 
-    fn compute_cost_impl(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+    fn compute_cost_impl(
+        &self,
+        memo: &Memo,
+        m_expr: &MExpr,
+        children_required_props: &[RequiredProperty],
+    ) -> Result<Cost> {
         match m_expr.plan.as_ref() {
             RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
             RelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
             RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
-            RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
+            RelOperator::Join(plan) => {
+                self.compute_cost_join(memo, m_expr, plan, children_required_props)
+            }
             RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
             RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
 
@@ -113,14 +127,33 @@ impl DefaultCostModel {
         Ok(Cost(cost))
     }
 
-    fn compute_cost_join(&self, memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
+    fn compute_cost_join(
+        &self,
+        memo: &Memo,
+        m_expr: &MExpr,
+        plan: &Join,
+        children_required_props: &[RequiredProperty],
+    ) -> Result<Cost> {
         let build_group = m_expr.child_group(memo, 1)?;
         let probe_group = m_expr.child_group(memo, 0)?;
         let build_card = build_group.stat_info.cardinality;
         let probe_card = probe_group.stat_info.cardinality;
 
         let mut cost = build_card * self.hash_table_per_row + probe_card * self.compute_per_row;
-
+        let extra_skew_build_rows = children_required_props.iter().find_map(|prop| {
+            if let Distribution::GlobalSkewHash(_, skew_info) = &prop.distribution
+                && matches!(skew_info.policy, crate::plans::SkewKeysPolicy::Broadcast)
+            {
+                return Some(skew_info.extra_build_rows);
+            }
+            None
+        });
+        if let Some(extra_skew_build_rows) = extra_skew_build_rows {
+            // The exchange operator accounts for sending duplicated build rows.
+            // The join operator still needs to account for inserting those
+            // duplicated rows into per-partition build hash tables.
+            cost += extra_skew_build_rows as f64 * self.hash_table_per_row;
+        }
         if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
             // Due to implementation reasons, right semi join is more expensive than left semi join
             // So if join type is right anti or right semi, cost needs multiply three (an approximate value)
@@ -162,6 +195,19 @@ impl DefaultCostModel {
             Exchange::NodeToNodeHash(_) | Exchange::GlobalHash(_) => {
                 group.stat_info.cardinality * self.network_per_row
                     + group.stat_info.cardinality * self.compute_per_row
+            }
+            Exchange::GlobalSkewHash(_, skew_info) => {
+                let extra_rows =
+                    if matches!(skew_info.policy, crate::plans::SkewKeysPolicy::Broadcast) {
+                        skew_info.extra_build_rows as f64
+                    } else {
+                        0.0
+                    };
+                // Only the build side physically duplicates hot-key rows for skew hash.
+                // Charge both network transfer and exchange-side hashing for the
+                // cardinality that will actually be sent.
+                (group.stat_info.cardinality + extra_rows) * self.network_per_row
+                    + (group.stat_info.cardinality + extra_rows) * self.compute_per_row
             }
             Exchange::Merge | Exchange::MergeSort => {
                 // Merge is essentially a very expensive operation cause it will break the parallelism.

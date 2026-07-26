@@ -355,6 +355,7 @@ impl PhysicalPlanBuilder {
 
                     PhysicalPlan::new(Exchange {
                         keys,
+                        skew_info: None,
                         kind,
                         ignore_exchange: false,
                         allow_adjust_parallelism: true,

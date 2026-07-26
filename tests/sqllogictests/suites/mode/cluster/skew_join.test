@@ -1,0 +1,246 @@
+statement ok
+DROP DATABASE IF EXISTS db_skew_join
+
+statement ok
+CREATE DATABASE db_skew_join
+
+statement ok
+USE db_skew_join
+
+query TT
+SELECT value, `default` FROM system.settings WHERE name = 'enable_experimental_skew_join'
+----
+0 0
+
+statement ok
+SET max_threads = 8
+
+statement ok
+SET enable_analyze_histogram = 0
+
+statement ok
+SET enable_table_snapshot_stats = 1
+
+statement ok
+SET enforce_shuffle_join = 1
+
+statement ok
+SET force_skew_join = 1
+
+statement ok
+SET optimizer_skip_list = ''
+
+statement ok
+CREATE TABLE skew_probe(k int not null) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 2
+
+statement ok
+CREATE TABLE skew_build(k int not null) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO skew_probe
+SELECT if(number < 990000, 1, number - 989998)::int FROM numbers(1000000)
+
+statement ok
+INSERT INTO skew_build
+SELECT if(number < 2, 1, number)::int FROM numbers(3)
+
+statement ok
+ANALYZE TABLE skew_probe
+
+statement ok
+ANALYZE TABLE skew_build
+
+query T
+EXPLAIN SELECT * FROM skew_probe WHERE k = 1
+----
+table: default.db_skew_join.skew_probe<slt:ignore>estimated rows: 990000.00
+
+query T
+EXPLAIN SELECT * FROM skew_build WHERE k = 1
+----
+table: default.db_skew_join.skew_build<slt:ignore>estimated rows: 2.00
+
+query I
+SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+1980001
+
+query T
+EXPLAIN OPTIMIZED SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+<slt:ignore>Exchange(SkewHash): keys: [skew_build.k (#1)], hot_keys: 1, buckets: 3, policy: Broadcast<slt:ignore>Exchange(SkewHash): keys: [skew_probe.k (#0)], hot_keys: 1, buckets: 3, policy: Random<slt:ignore>
+
+query T
+EXPLAIN SELECT count(*) FROM skew_probe p INNER JOIN skew_build b ON p.k = b.k
+----
+<slt:ignore>exchange type: SkewHash(b.k (#1), hot_keys=1, buckets=3, policy=Broadcast)<slt:ignore>exchange type: SkewHash(p.k (#0), hot_keys=1, buckets=3, policy=Random)<slt:ignore>
+
+## Mutation coverage. The target contains a hot key and the first and last cold
+## keys. Exact value counts and id checksums guard against rows being dropped,
+## duplicated, or routed to the wrong mutation branch.
+statement ok
+CREATE TABLE skew_mutation_target(
+    id bigint unsigned not null,
+    k int not null,
+    v int not null
+) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 5
+
+statement ok
+INSERT INTO skew_mutation_target
+SELECT
+    number,
+    if(number < 198000, 1, number - 197998)::int,
+    0
+FROM numbers(200000)
+
+statement ok
+CREATE TABLE skew_mutation_source(
+    k int not null,
+    v int not null,
+    action string not null
+) approx_distinct_columns = '' analyze_frequency_columns = 'k' analyze_top_n_size = 5
+
+statement ok
+INSERT INTO skew_mutation_source VALUES
+    (1, 10, 'update'),
+    (2, 20, 'delete'),
+    (2001, 30, 'update'),
+    (2002, 40, 'insert')
+
+statement ok
+ANALYZE TABLE skew_mutation_target
+
+statement ok
+ANALYZE TABLE skew_mutation_source
+
+## UPDATE with a joined subquery: exercise skew routing below the mutation and
+## verify the hot rows, both cold-key boundaries, and non-matching rows.
+query T
+EXPLAIN UPDATE skew_mutation_target
+SET v = v + 1
+WHERE id IN (
+    SELECT t.id
+    FROM skew_mutation_target AS t
+    INNER JOIN skew_mutation_source AS s ON t.k = s.k
+)
+----
+<slt:ignore>exchange type: SkewHash(s.k<slt:ignore>policy=Broadcast)<slt:ignore>exchange type: SkewHash(t.k<slt:ignore>policy=Random)<slt:ignore>
+
+statement ok
+UPDATE skew_mutation_target
+SET v = v + 1
+WHERE id IN (
+    SELECT t.id
+    FROM skew_mutation_target AS t
+    INNER JOIN skew_mutation_source AS s ON t.k = s.k
+)
+
+query IIII
+SELECT
+    count(*),
+    count_if(v = 1),
+    count_if(v = 0),
+    sum_if(id, v = 1)
+FROM skew_mutation_target
+----
+200000 198002 1998 19602298999
+
+statement ok
+UPDATE skew_mutation_target SET v = 0
+
+statement ok
+ANALYZE TABLE skew_mutation_target
+
+## Matched-only MERGE is an inner join and must use skew exchange. The source
+## is unique by non-NULL key, so every matching target row must update once.
+query T
+EXPLAIN MERGE INTO skew_mutation_target AS t
+USING skew_mutation_source AS s
+ON t.k = s.k
+WHEN MATCHED THEN UPDATE SET t.v = s.v
+----
+<slt:ignore>exchange type: SkewHash(s.k<slt:ignore>policy=Broadcast)<slt:ignore>exchange type: SkewHash(t.k<slt:ignore>policy=Random)<slt:ignore>
+
+query I
+MERGE INTO skew_mutation_target AS t
+USING skew_mutation_source AS s
+ON t.k = s.k
+WHEN MATCHED THEN UPDATE SET t.v = s.v
+----
+198002
+
+query IIIIII
+SELECT
+    count(*),
+    count_if(v = 0),
+    count_if(v = 10),
+    count_if(v = 20),
+    count_if(v = 30),
+    sum_if(id, v != 0)
+FROM skew_mutation_target
+----
+200000 1998 198000 1 1 19602298999
+
+statement ok
+UPDATE skew_mutation_target SET v = 0
+
+## Mixed MERGE uses an outer join, which is deliberately not skewed yet. It is
+## a boundary control for matched update/delete and unmatched insert. The
+## checksum catches compensating row loss and duplication.
+statement ok
+MERGE INTO skew_mutation_target AS t
+USING skew_mutation_source AS s
+ON t.k = s.k
+WHEN MATCHED AND s.action = 'delete' THEN DELETE
+WHEN MATCHED THEN UPDATE SET t.v = s.v
+WHEN NOT MATCHED THEN INSERT (id, k, v) VALUES (200000 + s.v, s.k, s.v)
+
+query IIIIII
+SELECT
+    count(*),
+    count_if(v = 0),
+    count_if(v = 10),
+    count_if(v = 30),
+    count_if(v = 40),
+    sum(id)
+FROM skew_mutation_target
+----
+200000 1998 198000 1 1 19999902040
+
+## NULL keys never match under normal equality. Keep this separate so it checks
+## SQL NULL semantics independently of TopN propagation through the optimizer's
+## injected is_not_null filter.
+statement ok
+CREATE TABLE skew_null_target(id bigint unsigned not null, k int null, v int not null)
+
+statement ok
+INSERT INTO skew_null_target VALUES (1, NULL, 0), (2, 1, 0)
+
+statement ok
+CREATE TABLE skew_null_source(k int null, v int not null)
+
+statement ok
+INSERT INTO skew_null_source VALUES (NULL, 50), (1, 10), (2, 20)
+
+statement ok
+MERGE INTO skew_null_target AS t
+USING skew_null_source AS s
+ON t.k = s.k
+WHEN MATCHED THEN UPDATE SET t.v = s.v
+WHEN NOT MATCHED THEN INSERT (id, k, v) VALUES (100 + s.v, s.k, s.v)
+
+query IIIIIII
+SELECT
+    count(*),
+    count_if(k IS NULL),
+    count_if(v = 0),
+    count_if(v = 10),
+    count_if(v = 20),
+    count_if(v = 50),
+    sum(id)
+FROM skew_null_target
+----
+4 2 1 1 1 1 273
+
+statement ok
+DROP DATABASE db_skew_join

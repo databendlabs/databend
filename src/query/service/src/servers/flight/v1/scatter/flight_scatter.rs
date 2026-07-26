@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 
 pub trait FlightScatter: Sync + Send {
@@ -20,10 +21,15 @@ pub trait FlightScatter: Sync + Send {
 
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
 
-    /// Compute per-row partition indices for use with BlockPartitionStream.
-    /// Returns None if this scatter type doesn't support index-based partitioning
-    /// (e.g., broadcast scatter clones the entire block to all destinations).
-    fn scatter_indices(&self, _data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
-        Ok(None)
+    /// Scatter a block into destination blocks. Index-based scatter keeps using
+    /// BlockPartitionStream batching; block-level scatter is used when rows may
+    /// need to be duplicated across destinations.
+    fn scatter_block(
+        &self,
+        data_block: DataBlock,
+        partition_stream: &mut BlockPartitionStream,
+    ) -> Result<Vec<(usize, DataBlock)>> {
+        let _ = partition_stream;
+        Ok(self.execute(data_block)?.into_iter().enumerate().collect())
     }
 }

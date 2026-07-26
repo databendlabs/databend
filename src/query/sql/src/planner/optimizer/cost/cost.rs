@@ -57,7 +57,12 @@ impl AddAssign for Cost {
 
 pub trait CostModel: Send + Sync {
     /// Compute cost of given `MExpr`(children are not encapsulated).
-    fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost>;
+    fn compute_cost(
+        &self,
+        memo: &Memo,
+        m_expr: &MExpr,
+        children_required_props: &[RequiredProperty],
+    ) -> Result<Cost>;
 }
 
 /// Context of best cost within a group.

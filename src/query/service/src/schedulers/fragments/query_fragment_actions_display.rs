@@ -71,8 +71,20 @@ impl Display for QueryFragmentActionsWrap<'_> {
             match data_exchange {
                 DataExchange::Merge(_) => writeln!(f, "  DataExchange: Merge")?,
                 DataExchange::Broadcast(_) => writeln!(f, "  DataExchange: Broadcast")?,
-                DataExchange::NodeToNodeExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
-                DataExchange::GlobalShuffleExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
+                DataExchange::NodeToNodeExchange(exchange) => {
+                    if exchange.skew_info.is_some() {
+                        writeln!(f, "  DataExchange: SkewShuffle")?
+                    } else {
+                        writeln!(f, "  DataExchange: Shuffle")?
+                    }
+                }
+                DataExchange::GlobalShuffleExchange(exchange) => {
+                    if exchange.skew_info.is_some() {
+                        writeln!(f, "  DataExchange: SkewShuffle")?
+                    } else {
+                        writeln!(f, "  DataExchange: Shuffle")?
+                    }
+                }
             }
         }
 

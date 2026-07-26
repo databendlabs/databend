@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_sql::plans::SkewHashInfo;
 
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
@@ -66,6 +67,7 @@ pub struct GlobalExchangeParams {
     pub schema: DataSchemaRef,
     pub exchange_id: String,
     pub shuffle_keys: Vec<RemoteExpr>,
+    pub skew_info: Option<SkewHashInfo>,
     pub destination_channels: Vec<(String, Vec<String>)>,
 }
 

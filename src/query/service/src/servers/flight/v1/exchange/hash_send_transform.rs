@@ -118,62 +118,60 @@ impl Processor for HashSendTransform {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            let ready_blocks = self
+                .scatter
+                .scatter_block(data_block, &mut self.partition_stream)?;
+            let mut active_downstream = false;
+            let mut futures = Vec::new();
 
-            if let Some(indices) = self.scatter.scatter_indices(&data_block)? {
-                let ready_blocks = self.partition_stream.partition(indices, data_block, true);
+            for (partition_id, block) in ready_blocks {
+                if block.is_empty() {
+                    continue;
+                }
 
-                let mut active_downstream = false;
-                let mut futures = Vec::new();
-
-                for (partition_id, block) in ready_blocks {
-                    if block.is_empty() {
+                if partition_id == self.local_pos {
+                    if self.output.is_finished() {
                         continue;
                     }
 
-                    if partition_id == self.local_pos {
-                        if self.output.is_finished() {
-                            continue;
-                        }
-
-                        if self.output.can_push() {
-                            active_downstream = true;
-                            self.output.push_data(Ok(block));
-                            continue;
-                        }
-                    }
-
-                    if self.channels.is_closed(partition_id) {
+                    if self.output.can_push() {
+                        active_downstream = true;
+                        self.output.push_data(Ok(block));
                         continue;
                     }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
                 }
 
-                if !futures.is_empty() {
-                    let joined = Box::pin(futures::future::join_all(futures));
-                    let mut handle = self.tasks.spawn(self.id, joined);
+                if self.channels.is_closed(partition_id) {
+                    continue;
+                }
 
-                    match handle.poll(true) {
-                        Poll::Ready(results) => {
-                            self.channels.handle_send_results(results)?;
-                            if self.no_active_downstream() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
-                            }
-                        }
-                        Poll::Pending => {
-                            self.handle = Some(handle);
-                            return Ok(Event::NeedConsume);
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
+            }
+
+            if !futures.is_empty() {
+                let joined = Box::pin(futures::future::join_all(futures));
+                let mut handle = self.tasks.spawn(self.id, joined);
+
+                match handle.poll(true) {
+                    Poll::Ready(results) => {
+                        self.channels.handle_send_results(results)?;
+                        if self.no_active_downstream() {
+                            self.input.finish();
+                            return Ok(Event::Finished);
                         }
                     }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
+                    }
                 }
+            }
 
-                if active_downstream {
-                    return Ok(Event::NeedConsume);
-                }
+            if active_downstream {
+                return Ok(Event::NeedConsume);
             }
         }
 

@@ -102,42 +102,40 @@ impl Processor for HashSendSink {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            let ready_blocks = self
+                .scatter
+                .scatter_block(data_block, &mut self.partition_stream)?;
+            let mut futures = Vec::new();
 
-            if let Some(indices) = self.scatter.scatter_indices(&data_block)? {
-                let ready_blocks = self.partition_stream.partition(indices, data_block, true);
-
-                let mut futures = Vec::new();
-
-                for (partition_id, block) in ready_blocks {
-                    if block.is_empty() {
-                        continue;
-                    }
-                    if self.channels.is_closed(partition_id) {
-                        continue;
-                    }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
+            for (partition_id, block) in ready_blocks {
+                if block.is_empty() {
+                    continue;
+                }
+                if self.channels.is_closed(partition_id) {
+                    continue;
                 }
 
-                if !futures.is_empty() {
-                    let joined = Box::pin(futures::future::join_all(futures));
-                    let mut handle = self.tasks.spawn(self.id, joined);
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
+            }
 
-                    match handle.poll(true) {
-                        Poll::Ready(results) => {
-                            self.channels.handle_send_results(results)?;
-                            if self.channels.all_closed() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
-                            }
+            if !futures.is_empty() {
+                let joined = Box::pin(futures::future::join_all(futures));
+                let mut handle = self.tasks.spawn(self.id, joined);
+
+                match handle.poll(true) {
+                    Poll::Ready(results) => {
+                        self.channels.handle_send_results(results)?;
+                        if self.channels.all_closed() {
+                            self.input.finish();
+                            return Ok(Event::Finished);
                         }
-                        Poll::Pending => {
-                            self.handle = Some(handle);
-                            return Ok(Event::NeedConsume);
-                        }
+                    }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
                     }
                 }
             }

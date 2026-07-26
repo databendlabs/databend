@@ -91,6 +91,11 @@ impl OptimizeExprTask {
         required_prop: RequiredProperty,
         children_required_props: Vec<RequiredProperty>,
     ) -> Result<Self> {
+        let cost_lower_bound = optimizer.cost_model.compute_cost(
+            &optimizer.memo,
+            optimizer.memo.group(group_index)?.m_expr(m_expr_index)?,
+            &children_required_props,
+        )?;
         Ok(Self {
             ctx,
             state: OptimizeExprState::Init,
@@ -102,10 +107,7 @@ impl OptimizeExprTask {
             children_required_props,
             children_task_scheduled: false,
             last_optimized_child_index: None,
-            cost_lower_bound: optimizer.cost_model.compute_cost(
-                &optimizer.memo,
-                optimizer.memo.group(group_index)?.m_expr(m_expr_index)?,
-            )?,
+            cost_lower_bound,
         })
     }
 
@@ -294,7 +296,11 @@ impl OptimizeExprTask {
             cost += cost_context.cost;
         }
 
-        let op_cost = optimizer.cost_model.compute_cost(&optimizer.memo, m_expr)?;
+        let op_cost = optimizer.cost_model.compute_cost(
+            &optimizer.memo,
+            m_expr,
+            &self.children_required_props,
+        )?;
         cost += op_cost;
 
         let rel_expr = RelExpr::with_opt_context(m_expr, &optimizer.memo, &children_best_props);
