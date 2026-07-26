@@ -53,6 +53,7 @@ pub use bitmap::HYBRID_MAGIC;
 pub use bitmap::HYBRID_VERSION;
 pub use bitmap::HybridBitmap;
 pub use bitmap::LARGE_THRESHOLD;
+pub use bitmap::bitmap_contains;
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
