@@ -415,7 +415,7 @@ impl Display for HistoryConfig {
             self.retention_interval,
             self.tables
                 .iter()
-                .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
+                .map(|f| format!("{}({} hours)", f.table_name, f.retention))
                 .join(", "),
             self.storage_params
                 .as_ref()
@@ -452,6 +452,14 @@ impl Default for HistoryTableConfig {
 }
 
 impl HistoryConfig {
+    pub fn is_table_enabled(&self, table_name: &str) -> bool {
+        self.on
+            && self
+                .tables
+                .iter()
+                .any(|table| table.table_name.eq_ignore_ascii_case(table_name))
+    }
+
     pub fn is_invisible(&self, table_name: &str) -> bool {
         self.tables
             .iter()

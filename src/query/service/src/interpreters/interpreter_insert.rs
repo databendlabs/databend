@@ -402,6 +402,7 @@ impl Interpreter for InsertInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
         let table = if let Some(table_info) = &self.plan.table_info {
@@ -420,6 +421,13 @@ impl Interpreter for InsertInterpreter {
                 )
                 .await?
         };
+
+        self.ctx.update_query_lineage_target_id(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+            table.get_table_info().ident.table_id,
+        );
 
         let mut table_constraints = Vec::new();
         // check mutability

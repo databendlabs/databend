@@ -227,6 +227,7 @@ impl CreateTableInterpreter {
         let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned();
         let reply = catalog.create_table(req).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
         let table_id = reply.table_id;
@@ -242,6 +243,12 @@ impl CreateTableInterpreter {
             return Err(e);
         }
 
+        self.ctx.update_query_lineage_target_id(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+            table_id,
+        );
         let prev_table_id = reply.prev_table_id;
         let orphan_table_name = reply.orphan_table_name.clone();
         let table_id_seq = reply
