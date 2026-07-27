@@ -337,6 +337,61 @@ fn bitmap_container_first(data: &[u8]) -> io::Result<u16> {
     Err(Error::other("bitmap container has no set bits"))
 }
 
+pub(crate) fn bitmap_max(buf: &[u8]) -> io::Result<Option<u64>> {
+    let tree = TreemapReader::new(buf)?;
+    // Find the last prefix bucket
+    let mut last_bitmap = None;
+    for bitmap_result in tree.iter() {
+        last_bitmap = Some(bitmap_result?);
+    }
+    let bitmap = match last_bitmap {
+        None => return Ok(None),
+        Some(b) => b,
+    };
+    if bitmap.containers() == 0 {
+        return Ok(None);
+    }
+    let last_idx = bitmap.containers() - 1;
+    let desc = bitmap.description(last_idx)?;
+    let offset = bitmap.container_offset(last_idx)?;
+    let container_data = &bitmap.bitmap_buf()[offset..];
+    let prefix = bitmap.prefix() as u64;
+    let container_key = desc.prefix as u64;
+    let cardinality = desc.cardinality();
+    let low16 = if cardinality <= ARRAY_LIMIT {
+        array_container_last(container_data, cardinality)?
+    } else {
+        bitmap_container_last(container_data)?
+    };
+    Ok(Some(prefix << 32 | container_key << 16 | low16 as u64))
+}
+
+fn array_container_last(data: &[u8], cardinality: usize) -> io::Result<u16> {
+    if data.len() < cardinality * 2 {
+        return Err(Error::other("array container too short"));
+    }
+    let offset = (cardinality - 1) * 2;
+    Ok(u16::from_le_bytes(
+        data[offset..offset + 2].try_into().unwrap(),
+    ))
+}
+
+fn bitmap_container_last(data: &[u8]) -> io::Result<u16> {
+    if data.len() < BITMAP_BYTES {
+        return Err(Error::other("bitmap container too short"));
+    }
+    // Find the highest set bit by scanning from the last word backwards
+    for word_index in (0..BITMAP_WORDS).rev() {
+        let start = word_index * WORD_BYTES;
+        let word = u64::from_le_bytes(data[start..start + WORD_BYTES].try_into().unwrap());
+        if word != 0 {
+            let bit_index = WORD_BITS - 1 - word.leading_zeros() as usize;
+            return Ok((word_index * WORD_BITS + bit_index) as u16);
+        }
+    }
+    Err(Error::other("bitmap container has no set bits"))
+}
+
 pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
     use std::cmp::Ordering::*;
     let rhs = TreemapReader::new(buf)?;
