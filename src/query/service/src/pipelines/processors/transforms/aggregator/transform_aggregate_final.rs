@@ -34,6 +34,7 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -260,6 +261,7 @@ impl TransformFinalAggregate {
             }
             AggregateMeta::Spilled(payloads) => {
                 for payload in payloads {
+                    check_interrupt()?;
                     let restored = self.spiller.restore(payload)?;
                     self.handle_serialized(restored, need_check_spill)?;
                 }
@@ -272,22 +274,26 @@ impl TransformFinalAggregate {
                 PartitionedData::Empty => {}
                 PartitionedData::Serialized(payloads) => {
                     for payload in payloads {
+                        check_interrupt()?;
                         self.handle_serialized(payload, need_check_spill)?;
                     }
                 }
                 PartitionedData::AggregatePayload(payloads) => {
                     for payload in payloads {
+                        check_interrupt()?;
                         self.handle_aggregate_payload(payload, need_check_spill)?;
                     }
                 }
                 PartitionedData::BucketSpilled(payloads) => {
                     for payload in payloads {
+                        check_interrupt()?;
                         let restored = self.spiller.restore(payload)?;
                         self.handle_serialized(restored, need_check_spill)?;
                     }
                 }
                 PartitionedData::Mixed(items) => {
                     for item in items {
+                        check_interrupt()?;
                         self.handle_meta(AggregateMeta::from(item), need_check_spill)?;
                     }
                 }
@@ -300,6 +306,7 @@ impl TransformFinalAggregate {
         self.spilled_occurred = true;
         if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
             for (bucket, payload) in v.payload.into_non_empty_bucket_payloads() {
+                check_interrupt()?;
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.spiller.spill(bucket, data_block)?;
             }
@@ -356,6 +363,7 @@ impl TransformFinalAggregate {
             // payload owns its arena, so finishing one partition also releases its states.
             for payload in hashtable.into_payloads() {
                 loop {
+                    check_interrupt()?;
                     let Some(block) = payload.merge_result(&mut self.flush_state)? else {
                         self.flush_state.clear();
                         break;

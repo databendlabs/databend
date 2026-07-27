@@ -110,6 +110,7 @@ impl Node {
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
         time_series_profile: Option<Arc<TimeSeriesProfiles>>,
+        processor_interrupt: Arc<AtomicBool>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -137,6 +138,8 @@ impl Node {
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
             tracking_payload.local_time_series_profile = time_series_profile;
+
+            tracking_payload.processor_interrupt = Some(processor_interrupt);
 
             tracking_payload
         };
@@ -187,7 +190,7 @@ struct ExecutingGraph {
     points: AtomicU64,
     max_points: AtomicU64,
     query_id: Arc<String>,
-    should_finish: AtomicBool,
+    should_finish: Arc<AtomicBool>,
     finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
@@ -212,11 +215,13 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        let should_finish = Arc::new(AtomicBool::new(false));
         Self::init_graph(
             &mut pipeline,
             &mut graph,
             &mut time_series_profile_builder,
             perf_enabled,
+            &should_finish,
         );
         let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
@@ -225,7 +230,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
-            should_finish: AtomicBool::new(false),
+            should_finish,
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
@@ -256,12 +261,14 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        let should_finish = Arc::new(AtomicBool::new(false));
         for pipeline in &mut pipelines {
             Self::init_graph(
                 pipeline,
                 &mut graph,
                 &mut time_series_profile_builder,
                 perf_enabled,
+                &should_finish,
             );
         }
         let executor_stats = ExecutorStats::new();
@@ -271,7 +278,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
-            should_finish: AtomicBool::new(false),
+            should_finish,
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
@@ -286,6 +293,7 @@ impl ExecutingGraph {
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
         perf_enabled: bool,
+        interrupt: &Arc<AtomicBool>,
     ) {
         let offset = graph.node_count();
         for node in pipeline.graph.node_weights() {
@@ -305,6 +313,7 @@ impl ExecutingGraph {
                 &node.inputs,
                 &node.outputs,
                 time_series_profile,
+                interrupt.clone(),
             ));
 
             unsafe {
@@ -877,12 +886,8 @@ impl RunningGraph {
         NodePerfCounters { counters }
     }
 
-    pub fn interrupt_running_nodes(&self) {
-        unsafe {
-            for node_index in self.0.graph.node_indices() {
-                self.0.graph[node_index].processor.interrupt();
-            }
-        }
+    pub fn interrupt(&self) {
+        self.0.should_finish.store(true, Ordering::SeqCst);
     }
 
     pub fn assert_finished_graph(&self) -> Result<()> {
@@ -911,7 +916,7 @@ impl RunningGraph {
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
         self.0.finished_notify.notify_waiters();
-        self.interrupt_running_nodes();
+        self.interrupt();
         let mut finished_error = self.0.finished_error.lock();
         if finished_error.is_none() {
             *finished_error = cause.err();

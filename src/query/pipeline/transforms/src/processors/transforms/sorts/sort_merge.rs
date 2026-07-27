@@ -15,16 +15,14 @@
 use std::hint::unlikely;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use bytesize::ByteSize;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline::core::check_interrupt;
 
 use super::core::Merger;
 use super::core::RowConverter;
@@ -47,8 +45,6 @@ pub struct TransformSortMerge<R: Rows> {
     block_size: usize,
     buffer: Vec<Option<(DataBlock, Column)>>,
 
-    aborting: Arc<AtomicBool>,
-
     /// Record current memory usage.
     num_bytes: ByteSize,
     num_rows: usize,
@@ -63,7 +59,6 @@ impl<R: Rows> TransformSortMerge<R> {
             limit,
             block_size,
             buffer: vec![],
-            aborting: Arc::new(AtomicBool::new(false)),
             num_bytes: ByteSize(0),
             num_rows: 0,
             _r: PhantomData,
@@ -75,10 +70,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
     fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()> {
-        if unlikely(self.aborting.load(Ordering::Relaxed)) {
-            return Err(ErrorCode::aborting());
-        }
-
+        check_interrupt()?;
         if unlikely(block.is_empty()) {
             return Ok(());
         }
@@ -96,10 +88,6 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
         } else {
             self.merge_sort(self.block_size)
         }
-    }
-
-    fn interrupt(&self) {
-        self.aborting.store(true, Ordering::Release);
     }
 
     #[inline(always)]
@@ -167,9 +155,7 @@ impl<R: Rows> TransformSortMerge<R> {
         let mut merger = Merger::<A, _>::new(streams, batch_size, self.limit);
 
         while let Some(block) = merger.next_block()? {
-            if unlikely(self.aborting.load(Ordering::Relaxed)) {
-                return Err(ErrorCode::aborting());
-            }
+            check_interrupt()?;
             result.push(block);
         }
 

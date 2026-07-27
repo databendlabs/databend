@@ -42,6 +42,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
@@ -440,7 +441,7 @@ impl HashJoinBuildState {
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
                             if Self::should_check_build_interrupt(row_index)
-                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                                && check_interrupt().is_err()
                             {
                                 is_interrupted = true;
                                 break;
@@ -469,7 +470,7 @@ impl HashJoinBuildState {
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
                             if Self::should_check_build_interrupt(row_index)
-                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                                && check_interrupt().is_err()
                             {
                                 is_interrupted = true;
                                 break;
@@ -533,7 +534,7 @@ impl HashJoinBuildState {
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
                             if Self::should_check_build_interrupt(row_index)
-                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                                && check_interrupt().is_err()
                             {
                                 is_interrupted = true;
                                 break;
@@ -575,7 +576,7 @@ impl HashJoinBuildState {
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
                             if Self::should_check_build_interrupt(row_index)
-                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                                && check_interrupt().is_err()
                             {
                                 is_interrupted = true;
                                 break;
@@ -621,9 +622,7 @@ impl HashJoinBuildState {
             }};
         }
 
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         let chunk_index = task;
         let chunk = &mut build_state.generation_state.chunks[chunk_index];

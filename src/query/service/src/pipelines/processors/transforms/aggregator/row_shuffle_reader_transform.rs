@@ -18,6 +18,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::BlockMetaTransform;
 use databend_common_pipeline_transforms::BlockMetaTransformer;
 
@@ -57,7 +58,10 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
 
         let restored = payloads
             .into_iter()
-            .map(|payload| self.reader.restore(payload))
+            .map(|payload| {
+                check_interrupt()?;
+                self.reader.restore(payload)
+            })
             .collect::<Result<_, _>>()?;
         let meta = AggregateMeta::Partitioned {
             bucket: None,

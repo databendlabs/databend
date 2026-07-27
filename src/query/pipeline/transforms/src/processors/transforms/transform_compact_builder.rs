@@ -30,7 +30,7 @@ pub fn build_compact_block_pipeline(
     pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new(thresholds));
     pipeline.try_resize(output_len)?;
-    pipeline.add_block_meta_transformer(TransformCompactBlock::default);
+    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
     Ok(())
 }
 

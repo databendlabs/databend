@@ -38,6 +38,7 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::Interval;
+use databend_common_pipeline::core::check_interrupt;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -468,9 +469,7 @@ impl HashJoinProbeState {
         task: usize,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -512,11 +511,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+            check_interrupt()?;
 
             let probe_block = if !projected_probe_fields.is_empty() {
                 // Create null chunk for unmatched rows in probe side
@@ -575,11 +570,7 @@ impl HashJoinProbeState {
         task: usize,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
+        check_interrupt()?;
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -614,11 +605,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+            check_interrupt()?;
 
             result_blocks.push(self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],
@@ -636,11 +623,7 @@ impl HashJoinProbeState {
         task: usize,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
+        check_interrupt()?;
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -675,11 +658,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+            check_interrupt()?;
 
             result_blocks.push(self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],
@@ -697,11 +676,7 @@ impl HashJoinProbeState {
         task: usize,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
+        check_interrupt()?;
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -759,11 +734,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
+            check_interrupt()?;
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
             let marker_column = NullableColumn::new_column(boolean_column, validity.into());

@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
@@ -136,10 +137,12 @@ impl HybridHashJoin {
     fn do_transition_work(&mut self, finished: bool) -> Result<()> {
         if let HybridJoinMode::Grace(grace_join) = &mut self.mode {
             while let Ok(memory_block) = self.state.transition_queue.pop() {
+                check_interrupt()?;
                 grace_join.add_block(Some(memory_block))?;
             }
 
             if finished {
+                check_interrupt()?;
                 grace_join.add_block(None)?;
             }
         }

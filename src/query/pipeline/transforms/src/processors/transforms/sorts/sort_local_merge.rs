@@ -16,8 +16,6 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::hint::unlikely;
 use std::sync::Arc;
-use std::sync::atomic;
-use std::sync::atomic::AtomicBool;
 
 use bytesize::ByteSize;
 use databend_common_exception::Result;
@@ -79,8 +77,6 @@ pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
     base: Base<S>,
     inner: Inner<A, S>,
 
-    aborting: AtomicBool,
-
     max_block_size: usize,
     enable_restore_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
@@ -131,7 +127,6 @@ where
             },
             inner,
             max_block_size,
-            aborting: AtomicBool::new(false),
             enable_restore_prefetch,
             enable_sort_spill_stream_regroup,
         })
@@ -417,7 +412,7 @@ where
                     let total_rows = spill_sort.collect_total_rows();
                     log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
                     spill_sort
-                        .sort_input_data(std::mem::take(input_data), !finished, &self.aborting)
+                        .sort_input_data(std::mem::take(input_data), !finished)
                         .await?;
                 }
                 if finished {
@@ -441,9 +436,5 @@ where
             }
             _ => unreachable!(),
         }
-    }
-
-    fn interrupt(&self) {
-        self.aborting.store(true, atomic::Ordering::Release);
     }
 }

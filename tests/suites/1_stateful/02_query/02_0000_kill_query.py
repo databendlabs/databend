@@ -45,3 +45,23 @@ with NativeClient(name="client1>") as client1:
 
     assert res is None
     client1.expect(prompt)
+
+    client1.send(
+        "SETTINGS (force_aggregate_data_spill = 1) SELECT max(number), sum(number) FROM numbers_mt(100000000000) GROUP BY number LIMIT 10;"
+    )
+    time.sleep(0.5)
+
+    mycursor.execute(
+        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%force_aggregate_data_spill%' AND extra_info NOT LIKE '%system.processes%';"
+    )
+    res = mycursor.fetchone()
+    kill_query = "kill query " + str(res[0]) + ";"
+    mycursor.execute(kill_query)
+    time.sleep(10)
+    mycursor.execute(
+        "SELECT * FROM system.processes WHERE extra_info LIKE '%force_aggregate_data_spill%' AND extra_info NOT LIKE '%system.processes%';"
+    )
+    res = mycursor.fetchone()
+
+    assert res is None
+    client1.expect(prompt)

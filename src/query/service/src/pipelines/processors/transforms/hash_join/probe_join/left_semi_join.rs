@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
-
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -72,9 +70,7 @@ impl HashJoinProbeState {
             }
         }
 
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         if matched_idx > 0 {
             result_blocks.push(DataBlock::take(
@@ -250,9 +246,7 @@ impl HashJoinProbeState {
         row_state: &mut [bool],
         filter_executor: &mut FilterExecutor,
     ) -> Result<()> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         let probe_block = if probe_state.is_probe_projected {
             Some(DataBlock::take(input, &probe_indexes[0..matched_idx])?)
