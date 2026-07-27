@@ -54,6 +54,7 @@ pub use bitmap::HYBRID_VERSION;
 pub use bitmap::HybridBitmap;
 pub use bitmap::LARGE_THRESHOLD;
 pub use bitmap::bitmap_contains;
+pub use bitmap::bitmap_max;
 pub use bitmap::bitmap_min;
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
