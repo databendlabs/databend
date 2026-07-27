@@ -109,8 +109,6 @@ pub struct HashJoinState {
     pub(crate) _build_done_dummy_receiver: Receiver<HashTableType>,
     /// Some description of hash join. Such as join type, join keys, etc.
     pub(crate) hash_join_desc: HashJoinDesc,
-    /// Interrupt the build phase or probe phase.
-    pub(crate) interrupt: AtomicBool,
     /// If there is no data in build side, maybe we can fast return.
     pub(crate) fast_return: AtomicBool,
     /// Use the column of probe side to construct build side column.
@@ -190,7 +188,6 @@ impl HashJoinState {
             build_watcher,
             _build_done_dummy_receiver,
             hash_join_desc,
-            interrupt: AtomicBool::new(false),
             fast_return: Default::default(),
             probe_to_build: probe_to_build.to_vec(),
             build_schema,
@@ -212,10 +209,6 @@ impl HashJoinState {
             column_map,
             next_cache_block_index: AtomicUsize::new(0),
         }))
-    }
-
-    pub fn interrupt(&self) {
-        self.interrupt.store(true, Ordering::Release);
     }
 
     /// Used by hash join probe processors, wait for build phase finished.

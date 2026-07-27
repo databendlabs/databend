@@ -249,10 +249,6 @@ impl Processor for TransformHashJoinBuild {
         }
     }
 
-    fn interrupt(&self) {
-        self.build_state.hash_join_state.interrupt()
-    }
-
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Collect) => {

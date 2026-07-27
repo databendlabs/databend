@@ -20,6 +20,7 @@ use std::cell::UnsafeCell;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::prelude::*;
@@ -27,6 +28,17 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
+
+/// Checks whether the currently executing processor has been interrupted.
+///
+/// The executor installs the processor's tracking payload while polling or processing it. Calls
+/// made outside processor execution are treated as not interrupted.
+pub fn check_interrupt() -> Result<()> {
+    if ThreadTracker::is_interrupted() {
+        return Err(ErrorCode::aborting());
+    }
+    Ok(())
+}
 
 #[derive(Debug)]
 pub enum Event {
@@ -68,9 +80,6 @@ pub trait Processor: Send {
     fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
         Ok(())
     }
-
-    // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
-    fn interrupt(&self) {}
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
@@ -164,11 +173,6 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
         unsafe { (*self.inner.get()).un_reacted(cause, self.id().index()) }
-    }
-
-    /// # Safety
-    pub unsafe fn interrupt(&self) {
-        unsafe { (*self.inner.get()).interrupt() }
     }
 
     /// # Safety
