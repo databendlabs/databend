@@ -150,6 +150,36 @@ impl CommitTableMetaError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("InvalidMaterializedView: {reason}")]
+pub struct InvalidMaterializedView {
+    reason: String,
+}
+
+impl InvalidMaterializedView {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("MaterializedViewAlreadyExists: {view_name} while {context}")]
+pub struct MaterializedViewAlreadyExists {
+    view_name: String,
+    context: String,
+}
+
+impl MaterializedViewAlreadyExists {
+    pub fn new(view_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            view_name: view_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -857,6 +887,12 @@ pub enum AppError {
     CommitTableMetaError(#[from] CommitTableMetaError),
 
     #[error(transparent)]
+    InvalidMaterializedView(#[from] InvalidMaterializedView),
+
+    #[error(transparent)]
+    MaterializedViewAlreadyExists(#[from] MaterializedViewAlreadyExists),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -1149,6 +1185,14 @@ impl AppErrorMessage for CommitTableMetaError {
     }
 }
 
+impl AppErrorMessage for InvalidMaterializedView {}
+
+impl AppErrorMessage for MaterializedViewAlreadyExists {
+    fn message(&self) -> String {
+        format!("Materialized view '{}' already exists", self.view_name)
+    }
+}
+
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
@@ -1361,6 +1405,12 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
+            AppError::InvalidMaterializedView(err) => {
+                ErrorCode::InvalidMaterializedView(err.message())
+            }
+            AppError::MaterializedViewAlreadyExists(err) => {
+                ErrorCode::MaterializedViewAlreadyExists(err.message())
+            }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {

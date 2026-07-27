@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::SequenceMeta;
@@ -97,6 +98,9 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_table_id_to_name/"    => DBIdTableName,
         "__fd_table_id_list/"       => TableIdList,
         "__fd_table_copied_files/"  => TableCopiedFileInfo,
+        "__fd_materialized_view_definition/" => MVDefinition,
+        "__fd_materialized_view_by_source/" => EmptyProto,
+        "__fd_materialized_view_source_binding_version/" => EmptyProto,
 
         // schema - catalog
         "__fd_catalog_by_id/"       => CatalogMeta,

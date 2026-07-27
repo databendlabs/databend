@@ -41,10 +41,13 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -57,6 +60,7 @@ use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -87,6 +91,7 @@ use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
 use super::lock_api2::LockApi2;
+use super::materialized_view_api::MaterializedViewApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
@@ -111,6 +116,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -132,6 +138,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -275,6 +282,19 @@ pub async fn construct_drop_table_txn_operations(
                     table_id,
                 },
             )));
+    }
+
+    if is_materialized_view_engine(&tb_meta.engine) {
+        // MVDefinition and the source relationship are immutable and owned by
+        // this table ID. The TableId seq condition below prevents a concurrent
+        // MV lifecycle change; txn_del is idempotent when either key is absent.
+        let source_table_id = tb_meta.materialized_view_source_table_id()?;
+        let def_ident = MVDefinitionIdent::new(tenant, table_id);
+        txn.if_then.push(txn_del(&def_ident));
+        txn.if_then.push(txn_del(&SourceTableMVIdent::new_generic(
+            tenant,
+            SourceTableMV::new(source_table_id, table_id),
+        )));
     }
 
     // There must NOT be concurrent txn(b) that list-then-delete tables:

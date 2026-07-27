@@ -20,6 +20,7 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
@@ -84,6 +85,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r
@@ -185,6 +187,13 @@ mod tests {
         assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key("CLUSTER_TYPE"));
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+    }
+
+    #[test]
+    fn test_materialized_view_source_table_id_is_reserved() {
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        ));
     }
 
     #[test]

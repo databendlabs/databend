@@ -38,8 +38,12 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -51,6 +55,7 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -772,6 +777,45 @@ async fn remove_data_for_dropped_table(
     //     warn!("{}", err);
     //     return Ok(Err(err));
     // }
+    // DROP TABLE normally deletes the MV definition. Database GC may collect
+    // tables without first running the per-table DROP path, so keep this
+    // deletion idempotent here as well.
+    if is_materialized_view_engine(&seq_meta.data.engine) {
+        txn.if_then
+            .push(txn_del(&MVDefinitionIdent::new(tenant, table_id.table_id)));
+        match seq_meta.data.materialized_view_source_table_id() {
+            Ok(source_table_id) => {
+                txn.if_then.push(txn_del(&SourceTableMVIdent::new_generic(
+                    tenant,
+                    SourceTableMV::new(source_table_id, table_id.table_id),
+                )));
+            }
+            Err(err) => {
+                warn!(
+                    table_id = table_id.table_id,
+                    error :% = err;
+                    "GC materialized view can not remove its source relationship"
+                );
+            }
+        }
+    }
+
+    let source_mv_prefix = DirName::new(SourceTableMVIdent::new_generic(
+        tenant,
+        SourceTableMV::new(table_id.table_id, 0),
+    ));
+    let source_mvs = kv_api
+        .list_pb_vec(ListOptions::unlimited(&source_mv_prefix))
+        .await?;
+    // The source table or its database is already dropped, so no new MV can
+    // reference it. Concurrent relationship deletions are idempotent.
+    txn.if_then
+        .extend(source_mvs.into_iter().map(|(ident, _)| txn_del(&ident)));
+    txn.if_then.push(txn_del(&MVSourceBindingVersionIdent::new(
+        tenant,
+        table_id.table_id,
+    )));
+
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping
