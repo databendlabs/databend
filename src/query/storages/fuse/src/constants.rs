@@ -18,6 +18,7 @@ pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_RECLUSTER_DEPTH: &str = "recluster_depth";
 pub const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
+pub const FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION: &str = "enable_recluster_block_reduction";
 pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
 pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
