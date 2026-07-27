@@ -804,6 +804,18 @@ pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
     }
 }
 
+pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
+    if buf.is_empty() {
+        return Ok(None);
+    }
+    validate_serialized_bitmap_header_and_length(buf)?;
+    if is_hybrid_large(buf) {
+        Ok(reader::bitmap_max(&buf[HYBRID_HEADER_LEN..])?)
+    } else {
+        Ok(deserialize_bitmap(buf)?.max())
+    }
+}
+
 fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
     if buf.is_empty() {
         return Ok(BitmapRhsView::Empty);
@@ -1586,5 +1598,53 @@ mod tests {
 
         // Empty buffer
         assert_eq!(bitmap_min(&[]).unwrap(), None);
+    }
+
+    #[test]
+    fn test_bitmap_max() {
+        // HybridLarge: spanning multiple containers
+        let large = HybridBitmap::from_iter(
+            [0u64, 2500, 65535, 65536, 65536 + 2500, 131071]
+                .into_iter()
+                .chain((0..40000).map(|v| v + 200000)),
+        );
+        let mut buf = Vec::new();
+        large.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(239999));
+
+        // HybridLarge with array container at max capacity (cardinality = 4096)
+        let boundary = HybridBitmap::from_iter(0u64..4096);
+        let mut buf = Vec::new();
+        boundary.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(4095));
+
+        // HybridLarge with multiple containers: array (4096) + bitmap (>4096)
+        let mixed = HybridBitmap::from_iter((0u64..4096).chain(65536..106496));
+        let mut buf = Vec::new();
+        mixed.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(106495));
+
+        // HybridSmall
+        let small = HybridBitmap::from_iter(0u64..31);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(30));
+
+        // HybridSmall with different range
+        let small = HybridBitmap::from_iter(100u64..131);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(130));
+
+        // Legacy
+        let mut tree = RoaringTreemap::new();
+        tree.insert(42);
+        tree.insert(100);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf).unwrap();
+        assert_eq!(bitmap_max(&buf).unwrap(), Some(100));
+
+        // Empty buffer
+        assert_eq!(bitmap_max(&[]).unwrap(), None);
     }
 }
