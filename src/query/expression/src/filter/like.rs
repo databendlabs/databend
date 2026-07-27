@@ -222,6 +222,13 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
         return LikePattern::Constant(true);
     }
 
+    if let Some(needle) = unescape_surrounded_literal(&pattern) {
+        return LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
+            Cow::Owned(needle),
+            haystack_size_hint,
+        ));
+    }
+
     let mut index = 0;
     let mut first_non_percent = 0;
     let mut percent_num = 0;
@@ -300,6 +307,43 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
             }
         }
     }
+}
+
+/// Extract the literal from a `%literal%` pattern that currently needs the
+/// complex matcher only because it contains escaped LIKE metacharacters.
+///
+/// Keep this deliberately narrow: patterns with an unescaped metacharacter,
+/// an unsupported escape, or anything other than one leading and one trailing
+/// percent continue to use the existing matcher.
+fn unescape_surrounded_literal(pattern: &[u8]) -> Option<Vec<u8>> {
+    if pattern.len() < 4 || pattern[0] != b'%' || pattern[pattern.len() - 1] != b'%' {
+        return None;
+    }
+
+    let end = pattern.len() - 1;
+    let mut index = 1;
+    let mut has_escape = false;
+    let mut literal = Vec::with_capacity(pattern.len() - 2);
+
+    while index < end {
+        match pattern[index] {
+            b'%' | b'_' => return None,
+            b'\\' => {
+                if index + 1 >= end || !is_like_pattern_escape(pattern[index + 1] as char) {
+                    return None;
+                }
+                literal.push(pattern[index + 1]);
+                has_escape = true;
+                index += 2;
+            }
+            byte => {
+                literal.push(byte);
+                index += 1;
+            }
+        }
+    }
+
+    has_escape.then_some(literal)
 }
 
 fn normalize_simple_pattern<'a>(
@@ -439,6 +483,18 @@ fn test_generate_like_pattern() {
             LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
         ),
         (
+            "%alpha\\_beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha_beta".as_bytes(), 1)),
+        ),
+        (
+            "%alpha\\%beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha%beta".as_bytes(), 1)),
+        ),
+        (
+            "%alpha\\\\beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha\\beta".as_bytes(), 1)),
+        ),
+        (
             "databend_cloud%data%warehouse",
             LikePattern::ComplexPattern("databend_cloud%data%warehouse".as_bytes().into()),
         ),
@@ -450,9 +506,113 @@ fn test_generate_like_pattern() {
             "databend%cloud_data%warehouse",
             LikePattern::ComplexPattern("databend%cloud_data%warehouse".as_bytes().into()),
         ),
+        (
+            "%alpha\\_beta%gamma%",
+            LikePattern::ComplexPattern("%alpha\\_beta%gamma%".as_bytes().into()),
+        ),
+        (
+            "%alpha\\xbeta%gamma%",
+            LikePattern::ComplexPattern("%alpha\\xbeta%gamma%".as_bytes().into()),
+        ),
+        (
+            "%alpha\\%",
+            LikePattern::ComplexPattern("%alpha\\%".as_bytes().into()),
+        ),
     ];
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
+    }
+}
+
+#[test]
+fn test_escaped_surrounded_literal_matches_complex_pattern() {
+    let test_cases = [
+        ("%alpha\\_beta%", [
+            "",
+            "alpha_beta",
+            "prefix alpha_beta suffix",
+            "alpha-beta",
+            "alpha__beta",
+            "α alpha_beta β",
+        ]),
+        ("%alpha\\%beta%", [
+            "",
+            "alpha%beta",
+            "prefix alpha%beta suffix",
+            "alpha_beta",
+            "alpha%%beta",
+            "α alpha%beta β",
+        ]),
+        ("%alpha\\\\beta%", [
+            "",
+            "alpha\\beta",
+            "prefix alpha\\beta suffix",
+            "alpha/beta",
+            "alpha\\\\beta",
+            "α alpha\\beta β",
+        ]),
+    ];
+
+    for (pattern, haystacks) in test_cases {
+        let optimized = generate_like_pattern(pattern.as_bytes(), 0);
+        assert!(matches!(optimized, LikePattern::SurroundByPercent(_)));
+
+        for haystack in haystacks {
+            assert_eq!(
+                optimized.compare(haystack.as_bytes()),
+                LikePattern::complex_pattern(haystack.as_bytes(), pattern.as_bytes()),
+                "{haystack:?} LIKE {pattern:?}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn escaped_surrounded_literal_is_equivalent_to_complex_pattern(
+            escaped_literal in prop::sample::select(vec![b'%', b'_', b'\\']),
+            literal_tail in prop::collection::vec(any::<u8>(), 0..32),
+            prefix in prop::collection::vec(any::<u8>(), 0..64),
+            suffix in prop::collection::vec(any::<u8>(), 0..64),
+            arbitrary in prop::collection::vec(any::<u8>(), 0..128),
+        ) {
+            let mut literal = Vec::with_capacity(literal_tail.len() + 1);
+            literal.push(escaped_literal);
+            literal.extend(literal_tail);
+
+            let mut pattern = Vec::with_capacity(literal.len() * 2 + 2);
+            pattern.push(b'%');
+            for byte in &literal {
+                if matches!(byte, b'%' | b'_' | b'\\') {
+                    pattern.push(b'\\');
+                }
+                pattern.push(*byte);
+            }
+            pattern.push(b'%');
+
+            let optimized = generate_like_pattern(pattern.as_slice(), 0);
+            prop_assert!(matches!(optimized, LikePattern::SurroundByPercent(_)));
+
+            prop_assert_eq!(
+                optimized.compare(&arbitrary),
+                LikePattern::complex_pattern(&arbitrary, &pattern),
+            );
+
+            let matching = [prefix.as_slice(), literal.as_slice(), suffix.as_slice()].concat();
+            prop_assert!(optimized.compare(&matching));
+            prop_assert_eq!(
+                optimized.compare(&matching),
+                LikePattern::complex_pattern(&matching, &pattern),
+            );
+        }
     }
 }
 
