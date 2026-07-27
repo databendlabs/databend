@@ -417,7 +417,7 @@ async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
     config.log.history.on = true;
     config.log.history.tables.push(HistoryTableConfig {
         table_name: "lineage_unresolved".to_string(),
-        retention: None,
+        retention: 168,
         invisible: false,
     });
     // Lite globals are thread-local in debug builds. Initialize capture on the test's current
