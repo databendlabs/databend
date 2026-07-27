@@ -661,6 +661,200 @@ fn array_bitmap_container_has_any(
     Ok(false)
 }
 
+pub(crate) fn bitmap_has_all(lhs: &[u8], rhs: &[u8]) -> io::Result<bool> {
+    use std::cmp::Ordering::*;
+    let lhs_tree = TreemapReader::new(lhs)?;
+    let rhs_tree = TreemapReader::new(rhs)?;
+
+    let mut lhs_iter = lhs_tree.iter();
+    let mut rhs_iter = rhs_tree.iter();
+
+    let mut lhs_curr = lhs_iter.next().transpose()?;
+    let mut rhs_curr = rhs_iter.next().transpose()?;
+
+    while let (Some(lhs_bitmap), Some(rhs_bitmap)) = (lhs_curr.as_ref(), rhs_curr.as_ref()) {
+        match lhs_bitmap.prefix().cmp(&rhs_bitmap.prefix()) {
+            Less => {
+                lhs_curr = lhs_iter.next().transpose()?;
+            }
+            Greater => {
+                // rhs has a prefix bucket that lhs doesn't have — lhs cannot contain all rhs values
+                return Ok(false);
+            }
+            Equal => {
+                if !containers_has_all(lhs_bitmap, rhs_bitmap)? {
+                    return Ok(false);
+                }
+                lhs_curr = lhs_iter.next().transpose()?;
+                rhs_curr = rhs_iter.next().transpose()?;
+            }
+        }
+    }
+
+    // If rhs still has remaining prefix buckets, lhs doesn't cover them
+    if rhs_curr.is_some() {
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn containers_has_all(lhs: &BitmapReader<'_>, rhs: &BitmapReader<'_>) -> io::Result<bool> {
+    let lhs_count = lhs.containers();
+    let rhs_count = rhs.containers();
+    let mut i = 0;
+    let mut j = 0;
+
+    while j < rhs_count {
+        // If lhs is exhausted but rhs still has containers, lhs can't contain them
+        if i >= lhs_count {
+            return Ok(false);
+        }
+        let lhs_desc = lhs.description(i)?;
+        let rhs_desc = rhs.description(j)?;
+        match lhs_desc.prefix.cmp(&rhs_desc.prefix) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => {
+                // rhs has a container key that lhs doesn't have
+                return Ok(false);
+            }
+            std::cmp::Ordering::Equal => {
+                let lhs_offset = lhs.container_offset(i)?;
+                let rhs_offset = rhs.container_offset(j)?;
+                let lhs_data = &lhs.bitmap_buf()[lhs_offset..];
+                let rhs_data = &rhs.bitmap_buf()[rhs_offset..];
+                let lhs_cardinality = lhs_desc.cardinality();
+                let rhs_cardinality = rhs_desc.cardinality();
+                if !container_has_all(lhs_data, lhs_cardinality, rhs_data, rhs_cardinality)? {
+                    return Ok(false);
+                }
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+
+    Ok(true)
+}
+
+fn container_has_all(
+    lhs_data: &[u8],
+    lhs_cardinality: usize,
+    rhs_data: &[u8],
+    rhs_cardinality: usize,
+) -> io::Result<bool> {
+    // lhs cannot contain all of rhs if lhs has fewer values
+    if lhs_cardinality < rhs_cardinality {
+        return Ok(false);
+    }
+    // If lhs is the full bitmap (65536 values), it trivially contains any rhs subset
+    if lhs_cardinality == 65536 {
+        return Ok(true);
+    }
+
+    let lhs_is_array = lhs_cardinality < ARRAY_LIMIT;
+    let rhs_is_array = rhs_cardinality < ARRAY_LIMIT;
+
+    if lhs_is_array && rhs_is_array {
+        array_container_has_all_array(lhs_data, lhs_cardinality, rhs_data, rhs_cardinality)
+    } else if !lhs_is_array && !rhs_is_array {
+        bitmap_container_has_all_bitmap(lhs_data, rhs_data)
+    } else if lhs_is_array {
+        // lhs is array, rhs is bitmap: array container cardinality < 4096,
+        // bitmap container cardinality >= 4096, so lhs can never be superset of rhs
+        // Fast path: rhs has more values than lhs can contain
+        Ok(false)
+    } else {
+        // lhs is bitmap, rhs is array: check each rhs value is in lhs bitmap
+        array_values_all_in_bitmap_container(rhs_data, rhs_cardinality, lhs_data)
+    }
+}
+
+fn array_container_has_all_array(
+    lhs_data: &[u8],
+    lhs_cardinality: usize,
+    rhs_data: &[u8],
+    rhs_cardinality: usize,
+) -> io::Result<bool> {
+    if lhs_data.len() < lhs_cardinality * 2 {
+        return Err(Error::other("lhs array container too short"));
+    }
+    if rhs_data.len() < rhs_cardinality * 2 {
+        return Err(Error::other("rhs array container too short"));
+    }
+
+    // Fast rejection: lhs must have at least as many values as rhs
+    if lhs_cardinality < rhs_cardinality {
+        return Ok(false);
+    }
+
+    let mut i = 0;
+    let mut j = 0;
+    while j < rhs_cardinality {
+        if i >= lhs_cardinality {
+            return Ok(false);
+        }
+        let lv = u16::from_le_bytes(lhs_data[i * 2..i * 2 + 2].try_into().unwrap());
+        let rv = u16::from_le_bytes(rhs_data[j * 2..j * 2 + 2].try_into().unwrap());
+        if lv < rv {
+            i += 1;
+        } else if lv == rv {
+            i += 1;
+            j += 1;
+        } else {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+fn bitmap_container_has_all_bitmap(lhs_data: &[u8], rhs_data: &[u8]) -> io::Result<bool> {
+    if lhs_data.len() < BITMAP_BYTES {
+        return Err(Error::other("lhs bitmap container too short"));
+    }
+    if rhs_data.len() < BITMAP_BYTES {
+        return Err(Error::other("rhs bitmap container too short"));
+    }
+
+    for word_index in 0..BITMAP_WORDS {
+        let start = word_index * WORD_BYTES;
+        let lhs_word = u64::from_le_bytes(lhs_data[start..start + WORD_BYTES].try_into().unwrap());
+        let rhs_word = u64::from_le_bytes(rhs_data[start..start + WORD_BYTES].try_into().unwrap());
+        // Check if all bits set in rhs are also set in lhs
+        // (rhs_word & !lhs_word) means value exists in rhs but not in lhs
+        if rhs_word & !lhs_word != 0 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn array_values_all_in_bitmap_container(
+    array_data: &[u8],
+    array_cardinality: usize,
+    bitmap_data: &[u8],
+) -> io::Result<bool> {
+    if array_data.len() < array_cardinality * 2 {
+        return Err(Error::other("array container too short"));
+    }
+    if bitmap_data.len() < BITMAP_BYTES {
+        return Err(Error::other("bitmap container too short"));
+    }
+
+    for i in 0..array_cardinality {
+        let value = u16::from_le_bytes(array_data[i * 2..i * 2 + 2].try_into().unwrap());
+        let word_index = value as usize / WORD_BITS;
+        let bit_index = value as usize % WORD_BITS;
+        let start = word_index * WORD_BYTES;
+        let word = u64::from_le_bytes(bitmap_data[start..start + WORD_BYTES].try_into().unwrap());
+        if word & (1 << bit_index) == 0 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
 
