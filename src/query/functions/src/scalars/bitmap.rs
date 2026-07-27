@@ -38,6 +38,7 @@ use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
 use databend_common_io::bitmap::bitmap_contains;
+use databend_common_io::bitmap::bitmap_has_all;
 use databend_common_io::bitmap::bitmap_has_any;
 use databend_common_io::bitmap::bitmap_len;
 use databend_common_io::bitmap::bitmap_max;
@@ -385,23 +386,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                let rb = match deserialize_bitmap(b) {
-                    Ok(rb) => rb,
+                match bitmap_has_all(b, items) {
+                    Ok(has_all) => {
+                        builder.push(has_all);
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         builder.push(false);
-                        return;
                     }
-                };
-                let rb2 = match deserialize_bitmap(items) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                builder.push(rb.is_superset(&rb2));
+                }
             },
         ),
     );
