@@ -398,7 +398,7 @@ pub struct HistoryConfig {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct HistoryTableConfig {
     pub table_name: String,
-    pub retention: usize,
+    pub retention: Option<usize>,
     pub invisible: bool,
 }
 
@@ -415,7 +415,12 @@ impl Display for HistoryConfig {
             self.retention_interval,
             self.tables
                 .iter()
-                .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
+                .map(|f| match f.retention {
+                    Some(retention) => {
+                        format!("{}({} hours)", f.table_name, retention)
+                    }
+                    None => format!("{}(default)", f.table_name),
+                })
                 .join(", "),
             self.storage_params
                 .as_ref()
@@ -445,13 +450,21 @@ impl Default for HistoryTableConfig {
     fn default() -> Self {
         Self {
             table_name: "".to_string(),
-            retention: 168,
+            retention: None,
             invisible: false,
         }
     }
 }
 
 impl HistoryConfig {
+    pub fn is_table_enabled(&self, table_name: &str) -> bool {
+        self.on
+            && self
+                .tables
+                .iter()
+                .any(|table| table.table_name.eq_ignore_ascii_case(table_name))
+    }
+
     pub fn is_invisible(&self, table_name: &str) -> bool {
         self.tables
             .iter()

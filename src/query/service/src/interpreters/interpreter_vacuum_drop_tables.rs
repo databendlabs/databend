@@ -39,6 +39,7 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -106,6 +107,11 @@ impl VacuumDropTablesInterpreter {
                 drop_ids: c.to_vec(),
             };
             num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
+            for drop_id in c {
+                if let DroppedId::Table { id, .. } = drop_id {
+                    log_lineage_object_deletion(&self.ctx, id.table_id);
+                }
+            }
         }
 
         // then gc drop db ids

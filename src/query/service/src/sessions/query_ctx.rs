@@ -122,6 +122,7 @@ use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
+use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -546,6 +547,37 @@ impl QueryContext {
         let finish_time = finish_time.unwrap_or_else(SystemTime::now);
         let finish_time = convert_query_log_timestamp(finish_time);
         (finish_time - query_start_time) / 1_000
+    }
+
+    pub fn attach_query_lineage(&self, lineage: Option<QueryLineage>) {
+        self.shared.attach_query_lineage(lineage);
+    }
+
+    pub fn get_query_lineage(&self) -> Option<QueryLineage> {
+        self.shared.get_query_lineage()
+    }
+
+    /// Update only the captured lineage identity after execution resolves the actual target.
+    /// This does not change which table the query writes to.
+    pub fn update_query_lineage_target_id(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        table_id: u64,
+    ) {
+        let Some(mut lineage) = self.get_query_lineage() else {
+            return;
+        };
+        for target in &mut lineage.targets {
+            if target.relation.catalog == catalog
+                && target.relation.database == database
+                && target.relation.name == table
+            {
+                target.relation.id = Some(table_id);
+            }
+        }
+        self.attach_query_lineage(Some(lineage));
     }
 
     pub fn get_created_time(&self) -> SystemTime {

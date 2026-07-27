@@ -2724,9 +2724,9 @@ pub struct HistoryLogTableConfig {
     /// Specifies the history table name
     pub table_name: String,
 
-    /// The retention period (in hours) for history logs.
-    /// Data older than this period will be deleted during retention tasks.
-    pub retention: usize,
+    /// The optional retention period (in hours) for history logs.
+    /// Unspecified tables use the default retention, except lineage, which is retained permanently.
+    pub retention: Option<usize>,
 
     /// Whether this history table is invisible for querying.
     /// Default is false.

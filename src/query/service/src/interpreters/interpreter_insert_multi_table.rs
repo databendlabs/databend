@@ -448,7 +448,14 @@ impl InsertMultiTableInterpreter {
                 casted_schema,
                 source_scalar_exprs,
             } = into;
-            let table = self.ctx.get_table(catalog, database, table).await?;
+            let table_name = table;
+            let table = self.ctx.get_table(catalog, database, table_name).await?;
+            self.ctx.update_query_lineage_target_id(
+                catalog,
+                database,
+                table_name,
+                table.get_table_info().ident.table_id,
+            );
             branches.push(
                 table,
                 condition,

@@ -310,6 +310,13 @@ impl Interpreter for InsertInterpreter {
                 .await?
         };
 
+        self.ctx.update_query_lineage_target_id(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+            table.get_table_info().ident.table_id,
+        );
+
         let mut table_constraints = Vec::new();
         // check mutability
         table.check_mutable()?;
