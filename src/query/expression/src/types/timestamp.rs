@@ -21,9 +21,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::Timestamp;
 use jiff::Zoned;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
+use num_traits::AsPrimitive;
 
 use super::ArgType;
 use super::DataType;
@@ -33,7 +35,6 @@ use super::number::SimpleDomain;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 use crate::property::Domain;
-use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;
 
@@ -45,6 +46,32 @@ pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 
 pub const MICROS_PER_SEC: i64 = 1_000_000;
 pub const MICROS_PER_MILLI: i64 = 1_000;
+
+// jiff's `Timestamp` only accepts UTC seconds in
+// [-377705023201, 253402207200] so that any +/-25:59:59 offset still
+// yields a valid civil datetime. Clamp after splitting into seconds
+// and sub-second nanoseconds to avoid constructing out-of-range values.
+const JIFF_TIMESTAMP_MIN_SEC: i64 = -377705023201;
+const JIFF_TIMESTAMP_MAX_SEC: i64 = 253402207200;
+
+pub fn timestamp_from_micros(micros: impl AsPrimitive<i64>, tz: &TimeZone) -> Zoned {
+    // Can't use `tz.timestamp_nanos(micros.as_() * 1000)` directly, as it may overflow.
+    let micros = micros.as_();
+    let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
+    if nanos < 0 {
+        secs -= 1;
+        nanos += 1_000_000_000;
+    }
+    if secs > JIFF_TIMESTAMP_MAX_SEC {
+        secs = JIFF_TIMESTAMP_MAX_SEC;
+        nanos = 0;
+    } else if secs < JIFF_TIMESTAMP_MIN_SEC {
+        secs = JIFF_TIMESTAMP_MIN_SEC;
+        nanos = 0;
+    }
+    let ts = Timestamp::new(secs, nanos as i32).unwrap();
+    ts.to_zoned(tz.clone())
+}
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
@@ -194,6 +221,6 @@ pub fn string_to_timestamp(
 
 #[inline]
 pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
-    let zdt = ts.to_timestamp(tz);
+    let zdt = timestamp_from_micros(ts, tz);
     strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
 }

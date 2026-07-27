@@ -20,6 +20,7 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::SignedDuration;
 use jiff::civil::Date;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
@@ -32,7 +33,6 @@ use super::SimpleValueType;
 use super::number::SimpleDomain;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
-use crate::date_helper::DateConverter;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -44,6 +44,11 @@ pub const DATE_MIN: i32 = -719162;
 /// Maximum valid date, represented by the day offset from 1970-01-01.
 /// 9999-12-31
 pub const DATE_MAX: i32 = 2932896;
+
+pub fn date_from_days(days: impl AsPrimitive<i64>) -> Date {
+    let duration = SignedDuration::from_hours(days.as_() * 24);
+    Date::constant(1970, 1, 1).checked_add(duration).unwrap()
+}
 
 /// Check if date is within range.
 /// /// If days is invalid convert to DATE_MIN.
@@ -161,7 +166,6 @@ pub fn string_to_date(
 }
 
 #[inline]
-pub fn date_to_string(date: impl AsPrimitive<i64>, tz: &TimeZone) -> impl Display {
-    let res = date.as_().to_date(tz);
-    strtime::format(DATE_FORMAT, res).unwrap()
+pub fn date_to_string(date: impl AsPrimitive<i64>) -> String {
+    strtime::format(DATE_FORMAT, date_from_days(date)).unwrap()
 }
