@@ -19,6 +19,7 @@ mod alter_table;
 pub mod error_handling;
 mod external;
 mod global_history_log;
+mod lineage;
 mod meta;
 pub mod session;
 

@@ -61,6 +61,9 @@ use crate::history_tables::error_handling::ErrorCounters;
 use crate::history_tables::error_handling::is_temp_error;
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::history_tables::external::get_external_storage_connection;
+use crate::history_tables::lineage::CREATE_LINEAGE_VIEWS;
+use crate::history_tables::lineage::DROP_LINEAGE_VIEWS;
+use crate::history_tables::lineage::LINEAGE_UNRESOLVED_TABLE;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
@@ -265,13 +268,32 @@ impl GlobalHistoryLog {
                 self.execute_sql(&alter_sql).await?;
             }
         }
+        self.prepare_lineage_views().await?;
         Ok(())
+    }
+
+    async fn prepare_lineage_views(&self) -> Result<()> {
+        if self.lineage_enabled() {
+            for sql in CREATE_LINEAGE_VIEWS {
+                self.execute_sql(sql).await?;
+            }
+        }
+        Ok(())
+    }
+
+    fn lineage_enabled(&self) -> bool {
+        self.tables
+            .iter()
+            .any(|table| table.name == LINEAGE_UNRESOLVED_TABLE)
     }
 
     pub async fn reset(&self) -> Result<()> {
         info!("Resetting system history tables");
         let drop_stage = format!("DROP STAGE IF EXISTS {}", self.stage_name);
         self.execute_sql(&drop_stage).await?;
+        for sql in DROP_LINEAGE_VIEWS {
+            self.execute_sql(sql).await?;
+        }
 
         // drop all pre-defined history tables to keep the system_history's tables consistency
         let drop_tables = get_all_history_table_names()
