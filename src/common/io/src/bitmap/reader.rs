@@ -427,6 +427,237 @@ pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io
     Ok(())
 }
 
+pub struct BitmapStats {
+    pub len: u64,
+    pub min: Option<u64>,
+    pub max: Option<u64>,
+}
+
+pub(crate) fn bitmap_stats(buf: &[u8]) -> io::Result<BitmapStats> {
+    let tree = TreemapReader::new(buf)?;
+
+    let mut total_len = 0u64;
+    let mut first_bitmap = None;
+    let mut last_bitmap = None;
+
+    for bitmap_result in tree.iter() {
+        let bitmap = bitmap_result?;
+        for i in 0..bitmap.containers() {
+            total_len += bitmap.description(i)?.cardinality() as u64;
+        }
+        if first_bitmap.is_none() {
+            first_bitmap = Some(bitmap.clone());
+        }
+        last_bitmap = Some(bitmap);
+    }
+
+    if first_bitmap.is_none() || total_len == 0 {
+        return Ok(BitmapStats {
+            len: 0,
+            min: None,
+            max: None,
+        });
+    }
+
+    // Compute min from the first container of the first prefix bucket
+    let first = first_bitmap.unwrap();
+    let first_desc = first.description(0)?;
+    let first_offset = first.container_offset(0)?;
+    let first_container_data = &first.bitmap_buf()[first_offset..];
+    let first_prefix = first.prefix() as u64;
+    let first_container_key = first_desc.prefix as u64;
+    let first_cardinality = first_desc.cardinality();
+    let first_low16 = if first_cardinality <= ARRAY_LIMIT {
+        array_container_first(first_container_data, first_cardinality)?
+    } else {
+        bitmap_container_first(first_container_data)?
+    };
+    let min_val = first_prefix << 32 | first_container_key << 16 | first_low16 as u64;
+
+    // Compute max from the last container of the last prefix bucket
+    let last = last_bitmap.unwrap();
+    let last_idx = last.containers() - 1;
+    let last_desc = last.description(last_idx)?;
+    let last_offset = last.container_offset(last_idx)?;
+    let last_container_data = &last.bitmap_buf()[last_offset..];
+    let last_prefix = last.prefix() as u64;
+    let last_container_key = last_desc.prefix as u64;
+    let last_cardinality = last_desc.cardinality();
+    let last_low16 = if last_cardinality <= ARRAY_LIMIT {
+        array_container_last(last_container_data, last_cardinality)?
+    } else {
+        bitmap_container_last(last_container_data)?
+    };
+    let max_val = last_prefix << 32 | last_container_key << 16 | last_low16 as u64;
+
+    Ok(BitmapStats {
+        len: total_len,
+        min: Some(min_val),
+        max: Some(max_val),
+    })
+}
+
+pub(crate) fn bitmap_has_any(lhs: &[u8], rhs: &[u8]) -> io::Result<bool> {
+    use std::cmp::Ordering::*;
+    let lhs_tree = TreemapReader::new(lhs)?;
+    let rhs_tree = TreemapReader::new(rhs)?;
+
+    let mut lhs_iter = lhs_tree.iter();
+    let mut rhs_iter = rhs_tree.iter();
+
+    let mut lhs_curr = lhs_iter.next().transpose()?;
+    let mut rhs_curr = rhs_iter.next().transpose()?;
+
+    while let (Some(lhs_bitmap), Some(rhs_bitmap)) = (lhs_curr.as_ref(), rhs_curr.as_ref()) {
+        match lhs_bitmap.prefix().cmp(&rhs_bitmap.prefix()) {
+            Less => {
+                lhs_curr = lhs_iter.next().transpose()?;
+            }
+            Greater => {
+                rhs_curr = rhs_iter.next().transpose()?;
+            }
+            Equal => {
+                if containers_has_any(lhs_bitmap, rhs_bitmap)? {
+                    return Ok(true);
+                }
+                lhs_curr = lhs_iter.next().transpose()?;
+                rhs_curr = rhs_iter.next().transpose()?;
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+fn containers_has_any(lhs: &BitmapReader<'_>, rhs: &BitmapReader<'_>) -> io::Result<bool> {
+    let lhs_count = lhs.containers();
+    let rhs_count = rhs.containers();
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < lhs_count && j < rhs_count {
+        let lhs_desc = lhs.description(i)?;
+        let rhs_desc = rhs.description(j)?;
+        match lhs_desc.prefix.cmp(&rhs_desc.prefix) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                let lhs_offset = lhs.container_offset(i)?;
+                let rhs_offset = rhs.container_offset(j)?;
+                let lhs_data = &lhs.bitmap_buf()[lhs_offset..];
+                let rhs_data = &rhs.bitmap_buf()[rhs_offset..];
+                let lhs_cardinality = lhs_desc.cardinality();
+                let rhs_cardinality = rhs_desc.cardinality();
+                if container_has_any(lhs_data, lhs_cardinality, rhs_data, rhs_cardinality)? {
+                    return Ok(true);
+                }
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+fn container_has_any(
+    lhs_data: &[u8],
+    lhs_cardinality: usize,
+    rhs_data: &[u8],
+    rhs_cardinality: usize,
+) -> io::Result<bool> {
+    // Pigeonhole: two subsets of a 65536-element space with combined size > 65536 must overlap
+    if lhs_cardinality + rhs_cardinality > 65536 {
+        return Ok(true);
+    }
+
+    let lhs_is_array = lhs_cardinality <= ARRAY_LIMIT;
+    let rhs_is_array = rhs_cardinality <= ARRAY_LIMIT;
+
+    if lhs_is_array && rhs_is_array {
+        array_container_has_any(lhs_data, lhs_cardinality, rhs_data, rhs_cardinality)
+    } else if !lhs_is_array && !rhs_is_array {
+        bitmap_container_has_any(lhs_data, rhs_data)
+    } else if lhs_is_array {
+        array_bitmap_container_has_any(lhs_data, lhs_cardinality, rhs_data)
+    } else {
+        array_bitmap_container_has_any(rhs_data, rhs_cardinality, lhs_data)
+    }
+}
+
+fn array_container_has_any(
+    lhs_data: &[u8],
+    lhs_cardinality: usize,
+    rhs_data: &[u8],
+    rhs_cardinality: usize,
+) -> io::Result<bool> {
+    if lhs_data.len() < lhs_cardinality * 2 {
+        return Err(Error::other("lhs array container too short"));
+    }
+    if rhs_data.len() < rhs_cardinality * 2 {
+        return Err(Error::other("rhs array container too short"));
+    }
+
+    let mut i = 0;
+    let mut j = 0;
+    while i < lhs_cardinality && j < rhs_cardinality {
+        let lv = u16::from_le_bytes(lhs_data[i * 2..i * 2 + 2].try_into().unwrap());
+        let rv = u16::from_le_bytes(rhs_data[j * 2..j * 2 + 2].try_into().unwrap());
+        if lv < rv {
+            i += 1;
+        } else if rv < lv {
+            j += 1;
+        } else {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn bitmap_container_has_any(lhs_data: &[u8], rhs_data: &[u8]) -> io::Result<bool> {
+    if lhs_data.len() < BITMAP_BYTES {
+        return Err(Error::other("lhs bitmap container too short"));
+    }
+    if rhs_data.len() < BITMAP_BYTES {
+        return Err(Error::other("rhs bitmap container too short"));
+    }
+
+    for word_index in 0..BITMAP_WORDS {
+        let start = word_index * WORD_BYTES;
+        let lhs_word = u64::from_le_bytes(lhs_data[start..start + WORD_BYTES].try_into().unwrap());
+        let rhs_word = u64::from_le_bytes(rhs_data[start..start + WORD_BYTES].try_into().unwrap());
+        if lhs_word & rhs_word != 0 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn array_bitmap_container_has_any(
+    array_data: &[u8],
+    array_cardinality: usize,
+    bitmap_data: &[u8],
+) -> io::Result<bool> {
+    if array_data.len() < array_cardinality * 2 {
+        return Err(Error::other("array container too short"));
+    }
+    if bitmap_data.len() < BITMAP_BYTES {
+        return Err(Error::other("bitmap container too short"));
+    }
+
+    for i in 0..array_cardinality {
+        let value = u16::from_le_bytes(array_data[i * 2..i * 2 + 2].try_into().unwrap());
+        let word_index = value as usize / WORD_BITS;
+        let bit_index = value as usize % WORD_BITS;
+        let start = word_index * WORD_BYTES;
+        let word = u64::from_le_bytes(bitmap_data[start..start + WORD_BYTES].try_into().unwrap());
+        if word & (1 << bit_index) != 0 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
 
