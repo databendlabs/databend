@@ -25,7 +25,9 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -84,10 +86,12 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
         let mut comments: Vec<String> = Vec::with_capacity(rows.len());
+        let mut column_ids: Vec<Option<u64>> = Vec::with_capacity(rows.len());
         for column_info in rows.into_iter() {
             names.push(column_info.column.name().clone());
             tables.push(column_info.table_name);
             databases.push(column_info.database_name);
+            column_ids.push(column_info.column_id);
             types.push(column_info.column.data_type().wrapped_display());
             let data_type = column_info
                 .column
@@ -123,6 +127,7 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(default_exprs),
             StringType::from_data(is_nullables),
             StringType::from_data(comments),
+            UInt64Type::from_opt_data(column_ids),
         ]))
     }
 }
@@ -133,6 +138,7 @@ struct TableColumnInfo {
 
     column: TableField,
     column_comment: String,
+    column_id: Option<u64>,
 }
 
 impl ColumnsTable {
@@ -149,6 +155,10 @@ impl ColumnsTable {
             TableField::new("default_expression", TableDataType::String),
             TableField::new("is_nullable", TableDataType::String),
             TableField::new("comment", TableDataType::String),
+            TableField::new(
+                "column_id",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
         ]);
 
         let table_info = TableInfo {
@@ -210,6 +220,9 @@ impl ColumnsTable {
                                 table_name: table.name().into(),
                                 column: field.clone(),
                                 column_comment: "".to_string(),
+                                // View output columns are inferred from the query plan here; their
+                                // ids are not stable table column ids.
+                                column_id: None,
                             })
                         }
                     }
@@ -223,6 +236,7 @@ impl ColumnsTable {
                                         table_name: table.name().into(),
                                         column: field.clone(),
                                         column_comment: "".to_string(),
+                                        column_id: Some(field.column_id() as u64),
                                     })
                                 }
                             }
@@ -253,6 +267,7 @@ impl ColumnsTable {
                                 table_name: table.name().into(),
                                 column: field.clone(),
                                 column_comment: comment,
+                                column_id: Some(field.column_id() as u64),
                             })
                         }
                     }

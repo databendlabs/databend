@@ -74,6 +74,7 @@ c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
 query TTTT??T?T
 SHOW FULL COLUMNS IN columns from system
 ----
+column_id bigint unsigned YES (empty) NULL NULL NULL NULL (empty)
 comment varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 data_type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 database varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)

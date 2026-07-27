@@ -1,515 +1,512 @@
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemColumns
 -------- TABLE CONTENTS ----------
-+-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+
-| Column 0                          | Column 1             | Column 2                  | Column 3              | Column 4            | Column 5 | Column 6 | Column 7 | Column 8 |
-+-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+
-| 'Comment'                         | 'system'             | 'engines'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'Engine'                          | 'system'             | 'engines'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'access'                          | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'acquired_on'                     | 'system'             | 'locks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'active_result_scan'              | 'system'             | 'query_cache'             | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'actual_row_count'                | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'after'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'allowed_values'                  | 'system'             | 'tags'                    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'arguments'                       | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'arguments'                       | 'system'             | 'user_functions'          | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
-| 'attempt_number'                  | 'system'             | 'task_history'            | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
-| 'attribute_names'                 | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
-| 'attribute_types'                 | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
-| 'auth_type'                       | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'auto_increment'                  | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'avg_size'                        | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'bloom_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'bloom_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'byte_size'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'cache_key_extras'                | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'capacity'                        | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'cardinality'                     | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'databases'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'databases_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog'                         | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'catalog_name'                    | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'category'                        | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'character_maximum_length'        | 'information_schema' | 'columns'                 | 'Nullable(UInt16)'    | 'SMALLINT UNSIGNED' | ''       | ''       | 'YES'    | ''       |
-| 'character_octet_length'          | 'information_schema' | 'columns'                 | 'Nullable(UInt16)'    | 'SMALLINT UNSIGNED' | ''       | ''       | 'YES'    | ''       |
-| 'character_set_catalog'           | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'character_set_name'              | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'character_set_name'              | 'information_schema' | 'columns'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'character_set_schema'            | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'check_option'                    | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'cluster'                         | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'cluster_by'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'cluster_by'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'collation'                       | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'collation_catalog'               | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'collation_name'                  | 'information_schema' | 'columns'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'collation_schema'                | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_comment'                  | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'column_default'                  | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_key'                      | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_name'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'column_name'                     | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_name'                     | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_name'                     | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'column_type'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'command'                         | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'notifications'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'comment'                         | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'comment'                         | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'comment'                         | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'comment'                         | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'completed_time'                  | 'system'             | 'task_history'            | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'compressed_data_bytes'           | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'condition_text'                  | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'condition_text'                  | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'constraint_catalog'              | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'constraint_catalog'              | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'constraint_column_indexes'       | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'constraint_column_names'         | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'constraint_name'                 | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'constraint_name'                 | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'constraint_schema'               | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'constraint_schema'               | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'create_time'                     | 'information_schema' | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'constraints'             | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'dictionaries'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'indexes'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'locks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'notification_history'    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'notifications'           | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'password_policies'       | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'procedures'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'roles'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'stages'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'streams'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'tables_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'tags'                    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'tasks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'temporary_tables'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'users'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'created_on'                      | 'system'             | 'views'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                      | 'system'             | 'views_with_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_time'                    | 'system'             | 'processes'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'creator'                         | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'current_query_id'                | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'data_compressed_size'            | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_compressed_size'            | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_free'                       | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'data_length'                     | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_read_bytes'                 | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'data_size'                       | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_size'                       | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_type'                       | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'data_type'                       | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'data_write_bytes'                | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'clustering_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database'                        | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'databases'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'databases_with_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'views'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'database_id'                     | 'system'             | 'views_with_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'datetime_precision'              | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default'                         | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default'                         | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default_character_set_catalog'   | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default_character_set_name'      | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default_character_set_schema'    | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default_collate_name'            | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default_collation_name'          | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default_expression'              | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default_kind'                    | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default_role'                    | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'default_warehouse'               | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'definition'                      | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'definition'                      | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'definition'                      | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'definition'                      | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'delete_rule'                     | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'description'                     | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'description'                     | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'description'                     | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'description'                     | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'description'                     | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'description'                     | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'disabled'                        | 'system'             | 'users'                   | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'distinct_count'                  | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'domain_catalog'                  | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'domain_name'                     | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'domain_schema'                   | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'drop_time'                       | 'information_schema' | 'tables'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'databases'               | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'databases_with_history'  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'tables'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'tables_with_history'     | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'views'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dropped_on'                      | 'system'             | 'views_with_history'      | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'dummy'                           | 'system'             | 'one'                     | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'dummy'                           | 'system'             | 'zero'                    | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'enabled'                         | 'system'             | 'notifications'           | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'end_time'                        | 'system'             | 'clustering_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'endpoint'                        | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'engine'                          | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine'                          | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine'                          | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine'                          | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine'                          | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine'                          | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine_full'                     | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine_full'                     | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine_full'                     | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'engine_full'                     | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'error_integration'               | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'error_message'                   | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'example'                         | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'exception_code'                  | 'system'             | 'task_history'            | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
-| 'exception_text'                  | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'expression'                      | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'extra'                           | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'extra_info'                      | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'extra_info'                      | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'file_content_length'             | 'system'             | 'temp_files'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'file_format_options'             | 'system'             | 'stages'                  | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
-| 'file_last_modified_time'         | 'system'             | 'temp_files'              | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'file_name'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'file_type'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'group'                           | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'has_credentials'                 | 'system'             | 'stages'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'has_data'                        | 'system'             | 'streams'                 | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'has_encryption_key'              | 'system'             | 'stages'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'histogram'                       | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'hit'                             | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'host'                            | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'host'                            | 'system'             | 'processes'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'hostname'                        | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'id'                              | 'system'             | 'notifications'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'id'                              | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'id'                              | 'system'             | 'task_history'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'id'                              | 'system'             | 'tasks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'index_comment'                   | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'index_data_bytes'                | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'index_length'                    | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'index_name'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'index_schema'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'index_size'                      | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'index_size'                      | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'index_type'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'inherited_roles'                 | 'system'             | 'roles'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'inherited_roles_name'            | 'system'             | 'roles'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'integration_name'                | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'invalid_reason'                  | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'inverted_index_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'inverted_index_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'is_aggregate'                    | 'system'             | 'functions'               | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_aggregate'                    | 'system'             | 'user_functions'          | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       |
-| 'is_attach'                       | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_attach'                       | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_configured'                   | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_current_session'              | 'system'             | 'temporary_tables'        | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_external'                     | 'system'             | 'tables'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_external'                     | 'system'             | 'tables_with_history'     | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_insertable_into'              | 'information_schema' | 'views'                   | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_nullable'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_nullable'                     | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_transient'                    | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_transient'                    | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_trigger_deletable'            | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'is_trigger_insertable_into'      | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'is_trigger_updatable'            | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'is_updatable'                    | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'key_names'                       | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
-| 'key_types'                       | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
-| 'keywords'                        | 'information_schema' | 'keywords'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'kind'                            | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'labels'                          | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'language'                        | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'last_committed_on'               | 'system'             | 'tasks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'last_suspended_on'               | 'system'             | 'tasks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'level'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'license'                         | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'location'                        | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'match_option'                    | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'max'                             | 'system'             | 'statistics'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'maxlen'                          | 'information_schema' | 'character_sets'          | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'memory_usage'                    | 'system'             | 'processes'               | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
-| 'message'                         | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'message_source'                  | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'metric'                          | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'min'                             | 'system'             | 'statistics'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'miss'                            | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'mode'                            | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'mode'                            | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'must_change_password'            | 'system'             | 'users'                   | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       |
-| 'mysql_connection_id'             | 'system'             | 'processes'               | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
-| 'name'                            | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'catalogs'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'contributors'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'databases'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'databases_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'malloc_stats_totals'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'notifications'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'roles'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'table_functions'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'name'                            | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'network_policy'                  | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'next_schedule_time'              | 'system'             | 'tasks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'ngram_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'ngram_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'node'                            | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'malloc_stats_totals'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'query_execution'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'node'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'non_unique'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'null_count'                      | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'nullable'                        | 'information_schema' | 'columns'                 | 'Nullable(UInt8)'     | 'TINYINT UNSIGNED'  | ''       | ''       | 'YES'    | ''       |
-| 'nullable'                        | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'num_blocks'                      | 'system'             | 'temporary_tables'        | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'num_items'                       | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'num_rows'                        | 'system'             | 'query_cache'             | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'num_rows'                        | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'num_rows'                        | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'num_rows'                        | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'num_segments'                    | 'system'             | 'temporary_tables'        | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'number_of_blocks'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'number_of_blocks'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'number_of_segments'              | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'number_of_segments'              | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'numeric_precision'               | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'numeric_precision_radix'         | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'numeric_scale'                   | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'options'                         | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'ordinal_position'                | 'information_schema' | 'columns'                 | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'ordinal_position'                | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'original'                        | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'owner'                           | 'system'             | 'databases'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'databases_with_history'  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'tables'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'tables_with_history'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'owner'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'owner'                           | 'system'             | 'views'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'owner'                           | 'system'             | 'views_with_history'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'packed'                          | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'partitions_sha'                  | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'password_policy'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'port'                            | 'system'             | 'clusters'                | 'UInt16'              | 'SMALLINT UNSIGNED' | ''       | ''       | 'NO'     | ''       |
-| 'position_in_unique_constraint'   | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'privileges'                      | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'procedure_id'                    | 'system'             | 'procedures'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'process_rows'                    | 'system'             | 'query_execution'         | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'process_time_in_micros'          | 'system'             | 'query_execution'         | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'processed'                       | 'system'             | 'notification_history'    | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'query_hash'                      | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_id'                        | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_id'                        | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_id'                        | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_id'                        | 'system'             | 'query_execution'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_id'                        | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'query_parameterized_hash'        | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'range'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'referenced_column_name'          | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'referenced_table_name'           | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'referenced_table_name'           | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'referenced_table_schema'         | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'reserved'                        | 'information_schema' | 'keywords'                | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
-| 'result_size'                     | 'system'             | 'query_cache'             | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'revision'                        | 'system'             | 'locks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'roles'                           | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'root_task_id'                    | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'row_count'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'run_id'                          | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'scan_progress_read_bytes'        | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'scan_progress_read_rows'         | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'schedule'                        | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'schedule'                        | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'scheduled_time'                  | 'system'             | 'task_history'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'schema_name'                     | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'schema_owner'                    | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'seq_in_index'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'session_id'                      | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'session_parameters'              | 'system'             | 'task_history'            | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
-| 'session_parameters'              | 'system'             | 'tasks'                   | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
-| 'session_type'                    | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'size'                            | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'snapshot_location'               | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'source'                          | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'source_column'                   | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'sql_path'                        | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'stack'                           | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'stage_type'                      | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'start_time'                      | 'system'             | 'clustering_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'state'                           | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'state'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'statistics'                      | 'system'             | 'malloc_stats'            | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
-| 'stats_row_count'                 | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'status'                          | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'status'                          | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'status'                          | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'status'                          | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'storage_param'                   | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'storage_param'                   | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'storage_params'                  | 'system'             | 'stages'                  | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
-| 'storage_type'                    | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'stream_id'                       | 'system'             | 'streams'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'sub_part'                        | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'suspend_task_after_num_failures' | 'system'             | 'tasks'                   | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'syntax'                          | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table'                           | 'system'             | 'clustering_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table'                           | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table'                           | 'system'             | 'constraints'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'table'                           | 'system'             | 'indexes'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'table'                           | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table'                           | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_catalog'                   | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_catalog'                   | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_catalog'                   | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_catalog'                   | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_catalog'                   | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_collation'                 | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_comment'                   | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'locks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'streams'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'table_id'                        | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'views'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_id'                        | 'system'             | 'views_with_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'table_name'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_name'                      | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'table_name'                      | 'system'             | 'streams_terse'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'table_option'                    | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_option'                    | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_rows'                      | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'table_schema'                    | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_schema'                    | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_schema'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_schema'                    | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_schema'                    | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_type'                      | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_type'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_type'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'table_version'                   | 'system'             | 'streams'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'time'                            | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'timestamp'                       | 'system'             | 'query_execution'         | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'total_columns'                   | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'total_columns'                   | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'notifications'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'type'                            | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'unique_constraint_catalog'       | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'unique_constraint_name'          | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'unique_constraint_schema'        | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'unit'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'update_on'                       | 'system'             | 'roles'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'update_on'                       | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'update_on'                       | 'system'             | 'users'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'update_rule'                     | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'updated_on'                      | 'system'             | 'constraints'             | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'updated_on'                      | 'system'             | 'dictionaries'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'indexes'                 | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'updated_on'                      | 'system'             | 'password_policies'       | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
-| 'updated_on'                      | 'system'             | 'streams'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'tables_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'temporary_tables'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'views'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'updated_on'                      | 'system'             | 'views_with_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'url'                             | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'user'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'user'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'user'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'value'                           | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'value'                           | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'value'                           | 'system'             | 'malloc_stats_totals'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'value'                           | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'value'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'vector_index_size'               | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'vector_index_size'               | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'version'                         | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'version'                         | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'view_definition'                 | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'view_query'                      | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'view_query'                      | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'virtual_column_id'               | 'system'             | 'virtual_columns'         | 'UInt32'              | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       |
-| 'virtual_column_name'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'virtual_column_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'virtual_column_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'virtual_column_type'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'warehouse'                       | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'warehouse'                       | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-| 'webhook_options'                 | 'system'             | 'notifications'           | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
-| 'workload_groups'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
-+-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+
++-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+----------+
+| Column 0                          | Column 1             | Column 2                  | Column 3              | Column 4            | Column 5 | Column 6 | Column 7 | Column 8 | Column 9 |
++-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+----------+
+| 'Comment'                         | 'system'             | 'engines'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'Engine'                          | 'system'             | 'engines'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'access'                          | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 6        |
+| 'acquired_on'                     | 'system'             | 'locks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 8        |
+| 'active_result_scan'              | 'system'             | 'query_cache'             | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'actual_row_count'                | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 4        |
+| 'after'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 10       |
+| 'allowed_values'                  | 'system'             | 'tags'                    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 1        |
+| 'arguments'                       | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'arguments'                       | 'system'             | 'user_functions'          | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'attempt_number'                  | 'system'             | 'task_history'            | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       | 13       |
+| 'attribute_names'                 | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       | 4        |
+| 'attribute_types'                 | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       | 5        |
+| 'auth_type'                       | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'auto_increment'                  | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'avg_size'                        | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 9        |
+| 'bloom_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 18       |
+| 'bloom_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 18       |
+| 'byte_size'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'cache_key_extras'                | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'capacity'                        | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'cardinality'                     | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'catalog'                         | 'system'             | 'databases'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'databases_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog'                         | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'catalog_name'                    | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'category'                        | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'character_maximum_length'        | 'information_schema' | 'columns'                 | 'Nullable(UInt16)'    | 'SMALLINT UNSIGNED' | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'character_octet_length'          | 'information_schema' | 'columns'                 | 'Nullable(UInt16)'    | 'SMALLINT UNSIGNED' | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'character_set_catalog'           | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'character_set_name'              | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'character_set_name'              | 'information_schema' | 'columns'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'character_set_schema'            | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'check_option'                    | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'cluster'                         | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'cluster_by'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'cluster_by'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'collation'                       | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'collation_catalog'               | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'collation_name'                  | 'information_schema' | 'columns'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'collation_schema'                | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_comment'                  | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_default'                  | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_id'                       | 'system'             | 'columns'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 9        |
+| 'column_key'                      | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_name'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_name'                     | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_name'                     | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'column_name'                     | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'column_type'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'command'                         | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'comment'                         | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'comment'                         | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'comment'                         | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'comment'                         | 'system'             | 'notifications'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 6        |
+| 'comment'                         | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'comment'                         | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'comment'                         | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 11       |
+| 'comment'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'comment'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 26       |
+| 'comment'                         | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 26       |
+| 'comment'                         | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'comment'                         | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'comment'                         | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 4        |
+| 'comment'                         | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 11       |
+| 'comment'                         | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 11       |
+| 'completed_time'                  | 'system'             | 'task_history'            | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 14       |
+| 'compressed_data_bytes'           | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 10       |
+| 'condition_text'                  | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'condition_text'                  | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 9        |
+| 'constraint_catalog'              | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'constraint_catalog'              | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'constraint_column_indexes'       | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'constraint_column_names'         | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'constraint_name'                 | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'constraint_name'                 | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'constraint_schema'               | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'constraint_schema'               | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'create_time'                     | 'information_schema' | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'created_on'                      | 'system'             | 'constraints'             | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 7        |
+| 'created_on'                      | 'system'             | 'dictionaries'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 8        |
+| 'created_on'                      | 'system'             | 'indexes'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 6        |
+| 'created_on'                      | 'system'             | 'locks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 7        |
+| 'created_on'                      | 'system'             | 'notification_history'    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 0        |
+| 'created_on'                      | 'system'             | 'notifications'           | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 0        |
+| 'created_on'                      | 'system'             | 'password_policies'       | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 3        |
+| 'created_on'                      | 'system'             | 'procedures'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 5        |
+| 'created_on'                      | 'system'             | 'roles'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 3        |
+| 'created_on'                      | 'system'             | 'stages'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 10       |
+| 'created_on'                      | 'system'             | 'streams'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 4        |
+| 'created_on'                      | 'system'             | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 11       |
+| 'created_on'                      | 'system'             | 'tables_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 11       |
+| 'created_on'                      | 'system'             | 'tags'                    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 3        |
+| 'created_on'                      | 'system'             | 'tasks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 0        |
+| 'created_on'                      | 'system'             | 'temporary_tables'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 8        |
+| 'created_on'                      | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 6        |
+| 'created_on'                      | 'system'             | 'users'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 11       |
+| 'created_on'                      | 'system'             | 'views'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 7        |
+| 'created_on'                      | 'system'             | 'views_with_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 7        |
+| 'created_time'                    | 'system'             | 'processes'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 15       |
+| 'creator'                         | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 9        |
+| 'current_query_id'                | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 17       |
+| 'data_compressed_size'            | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 16       |
+| 'data_compressed_size'            | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 16       |
+| 'data_free'                       | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'data_length'                     | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'data_read_bytes'                 | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 9        |
+| 'data_size'                       | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 15       |
+| 'data_size'                       | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 15       |
+| 'data_type'                       | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'data_type'                       | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'data_write_bytes'                | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 10       |
+| 'database'                        | 'system'             | 'clustering_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database'                        | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'database'                        | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'database'                        | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database'                        | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'database'                        | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'database'                        | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'database'                        | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'database_id'                     | 'system'             | 'databases'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database_id'                     | 'system'             | 'databases_with_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database_id'                     | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database_id'                     | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database_id'                     | 'system'             | 'views'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'database_id'                     | 'system'             | 'views_with_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'datetime_precision'              | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default'                         | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default'                         | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'default_character_set_catalog'   | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default_character_set_name'      | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default_character_set_schema'    | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default_collate_name'            | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default_collation_name'          | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'default_expression'              | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'default_kind'                    | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'default_role'                    | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'default_warehouse'               | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'definition'                      | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'definition'                      | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'definition'                      | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'definition'                      | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'delete_rule'                     | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'description'                     | 'information_schema' | 'character_sets'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'description'                     | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'description'                     | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'description'                     | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'description'                     | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'description'                     | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'disabled'                        | 'system'             | 'users'                   | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'distinct_count'                  | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 5        |
+| 'domain_catalog'                  | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'domain_name'                     | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'domain_schema'                   | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'drop_time'                       | 'information_schema' | 'tables'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'dropped_on'                      | 'system'             | 'databases'               | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 4        |
+| 'dropped_on'                      | 'system'             | 'databases_with_history'  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 4        |
+| 'dropped_on'                      | 'system'             | 'tables'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 12       |
+| 'dropped_on'                      | 'system'             | 'tables_with_history'     | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 12       |
+| 'dropped_on'                      | 'system'             | 'views'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 8        |
+| 'dropped_on'                      | 'system'             | 'views_with_history'      | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 8        |
+| 'dummy'                           | 'system'             | 'one'                     | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | 0        |
+| 'dummy'                           | 'system'             | 'zero'                    | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | 0        |
+| 'enabled'                         | 'system'             | 'notifications'           | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'end_time'                        | 'system'             | 'clustering_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 1        |
+| 'endpoint'                        | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 4        |
+| 'engine'                          | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'engine'                          | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'engine'                          | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'engine'                          | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'engine'                          | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'engine'                          | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'engine_full'                     | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'engine_full'                     | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'engine_full'                     | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'engine_full'                     | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'error_integration'               | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 12       |
+| 'error_message'                   | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'example'                         | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'exception_code'                  | 'system'             | 'task_history'            | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       | 11       |
+| 'exception_text'                  | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 12       |
+| 'expression'                      | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'extra'                           | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'extra_info'                      | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 9        |
+| 'extra_info'                      | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'file_content_length'             | 'system'             | 'temp_files'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'file_format_options'             | 'system'             | 'stages'                  | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       | 8        |
+| 'file_last_modified_time'         | 'system'             | 'temp_files'              | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 3        |
+| 'file_name'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'file_type'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'group'                           | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'has_credentials'                 | 'system'             | 'stages'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'has_data'                        | 'system'             | 'streams'                 | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 13       |
+| 'has_encryption_key'              | 'system'             | 'stages'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'histogram'                       | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 10       |
+| 'hit'                             | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 7        |
+| 'host'                            | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'host'                            | 'system'             | 'processes'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'hostname'                        | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'id'                              | 'system'             | 'notifications'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'id'                              | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'id'                              | 'system'             | 'task_history'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 1        |
+| 'id'                              | 'system'             | 'tasks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'index_comment'                   | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'index_data_bytes'                | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 11       |
+| 'index_length'                    | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'index_name'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'index_schema'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'index_size'                      | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 17       |
+| 'index_size'                      | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 17       |
+| 'index_type'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'inherited_roles'                 | 'system'             | 'roles'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 1        |
+| 'inherited_roles_name'            | 'system'             | 'roles'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'integration_name'                | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'invalid_reason'                  | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 12       |
+| 'inverted_index_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 20       |
+| 'inverted_index_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 20       |
+| 'is_aggregate'                    | 'system'             | 'functions'               | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'is_aggregate'                    | 'system'             | 'user_functions'          | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       | 1        |
+| 'is_attach'                       | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 10       |
+| 'is_attach'                       | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 10       |
+| 'is_configured'                   | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'is_current_session'              | 'system'             | 'temporary_tables'        | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'is_external'                     | 'system'             | 'tables'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 28       |
+| 'is_external'                     | 'system'             | 'tables_with_history'     | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | 28       |
+| 'is_insertable_into'              | 'information_schema' | 'views'                   | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'is_nullable'                     | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'is_nullable'                     | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'is_transient'                    | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 9        |
+| 'is_transient'                    | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 9        |
+| 'is_trigger_deletable'            | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'is_trigger_insertable_into'      | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'is_trigger_updatable'            | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'is_updatable'                    | 'information_schema' | 'views'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'key_names'                       | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       | 2        |
+| 'key_types'                       | 'system'             | 'dictionaries'            | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       | 3        |
+| 'keywords'                        | 'information_schema' | 'keywords'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'kind'                            | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'labels'                          | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'language'                        | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'last_committed_on'               | 'system'             | 'tasks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 14       |
+| 'last_suspended_on'               | 'system'             | 'tasks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 15       |
+| 'level'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'license'                         | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'location'                        | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'match_option'                    | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'max'                             | 'system'             | 'statistics'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 8        |
+| 'maxlen'                          | 'information_schema' | 'character_sets'          | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'memory_usage'                    | 'system'             | 'processes'               | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       | 8        |
+| 'message'                         | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'message_source'                  | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'metric'                          | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'min'                             | 'system'             | 'statistics'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 7        |
+| 'miss'                            | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 8        |
+| 'mode'                            | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'mode'                            | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'must_change_password'            | 'system'             | 'users'                   | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       | 10       |
+| 'mysql_connection_id'             | 'system'             | 'processes'               | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       | 13       |
+| 'name'                            | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'catalogs'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'contributors'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'databases'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'databases_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'notifications'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'roles'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'name'                            | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'name'                            | 'system'             | 'table_functions'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'name'                            | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'name'                            | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'name'                            | 'system'             | 'user_functions'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'name'                            | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'name'                            | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'network_policy'                  | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 8        |
+| 'next_schedule_time'              | 'system'             | 'tasks'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 13       |
+| 'ngram_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 19       |
+| 'ngram_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 19       |
+| 'node'                            | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'node'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'node'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'node'                            | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'node'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'node'                            | 'system'             | 'query_execution'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'node'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 15       |
+| 'non_unique'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'null_count'                      | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 6        |
+| 'nullable'                        | 'information_schema' | 'columns'                 | 'Nullable(UInt8)'     | 'TINYINT UNSIGNED'  | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'nullable'                        | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'num_blocks'                      | 'system'             | 'temporary_tables'        | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 14       |
+| 'num_items'                       | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'num_rows'                        | 'system'             | 'query_cache'             | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'num_rows'                        | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 14       |
+| 'num_rows'                        | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 14       |
+| 'num_rows'                        | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 12       |
+| 'num_segments'                    | 'system'             | 'temporary_tables'        | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 13       |
+| 'number_of_blocks'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 24       |
+| 'number_of_blocks'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 24       |
+| 'number_of_segments'              | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 23       |
+| 'number_of_segments'              | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 23       |
+| 'numeric_precision'               | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'numeric_precision_radix'         | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'numeric_scale'                   | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'options'                         | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'ordinal_position'                | 'information_schema' | 'columns'                 | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'ordinal_position'                | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'original'                        | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'owner'                           | 'system'             | 'databases'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'owner'                           | 'system'             | 'databases_with_history'  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'owner'                           | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 12       |
+| 'owner'                           | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 14       |
+| 'owner'                           | 'system'             | 'tables'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 25       |
+| 'owner'                           | 'system'             | 'tables_with_history'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 25       |
+| 'owner'                           | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'owner'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'owner'                           | 'system'             | 'views'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 10       |
+| 'owner'                           | 'system'             | 'views_with_history'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 10       |
+| 'packed'                          | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'partitions_sha'                  | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'password_policy'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 9        |
+| 'port'                            | 'system'             | 'clusters'                | 'UInt16'              | 'SMALLINT UNSIGNED' | ''       | ''       | 'NO'     | ''       | 3        |
+| 'position_in_unique_constraint'   | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'privileges'                      | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'procedure_id'                    | 'system'             | 'procedures'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 1        |
+| 'process_rows'                    | 'system'             | 'query_execution'         | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 3        |
+| 'process_time_in_micros'          | 'system'             | 'query_execution'         | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'processed'                       | 'system'             | 'notification_history'    | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 1        |
+| 'query_hash'                      | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 18       |
+| 'query_id'                        | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'query_id'                        | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'query_id'                        | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 0        |
+| 'query_id'                        | 'system'             | 'query_execution'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'query_id'                        | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 10       |
+| 'query_parameterized_hash'        | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 19       |
+| 'range'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'referenced_column_name'          | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'referenced_table_name'           | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'referenced_table_name'           | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'referenced_table_schema'         | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'reserved'                        | 'information_schema' | 'keywords'                | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'result_size'                     | 'system'             | 'query_cache'             | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 1        |
+| 'revision'                        | 'system'             | 'locks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 1        |
+| 'roles'                           | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'root_task_id'                    | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 16       |
+| 'row_count'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 5        |
+| 'run_id'                          | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 9        |
+| 'scan_progress_read_bytes'        | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 12       |
+| 'scan_progress_read_rows'         | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 11       |
+| 'schedule'                        | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 4        |
+| 'schedule'                        | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 6        |
+| 'scheduled_time'                  | 'system'             | 'task_history'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 15       |
+| 'schema_name'                     | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'schema_owner'                    | 'information_schema' | 'schemata'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'seq_in_index'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'session_id'                      | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'session_parameters'              | 'system'             | 'task_history'            | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       | 17       |
+| 'session_parameters'              | 'system'             | 'tasks'                   | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       | 16       |
+| 'session_type'                    | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'size'                            | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 3        |
+| 'snapshot_location'               | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 11       |
+| 'source'                          | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'source_column'                   | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'sql_path'                        | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'stack'                           | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'stage_type'                      | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'start_time'                      | 'system'             | 'clustering_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 0        |
+| 'state'                           | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'state'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 7        |
+| 'stats_row_count'                 | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 3        |
+| 'status'                          | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'status'                          | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'status'                          | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'status'                          | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 16       |
+| 'storage_param'                   | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 30       |
+| 'storage_param'                   | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 30       |
+| 'storage_params'                  | 'system'             | 'stages'                  | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       | 7        |
+| 'storage_type'                    | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 2        |
+| 'stream_id'                       | 'system'             | 'streams'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 3        |
+| 'sub_part'                        | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'suspend_task_after_num_failures' | 'system'             | 'tasks'                   | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 11       |
+| 'syntax'                          | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'table'                           | 'system'             | 'clustering_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'table'                           | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'table'                           | 'system'             | 'constraints'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 6        |
+| 'table'                           | 'system'             | 'indexes'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'table'                           | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'table'                           | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'table_catalog'                   | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_catalog'                   | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_catalog'                   | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_catalog'                   | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_catalog'                   | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_collation'                 | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_comment'                   | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_id'                        | 'system'             | 'locks'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 0        |
+| 'table_id'                        | 'system'             | 'streams'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 9        |
+| 'table_id'                        | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'table_id'                        | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'table_id'                        | 'system'             | 'temporary_tables'        | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 2        |
+| 'table_id'                        | 'system'             | 'views'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'table_id'                        | 'system'             | 'views_with_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 4        |
+| 'table_name'                      | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_name'                      | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_name'                      | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'table_name'                      | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_name'                      | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_name'                      | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_name'                      | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 8        |
+| 'table_name'                      | 'system'             | 'streams_terse'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 4        |
+| 'table_option'                    | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 29       |
+| 'table_option'                    | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 29       |
+| 'table_rows'                      | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'table_schema'                    | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_schema'                    | 'information_schema' | 'key_column_usage'        | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_schema'                    | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_schema'                    | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_schema'                    | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_type'                      | 'information_schema' | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'table_type'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 27       |
+| 'table_type'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 27       |
+| 'table_version'                   | 'system'             | 'streams'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 10       |
+| 'time'                            | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 14       |
+| 'timestamp'                       | 'system'             | 'query_execution'         | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 1        |
+| 'total_columns'                   | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 5        |
+| 'total_columns'                   | 'system'             | 'tables_with_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | 5        |
+| 'type'                            | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'type'                            | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'type'                            | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'type'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'type'                            | 'system'             | 'notifications'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 3        |
+| 'type'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'type'                            | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 6        |
+| 'unique_constraint_catalog'       | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'unique_constraint_name'          | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'unique_constraint_schema'        | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'unit'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'update_on'                       | 'system'             | 'roles'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 4        |
+| 'update_on'                       | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 7        |
+| 'update_on'                       | 'system'             | 'users'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 12       |
+| 'update_rule'                     | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | NULL     |
+| 'updated_on'                      | 'system'             | 'constraints'             | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 8        |
+| 'updated_on'                      | 'system'             | 'dictionaries'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 9        |
+| 'updated_on'                      | 'system'             | 'indexes'                 | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 7        |
+| 'updated_on'                      | 'system'             | 'password_policies'       | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | 4        |
+| 'updated_on'                      | 'system'             | 'streams'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 5        |
+| 'updated_on'                      | 'system'             | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 13       |
+| 'updated_on'                      | 'system'             | 'tables_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 13       |
+| 'updated_on'                      | 'system'             | 'temporary_tables'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 9        |
+| 'updated_on'                      | 'system'             | 'views'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 9        |
+| 'updated_on'                      | 'system'             | 'views_with_history'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | 9        |
+| 'url'                             | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 3        |
+| 'user'                            | 'system'             | 'locks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'user'                            | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'user'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'value'                           | 'system'             | 'build_options'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'value'                           | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 2        |
+| 'value'                           | 'system'             | 'metrics'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'value'                           | 'system'             | 'settings'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'vector_index_size'               | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 21       |
+| 'vector_index_size'               | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 21       |
+| 'version'                         | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'version'                         | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 1        |
+| 'view_definition'                 | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     |
+| 'view_query'                      | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 12       |
+| 'view_query'                      | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 12       |
+| 'virtual_column_id'               | 'system'             | 'virtual_columns'         | 'UInt32'              | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       | 3        |
+| 'virtual_column_name'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 4        |
+| 'virtual_column_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 22       |
+| 'virtual_column_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | 22       |
+| 'virtual_column_type'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | 5        |
+| 'warehouse'                       | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 5        |
+| 'warehouse'                       | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 5        |
+| 'webhook_options'                 | 'system'             | 'notifications'           | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       | 5        |
+| 'workload_groups'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | 13       |
++-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+----------+
 
 

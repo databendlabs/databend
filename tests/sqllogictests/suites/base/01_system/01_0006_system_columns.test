@@ -43,11 +43,21 @@ columntest tid2
 columntest tid3
 columntest tid4
 
+query TI
+SELECT lower(name), column_id FROM system.columns WHERE database = 'default' AND table = 't' ORDER BY name
+----
+id 0
+
 statement ok
 drop view if exists default.test_v_t;
 
 statement ok
 create view default.test_v_t as select * from default.t;
+
+query I
+SELECT count_if(column_id IS NULL) FROM system.columns WHERE database = 'default' AND table = 'test_v_t'
+----
+1
 
 statement ok
 drop table default.t;
