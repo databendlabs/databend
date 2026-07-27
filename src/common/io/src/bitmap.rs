@@ -28,6 +28,8 @@ use roaring::RoaringTreemap;
 use roaring::treemap::Iter;
 use smallvec::SmallVec;
 
+pub use crate::bitmap::reader::BitmapStats;
+
 mod reader;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
@@ -773,6 +775,99 @@ pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
         Ok(reader::bitmap_max(&buf[HYBRID_HEADER_LEN..])?)
     } else {
         Ok(deserialize_bitmap(buf)?.max())
+    }
+}
+
+pub fn bitmap_stats(buf: &[u8]) -> Result<BitmapStats> {
+    if buf.is_empty() {
+        return Ok(BitmapStats {
+            len: 0,
+            min: None,
+            max: None,
+        });
+    }
+    if is_hybrid_large(buf) {
+        Ok(reader::bitmap_stats(&buf[HYBRID_HEADER_LEN..])?)
+    } else {
+        let bm = deserialize_bitmap(buf)?;
+        Ok(BitmapStats {
+            len: bm.len() as u64,
+            min: bm.min(),
+            max: bm.max(),
+        })
+    }
+}
+
+pub fn bitmap_has_any(lhs: &[u8], rhs: &[u8]) -> Result<bool> {
+    if lhs.is_empty() || rhs.is_empty() {
+        return Ok(false);
+    }
+
+    // Stats fast path: range rejection
+    // If lhs.max < rhs.min OR rhs.max < lhs.min, no overlap possible
+    if is_hybrid_large(lhs) && is_hybrid_large(rhs) {
+        let lhs_stats = reader::bitmap_stats(&lhs[HYBRID_HEADER_LEN..])?;
+        let rhs_stats = reader::bitmap_stats(&rhs[HYBRID_HEADER_LEN..])?;
+        if let (Some(lhs_min), Some(rhs_max)) = (lhs_stats.min, rhs_stats.max)
+            && lhs_min > rhs_max
+        {
+            return Ok(false);
+        }
+        if let (Some(rhs_min), Some(lhs_max)) = (rhs_stats.min, lhs_stats.max)
+            && rhs_min > lhs_max
+        {
+            return Ok(false);
+        }
+        Ok(reader::bitmap_has_any(
+            &lhs[HYBRID_HEADER_LEN..],
+            &rhs[HYBRID_HEADER_LEN..],
+        )?)
+    } else if is_hybrid_large(lhs) || is_hybrid_large(rhs) {
+        // Normalize: large is the HybridLarge side, other is the non-HybridLarge side
+        let (large, other) = if is_hybrid_large(lhs) {
+            (lhs, rhs)
+        } else {
+            (rhs, lhs)
+        };
+
+        // Stats fast path: range rejection
+        let large_stats = reader::bitmap_stats(&large[HYBRID_HEADER_LEN..])?;
+        let other_stats = bitmap_stats(other)?;
+        if let (Some(large_min), Some(other_max)) = (large_stats.min, other_stats.max)
+            && large_min > other_max
+        {
+            return Ok(false);
+        }
+        if let (Some(other_min), Some(large_max)) = (other_stats.min, large_stats.max)
+            && other_min > large_max
+        {
+            return Ok(false);
+        }
+
+        // other is HybridSmall: iterate its (≤31) values through bitmap_contains on large.
+        // Each bitmap_contains call scans prefix buckets from the start, causing redundant
+        // work across iterations. This could be improved with a hint/cursor mechanism that
+        // tracks the last scanned position, but since HybridSmall holds at most 31 values
+        // the overhead is bounded (~μs-level). Revisit if this path becomes a bottleneck.
+        if is_hybrid(other) && !is_hybrid_large(other) {
+            let other_bm = deserialize_bitmap(other)?;
+            for value in other_bm.iter() {
+                if bitmap_contains(large, value)? {
+                    return Ok(true);
+                }
+            }
+            return Ok(false);
+        }
+
+        // other is Legacy (potentially large): fallback to full deserialization
+        let lhs_bm = deserialize_bitmap(lhs)?;
+        let rhs_bm = deserialize_bitmap(rhs)?;
+        Ok(lhs_bm.intersection_len(&rhs_bm) != 0)
+    } else {
+        // Both else: deserialize both
+        let lhs_bm = deserialize_bitmap(lhs)?;
+        let rhs_bm = deserialize_bitmap(rhs)?;
+        Ok(lhs_bm.intersection_len(&rhs_bm) != 0)
     }
 }
 
@@ -1573,5 +1668,196 @@ mod tests {
 
         // Empty buffer
         assert_eq!(bitmap_max(&[]).unwrap(), None);
+    }
+
+    fn ground_truth_has_any(lhs: &[u8], rhs: &[u8]) -> bool {
+        let lhs_bm = deserialize_bitmap(lhs).unwrap();
+        let rhs_bm = deserialize_bitmap(rhs).unwrap();
+        lhs_bm.intersection_len(&rhs_bm) != 0
+    }
+
+    #[test]
+    fn test_bitmap_has_any() {
+        // Both HybridLarge with overlap: 0..50000 and 40000..90000 -> overlap at 40000-49999
+        let lhs = HybridBitmap::from_iter(0u64..50000);
+        let rhs = HybridBitmap::from_iter(40000u64..90000);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Both HybridLarge disjoint: 0..50000 and 100000..150000
+        let lhs = HybridBitmap::from_iter(0u64..50000);
+        let rhs = HybridBitmap::from_iter(100000u64..150000);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(!bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Both HybridSmall with overlap: 0..31 and 20..51 -> overlap at 20-30
+        let lhs = HybridBitmap::from_iter(0u64..31);
+        let rhs = HybridBitmap::from_iter(20u64..51);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Both HybridSmall disjoint: 0..15 and 20..35
+        let lhs = HybridBitmap::from_iter(0u64..15);
+        let rhs = HybridBitmap::from_iter(20u64..35);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(!bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Mixed (HybridLarge lhs, HybridSmall rhs) with overlap: 0..50000 and 10..41
+        let lhs = HybridBitmap::from_iter(0u64..50000);
+        let rhs = HybridBitmap::from_iter(10u64..41);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Mixed (HybridSmall lhs, HybridLarge rhs) with overlap: 10..41 and 0..50000
+        let lhs = HybridBitmap::from_iter(10u64..41);
+        let rhs = HybridBitmap::from_iter(0u64..50000);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Empty lhs
+        let rhs = HybridBitmap::from_iter(0u64..50000);
+        let mut rhs_buf = Vec::new();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert!(!bitmap_has_any(&[], &rhs_buf).unwrap());
+
+        // Empty rhs
+        let lhs = HybridBitmap::from_iter(0u64..50000);
+        let mut lhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        assert!(!bitmap_has_any(&lhs_buf, &[]).unwrap());
+
+        // Both empty
+        assert!(!bitmap_has_any(&[], &[]).unwrap());
+
+        // Mixed (Legacy lhs, HybridLarge rhs) with overlap
+        let mut lhs_tree = RoaringTreemap::new();
+        for v in [0u64, 2500, 40000] {
+            lhs_tree.insert(v);
+        }
+        let rhs = HybridBitmap::from_iter(0u64..50000);
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs_tree.serialize_into(&mut lhs_buf).unwrap();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Mixed (HybridLarge lhs, Legacy rhs) with overlap
+        let lhs = HybridBitmap::from_iter(0u64..50000);
+        let mut rhs_tree = RoaringTreemap::new();
+        for v in [0u64, 2500, 40000] {
+            rhs_tree.insert(v);
+        }
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs.serialize_into(&mut lhs_buf).unwrap();
+        rhs_tree.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+
+        // Both Legacy with overlap
+        let mut lhs_tree = RoaringTreemap::new();
+        for v in 0u64..100 {
+            lhs_tree.insert(v);
+        }
+        let mut rhs_tree = RoaringTreemap::new();
+        for v in 50u64..150 {
+            rhs_tree.insert(v);
+        }
+        let mut lhs_buf = Vec::new();
+        let mut rhs_buf = Vec::new();
+        lhs_tree.serialize_into(&mut lhs_buf).unwrap();
+        rhs_tree.serialize_into(&mut rhs_buf).unwrap();
+        assert_eq!(
+            bitmap_has_any(&lhs_buf, &rhs_buf).unwrap(),
+            ground_truth_has_any(&lhs_buf, &rhs_buf)
+        );
+        assert!(bitmap_has_any(&lhs_buf, &rhs_buf).unwrap());
+    }
+
+    #[test]
+    fn test_bitmap_stats() {
+        // HybridLarge stats
+        let large = HybridBitmap::from_iter(0u64..50000);
+        let mut buf = Vec::new();
+        large.serialize_into(&mut buf).unwrap();
+        let stats = bitmap_stats(&buf).unwrap();
+        assert_eq!(stats.len, 50000);
+        assert_eq!(stats.min, Some(0));
+        assert_eq!(stats.max, Some(49999));
+
+        // HybridSmall stats
+        let small = HybridBitmap::from_iter(100u64..131);
+        let mut buf = Vec::new();
+        small.serialize_into(&mut buf).unwrap();
+        let stats = bitmap_stats(&buf).unwrap();
+        assert_eq!(stats.len, 31);
+        assert_eq!(stats.min, Some(100));
+        assert_eq!(stats.max, Some(130));
+
+        // Empty stats
+        let stats = bitmap_stats(&[]).unwrap();
+        assert_eq!(stats.len, 0);
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.max, None);
+
+        // Legacy stats
+        let mut tree = RoaringTreemap::new();
+        tree.insert(42);
+        tree.insert(100);
+        let mut buf = Vec::new();
+        tree.serialize_into(&mut buf).unwrap();
+        let stats = bitmap_stats(&buf).unwrap();
+        assert_eq!(stats.len, 2);
+        assert_eq!(stats.min, Some(42));
+        assert_eq!(stats.max, Some(100));
     }
 }
