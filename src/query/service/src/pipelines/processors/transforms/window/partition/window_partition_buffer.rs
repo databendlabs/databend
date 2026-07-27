@@ -18,6 +18,7 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
@@ -79,6 +80,7 @@ impl PartitionFileWriter {
 
     fn write_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
         for block in blocks {
+            check_interrupt()?;
             if self.schema.is_none() {
                 self.schema = Some(Arc::new(block.infer_schema()));
             }
@@ -142,7 +144,11 @@ impl PartitionFileReader {
             settings,
         )?;
         let mut blocks = Vec::new();
-        while let Some(block) = reader.read()? {
+        loop {
+            check_interrupt()?;
+            let Some(block) = reader.read()? else {
+                break;
+            };
             blocks.push(block);
         }
         Ok(blocks)
@@ -341,6 +347,7 @@ impl WindowPartitionBuffer {
     #[fastrace::trace(name = "WindowPartitionBuffer::restore")]
     pub fn restore(&mut self) -> Result<Vec<DataBlock>> {
         for partition in &mut self.partitions[self.next_to_restore..] {
+            check_interrupt()?;
             self.next_to_restore += 1;
 
             let mut result = Vec::new();

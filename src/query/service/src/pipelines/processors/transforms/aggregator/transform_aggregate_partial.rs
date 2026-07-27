@@ -29,6 +29,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
@@ -83,12 +84,14 @@ impl Spiller {
                 .enumerate()
             {
                 for (_, payload) in p.into_non_empty_bucket_payloads() {
+                    check_interrupt()?;
                     let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                     self.inner.spill(bucket, data_block)?;
                 }
             }
         } else {
             for (bucket, payload) in partition.into_non_empty_bucket_payloads() {
+                check_interrupt()?;
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.inner.spill(bucket, data_block)?;
             }
@@ -268,7 +271,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
-            HashTable::MovedOut => match !output && std::thread::panicking() {
+            HashTable::MovedOut => match !output {
                 true => vec![],
                 false => {
                     unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out in finish")

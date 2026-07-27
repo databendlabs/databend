@@ -33,7 +33,7 @@ pub fn build_ordered_compact_pipeline(
         OrderedBlockCompactBuilder::new(thresholds, extra_key_num)
     });
     pipeline.try_resize(max_threads)?;
-    pipeline.add_block_meta_transformer(TransformCompactBlock::default);
+    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
     Ok(())
 }
 
@@ -208,7 +208,7 @@ mod tests {
         let output = builder.on_finish(true)?;
         let meta_block = output.into_iter().next().unwrap();
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(output.len(), 1);
         assert_eq!(output[0].num_rows(), 20);
@@ -230,7 +230,7 @@ mod tests {
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(output.len(), 1);
         assert_eq!(output[0].num_rows(), 1600);
@@ -250,7 +250,7 @@ mod tests {
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(output.len(), 2);
         assert_eq!(output[0].num_rows(), 1001);
@@ -276,7 +276,7 @@ mod tests {
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert_eq!(
             output.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
@@ -303,7 +303,7 @@ mod tests {
 
         let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
         let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
-        let output = TransformCompactBlock::default().transform(meta)?;
+        let output = TransformCompactBlock.transform(meta)?;
 
         assert!(output.len() <= block_num);
         assert!(output.iter().all(|block| block.num_rows() > 1));

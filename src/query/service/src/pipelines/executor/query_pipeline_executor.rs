@@ -272,7 +272,7 @@ impl QueryPipelineExecutor {
 
         drop(finished_error);
         self.global_tasks_queue.finish(self.workers_condvar.clone());
-        self.graph.interrupt_running_nodes();
+        self.graph.interrupt();
         self.finished_notify.notify_waiters();
     }
 

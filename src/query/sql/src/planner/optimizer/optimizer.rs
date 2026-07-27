@@ -35,7 +35,6 @@ use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
-use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -271,8 +270,6 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ))
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
-        // Sync CTE consumer statistics with the latest producer estimates after pushdown rewrites.
-        .add(SyncMaterializedCTERefOptimizer::new())
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
