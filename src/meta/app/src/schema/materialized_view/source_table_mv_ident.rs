@@ -14,7 +14,6 @@
 
 use databend_meta_client::kvapi;
 
-use crate::schema::EmptyProto;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::resource::TenantResource;
 
@@ -33,8 +32,23 @@ impl SourceTableMV {
     }
 }
 
+/// Source generation to which one materialized view is bound.
+///
+/// This value cannot be `EmptyProto`: key existence would express both the
+/// durable dependency and its validity. Invalidating a source would then
+/// require deleting every relationship, losing the dependencies needed to
+/// discover invalid MVs for management and refresh. Recording the bound
+/// generation keeps the relationship and derives validity by comparison with
+/// the expected source generation. The source binding-version key's KV
+/// sequence is deliberately not persisted here; it is only an internal
+/// transaction CAS token.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MVSourceBinding {
+    pub bound_source_generation: u64,
+}
+
 /// `__fd_materialized_view_by_source/<tenant>/<source_table_id>/<mv_table_id>`
-/// -> [`EmptyProto`]
+/// -> [`MVSourceBinding`]
 pub type SourceTableMVIdent = TIdent<SourceTableMVResource, SourceTableMV>;
 
 pub struct SourceTableMVResource;
@@ -43,7 +57,7 @@ impl TenantResource for SourceTableMVResource {
     const PREFIX: &'static str = "__fd_materialized_view_by_source";
     const TYPE: &'static str = "SourceTableMVIdent";
     const HAS_TENANT: bool = true;
-    type ValueType = EmptyProto;
+    type ValueType = MVSourceBinding;
 }
 
 #[cfg(test)]

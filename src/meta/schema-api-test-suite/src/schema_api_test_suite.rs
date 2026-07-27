@@ -92,7 +92,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DroppedId;
-use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
@@ -120,6 +119,8 @@ use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
@@ -1697,15 +1698,20 @@ impl SchemaApiTestSuite {
         };
         let definition = new_definition(&source_table_name);
         let replacement_definition = new_definition(replacement_source_name);
-        let initial_source_binding_version_seq = mt
+        let initial_source_binding_generation = mt
             .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
             .await?
-            .map(|seqv| seqv.seq)
+            .map(|seqv| seqv.data.current_source_generation)
             .unwrap_or(0);
+        assert!(
+            mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .is_none()
+        );
         let new_mv_req = |name,
                           create_option,
                           source_table_id: u64,
-                          source_binding_version_seq: u64,
+                          source_binding_generation: u64,
                           definition: &MVDefinition| {
             let mut table_meta = TableMeta {
                 schema: util.schema(),
@@ -1725,7 +1731,7 @@ impl SchemaApiTestSuite {
                 as_dropped: false,
                 materialized_view: Some(CreateMaterializedViewMeta {
                     definition: definition.clone(),
-                    source_binding_version_seq,
+                    expected_source_generation: source_binding_generation,
                 }),
                 table_properties: None,
                 table_partition: None,
@@ -1760,9 +1766,17 @@ impl SchemaApiTestSuite {
                     .is_err()
             );
             assert!(
-                mt.list_mvs_by_source_table_id(&tenant, missing_source_id)
+                mt.list_valid_mvs_by_source_table_id(&tenant, missing_source_id, 0)
                     .await?
                     .is_empty()
+            );
+            assert!(
+                mt.get_pb(&MVSourceBindingVersionIdent::new(
+                    &tenant,
+                    missing_source_id
+                ))
+                .await?
+                .is_none()
             );
         }
 
@@ -1772,7 +1786,7 @@ impl SchemaApiTestSuite {
                 "mv_hidden",
                 CreateOption::Create,
                 source_table_id,
-                initial_source_binding_version_seq,
+                initial_source_binding_generation,
                 &definition,
             );
             hidden_req.as_dropped = true;
@@ -1784,9 +1798,18 @@ impl SchemaApiTestSuite {
                     .is_err()
             );
             assert!(
-                mt.list_mvs_by_source_table_id(&tenant, source_table_id)
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    initial_source_binding_generation,
+                )
+                .await?
+                .is_empty()
+            );
+            assert!(
+                mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
                     .await?
-                    .is_empty()
+                    .is_none()
             );
         }
 
@@ -1797,7 +1820,7 @@ impl SchemaApiTestSuite {
                     mv_name,
                     CreateOption::Create,
                     source_table_id,
-                    initial_source_binding_version_seq,
+                    initial_source_binding_generation,
                     &definition,
                 ))
                 .await?;
@@ -1808,38 +1831,48 @@ impl SchemaApiTestSuite {
                     .data,
                 definition
             );
-            assert!(
+            assert_eq!(
                 mt.get_pb(&source_mv_ident(source_table_id, created.table_id))
                     .await?
-                    .is_some()
+                    .expect("MV source binding must exist")
+                    .data,
+                MVSourceBinding {
+                    bound_source_generation: initial_source_binding_generation,
+                }
             );
+            let initialized_version = mt
+                .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
+                .await?
+                .expect("the first MV must initialize its source binding version");
+            assert!(initialized_version.seq > 0);
+            assert_eq!(initialized_version.data, MVSourceBindingVersion {
+                current_source_generation: initial_source_binding_generation,
+            });
             created
         };
         let mv_id = created.table_id;
 
         // MV membership changes do not advance the source binding version.
         {
-            let source_binding_version_seq = mt
+            let source_binding_version = mt
                 .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
                 .await?
-                .map(|seqv| seqv.seq)
-                .unwrap_or(0);
+                .expect("source binding version must have been initialized");
+            let source_binding_generation = source_binding_version.data.current_source_generation;
             let concurrent_mv_name = "mv_concurrent_create";
             let concurrent_mv = mt
                 .create_table(new_mv_req(
                     concurrent_mv_name,
                     CreateOption::Create,
                     source_table_id,
-                    source_binding_version_seq,
+                    source_binding_generation,
                     &definition,
                 ))
                 .await?;
             assert_eq!(
                 mt.get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
-                    .await?
-                    .map(|seqv| seqv.seq)
-                    .unwrap_or(0),
-                source_binding_version_seq
+                    .await?,
+                Some(source_binding_version)
             );
 
             mt.drop_table_by_id(DropTableByIdReq {
@@ -1854,17 +1887,24 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert_eq!(
-                mt.list_mvs_by_source_table_id(&tenant, source_table_id)
-                    .await?
-                    .iter()
-                    .map(|mv| mv.mv_id)
-                    .collect::<Vec<_>>(),
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    source_binding_generation,
+                )
+                .await?
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<Vec<_>>(),
                 vec![mv_id]
             );
 
+            let next_generation = source_binding_generation + 1;
             mt.upsert_pb(&UpsertPB::update(
                 MVSourceBindingVersionIdent::new(&tenant, source_table_id),
-                EmptyProto {},
+                MVSourceBindingVersion {
+                    current_source_generation: next_generation,
+                },
             ))
             .await?;
             assert!(
@@ -1872,11 +1912,25 @@ impl SchemaApiTestSuite {
                     "mv_stale_source_binding",
                     CreateOption::Create,
                     source_table_id,
-                    source_binding_version_seq,
+                    source_binding_generation,
                     &definition,
                 ))
                 .await
                 .is_err()
+            );
+            assert!(
+                mt.list_valid_mvs_by_source_table_id(&tenant, source_table_id, next_generation,)
+                    .await?
+                    .is_empty()
+            );
+            assert_eq!(
+                mt.list_mvs_by_source_table_id(&tenant, source_table_id)
+                    .await?
+                    .iter()
+                    .map(|mv| mv.mv_id)
+                    .collect::<Vec<_>>(),
+                vec![mv_id],
+                "the unfiltered list must retain invalid dependencies"
             );
         }
 
@@ -1892,7 +1946,11 @@ impl SchemaApiTestSuite {
             );
 
             let mvs = mt
-                .list_mvs_by_source_table_id(&tenant, source_table_id)
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    initial_source_binding_generation,
+                )
                 .await?;
             let [mv] = mvs.as_slice() else {
                 panic!("one complete MV must be returned");
@@ -1904,17 +1962,17 @@ impl SchemaApiTestSuite {
 
         // Replacing an MV removes the old definition and leaves only the new MV ID in the source index.
         let replacement = {
-            let source_binding_version_seq = mt
+            let source_binding_generation = mt
                 .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
                 .await?
-                .map(|seqv| seqv.seq)
+                .map(|seqv| seqv.data.current_source_generation)
                 .unwrap_or(0);
             let replacement = mt
                 .create_table(new_mv_req(
                     mv_name,
                     CreateOption::CreateOrReplace,
                     source_table_id,
-                    source_binding_version_seq,
+                    source_binding_generation,
                     &definition,
                 ))
                 .await?;
@@ -1927,7 +1985,11 @@ impl SchemaApiTestSuite {
             );
 
             let mvs = mt
-                .list_mvs_by_source_table_id(&tenant, source_table_id)
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    source_table_id,
+                    source_binding_generation,
+                )
                 .await?;
             let [mv] = mvs.as_slice() else {
                 panic!("the replacement MV must be returned");
@@ -1939,20 +2001,20 @@ impl SchemaApiTestSuite {
 
         // Replacing with another source empties the old source index and adds the new one.
         let new_source_replacement = {
-            let source_binding_version_seq = mt
+            let source_binding_generation = mt
                 .get_pb(&MVSourceBindingVersionIdent::new(
                     &tenant,
                     replacement_source_table_id,
                 ))
                 .await?
-                .map(|seqv| seqv.seq)
+                .map(|seqv| seqv.data.current_source_generation)
                 .unwrap_or(0);
             let new_source_replacement = mt
                 .create_table(new_mv_req(
                     mv_name,
                     CreateOption::CreateOrReplace,
                     replacement_source_table_id,
-                    source_binding_version_seq,
+                    source_binding_generation,
                     &replacement_definition,
                 ))
                 .await?;
@@ -1969,7 +2031,11 @@ impl SchemaApiTestSuite {
             );
 
             let mvs = mt
-                .list_mvs_by_source_table_id(&tenant, replacement_source_table_id)
+                .list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    replacement_source_table_id,
+                    source_binding_generation,
+                )
                 .await?;
             let [mv] = mvs.as_slice() else {
                 panic!("the new-source replacement MV must be returned");
@@ -1983,17 +2049,17 @@ impl SchemaApiTestSuite {
         // Explicit DROP removes the MV definition and its membership from an existing source index.
         {
             let explicit_drop_name = "mv_explicit_drop";
-            let source_binding_version_seq = mt
+            let source_binding_generation = mt
                 .get_pb(&MVSourceBindingVersionIdent::new(&tenant, source_table_id))
                 .await?
-                .map(|seqv| seqv.seq)
+                .map(|seqv| seqv.data.current_source_generation)
                 .unwrap_or(0);
             let explicit_drop = mt
                 .create_table(new_mv_req(
                     explicit_drop_name,
                     CreateOption::Create,
                     source_table_id,
-                    source_binding_version_seq,
+                    source_binding_generation,
                     &definition,
                 ))
                 .await?;
@@ -2028,11 +2094,12 @@ impl SchemaApiTestSuite {
                 source_mv_ident(replacement_source_table_id, new_source_replacement.table_id);
             let binding_version_ident =
                 MVSourceBindingVersionIdent::new(&tenant, replacement_source_table_id);
-            mt.upsert_pb(&UpsertPB::update(
-                binding_version_ident.clone(),
-                EmptyProto {},
-            ))
-            .await?;
+            let source_binding_generation = mt
+                .get_pb(&binding_version_ident)
+                .await?
+                .expect("CREATE MV must initialize its source binding version")
+                .data
+                .current_source_generation;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.clone(),
@@ -2052,11 +2119,15 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert_eq!(
-                mt.list_mvs_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
-                    .iter()
-                    .map(|mv| mv.mv_id)
-                    .collect::<Vec<_>>(),
+                mt.list_valid_mvs_by_source_table_id(
+                    &tenant,
+                    replacement_source_table_id,
+                    source_binding_generation,
+                )
+                .await?
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<Vec<_>>(),
                 vec![new_source_replacement.table_id]
             );
 
