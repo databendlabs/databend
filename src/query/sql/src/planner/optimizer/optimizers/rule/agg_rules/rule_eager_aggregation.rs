@@ -1244,6 +1244,14 @@ impl EagerAnalysis {
                 ),
             ],
         });
+        let multiplied_scalar = if matches!(
+            aggregate_function.return_type.remove_nullable(),
+            DataType::Decimal(_)
+        ) {
+            wrap_cast(&multiplied_scalar, &aggregate_function.return_type)
+        } else {
+            multiplied_scalar
+        };
         let multiplied_type = multiplied_scalar.data_type()?;
         let new_index = metadata.write().add_derived_column(
             format!("{} * _eager_count", aggregate_function.display_name),

@@ -1,0 +1,310 @@
+name: "Q64 cloud statistics"
+description: "Column statistics captured from the TPC-DS 100G cloud dataset"
+
+table_statistics:
+  catalog_returns:
+    num_rows: 14404374
+    data_size: 836914186
+    number_of_segments: 64
+  catalog_sales:
+    num_rows: 143997065
+    data_size: 7786861047
+    number_of_segments: 218
+  customer:
+    num_rows: 2000000
+    data_size: 98034466
+    number_of_segments: 6
+  customer_address:
+    num_rows: 1000000
+    data_size: 23813273
+    number_of_segments: 8
+  customer_demographics:
+    num_rows: 1920800
+    data_size: 5609623
+    number_of_segments: 2
+  date_dim:
+    num_rows: 73049
+    data_size: 877715
+    number_of_segments: 1
+  household_demographics:
+    num_rows: 7200
+    data_size: 19363
+    number_of_segments: 1
+  income_band:
+    num_rows: 20
+    data_size: 998
+    number_of_segments: 1
+  item:
+    num_rows: 204000
+    data_size: 14834490
+    number_of_segments: 5
+  promotion:
+    num_rows: 1000
+    data_size: 36053
+    number_of_segments: 1
+  store:
+    num_rows: 402
+    data_size: 34186
+    number_of_segments: 1
+  store_returns:
+    num_rows: 28795080
+    data_size: 1322580056
+    number_of_segments: 64
+  store_sales:
+    num_rows: 287997024
+    data_size: 10522430941
+    number_of_segments: 352
+
+column_statistics:
+  catalog_returns.cr_item_sk:
+    min: 1
+    max: 204000
+    ndv: 190915
+    null_count: 0
+  catalog_returns.cr_order_number:
+    min: 2
+    max: 16000000
+    ndv: 9718777
+    null_count: 0
+  catalog_returns.cr_refunded_cash:
+    min: 0.00
+    max: 24544.84
+    ndv: 24545
+    null_count: 287638
+  catalog_returns.cr_reversed_charge:
+    min: 0.00
+    max: 23801.24
+    ndv: 23802
+    null_count: 288476
+  catalog_returns.cr_store_credit:
+    min: 0.00
+    max: 22167.49
+    ndv: 22168
+    null_count: 288118
+
+  catalog_sales.cs_item_sk:
+    min: 1
+    max: 204000
+    ndv: 190915
+    null_count: 0
+  catalog_sales.cs_order_number:
+    min: 1
+    max: 16000000
+    ndv: 14418448
+    null_count: 0
+  catalog_sales.cs_ext_list_price:
+    min: 1.00
+    max: 29997.00
+    ndv: 29997
+    null_count: 719642
+
+  customer.c_customer_sk:
+    min: 1
+    max: 2000000
+    ndv: 1785814
+    null_count: 0
+  customer.c_current_addr_sk:
+    min: 1
+    max: 1000000
+    ndv: 848609
+    null_count: 0
+  customer.c_current_cdemo_sk:
+    min: 1
+    max: 1920798
+    ndv: 1203813
+    null_count: 69943
+  customer.c_current_hdemo_sk:
+    min: 1
+    max: 7200
+    ndv: 7200
+    null_count: 69657
+  customer.c_first_sales_date_sk:
+    min: 2448998
+    max: 2452648
+    ndv: 3651
+    null_count: 69950
+  customer.c_first_shipto_date_sk:
+    min: 2449028
+    max: 2452678
+    ndv: 3651
+    null_count: 70080
+
+  customer_address.ca_address_sk:
+    min: 1
+    max: 1000000
+    ndv: 890053
+    null_count: 0
+  customer_address.ca_city:
+    min: "Aberdeen"
+    max: "Zion"
+    ndv: 1118
+    null_count: 30183
+  customer_address.ca_street_name:
+    min: "10th"
+    max: "Woodland"
+    ndv: 8122
+    null_count: 30178
+  customer_address.ca_street_number:
+    min: "1"
+    max: "999"
+    ndv: 1128
+    null_count: 30226
+  customer_address.ca_zip:
+    min: "00601"
+    max: "99981"
+    ndv: 7050
+    null_count: 30370
+
+  customer_demographics.cd_demo_sk:
+    min: 1
+    max: 1920800
+    ndv: 1757450
+    null_count: 0
+  customer_demographics.cd_marital_status:
+    min: "D"
+    max: "W"
+    ndv: 5
+    null_count: 0
+
+  date_dim.d_date_sk:
+    min: 2415022
+    max: 2488070
+    ndv: 73049
+    null_count: 0
+  date_dim.d_year:
+    min: 1900
+    max: 2100
+    ndv: 184
+    null_count: 0
+
+  household_demographics.hd_demo_sk:
+    min: 1
+    max: 7200
+    ndv: 7200
+    null_count: 0
+  household_demographics.hd_income_band_sk:
+    min: 1
+    max: 20
+    ndv: 20
+    null_count: 0
+
+  income_band.ib_income_band_sk:
+    min: 1
+    max: 20
+    ndv: 20
+    null_count: 0
+
+  item.i_item_sk:
+    min: 1
+    max: 204000
+    ndv: 190915
+    null_count: 0
+  item.i_product_name:
+    min: "able"
+    max: "product"
+    ndv: 204000
+    null_count: 514
+  item.i_color:
+    min: "almond"
+    max: "yellow"
+    ndv: 94
+    null_count: 524
+  item.i_current_price:
+    min: 0.09
+    max: 99.99
+    ndv: 100
+    null_count: 518
+
+  promotion.p_promo_sk:
+    min: 1
+    max: 1000
+    ndv: 961
+    null_count: 0
+
+  store.s_store_sk:
+    min: 1
+    max: 402
+    ndv: 396
+    null_count: 0
+  store.s_store_name:
+    min: "able"
+    max: "store"
+    ndv: 9
+    null_count: 2
+  store.s_zip:
+    min: "20059"
+    max: "79431"
+    ndv: 99
+    null_count: 6
+
+  store_returns.sr_item_sk:
+    min: 1
+    max: 204000
+    ndv: 190915
+    null_count: 0
+  store_returns.sr_ticket_number:
+    min: 1
+    max: 23999996
+    ndv: 15016851
+    null_count: 0
+
+  store_sales.ss_addr_sk:
+    min: 1
+    max: 1000000
+    ndv: 890053
+    null_count: 12956686
+  store_sales.ss_cdemo_sk:
+    min: 1
+    max: 1920800
+    ndv: 1757450
+    null_count: 12955252
+  store_sales.ss_coupon_amt:
+    min: 0.00
+    max: 19225.00
+    ndv: 19226
+    null_count: 12958053
+  store_sales.ss_customer_sk:
+    min: 1
+    max: 2000000
+    ndv: 1785814
+    null_count: 12952082
+  store_sales.ss_hdemo_sk:
+    min: 1
+    max: 7200
+    ndv: 7200
+    null_count: 12957139
+  store_sales.ss_item_sk:
+    min: 1
+    max: 204000
+    ndv: 190915
+    null_count: 0
+  store_sales.ss_list_price:
+    min: 1.00
+    max: 200.00
+    ndv: 200
+    null_count: 12952108
+  store_sales.ss_promo_sk:
+    min: 1
+    max: 1000
+    ndv: 961
+    null_count: 12954088
+  store_sales.ss_sold_date_sk:
+    min: 2450816
+    max: 2452642
+    ndv: 1827
+    null_count: 12955025
+  store_sales.ss_store_sk:
+    min: 1
+    max: 400
+    ndv: 211
+    null_count: 12950651
+  store_sales.ss_ticket_number:
+    min: 1
+    max: 24000000
+    ndv: 21193014
+    null_count: 0
+  store_sales.ss_wholesale_cost:
+    min: 1.00
+    max: 100.00
+    ndv: 100
+    null_count: 12958327
