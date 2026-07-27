@@ -322,8 +322,7 @@ fn unescape_surrounded_literal(pattern: &[u8]) -> Option<Vec<u8>> {
 
     let end = pattern.len() - 1;
     let mut index = 1;
-    let mut has_escape = false;
-    let mut literal = Vec::with_capacity(pattern.len() - 2);
+    let mut literal = None;
 
     while index < end {
         match pattern[index] {
@@ -332,18 +331,24 @@ fn unescape_surrounded_literal(pattern: &[u8]) -> Option<Vec<u8>> {
                 if index + 1 >= end || !is_like_pattern_escape(pattern[index + 1] as char) {
                     return None;
                 }
+                let literal = literal.get_or_insert_with(|| {
+                    let mut literal = Vec::with_capacity(pattern.len() - 2);
+                    literal.extend_from_slice(&pattern[1..index]);
+                    literal
+                });
                 literal.push(pattern[index + 1]);
-                has_escape = true;
                 index += 2;
             }
             byte => {
-                literal.push(byte);
+                if let Some(literal) = &mut literal {
+                    literal.push(byte);
+                }
                 index += 1;
             }
         }
     }
 
-    has_escape.then_some(literal)
+    literal
 }
 
 fn normalize_simple_pattern<'a>(
