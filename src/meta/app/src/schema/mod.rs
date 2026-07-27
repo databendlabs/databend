@@ -105,6 +105,8 @@ pub use materialized_view::MVDefinition;
 pub use materialized_view::MVDefinitionIdent;
 pub use materialized_view::MVDefinitionResource;
 pub use materialized_view::MVInfo;
+pub use materialized_view::MVSourceBinding;
+pub use materialized_view::MVSourceBindingVersion;
 pub use materialized_view::MVSourceBindingVersionIdent;
 pub use materialized_view::MVSourceBindingVersionResource;
 pub use materialized_view::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;

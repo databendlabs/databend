@@ -58,7 +58,6 @@ use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
-use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -70,6 +69,8 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -483,26 +484,43 @@ where
                             .into(),
                         ));
                     }
-
                     let version_ident =
                         MVSourceBindingVersionIdent::new(req.tenant(), source_table_id);
-                    let (version_seq, _) = self.get_pb_seq_and_value(&version_ident).await?;
-                    if version_seq != mv.source_binding_version_seq {
+                    let (version_seq, version) = self.get_pb_seq_and_value(&version_ident).await?;
+                    let current_source_generation = version
+                        .as_ref()
+                        .map(|version| version.current_source_generation)
+                        .unwrap_or(0);
+                    if current_source_generation != mv.expected_source_generation {
                         return Err(KVAppError::AppError(
-                            InvalidMaterializedView::new(
-                                "source table changed while create materialized view",
-                            )
+                            InvalidMaterializedView::new(format!(
+                                "source table binding generation changed from {} to {} while creating materialized view",
+                                mv.expected_source_generation, current_source_generation
+                            ))
                             .into(),
                         ));
                     }
                     txn.condition
                         .push(txn_cond_eq_seq(&version_ident, version_seq));
+                    if version.is_none() {
+                        // A missing version record is semantic generation 0.
+                        // Initialize it in the same transaction that publishes
+                        // the first MV, so a failed CREATE leaves no record.
+                        // Its resulting KV seq is deliberately not the MV
+                        // generation; that seq is only a transaction CAS token.
+                        txn.if_then.push(txn_put_pb(
+                            &version_ident,
+                            &MVSourceBindingVersion::default(),
+                        ));
+                    }
                     txn.if_then.push(txn_put_pb(
                         &SourceTableMVIdent::new_generic(
                             req.tenant(),
                             SourceTableMV::new(source_table_id, table_id),
                         ),
-                        &EmptyProto {},
+                        &MVSourceBinding {
+                            bound_source_generation: mv.expected_source_generation,
+                        },
                     ));
                 }
 

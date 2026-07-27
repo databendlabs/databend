@@ -17,6 +17,8 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBinding;
+use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_meta_client::types::anyerror::func_name;
 
 use crate::common;
@@ -46,6 +48,39 @@ fn test_decode_v181_materialized_view_definition() -> anyhow::Result<()> {
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), mv_definition_v181.as_slice(), 181, want())?;
+
+    Ok(())
+}
+
+#[test]
+fn test_decode_v181_mv_source_binding() -> anyhow::Result<()> {
+    let mv_source_binding_v181 = vec![8, 42, 160, 6, 181, 1, 168, 6, 24];
+
+    let want = || MVSourceBinding {
+        bound_source_generation: 42,
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), mv_source_binding_v181.as_slice(), 181, want())?;
+
+    Ok(())
+}
+
+#[test]
+fn test_decode_v181_mv_source_binding_version() -> anyhow::Result<()> {
+    let mv_source_binding_version_v181 = vec![8, 42, 160, 6, 181, 1, 168, 6, 24];
+
+    let want = || MVSourceBindingVersion {
+        current_source_generation: 42,
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(
+        func_name!(),
+        mv_source_binding_version_v181.as_slice(),
+        181,
+        want(),
+    )?;
 
     Ok(())
 }

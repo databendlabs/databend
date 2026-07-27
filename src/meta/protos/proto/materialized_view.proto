@@ -46,3 +46,31 @@ message MVDefinition {
   // This mode is immutable after publication; recreate the MV to change it.
   bool sync_creation = 4;
 }
+
+// Source-table dependency recorded for one materialized view.
+// Identity lives on the key (tenant, source_table_id, mv_table_id).
+// The value is not empty because the relationship remains after invalidation;
+// its generation determines whether the dependency is currently valid.
+message MVSourceBinding {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Semantic MV-binding generation observed when this materialized view was
+  // bound. The view is valid only while this generation equals the source
+  // table's current binding generation.
+  uint64 bound_source_generation = 1;
+}
+
+// Current semantic MV-binding generation of one source table. Source DDL that
+// invalidates existing MVs advances it; ADD COLUMN, table rename, and table
+// DROP/UNDROP leave it unchanged.
+message MVSourceBindingVersion {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // This semantic generation is stored explicitly instead of using this
+  // record's KV sequence. That lets the first successful CREATE MV initialize
+  // generation 0 and its relationship atomically; a failed CREATE publishes
+  // neither record. The KV sequence remains an internal transaction CAS token.
+  uint64 current_source_generation = 1;
+}
