@@ -3,7 +3,7 @@ Exchange
 ├── exchange type: Merge
 └── EvalScalar
     ├── output columns: [sell_mnt = 0 (#168)]
-    ├── expressions: [t.sell_mnt (#167) = 0]
+    ├── expressions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) = 0]
     ├── estimated rows: 729765643534.22
     └── AggregateFinal
         ├── output columns: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), a.a0d (#0), a.a0k (#7), a.a0m (#9), c.a5m (#144)]
